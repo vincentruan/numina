@@ -10,6 +10,10 @@ const props = defineProps<{
   messages: ChatMessage[]
   isStreaming: boolean
   threadId?: string
+  canBranch?: boolean
+  branchingMessageId?: string | null
+  answeredInterruptIds?: Set<string>
+  interruptErrorId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +21,8 @@ const emit = defineEmits<{
   stop: []
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  branch: [messageId: string, messageIds: string[]]
+  clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
 }>()
 
 const { t } = useI18n()
@@ -161,8 +167,14 @@ onUnmounted(() => {
         :thread-id="threadId"
         :is-loading="isStreaming && index === lastAssistantGroupIndex"
         :is-last-assistant="index === lastAssistantGroupIndex"
+        :can-branch="canBranch"
+        :branching-message-id="branchingMessageId"
+        :answered-interrupt-ids="answeredInterruptIds"
+        :interrupt-error-id="interruptErrorId"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
+        @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
+        @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
       />
       <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
       <div v-if="showThinkingIndicator" class="thinking-placeholder">

@@ -204,18 +204,18 @@ function onSelectPreset(value: TokenUsageViewPreset) {
       <!-- Usage summary -->
       <div class="tud-section tud-summary">
         <div class="tud-header">{{ t('aiChat.tokenUsageTitle') }}</div>
-        <template v-if="usage.total_tokens > 0">
+        <template v-if="effectiveUsage.total_tokens > 0">
           <div class="tud-row">
             <span>{{ t('aiChat.tokensInput') }}</span>
-            <span class="tud-mono">{{ formatTokenCount(usage.prompt_tokens) }}</span>
+            <span class="tud-mono">{{ formatTokenCount(effectiveUsage.prompt_tokens) }}</span>
           </div>
           <div class="tud-row">
             <span>{{ t('aiChat.tokensOutput') }}</span>
-            <span class="tud-mono">{{ formatTokenCount(usage.completion_tokens) }}</span>
+            <span class="tud-mono">{{ formatTokenCount(effectiveUsage.completion_tokens) }}</span>
           </div>
           <div class="tud-row tud-total-row">
             <span>{{ t('aiChat.tokensTotal') }}</span>
-            <span class="tud-mono tud-total-num">{{ formatTokenCount(usage.total_tokens) }}</span>
+            <span class="tud-mono tud-total-num">{{ formatTokenCount(effectiveUsage.total_tokens) }}</span>
           </div>
         </template>
         <div v-else class="tud-unavailable">{{ t('aiChat.tokenUsageUnavailable') }}</div>
@@ -247,17 +247,33 @@ function onSelectPreset(value: TokenUsageViewPreset) {
     </div>
     <template #reference>
       <button
-        v-show="preferences.headerTotal || usage.total_tokens > 0"
+        v-show="preferences.headerTotal || effectiveUsage.total_tokens > 0"
         class="header-btn token-usage-btn"
-        :class="{ 'has-tokens': usage.total_tokens > 0, 'is-off': !preferences.headerTotal }"
+        :class="{ 'has-tokens': effectiveUsage.total_tokens > 0, 'is-off': !preferences.headerTotal }"
         :title="t('aiChat.tokenUsage')"
       >
         <van-loading v-if="loading" type="spinner" size="14" />
+        <template v-else-if="effectiveUsage.total_tokens > 0">
+          <span class="token-io-item token-input">
+            <svg class="token-io-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+            </svg>
+            <span class="token-io-count">{{ formatTokenCount(effectiveUsage.prompt_tokens) }}</span>
+          </span>
+          <span class="token-io-item token-output">
+            <svg class="token-io-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+            </svg>
+            <span class="token-io-count">{{ formatTokenCount(effectiveUsage.completion_tokens) }}</span>
+          </span>
+          <svg class="token-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </template>
         <template v-else>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
-          <span v-if="usage.total_tokens > 0" class="token-count">{{ usage.total_tokens > 999 ? (usage.total_tokens/1000).toFixed(1) + 'k' : usage.total_tokens }}</span>
           <svg class="token-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -320,7 +336,7 @@ function onSelectPreset(value: TokenUsageViewPreset) {
 .token-usage-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 12px;
   padding: 0 8px;
   border-radius: 12px;
@@ -346,6 +362,32 @@ function onSelectPreset(value: TokenUsageViewPreset) {
 
 .token-usage-btn.is-off .token-chevron {
   display: none;
+}
+
+/* DeerFlow-style ↑input ↓output display */
+.token-io-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-io-arrow {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.token-io-count {
+  font-weight: 500;
+  line-height: 1;
+}
+
+.token-io-item.token-input {
+  color: var(--van-text-color, rgba(0, 0, 0, 0.9));
+}
+
+.token-io-item.token-output {
+  color: var(--van-primary-color);
 }
 
 .token-chevron {

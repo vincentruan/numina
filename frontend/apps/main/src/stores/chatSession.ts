@@ -59,16 +59,16 @@ export const useChatSessionStore = defineStore('chatSession', () => {
     // This ensures ChatHistoryPage can re-select the same thread without losing state
     if (activeThreadId.value === id) {
       // Already active - no change needed, just update URL
-      history.replaceState(null, '', `?thread_id=${id}`)
+      history.replaceState(history.state, '', `?thread_id=${id}`)
       return
     }
     activeThreadId.value = id
-    history.replaceState(null, '', `?thread_id=${id}`)
+    history.replaceState(history.state, '', `?thread_id=${id}`)
   }
 
   function clearActiveThread() {
     activeThreadId.value = null
-    history.replaceState(null, '', window.location.pathname)
+    history.replaceState(history.state, '', window.location.pathname)
   }
 
   function setSessions(list: ThreadSession[]) {

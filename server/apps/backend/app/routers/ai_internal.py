@@ -747,7 +747,7 @@ class SessionSummaryRequest(BaseModel):
 
 def _session_to_dict(s: "object") -> dict:
     return {
-        "session_id": s.id,  # type: ignore[attr-defined]
+        "session_id": str(s.id),  # type: ignore[attr-defined]
         "family_id": str(s.family_id),  # type: ignore[attr-defined]
         "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
         "agent_id": str(s.agent_id) if s.agent_id else None,  # type: ignore[attr-defined]

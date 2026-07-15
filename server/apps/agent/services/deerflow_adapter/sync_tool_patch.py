@@ -187,6 +187,97 @@ def _apply_contextvar_propagation_patch() -> None:
 
     _sync_mod.make_sync_tool_wrapper = _patched_make_sync_tool_wrapper
     logger.info("[sync_tool_patch] patched make_sync_tool_wrapper to propagate contextvars into pool thread")
+    _apply_subagent_contextvar_patch()
+    _apply_callback_manager_patch()
+
+
+def _apply_callback_manager_patch() -> None:
+    """Patch ``_find_usage_recorder`` to handle CallbackManager correctly.
+
+    DeerFlow's ``task_tool._find_usage_recorder`` tries to iterate over
+    ``runtime.config.get("callbacks", [])``, but in our environment this is
+    a ``CallbackManager`` object (not a list), causing:
+        TypeError: 'CallbackManager' object is not iterable
+
+    Fix: extract the handlers list from CallbackManager before iterating.
+    """
+    import sys
+    try:
+        # Import the actual module, not the tool instance
+        import importlib.util
+        spec = importlib.util.find_spec("deerflow.tools.builtins.task_tool")
+        if spec is None or spec.loader is None:
+            logger.warning("[sync_tool_patch] deerflow.tools.builtins.task_tool module not found; skipping")
+            return
+        _task_tool_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_task_tool_mod)
+    except (ImportError, AttributeError, Exception) as e:
+        logger.warning(f"[sync_tool_patch] failed to load task_tool module: {e}; skipping")
+        return
+
+    if not hasattr(_task_tool_mod, '_find_usage_recorder'):
+        logger.warning("[sync_tool_patch] _find_usage_recorder not found in task_tool module; skipping")
+        return
+
+    _orig_find_usage_recorder = _task_tool_mod._find_usage_recorder
+
+    def _patched_find_usage_recorder(runtime):
+        """Extract usage recorder from runtime, handling CallbackManager."""
+        if runtime is None:
+            return None
+        config = getattr(runtime, "config", None)
+        if not isinstance(config, dict):
+            return None
+        callbacks = config.get("callbacks", [])
+        # Handle CallbackManager object (has .handlers attribute)
+        if hasattr(callbacks, "handlers"):
+            callbacks = callbacks.handlers
+        # Ensure callbacks is iterable
+        if not hasattr(callbacks, "__iter__"):
+            callbacks = [callbacks] if callbacks else []
+        for cb in callbacks:
+            if hasattr(cb, "record_external_llm_usage_records"):
+                return cb
+        return None
+
+    _task_tool_mod._find_usage_recorder = _patched_find_usage_recorder
+    # Also patch in sys.modules to ensure the patched version is used
+    if 'deerflow.tools.builtins.task_tool' in sys.modules:
+        sys.modules['deerflow.tools.builtins.task_tool']._find_usage_recorder = _patched_find_usage_recorder
+    logger.info("[sync_tool_patch] patched _find_usage_recorder to handle CallbackManager")
+
+
+def _apply_subagent_contextvar_patch() -> None:
+    """Patch ``_submit_to_isolated_loop_in_context`` to propagate contextvars.
+
+    The original function calls ``context.run(lambda: asyncio.run_coroutine_threadsafe(...))``
+    which sets the context on the *calling* thread, but the coroutine runs on the
+    isolated loop thread where the context is NOT propagated.
+
+    Fix: wrap the coroutine so it runs inside the captured context on the isolated loop.
+    """
+    try:
+        import deerflow.subagents.executor as _executor_mod
+    except (ImportError, AttributeError):
+        logger.warning("[sync_tool_patch] deerflow.subagents.executor not found; skipping")
+        return
+
+    _orig_submit = _executor_mod._submit_to_isolated_loop_in_context
+
+    def _patched_submit(context, coro_factory):
+        """Submit coroutine to isolated loop while preserving ContextVar state."""
+        import asyncio as _asyncio
+
+        async def _run_in_context():
+            return await context.run(coro_factory)
+
+        return _asyncio.run_coroutine_threadsafe(
+            _run_in_context(),
+            _executor_mod._get_isolated_subagent_loop(),
+        )
+
+    _executor_mod._submit_to_isolated_loop_in_context = _patched_submit
+    logger.info("[sync_tool_patch] patched _submit_to_isolated_loop_in_context to propagate contextvars into isolated loop")
 
 
 def _apply_mcp_proxy_bypass_patch() -> None:

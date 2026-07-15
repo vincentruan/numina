@@ -325,6 +325,21 @@ function handleContextChange(_context: InputContext) {
 async function handleSuggestionClick(text: string) {
   if (!store.activeThreadId || chat.isLoading.value) return
   chat.suggestions.value = []
+  // Also clear per-message suggestions on the last AI message so the inline
+  // chips don't remain visible after the user has clicked one and a new
+  // round starts. Without this, the old suggestion chips stay rendered
+  // inside the previous AI message bubble.
+  const lastAiIdx = chat.messages.value.findLastIndex(m => m.type === 'ai')
+  if (lastAiIdx >= 0) {
+    const msg = chat.messages.value[lastAiIdx]
+    if (msg.suggestions) {
+      chat.messages.value = [
+        ...chat.messages.value.slice(0, lastAiIdx),
+        { ...msg, suggestions: undefined },
+        ...chat.messages.value.slice(lastAiIdx + 1),
+      ]
+    }
+  }
   await chat.sendMessage(text, undefined, store.activeThreadId)
 }
 
@@ -340,6 +355,7 @@ function handleArtifactTap(artifact: { id: string; title: string; kind: string; 
 }
 
 function handleNewChat() {
+  chat.clearMessages()
   store.clearActiveThread()
 }
 
@@ -365,6 +381,14 @@ async function handleBranch(messageId: string, messageIds: string[]) {
   } finally {
     branchingMessageId.value = null
   }
+}
+
+/**
+ * Handle clarification submit from HumanInputCard.
+ * Calls the resume API to continue the interrupted graph execution.
+ */
+async function handleClarificationSubmit(payload: { threadId: string; interruptId: string; answer: string }) {
+  await chat.resumeInterrupt(payload.threadId, payload.interruptId, payload.answer)
 }
 </script>
 
@@ -396,11 +420,14 @@ async function handleBranch(messageId: string, messageIds: string[]) {
           :thread-id="store.activeThreadId || undefined"
           :can-branch="canBranch"
           :branching-message-id="branchingMessageId"
+          :answered-interrupt-ids="chat.answeredInterruptIds.value"
+          :interrupt-error-id="chat.interruptErrorId.value"
           @retry="handleRetry"
           @stop="handleStopStream"
           @suggestion-click="handleSuggestionClick"
           @artifact-tap="handleArtifactTap"
           @branch="handleBranch"
+          @clarification-submit="handleClarificationSubmit"
         />
       <!-- Suggestion chips above input (from SSE custom events) -->
       <SuggestionChips

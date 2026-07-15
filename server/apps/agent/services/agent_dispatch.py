@@ -740,23 +740,41 @@ async def stream_agent_dispatch(
                             backend_id = tool_call_id_map.get(provider_id, provider_id)
                             # Generate result_summary for frontend display (deerflow pattern)
                             result_summary = _generate_tool_result_summary(content)
+
+                            # Detect tool errors from content (DeerFlow pattern)
+                            # Tools return errors in specific formats:
+                            # - JSON with "error" field: {"error": "message"}
+                            # - String starting with "Error:" or "Error "
+                            tool_success = True
+                            if content:
+                                content_str = str(content)
+                                # Check for JSON error format
+                                try:
+                                    import json
+                                    parsed = json.loads(content_str)
+                                    if isinstance(parsed, dict) and "error" in parsed:
+                                        tool_success = False
+                                except (json.JSONDecodeError, TypeError):
+                                    # Not JSON, check for string error patterns
+                                    if content_str.startswith("Error:") or content_str.startswith("Error "):
+                                        tool_success = False
+
                             # Journal write BEFORE yield to ensure persistence on disconnect
                             try:
                                 session_journal.write_tool_result(
                                     family_id=family_id,
                                     session_id=thread_id,
                                     tool_id=backend_id,
-                                    success=True,
+                                    success=tool_success,
                                     execution_time_ms=0,  # streaming path lacks timing metadata
                                 )
                             except Exception as e:
                                 logger.warning("[agent_dispatch] journal write_tool_result failed: %s", e)
                             # Tool messages from langchain don't carry success/timing —
-                            # we report success when content is present, no exception
-                            # bubbled up; failures arrive via the surrounding except.
+                            # we detect success from content patterns (JSON error field or "Error:" prefix)
                             yield builder_events.tool_result(
                                 tool_id=backend_id,
-                                success=True,
+                                success=tool_success,
                                 execution_time_ms=0,
                                 data=content,
                                 result_summary=result_summary,

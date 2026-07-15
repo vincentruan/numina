@@ -12,25 +12,35 @@ const i18n = createI18n({
         sendingMessage: '发送中',
         sendFailed: '发送失败',
         resend: '重发',
+        retry: '重发',
         copyAria: '复制',
       },
     },
   },
 })
 
+// Stub MarkdownContent to render its content prop as plain text
+const MarkdownContentStub = {
+  template: '<div class="markdown-stub"><slot />{{ content }}</div>',
+  props: ['content'],
+}
+
 function mountWith(props: Partial<InstanceType<typeof UserBubble>['$props']> = {}) {
   return mount(UserBubble, {
     props: { content: 'hello', displayTime: '14:28', ...props },
-    global: { plugins: [i18n] },
+    global: {
+      plugins: [i18n],
+      stubs: { MarkdownContent: MarkdownContentStub },
+    },
   })
 }
 
 describe('UserBubble — DeerFlow layout', () => {
-  it('bubble-content contains only the text, not the copy button or time', () => {
+  it('bubble-content contains the text via MarkdownContent, not the copy button or time', () => {
     const w = mountWith({ content: '你应该接了mcp才对' })
     const bubble = w.find('.bubble-content')
     expect(bubble.exists()).toBe(true)
-    expect(bubble.text()).toBe('你应该接了mcp才对')
+    expect(bubble.text()).toContain('你应该接了mcp才对')
     // Footer (copy + time) must NOT be inside the bubble
     expect(bubble.find('.bubble-footer').exists()).toBe(false)
     expect(bubble.find('.bubble-time').exists()).toBe(false)

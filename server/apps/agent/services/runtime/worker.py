@@ -53,6 +53,8 @@ async def run_family_agent(
     graph_input: dict | None,
     config: dict[str, Any],
     stream_modes: list[str] | None = None,
+    resume_answer: str | None = None,
+    interrupt_id: str | None = None,
 ) -> None:
     """Background agent execution for a family-scoped run.
 
@@ -223,6 +225,7 @@ async def run_family_agent(
             enable_thinking=call_thinking_enabled,
             subagent_enabled=call_subagent_enabled,
             plan_mode=call_plan_mode,
+            resume_answer=resume_answer,
         ):
             # Cooperative cancellation check (DeerFlow pattern)
             if record.abort_event.is_set():
@@ -303,23 +306,18 @@ async def run_family_agent(
                 duration_ms=int((time.monotonic() - t_start) * 1000),
             )
         )
-        # 10. Terminal frames: `end` with completion status (Q2), follow-up
-        # suggestions (R8), and fire-and-forget title generation — then the
-        # end sentinel + deferred cleanup (DeerFlow pattern).
+        # 10. Terminal frames: follow-up suggestions (R8), `end` with completion
+        # status (Q2), and fire-and-forget title generation — then the end
+        # sentinel + deferred cleanup (DeerFlow pattern).
         #
-        # Q2: publish a real `end` data frame carrying the completion status
-        # so the frontend can distinguish a clean completion from a truncated
-        # stream (#19) without guessing from content. publish_end() below only
-        # signals the sentinel (data=None), so the data frame must precede it.
-        await bridge.publish(run_id, "end", {"status": completion_status})
-
-        # R8: generate follow-up suggestions from the selected provider config
+        # R8: generate follow-up suggestions BEFORE publishing `end`, because
+        # the frontend attaches suggestions to the last AI message in the `end`
+        # handler. If suggestions arrive after `end`, they are silently dropped.
         # — NOT the whole ``ai_config`` envelope, which nests provider keys
         # (api_key/ai_model_id/ai_base_url) under ``providers``. Passing the
         # envelope leaves every key unset, so the suggestions LLM falls back
         # to a dummy key and silently 401s. Skipped when the run aborted
         # before a provider was selected OR when the run was cancelled/interrupted.
-        # Mirrors the legacy runs.py:251-254 finally-block behavior.
         if completion_status == 'complete' and selected_provider is not None:
             ai_response = "".join(ai_response_parts)
             suggestions = await generate_suggestions(ai_response, user_message, selected_provider)
@@ -329,6 +327,13 @@ async def run_family_agent(
                     "suggestions": suggestions,
                 })
 
+        # Q2: publish a real `end` data frame carrying the completion status
+        # so the frontend can distinguish a clean completion from a truncated
+        # stream (#19) without guessing from content. publish_end() below only
+        # signals the sentinel (data=None), so the data frame must precede it.
+        await bridge.publish(run_id, "end", {"status": completion_status})
+
+        if completion_status == 'complete' and selected_provider is not None:
             # Sync / generate the thread title. DeerFlow's TitleMiddleware
             # writes to the checkpoint, but Numina's adapter runs the sync
             # ``stream()`` path so only the sync ``after_model`` hook fires -

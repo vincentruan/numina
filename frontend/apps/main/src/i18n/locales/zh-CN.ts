@@ -407,6 +407,7 @@ export default {
       retry: '重试',
       superseded: '已被新问题替代',
       customInput: '或输入自定义回答...',
+      inputPlaceholder: '请输入您的回答...',
     },
     quoteButton: '引用到对话',
     branchButton: '创建分支',

@@ -334,11 +334,19 @@ class LLMClient:
         for block in message.content:
             if hasattr(block, "text"):
                 return block.text
+        # DeepSeek / non-Anthropic models routed through Anthropic SDK may
+        # return only ThinkingBlock when max_tokens is too low to leave
+        # budget for a TextBlock (reasoning is intrinsic to the model).
+        # Treat thinking content as valid connection proof (see Qwen3
+        # enable_thinking empty content pattern).
+        for block in message.content:
+            if hasattr(block, "thinking"):
+                return block.thinking
         # 标准化错误处理：明确告知响应格式问题
         block_types = [type(b).__name__ for b in message.content]
         raise LLMResponseError(
             provider="anthropic",
-            message="Response contains no text blocks",
+            message="Response contains no text or thinking blocks",
             details=f"block_types={block_types}, model={self.model_id}",
         )
 
@@ -398,6 +406,11 @@ class LLMClient:
         for block in message.content:
             if hasattr(block, "text"):
                 return block.text
+        # Same fallback as _complete_anthropic: DeepSeek / non-Anthropic
+        # models may return only ThinkingBlock when max_tokens is too low.
+        for block in message.content:
+            if hasattr(block, "thinking"):
+                return block.thinking
         return ""
 
     async def _complete_openai_vision(

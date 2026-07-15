@@ -13,13 +13,15 @@
  * - Main content area with markdown rendering
  * - Actions: copy, regenerate, feedback (thumbs up/down)
  */
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
+import type { CitationSource } from '@/utils/ai-chat/citations'
 import ReasoningSection from './ReasoningSection.vue'
 import ToolCallList from './ToolCallList.vue'
 import TodoListPanel from './TodoListPanel.vue'
 import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
+import CitationSourcesPanel from '@/components/ai-chat/CitationSourcesPanel.vue'
 import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
 
 interface Props {
@@ -36,9 +38,15 @@ interface Props {
   feedback?: 1 | -1 | 0
   displayTime: string
   artifacts?: Array<{ id: string; title: string; kind: string; url?: string; path?: string }>
+  canBranch?: boolean
+  isBranching?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  phase: 'done',
+  canBranch: false,
+  isBranching: false,
+})
 
 const emit = defineEmits<{
   retry: []
@@ -46,6 +54,7 @@ const emit = defineEmits<{
   feedback: [value: 1 | -1]
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  branch: []
 }>()
 
 const { t } = useI18n()
@@ -111,10 +120,100 @@ function onFeedback(value: 1 | -1) {
   emit('feedback', value)
 }
 
+// Citation sources extracted from markdown content
+const citationSources = ref<CitationSource[]>([])
+
+function onCitations(sources: CitationSource[]) {
+  citationSources.value = sources
+}
+
 // Suggestion chips generation (placeholder - will be enhanced)
 function suggestionChips(): string[] {
   return props.suggestions ?? []
 }
+
+// Marquee scrolling: detect overflow chips via canvas text measurement
+// and apply CSS animation class + distance variable
+const overflowIdxs = ref<number[]>([])
+const chipsContainerRef = ref<HTMLDivElement | null>(null)
+
+let _measureCanvas: HTMLCanvasElement | null = null
+function measureTextPxWidth(text: string, font: string): number {
+  if (!_measureCanvas) _measureCanvas = document.createElement('canvas')
+  const ctx = _measureCanvas.getContext('2d')
+  if (!ctx) return 0
+  ctx.font = font
+  return ctx.measureText(text).width
+}
+
+function measureChipOverflow() {
+  const container = chipsContainerRef.value
+  console.log('[SuggestionChip] container:', !!container)
+  if (!container) return
+
+  const chips = container.querySelectorAll<HTMLButtonElement>('.suggestion-chip')
+  console.log('[SuggestionChip] chips count:', chips.length)
+  const next: number[] = []
+
+  chips.forEach((chip, idx) => {
+    const textEl = chip.querySelector('.suggestion-chip__text') as HTMLElement | null
+    if (!textEl) return
+    const text = textEl.textContent ?? ''
+    if (!text) return
+
+    const cs = window.getComputedStyle(textEl)
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily}`
+    const textW = measureTextPxWidth(text, font)
+    const availW = chip.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+
+    console.log(`[SuggestionChip] chip ${idx}:`, {
+      text: text.substring(0, 30),
+      textW: Math.round(textW),
+      availW: Math.round(availW),
+      chipW: chip.clientWidth,
+      padL: cs.paddingLeft,
+      padR: cs.paddingRight,
+      overflow: textW > availW + 2,
+    })
+
+    if (textW > availW + 2) {
+      next.push(idx)
+      chip.style.setProperty('--marquee-distance', `-${Math.round(textW - availW)}px`)
+    } else {
+      chip.style.removeProperty('--marquee-distance')
+    }
+  })
+  overflowIdxs.value = next
+  console.log('[SuggestionChip] overflowIdxs:', next)
+}
+
+function onChipClick(chip: string) {
+  emit('suggestionClick', chip)
+}
+
+// Watch the actual render condition, not just the props
+const shouldShowChips = computed(() =>
+  props.phase === 'done' &&
+  props.content &&
+  props.content.length >= 30 &&
+  suggestionChips().length > 0
+)
+
+// flush: 'post' ensures this runs AFTER DOM updates
+watch(
+  shouldShowChips,
+  (show) => {
+    if (show) {
+      // Chips just became visible, measure them after DOM update
+      // flush: 'post' already ensures DOM is updated, no need for nextTick
+      measureChipOverflow()
+    } else {
+      // Chips hidden, reset
+      overflowIdxs.value = []
+    }
+  },
+  { immediate: true, flush: 'post' }
+)
 </script>
 
 <template>
@@ -158,7 +257,13 @@ function suggestionChips(): string[] {
       :class="{ 'content--appearing': phase === 'answering' && !renderedContent }"
     >
       <!-- Markdown rendered via MarkdownContent (markdown-it + shiki) -->
-      <MarkdownContent :content="content" :is-loading="false" />
+      <MarkdownContent :content="content" :is-loading="false" @citations="onCitations" />
+
+      <!-- Citation sources panel (DeerFlow pattern) -->
+      <CitationSourcesPanel
+        v-if="citationSources.length > 0 && phase === 'done'"
+        :sources="citationSources"
+      />
 
       <!-- Streaming indicator (block-level bouncing dots, U6) -->
       <StreamingIndicator :visible="phase === 'answering'" />
@@ -205,6 +310,21 @@ function suggestionChips(): string[] {
           </svg>
         </button>
         <button
+          v-if="canBranch"
+          class="action-btn"
+          :class="{ 'action-btn--branching': isBranching }"
+          :aria-label="t('aiChat.branchButton')"
+          :disabled="isBranching"
+          @click="emit('branch')"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <line x1="6" y1="3" x2="6" y2="15"/>
+            <circle cx="18" cy="6" r="3"/>
+            <circle cx="6" cy="18" r="3"/>
+            <path d="M18 9a9 9 0 0 1-9 9"/>
+          </svg>
+        </button>
+        <button
           class="action-btn"
           :class="{ 'action-btn--active': feedback === 1 }"
           :aria-label="t('aiChat.helpfulAria')"
@@ -232,15 +352,18 @@ function suggestionChips(): string[] {
     <!-- Suggestion chips -->
     <div
       v-if="phase === 'done' && content && content.length >= 30 && suggestionChips().length > 0"
+      ref="chipsContainerRef"
       class="suggestion-chips"
     >
       <button
-        v-for="chip in suggestionChips()"
+        v-for="(chip, idx) in suggestionChips()"
         :key="chip"
         class="suggestion-chip"
-        @click="emit('suggestionClick', chip)"
+        :class="{ 'suggestion-chip--scrolling': overflowIdxs.includes(idx) }"
+        type="button"
+        @click="onChipClick(chip)"
       >
-        {{ chip }}
+        <span class="suggestion-chip__text">{{ chip }}</span>
       </button>
     </div>
   </div>
@@ -460,6 +583,15 @@ function suggestionChips(): string[] {
   opacity: 1;
 }
 
+.action-btn--branching {
+  animation: branch-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes branch-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Suggestion chips */
 .suggestion-chips {
   display: flex;
@@ -469,6 +601,8 @@ function suggestionChips(): string[] {
 }
 
 .suggestion-chip {
+  position: relative;
+  max-width: min(100%, 320px);
   padding: 8px 14px;
   font-size: 13px;
   background: rgba(129, 140, 248, 0.1);
@@ -476,12 +610,48 @@ function suggestionChips(): string[] {
   border-radius: 20px;
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, border-color 0.2s;
+  overflow: hidden;
+  text-align: left;
 }
 
 .suggestion-chip:hover {
   background: rgba(129, 140, 248, 0.2);
   border-color: rgba(129, 140, 248, 0.3);
+}
+
+.suggestion-chip__text {
+  display: inline-block;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Overflow chips: auto-scroll marquee (works on mobile without hover) */
+.suggestion-chip--scrolling .suggestion-chip__text {
+  /* Remove max-width constraint so text can be wider than container */
+  max-width: none;
+  /* Make overflow visible so parent's overflow:hidden can clip it */
+  overflow: visible;
+  text-overflow: clip;
+  animation: suggestion-marquee 6s ease-in-out infinite;
+}
+
+@keyframes suggestion-marquee {
+  0%, 20% {
+    transform: translateX(0);
+  }
+  80%, 100% {
+    transform: translateX(var(--marquee-distance, -50%));
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .suggestion-chip--scrolling .suggestion-chip__text {
+    animation: none;
+  }
 }
 
 @keyframes pulse {

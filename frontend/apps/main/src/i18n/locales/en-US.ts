@@ -222,6 +222,7 @@ export default {
       retry: 'Retry',
       superseded: 'Superseded by new question',
       customInput: 'Or type a custom answer...',
+      inputPlaceholder: 'Type your answer...',
     },
     quoteButton: 'Quote to conversation',
     branchButton: 'Branch conversation',

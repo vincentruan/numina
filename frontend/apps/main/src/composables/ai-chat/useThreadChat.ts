@@ -88,6 +88,8 @@ export interface InterruptData {
   question: string
   options?: Array<{ label: string; value: string }>
   context?: string
+  choiceWithOther?: boolean
+  multiSelect?: boolean
   interrupt_id: string
 }
 
@@ -191,6 +193,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   const tokenUsage = ref<TokenUsage | null>(null)
   const planningSteps = ref<PlanningStep[]>([])
   const suggestions = ref<string[]>([])
+  /**
+   * Track interrupt IDs that have been answered by the user in this session.
+   * Used by MessageGroup to transition HumanInputCard from 'pending' to
+   * 'answered' after resumeInterrupt completes. getMessageGroups doesn't
+   * set phase/answer on clarification groups, so we track externally.
+   */
+  const answeredInterruptIds = ref<Set<string>>(new Set())
   const runId = ref<string | null>(null)
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
@@ -415,7 +424,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     },
     source?: string,
   ): Promise<void> {
-    if (isLoading.value) return
+    // If a previous stream is still marked as loading (e.g. dropped connection
+    // that hasn't fully cleaned up, or user clicked retry mid-stream), cancel
+    // it first instead of silently dropping the new message. Previously
+    // `if (isLoading.value) return` caused the retry button to appear
+    // clickable but do nothing.
+    if (isLoading.value) {
+      cancelStream()
+      // Wait one tick for Vue reactivity to settle after cancel
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
     isLoading.value = true
     error.value = null
     planningSteps.value = []
@@ -565,6 +583,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               question?: string
               options?: Array<{ label: string; value: string }>
               context?: string
+              choice_with_other?: boolean
+              multi_select?: boolean
               interrupt_id?: string
             }
             if (customData.type === 'tool_call') {
@@ -577,6 +597,18 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               }
             } else if (customData.type === 'suggestions' && customData.suggestions) {
               suggestions.value = customData.suggestions
+              // If the stream already ended (end arrived before suggestions),
+              // retroactively attach suggestions to the last AI message so
+              // they appear without requiring a new message.
+              const lastAiIdx = messages.value.findLastIndex(m => m.type === 'ai')
+              if (lastAiIdx >= 0 && messages.value[lastAiIdx].phase === 'done') {
+                const msg = messages.value[lastAiIdx]
+                messages.value = [
+                  ...messages.value.slice(0, lastAiIdx),
+                  { ...msg, suggestions: customData.suggestions },
+                  ...messages.value.slice(lastAiIdx + 1),
+                ]
+              }
             } else if (customData.type === 'interrupt') {
               // DeerFlow ask_clarification interrupt: the agent paused and needs
               // user input to continue. Create a tool message named
@@ -588,6 +620,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                 question: customData.question || '',
                 options: customData.options,
                 context: customData.context,
+                choiceWithOther: customData.choice_with_other,
+                multiSelect: customData.multi_select,
                 interrupt_id: customData.interrupt_id || genId('intr'),
               }
               const msg: ChatMessage = {
@@ -665,7 +699,18 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             }
             // Mark all planning steps as done
             planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+            // Defensive: ensure user message status is 'sent' when stream completes.
+            // Line 520 should have already set this, but the array replacement in the
+            // AI message marking above can sometimes race with Vue's reactivity system,
+            // leaving the user bubble stuck at "发送中". This explicit call guarantees
+            // the status is correct when the stream ends successfully.
+            setUserMsgStatus(userMsg.id, 'sent')
             streamSucceeded = true
+            // Clear standalone suggestions now that they're attached inline to
+            // the last AI message. Without this, SuggestionChips (standalone)
+            // and AssistantMessage (inline) both render the same suggestions
+            // simultaneously — duplicate UI.
+            suggestions.value = []
             // Notify caller that stream ended (for title refresh)
             if (currentThreadId) {
               options.onStreamEnd?.(currentThreadId)
@@ -830,9 +875,310 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
+  function clearMessages() {
+    cancelStream()
+    messages.value = []
+    tokenUsage.value = null
+    planningSteps.value = []
+    suggestions.value = []
+    answeredInterruptIds.value = new Set()
+    runId.value = null
+    error.value = null
+    isLoading.value = false
+  }
+
+  /**
+   * Resume an interrupted graph execution with the user's answer.
+   *
+   * Calls POST /api/threads/{threadId}/runs/resume which returns an SSE stream
+   * (same protocol as sendMessage). Processes the stream identically — messages-
+   * tuple, values, custom events — so the agent's continued response appears
+   * in the chat in real-time.
+   *
+   * Includes retry logic (3 attempts with exponential backoff) matching
+   * sendMessage's behavior. On failure, sets interruptError so HumanInputCard
+   * can show error state with retry button.
+   */
+  const interruptError = ref<string | null>(null)
+
+  /**
+   * The interrupt_id that most recently failed (all retries exhausted).
+   * Used by MessageGroup to set HumanInputCard status to 'error' so the
+   * retry button appears. Cleared on new resumeInterrupt attempt.
+   */
+  const interruptErrorId = ref<string | null>(null)
+
+  async function resumeInterrupt(
+    threadId: string,
+    interruptId: string,
+    answer: string,
+  ): Promise<void> {
+    if (isLoading.value) return
+    isLoading.value = true
+    error.value = null
+    interruptError.value = null
+    planningSteps.value = []
+    suggestions.value = []
+    runId.value = null
+    userCancelled = false
+    abortController = new AbortController()
+
+    // Add an optimistic user message so the answer appears in the chat
+    const userMsg = addOptimisticUserMessage(answer)
+
+    let retryCount = 0
+    let streamSucceeded = false
+
+    while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
+      if (retryCount > 0) {
+        // Exponential backoff with jitter
+        const baseDelay = SSE_RETRY_DELAYS[retryCount - 1]
+        const jitteredDelay = Math.floor(baseDelay * (0.85 + Math.random() * 0.15))
+        await new Promise(resolve => {
+          retryDelayId = setTimeout(resolve, jitteredDelay)
+        })
+        retryDelayId = null
+        if (userCancelled || !abortController || abortController.signal.aborted) break
+      }
+
+      streamTimeoutId = setTimeout(() => {
+        abortController?.abort()
+      }, STREAM_TIMEOUT_MS)
+
+      try {
+        const apiUrl = typeof window !== 'undefined' ? window.location.origin : ''
+        const authStore = (await import('@/stores/auth')).useAuthStore()
+        const familyStore = (await import('@/stores/family')).useFamilyStore()
+        const familyId = familyStore.family?.id || authStore.user?.family_id
+        if (!familyId) throw new Error('Family not loaded')
+
+        const res = await fetch(
+          `${apiUrl}/api/threads/${encodeURIComponent(threadId)}/runs/resume`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Family-Id': familyId,
+              ...(authStore.user?.id ? { 'X-User-Id': String(authStore.user.id) } : {}),
+            },
+            credentials: 'include',
+            body: JSON.stringify({ answer, interrupt_id: interruptId }),
+            signal: abortController.signal,
+          },
+        )
+
+        if (!res.ok) {
+          throw new Error(`Resume failed: ${res.status}`)
+        }
+
+        setUserMsgStatus(userMsg.id, 'sent')
+
+        // Parse the SSE stream from the resume endpoint
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('No response body')
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let streamEnded = false
+        let currentEvent = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            // Handle SSE event: field
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim()
+              continue
+            }
+            // Handle SSE data: field
+            if (!line.startsWith('data:')) continue
+            const dataStr = line.slice(5).trim()
+            if (!dataStr || dataStr === '[DONE]') continue
+
+            try {
+              const parsed = JSON.parse(dataStr) as {
+                event?: string
+                data?: unknown
+              }
+              // Prefer event: field, fallback to parsed.event
+              const event = currentEvent || parsed.event || 'message'
+              const data = parsed.data
+              currentEvent = '' // Reset after use
+
+              if (event === 'metadata' && data) {
+                const metaData = data as { run_id?: string }
+                if (metaData.run_id) runId.value = metaData.run_id
+              } else if ((event === 'messages-tuple' || event === 'messages') && data) {
+                mergeMessagesTuple(data as MessagesTupleData)
+              } else if (event === 'values' && data) {
+                const valData = data as ValuesData
+                if (valData.messages) mergeValuesMessages(valData.messages)
+              } else if (event === 'custom' && data) {
+                const customData = data as {
+                  type?: string
+                  question?: string
+                  options?: Array<{ label: string; value: string }>
+                  context?: string
+                  choice_with_other?: boolean
+                  multi_select?: boolean
+                  interrupt_id?: string
+                  suggestions?: string[]
+                  tool_call_id?: string
+                  tool_name?: string
+                  args?: Record<string, unknown>
+                  task_id?: string
+                  description?: string
+                  prompt?: string
+                  result?: string
+                  error?: string
+                  usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
+                }
+                if (customData.type === 'tool_call') {
+                  const step = createPlanningStep(customData)
+                  const exists = step.id && planningSteps.value.some(s => s.id === step.id)
+                  if (!exists) planningSteps.value = [...planningSteps.value, step]
+                } else if (customData.type === 'suggestions' && customData.suggestions) {
+                  suggestions.value = customData.suggestions
+                  // If the stream already ended (end arrived before suggestions),
+                  // retroactively attach suggestions to the last AI message so
+                  // they appear without requiring a new message.
+                  const lastAiIdx = messages.value.findLastIndex(m => m.type === 'ai')
+                  if (lastAiIdx >= 0 && messages.value[lastAiIdx].phase === 'done') {
+                    const msg = messages.value[lastAiIdx]
+                    messages.value = [
+                      ...messages.value.slice(0, lastAiIdx),
+                      { ...msg, suggestions: customData.suggestions },
+                      ...messages.value.slice(lastAiIdx + 1),
+                    ]
+                  }
+                } else if (customData.type === 'interrupt') {
+                  // Nested interrupt (agent asks another question)
+                  const interruptPayload: InterruptData = {
+                    question: customData.question || '',
+                    options: customData.options,
+                    context: customData.context,
+                    choiceWithOther: customData.choice_with_other,
+                    multiSelect: customData.multi_select,
+                    interrupt_id: customData.interrupt_id || genId('intr'),
+                  }
+                  const msg: ChatMessage = {
+                    id: genId('clar'),
+                    type: 'tool',
+                    role: 'assistant',
+                    content: interruptPayload.question,
+                    displayTime: formatDisplayTime(),
+                    name: 'ask_clarification',
+                    tool_call_id: interruptPayload.interrupt_id,
+                    additional_kwargs: { interruptData: interruptPayload },
+                  }
+                  messages.value = [...messages.value, msg]
+                } else if (
+                  customData.type === 'task_started'
+                  || customData.type === 'task_running'
+                  || customData.type === 'task_completed'
+                  || customData.type === 'task_failed'
+                  || customData.type === 'task_timed_out'
+                  || customData.type === 'task_cancelled'
+                ) {
+                  handleTaskEvent(customData)
+                }
+              } else if (event === 'end') {
+                streamEnded = true
+                if (data) {
+                  const endData = data as { usage?: TokenUsage; status?: string }
+                  if (endData.status === 'error') throw new Error(t('aiChat.sendFailed'))
+                  if (endData.usage) tokenUsage.value = endData.usage
+                }
+                // Mark all AI messages as done
+                const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+                if (lastIdx >= 0) {
+                  const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
+                  const next = messages.value.map((msg, i) => {
+                    if (msg.type !== 'ai' || msg.phase === 'done') return msg
+                    const isLast = i === lastIdx
+                    return {
+                      ...msg,
+                      phase: 'done' as const,
+                      suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+                    }
+                  })
+                  messages.value = next
+                }
+                planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+                setUserMsgStatus(userMsg.id, 'sent')
+                // Clear standalone suggestions (now attached inline)
+                suggestions.value = []
+                if (currentThreadId) options.onStreamEnd?.(currentThreadId)
+                streamSucceeded = true
+              } else if (event === 'error' && data) {
+                const errData = data as { error?: string; message?: string }
+                throw new Error(errData.error || errData.message || t('aiChat.sendFailed'))
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== t('aiChat.sendFailed')) {
+                // JSON parse error — skip malformed line
+                continue
+              }
+              throw parseErr
+            }
+          }
+        }
+
+        if (!streamEnded && !streamSucceeded) {
+          // Stream ended without explicit 'end' chunk — mark AI messages done
+          const next = messages.value.map(msg =>
+            msg.type === 'ai' && msg.phase !== 'done'
+              ? { ...msg, phase: 'done' as const }
+              : msg,
+          )
+          messages.value = next
+          planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+          streamSucceeded = true
+        }
+      } catch (err) {
+        const e = err as Error & { name?: string }
+        setUserMsgStatus(userMsg.id, 'failed')
+        if (e.name === 'AbortError' && userCancelled) {
+          break
+        }
+        retryCount++
+        if (retryCount <= SSE_MAX_RETRIES) {
+          setUserMsgStatus(userMsg.id, 'sending')
+        }
+        if (retryCount > SSE_MAX_RETRIES) {
+          // All retries exhausted — set interruptError for HumanInputCard
+          interruptError.value = e.message || t('aiChat.sendFailed')
+          interruptErrorId.value = interruptId
+          error.value = interruptError.value
+        }
+      } finally {
+        if (streamTimeoutId !== null) {
+          clearTimeout(streamTimeoutId)
+          streamTimeoutId = null
+        }
+      }
+    }
+
+    // Mark this interrupt as answered so HumanInputCard transitions to
+    // 'answered' state (checkmark + answer text). Without this, the card
+    // stays in 'pending' state forever after a successful resume.
+    if (streamSucceeded) {
+      answeredInterruptIds.value = new Set([...answeredInterruptIds.value, interruptId])
+    }
+
+    isLoading.value = false
+    abortController = null
+  }
+
   return {
     messages, isLoading, isStreaming, error, tokenUsage,
-    planningSteps, suggestions, runId,
-    sendMessage, cancelStream, loadHistory, retry,
+    planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
+    sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
   }
 }

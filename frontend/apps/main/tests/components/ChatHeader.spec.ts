@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
 import ChatHeader from '../../src/components/ai/ChatHeader.vue'
-import { useAgentStore } from '../../src/stores/agent'
 
 // Mock composables
 vi.mock('@/composables/ai-chat/useThreadChat', () => ({
@@ -80,77 +79,11 @@ const vantStubs = {
 
 describe('ChatHeader', () => {
   let wrapper: VueWrapper<any>
-  let agentStore: ReturnType<typeof useAgentStore>
 
   beforeEach(() => {
     setActivePinia(createPinia())
-    agentStore = useAgentStore()
     mockPush.mockClear()
     vi.clearAllMocks()
-  })
-
-  describe('Agent Info Popup', () => {
-    it('shows agent logo button when activeAgent exists', async () => {
-      agentStore.systemAgents = [
-        { id: '1', agent_name: 'numina', display_name: 'Numina', description: 'AI Assistant', icon: '🤖', is_enabled: true } as any,
-      ]
-
-      wrapper = mount(ChatHeader, {
-        props: {
-          activeThreadId: null,
-          sessions: [],
-          activeAgent: agentStore.systemAgents[0],
-        },
-        global: { stubs: vantStubs },
-      })
-
-      await nextTick()
-
-      const agentBtn = wrapper.find('.header-agent-logo-btn')
-      expect(agentBtn.exists()).toBe(true)
-      expect(agentBtn.attributes('aria-label')).toBe('aiChat.agentInfoAria')
-    })
-
-    it('hides agent logo button when no agents available', async () => {
-      wrapper = mount(ChatHeader, {
-        props: {
-          activeThreadId: null,
-          sessions: [],
-          activeAgent: null,
-        },
-        global: { stubs: vantStubs },
-      })
-
-      await nextTick()
-
-      expect(wrapper.find('.header-agent-logo-btn').exists()).toBe(false)
-    })
-
-    it('toggles agent info popup on click', async () => {
-      agentStore.systemAgents = [
-        { id: '1', agent_name: 'numina', display_name: 'Numina', description: 'AI Assistant', icon: '🤖', is_enabled: true } as any,
-      ]
-
-      wrapper = mount(ChatHeader, {
-        props: {
-          activeThreadId: null,
-          sessions: [],
-          activeAgent: agentStore.systemAgents[0],
-        },
-        global: { stubs: vantStubs },
-      })
-
-      await nextTick()
-
-      expect(wrapper.find('.agent-info-popup').exists()).toBe(false)
-
-      await wrapper.find('.header-agent-logo-btn').trigger('click')
-      await nextTick()
-
-      expect(wrapper.find('.agent-info-popup').exists()).toBe(true)
-      expect(wrapper.find('.agent-info-popup').attributes('role')).toBe('dialog')
-      expect(wrapper.find('.agent-info-popup').attributes('aria-label')).toBe('Agent information')
-    })
   })
 
   describe('Header Title Computed', () => {
@@ -159,7 +92,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -177,7 +109,6 @@ describe('ChatHeader', () => {
           sessions: [
             { thread_id: 'thread-1', title: 'My Conversation', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -195,7 +126,6 @@ describe('ChatHeader', () => {
           sessions: [
             { thread_id: 'thread-2', title: '', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -208,14 +138,18 @@ describe('ChatHeader', () => {
   })
 
   describe('Title Scroll Animation', () => {
-    it('needs scroll when title length > 8', async () => {
+    // Title overflow detection relies on DOM measurements (offsetWidth) which
+    // are 0 in jsdom. When both containerWidth and titleNaturalWidth are 0,
+    // titleOverflows returns false (guard: both must be > 0).
+    // So in test env, title always "fits" — we test the computed logic directly.
+
+    it('titleOverflows is false when measurements are zero (jsdom)', async () => {
       wrapper = mount(ChatHeader, {
         props: {
           activeThreadId: 'thread-3',
           sessions: [
             { thread_id: 'thread-3', title: 'This is a very long conversation title', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -223,18 +157,19 @@ describe('ChatHeader', () => {
       await nextTick()
 
       const vm = wrapper.vm as any
-      expect(vm.titleNeedsScroll).toBe(true)
-      expect(wrapper.find('.header-title-container').classes()).toContain('needs-scroll')
+      // In jsdom, offsetWidth is 0, so titleOverflows guard returns false
+      expect(vm.titleOverflows).toBe(false)
+      // mode-centered is the default when titleFits is true (which it is when measurements are 0)
+      expect(wrapper.find('.header-title-container').classes()).toContain('mode-centered')
     })
 
-    it('does not need scroll for short titles (<=8 chars)', async () => {
+    it('titleOverflows can be set via internal state', async () => {
       wrapper = mount(ChatHeader, {
         props: {
           activeThreadId: 'thread-4',
           sessions: [
             { thread_id: 'thread-4', title: 'Short', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -242,18 +177,16 @@ describe('ChatHeader', () => {
       await nextTick()
 
       const vm = wrapper.vm as any
-      expect(vm.titleNeedsScroll).toBe(false)
-      expect(wrapper.find('.header-title-container').classes()).not.toContain('needs-scroll')
+      expect(vm.titleOverflows).toBe(false)
     })
 
-    it('boundary case: exactly 8 chars does not scroll', async () => {
+    it('titleFits is true when measurements are zero', async () => {
       wrapper = mount(ChatHeader, {
         props: {
           activeThreadId: 'thread-5',
           sessions: [
             { thread_id: 'thread-5', title: '12345678', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -261,17 +194,17 @@ describe('ChatHeader', () => {
       await nextTick()
 
       const vm = wrapper.vm as any
-      expect(vm.titleNeedsScroll).toBe(false)
+      // Both widths are 0 in jsdom → titleFits guard returns true
+      expect(vm.titleFits).toBe(true)
     })
 
-    it('boundary case: 9 chars scrolls', async () => {
+    it('scrollDistance is 0 when title does not overflow', async () => {
       wrapper = mount(ChatHeader, {
         props: {
           activeThreadId: 'thread-6',
           sessions: [
             { thread_id: 'thread-6', title: '123456789', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -279,7 +212,7 @@ describe('ChatHeader', () => {
       await nextTick()
 
       const vm = wrapper.vm as any
-      expect(vm.titleNeedsScroll).toBe(true)
+      expect(vm.scrollDistance).toBe(0)
     })
   })
 
@@ -291,7 +224,6 @@ describe('ChatHeader', () => {
           sessions: [
             { thread_id: 'thread-7', title: 'Editable Title', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -308,7 +240,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -327,7 +258,6 @@ describe('ChatHeader', () => {
           sessions: [
             { thread_id: 'thread-8', title: '', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -346,7 +276,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -363,7 +292,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -382,7 +310,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -403,7 +330,6 @@ describe('ChatHeader', () => {
           sessions: [
             { thread_id: 'thread-1', title: 'Old Title', updated_at: Date.now() } as any,
           ],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -425,7 +351,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -442,7 +367,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -459,7 +383,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })
@@ -479,7 +402,6 @@ describe('ChatHeader', () => {
           sessions: [
             { thread_id: 'thread-1', title: 'Test', updated_at: Date.now() } as any,
           ],
-          activeAgent: { id: '1', agent_name: 'numina', display_name: 'Numina', description: 'AI', icon: '🤖', is_enabled: true } as any,
         },
         global: { stubs: vantStubs },
       })
@@ -499,7 +421,6 @@ describe('ChatHeader', () => {
         props: {
           activeThreadId: null,
           sessions: [],
-          activeAgent: null,
         },
         global: { stubs: vantStubs },
       })

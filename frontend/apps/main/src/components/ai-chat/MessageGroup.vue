@@ -43,6 +43,10 @@ const props = defineProps<{
   isLoading?: boolean
   threadId?: string
   isLastAssistant?: boolean
+  canBranch?: boolean
+  branchingMessageId?: string | null
+  answeredInterruptIds?: Set<string>
+  interruptErrorId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -51,6 +55,8 @@ const emit = defineEmits<{
   feedback: [messageId: string, value: 1 | -1]
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  branch: [messageId: string, messageIds: string[]]
+  clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
 }>()
 
 const { t } = useI18n()
@@ -128,13 +134,47 @@ const clarificationInterruptData = computed(() => {
   return (props.group as AssistantClarificationGroup).interruptData ?? null
 })
 
+// Clarification status: check if this interrupt was answered via answeredInterruptIds
+// (tracked by useThreadChat after resumeInterrupt succeeds) or via group.phase.
+// Also check for error state from useThreadChat.interruptError.
+const clarificationStatus = computed((): 'pending' | 'submitting' | 'answered' | 'error' => {
+  if (props.group.type !== 'assistant:clarification') return 'pending'
+  const interruptId = (props.group as AssistantClarificationGroup).interruptData?.interrupt_id
+  if (interruptId && props.answeredInterruptIds?.has(interruptId)) return 'answered'
+  if (props.group.phase === 'answered') return 'answered'
+  // Check if this specific interrupt failed (error state)
+  if (interruptId && props.interruptErrorId === interruptId) return 'error'
+  return 'pending'
+})
+
+// Branch: extract all assistant message IDs from the group
+const assistantMessageIds = computed((): string[] => {
+  if (props.group.type !== 'assistant') return []
+  return props.group.messages
+    .filter(msg => msg.role === 'assistant' && msg.id)
+    .map(msg => msg.id!)
+})
+
+// Branch: check if this specific message is currently branching
+const isBranching = computed(() => {
+  if (!props.branchingMessageId || !assistantMessage.value) return false
+  return props.branchingMessageId === assistantMessage.value.id
+})
+
+// Handle branch button click
+function handleBranch() {
+  if (!assistantMessage.value?.id) return
+  emit('branch', assistantMessage.value.id, assistantMessageIds.value)
+}
+
 // Handle clarification answer submission
 function handleClarificationSubmit(group: MessageGroup, answer: string) {
   if (group.type !== 'assistant:clarification') return
-  // TODO: Call resume API with threadId and interruptId
-  // For now, just mark the group as answered
-  group.phase = 'answered'
-  group.answer = answer
+  const interruptId = group.interruptData?.interrupt_id
+  const threadId = props.threadId
+  if (!interruptId || !threadId) return
+  // Emit to parent (AIChatBox) which calls the resume API
+  emit('clarificationSubmit', { threadId, interruptId, answer })
 }
 
 // Present-files group: extract files
@@ -185,10 +225,13 @@ const subagentTaskIds = computed(() => {
         :display-time="assistantMessage.displayTime"
         :suggestions="assistantMessage.suggestions"
         :feedback="assistantMessage.feedback"
+        :can-branch="canBranch && !isLoading"
+        :is-branching="isBranching"
         @retry="emit('retry')"
         @copy="emit('copy', assistantCleanContent)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
+        @branch="handleBranch"
       >
         <!-- Per-message token usage (slotted between content and footer so the
              order is: content -> token usage -> timestamp/actions -> suggestions).
@@ -224,7 +267,8 @@ const subagentTaskIds = computed(() => {
       :options="clarificationInterruptData?.options"
       :context="clarificationInterruptData?.context"
       :choice-with-other="clarificationInterruptData?.choiceWithOther"
-      :status="group.phase === 'answered' ? 'answered' : 'pending'"
+      :multi-select="clarificationInterruptData?.multiSelect"
+      :status="clarificationStatus"
       :answer="group.answer"
       :thread-id="threadId || ''"
       :interrupt-id="clarificationInterruptData?.interrupt_id || ''"

@@ -46,6 +46,7 @@ export interface ClarificationInterruptData {
   options?: Array<{ label: string; value: string }>
   context?: string
   choiceWithOther?: boolean
+  multiSelect?: boolean
   interrupt_id: string
 }
 

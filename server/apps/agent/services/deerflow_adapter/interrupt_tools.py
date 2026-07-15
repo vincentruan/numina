@@ -26,6 +26,10 @@ class AskClarificationInput(BaseModel):
         default=False,
         description="Allow user to select an option OR provide custom text",
     )
+    multi_select: bool = Field(
+        default=False,
+        description="Allow user to select multiple options (checkboxes instead of radio)",
+    )
 
 
 def _ask_clarification(
@@ -33,6 +37,7 @@ def _ask_clarification(
     options: list[dict[str, str]] | None = None,
     context: str | None = None,
     choice_with_other: bool = False,
+    multi_select: bool = False,
 ) -> str:
     """Ask the user for clarification during agent execution.
 
@@ -44,6 +49,7 @@ def _ask_clarification(
         "options": options,
         "context": context,
         "choice_with_other": choice_with_other,
+        "multi_select": multi_select,
     }
     # LangGraph interrupt() pauses the graph and returns this value to the UI.
     # When the user responds, LangGraph resumes and returns the user's answer.

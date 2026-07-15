@@ -53,6 +53,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
 
   it('parses custom suggestions event into suggestions ref', async () => {
     const mockStream = makeMockStream([
+      { event: 'messages-tuple', data: { type: 'ai', content: 'Hello!', id: 'ai-1' } },
       { event: 'custom', data: { type: 'suggestions', suggestions: ['Q1', 'Q2', 'Q3'] } },
       { event: 'end', data: null },
     ])
@@ -63,7 +64,11 @@ describe('useThreadChat — U1 SSE extensions', () => {
     const chat = useThreadChat()
     await chat.sendMessage('hello', undefined, 'thread-1')
 
-    expect(chat.suggestions.value).toEqual(['Q1', 'Q2', 'Q3'])
+    // After stream ends, suggestions are cleared from standalone ref (Issue 1 fix)
+    // and attached inline to the last AI message instead
+    expect(chat.suggestions.value).toEqual([])
+    const lastAi = chat.messages.value.filter(m => m.type === 'ai').pop()
+    expect(lastAi?.suggestions).toEqual(['Q1', 'Q2', 'Q3'])
   })
 
   it('captures metadata run_id', async () => {

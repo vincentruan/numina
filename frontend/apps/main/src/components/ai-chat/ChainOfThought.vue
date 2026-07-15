@@ -52,28 +52,6 @@ const reasoningEndTime = ref<number | null>(null)
 const manualControl = ref(false)
 const autoCollapsed = ref(false)
 
-// Watch for reasoning content to track start time
-watch(() => lastReasoningStep.value?.content, (newVal) => {
-  if (newVal && !reasoningStartTime.value) {
-    reasoningStartTime.value = Date.now()
-  }
-})
-
-// Watch for content after reasoning to track end time and auto-collapse
-watch(() => lastToolCallStep.value, (newVal) => {
-  // When tool calls appear after reasoning starts, mark reasoning as ended
-  if (newVal && reasoningStartTime.value && !reasoningEndTime.value) {
-    reasoningEndTime.value = Date.now()
-    // Auto-collapse after 1s if user hasn't manually toggled
-    setTimeout(() => {
-      if (!manualControl.value) {
-        showThinking.value = false
-        autoCollapsed.value = true
-      }
-    }, 1000)
-  }
-})
-
 function toggleThinking() {
   showThinking.value = !showThinking.value
   manualControl.value = true
@@ -130,8 +108,6 @@ const steps = computed(() => {
       }
 
       for (const tc of toolCalls) {
-        // Skip 'task' tool - handled by SubtaskCard
-        if (tc.name === 'task') continue
         // 跳过空名 tool_call（后端有时发出 name="" 的占位条目，id 形如 tc-xxx）
         if (!tc.name) continue
         // Convert ToolCallSummary status to CoT step status.
@@ -215,6 +191,34 @@ const lastReasoningStep = computed(() => {
   // No tool calls: return the last reasoning
   const reasonings = steps.value.filter(s => s.type === 'reasoning')
   return reasonings[reasonings.length - 1] || null
+})
+
+// Watch for reasoning content to track start time
+watch(() => lastReasoningStep.value?.content, (newVal) => {
+  if (newVal && !reasoningStartTime.value) {
+    reasoningStartTime.value = Date.now()
+  }
+})
+
+// Watch for content after reasoning to track end time and auto-collapse
+watch(() => lastToolCallStep.value, (newVal) => {
+  // When tool calls appear after reasoning starts, mark reasoning as ended
+  if (newVal && reasoningStartTime.value && !reasoningEndTime.value) {
+    reasoningEndTime.value = Date.now()
+    // Auto-expand briefly to show reasoning exists, then collapse
+    setTimeout(() => {
+      if (!manualControl.value) {
+        showThinking.value = true
+        // Auto-collapse after 2 seconds
+        setTimeout(() => {
+          if (!manualControl.value) {
+            showThinking.value = false
+            autoCollapsed.value = true
+          }
+        }, 2000)
+      }
+    }, 1000)
+  }
 })
 
 // 隐藏的历史步骤数量 (DeerFlow pattern: aboveLastToolCallSteps)
@@ -434,6 +438,13 @@ function isWebFetch(step: { name?: string }): boolean {
 }
 
 /**
+ * Check if step is a subagent task delegation.
+ */
+function isSubagentTask(step: { name?: string }): boolean {
+  return extractShortToolName(step.name || '') === 'task'
+}
+
+/**
  * Get a display-friendly domain from a URL for web_fetch badge.
  */
 function getFetchDomain(url: string): string {
@@ -506,11 +517,15 @@ function getFetchDomain(url: string): string {
           <!-- Tool call step (history) - DeerFlow pattern: no status badge, just name + result -->
           <template v-else>
             <div class="step-icon-wrapper">
-              <IIcon :icon="getIcon(step)" class="step-icon" />
+              <IIcon :icon="getIcon(step)" class="step-icon" :class="{ 'subagent-icon': isSubagentTask(step) }" />
               <div class="step-connector" />
             </div>
             <div class="step-body-vertical">
-              <div class="step-name">{{ getName(step) }}</div>
+              <div class="step-name" :class="{ 'subagent-name': isSubagentTask(step) }">{{ getName(step) }}</div>
+              <!-- Subagent task: show progress indicator -->
+              <div v-if="isSubagentTask(step) && step.status === 'running'" class="subagent-progress">
+                <span class="subagent-progress-text">{{ t('aiChat.subtaskExecuting') }}</span>
+              </div>
               <!-- Error state: tool returned an error -->
               <div v-if="hasToolError(step)" class="tool-error">
                 <IIcon icon="x-circle" class="tool-error-icon" />
@@ -568,11 +583,11 @@ function getFetchDomain(url: string): string {
         >
           <!-- DeerFlow pattern: icon wrapper without connector (last step has no line) -->
           <div class="step-icon-wrapper">
-            <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" />
+            <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" :class="{ 'subagent-icon': isSubagentTask(lastToolCallStep) }" />
           </div>
           <div class="step-body-vertical">
             <div class="step-name-row">
-              <span class="step-name">{{ getName(lastToolCallStep) }}</span>
+              <span class="step-name" :class="{ 'subagent-name': isSubagentTask(lastToolCallStep) }">{{ getName(lastToolCallStep) }}</span>
               <!-- DeerFlow pattern: only show spinner for running, no ✓/✗ badge for done -->
               <svg
                 v-if="lastToolCallStep.status === 'running'"
@@ -1072,6 +1087,29 @@ function getFetchDomain(url: string): string {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+/* Subagent task delegation: distinct visual style */
+.subagent-icon {
+  color: var(--van-primary-color);
+}
+
+.subagent-name {
+  color: var(--van-primary-color);
+  font-weight: 500;
+}
+
+.subagent-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.subagent-progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 @keyframes spin {

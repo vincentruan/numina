@@ -199,3 +199,50 @@ export async function getTokenUsage(threadId: string): Promise<TokenUsageData> {
   if (!res.ok) throw new Error(`Failed to fetch token usage: ${res.status}`)
   return res.json()
 }
+
+// ---------------------------------------------------------------------------
+// Branch API (DeerFlow threads/api.ts:71-97)
+// ---------------------------------------------------------------------------
+
+export interface ThreadBranchResponse {
+  thread_id: string
+  parent_thread_id: string
+  parent_checkpoint_id: string
+  branched_from_message_id: string
+}
+
+export interface BranchThreadFromTurnInput {
+  messageId: string
+  messageIds?: string[]
+  title?: string
+}
+
+export async function branchThreadFromTurn(
+  threadId: string,
+  input: BranchThreadFromTurnInput,
+): Promise<ThreadBranchResponse> {
+  const res = await fetch(
+    `${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/branches`,
+    {
+      method: 'POST',
+      headers: getAgentHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({
+        message_id: input.messageId,
+        message_ids: input.messageIds ?? [input.messageId],
+        ...(input.title ? { title: input.title } : {}),
+      }),
+    },
+  )
+  if (!res.ok) {
+    let detail = `Failed to branch conversation (${res.status})`
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+    } catch {
+      // ignore parse failure, use fallback detail
+    }
+    throw new Error(detail)
+  }
+  return res.json() as Promise<ThreadBranchResponse>
+}

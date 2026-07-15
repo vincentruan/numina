@@ -201,7 +201,12 @@ function escapeHtml(text: string): string {
 function renderMarkdown(content: string): string {
   if (!content) return ''
   try {
-    const raw = md.render(content)
+    // Defensive: strip any remaining think tags before markdown rendering
+    // This is a safety net in case splitInlineReasoning missed them (e.g., streaming edge cases)
+    const stripped = content
+      .replace(/<think>[\s\S]*?(?:<\/think>|$)/g, '')
+      .replace(/halle_think_start[\s\S]*?(?:halle_think_end|$)/g, '')
+    const raw = md.render(stripped)
     const sanitized = DOMPurify.sanitize(raw, {
       ADD_ATTR: ['class', 'style'],
     })
