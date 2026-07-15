@@ -28,6 +28,16 @@ _NUMINA_AGENT = {
 - **主动**：在回答完用户问题后，主动建议下一步行动（"接下来想看看……吗？"）
 - **节制**：不夸张、不预测收益、不替用户做决策
 
+## 语言
+
+根据用户消息的语言选择输出语言，保持与用户一致：
+
+- 用户用中文 → 中文输出（默认）
+- 用户用 English → English output
+- 中英混用 → 以主要语言为准，专业术语可保留原文
+
+无论哪种语言，保持同样的温暖、清晰、节制风格。
+
 ## 工作原则
 
 1. **数据驱动**：所有结论基于家庭实际资产数据，不做无依据的推测
@@ -133,52 +143,35 @@ _ASSET_REPORT_AGENT = {
 }
 
 
-def bootstrap_agents(db: Session) -> None:
-    """Ensure builtin agents exist. Idempotent — skips if already present."""
+def _upsert_builtin_agent(db: Session, spec: dict) -> None:
+    """Insert or update a builtin system agent from its spec dict."""
     from apps.backend.app.models.ai_agent import AIAgent
 
-    # Seed numina agent
-    existing_numina = db.query(AIAgent).filter(
-        AIAgent.id == _NUMINA_AGENT["id"],
-    ).first()
+    existing = db.query(AIAgent).filter(AIAgent.id == spec["id"]).first()
 
-    if not existing_numina:
-        numina = AIAgent(
-            id=_NUMINA_AGENT["id"],
-            family_id=_NUMINA_AGENT["family_id"],
-            agent_name=_NUMINA_AGENT["agent_name"],
-            display_name=_NUMINA_AGENT["display_name"],
-            description=_NUMINA_AGENT["description"],
-            icon=_NUMINA_AGENT["icon"],
-            color=_NUMINA_AGENT["color"],
-            soul_md=_NUMINA_AGENT["soul_md"],
-            skills=_NUMINA_AGENT["skills"],
-            agent_type=_NUMINA_AGENT["agent_type"],
-            display_order=_NUMINA_AGENT["display_order"],
-        )
-        db.add(numina)
-        logger.info("已初始化系统智能体: 数鸣 (numina)")
+    if not existing:
+        db.add(AIAgent(
+            id=spec["id"],
+            family_id=spec["family_id"],
+            agent_name=spec["agent_name"],
+            display_name=spec["display_name"],
+            description=spec["description"],
+            icon=spec["icon"],
+            color=spec["color"],
+            soul_md=spec["soul_md"],
+            skills=spec["skills"],
+            agent_type=spec["agent_type"],
+            display_order=spec["display_order"],
+        ))
+        logger.info("已初始化系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
+    elif existing.soul_md != spec["soul_md"]:
+        existing.soul_md = spec["soul_md"]
+        existing.description = spec["description"]
+        logger.info("已更新系统智能体 soul: %s (%s)", spec["display_name"], spec["agent_name"])
 
-    # Seed asset-report agent
-    existing_report = db.query(AIAgent).filter(
-        AIAgent.id == _ASSET_REPORT_AGENT["id"],
-    ).first()
 
-    if not existing_report:
-        report_agent = AIAgent(
-            id=_ASSET_REPORT_AGENT["id"],
-            family_id=_ASSET_REPORT_AGENT["family_id"],
-            agent_name=_ASSET_REPORT_AGENT["agent_name"],
-            display_name=_ASSET_REPORT_AGENT["display_name"],
-            description=_ASSET_REPORT_AGENT["description"],
-            icon=_ASSET_REPORT_AGENT["icon"],
-            color=_ASSET_REPORT_AGENT["color"],
-            soul_md=_ASSET_REPORT_AGENT["soul_md"],
-            skills=_ASSET_REPORT_AGENT["skills"],
-            agent_type=_ASSET_REPORT_AGENT["agent_type"],
-            display_order=_ASSET_REPORT_AGENT["display_order"],
-        )
-        db.add(report_agent)
-        logger.info("已初始化系统智能体: 资产报告 (asset-report)")
-
+def bootstrap_agents(db: Session) -> None:
+    """Ensure builtin agents exist and their soul matches code. Idempotent."""
+    _upsert_builtin_agent(db, _NUMINA_AGENT)
+    _upsert_builtin_agent(db, _ASSET_REPORT_AGENT)
     db.commit()
