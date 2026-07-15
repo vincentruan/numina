@@ -39,12 +39,21 @@ const emit = defineEmits<{
   background: var(--card-bg);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
 .suggestion-chip:hover {
   border-color: var(--van-primary-color);
   color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 8%, var(--card-bg));
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.suggestion-chip:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 /* DeerFlow reference: globals.css @keyframes fade-in-up */

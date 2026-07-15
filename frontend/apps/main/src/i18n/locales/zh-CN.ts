@@ -43,7 +43,7 @@ export default {
     },
     thinking: {
       label: '思考',
-      description: '思考后再行动，在时间与准确性之间取得平衡',
+      description: '思考后再行动，在时间与准确性之间取得平衡，适合中等复杂度任务',
     },
     pro: {
       label: 'Pro',
