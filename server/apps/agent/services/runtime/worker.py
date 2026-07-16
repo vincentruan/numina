@@ -254,9 +254,21 @@ async def run_family_agent(
                 msg_type = data.get("type")
 
                 if msg_type == "ai":
-                    if data.get("content"):
-                        ai_response_parts.append(data["content"])
-                    tool_calls_raw = data.get("tool_calls")
+                    content = data.get("content")
+                    tool_calls = data.get("tool_calls")
+                    msg_id = data.get("id")
+                    logger.info(
+                        "[run_family_agent] AI message received: run=%s id=%s content_len=%d has_tool_calls=%s",
+                        run_id, msg_id, len(content) if content else 0, bool(tool_calls),
+                    )
+                    if content:
+                        ai_response_parts.append(content)
+                    else:
+                        logger.warning(
+                            "[run_family_agent] AI message with empty content: run=%s data_keys=%s",
+                            run_id, list(data.keys()),
+                        )
+                    tool_calls_raw = tool_calls
                     if tool_calls_raw:
                         # Use extract_tool_calls to properly handle LangChain ToolCall objects
                         for tc in extract_tool_calls(data):

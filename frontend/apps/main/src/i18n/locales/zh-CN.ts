@@ -199,6 +199,7 @@ export default {
     retry: '重试',
     retrying: '重新生成中',
     errorRetry: '请求失败，请重试',
+    noResponseFallback: '抱歉，AI 未能生成回复，请重试',
     errorTimeout: '响应超时，请重试',
     errorReconnectFailed: '连接中断，已尝试 {attempts} 次重连，请手动重试',
     connectionBrokenRetry: '连接中断，点击重试',

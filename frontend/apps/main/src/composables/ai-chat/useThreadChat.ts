@@ -259,6 +259,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    */
   function mergeMessagesTuple(chunk: MessagesTupleData): void {
     if (chunk.type === 'ai') {
+      console.log('[useThreadChat] AI message chunk received:', {
+        id: chunk.id,
+        contentLength: chunk.content?.length || 0,
+        contentPreview: chunk.content?.slice(0, 50),
+        hasToolCalls: !!chunk.tool_calls,
+      })
       const last = messages.value[messages.value.length - 1]
       const chunkId = chunk.id
 
@@ -724,6 +730,30 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               if (changed) {
                 messages.value = next
               }
+            }
+
+            // Check if any AI message has actual visible content (not just tool_calls or thinking).
+            // If all AI messages are empty/tool-only, show a fallback so the user doesn't see a blank page.
+            // This must be OUTSIDE the `if (lastIdx >= 0)` block to also handle the case where
+            // no AI messages were created at all (e.g. LLM returned nothing, or stream dropped early).
+            const hasVisibleContent = messages.value.some(m => {
+              if (m.type !== 'ai') return false
+              const content = (m.content || '').trim()
+              const withoutThinking = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+              return withoutThinking.length > 0
+            })
+
+            if (!hasVisibleContent) {
+              console.warn('[useThreadChat] Stream completed but no visible AI content')
+              const fallbackMsg: ChatMessage = {
+                id: genId('fallback'),
+                type: 'ai',
+                role: 'assistant',
+                content: t('aiChat.noResponseFallback'),
+                displayTime: formatDisplayTime(),
+                phase: 'done',
+              }
+              messages.value = [...messages.value, fallbackMsg]
             }
             // Mark all planning steps as done
             planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
