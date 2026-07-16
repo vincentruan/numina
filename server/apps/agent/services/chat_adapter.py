@@ -104,6 +104,8 @@ class ChatAdapter:
         }
         if caller_user_id:
             mcp_headers["X-Caller-User-Id"] = caller_user_id
+        if thread_id:
+            mcp_headers["X-Thread-Id"] = thread_id
         mcp_servers = [
             {
                 "name": "numina-family-data",

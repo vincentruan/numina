@@ -17,9 +17,6 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from apps.agent.services.session_journal import session_journal
-from apps.agent.services.stream_events import EventStreamBuilder
-
 from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient, report_web_search_circuit
 from apps.agent.schemas.policy import CapabilityPolicy
@@ -34,6 +31,8 @@ from apps.agent.services.message_classifier import (
 )
 from apps.agent.services.pii_redactor import pii_redactor
 from apps.agent.services.policy_guard import policy_guard
+from apps.agent.services.session_journal import session_journal
+from apps.agent.services.stream_events import EventStreamBuilder
 from packages.core import get_path_manager
 from packages.core.effective_config import EffectiveConfigBuilder
 from packages.core.logging import get_logger
@@ -384,6 +383,8 @@ async def stream_agent_dispatch(
     }
     if user_id:
         mcp_headers["X-Caller-User-Id"] = user_id
+    if thread_id:
+        mcp_headers["X-Thread-Id"] = thread_id
     for srv in mcp_servers:
         srv["headers"] = mcp_headers
 

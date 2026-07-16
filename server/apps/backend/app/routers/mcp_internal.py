@@ -66,6 +66,7 @@ async def mcp_sse(
     x_agent_token: str | None = Header(None, alias="X-Agent-Token"),
     x_family_id: str | None = Header(None, alias="X-Family-Id"),
     x_caller_user_id: str | None = Header(None, alias="X-Caller-User-Id"),
+    x_thread_id: str | None = Header(None, alias="X-Thread-Id"),
 ):
     """SSE endpoint that speaks MCP protocol for the given family_id."""
     _verify_agent_token(x_agent_token)
@@ -110,6 +111,7 @@ async def mcp_sse(
         family_id=family_id,
         caller_user_id=x_caller_user_id,
         caller_role=caller_role,
+        thread_id=x_thread_id,
     )
     return MCPSSEResponse(session=session, family_id=family_id)
 

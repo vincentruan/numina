@@ -135,14 +135,23 @@ def _get_session_for_family(
     if session_id is None:
         return None
     try:
-        sid = int(session_id)
+        fid = int(family_id)
     except (ValueError, TypeError):
         return None
-    return (
-        db.query(AIChatSession)
-        .filter(AIChatSession.id == sid, AIChatSession.family_id == int(family_id))
-        .first()
-    )
+    try:
+        sid = int(session_id)
+        return (
+            db.query(AIChatSession)
+            .filter(AIChatSession.id == sid, AIChatSession.family_id == fid)
+            .first()
+        )
+    except (ValueError, TypeError):
+        # UUID format — query as string (DeerFlow agent creates UUID thread_ids)
+        return (
+            db.query(AIChatSession)
+            .filter(AIChatSession.id == str(session_id), AIChatSession.family_id == fid)
+            .first()
+        )
 
 
 def _get_latest_session(family_id: str, db: Session) -> AIChatSession | None:
@@ -439,38 +448,51 @@ async def get_artifact(
         raise AppError(ErrorCode.NOT_FOUND)
 
     # Security: Reject path traversal patterns in decoded path
-    if ".." in decoded_filepath or decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
+    if ".." in decoded_filepath:
         logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
         raise AppError(ErrorCode.NOT_FOUND)
 
-    # Try to find artifact in multiple possible locations:
-    # 1. DeerFlow tenant reports directory: ~/.numina/data/workspaces/tenants/{family_id}/reports/
-    # 2. Session artifact directory: CHAT_DIR/session_{session_id}/artifacts/
+    # Strip DeerFlow virtual sandbox prefix (/mnt/user-data/outputs/) so the
+    # bare filename can be resolved against the tenant reports directory.
+    _SANDBOX_OUTPUT_PREFIX = "/mnt/user-data/outputs/"
+    if decoded_filepath.startswith(_SANDBOX_OUTPUT_PREFIX):
+        decoded_filepath = decoded_filepath[len(_SANDBOX_OUTPUT_PREFIX):]
+
+    # After stripping, reject any remaining absolute paths
+    if decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
+        logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    # Try to find artifact in two locations (search order matters):
+    # 1. Per-thread sandbox outputs: workspaces/{family_id}/sandboxes/{thread_id}/outputs/
+    #    (MCP tools with thread_id write here — per-thread isolation)
+    # 2. Tenant reports directory: workspaces/tenants/{family_id}/reports/
+    #    (MCP tools without thread_id, or old files — per-family fallback)
     family_id = current_user.family_id
     data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
 
     possible_paths = [
-        # DeerFlow tenant reports (primary location)
+        # Per-thread sandbox outputs (primary — MCP tools with thread_id write here)
+        data_root / "workspaces" / str(family_id) / "sandboxes" / session_id / "outputs" / decoded_filepath,
+        # Tenant reports (backward compat — MCP tools without thread_id)
         data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
-        # Session artifacts (legacy location)
-        Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts" / decoded_filepath,
+    ]
+
+    allowed_dirs = [
+        (data_root / "workspaces" / str(family_id) / "sandboxes" / session_id / "outputs").resolve(),
+        (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
     ]
 
     artifact_path = None
     for candidate_path in possible_paths:
-        # Security: Final check - resolved path must be within allowed directories
-        allowed_dirs = [
-            (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
-            (Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts").resolve(),
-        ]
-
         try:
             resolved = candidate_path.resolve()
-            # Check if resolved path is within any allowed directory
-            if any(resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()):
-                if resolved.exists():
-                    artifact_path = resolved
-                    break
+            # Security: resolved path must be within allowed directories
+            if resolved.exists() and any(
+                resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()
+            ):
+                artifact_path = resolved
+                break
         except (ValueError, OSError):
             continue
 

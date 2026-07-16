@@ -211,6 +211,33 @@ class PathManager:
             )
         return self.tenant_report_dir(family_id) / filename
 
+    # ── Per-thread report paths (aligned with sandbox outputs) ──────────
+
+    def thread_report_dir(self, family_id: int, thread_id: str) -> Path:
+        """Get per-thread report storage directory.
+
+        Aligned with NuminaLocalSandboxProvider's outputs mapping:
+        ``{DATA_ROOT}/workspaces/{family_id}/sandboxes/{thread_id}/outputs/``
+
+        When thread_id is available, MCP tools write here instead of the
+        tenant-level directory, achieving per-thread isolation consistent
+        with DeerFlow's sandbox path mappings.
+        """
+        fid = self._validate_numeric_id(family_id, "family_id")
+        tid = self._validate_thread_id(thread_id)
+        path = self._data_root / "workspaces" / fid / "sandboxes" / tid / "outputs"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def thread_report_file(self, family_id: int, thread_id: str, filename: str) -> Path:
+        """Get full path for a per-thread report file with validation."""
+        if not self._REPORT_FILENAME_PATTERN.match(filename):
+            raise PathSecurityError(
+                f"Invalid report filename: {filename!r}. "
+                f"Expected pattern: report_[alphanumeric_-].md"
+            )
+        return self.thread_report_dir(family_id, thread_id) / filename
+
     # Runtime effective (generated, deletable)
     def effective_dir(self, family_id: int) -> Path:
         fid = self._validate_numeric_id(family_id, "family_id")

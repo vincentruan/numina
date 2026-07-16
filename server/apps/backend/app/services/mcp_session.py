@@ -39,12 +39,20 @@ class MCPSession:
 
     Tenant + caller isolation via __slots__:
     - _family_id, _caller_user_id, _caller_role are frozen at construction
+    - _thread_id is optional; when present, report tools write to per-thread
+      sandbox outputs for isolation consistent with DeerFlow's sandbox provider
     - Tool handlers NEVER read these from tool args — only from self
     """
 
-    __slots__ = ("_family_id", "_caller_user_id", "_caller_role", "_server")
+    __slots__ = ("_family_id", "_caller_user_id", "_caller_role", "_thread_id", "_server")
 
-    def __init__(self, family_id: str, caller_user_id: str, caller_role: str) -> None:
+    def __init__(
+        self,
+        family_id: str,
+        caller_user_id: str,
+        caller_role: str,
+        thread_id: str | None = None,
+    ) -> None:
         if not family_id:
             raise ValueError("family_id must not be empty")
         if not caller_user_id:
@@ -54,6 +62,7 @@ class MCPSession:
         self._family_id = family_id
         self._caller_user_id = caller_user_id
         self._caller_role = caller_role
+        self._thread_id = thread_id
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
@@ -179,7 +188,11 @@ class MCPSession:
                 return [TextContent(type="text", text=json.dumps({"error": "查询失败，请稍后重试"}, ensure_ascii=False))]
 
     def _handle_write_file(self, filename: str, content: str) -> dict[str, Any]:
-        """Write content to a report file in tenant's report directory.
+        """Write content to a report file.
+
+        When thread_id is available, writes to per-thread sandbox outputs
+        for isolation consistent with DeerFlow's sandbox provider.
+        Otherwise falls back to tenant-level reports directory.
 
         Args:
             filename: Must match pattern report_*.md
@@ -201,14 +214,20 @@ class MCPSession:
         try:
             pm = PathManager()
             family_id_int = int(self._family_id)
-            file_path = pm.tenant_report_file(family_id_int, filename)
+
+            # Per-thread isolation when thread_id is available
+            if self._thread_id:
+                file_path = pm.thread_report_file(family_id_int, self._thread_id, filename)
+            else:
+                file_path = pm.tenant_report_file(family_id_int, filename)
 
             # Write content
             file_path.write_text(content, encoding="utf-8")
 
             logger.info(
-                "[mcp_session] write_file success family=%s filename=%s size=%d",
+                "[mcp_session] write_file success family=%s thread=%s filename=%s size=%d",
                 self._family_id,
+                self._thread_id or "none",
                 filename,
                 len(content),
             )
@@ -219,23 +238,28 @@ class MCPSession:
             }
         except PathSecurityError as e:
             logger.warning(
-                "[mcp_session] write_file path security error family=%s filename=%s: %s",
+                "[mcp_session] write_file path security error family=%s thread=%s filename=%s: %s",
                 self._family_id,
+                self._thread_id or "none",
                 filename,
                 e,
             )
             return {"error": "path_security_error", "message": "文件路径验证失败"}
         except Exception as e:
             logger.error(
-                "[mcp_session] write_file failed family=%s filename=%s: %s",
+                "[mcp_session] write_file failed family=%s thread=%s filename=%s: %s",
                 self._family_id,
+                self._thread_id or "none",
                 filename,
                 e,
             )
             return {"error": "write_failed", "message": "文件写入失败"}
 
     def _handle_read_file(self, filename: str) -> dict[str, Any]:
-        """Read content from a report file in tenant's report directory.
+        """Read content from a report file.
+
+        When thread_id is available, reads from per-thread sandbox outputs first,
+        falling back to tenant-level reports directory for backward compatibility.
 
         Args:
             filename: Must match pattern report_*.md
@@ -256,12 +280,23 @@ class MCPSession:
         try:
             pm = PathManager()
             family_id_int = int(self._family_id)
-            file_path = pm.tenant_report_file(family_id_int, filename)
+
+            # Per-thread isolation: check thread-level first, then tenant-level
+            if self._thread_id:
+                thread_path = pm.thread_report_file(family_id_int, self._thread_id, filename)
+                if thread_path.exists():
+                    file_path = thread_path
+                else:
+                    # Fallback to tenant-level for backward compatibility
+                    file_path = pm.tenant_report_file(family_id_int, filename)
+            else:
+                file_path = pm.tenant_report_file(family_id_int, filename)
 
             if not file_path.exists():
                 logger.warning(
-                    "[mcp_session] read_file file not found family=%s filename=%s",
+                    "[mcp_session] read_file file not found family=%s thread=%s filename=%s",
                     self._family_id,
+                    self._thread_id or "none",
                     filename,
                 )
                 return {"error": "file_not_found", "message": "报告文件不存在"}
