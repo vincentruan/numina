@@ -192,23 +192,16 @@ async def run_family_agent(
                 if isinstance(last, dict) and last.get("role") in ("user", "human"):
                     user_message = last.get("content", "")
 
-        # 5a. Inject web_search behavioural guidance so the LLM knows whether it
-        # may search. The web_search tool is always loaded when the family has a
-        # configured provider (family_adapter_cache.py:485), but without this
-        # prompt the LLM won't proactively call it. Mirrors chat_adapter.py:96-100
-        # and agent_dispatch.py:630-651 (legacy Gateway path).
-        if call_websearch_enabled:
-            web_search_providers = ai_config.get("web_search_providers", [])
-            web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
-            if web_search_providers:
-                web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
-            elif web_search_mcp_servers:
-                web_search_guidance = (
-                    "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
-                )
-            else:
-                web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
-            user_message = f"## 联网搜索\n\n{web_search_guidance}\n\n{user_message}"
+        # 5a. Web-search behavioral guidance lives in the skill files:
+        # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
+        # The skill is selected below (chat-search vs chat) based on call_websearch_enabled,
+        # so no runtime injection is needed — and injecting here would leak
+        # internal guidance into user-visible prompts.
+        # Only use chat-search when actual search capability is configured.
+        # Otherwise the model is told it can search but has no tools → hallucinated searches.
+        has_search_capability = bool(
+            ai_config.get("web_search_providers") or ai_config.get("web_search_mcp_servers")
+        )
 
         # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)
@@ -221,7 +214,7 @@ async def run_family_agent(
         # because typed_stream_dispatch yields raw LangGraph `messages` events
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        capability = "chat-search" if call_websearch_enabled else "chat"
+        capability = "chat-search" if (call_websearch_enabled and has_search_capability) else "chat"
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
             context=redacted,

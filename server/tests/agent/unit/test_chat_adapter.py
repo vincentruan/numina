@@ -91,17 +91,18 @@ async def test_stream_injects_mcp_server_into_adapter():
 
 
 @pytest.mark.asyncio
-async def test_stream_web_search_true_appends_search_guidance():
+async def test_stream_web_search_true_selects_chat_search_skill():
     from apps.agent.services.deerflow_adapter.adapter import StreamChunk
 
     adapter = ChatAdapter("http://backend:8000", "secret-token")
-    captured_context: dict = {}
+    captured: dict = {}
 
     def fake_create(*args, **kwargs):
         mock_adapter = AsyncMock()
 
         async def fake_stream(skill, context, *a, **kw):
-            captured_context["text"] = context.free_text
+            captured["skill"] = skill
+            captured["text"] = context.free_text
             yield StreamChunk(type="text", content="ok")
 
         mock_adapter.stream_dispatch = fake_stream
@@ -115,29 +116,72 @@ async def test_stream_web_search_true_appends_search_guidance():
             family_id="100",
             question="hi",
             thread_id="t1",
+            ai_config={
+                "api_key": "k", "ai_model_id": "m", "ai_provider": "openai",
+                "web_search_providers": [{"id": 1, "provider": "google"}],
+            },
+            web_search=True,
+        ):
+            pass
+
+    # web_search=True + search capability configured → chat-search skill
+    assert captured["skill"] == "chat-search"
+    assert "<system_instructions>" in captured["text"]
+    assert "<user_question>" in captured["text"]
+    # Runtime injection removed — no "联网搜索" section in the context text
+    assert "## 联网搜索" not in captured["text"]
+
+
+@pytest.mark.asyncio
+async def test_stream_web_search_true_no_capability_falls_back_to_chat():
+    """Boundary: web_search=True but no search provider/MCP configured → chat skill."""
+    from apps.agent.services.deerflow_adapter.adapter import StreamChunk
+
+    adapter = ChatAdapter("http://backend:8000", "secret-token")
+    captured: dict = {}
+
+    def fake_create(*args, **kwargs):
+        mock_adapter = AsyncMock()
+
+        async def fake_stream(skill, context, *a, **kw):
+            captured["skill"] = skill
+            yield StreamChunk(type="text", content="ok")
+
+        mock_adapter.stream_dispatch = fake_stream
+        return mock_adapter
+
+    with (
+        patch("apps.agent.services.chat_adapter._create_family_adapter", side_effect=fake_create),
+        patch.object(adapter, "_resolve_prompt", new=AsyncMock(return_value="You are a helper.")),
+    ):
+        async for _ in adapter.stream(
+            family_id="100",
+            question="hi",
+            thread_id="t1",
+            # No web_search_providers, no web_search_mcp_servers
             ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
             web_search=True,
         ):
             pass
 
-    assert "联网搜索" in captured_context["text"]
-    assert "调用搜索工具" in captured_context["text"]
-    assert "<system_instructions>" in captured_context["text"]
-    assert "<user_question>" in captured_context["text"]
+    # web_search=True but NO search capability → fallback to chat skill
+    # (avoids model hallucinating searches when no tools are available)
+    assert captured["skill"] == "chat"
 
 
 @pytest.mark.asyncio
-async def test_stream_web_search_false_appends_no_search_constraint():
+async def test_stream_web_search_false_selects_chat_skill():
     from apps.agent.services.deerflow_adapter.adapter import StreamChunk
 
     adapter = ChatAdapter("http://backend:8000", "secret-token")
-    captured_context: dict = {}
+    captured: dict = {}
 
     def fake_create(*args, **kwargs):
         mock_adapter = AsyncMock()
 
         async def fake_stream(skill, context, *a, **kw):
-            captured_context["text"] = context.free_text
+            captured["skill"] = skill
+            captured["text"] = context.free_text
             yield StreamChunk(type="text", content="ok")
 
         mock_adapter.stream_dispatch = fake_stream
@@ -151,19 +195,24 @@ async def test_stream_web_search_false_appends_no_search_constraint():
             family_id="100",
             question="hi",
             thread_id="t1",
-            ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
+            ai_config={
+                "api_key": "k", "ai_model_id": "m", "ai_provider": "openai",
+                "web_search_providers": [{"id": 1, "provider": "google"}],
+            },
             web_search=False,
         ):
             pass
 
-    assert "联网搜索" in captured_context["text"]
-    assert "不要尝试联网" in captured_context["text"]
-    assert "<system_instructions>" in captured_context["text"]
-    assert "<user_question>" in captured_context["text"]
+    # web_search=False → chat skill regardless of capability config
+    assert captured["skill"] == "chat"
+    assert "<system_instructions>" in captured["text"]
+    assert "<user_question>" in captured["text"]
+    assert "## 联网搜索" not in captured["text"]
 
 
 @pytest.mark.asyncio
-async def test_stream_deep_think_enables_subagent_and_plan_mode():
+async def test_stream_explicit_execution_mode_params_passed_through():
+    """subagent_enabled and is_plan_mode are explicit params (not derived from deep_think)."""
     adapter = ChatAdapter("http://backend:8000", "secret-token")
     captured: dict = {}
 
@@ -185,7 +234,8 @@ async def test_stream_deep_think_enables_subagent_and_plan_mode():
             question="hi",
             thread_id="t1",
             ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
-            deep_think=True,
+            is_plan_mode=True,
+            subagent_enabled=True,
             web_search=False,
         ):
             break

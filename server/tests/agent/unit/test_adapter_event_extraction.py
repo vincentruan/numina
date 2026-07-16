@@ -142,7 +142,7 @@ async def test_tool_call_chunk_includes_tool_metadata():
     data = chunks[0].data
     assert data["tool_type"] == "asset_query"
     assert data["display_name"] == "查询资产"
-    assert data["icon"] == "wallet"
+    assert data["icon"] == "💰"
 
 
 @pytest.mark.asyncio

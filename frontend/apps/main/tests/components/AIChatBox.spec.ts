@@ -18,6 +18,7 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     planningSteps: { value: [] },
     suggestions: { value: [] },
     answeredInterruptIds: { value: new Set() },
+    interruptErrorId: { value: null },
     runId: { value: null },
     sendMessage: vi.fn(),
     cancelStream: vi.fn(),
@@ -142,7 +143,7 @@ describe('AIChatBox', () => {
   })
 
   describe('ChatHeader Integration', () => {
-    it('passes activeAgent to ChatHeader', async () => {
+    it('passes expected props to ChatHeader', async () => {
       agentStore.systemAgents = [
         { id: '1', agent_name: 'numina', display_name: 'Numina', description: 'AI', icon: '🤖', is_enabled: true } as any,
       ]
@@ -155,7 +156,10 @@ describe('AIChatBox', () => {
 
       const chatHeader = wrapper.findComponent({ name: 'ChatHeader' })
       expect(chatHeader.exists()).toBe(true)
-      expect(chatHeader.props('activeAgent')?.agent_name).toBe('numina')
+      // ChatHeader no longer receives activeAgent prop; it receives
+      // activeThreadId, sessions, realtimeTokenUsage, isStreaming
+      expect(chatHeader.props('activeThreadId')).toBeDefined()
+      expect(chatHeader.props('sessions')).toBeDefined()
     })
 
     it('passes activeThreadId to ChatHeader', async () => {

@@ -420,6 +420,7 @@ async def stream_agent_dispatch(
             agent_config=agent_config,
             enabled_skills=skill_entries,
             mcp_servers=mcp_servers,
+            ai_config=ai_config,
         )
     except Exception as e:
         logger.warning(
@@ -627,28 +628,12 @@ async def stream_agent_dispatch(
         # Track last answer content hash to skip duplicate tokens
         last_answer_hash: str = ""
 
-        # Inject web_search behavioural guidance as a system message prefix so the
-        # LLM knows whether it may rely on its tools / pretend to search. Mirrors
-        # chat_adapter.py:92-96 — same wording, same stance, kept inline rather
-        # than extracted because two short occurrences don't justify a shared module.
-        # Multi-branch logic: native providers > MCP fallback > disabled.
-        # IMPORTANT: Only inject when web_search=True is explicitly requested.
-        # For capabilities like report that pass web_search=False, skip the preamble
-        # entirely to avoid corrupting structured JSON output.
+        # Web-search behavioral guidance lives in the skill files:
+        # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
+        # The skill is selected based on web_search, so no runtime injection is
+        # needed — and injecting here would leak internal guidance into
+        # user-visible prompts.
         messages = []
-        if web_search:
-            web_search_providers = ai_config.get("web_search_providers", [])
-            web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
-
-            if web_search_providers:
-                web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
-            elif web_search_mcp_servers:
-                web_search_guidance = (
-                    "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
-                )
-            else:
-                web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
-            messages.append({"role": "system", "content": f"## 联网搜索\n\n{web_search_guidance}"})
 
         messages.append({"role": "user", "content": message})
 

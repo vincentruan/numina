@@ -5,6 +5,8 @@ import { getTokenUsage } from '@/api/ai-chat'
 import type { UsageMetadata, ChatMessage } from '@/types/ai-chat/message-group'
 import {
   buildTokenDebugStep,
+  buildTokenDebugSteps,
+  accumulateUsage,
   formatTokenCount,
   type TokenDebugStep,
 } from '@/utils/ai-chat/token-usage-steps'
@@ -283,43 +285,52 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   </van-popover>
 
   <!-- Inline mode: per-turn summary (DeerFlow MessageTokenUsageList pattern) -->
-  <span v-else-if="shouldRenderInline && preferences.inlineMode === 'per_turn'" class="token-usage-inline">
-    <svg class="token-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-    </svg>
-    <span class="token-label">{{ t('aiChat.usageToken') }}</span>
-    <span class="token-sep">·</span>
-    <strong class="token-value">{{ formatInlineTokenCount(effectiveUsage.prompt_tokens) }}</strong>
-    <span class="token-sep">·</span>
-    <strong class="token-value">{{ formatInlineTokenCount(effectiveUsage.completion_tokens) }}</strong>
-    <span class="token-sep">·</span>
-    <strong class="token-value token-value-total">{{ formatInlineTokenCount(effectiveUsage.total_tokens) }}</strong>
-  </span>
-
-  <!-- Inline mode: debug step card (DeerFlow MessageTokenUsageDebugList pattern) -->
-  <div v-else-if="shouldRenderInline && preferences.inlineMode === 'step_debug' && debugStep" class="token-debug-card">
-    <div class="tdc-main">
-      <div class="tdc-label-row">
-        <svg class="tdc-coin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <div v-else-if="shouldRenderInline && preferences.inlineMode === 'per_turn'" class="token-usage-inline-wrapper">
+    <div class="token-usage-summary">
+      <span class="token-summary-label">
+        <svg class="token-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
         </svg>
-        <span class="tdc-label">{{ debugStep.label }}</span>
-      </div>
-      <div v-if="debugStep.secondaryLabels.length > 0" class="tdc-badges">
-        <span v-for="(label, i) in debugStep.secondaryLabels" :key="`${debugStep.id}-${i}-${label}`" class="tdc-badge">{{ label }}</span>
-      </div>
-      <div v-if="debugStep.sharedAttribution" class="tdc-shared">{{ t('aiChat.tokenUsageSharedAttribution') }}</div>
-      <div class="tdc-usage-detail">
-        <template v-if="debugStep.usage">
-          {{ formatTokenCount(debugStep.usage.inputTokens) }}
-          · {{ formatTokenCount(debugStep.usage.outputTokens) }}
-        </template>
-        <template v-else>{{ t('aiChat.tokenUsageUnavailableShort') }}</template>
-      </div>
+        {{ t('aiChat.usageToken') }}
+      </span>
+      <span class="token-summary-item">
+        {{ t('aiChat.tokensInput') }}: <strong>{{ formatInlineTokenCount(effectiveUsage.prompt_tokens) }}</strong>
+      </span>
+      <span class="token-summary-item">
+        {{ t('aiChat.tokensOutput') }}: <strong>{{ formatInlineTokenCount(effectiveUsage.completion_tokens) }}</strong>
+      </span>
+      <span class="token-summary-total">
+        {{ t('aiChat.tokensTotal') }}: <strong>{{ formatInlineTokenCount(effectiveUsage.total_tokens) }}</strong>
+      </span>
     </div>
-    <span class="tdc-total-badge">
-      {{ debugStep.usage ? `${formatTokenCount(debugStep.usage.totalTokens)} ${t('aiChat.tokenUsageLabel')}` : t('aiChat.tokenUsageUnavailableShort') }}
-    </span>
+  </div>
+
+  <!-- Inline mode: debug step card (DeerFlow MessageTokenUsageDebugList pattern) -->
+  <div v-else-if="shouldRenderInline && preferences.inlineMode === 'step_debug' && debugStep" class="token-debug-wrapper">
+    <div class="token-debug-card-full">
+      <div class="tdc-content">
+        <div class="tdc-label-row">
+          <svg class="tdc-coin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span class="tdc-label">{{ debugStep.label }}</span>
+        </div>
+        <div v-if="debugStep.secondaryLabels.length > 0" class="tdc-badges">
+          <span v-for="(label, i) in debugStep.secondaryLabels" :key="`${debugStep.id}-${i}-${label}`" class="tdc-badge">{{ label }}</span>
+        </div>
+        <div v-if="debugStep.sharedAttribution" class="tdc-shared">{{ t('aiChat.tokenUsageSharedAttribution') }}</div>
+        <div class="tdc-usage-detail">
+          <template v-if="debugStep.usage">
+            {{ t('aiChat.tokensInput') }}: {{ formatTokenCount(debugStep.usage.inputTokens) }}
+            · {{ t('aiChat.tokensOutput') }}: {{ formatTokenCount(debugStep.usage.outputTokens) }}
+          </template>
+          <template v-else>{{ t('aiChat.tokenUsageUnavailableShort') }}</template>
+        </div>
+      </div>
+      <span class="tdc-total-badge">
+        {{ debugStep.usage ? `${formatTokenCount(debugStep.usage.totalTokens)} ${t('aiChat.tokenUsageLabel')}` : t('aiChat.tokenUsageUnavailableShort') }}
+      </span>
+    </div>
   </div>
 </template>
 
@@ -510,15 +521,28 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   border-top: 1px solid var(--van-border-color);
 }
 
-/* Inline per-turn mode */
-.token-usage-inline {
+/* Inline per-turn mode (DeerFlow MessageTokenUsageList pattern) */
+.token-usage-inline-wrapper {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
+}
+
+.token-usage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+}
+
+.token-summary-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-weight: 500;
   color: var(--text-secondary, #999);
-  padding: 4px 0;
-  flex-wrap: nowrap;
 }
 
 .token-icon {
@@ -526,44 +550,50 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   opacity: 0.6;
 }
 
-.token-label {
-  font-weight: 500;
+.token-summary-item {
   color: var(--text-secondary, #999);
 }
 
-.token-sep {
-  opacity: 0.4;
-}
-
-.token-value {
+.token-summary-item strong {
   color: var(--text-primary, #fff);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.token-value-total {
-  color: var(--van-primary-color, #6366f1);
+.token-summary-total {
+  color: var(--text-secondary, #999);
 }
 
-/* Inline debug mode (DeerFlow MessageTokenUsageDebugList card pattern) */
-.token-debug-card {
+.token-summary-total strong {
+  color: var(--van-primary-color, #6366f1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inline debug mode (DeerFlow MessageTokenUsageDebugList pattern) */
+.token-debug-wrapper {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
+}
+
+.token-debug-card-full {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--van-border-color);
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
-  background: var(--van-background-2);
+  background: var(--van-background-2, rgba(0, 0, 0, 0.02));
 }
 
-.tdc-main {
+.tdc-content {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .tdc-label-row {
@@ -575,13 +605,13 @@ function onSelectPreset(value: TokenUsageViewPreset) {
 .tdc-coin {
   flex-shrink: 0;
   opacity: 0.6;
-  color: var(--van-text-color-2);
+  color: var(--van-text-color-2, #999);
 }
 
 .tdc-label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--van-text-color);
+  color: var(--text-primary, #fff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -590,27 +620,29 @@ function onSelectPreset(value: TokenUsageViewPreset) {
 .tdc-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 
 .tdc-badge {
   font-size: 10px;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 4px;
-  background: var(--van-background-3, rgba(0,0,0,0.06));
-  color: var(--van-text-color-2);
+  background: var(--van-background-3, rgba(0, 0, 0, 0.06));
+  color: var(--van-text-color-2, #999);
   font-weight: 400;
 }
 
 .tdc-shared {
   font-size: 11px;
-  color: var(--van-text-color-3);
+  color: var(--van-text-color-3, #666);
+  line-height: 1.4;
 }
 
 .tdc-usage-detail {
   font-size: 11px;
-  color: var(--van-text-color-2);
+  color: var(--van-text-color-2, #999);
   font-variant-numeric: tabular-nums;
+  line-height: 1.4;
 }
 
 .tdc-total-badge {
@@ -619,10 +651,11 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   font-weight: 600;
   font-family: var(--van-font-mono, monospace);
   font-variant-numeric: tabular-nums;
-  padding: 2px 8px;
-  border: 1px solid var(--van-border-color);
+  padding: 4px 10px;
+  border: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
   border-radius: 6px;
-  color: var(--van-text-color);
+  color: var(--text-primary, #fff);
   white-space: nowrap;
+  background: var(--van-background-1, #fff);
 }
 </style>

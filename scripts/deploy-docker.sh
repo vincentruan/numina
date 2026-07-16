@@ -3,11 +3,10 @@
 # Numina Docker 快速部署脚本
 #
 # 用法：
-#   ./scripts/deploy-docker.sh [--skip-clone] [--dev]
+#   ./scripts/deploy-docker.sh [--dev]
 #
 # 参数：
-#   --skip-clone  跳过 deer-flow 克隆（如果已存在）
-#   --dev         使用开发环境模式（放宽部分安全检查）
+#   --dev         使用开发环境模式（放宽部分安全检查，初始化种子数据，运行仿真测试）
 
 set -euo pipefail
 
@@ -28,12 +27,10 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # ========================================
 # 参数解析
 # ========================================
-SKIP_CLONE=false
 DEV_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --skip-clone) SKIP_CLONE=true; shift ;;
     --dev) DEV_MODE=true; shift ;;
     *) error "未知参数: $1" ;;
   esac
@@ -101,47 +98,10 @@ info "工作目录: $PROJECT_ROOT"
 # ========================================
 # 3. DeerFlow harness 准备
 # ========================================
-DEERFLOW_REF_PATH="${PROJECT_ROOT}/../deer-flow-reference"
-HARNESS_DST="$PROJECT_ROOT/server/apps/agent/vendor/deerflow-harness"
-
-if [[ "$SKIP_CLONE" == true ]]; then
-  info "跳过 deer-flow 克隆 (--skip-clone)"
-else
-  if [[ ! -d "$DEERFLOW_REF_PATH" ]]; then
-    info "克隆 DeerFlow 仓库..."
-    git clone --depth 1 https://github.com/bytedance/deer-flow.git "$DEERFLOW_REF_PATH"
-    success "DeerFlow 仓库已克隆到: $DEERFLOW_REF_PATH"
-  else
-    info "DeerFlow 仓库已存在: $DEERFLOW_REF_PATH"
-  fi
-fi
-
-# Vendor harness
-if [[ ! -d "$HARNESS_DST" ]]; then
-  info "复制 DeerFlow harness 到 vendor 目录..."
-
-  if [[ ! -d "$DEERFLOW_REF_PATH/backend/packages/harness" ]]; then
-    error "Harness 目录不存在: $DEERFLOW_REF_PATH/backend/packages/harness"
-  fi
-
-  rm -rf "$HARNESS_DST"
-  cp -r "$DEERFLOW_REF_PATH/backend/packages/harness" "$HARNESS_DST"
-
-  # 写入 manifest
-  COMMIT_SHA=$(git -C "$DEERFLOW_REF_PATH" rev-parse HEAD 2>/dev/null || echo "unknown")
-  cat > "$HARNESS_DST/.vendor-manifest.json" <<EOF
-{
-  "source": "https://github.com/bytedance/deer-flow",
-  "commit": "$COMMIT_SHA",
-  "vendored_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "harness_path": "backend/packages/harness"
-}
-EOF
-
-  success "Harness 已复制到: $HARNESS_DST"
-else
-  info "Harness 已存在: $HARNESS_DST"
-fi
+# DeerFlow harness 现在通过 uv 在 Docker 构建时自动从 GitHub 拉取
+# (见 server/pyproject.toml 中的 deerflow-harness 依赖)
+# 不再需要本地 vendor 步骤
+info "DeerFlow harness 将在 Docker 构建时自动安装（via uv from GitHub）"
 
 # ========================================
 # 4. .env 文件配置
@@ -299,10 +259,10 @@ fi
 # ========================================
 # 5. 数据目录准备
 # ========================================
-DATA_DIR="$PROJECT_ROOT/data"
+DATA_DIR="${NUMINA_DATA_DIR:-$PROJECT_ROOT/.numina/data}"
 if [[ ! -d "$DATA_DIR" ]]; then
   info "创建数据目录..."
-  mkdir -p "$DATA_DIR"
+  mkdir -p "$DATA_DIR/db" "$DATA_DIR/uploads"
   success "数据目录已创建: $DATA_DIR"
 fi
 
@@ -380,7 +340,52 @@ else
 fi
 
 # ========================================
-# 10. 显示服务状态
+# 10. 初始化种子数据
+# ========================================
+if [[ "$DEV_MODE" == true ]]; then
+  info "初始化种子数据（开发模式）..."
+  # 从宿主机直接执行，连接到容器映射的 SQLite 数据库
+  # seed-data.sh 检测到 Docker 后会尝试容器内执行，但 tests/ 未挂载到容器中
+  ACTUAL_DB_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" | cut -d= -f2-)
+  if [[ -z "$ACTUAL_DB_URL" ]]; then
+    ACTUAL_DB_URL="sqlite:////app/.numina/data/db/numina.db"
+  fi
+  # 将容器路径转换为宿主机路径（用于本地 SQLite）
+  HOST_DB_PATH="$DATA_DIR/db/numina.db"
+  HOST_DB_URL="sqlite:///$HOST_DB_PATH"
+  if cd "$PROJECT_ROOT/server" && TEST_DATABASE_URL="$HOST_DB_URL" uv run python ../tests/data/seed_data.py --force; then
+    success "种子数据初始化完成"
+    # 重启 backend 以刷新连接池（确保新写入的数据可见）
+    info "重启 backend 以刷新连接池..."
+    $COMPOSE_CMD restart backend
+    sleep 10
+  else
+    warn "种子数据初始化失败（可稍后手动运行 tests/data/seed-data.sh）"
+  fi
+  cd "$PROJECT_ROOT"
+fi
+
+# ========================================
+# 11. 运行仿真测试
+# ========================================
+if [[ "$DEV_MODE" == true ]]; then
+  info "运行仿真测试..."
+  echo ""
+  echo "--- 基础验收测试 ---"
+  bash "$PROJECT_ROOT/tests/e2e/acceptance.sh" || warn "验收测试存在失败项"
+  echo ""
+  echo "--- 扩展 CRUD 测试 ---"
+  bash "$PROJECT_ROOT/tests/e2e/extended.sh" || warn "扩展测试存在失败项"
+  echo ""
+  echo "--- 多供应商 AI 配置测试 ---"
+  bash "$PROJECT_ROOT/tests/e2e/multi-provider-sim-test.sh" || warn "多供应商测试存在失败项"
+  echo ""
+  echo "--- 儿童角色仿真测试 ---"
+  bash "$PROJECT_ROOT/tests/e2e/test-child-simulation.sh" || warn "儿童测试存在失败项"
+fi
+
+# ========================================
+# 12. 显示服务状态
 # ========================================
 echo ""
 echo "========================================"

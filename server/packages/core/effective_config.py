@@ -44,6 +44,7 @@ class EffectiveConfigBuilder:
         agent_config: dict[str, Any],
         enabled_skills: list[dict[str, Any]],
         mcp_servers: list[dict[str, Any]],
+        ai_config: dict[str, Any] | None = None,
     ) -> EffectiveConfig:
         model_entry = build_model_entry(ai_provider)
 
@@ -62,6 +63,22 @@ class EffectiveConfigBuilder:
             "memory": {"enabled": True, "storage_path": memory_path},
             "checkpointer": {"type": "sqlite", "connection_string": checkpointer_path},
         }
+
+        # Inject web_search tool config from ai_config (web_search_providers)
+        # so DeerFlow can load the web_search tool with the correct provider.
+        if ai_config:
+            web_search_providers = ai_config.get("web_search_providers", [])
+            if web_search_providers:
+                first_provider = web_search_providers[0]
+                config_dict["tools"] = [
+                    {
+                        "name": "web_search",
+                        "group": "web",
+                        "use": first_provider.get("provider_class", ""),
+                        "api_key": first_provider.get("api_key", ""),
+                        "max_results": first_provider.get("max_results", 5),
+                    }
+                ]
 
         # DeerFlow reads MCP servers from extensions_config.json (not config.yaml).
         # Generate the file and return its path so the caller can set DEER_FLOW_EXTENSIONS_CONFIG_PATH.

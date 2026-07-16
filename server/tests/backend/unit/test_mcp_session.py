@@ -24,7 +24,7 @@ def test_session_family_id_is_immutable():
 
 
 @pytest.mark.asyncio
-async def test_list_tools_returns_five_tools():
+async def test_list_tools_returns_seven_tools():
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
@@ -34,6 +34,8 @@ async def test_list_tools_returns_five_tools():
         "get_liabilities",
         "get_members",
         "get_recent_alerts",
+        "read_numina_report",
+        "write_numina_report",
     }
 
 

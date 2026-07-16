@@ -36,6 +36,8 @@ class TestDeerFlowAdapterDispatch:
             adapter = DeerFlowAdapter.__new__(DeerFlowAdapter)
             adapter._client = mock_client
             adapter._timeout = 10
+            adapter._config_path = None  # Required by _sync_dispatch
+            adapter._is_family_mode = False
             return adapter
 
     def test_dispatch_returns_string(self):

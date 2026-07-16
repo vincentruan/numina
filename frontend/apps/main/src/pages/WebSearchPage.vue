@@ -31,10 +31,12 @@ const enabledProviders = computed({
   get: () =>
     providers.value.filter((p) => p.is_enabled).sort((a, b) => a.display_order - b.display_order),
   set: (newList: WebSearchProvider[]) => {
-    // Sync the reordered enabled list back into the source array
+    // Sync the reordered enabled list back into the source array,
+    // updating display_order so the getter's sort preserves the new order.
     const enabledIds = new Set(newList.map((p) => p.id))
     const disabled = providers.value.filter((p) => !enabledIds.has(p.id))
-    providers.value = [...newList, ...disabled]
+    const reordered = newList.map((p, i) => ({ ...p, display_order: i }))
+    providers.value = [...reordered, ...disabled]
   },
 })
 

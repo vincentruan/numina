@@ -93,11 +93,11 @@ class ChatAdapter:
         and the message content are the only injection points available.
         """
         system_prompt = await self._resolve_prompt(family_id)
-        # Append web_search behavioral guidance so the LLM knows whether it may search
-        if web_search:
-            system_prompt += "\n\n## 联网搜索\n\n用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
-        else:
-            system_prompt += "\n\n## 联网搜索\n\n用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+        # Web-search behavioral guidance lives in the skill files:
+        # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
+        # The skill is selected below (chat-search vs chat) based on web_search,
+        # so no runtime injection is needed — and injecting here would leak
+        # internal guidance into user-visible prompts.
         mcp_headers: dict[str, str] = {
             "X-Agent-Token": self._internal_token,
             "X-Family-Id": family_id,
@@ -133,7 +133,13 @@ class ChatAdapter:
         )
         context = RedactedContext(family_id=family_id, free_text=augmented_text)
 
-        skill_name = "chat-search" if web_search else "chat"
+        # Only use chat-search skill when web_search=True AND actual search
+        # capability is configured. Otherwise the model is told it can search
+        # but has no tools → hallucinated searches or errors.
+        has_search_capability = bool(
+            ai_config.get("web_search_providers") or ai_config.get("web_search_mcp_servers")
+        )
+        skill_name = "chat-search" if (web_search and has_search_capability) else "chat"
         async for chunk in adapter.stream_dispatch(
             skill_name,
             context,

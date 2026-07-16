@@ -22,6 +22,14 @@ def _make_ai_config(enabled=True, provider="anthropic", api_key="sk-test"):
         "ai_enabled": enabled,
         "ai_provider": provider,
         "api_key": api_key,
+        "providers": [
+            {
+                "ai_provider": provider,
+                "api_key": api_key,
+                "ai_model_id": "claude-3-5-sonnet-20241022",
+                "is_active": True,
+            }
+        ],
         "allowed_capabilities": [],
         "admin_only_capabilities": [],
         "member_role": "member",
@@ -191,7 +199,7 @@ class TestOrchestratorDeerFlowPath:
 
         assert isinstance(response, AgentResponse)
         assert "不可用" in response.summary or "重试" in response.summary
-        assert response.fallback_used is False
+        assert response.fallback_used is True  # Error response IS a fallback
 
 
 class TestOrchestratorPolicyEnforcement:

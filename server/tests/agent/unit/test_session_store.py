@@ -24,15 +24,16 @@ class TestAiSessionRepository:
                 session_id="s1",
                 family_id=FAMILY_ID,
                 user_id="u1",
-                capability="chat",
-                jsonl_path="data/sessions/f1/s1.jsonl",
+                agent_id="agent-1",
+                last_model="claude-3",
+                source="test",
             )
             mock_upsert.assert_awaited_once_with(
                 session_id="s1",
                 user_id="u1",
-                capability="chat",
-                jsonl_path="data/sessions/f1/s1.jsonl",
-                last_model=None,
+                agent_id="agent-1",
+                last_model="claude-3",
+                source="test",
             )
 
     async def test_upsert_swallows_backend_error(self, repo):
@@ -42,8 +43,9 @@ class TestAiSessionRepository:
                 session_id="s1",
                 family_id=FAMILY_ID,
                 user_id=None,
-                capability="chat",
-                jsonl_path="p1",
+                agent_id=None,
+                last_model=None,
+                source=None,
             )
 
     async def test_get_session_returns_dict(self, repo):

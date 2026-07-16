@@ -278,29 +278,32 @@ def test_extract_content_returns_none_when_absent():
 
 
 def test_resolve_tool_metadata_known_tool():
-    """Known tool name returns correct (type, display_name, icon)."""
-    ttype, display, icon = resolve_tool_metadata("get_assets")
+    """Known tool name returns correct (type, display_name, icon, i18n_key)."""
+    ttype, display, icon, i18n_key = resolve_tool_metadata("get_assets")
     assert ttype == "asset_query"
     assert display == "查询资产"
-    assert icon == "wallet"
+    assert icon == "💰"
+    assert i18n_key == "toolName.getAssets"
 
 
 def test_resolve_tool_metadata_web_search():
     """web_search tool maps to web_search type."""
-    ttype, display, icon = resolve_tool_metadata("web_search")
+    ttype, display, icon, i18n_key = resolve_tool_metadata("web_search")
     assert ttype == "web_search"
-    assert icon == "search"
+    assert icon == "🔍"
+    assert i18n_key == "toolName.webSearch"
 
 
 def test_resolve_tool_metadata_unknown_tool_fallback():
-    """Unknown tool name falls back to ('unknown', <name>, 'tool')."""
-    ttype, display, icon = resolve_tool_metadata("some_custom_tool")
+    """Unknown tool name falls back to ('unknown', <name>, 'tool', None)."""
+    ttype, display, icon, i18n_key = resolve_tool_metadata("some_custom_tool")
     assert ttype == "unknown"
     assert display == "some_custom_tool"
     assert icon == "tool"
+    assert i18n_key is None
 
 
 def test_resolve_tool_metadata_tavily_search():
     """tavily_search maps to web_search type (same as web_search)."""
-    ttype, _, _ = resolve_tool_metadata("tavily_search")
+    ttype, _, _, _ = resolve_tool_metadata("tavily_search")
     assert ttype == "web_search"

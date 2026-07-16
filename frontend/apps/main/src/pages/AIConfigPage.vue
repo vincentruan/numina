@@ -244,6 +244,8 @@ const resettingCircuitId = ref<string | null>(null)
 const draggableConfigs = computed({
   get: () => aiStore.configs,
   set: (val: ProviderConfig[]) => {
+    // Update display_order so the getter's sort preserves the new order immediately
+    val.forEach((c, i) => { c.display_order = i })
     aiStore.configs = val
   },
 })

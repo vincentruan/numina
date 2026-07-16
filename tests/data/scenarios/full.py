@@ -22,10 +22,8 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
         avatar_color="#10B981",
     )
 
-    if not created:
-        if verbose:
-            print("  [skip] test_rich 已存在")
-        return
+    if not created and verbose:
+        print("  [info] test_rich 已存在，确保关联数据完整...")
 
     fam = FamilyFactory.get_or_create(db, name="完整测试家庭", created_by_id=user.id)
     user.family_id = fam.id

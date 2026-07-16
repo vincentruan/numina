@@ -36,11 +36,11 @@ class TestDataRootExpansion:
 class TestDerivedPaths:
     def test_sessions_data_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.SESSIONS_DATA_DIR == _resolve("/tmp/test-agent") + "/workspace"
+        assert s.SESSIONS_DATA_DIR == _resolve("/tmp/test-agent") + "/workspaces"
 
     def test_agent_data_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.AGENT_DATA_DIR == _resolve("/tmp/test-agent") + "/workspace"
+        assert s.AGENT_DATA_DIR == _resolve("/tmp/test-agent") + "/workspaces"
 
     def test_log_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")

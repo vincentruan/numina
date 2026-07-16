@@ -15,13 +15,15 @@ from apps.backend.app.services.mcp_tool_registry import (
 
 
 class TestRegistryContents:
-    def test_registry_contains_all_five_legacy_tools(self):
+    def test_registry_contains_all_seven_tools(self):
         expected_names = {
             "get_family_overview",
             "get_assets",
             "get_liabilities",
             "get_members",
             "get_recent_alerts",
+            "read_numina_report",
+            "write_numina_report",
         }
         assert set(_REGISTRY.keys()) == expected_names
 
@@ -51,12 +53,12 @@ class TestGetTool:
 class TestListToolsForRole:
     def test_list_tools_for_role_owner(self):
         tools = list_tools_for_role("owner")
-        assert len(tools) == 5
+        assert len(tools) == 7
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 5
+        assert len(tools) == 7
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")

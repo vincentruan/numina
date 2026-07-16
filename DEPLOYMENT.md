@@ -612,6 +612,70 @@ docker-compose up -d --build backend
 
 **说明**: 该脚本设计为功能验证脚本，不是幂等的。如需清理，手动删除 demouser 账号下名称包含"深圳湾一号"、"宝马X5"等测试数据的条目，或重置数据库后重新运行 `seed-data.sh`。
 
+### Q: Docker 重建后登录失败 — AUTH_INVALID_CREDENTIALS
+
+**原因**: 容器内 `DATABASE_URL` 指向宿主机绝对路径（如 `/Users/xxx/.numina/data/db/numina.db`），该路径在容器内可能不存在或指向不同数据。`seed-data.sh` 更新的密码哈希写入了容器内的数据库，但后端实际使用的是另一个路径。
+
+**解决**:
+```bash
+# 1. 确认后端实际使用的数据库路径
+docker exec numina-backend env | grep DATABASE_URL
+
+# 2. 在该数据库中同步密码
+docker exec numina-backend uv run python -c "
+import bcrypt, sqlite3
+conn = sqlite3.connect('<ACTUAL_DB_PATH>')
+cursor = conn.cursor()
+for user, pw in [('demouser','DemoPass123'), ('xiaobao','DemoPass123')]:
+    h = bcrypt.hashpw(pw.encode(), bcrypt.gensalt(12)).decode()
+    cursor.execute('UPDATE users SET password_hash=? WHERE username=?', (h, user))
+conn.commit(); conn.close()
+print('Done')
+"
+```
+
+**预防**: 本地开发 `.env` 中的 `DATABASE_URL` 应使用容器内路径 `sqlite:////app/.numina/data/db/numina.db`，或确保宿主机路径在容器 volume 映射中一致。
+
+### Q: 儿童端仿真测试登录失败 — step1 返回 401
+
+**原因**: 儿童账号（如 `xiaoming`）的密码哈希与种子数据脚本中定义的不一致。容器重建后如果 volume 未清除，旧密码哈希仍然存在。
+
+**解决**: 运行 `seed-data.sh --force` 重新同步所有种子账号密码，或手动更新（见上方 Q&A）。
+
+### Q: multi-provider-sim-test.sh 中 frontend 健康检查失败
+
+**原因**: 脚本中 `docker inspect numina-frontend` 使用了错误的容器名。实际容器名为 `numina-frontend-main`。
+
+**解决**: 已修复为 `docker inspect numina-frontend-main`。
+
+### Q: 种子数据初始化后登录失败 — AUTH_INVALID_CREDENTIALS
+
+**原因**: `.env` 中 `DATABASE_URL` 指向宿主机绝对路径（如 `sqlite:////Users/xxx/.numina/data/db/numina.db`），容器内路径不同。种子脚本写入宿主机 DB 文件，但后端读取容器内路径。
+
+**解决**: 本地开发 `.env` 中的 `DATABASE_URL` 应使用容器内路径：
+```bash
+DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+```
+部署脚本已修复此问题。如遇此错误，修改 `.env` 后重启 backend：
+```bash
+docker compose restart backend
+```
+
+### Q: 儿童账号 xiaoming 不存在 / 登录失败
+
+**原因**: `seed_full_scenario` 在 `test_rich` 已存在时直接 `return`，跳过了儿童账号创建。
+
+**解决**: 已修复 `tests/data/scenarios/full.py`，移除 early return，确保关联数据（儿童、家务、心愿）始终创建。重新运行种子数据：
+```bash
+cd server && TEST_DATABASE_URL="sqlite:////app/.numina/data/db/numina.db" uv run python ../tests/data/seed_data.py --force
+```
+
+### Q: test-child-simulation.sh 完成家务返回 405
+
+**原因**: 测试脚本对 `/complete` 端点发了两次 POST（一次取 body，一次取 status code），第一次成功后 chore 状态变为 `completed`，第二次请求因状态不匹配返回 405。
+
+**解决**: 已修复测试脚本，合并为单次请求同时获取 status code。
+
 ---
 
 ## 仿真测试
@@ -619,11 +683,17 @@ docker-compose up -d --build backend
 部署完成后，运行双角色仿真测试验证核心功能：
 
 ```bash
-# 基础验收测试（23 项）
+# 基础验收测试（23 项）— demouser 成人角色
 bash tests/e2e/acceptance.sh
 
-# 扩展 CRUD 测试（56 项）
+# 扩展 CRUD 测试（56 项）— demouser 成人角色
 bash tests/e2e/extended.sh
+
+# 多供应商 AI 配置 + 双角色测试（31 项）— demouser + xiaobao
+bash tests/e2e/multi-provider-sim-test.sh
+
+# 儿童角色完整仿真（19-22 项，视条件执行）— xiaoming (test_rich 家庭儿童)
+bash tests/e2e/test-child-simulation.sh
 
 # 心愿/负债功能测试
 bash tests/e2e/wishes-liabilities.sh
@@ -634,13 +704,29 @@ bash tests/data/seed-data.sh
 
 **双角色验证要点**:
 
-| 角色 | 登录端点 | 身份端点 | 权限 |
-|------|---------|---------|------|
-| demouser (owner) | `POST /auth/login` | `GET /auth/me` | 完整资产/负债/家庭管理 |
-| testchild (child) | `POST /auth/child/login` | `GET /auth/child/me` | 仅 `/child/*` 路由 |
+| 角色 | 账号 | 密码 | 登录方式 | 权限 |
+|------|------|------|---------|------|
+| demouser (owner) | `demouser` | `DemoPass123` | `POST /auth/login` | 完整资产/负债/家庭管理 |
+| xiaobao (child) | `xiaobao` | `DemoPass123` + emoji PIN | `POST /auth/login/step1` → `step2` | 仅 `/child/*` 路由 |
+| xiaoming (child) | `xiaoming` | `TestRich123!` + emoji PIN | `POST /auth/login/step1` → `step2` | 仅 `/child/*` 路由 |
 
-儿童账号 (`testchild`) 访问 `/assets`、`/liabilities` 等成人端点应返回 **403**。
+**儿童登录流程**（两步验证）：
+```bash
+# Step 1: 用户名 + 密码 → temp_token
+STEP1=$(curl -s -X POST http://localhost/api/v1/auth/login/step1 \
+  -H "Content-Type: application/json" \
+  -d '{"username":"xiaobao","password":"DemoPass123"}')
+TEMP_TOKEN=$(echo "$STEP1" | jq -r '.data.temp_token')
+
+# Step 2: emoji PIN → access_token
+STEP2=$(curl -s -X POST http://localhost/api/v1/auth/login/step2 \
+  -H "Content-Type: application/json" \
+  -d "{\"temp_token\":\"$TEMP_TOKEN\",\"factor_type\":\"emoji_pin\",\"payload\":{\"pin_sequence\":[\"🐱\",\"🐶\",\"🌟\",\"🌈\"]}}")
+CHILD_TOKEN=$(echo "$STEP2" | jq -r '.data.access_token')
+```
+
+儿童账号 (`xiaoming`/`xiaobao`) 访问 `/assets`、`/liabilities` 等成人端点应返回 **403**。
 
 ---
-**最后更新**: 2026-05-01
+**最后更新**: 2026-07-16
 **维护者**: Numina Team

@@ -309,4 +309,13 @@ class Orchestrator:
 
         return response
 
+    def _error_response(self, capability: str, audit_id: str, summary: str = "服务暂时不可用，请稍后重试") -> AgentResponse:
+        """Return a fallback AgentResponse for error cases."""
+        return AgentResponse(
+            capability=capability,
+            summary=summary,
+            fallback_used=True,
+            audit_id=audit_id,
+        )
+
 orchestrator = Orchestrator()

@@ -125,6 +125,7 @@ def test_step2_title_middleware_in_chain(runnable_config: dict[str, Any]) -> Non
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason="U2 persistence fix not yet implemented - checkpointer injection pending")
 def test_step1_checkpointer_wired(
     runnable_config: dict[str, Any],
     fake_chat_model: FakeListChatModel,

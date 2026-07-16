@@ -504,7 +504,9 @@ class TestCacheFixes:
     def test_no_deer_flow_config_path_env_var_set(self, base_config_dir, ai_config):
         """get_family_adapter must restore DEER_FLOW_CONFIG_PATH after init, not leave it set."""
         clear_cache()
-        original = os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+        # Save original value and remove it
+        original = os.environ.get("DEER_FLOW_CONFIG_PATH")
+        os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
@@ -513,12 +515,13 @@ class TestCacheFixes:
         ):
             get_family_adapter("fam-env-test", ai_config, base_config_dir)
 
-        # After init, env var must be restored to its original state (absent if it wasn't set)
-        assert os.environ.get("DEER_FLOW_CONFIG_PATH") == original, (
-            "get_family_adapter must restore DEER_FLOW_CONFIG_PATH to its original value — "
+        # After init, env var must be absent (since it was absent before)
+        assert os.environ.get("DEER_FLOW_CONFIG_PATH") is None, (
+            "get_family_adapter must not leave DEER_FLOW_CONFIG_PATH set — "
             "leaving it set to a per-family temp path would contaminate subsequent calls"
         )
 
+        # Restore original if it was set
         if original is not None:
             os.environ["DEER_FLOW_CONFIG_PATH"] = original
         clear_cache()

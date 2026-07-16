@@ -298,15 +298,14 @@ watch(
       {{ t('aiChat.generationStopped') }}
     </div>
 
-    <!-- Footer: token usage + timestamp + actions.
-         Token usage is integrated into the footer (DeerFlow pattern) instead of
-         rendering as a separate block between content and footer. The separate
-         block created a visual break that made the content above look like a
-         boxed "final reply", confusing users into thinking the actual answer
-         was below the token usage line. -->
+    <!-- Inline token usage (DeerFlow pattern: separate block with separator,
+         between content and footer — NOT mixed into the footer row).
+         Visibility is controlled by TokenUsage (off/per_turn/debug). -->
+    <slot name="token-usage" />
+
+    <!-- Footer: timestamp + actions (DeerFlow: actions on hover toolbar) -->
     <div v-if="phase === 'done' || phase === 'interrupted' || phase === 'error'" class="message-footer">
       <span class="message-time">{{ displayTime }}</span>
-      <slot name="token-usage" />
       <div class="message-footer-spacer" />
 
       <!-- Actions -->

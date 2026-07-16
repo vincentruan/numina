@@ -110,6 +110,8 @@ class UserFactory:
             existing.password_hash = _hash(password)
             if pin is not None:
                 existing.pin_hash = _hash(pin)
+            if username is not None:
+                existing.username = username.lower()
             return existing, False
         child = User(
             id=next_id(),
