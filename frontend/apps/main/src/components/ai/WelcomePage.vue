@@ -2,6 +2,9 @@
 import InputBox from '@/components/ai-chat/InputBox.vue'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
 
+// Draft text to pre-fill the input with (e.g. recovered after a failed
+// auto-send from the AI hub). Empty/undefined leaves the input blank.
+defineProps<{ modelValue?: string }>()
 defineEmits<{
   startChat: [payload: SubmitPayload]
 }>()
@@ -13,6 +16,7 @@ defineEmits<{
     <InputBox
       status="ready"
       is-welcome-mode
+      :model-value="modelValue"
       @submit="$emit('startChat', $event)"
     />
   </div>

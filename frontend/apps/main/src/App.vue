@@ -75,6 +75,18 @@ onMounted(() => {
   // Load family data for agent API calls (X-Family-Id header)
   familyStore.fetchFamily()
 
+  // Restore the full user profile (incl. family_id) from the server. The
+  // localStorage-cached user (auth.user) deliberately omits family_id for
+  // security, so on a fresh page load authStore.user.family_id is undefined
+  // until fetchMe() resolves. That left a race window where /ai/chat's
+  // auto-send hit createThread before family data was ready and threw
+  // "Family not loaded" — dropping the user's submitted text. fetchMe()
+  // populates authStore.user.family_id so getAgentHeaders()/getClient()
+  // (api/ai-chat.ts) have a working fallback independent of fetchFamily()'s
+  // timing. Non-blocking: failures (e.g. expired cookie → router guard
+  // redirects to /login) are swallowed.
+  authStore.fetchMe().catch(() => { /* session invalid → router guard handles redirect */ })
+
   // Load coin config for adult users (children don't have access to /family/settings)
   if (authStore.user && authStore.user.role !== 'child') {
     familyStore.loadCoinConfig()
