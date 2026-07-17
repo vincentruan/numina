@@ -7,19 +7,16 @@
  * Displays a collapsible list of citation sources used in the AI response.
  * Each source shows: index, title, domain, citation count, and external link.
  */
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showSuccessToast } from 'vant'
 import type { CitationSource } from '@/utils/ai-chat/citations'
 import { formatCitationMarkdownReference } from '@/utils/ai-chat/citations'
+import CopyButton from '@/components/ai-chat/CopyButton.vue'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   sources: CitationSource[]
 }>()
-
-const copiedIndex = ref<number | null>(null)
 
 function extractDomain(url: string): string {
   try {
@@ -29,18 +26,8 @@ function extractDomain(url: string): string {
   }
 }
 
-async function copySource(source: CitationSource, index: number) {
-  const markdown = formatCitationMarkdownReference(source)
-  try {
-    await navigator.clipboard.writeText(markdown)
-    copiedIndex.value = index
-    showSuccessToast(t('aiChat.copiedSuccess'))
-    setTimeout(() => {
-      copiedIndex.value = null
-    }, 2000)
-  } catch {
-    // Copy failed silently
-  }
+function citationMarkdown(source: CitationSource) {
+  return formatCitationMarkdownReference(source)
 }
 </script>
 
@@ -80,19 +67,21 @@ async function copySource(source: CitationSource, index: number) {
             <line x1="10" y1="14" x2="21" y2="3" />
           </svg>
         </a>
-        <button
-          class="citation-source-copy"
-          :title="t('aiChat.copyReference')"
-          @click.prevent="copySource(source, index)"
-        >
-          <svg v-if="copiedIndex === index" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-        </button>
+        <CopyButton v-slot="{ copy, copied }" :content="citationMarkdown(source)" :copied-duration="2000">
+          <button
+            class="citation-source-copy"
+            :title="t('aiChat.copyReference')"
+            @click.prevent="copy"
+          >
+            <svg v-if="copied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+        </CopyButton>
       </li>
     </ol>
   </details>

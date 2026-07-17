@@ -111,11 +111,41 @@ export function downloadCsv(csvContent: string, filename = 'table.csv'): void {
   URL.revokeObjectURL(url)
 }
 
-/** Copy text to clipboard with toast feedback */
+/**
+ * Copy text to clipboard.
+ *
+ * Uses the async Clipboard API when available (secure contexts — https or
+ * localhost). Falls back to a hidden <textarea> + document.execCommand('copy')
+ * for non-secure contexts (e.g. dev server served over plain HTTP on a LAN IP),
+ * where `navigator.clipboard` is undefined and the async API would throw.
+ * Returns true on success, false otherwise; callers own toast feedback.
+ */
 export async function copyToClipboard(text: string): Promise<boolean> {
+  // Prefer the async Clipboard API (secure contexts).
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fall through to the legacy path (e.g. permission denied).
+    }
+  }
+
+  // Legacy fallback: works in non-secure HTTP contexts where the async API
+  // is unavailable. execCommand is deprecated but still the only option here.
   try {
-    await navigator.clipboard.writeText(text)
-    return true
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.top = '0'
+    textarea.style.left = '0'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return ok
   } catch {
     return false
   }

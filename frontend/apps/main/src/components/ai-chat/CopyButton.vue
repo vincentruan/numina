@@ -1,54 +1,62 @@
 <script setup lang="ts">
 /**
- * CopyButton 组件
+ * CopyButton — 可复用的复制逻辑包装组件
  *
- * 简化的复制按钮，用于复制文本内容
+ * 只负责「调用 copyToClipboard + toast 反馈 + 暴露 copied 瞬时状态」，
+ * 不渲染固定按钮/图标/样式，由默认 slot 承载调用方自己的按钮。
+ * 这样不同场景（消息工具条 action-btn、代码块 copy-btn、引用源按钮）
+ * 各自保持视觉一致性，仅共享复制逻辑。
+ *
+ * Slot props:
+ *   - copy: () => void      触发复制（绑定到调用方按钮的 @click）
+ *   - copied: boolean       复制成功后的瞬时状态（用于切换 ✓ 图标，约 1.5s）
+ *
+ * 用法示例：
+ *   <CopyButton :content="text" v-slot="{ copy, copied }">
+ *     <button class="my-btn" @click="copy">
+ *       <svg v-if="copied" .../><svg v-else .../>
+ *     </button>
+ *   </CopyButton>
  */
-import { showToast, showSuccessToast } from 'vant'
-import i18n from '@/i18n'
-import IIcon from '@/components/IIcon.vue'
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { showSuccessToast, showFailToast } from 'vant'
+import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   content: string
-}>()
+  /** 成功 toast 文案 key，默认 aiChat.copiedSuccess */
+  successKey?: string
+  /** 失败 toast 文案 key，默认 aiChat.copyFailed */
+  failKey?: string
+  /** copied 瞬时状态持续时长（ms），默认 1500 */
+  copiedDuration?: number
+}>(), {
+  successKey: 'aiChat.copiedSuccess',
+  failKey: 'aiChat.copyFailed',
+  copiedDuration: 1500,
+})
 
-function handleCopy() {
-  navigator.clipboard.writeText(props.content)
-  showSuccessToast(i18n.global.t('aiChat.copiedSuccess'))
+const { t } = useI18n()
+const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copy() {
+  const ok = await copyToClipboard(props.content)
+  if (ok) {
+    showSuccessToast(t(props.successKey))
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copied.value = false
+      copiedTimer = null
+    }, props.copiedDuration)
+  } else {
+    showFailToast(t(props.failKey))
+  }
 }
 </script>
 
 <template>
-  <button class="copy-button" @click="handleCopy">
-    <IIcon icon="copy" class="copy-icon" />
-  </button>
+  <slot :copy="copy" :copied="copied" />
 </template>
-
-<style scoped>
-.copy-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.copy-button:hover {
-  background: var(--bg-primary);
-  border-color: var(--van-primary-color);
-}
-
-.copy-icon {
-  width: 14px;
-  height: 14px;
-  color: var(--text-secondary);
-}
-
-.copy-button:hover .copy-icon {
-  color: var(--van-primary-color);
-}
-</style>

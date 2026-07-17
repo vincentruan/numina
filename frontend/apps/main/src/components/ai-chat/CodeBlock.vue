@@ -11,6 +11,7 @@
  */
 import { computed } from 'vue'
 import IIcon from '@/components/IIcon.vue'
+import CopyButton from '@/components/ai-chat/CopyButton.vue'
 
 const props = defineProps<{
   language: string
@@ -31,11 +32,6 @@ const formattedCode = computed(() => {
 })
 
 const languageLabel = computed(() => props.language || 'text')
-
-// 复制代码到剪贴板
-function copyCode() {
-  navigator.clipboard.writeText(props.code)
-}
 </script>
 
 <template>
@@ -43,9 +39,11 @@ function copyCode() {
     <!-- 语言标签 + 复制按钮（bare 模式下隐藏） -->
     <div v-if="!bare" class="code-header">
       <span class="language-label">{{ languageLabel }}</span>
-      <button class="copy-btn" @click="copyCode">
-        <IIcon icon="copy" />
-      </button>
+      <CopyButton v-slot="{ copy }" :content="code">
+        <button class="copy-btn" @click="copy">
+          <IIcon icon="copy" />
+        </button>
+      </CopyButton>
     </div>
 
     <!-- 代码内容 -->
