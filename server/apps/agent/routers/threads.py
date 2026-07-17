@@ -480,6 +480,13 @@ async def search_threads(
                 "title": r.get("title", ""),
                 "original_title": r.get("original_title"),
                 "is_pinned": r.get("is_pinned", False),
+                # U3: branch lineage for the history page. is_branch is derived
+                # from source=="branch" (snake_case metadata key, aligned with
+                # is_pinned); parent_thread_id comes from the session row
+                # (U2 column). checkpoint-internal keys (numina_branch /
+                # branch_parent_thread_id) are not mixed in here.
+                "is_branch": r.get("source") == "branch",
+                "parent_thread_id": r.get("parent_thread_id"),
             },
             values={"title": r.get("title", "")} if r.get("title") else {},
             interrupts={},
@@ -554,6 +561,9 @@ async def get_thread(
         meta["original_title"] = record["original_title"]
     if "is_pinned" in record:
         meta["is_pinned"] = record["is_pinned"]
+    # U3: branch lineage (aligned with search_threads metadata shape).
+    meta["is_branch"] = record.get("source") == "branch"
+    meta["parent_thread_id"] = record.get("parent_thread_id")
 
     return ThreadResponse(
         thread_id=thread_id,
