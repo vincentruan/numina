@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showFailToast, showSuccessToast } from 'vant'
+import { showFailToast, showSuccessToast, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import { useArtifacts } from '@/composables/ai-chat/useArtifacts'
 import { useAgentStore } from '@/stores/agent'
+import { useFamilyStore } from '@/stores/family'
 import { getThread, createThread, branchThreadFromTurn } from '@/api/ai-chat'
 import { accumulateUsage } from '@/utils/ai-chat/token-usage-steps'
 import ChatHeader from '@/components/ai/ChatHeader.vue'
@@ -28,6 +29,7 @@ const router = useRouter()
 
 const store = useChatSessionStore()
 const agentStore = useAgentStore()
+const familyStore = useFamilyStore()
 
 // Active agent for ChatHeader
 const activeAgent = computed(() => {
@@ -130,6 +132,12 @@ async function ensureThreadInSessions(threadId: string) {
 // Initial loading state for skeleton display (during thread creation + first send)
 const initialLoading = ref(true)
 
+// Draft text recovered into the welcome InputBox after a failed auto-send /
+// submit. AIChatBox passes it to WelcomePage's InputBox as modelValue so the
+// user's original text is not lost when handleStartChat throws (e.g. backend
+// /api/threads error, network failure). Cleared once a send succeeds.
+const draftText = ref<string | undefined>(undefined)
+
 // Inherited web search state: when the chat page is entered from the AI hub
 // page, the hub's web search toggle is carried via pendingMessage.webSearch.
 // Pass it to the chat InputBox as an explicit initial value so it inherits the
@@ -170,6 +178,21 @@ onMounted(async () => {
     // Inherit the hub page's web search toggle into the chat InputBox
     if (msg.webSearch !== undefined) {
       chatWebSearch.value = msg.webSearch
+    }
+    // Wait for family data before auto-sending. createThread →
+    // getAgentHeaders() (api/ai-chat.ts) needs familyStore.family?.id (or
+    // authStore.user.family_id, restored by App.vue's fetchMe()). App.vue /
+    // MainLayout fire fetchFamily() on mount but do not await it, so on first
+    // entry to /ai/chat the family id can still be unset when handleStartChat
+    // runs — which threw "Family not loaded" and dropped the user's text.
+    // Awaiting here closes that race for the auto-send path.
+    if (!familyStore.family) {
+      try {
+        await familyStore.fetchFamily()
+      } catch {
+        // fetchFamily failure is non-fatal here — handleStartChat will surface
+        // a send-failed toast and draftText recovery kicks in below.
+      }
     }
     // Construct complete SubmitPayload with mode config values
     const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = msg.deepThink ? 'thinking' : 'pro'
@@ -286,10 +309,24 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
       reasoning_effort: payload.reasoning_effort,
       websearch_enabled: payload.websearch_enabled,
     }, source)
+    // Send started successfully — clear any recovered draft so it doesn't
+    // linger in the (now-hidden) welcome InputBox on a later new-chat.
+    draftText.value = undefined
   } catch {
     skipNextHistoryLoadFor.value = null
     initialLoading.value = false
     showFailToast(t('aiChat.sendFailed'))
+    // Recover the user's text only when we never left welcome mode — i.e.
+    // createThread failed before setActiveThread ran. In that case
+    // activeThreadId is still null and the welcome InputBox is mounted, so
+    // seeding draftText (bound as its modelValue) restores the typed text for
+    // the user to retry. If sendMessage failed after thread creation, the user
+    // is already in chat mode with the message as an optimistic bubble and a
+    // retry button (useThreadChat marks the last AI message error) — re-seeding
+    // draftText there would create a stray duplicate in the hidden welcome box.
+    if (!store.activeThreadId) {
+      draftText.value = payload.text
+    }
   }
 }
 
@@ -362,6 +399,9 @@ function handleArtifactTap(artifact: { id: string; title: string; kind: string; 
 function handleNewChat() {
   chat.clearMessages()
   store.clearActiveThread()
+  // Clear any recovered draft so a previous failed send's text doesn't
+  // reappear in the fresh welcome InputBox.
+  draftText.value = undefined
 }
 
 // Branch conversation state and handler
@@ -378,6 +418,13 @@ async function handleBranch(messageId: string, messageIds: string[]) {
       messageIds,
     })
     showSuccessToast(t('aiChat.branchSuccess'))
+    // U5: when the sandbox artifact clone did not fully succeed, surface a
+    // non-blocking warning so the user knows why some files (e.g. reports)
+    // may be missing in the branch. The branch itself is still created.
+    const cloneWarnKey = branchCloneWarnKey(response.workspace_clone_mode)
+    if (cloneWarnKey) {
+      showToast({ type: 'warning', message: t(cloneWarnKey) })
+    }
     // Navigate to the new branch thread
     router.push({ name: 'AIChat', query: { thread_id: response.thread_id } })
   } catch (error) {
@@ -385,6 +432,16 @@ async function handleBranch(messageId: string, messageIds: string[]) {
     showFailToast(message)
   } finally {
     branchingMessageId.value = null
+  }
+}
+
+/** U5: map workspace_clone_mode to an i18n warning key, or undefined for success. */
+function branchCloneWarnKey(mode?: string): string | undefined {
+  switch (mode) {
+    case 'skipped_historical_turn': return 'aiChat.branchCloneSkippedHistorical'
+    case 'not_found': return 'aiChat.branchCloneNotFound'
+    case 'failed': return 'aiChat.branchCloneFailed'
+    default: return undefined
   }
 }
 
@@ -416,7 +473,7 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
 
       <template v-if="store.isWelcomeMode">
         <!-- WelcomePage includes its own InputBox (DeerFlow pattern) -->
-        <WelcomePage @start-chat="handleStartChat" />
+        <WelcomePage :model-value="draftText" @start-chat="handleStartChat" />
       </template>
       <template v-else>
         <MessageList

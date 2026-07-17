@@ -211,6 +211,8 @@ export interface ThreadBranchResponse {
   parent_thread_id: string
   parent_checkpoint_id: string
   branched_from_message_id: string
+  /** Sandbox artifact clone outcome (U1/U5). Empty when not reported. */
+  workspace_clone_mode?: string
 }
 
 export interface BranchThreadFromTurnInput {
