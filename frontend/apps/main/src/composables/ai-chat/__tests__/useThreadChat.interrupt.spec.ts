@@ -19,6 +19,12 @@ vi.mock('@/api/ai-chat', () => ({
   deleteThread: vi.fn(),
 }))
 
+// Mock the sessions API module (used by feedback hydration/submit)
+vi.mock('@/api/sessions', () => ({
+  submitMessageFeedback: vi.fn(),
+  getSessionFeedback: vi.fn().mockResolvedValue({ data: { items: {} } }),
+}))
+
 describe('useThreadChat — interrupt SSE event handling', () => {
   beforeEach(() => {
     vi.clearAllMocks()

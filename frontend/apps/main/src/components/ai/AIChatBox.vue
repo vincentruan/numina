@@ -318,6 +318,11 @@ async function handleRetry() {
   }
 }
 
+async function handleFeedback(messageId: string, value: 1 | -1) {
+  if (!store.activeThreadId) return
+  await chat.submitFeedback(store.activeThreadId, messageId, value)
+}
+
 function handleContextChange(_context: InputContext) {
   // Handle context changes if needed
 }
@@ -428,6 +433,7 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
           @artifact-tap="handleArtifactTap"
           @branch="handleBranch"
           @clarification-submit="handleClarificationSubmit"
+          @feedback="handleFeedback"
         />
       <!-- Suggestion chips above input (from SSE custom events) -->
       <SuggestionChips

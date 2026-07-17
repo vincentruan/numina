@@ -8,6 +8,7 @@ from apps.backend.app.models.ai_allocation_target import (
     AIAllocationTarget,
 )
 from apps.backend.app.models.ai_asset_alert import AIAssetAlert
+from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
 from apps.backend.app.models.ai_chat_message import AIChatMessage
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_disposal_suggestion import (

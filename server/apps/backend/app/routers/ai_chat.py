@@ -32,6 +32,7 @@ from apps.backend.app.config import settings
 from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
@@ -396,6 +397,110 @@ async def stream_session_events(
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )
+
+
+
+
+# ── Message Feedback (点赞/点踩) ─────────────────────────────────────────────
+
+
+class FeedbackRequest(BaseModel):
+    """点赞/点踩请求体。feedback: 1=点赞, -1=点踩, 0=取消。"""
+
+    feedback: Literal[1, -1, 0]
+
+
+class FeedbackResponse(BaseModel):
+    """单条消息的反馈状态回执。"""
+
+    message_id: str
+    feedback: int
+
+
+class FeedbackMapResponse(BaseModel):
+    """某会话下当前用户所有消息的反馈状态 (用于历史回填)。"""
+
+    items: dict[str, int]
+
+
+@sessions_router.post(
+    "/sessions/{session_id}/messages/{message_id}/feedback",
+    response_model=FeedbackResponse,
+)
+def submit_message_feedback(
+    session_id: str,
+    message_id: str,
+    body: FeedbackRequest,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> FeedbackResponse:
+    """提交对某条 AI 消息的点赞/点踩。
+
+    语义:再点同一个值会取消(feedback=0)。按用户独立记录,家庭内成员互不影响。
+    安全校验:session_id 必须属于当前 family。
+    """
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    thread_id = str(session.id)
+    row = (
+        db.query(AIChatMessageFeedback)
+        .filter(
+            AIChatMessageFeedback.family_id == current_user.family_id,
+            AIChatMessageFeedback.thread_id == thread_id,
+            AIChatMessageFeedback.message_id == message_id,
+            AIChatMessageFeedback.user_id == current_user.id,
+        )
+        .first()
+    )
+    if row is None:
+        row = AIChatMessageFeedback(
+            family_id=current_user.family_id,
+            user_id=current_user.id,
+            thread_id=thread_id,
+            message_id=message_id,
+            feedback=body.feedback,
+        )
+        db.add(row)
+    else:
+        # 再点同一个值 → 取消 (0);否则切换为新值
+        row.feedback = 0 if row.feedback == body.feedback else body.feedback
+    db.commit()
+    return FeedbackResponse(message_id=message_id, feedback=row.feedback)
+
+
+@sessions_router.get(
+    "/sessions/{session_id}/feedback",
+    response_model=FeedbackMapResponse,
+)
+def get_session_feedback(
+    session_id: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> FeedbackMapResponse:
+    """获取某会话下当前用户对所有消息的反馈状态 (用于历史加载时回填高亮)。"""
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    thread_id = str(session.id)
+    rows = (
+        db.query(AIChatMessageFeedback)
+        .filter(
+            AIChatMessageFeedback.family_id == current_user.family_id,
+            AIChatMessageFeedback.thread_id == thread_id,
+            AIChatMessageFeedback.user_id == current_user.id,
+            AIChatMessageFeedback.feedback != 0,
+        )
+        .all()
+    )
+    items = {r.message_id: r.feedback for r in rows}
+    return FeedbackMapResponse(items=items)
 
 
 

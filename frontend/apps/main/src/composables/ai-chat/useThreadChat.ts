@@ -1,7 +1,9 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { showFailToast, showSuccessToast } from 'vant'
 import { nanoid } from 'nanoid'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
+import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
@@ -287,7 +289,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (chunk.additional_kwargs) {
           updated.additional_kwargs = { ...(last.additional_kwargs || {}), ...chunk.additional_kwargs }
         }
-        messages.value = [...messages.value.slice(0, -1), updated]
+        messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
       } else {
         // New AI message
         const msg: ChatMessage = {
@@ -304,7 +306,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (chunk.additional_kwargs) {
           msg.additional_kwargs = chunk.additional_kwargs
         }
-        messages.value = [...messages.value, msg]
+        messages.value = [...messages.value, enrichToolCallMetadata(msg)]
       }
     } else if (chunk.type === 'tool') {
       // Tool result message
@@ -411,6 +413,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     tool_call_id?: string
     tool_name?: string
     args?: Record<string, unknown>
+    display_name?: string
+    display_key?: string
+    icon?: string
+    tool_type?: string
   }): PlanningStep {
     const toolName = customData.tool_name || 'unknown'
     return {
@@ -419,7 +425,73 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       args: customData.args || {},
       status: 'running',
       timestamp: Date.now(),
+      displayName: customData.display_name,
+      displayKey: customData.display_key,
+      icon: customData.icon,
+      toolType: customData.tool_type,
     }
+  }
+
+  /**
+   * Enrich a ChatMessage's tool_calls with display metadata (displayName /
+   * displayKey / icon / toolType) resolved by the backend and stored on the
+   * matching planning step.
+   *
+   * The AI `messages-tuple` chunk only carries the raw tool name (e.g.
+   * "Numina Backend MCP_get_assets"); the readable Chinese label and i18n key
+   * arrive on the separate custom `tool_call` event (held in planningSteps).
+   * ChainOfThought reads from the AI message's tool_calls, so without this
+   * join it would only ever see the raw name. We backfill displayName /
+   * displayKey here so ChainOfThought.getName() can show "查询资产数据" etc.
+   */
+  function enrichToolCallMetadata(msg: ChatMessage): ChatMessage {
+    if (msg.type !== 'ai' || !msg.tool_calls?.length) return msg
+    const stepById = new Map(planningSteps.value.map(s => [s.id, s]))
+    let changed = false
+    const updatedCalls = msg.tool_calls.map(tc => {
+      const step = stepById.get(tc.id)
+      if (!step || (!step.displayName && !step.displayKey)) return tc
+      changed = true
+      return {
+        ...tc,
+        displayName: step.displayName || tc.displayName,
+        displayKey: step.displayKey || tc.displayKey,
+      }
+    })
+    return changed ? { ...msg, tool_calls: updatedCalls } : msg
+  }
+
+  /**
+   * Attach a tool result (raw content) to the matching tool_call on the most
+   * recent AI message that carries it.
+   *
+   * This is a fallback for the custom `tool_result` event: the messages-tuple
+   * `tool` chunk (handled in mergeMessagesTupleChunk) normally sets
+   * `tc.result`. But when that chunk is absent (certain LangGraph configs), the
+   * ChainOfThought search-result / artifact renderers would have no `result`
+   * to parse. The custom event's `content` (raw tool return value) bridges
+   * that gap so web_search URLs etc. still render.
+   *
+   * No-op if `content` is undefined or no matching AI message exists, or if the
+   * tool_call already has a result (mergeMessagesTupleChunk won the race).
+   */
+  function attachToolResultToAiMessage(toolCallId: string, content: unknown): void {
+    if (content === undefined || content === null) return
+    const aiMsgIdx = messages.value.findLastIndex(
+      m => m.type === 'ai' && m.tool_calls?.some(tc => tc.id === toolCallId),
+    )
+    if (aiMsgIdx < 0) return
+    const aiMsg = messages.value[aiMsgIdx]
+    const updatedCalls = (aiMsg.tool_calls || []).map(tc =>
+      tc.id === toolCallId && tc.result === undefined
+        ? { ...tc, status: 'success' as const, result: content }
+        : tc,
+    )
+    messages.value = [
+      ...messages.value.slice(0, aiMsgIdx),
+      { ...aiMsg, tool_calls: updatedCalls },
+      ...messages.value.slice(aiMsgIdx + 1),
+    ]
   }
 
   /**
@@ -667,6 +739,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               tool_call_id?: string
               tool_name?: string
               args?: Record<string, unknown>
+              display_name?: string
+              display_key?: string
+              icon?: string
+              tool_type?: string
+              content?: unknown
               suggestions?: string[]
               task_id?: string
               description?: string
@@ -690,6 +767,24 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               if (!exists) {
                 planningSteps.value = [...planningSteps.value, step]
               }
+              // Backfill display metadata onto any pre-existing AI message that
+              // already carries this tool_call (tool_call custom event may arrive
+              // after the messages-tuple AI chunk that created it).
+              if (step.id && (step.displayName || step.displayKey)) {
+                const idx = messages.value.findLastIndex(
+                  m => m.type === 'ai' && m.tool_calls?.some(tc => tc.id === step.id),
+                )
+                if (idx >= 0) {
+                  const enriched = enrichToolCallMetadata(messages.value[idx])
+                  if (enriched !== messages.value[idx]) {
+                    messages.value = [
+                      ...messages.value.slice(0, idx),
+                      enriched,
+                      ...messages.value.slice(idx + 1),
+                    ]
+                  }
+                }
+              }
             } else if (customData.type === 'tool_result') {
               // Tool result from backend — update the corresponding tool_call
               // step status from 'running' to 'done' and attach the result.
@@ -702,6 +797,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                     ? { ...s, status: 'done' as const }
                     : s
                 )
+                // Fallback: attach the result content to the matching AI message's
+                // tool_call. The messages-tuple `tool` chunk normally carries the
+                // content (set via mergeMessagesTupleChunk), but if that chunk is
+                // absent for some LangGraph configurations, the ChainOfThought
+                // search-result / artifact rendering would have no `result` to
+                // parse. The custom tool_result event's `content` (the raw tool
+                // return value) covers that gap so web_search URLs etc. still show.
+                attachToolResultToAiMessage(toolCallId, customData.content)
               }
             } else if (customData.type === 'suggestions' && customData.suggestions) {
               suggestions.value = customData.suggestions
@@ -1019,6 +1122,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (values?.messages) {
           // Replace messages entirely for history load
           messages.value = values.messages.map(serializedToChatMessage)
+          // Hydrate per-user feedback state (点赞/点踩) from backend so the
+          // thumbs-up/down highlight persists across reloads.
+          await hydrateFeedback(threadId)
         }
         isLoading.value = false
         return
@@ -1028,6 +1134,79 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         error.value = e.message || t('aiChat.loadSessionFailed')
         isLoading.value = false
       }
+    }
+  }
+
+  /**
+   * Hydrate per-user message feedback (点赞/点踩) from backend into the
+   * currently-loaded messages so the thumbs-up/down highlight is restored.
+   * Safe to call after loadHistory; failures are non-fatal (silent).
+   */
+  async function hydrateFeedback(threadId: string): Promise<void> {
+    try {
+      const res = await getSessionFeedback(threadId)
+      const items = res.data?.items
+      if (!items || Object.keys(items).length === 0) return
+      const idToFeedback = new Map<string, 1 | -1>(Object.entries(items) as [string, 1 | -1][])
+      let changed = false
+      const next = messages.value.map(msg => {
+        const fb = idToFeedback.get(msg.id)
+        if (fb !== undefined && msg.feedback !== fb) {
+          changed = true
+          return { ...msg, feedback: fb }
+        }
+        return msg
+      })
+      if (changed) messages.value = next
+    } catch {
+      // Feedback hydration is best-effort; don't surface errors to the user.
+    }
+  }
+
+  /**
+   * Submit 点赞/点踩 for a message.
+   * Optimistically updates the local message.feedback so the highlight is
+   * immediate; rolls back + toasts on backend failure.
+   * Toggle semantics: clicking the same value again cancels (→ 0). The
+   * backend also enforces this, but we mirror it locally for instant UX.
+   */
+  async function submitFeedback(
+    threadId: string,
+    messageId: string,
+    value: 1 | -1,
+  ): Promise<void> {
+    const idx = messages.value.findIndex(m => m.id === messageId)
+    if (idx === -1) return
+    const current = messages.value[idx].feedback ?? 0
+    const optimistic = current === value ? 0 : value
+    const prev = messages.value[idx]
+    messages.value = [
+      ...messages.value.slice(0, idx),
+      { ...prev, feedback: optimistic },
+      ...messages.value.slice(idx + 1),
+    ]
+    try {
+      const res = await submitMessageFeedback(threadId, messageId, value)
+      // Reconcile with authoritative server value (backend may have toggled to 0).
+      const serverFeedback = res.data?.feedback ?? optimistic
+      if (serverFeedback !== optimistic && messages.value[idx]?.id === messageId) {
+        messages.value = [
+          ...messages.value.slice(0, idx),
+          { ...messages.value[idx], feedback: serverFeedback },
+          ...messages.value.slice(idx + 1),
+        ]
+      }
+      if (serverFeedback !== 0) {
+        showSuccessToast(t('aiChat.feedbackSubmitted'))
+      }
+    } catch {
+      // Rollback on failure.
+      messages.value = [
+        ...messages.value.slice(0, idx),
+        { ...prev, feedback: current },
+        ...messages.value.slice(idx + 1),
+      ]
+      showFailToast(t('aiChat.feedbackFailed'))
     }
   }
 
@@ -1366,5 +1545,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     messages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
     sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
+    submitFeedback,
   }
 }
