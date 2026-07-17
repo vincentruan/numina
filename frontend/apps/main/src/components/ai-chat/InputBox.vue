@@ -248,8 +248,14 @@ function onSubmit() {
   const text = internalValue.value.trim()
   if (!text) return
 
-  // Guard against submitting before models have loaded
-  if (!context.value.model_name) return
+  // Models not loaded yet (e.g. /ai/models still in flight on first entry to
+  // welcome mode). Previously this returned silently, making the send button
+  // appear broken. Toast so the user knows to wait, and keep their text
+  // intact so they can retry once models resolve.
+  if (!context.value.model_name) {
+    showToast(t('aiChat.modelsLoading'))
+    return
+  }
 
   emit('submit', {
     text,

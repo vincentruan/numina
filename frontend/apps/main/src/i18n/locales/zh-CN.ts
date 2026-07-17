@@ -330,6 +330,9 @@ export default {
     tenantNoFamily: '未选择家庭',
     tenantLoadFailed: '加载租户资源失败',
     tenantUltraDisabled: '当前家庭资源不支持旗舰模式',
+    // Shown when the user submits before /ai/models has loaded (welcome mode).
+    // Replaces a silent no-op that made the send button appear broken.
+    modelsLoading: '模型加载中，请稍候再发送',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     // DeerFlow InputBox keys

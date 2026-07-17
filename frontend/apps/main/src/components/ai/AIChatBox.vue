@@ -174,7 +174,12 @@ onMounted(async () => {
   // Auto-send pending message from URL (passed from AIHubPage)
   if (store.pendingMessage) {
     const msg = store.pendingMessage
-    store.pendingMessage = null // clear so it only fires once
+    // NOTE: do NOT clear pendingMessage here. It is cleared only after the
+    // send actually connects (handleStartChat success path). Clearing early
+    // meant that if handleStartChat threw (family race, /api/threads error,
+    // network) the message was gone for good — a cold reload would not
+    // re-send it. Deferring keeps it available for a re-mount retry, and
+    // draftText (fix #2) restores the visible input for an immediate retry.
     // Inherit the hub page's web search toggle into the chat InputBox
     if (msg.webSearch !== undefined) {
       chatWebSearch.value = msg.webSearch
@@ -309,8 +314,10 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
       reasoning_effort: payload.reasoning_effort,
       websearch_enabled: payload.websearch_enabled,
     }, source)
-    // Send started successfully — clear any recovered draft so it doesn't
-    // linger in the (now-hidden) welcome InputBox on a later new-chat.
+    // Send started successfully — clear the one-shot pending message (so a
+    // re-mount does not re-send) and any recovered draft so it doesn't linger
+    // in the (now-hidden) welcome InputBox on a later new-chat.
+    store.pendingMessage = null
     draftText.value = undefined
   } catch {
     skipNextHistoryLoadFor.value = null
