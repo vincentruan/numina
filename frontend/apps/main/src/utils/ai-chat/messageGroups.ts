@@ -272,20 +272,29 @@ export function extractPresentFilesFromGroup(group: AssistantPresentFilesGroup):
   // 从 tool_calls 提取 present_files 的参数
   const presentFilesCall = message.tool_calls?.find(tc => tc.name === 'present_files')
   if (presentFilesCall?.args) {
-    const args = typeof presentFilesCall.args === 'string'
-      ? JSON.parse(presentFilesCall.args) as Record<string, unknown>
-      : presentFilesCall.args as Record<string, unknown>
-    // DeerFlow present_files tool uses "filepaths" (string[])
-    if (Array.isArray(args.filepaths)) {
-      return args.filepaths.map((fp: string) => ({
-        path: fp,
-        id: fp,
-        kind: 'report' as const,
-      }))
+    // Guard JSON.parse: malformed args (truncated SSE, partial stream) must not
+    // crash the Vue render. Fall through to the artifacts fallback below.
+    let args: Record<string, unknown> | null = null
+    try {
+      args = typeof presentFilesCall.args === 'string'
+        ? JSON.parse(presentFilesCall.args) as Record<string, unknown>
+        : presentFilesCall.args as Record<string, unknown>
+    } catch {
+      args = null
     }
-    // Legacy / alternate shape: "files" (Artifact[])
-    if (Array.isArray(args.files)) {
-      return args.files as ChatMessage['artifacts']
+    if (args) {
+      // DeerFlow present_files tool uses "filepaths" (string[])
+      if (Array.isArray(args.filepaths)) {
+        return args.filepaths.map((fp: string) => ({
+          path: fp,
+          id: fp,
+          kind: 'report' as const,
+        }))
+      }
+      // Legacy / alternate shape: "files" (Artifact[])
+      if (Array.isArray(args.files)) {
+        return args.files as ChatMessage['artifacts']
+      }
     }
   }
 

@@ -283,7 +283,8 @@ class MCPSession:
 
             # Per-thread isolation: check thread-level first, then tenant-level
             if self._thread_id:
-                thread_path = pm.thread_report_file(family_id_int, self._thread_id, filename)
+                # Pass create=False to avoid creating directories on read path
+                thread_path = pm.thread_report_file(family_id_int, self._thread_id, filename, create=False)
                 if thread_path.exists():
                     file_path = thread_path
                 else:

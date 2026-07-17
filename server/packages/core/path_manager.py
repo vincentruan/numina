@@ -13,6 +13,9 @@ _SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 _SLUG_MAX_LEN = 128
 _UUID_PATTERN = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
 
+# DeerFlow virtual sandbox output prefix (used in artifact paths)
+DEERFLOW_SANDBOX_OUTPUT_PREFIX = "/mnt/user-data/outputs/"
+
 
 class PathSecurityError(Exception):
     """路径安全违规。"""
@@ -213,7 +216,7 @@ class PathManager:
 
     # ── Per-thread report paths (aligned with sandbox outputs) ──────────
 
-    def thread_report_dir(self, family_id: int, thread_id: str) -> Path:
+    def thread_report_dir(self, family_id: int, thread_id: str, create: bool = True) -> Path:
         """Get per-thread report storage directory.
 
         Aligned with NuminaLocalSandboxProvider's outputs mapping:
@@ -222,21 +225,31 @@ class PathManager:
         When thread_id is available, MCP tools write here instead of the
         tenant-level directory, achieving per-thread isolation consistent
         with DeerFlow's sandbox path mappings.
+
+        Args:
+            create: If True (default), create the directory. If False, return
+                    the path without creating it (for read-only operations).
         """
         fid = self._validate_numeric_id(family_id, "family_id")
         tid = self._validate_thread_id(thread_id)
         path = self._data_root / "workspaces" / fid / "sandboxes" / tid / "outputs"
-        path.mkdir(parents=True, exist_ok=True)
+        if create:
+            path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def thread_report_file(self, family_id: int, thread_id: str, filename: str) -> Path:
-        """Get full path for a per-thread report file with validation."""
+    def thread_report_file(self, family_id: int, thread_id: str, filename: str, create: bool = True) -> Path:
+        """Get full path for a per-thread report file with validation.
+
+        Args:
+            create: If True (default), create the parent directory. If False,
+                    return the path without creating it (for read-only operations).
+        """
         if not self._REPORT_FILENAME_PATTERN.match(filename):
             raise PathSecurityError(
                 f"Invalid report filename: {filename!r}. "
                 f"Expected pattern: report_[alphanumeric_-].md"
             )
-        return self.thread_report_dir(family_id, thread_id) / filename
+        return self.thread_report_dir(family_id, thread_id, create=create) / filename
 
     # Runtime effective (generated, deletable)
     def effective_dir(self, family_id: int) -> Path:

@@ -454,9 +454,9 @@ async def get_artifact(
 
     # Strip DeerFlow virtual sandbox prefix (/mnt/user-data/outputs/) so the
     # bare filename can be resolved against the tenant reports directory.
-    _SANDBOX_OUTPUT_PREFIX = "/mnt/user-data/outputs/"
-    if decoded_filepath.startswith(_SANDBOX_OUTPUT_PREFIX):
-        decoded_filepath = decoded_filepath[len(_SANDBOX_OUTPUT_PREFIX):]
+    from packages.core.path_manager import DEERFLOW_SANDBOX_OUTPUT_PREFIX
+    if decoded_filepath.startswith(DEERFLOW_SANDBOX_OUTPUT_PREFIX):
+        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_OUTPUT_PREFIX):]
 
     # After stripping, reject any remaining absolute paths
     if decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
@@ -471,17 +471,29 @@ async def get_artifact(
     family_id = current_user.family_id
     data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
 
+    family_sandboxes = data_root / "workspaces" / str(family_id) / "sandboxes"
     possible_paths = [
         # Per-thread sandbox outputs (primary — MCP tools with thread_id write here)
-        data_root / "workspaces" / str(family_id) / "sandboxes" / session_id / "outputs" / decoded_filepath,
+        family_sandboxes / session_id / "outputs" / decoded_filepath,
         # Tenant reports (backward compat — MCP tools without thread_id)
         data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
     ]
+    # Fallback: scan all per-thread sandbox dirs for the family. This handles
+    # the case where session_id is a Snowflake int (MCP writes use a UUID
+    # thread_id via X-Thread-Id header, so files land in a different sandbox
+    # subdir than the session_id would suggest). The filename regex validation
+    # above ensures the glob only matches safe filenames.
+    if family_sandboxes.exists():
+        for match in family_sandboxes.glob(f"*/outputs/{decoded_filepath}"):
+            possible_paths.append(match)
 
     allowed_dirs = [
-        (data_root / "workspaces" / str(family_id) / "sandboxes" / session_id / "outputs").resolve(),
+        (family_sandboxes / session_id / "outputs").resolve(),
         (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
     ]
+    # Also allow any resolved sandbox subdir (for the glob fallback above)
+    if family_sandboxes.exists():
+        allowed_dirs.append(family_sandboxes.resolve())
 
     artifact_path = None
     for candidate_path in possible_paths:

@@ -422,6 +422,90 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
+  /**
+   * Finalize all in-progress AI messages and planning steps.
+   *
+   * Marks every AI message with phase='answering' → phase='done', stops all
+   * planning steps, and ensures the user message is not stuck at 'sending'.
+   *
+   * Called in error/cleanup paths where the stream terminates abnormally
+   * (error event, retries exhausted, stream drop without content) — without
+   * this, AI messages stay at phase='answering' forever, causing:
+   * - StreamingIndicator (three-dot animation) never stops
+   * - User bubble stuck at "发送中"
+   * - No retry button visible (AssistantMessage only shows retry at phase='error')
+   */
+  function finalizeAllInProgress(): void {
+    // Mark all AI messages as done
+    const hasAnswering = messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
+    if (hasAnswering) {
+      messages.value = messages.value.map(msg =>
+        msg.type === 'ai' && msg.phase === 'answering'
+          ? { ...msg, phase: 'done' as const }
+          : msg,
+      )
+    }
+    // Mark all planning steps as done
+    planningSteps.value = planningSteps.value.map(s =>
+      s.status === 'running' ? { ...s, status: 'done' as const } : s,
+    )
+  }
+
+  /**
+   * Mark the last AI message as error phase so the retry button appears.
+   *
+   * When the stream fails with an error (LLM failure, MCP error, etc.), the
+   * AI message content may contain the error text. Setting phase='error' on
+   * the last AI message triggers AssistantMessage's error-state UI, which
+   * includes a retry button — so the user is not left staring at an error
+   * message with no way to recover.
+   */
+  function markLastAiAsError(): void {
+    const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+    if (lastIdx >= 0) {
+      messages.value = [
+        ...messages.value.slice(0, lastIdx),
+        { ...messages.value[lastIdx], phase: 'error' as const },
+        ...messages.value.slice(lastIdx + 1),
+      ]
+    }
+  }
+
+  /**
+   * Finalize stream completion: mark all AI messages as done, attach suggestions
+   * to the last message, mark planning steps done, and set user message status.
+   *
+   * Extracted from the `end` event handler to avoid duplication across multiple
+   * success paths (end event, dropped-connection with content).
+   */
+  function finalizeStreamSuccess(userMsgId: string): void {
+    // Mark ALL AI messages as done (fixes multi-AI-message stuck bug)
+    const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+    if (lastIdx >= 0) {
+      const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
+      let changed = false
+      const next = messages.value.map((msg, i) => {
+        if (msg.type !== 'ai' || msg.phase === 'done') return msg
+        changed = true
+        const isLast = i === lastIdx
+        return {
+          ...msg,
+          phase: 'done' as const,
+          suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+        }
+      })
+      if (changed) {
+        messages.value = next
+      }
+    }
+    // Mark all planning steps as done
+    planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+    // Ensure user message status is 'sent'
+    setUserMsgStatus(userMsgId, 'sent')
+    // Clear standalone suggestions (now attached inline)
+    suggestions.value = []
+  }
+
   async function sendMessage(
     text: string,
     mode?: string,
@@ -678,12 +762,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // the silent success below, which left the page blank with no AI
             // reply and no error UI (B-end-status).
             let endStatus: string | undefined
+            let endError: string | undefined
             if (chunk.data) {
               const endData = chunk.data as {
                 usage?: TokenUsage | { input_tokens?: number; output_tokens?: number; total_tokens?: number }
                 status?: string
+                error?: string
+                message?: string
               }
               endStatus = endData.status
+              endError = endData.error || endData.message
               if (endData.usage) {
                 // Normalize: backend may send DeerFlow format (input_tokens/output_tokens)
                 // or legacy format (prompt_tokens/completion_tokens)
@@ -695,10 +783,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                 }
               }
             }
-            if (endStatus === 'error') {
-              throw new Error(t('aiChat.sendFailed'))
-            }
-            // Mark ALL AI messages as done (attach suggestions to the last one).
+
+            // CRITICAL: Mark ALL AI messages as done BEFORE checking for error status.
+            // Previously, the throw for `status: 'error'` happened BEFORE this cleanup,
+            // leaving AI messages stuck at phase='answering' forever — the three-dot
+            // StreamingIndicator never stopped, and the user message stayed at "发送中".
             // #19: an `end` chunk is the backend's completion signal — treat it
             // as success. Truncated-content detection is unreliable from `end`
             // alone (a tool-only turn legitimately ends with no AI text), and
@@ -713,29 +802,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // (three-dot animation never stops), and the next turn's
             // hasPriorProgress check saw an 'answering' message and skipped
             // setUserMsgStatus, leaving the follow-up user bubble on "发送中".
-            const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
-            if (lastIdx >= 0) {
-              const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
-              let changed = false
-              const next = messages.value.map((msg, i) => {
-                if (msg.type !== 'ai' || msg.phase === 'done') return msg
-                changed = true
-                const isLast = i === lastIdx
-                return {
-                  ...msg,
-                  phase: 'done' as const,
-                  suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
-                }
-              })
-              if (changed) {
-                messages.value = next
-              }
-            }
+            //
+            // Extracted to finalizeStreamSuccess() to avoid duplication across
+            // multiple success paths (end event, dropped-connection with content).
 
             // Check if any AI message has actual visible content (not just tool_calls or thinking).
             // If all AI messages are empty/tool-only, show a fallback so the user doesn't see a blank page.
-            // This must be OUTSIDE the `if (lastIdx >= 0)` block to also handle the case where
-            // no AI messages were created at all (e.g. LLM returned nothing, or stream dropped early).
             const hasVisibleContent = messages.value.some(m => {
               if (m.type !== 'ai') return false
               const content = (m.content || '').trim()
@@ -755,24 +827,27 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               }
               messages.value = [...messages.value, fallbackMsg]
             }
-            // Mark all planning steps as done
-            planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
-            // Defensive: ensure user message status is 'sent' when stream completes.
-            // Line 520 should have already set this, but the array replacement in the
-            // AI message marking above can sometimes race with Vue's reactivity system,
-            // leaving the user bubble stuck at "发送中". This explicit call guarantees
-            // the status is correct when the stream ends successfully.
-            setUserMsgStatus(userMsg.id, 'sent')
-            streamSucceeded = true
-            // Clear standalone suggestions now that they're attached inline to
-            // the last AI message. Without this, SuggestionChips (standalone)
-            // and AssistantMessage (inline) both render the same suggestions
-            // simultaneously — duplicate UI.
-            suggestions.value = []
+
+            // Finalize: mark all AI messages done, attach suggestions, mark planning steps done
+            finalizeStreamSuccess(userMsg.id)
+
             // Notify caller that stream ended (for title refresh)
             if (currentThreadId) {
               options.onStreamEnd?.(currentThreadId)
             }
+
+            // NOW check for error status AFTER cleanup. This ensures AI messages are
+            // marked as 'done' and user message status is finalized before throwing.
+            // Set streamSucceeded=true before throwing to prevent the catch block from
+            // retrying on terminal backend errors (LLM API key failure, provider outage).
+            // Without this, the same failing request is retried SSE_MAX_RETRIES times,
+            // each producing the same error — wasted round-trips for a known-terminal failure.
+            if (endStatus === 'error') {
+              streamSucceeded = true
+              throw new Error(endError || t('aiChat.sendFailed'))
+            }
+
+            streamSucceeded = true
           } else if (chunk.event === 'error' && chunk.data) {
             // worker.py publishes `{"message": str(exc), "name": error_type}`;
             // accept both `message` and `error` so the toast carries the real
@@ -781,7 +856,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // #20: an `error` chunk is terminal for this attempt. Set the error
             // and throw so the catch block classifies and retries; do NOT let
             // the loop fall through to streamSucceeded=true with a stale error.
+            //
+            // IMPORTANT: Finalize in-progress messages BEFORE throwing. Without
+            // this, AI messages stay at phase='answering' (three-dot indicator
+            // never stops) and the user message stays at 'sending'. The throw
+            // goes to the catch block which handles retry logic.
             const errMsg = errData.error || errData.message || t('aiChat.sendFailed')
+            finalizeAllInProgress()
             throw new Error(errMsg)
           }
         }
@@ -795,18 +876,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (!streamSucceeded && streamEnded === false) {
           const lastAi = [...messages.value].reverse().find(m => m.type === 'ai')
           if (lastAi && lastAi.content.trim().length > 0) {
-            // Mark ALL AI messages as done - mirrors the `end` chunk handling
-            // above. Without this, a dropped connection leaves earlier AI
-            // messages stuck at phase='answering', so their StreamingIndicator
-            // (three-dot animation) stays visible forever even though
-            // isLoading is set to false below.
-            const next = messages.value.map(msg =>
-              msg.type === 'ai' && msg.phase !== 'done'
-                ? { ...msg, phase: 'done' as const }
-                : msg,
-            )
-            messages.value = next
-            planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+            // Use the same finalization helper as the `end` event path to avoid
+            // duplication and ensure consistent behavior.
+            finalizeStreamSuccess(userMsg.id)
             streamSucceeded = true
           }
         }
@@ -821,6 +893,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // from a timeout/stream error abort (retryable transient failure).
         if (e.name === 'AbortError') {
           if (userCancelled) {
+            // User cancelled — finalize messages so they don't stay in-progress
+            finalizeAllInProgress()
             break
           }
           // Timeout abort — retry like any transient failure.
@@ -838,6 +912,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           }
         }
         if (retryCount > SSE_MAX_RETRIES) {
+          // All retries exhausted — finalize messages and mark last AI as error
+          // so the retry button appears in the UI.
+          finalizeAllInProgress()
+          markLastAiAsError()
           error.value = e.message || t('aiChat.sendFailed')
         }
       } finally {
@@ -845,6 +923,36 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           clearTimeout(streamTimeoutId)
           streamTimeoutId = null
         }
+      }
+    }
+
+    // Post-loop finalization: if the stream never succeeded (e.g. all retries
+    // exhausted, or the loop broke without reaching streamSucceeded=true),
+    // ensure no messages are stuck in-progress. This is a safety net for edge
+    // cases where the catch block's finalization didn't run (e.g. unexpected
+    // exceptions, or the stream ended without an `end` event and without
+    // substantial content to trigger the dropped-connection path above).
+    if (!streamSucceeded) {
+      finalizeAllInProgress()
+      // Ensure user message status is finalized even when stream didn't complete.
+      // Without this, the user bubble stays stuck at "发送中" forever when:
+      // - Stream connection succeeded but `end` event never arrived (network drop)
+      // - User cancelled the stream mid-flight (cancelStream)
+      // - All retries exhausted before receiving `end`
+      // For user cancel, mark as 'sent' (message was sent, user just stopped the response).
+      // For errors, mark as 'failed' so the retry button appears.
+      if (userCancelled) {
+        setUserMsgStatus(userMsg.id, 'sent')
+      } else if (error.value) {
+        setUserMsgStatus(userMsg.id, 'failed')
+      } else {
+        // No error but stream didn't succeed — mark as 'sent' to avoid stuck "发送中"
+        setUserMsgStatus(userMsg.id, 'sent')
+      }
+      // Only mark as error if there's an actual error to show (avoid marking
+      // as error when the user cancelled — that's a clean exit, not a failure).
+      if (!userCancelled && error.value) {
+        markLastAiAsError()
       }
     }
 
@@ -1148,12 +1256,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                 }
               } else if (event === 'end') {
                 streamEnded = true
+                let endStatus: string | undefined
+                let endError: string | undefined
                 if (data) {
-                  const endData = data as { usage?: TokenUsage; status?: string }
-                  if (endData.status === 'error') throw new Error(t('aiChat.sendFailed'))
+                  const endData = data as { usage?: TokenUsage; status?: string; error?: string; message?: string }
+                  endStatus = endData.status
+                  endError = endData.error || endData.message
                   if (endData.usage) tokenUsage.value = endData.usage
                 }
-                // Mark all AI messages as done
+                // Mark all AI messages as done BEFORE checking for error status.
+                // This ensures cleanup happens even if the stream ended with an error.
                 const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
                 if (lastIdx >= 0) {
                   const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
@@ -1173,9 +1285,17 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                 // Clear standalone suggestions (now attached inline)
                 suggestions.value = []
                 if (currentThreadId) options.onStreamEnd?.(currentThreadId)
+
+                // NOW check for error status AFTER cleanup
+                if (endStatus === 'error') {
+                  throw new Error(endError || t('aiChat.sendFailed'))
+                }
+
                 streamSucceeded = true
               } else if (event === 'error' && data) {
                 const errData = data as { error?: string; message?: string }
+                // Finalize in-progress messages BEFORE throwing
+                finalizeAllInProgress()
                 throw new Error(errData.error || errData.message || t('aiChat.sendFailed'))
               }
             } catch (parseErr) {
@@ -1203,6 +1323,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         const e = err as Error & { name?: string }
         setUserMsgStatus(userMsg.id, 'failed')
         if (e.name === 'AbortError' && userCancelled) {
+          // User cancelled — finalize messages so they don't stay in-progress
+          finalizeAllInProgress()
           break
         }
         retryCount++
@@ -1210,7 +1332,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           setUserMsgStatus(userMsg.id, 'sending')
         }
         if (retryCount > SSE_MAX_RETRIES) {
-          // All retries exhausted — set interruptError for HumanInputCard
+          // All retries exhausted — finalize messages and set interruptError
+          finalizeAllInProgress()
           interruptError.value = e.message || t('aiChat.sendFailed')
           interruptErrorId.value = interruptId
           error.value = interruptError.value
@@ -1221,6 +1344,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           streamTimeoutId = null
         }
       }
+    }
+
+    // Post-loop finalization: ensure no messages are stuck in-progress
+    if (!streamSucceeded) {
+      finalizeAllInProgress()
     }
 
     // Mark this interrupt as answered so HumanInputCard transitions to
