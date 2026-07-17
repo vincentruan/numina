@@ -915,6 +915,7 @@ async def branch_thread(
             agent_id=source_record.get("agent_id"),
             last_model=source_record.get("last_model"),
             source="branch",
+            parent_thread_id=thread_id,
         )
         if display_title:
             await repo.update_summary(

@@ -735,6 +735,7 @@ class SessionUpsertRequest(BaseModel):
     agent_id: str | None = None
     last_model: str | None = None
     source: str | None = None
+    parent_thread_id: str | None = None
 
 
 class SessionSummaryRequest(BaseModel):
@@ -758,6 +759,7 @@ def _session_to_dict(s: "object") -> dict:
         "last_model": s.last_model,  # type: ignore[attr-defined]
         "is_pinned": s.is_pinned,  # type: ignore[attr-defined]
         "source": s.source,  # type: ignore[attr-defined]
+        "parent_thread_id": s.parent_thread_id,  # type: ignore[attr-defined]
         "created_at": s.created_at.isoformat() if s.created_at else None,  # type: ignore[attr-defined]
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,  # type: ignore[attr-defined]
     }
@@ -780,6 +782,7 @@ def internal_upsert_session(
             agent_id=int(body.agent_id) if body.agent_id else None,
             last_model=body.last_model,
             source=body.source,
+            parent_thread_id=body.parent_thread_id,
         )
         db.add(row)
     else:

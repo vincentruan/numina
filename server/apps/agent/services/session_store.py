@@ -35,6 +35,7 @@ class AiSessionRepository:
         agent_id: str | None = None,
         last_model: str | None = None,
         source: str | None = None,
+        parent_thread_id: str | None = None,
     ) -> None:
         try:
             await self._client.upsert_session(
@@ -43,6 +44,7 @@ class AiSessionRepository:
                 agent_id=agent_id,
                 last_model=last_model,
                 source=source,
+                parent_thread_id=parent_thread_id,
             )
         except Exception as e:
             logger.warning("session upsert failed for %s: %s", session_id, e)

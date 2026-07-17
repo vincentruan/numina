@@ -103,6 +103,9 @@ async def test_branch_thread_success():
         assert call_args.kwargs["session_id"] == result.thread_id
         assert call_args.kwargs["family_id"] == "family-1"
         assert call_args.kwargs["source"] == "branch"
+        # U2: parent_thread_id must propagate through the 6-layer chain to the
+        # upsert call, so the branch session row records its parent thread.
+        assert call_args.kwargs["parent_thread_id"] == "thread-1"
 
         # Verify title was set with "分支: " prefix
         repo.update_summary.assert_awaited_once()

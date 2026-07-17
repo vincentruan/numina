@@ -41,6 +41,11 @@ class AIChatSession(Base):
     last_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Thread this session was branched from (UUID string of the parent thread).
+    # No FK: the parent thread may live in a different family's checkpoint
+    # context and cross-family access is enforced at the application layer
+    # (get_thread family gating). Null for non-branch sessions.
+    parent_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=func.now(), onupdate=func.now()
