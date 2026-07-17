@@ -14,6 +14,33 @@ const store = useChatSessionStore()
 const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession } = useThreadList()
 const { t } = useI18n()
 
+// U4: in-memory cross-join of parent_thread_id -> parent title. The history
+// list is the set of sessions already loaded for this family; if a branch's
+// parent thread is among them, we can show its title without a new endpoint.
+// When the parent is not in the loaded list (paginated out or deleted), the
+// branch entry degrades to a title-less "from parent session" link (Open
+// Question (a) fallback).
+const parentTitleById = computed(() => {
+  const map = new Map<string, string>()
+  for (const group of dateGroups.value) {
+    for (const s of group.sessions) {
+      if (s.thread_id && s.title) map.set(s.thread_id, s.title)
+    }
+  }
+  return map
+})
+
+function parentTitleOf(session: ThreadSession): string | undefined {
+  return session.parent_thread_id ? parentTitleById.value.get(session.parent_thread_id) : undefined
+}
+
+function goToParentThread(session: ThreadSession) {
+  if (!session.parent_thread_id) return
+  // Rely on the target route's 404 fallback to surface "parent deleted" if
+  // the parent thread no longer exists, rather than probing here.
+  selectThread(session.parent_thread_id)
+}
+
 const renamingId = ref<string | null>(null)
 const renameInput = ref('')
 
@@ -71,7 +98,8 @@ onUnmounted(() => {
 })
 
 function close() {
-  // Navigate to AI chat page by route name
+  // Clear active thread so the AI chat page enters welcome (new conversation) mode
+  store.clearActiveThread()
   router.push({ name: 'AIChat' })
 }
 
@@ -296,6 +324,18 @@ function closeSwipe(sessionId: string) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
               </svg>
+            </div>
+            <!-- U4: branch lineage badge + parent link -->
+            <div v-if="session.is_branch" class="session-branch-indicator">
+              <span class="branch-badge" role="img" :aria-label="t('aiChat.branchBadge')">{{ t('aiChat.branchBadge') }}</span>
+              <a
+                v-if="session.parent_thread_id"
+                class="branch-parent-link"
+                href="#"
+                :aria-label="t('aiChat.branchParentLink')"
+                @click.prevent="goToParentThread(session)"
+              >{{ parentTitleOf(session) ? t('aiChat.branchFromParent') + ' · ' + parentTitleOf(session) : t('aiChat.branchFromParent') }}</a>
+              <span v-else class="branch-parent-deleted" role="img" :aria-label="t('aiChat.branchParentDeleted')">{{ t('aiChat.branchParentDeleted') }}</span>
             </div>
           </div>
           <div class="session-actions">
@@ -529,6 +569,45 @@ function closeSwipe(sessionId: string) {
   color: var(--van-text-color-3, #999);
   margin-top: 4px;
   font-style: italic;
+}
+
+.session-branch-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.branch-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--van-primary-color, #1989fa);
+  background: rgba(25, 137, 250, 0.12);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.branch-parent-link {
+  font-size: 11px;
+  color: var(--van-primary-color, #1989fa);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.branch-parent-link:active {
+  opacity: 0.7;
+}
+
+.branch-parent-deleted {
+  font-size: 11px;
+  color: var(--van-text-color-3, #999);
+  white-space: nowrap;
 }
 
 .swipe-action-btn {

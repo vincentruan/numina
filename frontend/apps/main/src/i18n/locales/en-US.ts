@@ -235,6 +235,13 @@ export default {
     branchButton: 'Branch conversation',
     branchSuccess: 'Branch created',
     branchFailed: 'Failed to create branch',
+    branchBadge: 'Branch',
+    branchFromParent: 'From parent session',
+    branchParentLink: 'Go to parent thread',
+    branchParentDeleted: 'Parent thread deleted',
+    branchCloneSkippedHistorical: 'Branched from an earlier turn; some files not copied',
+    branchCloneNotFound: 'Source files not found; branch created',
+    branchCloneFailed: 'File copy failed; branch created',
   },
   ai: {
     systemAgents: 'System Agents',

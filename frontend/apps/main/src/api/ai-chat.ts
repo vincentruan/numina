@@ -93,6 +93,8 @@ function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
     original_title: (r.metadata?.original_title as string) || undefined,
     status: (r.status as ThreadSession['status']) || 'idle',
     is_pinned: (r.metadata?.is_pinned as boolean) || false,
+    is_branch: (r.metadata?.is_branch as boolean) || false,
+    parent_thread_id: (r.metadata?.parent_thread_id as string) || undefined,
     created_at: r.created_at,
     updated_at: r.updated_at,
   }

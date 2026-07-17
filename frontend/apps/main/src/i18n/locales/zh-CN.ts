@@ -421,6 +421,13 @@ export default {
     branchButton: '创建分支',
     branchSuccess: '分支创建成功',
     branchFailed: '无法创建分支',
+    branchBadge: '分支',
+    branchFromParent: '来自父会话',
+    branchParentLink: '跳转到父线程',
+    branchParentDeleted: '父线程已删除',
+    branchCloneSkippedHistorical: '从历史轮分支，部分文件未复制',
+    branchCloneNotFound: '源文件未找到，分支已创建',
+    branchCloneFailed: '文件复制失败，分支已创建',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',

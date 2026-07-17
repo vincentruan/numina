@@ -416,4 +416,138 @@ describe('ChatHistoryPage', () => {
       expect(wrapper.find('.van-field').attributes('aria-label')).toBe('aiChat.editTitle')
     })
   })
+
+  describe('Branch lineage (U4)', () => {
+    it('renders branch badge for a branch session, not for a plain session', async () => {
+      mockDateGroups.value = [
+        {
+          label: 'today',
+          displayName: 'Today',
+          sessions: [
+            { thread_id: 'parent-1', title: 'Parent', updated_at: Date.now(), is_pinned: false, is_branch: false },
+            { thread_id: 'branch-1', title: '分支: Parent', updated_at: Date.now(), is_pinned: false, is_branch: true, parent_thread_id: 'parent-1' },
+          ],
+        },
+      ]
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+      await nextTick()
+
+      const sessions = wrapper.findAll('.history-session')
+      expect(sessions[0].find('.session-branch-indicator').exists()).toBe(false)
+      expect(sessions[1].find('.session-branch-indicator').exists()).toBe(true)
+      expect(sessions[1].find('.branch-badge').text()).toBe('aiChat.branchBadge')
+    })
+
+    it('parent link shows the parent title when the parent is in the loaded list', async () => {
+      mockDateGroups.value = [
+        {
+          label: 'today',
+          displayName: 'Today',
+          sessions: [
+            { thread_id: 'parent-1', title: 'Parent Thread', updated_at: Date.now(), is_pinned: false, is_branch: false },
+            { thread_id: 'branch-1', title: '分支', updated_at: Date.now(), is_pinned: false, is_branch: true, parent_thread_id: 'parent-1' },
+          ],
+        },
+      ]
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+      await nextTick()
+
+      const link = wrapper.findAll('.history-session')[1].find('.branch-parent-link')
+      expect(link.exists()).toBe(true)
+      expect(link.text()).toBe('aiChat.branchFromParent · Parent Thread')
+    })
+
+    it('clicking the parent link navigates to the parent thread', async () => {
+      mockDateGroups.value = [
+        {
+          label: 'today',
+          displayName: 'Today',
+          sessions: [
+            { thread_id: 'parent-1', title: 'Parent', updated_at: Date.now(), is_pinned: false, is_branch: false },
+            { thread_id: 'branch-1', title: '分支', updated_at: Date.now(), is_pinned: false, is_branch: true, parent_thread_id: 'parent-1' },
+          ],
+        },
+      ]
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+      await nextTick()
+
+      await wrapper.findAll('.history-session')[1].find('.branch-parent-link').trigger('click')
+      await nextTick()
+
+      expect(mockPush).toHaveBeenCalledWith('/ai/chat?thread_id=parent-1')
+    })
+
+    it('degrades to title-less link when parent is not in the loaded list', async () => {
+      mockDateGroups.value = [
+        {
+          label: 'today',
+          displayName: 'Today',
+          sessions: [
+            { thread_id: 'branch-1', title: '分支', updated_at: Date.now(), is_pinned: false, is_branch: true, parent_thread_id: 'missing-parent' },
+          ],
+        },
+      ]
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+      await nextTick()
+
+      const link = wrapper.find('.branch-parent-link')
+      expect(link.exists()).toBe(true)
+      // No parent title available -> just the "from parent" label, no "·"
+      expect(link.text()).toBe('aiChat.branchFromParent')
+    })
+
+    it('shows deleted-parent badge when a branch has no parent_thread_id', async () => {
+      mockDateGroups.value = [
+        {
+          label: 'today',
+          displayName: 'Today',
+          sessions: [
+            { thread_id: 'branch-1', title: '分支', updated_at: Date.now(), is_pinned: false, is_branch: true },
+          ],
+        },
+      ]
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+      await nextTick()
+
+      expect(wrapper.find('.branch-parent-deleted').exists()).toBe(true)
+      expect(wrapper.find('.branch-parent-deleted').attributes('aria-label')).toBe('aiChat.branchParentDeleted')
+    })
+
+    it('branch badge and parent link have aria semantics', async () => {
+      mockDateGroups.value = [
+        {
+          label: 'today',
+          displayName: 'Today',
+          sessions: [
+            { thread_id: 'parent-1', title: 'Parent', updated_at: Date.now(), is_pinned: false, is_branch: false },
+            { thread_id: 'branch-1', title: '分支', updated_at: Date.now(), is_pinned: false, is_branch: true, parent_thread_id: 'parent-1' },
+          ],
+        },
+      ]
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+      await nextTick()
+
+      const branchSession = wrapper.findAll('.history-session')[1]
+      expect(branchSession.find('.branch-badge').attributes('role')).toBe('img')
+      expect(branchSession.find('.branch-parent-link').attributes('aria-label')).toBe('aiChat.branchParentLink')
+    })
+  })
 })
