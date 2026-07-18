@@ -490,15 +490,26 @@ def _generate_temp_config(
     # 移除旧的 llm 节（已弃用）
     config.pop("llm", None)
 
-    # 注入家庭级 memory 隔离路径：每家庭独立文件，防止跨家庭 facts 污染
+    # 注入家庭级 memory 隔离路径：每家庭独立目录，防止跨家庭 facts 污染
     # DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
     # deermem storage path from the top-level ``memory.storage_path`` key into
     # ``memory.backend_config.storage_path`` (parsed by DeerMemConfig). The
     # top-level MemoryConfig now carries ``manager_class`` + ``backend_config``
     # instead of a flat ``storage_path`` field.
+    #
+    # storage_path must be a DIRECTORY (not a file): DeerMem stores per-user
+    # memory under ``{storage_path}/users/{uid}/memory.json``. The pre-#4122
+    # convention pointed at a ``memory.json`` file; the guard in
+    # ``get_memory_manager`` (manager.py:439-446) raises on a file-style value
+    # to fail loud rather than silently NotADirectoryError on save. Point at a
+    # per-family ``memory/`` directory; the legacy ``memory.json`` file (if any)
+    # is left in place as a sibling and simply no longer read — its pre-
+    # abstraction schema (version/user/personalContext) is incompatible with
+    # the new per-uid layout and cannot be auto-migrated. Memory is derived
+    # context state, not core family data, so loss is recoverable.
     from apps.agent.app.config import settings
-    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory.json"
-    memory_path.parent.mkdir(parents=True, exist_ok=True)
+    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory"
+    memory_path.mkdir(parents=True, exist_ok=True)
     if "memory" not in config:
         config["memory"] = {}
     config["memory"]["manager_class"] = "deermem"

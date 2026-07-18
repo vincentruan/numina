@@ -80,12 +80,28 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     # [Integrated with Numina Multi-Tenant]
     # DeerFlow uses: get_paths().sandbox_work_dir(thread_id, user_id)
     # Numina uses:  settings.AGENT_DATA_DIR / family_id / sandboxes / thread_id/
+    #
+    # harness rev >=10890e10: parent ``_build_thread_path_mappings`` gained a
+    # keyword-only ``user_id`` param (local_sandbox_provider.py:234), and
+    # ``acquire`` passes it (L363). Numina's multi-tenant isolation is by
+    # ``family_id`` (ContextVar), NOT by harness ``user_id`` — so we accept
+    # ``user_id`` for signature compatibility but ignore it, keeping paths
+    # scoped to family_id. NOTE: ``acquire`` (L370) now builds sandbox IDs via
+    # ``_sandbox_id_for_thread(thread_id, effective_user_id)`` and bypasses the
+    # ``_deterministic_sandbox_id`` override below — family_id no longer enters
+    # the sandbox ID, a separate tenant-isolation regression to track.
     @staticmethod
-    def _build_thread_path_mappings(thread_id: str) -> list[PathMapping]:
+    def _build_thread_path_mappings(
+        thread_id: str, *, user_id: str | None = None
+    ) -> list[PathMapping]:
         """Build per-thread path mappings scoped to family_id.
 
         Directories are created lazily under:
         ``{AGENT_DATA_DIR}/{family_id}/sandboxes/{thread_id}/{workspace,uploads,outputs}``
+
+        ``user_id`` is accepted for signature compatibility with the parent
+        class (harness rev >=10890e10) but ignored — Numina isolates by
+        ``family_id`` via the coroutine-scoped ContextVar, not by user_id.
         """
         family_id = get_family_sandbox_context()
         if not family_id:
