@@ -17,12 +17,16 @@ from typing import Any
 # Icons use emojis following deerflow pattern (ChainOfThoughtStep icon style).
 _TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     # Asset queries
-    "get_assets": ("asset_query", "查询资产", "💰", "toolName.getAssets"),
+    # NOTE: "get_assets"/"get_liabilities" used to live here as built-in
+    # capability tools (asset_query category) from the pre-U7 NDJSON era.
+    # U7 deleted the trigger skills that emitted them, so they became dead
+    # mappings. They are re-introduced below as MCP base-name tools
+    # (data_collect category) under tool_name_prefix=False — see the
+    # "MCP tools — base names" block.
     "get_dashboard_overview": ("asset_query", "读取资产概览", "📊", "toolName.getDashboardOverview"),
     "get_dashboard_allocation": ("asset_query", "读取资产配置", "📈", "toolName.getDashboardAllocation"),
     "get_dashboard_trend": ("trend_calc", "计算资产趋势", "📈", "toolName.getDashboardTrend"),
     "get_low_usage_assets": ("asset_query", "扫描闲置资产", "🔍", "toolName.getLowUsageAssets"),
-    "get_liabilities": ("asset_query", "查询负债", "📋", "toolName.getLiabilities"),
     # Reports
     "generate_report": ("report_gen", "生成家庭报告", "📄", "toolName.generateReport"),
     "compose_summary": ("report_gen", "生成摘要", "📝", "toolName.composeSummary"),
@@ -38,6 +42,15 @@ _TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     "numina-family-data_get_liabilities": ("data_collect", "查询负债数据", "📋", "toolName.getLiabilitiesData"),
     "numina-family-data_get_members": ("data_collect", "获取家庭成员", "👥", "toolName.getMembers"),
     "numina-family-data_get_recent_alerts": ("data_collect", "获取近期预警", "🔔", "toolName.getRecentAlerts"),
+    # MCP tools — base names (sync_tool_patch.py tool_name_prefix=False). The
+    # live worker path loads MCP tools without the server-name prefix, so the
+    # LLM emits bare ``get_assets`` etc. Keep the prefixed entries above for
+    # backward compatibility with older checkpoints / the legacy ChatAdapter path.
+    "get_family_overview": ("data_collect", "获取家庭概览", "📊", "toolName.getFamilyOverview"),
+    "get_assets": ("data_collect", "查询资产数据", "💰", "toolName.getAssetsData"),
+    "get_liabilities": ("data_collect", "查询负债数据", "📋", "toolName.getLiabilitiesData"),
+    "get_members": ("data_collect", "获取家庭成员", "👥", "toolName.getMembers"),
+    "get_recent_alerts": ("data_collect", "获取近期预警", "🔔", "toolName.getRecentAlerts"),
     # DeerFlow built-in tools
     "execute_code": ("execution", "执行分析代码", "⚙️", "toolName.executeCode"),
     "bash": ("execution", "执行命令", "⚙️", "toolName.bash"),

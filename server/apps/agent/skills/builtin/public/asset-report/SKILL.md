@@ -13,13 +13,15 @@ trigger_phrases:
 # 原生 DeerFlow sandbox 工具（非 MCP）—— write_file/read_file/str_replace 经
 # NuminaLocalSandboxProvider 走 family_id-scoped 沙箱（Resolved-3 阻塞点 A/B/C）。
 # read_file 也在 ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES，但显式声明便于审计。
-# family-data MCP 工具带 numina-family-data_ 前缀（MultiServerMCPClient tool_name_prefix=True）。
+# family-data MCP 工具用基名（sync_tool_patch.py MultiServerMCPClient
+# tool_name_prefix=False），allowed-tools 必须用基名全名匹配
+# （filter_tools_by_skill_allowed_tools 全名精确匹配，非前缀匹配）。
 allowed-tools:
-  - numina-family-data_get_family_overview
-  - numina-family-data_get_assets
-  - numina-family-data_get_liabilities
-  - numina-family-data_get_members
-  - numina-family-data_get_recent_alerts
+  - get_family_overview
+  - get_assets
+  - get_liabilities
+  - get_members
+  - get_recent_alerts
   - write_file
   - read_file
   - str_replace
@@ -37,7 +39,7 @@ max_tokens: 6000
 ## 最重要的规则（必须严格遵守）
 
 1. **必须按顺序完成三步**，缺一不可：
-   - 步骤1：调用 `numina-family-data_*` MCP 工具获取家庭数据
+   - 步骤1：调用 family-data MCP 工具（`get_family_overview` 等）获取家庭数据
    - 步骤2：调用原生 `write_file` 把 markdown 报告落盘到沙箱 workspace
    - 步骤3：调用原生 `read_file` 读回该文件（验证落盘成功），再输出最终 JSON
 2. **响应文本中必须声明写入的 filename**：调用 `write_file` 后，在下一条消息里先输出一行 `WRITE_FILE: <filename>`（如 `WRITE_FILE: report_20260718_100530.md`）。原因：原生 `write_file` 成功只返回字面量 `"OK"`（非路径），故必须在响应文本声明 filename，使步骤3 `read_file` 能定向该文件、worker 也能推导沙箱路径。
@@ -48,25 +50,25 @@ max_tokens: 6000
 ## 文件命名规则
 
 - 文件名格式：`report_{YYYYMMDD_HHMMSS}.md`（例如：`report_20260718_100530.md`）
-- 路径：`write_file` 的 path 参数直接传文件名即可，沙箱会解析到家庭/线程 workspace 目录（不要传绝对路径）
+- 路径：`write_file`/`read_file` 的 path 参数**必须**用完整虚拟路径 `/mnt/user-data/workspace/report_{timestamp}.md`。沙箱路径校验只允许 `/mnt/user-data/` 前缀，裸文件名会被拒绝。
 
 ## 工作流程
 
 ### 步骤1：获取家庭数据
 
 依次调用 MCP 工具（按需）：
-- `numina-family-data_get_family_overview` — 净资产、资产总计、负债总计
-- `numina-family-data_get_assets` — 资产列表和详情
-- `numina-family-data_get_liabilities` — 负债列表和详情
-- `numina-family-data_get_members` — 家庭成员信息
-- `numina-family-data_get_recent_alerts` — 最近 alerts
+- `get_family_overview` — 净资产、资产总计、负债总计
+- `get_assets` — 资产列表和详情
+- `get_liabilities` — 负债列表和详情
+- `get_members` — 家庭成员信息
+- `get_recent_alerts` — 最近 alerts
 
 ### 步骤2：落盘 markdown 审计
 
 基于步骤1数据，构建 markdown 报告并调用原生工具：
 
 ```
-write_file(path: "report_{timestamp}.md", content: "<markdown内容>")
+write_file(path: "/mnt/user-data/workspace/report_{timestamp}.md", content: "<markdown内容>")
 ```
 
 markdown 内容须包含：
@@ -82,7 +84,7 @@ WRITE_FILE: report_{timestamp}.md
 
 ### 步骤3：读回并输出 JSON
 
-调用原生 `read_file(path: "report_{timestamp}.md")` 读回步骤2写入的文件（验证落盘成功），然后输出最终 JSON。
+调用原生 `read_file(path: "/mnt/user-data/workspace/report_{timestamp}.md")` 读回步骤2写入的文件（验证落盘成功），然后输出最终 JSON。
 
 ## JSON 输出格式（唯一允许的最终格式）
 

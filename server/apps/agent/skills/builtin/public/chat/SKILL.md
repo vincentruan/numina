@@ -6,15 +6,17 @@ description: |
 
 trigger_phrases: []
 
-# allowed-tools restricts this skill to its declared MCP data tools (prefixed
-# with the MCP server name, as MultiServerMCPClient applies tool_name_prefix=True).
-# Enforced at runtime by filter_tools_by_skill_allowed_tools (sync_tool_patch.py).
+# allowed-tools restricts this skill to its declared MCP data tools (base names,
+# as MultiServerMCPClient applies tool_name_prefix=False in sync_tool_patch.py).
+# Enforced at runtime by filter_tools_by_skill_allowed_tools (full-name exact
+# match, deerflow/skills/tool_policy.py:65) — a prefixed declaration would never
+# match and silently filter out every business tool.
 allowed-tools:
-  - numina-family-data_get_family_overview
-  - numina-family-data_get_assets
-  - numina-family-data_get_liabilities
-  - numina-family-data_get_members
-  - numina-family-data_get_recent_alerts
+  - get_family_overview
+  - get_assets
+  - get_liabilities
+  - get_members
+  - get_recent_alerts
 
 thinking: true
 ---

@@ -438,10 +438,21 @@ def _apply_mcp_proxy_bypass_patch() -> None:
             tool_interceptors.append(oauth_interceptor)
 
         try:
+            # tool_name_prefix=False: MCP tools keep their base names (e.g.
+            # ``get_assets``) instead of ``{server_name}_get_assets`` (e.g.
+            # ``Numina Backend MCP_get_assets``). Skill ``allowed-tools``
+            # declarations use base names, and ``filter_tools_by_skill_allowed_tools``
+            # (deerflow/skills/tool_policy.py:65) matches by full name — a prefixed
+            # name would never match the base-name allowlist, silently filtering
+            # out every business tool (root cause of "all records empty" and
+            # asset-report Recursion-100). Numina runs a single MCP server, so
+            # there is no cross-server tool-name collision risk from disabling
+            # the prefix. Mirrors DeerFlow reference skills (e.g. skill-reviewer)
+            # which declare ``allowed-tools`` as unprefixed base names.
             client = MultiServerMCPClient(
                 servers_config,
                 tool_interceptors=tool_interceptors,
-                tool_name_prefix=True,
+                tool_name_prefix=False,
             )
             tools = await client.get_tools()
             _mcp_mod.logger.info(f"Successfully loaded {len(tools)} tool(s) from MCP servers")

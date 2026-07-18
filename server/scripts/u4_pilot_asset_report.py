@@ -240,7 +240,7 @@ async def _main_async(args: argparse.Namespace) -> int:
         print(f"WARN: sync_tool_patch failed: {_e}", file=sys.stderr)
 
     print(f"U4 pilot: skill={args.skill} family={args.family_id} runs={args.runs}")
-    print(f"  provider={ai_config['providers'][0].get('provider')}")
+    print(f"  provider={ai_config['providers'][0].get('ai_provider')}")
 
     results = []
     for i in range(args.runs):
