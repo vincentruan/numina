@@ -8,7 +8,7 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -47,6 +47,15 @@ def _latest_report(family_id: str, db: Session) -> AIReport | None:
         .order_by(AIReport.generated_at.desc())
         .first()
     )
+
+
+# U4 step 6: report cache TTL. A trigger within this window returns the cached
+# AIReport as non-streaming JSON (200) unless ?force=true. Cached report_json
+# re-validation (plan P2, security-lens #22) is deferred — the fresh-generation
+# path runs schema validation on write, and the frontend DOMPurify is the
+# render-time mitigation; server-side re-validation on cache hit is tracked
+# separately as defense-in-depth.
+REPORT_CACHE_TTL = timedelta(hours=8)
 
 
 @router.get("")
@@ -108,15 +117,38 @@ async def _stream_asset_report_sse(
 
 @router.post("/generate/events")
 async def trigger_generate_events(
+    force: bool = False,
     current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
-    """触发体检报告生成（NDJSON 事件流）。"""
+    """触发体检报告生成（SSE 流式推送三步进度，U4）。
+
+    U4 step 6: 8h 缓存——入口先查最新 completed AIReport，8h 内且无 force
+    直接返回缓存 JSON（200，非流）；force=true 或超 8h 走 stream_run 重新生成。
+    缓存检查在并发检查之前（计划步骤 6）；强制刷新仍受单家庭单任务并发约束。
+    """
     blocked_resp = check_circuit_blocked(current_user.family_id, "report", db)
     if blocked_resp is not None:
         return blocked_resp
+
+    # U4 step 6: 8h cache check (before concurrency gating — a cache hit does
+    # not create a run, so it must not be blocked by / queue behind a running
+    # task). force=true skips the cache and regenerates.
+    if not force:
+        cached = _latest_report(current_user.family_id, db)
+        if cached is not None and cached.generated_at is not None:
+            age = datetime.now(timezone.utc).replace(tzinfo=None) - cached.generated_at  # noqa: UP017
+            if age < REPORT_CACHE_TTL:
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "status": "cached",
+                        "generated_at": cached.generated_at.isoformat(),
+                        "report": cached.report_json,
+                    },
+                )
 
     # Check if there's already a running task - resume it instead of 409
     existing = AITaskService.get_running_task(current_user.family_id, "report", db)

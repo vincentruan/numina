@@ -59,6 +59,9 @@ def client(monkeypatch):
         patch("apps.backend.app.routers.ai_report.AITaskService.get_any_running_task", return_value=None),
         patch("apps.backend.app.routers.ai_report.AITaskService.create_task", return_value=type("T", (), {"id": 1})()),
         patch("apps.backend.app.routers.ai_report.ChatSessionService.create_session", new_callable=AsyncMock, return_value=type("S", (), {"id": "session-1"})()),
+        # Default: no cached report (cache-miss → stream). Cache-hit tests override
+        # _latest_report locally.
+        patch("apps.backend.app.routers.ai_report._latest_report", return_value=None),
     ):
         mock_agent_cls.return_value.stream = _fake_agent_sse_stream(
             [("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]
@@ -95,3 +98,61 @@ def test_trigger_streams_agent_sse(client):
     step2 = [e for e in events if e["event"] == "custom" and isinstance(e["data"], dict) and e["data"].get("type") == "report.step2_json"]
     assert len(step2) == 1, f"expected forwarded report.step2_json, got {events}"
     assert step2[0]["data"]["payload"] == {"overall_score": 77}
+
+
+def _fresh_cached_report():
+    """An AIReport-like object generated < 8h ago (cache hit)."""
+    from datetime import datetime, timedelta, timezone
+
+    return type(
+        "R",
+        (),
+        {
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),  # noqa: UP017
+            "report_json": {"overall_score": 65, "indicators": []},
+        },
+    )()
+
+
+def test_trigger_cache_hit_returns_json_not_stream(client):
+    """Within 8h + no force → 200 JSON {status: cached}, no agent stream call."""
+    with patch(
+        "apps.backend.app.routers.ai_report._latest_report",
+        return_value=_fresh_cached_report(),
+    ):
+        response = client.post("/api/v1/ai/report/generate/events")
+    assert response.status_code == 200
+    assert "application/json" in response.headers.get("content-type", "")
+    body = response.json()
+    assert body["status"] == "cached"
+    assert body["report"] == {"overall_score": 65, "indicators": []}
+    assert "generated_at" in body
+
+
+def test_trigger_force_bypasses_cache(client):
+    """?force=true skips the cache and regenerates (streams via agent)."""
+    with patch(
+        "apps.backend.app.routers.ai_report._latest_report",
+        return_value=_fresh_cached_report(),
+    ):
+        response = client.post("/api/v1/ai/report/generate/events?force=true")
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
+
+
+def test_trigger_stale_cache_misses(client):
+    """A report older than 8h is a cache miss → stream."""
+    from datetime import datetime, timedelta, timezone
+
+    stale = type(
+        "R",
+        (),
+        {
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=10),  # noqa: UP017
+            "report_json": {"overall_score": 1},
+        },
+    )()
+    with patch("apps.backend.app.routers.ai_report._latest_report", return_value=stale):
+        response = client.post("/api/v1/ai/report/generate/events")
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
