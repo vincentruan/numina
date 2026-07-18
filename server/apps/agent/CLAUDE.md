@@ -109,7 +109,6 @@ agent/
 │   ├── chat.py                # POST /chat/ask, /chat/ask/stream (NDJSON)
 │   ├── import_parse.py        # POST /import/parse
 │   ├── model_test.py          # POST /model-test — validate per-family LLM config (token, model, ping)
-│   ├── report.py              # POST /report/generate, /report/generate/stream
 │   ├── sessions.py            # GET /sessions, GET /sessions/{id}/events (NDJSON)
 │   └── suggest.py             # POST /suggest/asset
 ├── services/

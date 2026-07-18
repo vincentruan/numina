@@ -77,13 +77,6 @@ CAPABILITY_SCHEMAS = {
                     },
                 },
             },
-            # Legacy fields for backward compatibility
-            "narrative": {"type": "string"},
-            "sections": {"type": "object"},
-            "net_worth_health": {"type": "object"},
-            "allocation_analysis": {"type": "object"},
-            "liability_pressure": {"type": "object"},
-            "asset_efficiency": {"type": "object"},
         },
     },
 }

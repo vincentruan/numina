@@ -8,6 +8,3 @@ excluded from this module — do not import from here in migration scripts.
 # System agent IDs (family_id=0, agent_type="system")
 NUMINA_AGENT_ID: int = 100000000000005
 ASSET_REPORT_AGENT_ID: int = 100000000000006
-
-# System skill IDs (family_id=0, skill_type="builtin")
-SKILL_REPORT_ID: int = 100000000000014
