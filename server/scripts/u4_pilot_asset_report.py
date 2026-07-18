@@ -225,6 +225,20 @@ async def _main_async(args: argparse.Namespace) -> int:
     user_id = args.user_id
     mcp_servers = await _build_mcp_servers(client, args.family_id, user_id)
 
+    # The pilot script bypasses apps.agent.app.main startup, so the MCP proxy
+    # bypass patch (sync_tool_patch.apply_sync_tool_patches, normally applied
+    # in main.py:157) is never applied — without it, sse_client uses the
+    # default httpx trust_env=True, which routes internal MCP SSE calls
+    # through the macOS system proxy (127.0.0.1:1082) and returns 503.
+    # Apply it here to mirror the agent process runtime.
+    try:
+        from apps.agent.services.deerflow_adapter.sync_tool_patch import (
+            apply_sync_tool_patches,
+        )
+        apply_sync_tool_patches()
+    except Exception as _e:
+        print(f"WARN: sync_tool_patch failed: {_e}", file=sys.stderr)
+
     print(f"U4 pilot: skill={args.skill} family={args.family_id} runs={args.runs}")
     print(f"  provider={ai_config['providers'][0].get('provider')}")
 
