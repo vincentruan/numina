@@ -671,8 +671,28 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // attempt (partial progress observed server-side), do NOT re-send the
         // user message — that would append a duplicate and re-execute tools.
         // Resume the run instead by passing `input: null`.
+        //
+        // The progress check must key off the CURRENT turn's user message — not
+        // just `phase === 'answering'`. The error path calls finalizeAllInProgress()
+        // which flips in-progress AI messages to `phase='done'` before throwing,
+        // so by the time a retry re-enters this block those messages are no longer
+        // 'answering'. Checking only 'answering' would then return false, re-send
+        // the user message, and the backend would re-execute the LLM with a NEW
+        // message id — mergeValuesMessages dedups by id, so the new AI reply
+        // (a duplicate greeting) was appended instead of merged. That produced
+        // "greeting output, then repeated twice, third attempt failed" because
+        // each of the 3 retries generated a fresh duplicate until SSE_MAX_RETRIES
+        // exhausted and markLastAiAsError flagged the last one.
+        const turnUserMsgId = userMsg.id
         const hasPriorProgress = planningSteps.value.length > 0
-          || messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
+          || messages.value.some(m => {
+            if (m.type !== 'ai') return false
+            // Any AI message that arrived AFTER this turn's user message counts
+            // as progress (find its index relative to the user message).
+            const userIdx = messages.value.findIndex(mm => mm.id === turnUserMsgId)
+            const aiIdx = messages.value.indexOf(m)
+            return userIdx >= 0 && aiIdx > userIdx
+          })
         // Pass execution-mode overrides (flash/thinking/pro/ultra) to the backend
         // via config.configurable. The worker (run_family_agent) reads these and
         // forwards them to DeerFlowClient.stream() as per-call kwargs, which
