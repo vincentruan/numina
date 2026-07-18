@@ -95,6 +95,7 @@ class DeerFlowAdapter:
         subagent_enabled: bool = False,
         plan_mode: bool = False,
         mcp_servers: list[dict[str, Any]] | None = None,
+        agent_name: str | None = None,
     ) -> None:
         """Initialize adapter.
 
@@ -104,6 +105,10 @@ class DeerFlowAdapter:
             family_id: 家庭 ID（家庭级配置模式）
             ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
             mcp_servers: MCP server configs to inject into DeerFlow config YAML
+            agent_name: Optional DeerFlowClient agent_name. When set, DeerMem
+                buckets memory per (agent_name, user_id), isolating this adapter's
+                memory from others (e.g. asset-report vs chat/lead-agent). None
+                falls back to the client default (lead-agent global bucket).
         """
         self._timeout = timeout_seconds
         self._family_id = family_id
@@ -118,6 +123,7 @@ class DeerFlowAdapter:
                 subagent_enabled=subagent_enabled,
                 plan_mode=plan_mode,
                 mcp_servers=mcp_servers,
+                agent_name=agent_name,
             )
             self._is_family_mode = True
         elif config_path:
@@ -698,6 +704,7 @@ def create_family_adapter(
     subagent_enabled: bool = False,
     plan_mode: bool = False,
     mcp_servers: list[dict[str, Any]] | None = None,
+    agent_name: str | None = None,
 ) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
@@ -708,6 +715,7 @@ def create_family_adapter(
         subagent_enabled: 是否启用子 agent 委托（init-time 参数）
         plan_mode: 是否启用 TodoList 规划中间件（init-time 参数）
         mcp_servers: MCP server configs to inject into DeerFlow config YAML
+        agent_name: Optional DeerMem memory-bucket key (see DeerFlowAdapter.__init__)
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
@@ -719,6 +727,7 @@ def create_family_adapter(
         subagent_enabled=subagent_enabled,
         plan_mode=plan_mode,
         mcp_servers=mcp_servers,
+        agent_name=agent_name,
     )
 
 

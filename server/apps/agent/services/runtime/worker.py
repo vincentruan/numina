@@ -270,6 +270,11 @@ async def _run_asset_report_pipeline(
             subagent_enabled=False,
             plan_mode=False,
             mcp_servers=mcp_servers,
+            # Isolate DeerMem memory bucket: asset-report is a fixed pipeline that
+            # must fetch fresh MCP data each run, not reuse chat's accumulated
+            # memory (which caused LLM to skip write_file/read_file/MCP and answer
+            # from stale memory — see plan Open Question DeerMem pollution).
+            agent_name="asset-report",
         )
 
         # 5. Synthetic trigger message (plan L117): report runs are backend-

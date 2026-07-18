@@ -641,6 +641,7 @@ def get_family_adapter(
     subagent_enabled: bool = False,
     plan_mode: bool = False,
     mcp_servers: list[dict[str, Any]] | None = None,
+    agent_name: str | None = None,
 ) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
@@ -649,9 +650,12 @@ def get_family_adapter(
     so different families' conversations remain isolated even with a shared
     checkpointer instance.
 
-    Cache key is (family_id, config_id, subagent_enabled, plan_mode) — different
-    flag combinations create distinct client instances since these are init-time
-    parameters on DeerFlowClient.
+    Cache key is (family_id, config_id, subagent_enabled, plan_mode, mcp_key,
+    agent_name) — different flag combinations create distinct client instances
+    since these are init-time parameters on DeerFlowClient. agent_name is in
+    the key because it selects a distinct DeerMem memory bucket (per
+    (agent_name, user_id)) — an asset-report client must not share a chat
+    client's memory.
 
     Thread safety:
     - _cache_lock guards all reads/writes to _adapter_cache.
@@ -675,8 +679,8 @@ def get_family_adapter(
         base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
 
     config_id: str = ai_config.get("config_id", "")
-    cache_key: tuple[str, str, bool, bool, str] = (
-        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers),
+    cache_key: tuple[str, str, bool, bool, str, str] = (
+        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "",
     )
 
     # Fast path: return cached client
@@ -740,6 +744,7 @@ def get_family_adapter(
                     thinking_enabled=bool(ai_config.get("thinking_supported", False)),
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
+                    agent_name=agent_name,
                 )
             finally:
                 # Restore previous value (or remove if it wasn't set)
