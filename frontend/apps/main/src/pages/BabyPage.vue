@@ -989,7 +989,19 @@ async function doApproveChore(chore: ChoreInstance) {
     await approveChore(chore.id)
     showSuccessToast(t('baby.choreApproveSuccess'))
     await loadData()
-  } catch {
+  } catch (err) {
+    // Idempotent: if the chore was already approved (e.g. approved from the
+    // header section while the task tab still shows it as actionable), treat
+    // as success — show a friendly toast and refresh instead of an error.
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 422 || status === 409) {
+      await loadData()
+      const fresh = allChores.value.find(c => c.id === chore.id)
+      if (fresh?.status === 'approved') {
+        showSuccessToast(t('baby.choreAlreadyApproved'))
+        return
+      }
+    }
     showFailToast(t('baby.choreApproveFailed'))
   } finally {
     actioningId.value = null
