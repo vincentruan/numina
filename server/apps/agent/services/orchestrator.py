@@ -20,7 +20,6 @@ from collections.abc import AsyncGenerator
 
 from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
-from apps.agent.schemas.context import FamilyContext
 from apps.agent.schemas.policy import CapabilityPolicy
 from apps.agent.schemas.response import AgentResponse
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
@@ -252,10 +251,9 @@ class Orchestrator:
                 )
 
             # ── 3. Fetch family context ────────────────────────────────────
-            if capability == "suggest":
-                raw_context = FamilyContext(family_id=family_id, free_text=free_text)
-            else:
-                raw_context = await self._build_context(client, family_id, free_text)
+            # U6: suggest 重构为轻量 LLM 单次调用（routers/suggest.py），不再走
+            # orchestrator.dispatch；此处仅 import_parse（U8 待迁）走通用 context 构造。
+            raw_context = await self._build_context(client, family_id, free_text)
 
             # ── 4. PII redaction ───────────────────────────────────────────
             redacted = pii_redactor.redact(raw_context)
