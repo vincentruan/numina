@@ -2,10 +2,12 @@
 
 - GET  /api/v1/ai/report          — 获取最新报告
 - GET  /api/v1/ai/report/markdown — 获取markdown报告文件内容
-- POST /api/v1/ai/report/generate/events — 触发生成（NDJSON 流式推送进度）
+- POST /api/v1/ai/report/generate/events — 触发生成（SSE 流式推送三步进度，U4）
 """
 
+import json
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -20,10 +22,8 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import (
-    check_circuit_blocked,
-    proxy_report_events,
-)
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 from packages.core.path_manager import PathManager
@@ -59,6 +59,51 @@ def get_report(
     if not report:
         return {"report": None}
     return {"report": report.report_json, "generated_at": report.generated_at.isoformat()}
+
+
+async def _stream_asset_report_sse(
+    *,
+    family_id: str,
+    user_id: str,
+    thread_id: str,
+    task_id: str,
+) -> AsyncGenerator[bytes, None]:
+    """Proxy the agent's asset-report SSE stream to the frontend (U4 step 5).
+
+    Calls the agent's internal ``/internal/gateway/runs/asset-report/{thread_id}``
+    endpoint via ``AgentClient`` (which injects ``X-Agent-Token`` for service-
+    to-service auth) and forwards the raw SSE bytes. The agent worker
+    (``_run_asset_report_pipeline``) emits the 3-step execution frames +
+    ``report.step2_json`` custom event; this helper is a pure passthrough.
+
+    On agent error/non-200, yields a single SSE error frame so the frontend
+    receives a graceful close rather than a truncated stream.
+    """
+    agent_client = AgentClient(family_id, user_id, timeout=300.0)
+    agent_url = f"/internal/gateway/runs/asset-report/{thread_id}"
+    try:
+        async with agent_client.stream(
+            "POST",
+            agent_url,
+            json={"family_id": family_id, "user_id": user_id},
+        ) as resp:
+            if resp.status_code != 200:
+                body = await resp.aread()
+                logger.warning(
+                    "[asset-report] agent stream non-200: status=%s body=%s task=%s",
+                    resp.status_code, body[:200], task_id,
+                )
+                err = json.dumps({"message": "报告生成服务异常", "name": "AgentError"}).encode()
+                yield f"event: error\ndata: {err.decode()}\n\n".encode()
+                return
+            async for line in resp.aiter_lines():
+                # Forward each raw line; aiter_lines strips the trailing newline,
+                # so re-add it. Blank lines separate SSE events.
+                yield (line + "\n").encode()
+    except Exception as exc:
+        logger.warning("[asset-report] agent stream failed task=%s err=%s", task_id, exc)
+        err = json.dumps({"message": "报告生成服务中断", "name": type(exc).__name__}).encode()
+        yield f"event: error\ndata: {err.decode()}\n\n".encode()
 
 
 @router.post("/generate/events")
@@ -115,16 +160,20 @@ async def trigger_generate_events(
 
     task_id = str(task.id)
     family_id = current_user.family_id
+    user_id = str(current_user.id)
 
+    # U4 step 5: trigger an asset-report stream_run on the agent via the
+    # internal X-Agent-Token gateway endpoint. The agent worker runs the 3-step
+    # pipeline and emits report.step2_json; this endpoint streams it back as SSE
+    # (replaces the legacy NDJSON proxy_report_events orchestration).
     return StreamingResponse(
-        proxy_report_events(
-            task_id=task_id,
-            session_id=session_id,
+        _stream_asset_report_sse(
             family_id=family_id,
-            current_user=current_user,
-            db=db,
+            user_id=user_id,
+            thread_id=session_id,
+            task_id=task_id,
         ),
-        media_type="application/x-ndjson",
+        media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )
 
