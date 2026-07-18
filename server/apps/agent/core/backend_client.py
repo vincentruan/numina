@@ -141,6 +141,17 @@ class BackendClient:
         resp.raise_for_status()
         return _unwrap(resp)
 
+    async def get_agent_by_name(self, agent_name: str) -> dict:
+        """Fetch an agent config by name (system agent family_id=0 preferred)."""
+        validated_id = _validate_family_id(self.family_id)
+        client = await get_shared_client()
+        resp = await client.get(
+            f"/api/v1/internal/ai/agents/by-name/{agent_name}",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)
+
     async def get_enabled_skills(self) -> list[dict]:
         """Fetch enabled skill registry records for the family."""
         validated_id = _validate_family_id(self.family_id)
