@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 _WRITE_FILE_DECL_RE = re.compile(
     r"WRITE_FILE:\s*(report_[a-zA-Z0-9_-]+\.md)", re.IGNORECASE
 )
+# Canonical report filename pattern (mirrors PathManager._REPORT_FILENAME_PATTERN)
+# — used to validate filenames recovered from write_file tool_call args.path.
+_REPORT_FILENAME_RE = re.compile(r"^report_[a-zA-Z0-9_-]+\.md$")
 
 # Track fire-and-forget background tasks so they don't get garbage collected prematurely
 _background_tasks: set[asyncio.Task] = set()
@@ -66,14 +69,21 @@ def _copy_asset_report_markdown(
     thread_id: str,
     run_id: str,
     ai_text: str,
+    write_file_paths: list[str],
 ) -> str | None:
     """U4 step 3 / R5 path 契约: copy the step-1 markdown audit from the
     per-thread sandbox into the tenant reports directory, returning the
     persisted filename for ``AIReport.markdown_file_path``.
 
-    The LLM declares the filename it wrote via ``WRITE_FILE: <filename>``
-    (SKILL.md §文件命名规则) because the native ``write_file`` tool only
-    returns ``"OK"`` (not a path). The source sandbox file lives at
+    The source filename is resolved in priority order:
+    1. ``write_file`` tool_call ``args.path`` (most reliable — e2e showed the
+       LLM often omits the ``WRITE_FILE:`` text declaration from AI message
+       content even when it calls ``write_file`` with a real path).
+    2. ``WRITE_FILE: <filename>`` declaration in the AI text (SKILL.md
+       §文件命名规则 instructs the LLM to declare it; the native ``write_file``
+       tool only returns ``"OK"`` so the filename must be recovered elsewhere).
+
+    The source sandbox file lives at
     ``AGENT_DATA_DIR/{family_id}/sandboxes/{thread_id}/workspace/<filename>``.
 
     The persisted filename is server-generated (plan R5 文件名碰撞防御):
@@ -81,17 +91,31 @@ def _copy_asset_report_markdown(
     ``run_id`` suffix to eliminate same-second collision across retried/queued
     runs. Matches ``^report_[a-zA-Z0-9_-]+\\.md$`` (``_`` already allowed).
 
-    Returns ``None`` (and logs) when the LLM declared no filename or the sandbox
+    Returns ``None`` (and logs) when no filename is recoverable or the sandbox
     file is missing — persistence is best-effort, a failure must not fail the run.
     """
-    decl = _WRITE_FILE_DECL_RE.search(ai_text)
-    if decl is None:
+    declared_filename: str | None = None
+
+    # 1. Prefer write_file tool_call args.path — extract the basename.
+    for wf_path in write_file_paths:
+        candidate = Path(wf_path).name
+        if _REPORT_FILENAME_RE.match(candidate):
+            declared_filename = candidate
+            break
+
+    # 2. Fallback: WRITE_FILE: <filename> declaration in AI text.
+    if declared_filename is None:
+        decl = _WRITE_FILE_DECL_RE.search(ai_text)
+        if decl is not None:
+            declared_filename = decl.group(1)
+
+    if declared_filename is None:
         logger.warning(
-            "[_run_asset_report_pipeline] no WRITE_FILE declaration in AI text, "
-            "markdown_file_path not persisted run=%s", run_id,
+            "[_run_asset_report_pipeline] no write_file path or WRITE_FILE "
+            "declaration recovered, markdown_file_path not persisted run=%s "
+            "(write_file_paths=%s)", run_id, write_file_paths,
         )
         return None
-    declared_filename = decl.group(1)
 
     # Source: per-thread sandbox workspace (NuminaLocalSandboxProvider layout).
     sandbox_workspace = (
@@ -288,6 +312,7 @@ async def _run_asset_report_pipeline(
     completion_status = "error"
     selected_provider: dict[str, Any] | None = None
     ai_response_parts: list[str] = []
+    write_file_paths: list[str] = []
     cumulative_usage: dict[str, int] | None = None
 
     try:
@@ -430,6 +455,16 @@ async def _run_asset_report_pipeline(
                     if tool_calls:
                         for tc in extract_tool_calls(data):
                             raw_name = tc.get("name", "")
+                            # U4 step 3 / R5: capture write_file's args.path so
+                            # step 9 can locate the sandbox markdown for
+                            # persistence (more reliable than the LLM's
+                            # WRITE_FILE: text declaration, which e2e showed is
+                            # often omitted from AI message content).
+                            if raw_name == "write_file":
+                                tc_args = tc.get("args") or {}
+                                wf_path = tc_args.get("path")
+                                if isinstance(wf_path, str) and wf_path:
+                                    write_file_paths.append(wf_path)
                             tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
                             payload: dict[str, Any] = {
                                 "type": "tool_call",
@@ -489,6 +524,7 @@ async def _run_asset_report_pipeline(
                     thread_id=thread_id,
                     run_id=run_id,
                     ai_text=ai_text,
+                    write_file_paths=write_file_paths,
                 )
                 try:
                     await client.persist_report_result(

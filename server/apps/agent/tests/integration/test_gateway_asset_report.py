@@ -263,3 +263,94 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
     target = real.tenant_report_file(int(family_id), md_path)
     assert target.is_file(), f"persisted markdown missing at {target}"
     assert target.resolve().relative_to(real.tenant_report_dir(int(family_id)).resolve())
+
+
+def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch):
+    """U4 step 3 / R5: when the LLM calls write_file with a real path but omits
+    the ``WRITE_FILE:`` text declaration from AI content (the e2e-observed
+    pattern), worker recovers the filename from the write_file tool_call
+    ``args.path`` and still persists markdown_file_path.
+
+    This is the primary filename-recovery path; the WRITE_FILE text declaration
+    is the fallback.
+    """
+    family_id = "321210384289632256"
+    thread_id = "thread-tc"
+    sandbox_workspace = tmp_path / family_id / "sandboxes" / thread_id / "workspace"
+    sandbox_workspace.mkdir(parents=True)
+    declared = "report_20260719_120000.md"
+    (sandbox_workspace / declared).write_text("# 报告\n## 评分 71/100", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "apps.agent.services.runtime.worker.settings.AGENT_DATA_DIR",
+        str(tmp_path),
+    )
+    from packages.core.path_manager import PathManager as _RealPM
+
+    real = _RealPM(data_root=tmp_path)
+    monkeypatch.setattr(
+        "apps.agent.services.runtime.worker.get_path_manager",
+        lambda: real,
+    )
+
+    # Stub adapter: AI message carries a write_file tool_call with args.path
+    # (no WRITE_FILE: text declaration in content) — mirrors e2e behavior.
+    stub = AsyncMock()
+
+    async def typed_stream_dispatch(
+        skill_name: str,
+        context: Any,
+        thread_id: str,
+        enable_thinking: bool = False,
+    ) -> AsyncGenerator[tuple[str, dict], None]:
+        yield (
+            "messages",
+            {
+                "type": "ai",
+                "content": '```json\n{"overall_score": 71}\n```',
+                "tool_calls": [
+                    {
+                        "name": "write_file",
+                        "id": "wf-1",
+                        "args": {
+                            "path": f"/mnt/user-data/workspace/{declared}",
+                            "content": "# 报告",
+                        },
+                    }
+                ],
+            },
+        )
+        yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
+
+    stub.typed_stream_dispatch = typed_stream_dispatch
+
+    with (
+        patch(
+            "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
+            _TOKEN,
+        ),
+        patch(
+            "apps.agent.services.runtime.worker.create_family_adapter",
+            return_value=stub,
+        ),
+        patch(
+            "apps.agent.services.runtime.worker.BackendClient.persist_report_result",
+            new_callable=AsyncMock,
+            return_value={"ok": True, "written": 1},
+        ) as mock_persist,
+    ):
+        response = client.post(
+            "/internal/gateway/runs/asset-report/thread-tc",
+            headers={"X-Agent-Token": _TOKEN},
+            json={"family_id": family_id, "user_id": "user-1"},
+        )
+    assert response.status_code == 200
+
+    mock_persist.assert_awaited_once()
+    md_path = mock_persist.await_args.kwargs.get("markdown_file_path")
+    # Recovered from tool_call args.path basename, with run_id[:8] suffix.
+    assert md_path is not None, "markdown_file_path must be recovered from tool_call path"
+    assert md_path.startswith("report_20260719_120000_")
+    assert md_path.endswith(".md")
+    target = real.tenant_report_file(int(family_id), md_path)
+    assert target.is_file(), f"persisted markdown missing at {target}"
