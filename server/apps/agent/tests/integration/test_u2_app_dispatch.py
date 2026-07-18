@@ -18,14 +18,14 @@ error rather than crashing (Finding 15).
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
-
 
 # ---------------------------------------------------------------------------
 # Stub adapter — yields a minimal frames sequence so numina dispatch completes
@@ -240,6 +240,9 @@ class _FakeRunManager:
     async def set_status(self, run_id: str, status: Any, **kw: Any) -> None:
         self.status.append((run_id, getattr(status, "value", str(status))))
 
+    async def cleanup(self, run_id: str, delay: float = 0) -> None:
+        pass
+
 
 async def test_run_agent_dispatches_asset_report_to_pipeline():
     """app='asset-report' → _run_asset_report_pipeline runs the 3-step pipeline.
@@ -287,10 +290,12 @@ async def test_run_agent_dispatches_asset_report_to_pipeline():
     error_events = [d for ev, d in bridge.published if ev == "error"]
     assert not error_events, f"unexpected error event: {error_events}"
 
-    # report.step2_json custom event emitted exactly once with parsed JSON
+    # U4 step 3: report.step2_json is now emitted by AssetReportStep2Middleware
+    # (in-graph via get_stream_writer), NOT by the worker. The stub adapter
+    # bypasses the real graph middleware path, so no step2 event appears here —
+    # the worker only persists the parsed JSON (asserted via persist mock below).
     step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
-    assert len(step2) == 1, f"expected 1 report.step2_json, got {len(step2)}: {bridge.published}"
-    assert step2[0]["payload"] == {"overall_score": 72}
+    assert step2 == [], f"worker must not emit step2 (middleware owns it): {step2}"
 
     # end frame status = complete
     end_events = [d for ev, d in bridge.published if ev == "end" and d is not None]

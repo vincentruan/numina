@@ -15,11 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import time
 from typing import Any
 
-import json_repair
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
 from apps.agent.app.config import settings
@@ -34,6 +32,7 @@ from apps.agent.services.message_classifier import (
 from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
+from .asset_report_middleware import AssetReportStep2Middleware, parse_report_json
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
 from .sandbox_provider import set_family_sandbox_context
 
@@ -275,6 +274,11 @@ async def _run_asset_report_pipeline(
             # memory (which caused LLM to skip write_file/read_file/MCP and answer
             # from stale memory — see plan Open Question DeerMem pollution).
             agent_name="asset-report",
+            # U4 step 3: emit report.step2_json via middleware (replicates
+            # DeerFlow get_stream_writer() pattern) instead of worker post-run
+            # synthesis. The middleware fires from inside the graph node path
+            # where get_stream_writer() works natively.
+            middlewares=[AssetReportStep2Middleware()],
         )
 
         # 5. Synthetic trigger message (plan L117): report runs are backend-
@@ -373,23 +377,16 @@ async def _run_asset_report_pipeline(
             completion_status = "complete"
             success = record.status == RunStatus.success
 
-        # 9. Step 3 worker-synthesized report.step2_json: parse the accumulated
-        # AI text (the final ```json block) via json_repair and emit exactly one
-        # custom event BEFORE the end frame (plan step 3 fallback path; timing
-        # contract per plan — report.step2_json strictly precedes end).
+        # 9. Step 3 persistence: the report.step2_json custom event is now emitted
+        # by AssetReportStep2Middleware (in-graph, via get_stream_writer — plan
+        # step 3 preferred middleware path). The worker only persists the parsed
+        # JSON to ai_reports here (step 7). Best-effort: a persistence failure
+        # must not fail the run (the SSE stream already delivered step2_json to
+        # the frontend; the row is for subsequent GET /ai/report queries).
+        # markdown_file_path deferred to P1 (requires sandbox→tenant-reports copy).
         if completion_status == "complete":
-            step2_payload = _parse_report_json("".join(ai_response_parts))
+            step2_payload = parse_report_json("".join(ai_response_parts))
             if step2_payload is not None:
-                await bridge.publish(run_id, "custom", {
-                    "type": "report.step2_json",
-                    "payload": step2_payload,
-                })
-                # Step 7: persist the parsed indicators JSON to ai_reports via
-                # backend internal endpoint (verify_agent_token auth). Best-effort
-                # — a persistence failure must not fail the run (the SSE stream
-                # already delivered report.step2_json to the frontend; the row is
-                # for subsequent GET /ai/report queries). markdown_file_path
-                # deferred to P1 (requires sandbox→tenant-reports file copy).
                 try:
                     await client.persist_report_result(report_json=step2_payload)
                 except Exception as persist_exc:
@@ -449,30 +446,6 @@ async def _run_asset_report_pipeline(
 # Synthetic trigger for asset-report runs (plan L117: backend-initiated runs
 # have no natural user message; slash form steers skill loading to asset-report).
 _SYNTHETIC_ASSET_REPORT_TRIGGER = "/asset-report 生成家庭资产报告"
-
-
-def _parse_report_json(ai_text: str) -> dict | None:
-    """Parse the indicators JSON from the asset-report AI output.
-
-    Tries fenced ```json blocks first, then the bare text, via json_repair
-    (tolerant of trailing commas / minor syntax drift). Returns None on failure
-    so the caller can skip emitting ``report.step2_json`` (plan F8: step2
-    incomplete => 0 events).
-    """
-    if not ai_text:
-        return None
-
-    fence_re = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
-    candidates: list[str] = [m.group(1) for m in fence_re.finditer(ai_text)]
-    candidates.append(ai_text)
-    for cand in candidates:
-        try:
-            parsed = json_repair.repair_json(cand, return_objects=True)
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            continue
-    return None
 
 
 async def _run_import_parse_agent(

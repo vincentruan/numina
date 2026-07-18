@@ -129,10 +129,13 @@ def test_asset_report_run_rejects_bad_token(client):
 
 
 def test_asset_report_run_streams_step2_json(client):
-    """Valid token → SSE stream with report.step2_json custom event + complete end.
+    """Valid token → SSE stream completes; worker persists parsed JSON (step 7).
 
-    Also asserts the worker calls BackendClient.persist_report_result with the
-    parsed indicators JSON (U4 step 7 persistence).
+    U4 step 3: report.step2_json is now emitted by AssetReportStep2Middleware
+    (in-graph via get_stream_writer). The stub adapter bypasses the real graph
+    middleware path, so no step2 event appears in this SSE stream — the worker
+    only persists the parsed JSON (asserted via persist mock). The middleware's
+    in-graph emission is covered by the F1 e2e run, not this unit test.
     """
     with (
         patch(
@@ -152,12 +155,12 @@ def test_asset_report_run_streams_step2_json(client):
         )
     assert response.status_code == 200
     events = _parse_sse_events(response.text)
+    # Worker must NOT emit step2 (middleware owns it now).
     step2 = [
         e for e in events
         if e["event"] == "custom" and isinstance(e["data"], dict) and e["data"].get("type") == "report.step2_json"
     ]
-    assert len(step2) == 1, f"expected 1 report.step2_json, got {events}"
-    assert step2[0]["data"]["payload"] == {"overall_score": 88}
+    assert step2 == [], f"worker must not emit step2 (middleware owns it): {step2}"
     # U4 step 7: worker persisted the parsed JSON to ai_reports via backend.
     mock_persist.assert_awaited_once()
     assert mock_persist.await_args.kwargs["report_json"] == {"overall_score": 88}

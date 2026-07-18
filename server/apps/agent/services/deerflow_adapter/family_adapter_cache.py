@@ -642,6 +642,7 @@ def get_family_adapter(
     plan_mode: bool = False,
     mcp_servers: list[dict[str, Any]] | None = None,
     agent_name: str | None = None,
+    middlewares: list[Any] | None = None,
 ) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
@@ -651,11 +652,13 @@ def get_family_adapter(
     checkpointer instance.
 
     Cache key is (family_id, config_id, subagent_enabled, plan_mode, mcp_key,
-    agent_name) — different flag combinations create distinct client instances
-    since these are init-time parameters on DeerFlowClient. agent_name is in
-    the key because it selects a distinct DeerMem memory bucket (per
-    (agent_name, user_id)) — an asset-report client must not share a chat
-    client's memory.
+    agent_name, middlewares_key) — different flag combinations create distinct
+    client instances since these are init-time parameters on DeerFlowClient.
+    agent_name is in the key because it selects a distinct DeerMem memory
+    bucket (per (agent_name, user_id)) — an asset-report client must not share
+    a chat client's memory. middlewares is in the key (as id() tuple) because
+    a client with AssetReportStep2Middleware must not be reused for a chat run
+    that should not emit report.step2_json.
 
     Thread safety:
     - _cache_lock guards all reads/writes to _adapter_cache.
@@ -679,8 +682,13 @@ def get_family_adapter(
         base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
 
     config_id: str = ai_config.get("config_id", "")
-    cache_key: tuple[str, str, bool, bool, str, str] = (
-        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "",
+    # middlewares are unhashable objects; key by their id() tuple so a client
+    # built with AssetReportStep2Middleware never collides with a no-middleware
+    # chat client. (Both are module-singleton or per-pipeline lists, so id()
+    # is stable across calls within a process.)
+    middlewares_key = tuple(id(m) for m in middlewares) if middlewares else ()
+    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...]] = (
+        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key,
     )
 
     # Fast path: return cached client
@@ -745,6 +753,7 @@ def get_family_adapter(
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
                     agent_name=agent_name,
+                    middlewares=middlewares,
                 )
             finally:
                 # Restore previous value (or remove if it wasn't set)

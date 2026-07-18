@@ -96,6 +96,7 @@ class DeerFlowAdapter:
         plan_mode: bool = False,
         mcp_servers: list[dict[str, Any]] | None = None,
         agent_name: str | None = None,
+        middlewares: list[Any] | None = None,
     ) -> None:
         """Initialize adapter.
 
@@ -109,6 +110,10 @@ class DeerFlowAdapter:
                 buckets memory per (agent_name, user_id), isolating this adapter's
                 memory from others (e.g. asset-report vs chat/lead-agent). None
                 falls back to the client default (lead-agent global bucket).
+            middlewares: Optional list of AgentMiddleware instances to inject into
+                the DeerFlow agent (e.g. AssetReportStep2Middleware to emit
+                report.step2_json via get_stream_writer). None = no custom
+                middlewares (chat path).
         """
         self._timeout = timeout_seconds
         self._family_id = family_id
@@ -124,6 +129,7 @@ class DeerFlowAdapter:
                 plan_mode=plan_mode,
                 mcp_servers=mcp_servers,
                 agent_name=agent_name,
+                middlewares=middlewares,
             )
             self._is_family_mode = True
         elif config_path:
@@ -705,6 +711,7 @@ def create_family_adapter(
     plan_mode: bool = False,
     mcp_servers: list[dict[str, Any]] | None = None,
     agent_name: str | None = None,
+    middlewares: list[Any] | None = None,
 ) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
@@ -716,6 +723,7 @@ def create_family_adapter(
         plan_mode: 是否启用 TodoList 规划中间件（init-time 参数）
         mcp_servers: MCP server configs to inject into DeerFlow config YAML
         agent_name: Optional DeerMem memory-bucket key (see DeerFlowAdapter.__init__)
+        middlewares: Optional AgentMiddleware list (see DeerFlowAdapter.__init__)
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
@@ -728,6 +736,7 @@ def create_family_adapter(
         plan_mode=plan_mode,
         mcp_servers=mcp_servers,
         agent_name=agent_name,
+        middlewares=middlewares,
     )
 
 
