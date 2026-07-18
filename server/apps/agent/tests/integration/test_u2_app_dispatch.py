@@ -241,33 +241,96 @@ class _FakeRunManager:
         self.status.append((run_id, getattr(status, "value", str(status))))
 
 
-async def test_run_agent_dispatches_asset_report_to_503_placeholder():
-    """app='asset-report' → _run_asset_report_pipeline publishes a 503-style error."""
+async def test_run_agent_dispatches_asset_report_to_pipeline():
+    """app='asset-report' → _run_asset_report_pipeline runs the 3-step pipeline.
+
+    U4: the 503 placeholder is replaced by a real adapter stream. Stubs the
+    adapter to yield an AI message with a fenced JSON block (step 2 output),
+    then verifies the worker forwards frames, emits exactly one
+    ``report.step2_json`` custom event (worker-synthesized step 3), and
+    completes with status='complete'.
+    """
     from apps.agent.services.runtime.worker import run_agent
 
-    record = await _make_record("asset-report")
-    bridge = _FakeBridge()
-    rm = _FakeRunManager()
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
+        yield ("messages", {"type": "ai", "content": '```json\n{"overall_score": 72}\n```', "tool_calls": None, "id": "m1"})
+        yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
 
-    # Run in a real coroutine so set_family_sandbox_context's ContextVar works.
-    await run_agent(
-        bridge=bridge,  # type: ignore[arg-type]
-        run_manager=rm,  # type: ignore[arg-type]
-        record=record,
-        family_id="family-1",
-        user_id="user-1",
-        thread_id="thread-ar",
-        graph_input=None,
-        config={},
-    )
+    stub_adapter = AsyncMock()
+    stub_adapter.typed_stream_dispatch = _stub_stream
 
-    # 503-style error published, not a raised crash
+    mock_ai_config = {
+        "ai_enabled": True,
+        "providers": [{"is_active": True, "provider": "openai", "api_key": "k", "base_url": "u"}],
+    }
+    with (
+        patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
+        patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
+        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+    ):
+        record = await _make_record("asset-report")
+        bridge = _FakeBridge()
+        rm = _FakeRunManager()
+        await run_agent(
+            bridge=bridge,  # type: ignore[arg-type]
+            run_manager=rm,  # type: ignore[arg-type]
+            record=record,
+            family_id="family-1",
+            user_id="user-1",
+            thread_id="thread-ar",
+            graph_input=None,
+            config={},
+        )
+
+    # No error event (pipeline completed cleanly)
     error_events = [d for ev, d in bridge.published if ev == "error"]
-    assert error_events, f"no error event published: {bridge.published}"
-    assert "asset-report" in error_events[0]["message"]
-    assert "U4" in error_events[0]["message"]
+    assert not error_events, f"unexpected error event: {error_events}"
+
+    # report.step2_json custom event emitted exactly once with parsed JSON
+    step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
+    assert len(step2) == 1, f"expected 1 report.step2_json, got {len(step2)}: {bridge.published}"
+    assert step2[0]["payload"] == {"overall_score": 72}
+
+    # end frame status = complete
     end_events = [d for ev, d in bridge.published if ev == "end" and d is not None]
-    assert end_events and end_events[0]["status"] == "error"
+    assert end_events and end_events[0]["status"] == "complete", bridge.published
+
+
+async def test_run_agent_asset_report_no_json_skips_step2_event():
+    """If the AI output has no parseable JSON, no report.step2_json is emitted (F8)."""
+    from apps.agent.services.runtime.worker import run_agent
+
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
+        yield ("messages", {"type": "ai", "content": "no json here", "tool_calls": None, "id": "m1"})
+        yield ("end", {})
+
+    stub_adapter = AsyncMock()
+    stub_adapter.typed_stream_dispatch = _stub_stream
+
+    mock_ai_config = {"ai_enabled": True, "providers": [{"is_active": True, "provider": "openai", "api_key": "k", "base_url": "u"}]}
+    with (
+        patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
+        patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
+        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+    ):
+        record = await _make_record("asset-report")
+        bridge = _FakeBridge()
+        rm = _FakeRunManager()
+        await run_agent(
+            bridge=bridge,  # type: ignore[arg-type]
+            run_manager=rm,  # type: ignore[arg-type]
+            record=record,
+            family_id="family-1",
+            user_id="user-1",
+            thread_id="thread-ar2",
+            graph_input=None,
+            config={},
+        )
+
+    step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
+    assert step2 == [], f"expected no report.step2_json for non-JSON output: {step2}"
 
 
 async def test_run_agent_dispatches_import_parse_to_503_placeholder():
