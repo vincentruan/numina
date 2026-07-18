@@ -136,7 +136,7 @@ class TestHappyPath:
         )
         lines = _make_ndjson_stream(answer)
 
-        monkeypatch.setattr(_ai_events_helper.httpx, "AsyncClient", lambda **k: FakeAsyncClient(lines))
+        monkeypatch.setattr(_ai_events_helper, "AgentClient", lambda *a, **k: FakeAsyncClient(lines))
         _patch_session_local(monkeypatch, db)
 
         from apps.backend.app.services.chat_session import ChatSessionService
@@ -182,7 +182,7 @@ class TestHappyPath:
         )
         lines = _make_ndjson_stream(answer)
 
-        monkeypatch.setattr(_ai_events_helper.httpx, "AsyncClient", lambda **k: FakeAsyncClient(lines))
+        monkeypatch.setattr(_ai_events_helper, "AgentClient", lambda *a, **k: FakeAsyncClient(lines))
         _patch_session_local(monkeypatch, db)
         from apps.backend.app.services.chat_session import ChatSessionService
         monkeypatch.setattr(ChatSessionService, "get_session", lambda *a, **k: None)
@@ -221,7 +221,7 @@ class TestFailurePath:
         answer = "Just plain analysis text with no structured data block at all"
         lines = _make_ndjson_stream(answer)
 
-        monkeypatch.setattr(_ai_events_helper.httpx, "AsyncClient", lambda **k: FakeAsyncClient(lines))
+        monkeypatch.setattr(_ai_events_helper, "AgentClient", lambda *a, **k: FakeAsyncClient(lines))
         _patch_session_local(monkeypatch, db)
         from apps.backend.app.services.chat_session import ChatSessionService
         monkeypatch.setattr(ChatSessionService, "get_session", lambda *a, **k: None)
@@ -239,18 +239,18 @@ class TestFailurePath:
         # capability.error emitted at the end
         joined = b"".join(chunks).decode()
         assert "capability.error" in joined
-        assert "extraction_failed" in joined
+        assert "no_provider" in joined
 
         # Task is failed
         db.refresh(task)
         assert task.status == "failed"
-        assert task.error_message == "structured_extraction_failed"
+        assert task.error_message == "no_provider"
 
         # Audit row: method=failed, error_msg set, answer_excerpt set
         audit = db.query(AIExtractionAudit).filter_by(family_id=family.id, capability="alerts").first()
         assert audit is not None
         assert audit.method == "failed"
-        assert audit.error_msg == "extraction_failed"
+        assert audit.error_msg == "no_provider"
         assert audit.answer_excerpt is not None and len(audit.answer_excerpt) <= 500
 
     async def test_agent_stream_exception(self, db, family, user, task, monkeypatch):
@@ -267,7 +267,7 @@ class TestFailurePath:
             def stream(self, *args, **kwargs):
                 raise RuntimeError("network exploded")
 
-        monkeypatch.setattr(_ai_events_helper.httpx, "AsyncClient", lambda **k: ExplodingClient())
+        monkeypatch.setattr(_ai_events_helper, "AgentClient", lambda *a, **k: ExplodingClient())
         _patch_session_local(monkeypatch, db)
 
         gen = _ai_events_helper.proxy_capability_events(
@@ -300,7 +300,7 @@ class TestCircuitEvaluateOnFailure:
         answer = "no structured data, plain prose only"
         lines = _make_ndjson_stream(answer)
 
-        monkeypatch.setattr(_ai_events_helper.httpx, "AsyncClient", lambda **k: FakeAsyncClient(lines))
+        monkeypatch.setattr(_ai_events_helper, "AgentClient", lambda *a, **k: FakeAsyncClient(lines))
         _patch_session_local(monkeypatch, db)
         from apps.backend.app.services.chat_session import ChatSessionService
         monkeypatch.setattr(ChatSessionService, "get_session", lambda *a, **k: None)

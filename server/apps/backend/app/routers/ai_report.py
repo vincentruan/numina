@@ -8,7 +8,7 @@
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -140,15 +140,9 @@ def get_report_markdown(
     """
     report = _latest_report(current_user.family_id, db)
     if not report:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "report_not_found", "message": "报告不存在"}
-        )
+        raise AppError(ErrorCode.AI_REPORT_NOT_FOUND)
     if not report.markdown_file_path:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "markdown_not_found", "message": "报告文件不存在或已被删除"}
-        )
+        raise AppError(ErrorCode.AI_REPORT_MARKDOWN_NOT_FOUND)
 
     # Read markdown file via PathManager
     pm = PathManager()
@@ -157,16 +151,10 @@ def get_report_markdown(
         file_path = pm.tenant_report_file(int(current_user.family_id), filename)
     except Exception as e:
         logger.warning(f"Invalid markdown file path for family {current_user.family_id}: {e}")
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "markdown_not_found", "message": "报告文件路径无效"}
-        ) from None
+        raise AppError(ErrorCode.AI_REPORT_MARKDOWN_NOT_FOUND) from None
 
     if not file_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "markdown_not_found", "message": "报告文件不存在或已被删除"}
-        )
+        raise AppError(ErrorCode.AI_REPORT_MARKDOWN_NOT_FOUND)
 
     content = file_path.read_text(encoding="utf-8")
     return MarkdownResponse(

@@ -47,17 +47,17 @@ class TestDataRootExpansion:
 class TestDerivedPaths:
     def test_upload_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspace"
+        expected = _resolve("/tmp/test-numina") + "/workspaces"
         assert s.UPLOAD_DIR == expected
 
     def test_workspace_root_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspace"
+        expected = _resolve("/tmp/test-numina") + "/workspaces"
         assert s.WORKSPACE_ROOT == expected
 
     def test_chat_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspace"
+        expected = _resolve("/tmp/test-numina") + "/workspaces"
         assert s.CHAT_DIR == expected
 
     def test_log_dir_derived_from_data_root(self):

@@ -29,40 +29,60 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
-def _make_streaming_mock(chunks: list[str] | None = None):
-    """Build a mock httpx.AsyncClient that supports async streaming via client.stream() for NDJSON."""
+def _make_two_phase_streaming_mock(markdown_path: str = "/tmp/test-report.md"):
+    """Build a mock AgentClient for the two-phase report pipeline.
+
+    proxy_report_events calls _call_agent_skill twice:
+      Phase 1 (report_generate) → capability.end with result.success=True + result.path
+      Phase 2 (report_structured) → capability.end with summary containing STRUCTURED_DATA JSON
+
+    The mock's .stream() returns the phase-1 stream on the first call and the
+    phase-2 stream on the second, matching the call sequence.
+    """
     import json
 
-    if chunks is None:
-        # Default: emit capability.end event with parseable structured data
-        summary = (
-            "报告生成完成。\n"
-            "<!-- STRUCTURED_DATA "
-            '{"overall_score": 75, "data_completeness_score": 0.8, "narrative": "示例", "sections": {}}'
-            " -->"
-        )
-        chunks = [json.dumps({"type": "capability.end", "result": {"summary": summary}})]
+    phase1_chunks = [
+        json.dumps({"type": "capability.end", "result": {"success": True, "path": markdown_path}}),
+    ]
+    structured = (
+        "报告解析完成。\n"
+        "<!-- STRUCTURED_DATA "
+        '{"overall_score": 75, "data_completeness_score": 0.8, "narrative": "示例", "sections": {}, '
+        '"indicators": ['
+        '{"key": "liquidity", "label": "流动性", "score": 4, "narrative": "良好"}, '
+        '{"key": "debt", "label": "负债", "score": 3, "narrative": "适中"}, '
+        '{"key": "growth", "label": "增长", "score": 5, "narrative": "强劲"}'
+        "]}"
+        " -->"
+    )
+    phase2_chunks = [
+        json.dumps({"type": "capability.end", "result": {"summary": structured}}),
+    ]
 
-    async def _aiter_lines():
-        for chunk in chunks:
-            yield chunk
+    def _make_resp(chunks):
+        async def _aiter_lines():
+            for chunk in chunks:
+                yield chunk
 
-    # The innermost object: the response returned by `async with client.stream(...) as resp`
-    mock_resp = MagicMock()
-    mock_resp.aiter_lines = _aiter_lines
+        resp = MagicMock()
+        resp.aiter_lines = _aiter_lines
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        return cm
 
-    # The context manager returned by client.stream(...)
-    mock_stream_cm = MagicMock()
-    mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
+    streams = [_make_resp(phase1_chunks), _make_resp(phase2_chunks)]
+    call_state = {"i": 0}
 
-    # The client returned by `async with httpx.AsyncClient(...) as client`
+    def _stream(*a, **k):
+        cm = streams[min(call_state["i"], len(streams) - 1)]
+        call_state["i"] += 1
+        return cm
+
     mock_client = MagicMock()
-    mock_client.stream = MagicMock(return_value=mock_stream_cm)
+    mock_client.stream = MagicMock(side_effect=_stream)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-
-    # The class itself: httpx.AsyncClient(...)
     mock_cls = MagicMock(return_value=mock_client)
     return mock_cls
 
@@ -139,7 +159,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
+    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=_make_two_phase_streaming_mock()):
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -171,7 +191,7 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate/events requires owner role (embedded in JWT)."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
+    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=_make_two_phase_streaming_mock()):
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -190,7 +210,6 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     # Create an existing session and running task (simulates a task started earlier)
     session = AIChatSession(
         family_id=family_id,
-        jsonl_path=f"{family_id}/test-session.jsonl",
         status="active",
     )
     db.add(session)
@@ -207,7 +226,7 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     db.add(task)
     db.commit()
 
-    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
+    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=_make_two_phase_streaming_mock()):
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     # Should resume (200 + NDJSON stream) instead of 409
@@ -239,8 +258,7 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
 
     mock_cls = MagicMock(return_value=mock_client)
 
-    with patch("httpx.AsyncClient", new=mock_cls), \
-         patch("apps.backend.app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()):
+    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=mock_cls):
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     # Response should still be 200 with error event (helper catches errors)

@@ -126,7 +126,7 @@ class TestAlertsCircuitShortCircuit:
             def stream(self, *a, **k):
                 return NoopStream()
 
-        monkeypatch.setattr(_ai_events_helper.httpx, "AsyncClient", lambda **k: NoopClient())
+        monkeypatch.setattr(_ai_events_helper, "AgentClient", lambda *a, **k: NoopClient())
 
         resp = client.post(
             "/api/v1/ai/asset-alerts/refresh/events",

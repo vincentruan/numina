@@ -117,8 +117,8 @@ class TestAlertsE2EHappyPath:
 
         lines = _make_ndjson_with_structured_data("alerts")
         monkeypatch.setattr(
-            _ai_events_helper.httpx, "AsyncClient",
-            lambda **k: FakeAsyncClient(lines),
+            _ai_events_helper, "AgentClient",
+            lambda *a, **k: FakeAsyncClient(lines),
         )
 
         resp = client.post(
@@ -155,8 +155,8 @@ class TestDisposalE2EHappyPath:
 
         lines = _make_ndjson_with_structured_data("disposal")
         monkeypatch.setattr(
-            _ai_events_helper.httpx, "AsyncClient",
-            lambda **k: FakeAsyncClient(lines),
+            _ai_events_helper, "AgentClient",
+            lambda *a, **k: FakeAsyncClient(lines),
         )
 
         resp = client.post(
@@ -187,8 +187,8 @@ class TestSpendingLeakE2EHappyPath:
 
         lines = _make_ndjson_with_structured_data("spending_leak")
         monkeypatch.setattr(
-            _ai_events_helper.httpx, "AsyncClient",
-            lambda **k: FakeAsyncClient(lines),
+            _ai_events_helper, "AgentClient",
+            lambda *a, **k: FakeAsyncClient(lines),
         )
 
         resp = client.post(
@@ -220,8 +220,8 @@ class TestFallbackAndFailure:
 
         lines = _make_ndjson_no_structured_data()
         monkeypatch.setattr(
-            _ai_events_helper.httpx, "AsyncClient",
-            lambda **k: FakeAsyncClient(lines),
+            _ai_events_helper, "AgentClient",
+            lambda *a, **k: FakeAsyncClient(lines),
         )
 
         resp = client.post(
@@ -231,7 +231,7 @@ class TestFallbackAndFailure:
         assert resp.status_code == 200
         body = resp.text
         assert "capability.error" in body
-        assert "extraction_failed" in body
+        assert "api_key_error" in body
 
         # GET alerts should be empty (no data written)
         alerts = db.query(AIAssetAlert).filter_by(family_id=family_id).all()
@@ -243,7 +243,7 @@ class TestFallbackAndFailure:
         ).first()
         assert audit is not None
         assert audit.method == "failed"
-        assert audit.error_msg == "extraction_failed"
+        assert audit.error_msg == "api_key_error"
 
     def test_fallback_hit_with_mocked_llm(self, client, auth_headers, db, monkeypatch):
         """No STRUCTURED_DATA but LLM fallback succeeds → data written + audit method=llm_fallback_hit."""
@@ -256,8 +256,8 @@ class TestFallbackAndFailure:
 
         lines = _make_ndjson_no_structured_data()
         monkeypatch.setattr(
-            _ai_events_helper.httpx, "AsyncClient",
-            lambda **k: FakeAsyncClient(lines),
+            _ai_events_helper, "AgentClient",
+            lambda *a, **k: FakeAsyncClient(lines),
         )
 
         # Mock the LLM call to return valid structured data
