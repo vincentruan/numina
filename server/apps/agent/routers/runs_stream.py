@@ -92,7 +92,7 @@ async def disconnect_watcher(request: Request, run_id: str, run_mgr: RunManager)
 
 
 @router.post("/{thread_id}/runs/stream")
-async def stream_run_v2(
+async def stream_run(
     thread_id: str,
     body: RunCreateRequest,
     request: Request,

@@ -241,7 +241,7 @@ async def _run_asset_report_pipeline(...):
 
 ### 阶段 0: 死代码清理 + v2 命名
 - [ ] ~~删 `agent_dispatch.py` 的 `stream_agent_dispatch` + `EffectiveConfigBuilder` 死代码~~ **校正**：二者均**非死代码**——`stream_agent_dispatch`（`agent_dispatch.py:198`）被 `test_agent_run_service.py` 引用且 `worker.py:129` 注释引用其逻辑；`EffectiveConfigBuilder`（`packages/core/effective_config.py:30`）被 `agent_dispatch.py:409` + `main.py:85` 调用并有 `test_effective_config.py` 单测。**本阶段不删二者**，仅做下条重命名。
-- [ ] `runs_stream.py:stream_run_v2` → `stream_run`（函数重命名，路由路径不变）。
+- [x] `runs_stream.py:stream_run_v2` → `stream_run`（函数重命名，路由路径不变）。
 - **量化验收**:
   - 残留引用数 = 0：`git grep -n "stream_run_v2"` 在改后无命中。（`stream_agent_dispatch`/`EffectiveConfigBuilder` 本阶段不删，见校正。）
   - 路由路径不变量：`/api/threads/{id}/runs/stream` 的 HTTP 状态码在重命名前后均为 200（无 307/404 回归），用 1 条端到端请求断言。
