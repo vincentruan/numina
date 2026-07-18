@@ -25,6 +25,8 @@ system_prompt_suffix: |
   5. 严禁脱离实际数据做夸张结论
 
 # 规划模式（深度研究任务启用）
+# Note: family-finance-insight-planner skill was merged into the chat SOUL
+# (plan U3). Planning mode is now controlled per-call via plan_mode in the
+# worker, not via a dedicated skill entry.
 planning:
-  enabled_for_skills:
-    - family-finance-insight-planner
+  enabled_for_skills: []

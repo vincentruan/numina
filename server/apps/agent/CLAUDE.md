@@ -235,7 +235,7 @@ Loaded directly by the DeerFlow harness from `/app/skills/custom` (configured in
 
 ```markdown
 ---
-name: family-asset-checkup
+name: chat
 description: |
   触发条件描述...
 

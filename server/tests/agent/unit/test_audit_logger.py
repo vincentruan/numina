@@ -39,7 +39,7 @@ class TestAuditEntry:
             capability="chat",
             success=False,
             user_id="u1",
-            skill_triggered="family-asset-checkup",
+            skill_triggered="chat",
             fallback_used=True,
             deerflow_attempted=True,
             duration_ms=1234,
@@ -48,7 +48,7 @@ class TestAuditEntry:
         )
         assert entry.family_id == "f1"
         assert entry.user_id == "u1"
-        assert entry.skill_triggered == "family-asset-checkup"
+        assert entry.skill_triggered == "chat"
         assert entry.fallback_used is True
         assert entry.deerflow_attempted is True
         assert entry.duration_ms == 1234

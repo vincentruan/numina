@@ -23,7 +23,7 @@ def sample_agent_config():
     return {
         "agent_name": "asset-health-advisor",
         "soul_md": "You are a professional asset advisor.",
-        "skills": ["family-asset-checkup"],
+        "skills": ["chat"],
         "tool_groups": [],
         "model": None,
         "subagent_enabled": False,
