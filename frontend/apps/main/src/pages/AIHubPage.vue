@@ -11,7 +11,7 @@
       <div class="hub-header-main">
         <div class="hub-greeting">
           <span class="hub-greeting-label">{{ t('aiHub.title') }}</span>
-          <span class="hub-greeting-hi">{{ t('aiHub.greeting', { userName }) }}</span>
+          <span class="hub-greeting-hi"><ShimmerText :text="t('aiHub.greeting', { userName })" :duration="3" /></span>
         </div>
         <!-- Health score ring -->
         <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="scoreAriaLabel">

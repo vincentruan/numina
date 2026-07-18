@@ -257,6 +257,7 @@ function handleClick() {
 }
 
 .card-icon {
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 12px;
@@ -265,17 +266,52 @@ function handleClick() {
   justify-content: center;
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
 }
 
 [data-theme='dark'] .card-icon {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.card-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  animation: icon-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
 .icon-svg {
+  position: relative;
+  z-index: 1;
   width: 24px;
   height: 24px;
   fill: white;
   color: white;
+}
+
+@keyframes icon-shimmer {
+  0% {
+    transform: translateX(-150%);
+  }
+  60%,
+  100% {
+    transform: translateX(150%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-icon::before {
+    animation: none;
+    display: none;
+  }
 }
 
 .card-header-text {

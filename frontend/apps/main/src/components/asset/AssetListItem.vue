@@ -219,6 +219,7 @@ const remainingLabel = computed(() =>
 }
 
 .item-icon {
+  position: relative;
   width: 36px;
   height: 36px;
   border-radius: 8px;
@@ -226,12 +227,44 @@ const remainingLabel = computed(() =>
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.item-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  animation: icon-shimmer 2.8s ease-in-out infinite;
+  pointer-events: none;
 }
 .icon-svg {
+  position: relative;
+  z-index: 1;
   width: 20px;
   height: 20px;
   fill: white;
   color: white;
+}
+@keyframes icon-shimmer {
+  0% {
+    transform: translateX(-150%);
+  }
+  60%,
+  100% {
+    transform: translateX(150%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .item-icon::before {
+    animation: none;
+    display: none;
+  }
 }
 
 .item-info {

@@ -109,7 +109,7 @@
                 <path d="M40 22c-1.1 0-2 .9-2 2v14H24c-1.1 0-2 .9-2 2s.9 2 2 2h14v14c0 1.1.9 2 2 2s2-.9 2-2V42h14c1.1 0 2-.9 2-2s-.9-2-2-2H42V24c0-1.1-.9-2-2-2z" fill="var(--van-primary-color)"/>
               </svg>
             </div>
-            <p class="empty-title">{{ t('wish.emptyState.noWishesTitle') }}</p>
+            <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noWishesTitle')" :duration="3" /></p>
             <p class="empty-desc">{{ t('wish.emptyState.noWishesDesc') }}</p>
             <button class="empty-action-btn" @click="$router.push('/wishes/new')">
               <svg viewBox="0 0 16 16" fill="none" width="14" height="14" aria-hidden="true">
@@ -127,7 +127,7 @@
                 <path d="M40 20l4.9 9.9 10.9 1.6-7.9 7.7 1.9 10.9L40 45.4l-9.8 5.1 1.9-10.9-7.9-7.7 10.9-1.6L40 20z" fill="#07c160" fill-opacity="0.25" stroke="#07c160" stroke-width="1.5" stroke-linejoin="round"/>
               </svg>
             </div>
-            <p class="empty-title">{{ t('wish.emptyState.noRealizedTitle') }}</p>
+            <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noRealizedTitle')" :duration="3" /></p>
             <p class="empty-desc">{{ t('wish.emptyState.noRealizedDesc') }}</p>
           </template>
 
@@ -139,7 +139,7 @@
                 <path d="M28 28l24 24M52 28L28 52" stroke="#999" stroke-width="3" stroke-linecap="round"/>
               </svg>
             </div>
-            <p class="empty-title">{{ t('wish.emptyState.noCancelledTitle') }}</p>
+            <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noCancelledTitle')" :duration="3" /></p>
             <p class="empty-desc">{{ t('wish.emptyState.noCancelledDesc') }}</p>
           </template>
         </div>
@@ -160,6 +160,7 @@ import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useWishStore } from '@/stores/wish'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
+import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 
 const { t } = useI18n()
 const dashboardStore = useDashboardStore()
@@ -381,6 +382,32 @@ onMounted(loadWishes)
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: linear-gradient(
+    90deg,
+    var(--text-primary) 0%,
+    var(--van-primary-color) calc(50% - 3%),
+    var(--van-primary-color) calc(50% + 3%),
+    var(--text-primary) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: wish-name-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes wish-name-shimmer {
+  0% { background-position: -100% 0; }
+  50% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wish-name {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: initial;
+  }
 }
 
 .wish-right {
@@ -471,6 +498,19 @@ onMounted(loadWishes)
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* Preserve empty-title weight (ShimmerText defaults to 500) */
+.empty-title :deep(.shimmer-text) {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-title :deep(.shimmer-text) {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: initial;
+  }
 }
 
 .empty-desc {
