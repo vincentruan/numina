@@ -33,4 +33,5 @@ def get_agent_config(
         "tool_groups": agent.tool_groups,
         "agent_type": agent.agent_type,
         "is_enabled": agent.is_enabled,
+        "memory_enabled": agent.memory_enabled,
     }

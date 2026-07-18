@@ -61,6 +61,7 @@ _NUMINA_AGENT = {
 - 不在响应中泄露其他家庭成员的隐私数据""",
     "skills": ["*"],
     "agent_type": "system",
+    "memory_enabled": True,
     "display_order": 15,
 }
 
@@ -139,6 +140,11 @@ _ASSET_REPORT_AGENT = {
 - 数据不完整时在摘要中注明「数据可能不完整，分析仅供参考」""",
     "skills": ["report"],
     "agent_type": "system",
+    # asset-report is a fixed 3-step pipeline (write_file → read_file → JSON);
+    # it must be stateless — disable DeerMem injection + write so each run
+    # fetches fresh MCP data instead of reusing accumulated report history
+    # (plan U4 Open Question: DeerMem pollution).
+    "memory_enabled": False,
     "display_order": 20,
 }
 
@@ -161,13 +167,17 @@ def _upsert_builtin_agent(db: Session, spec: dict) -> None:
             soul_md=spec["soul_md"],
             skills=spec["skills"],
             agent_type=spec["agent_type"],
+            memory_enabled=spec.get("memory_enabled", True),
             display_order=spec["display_order"],
         ))
         logger.info("已初始化系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
-    elif existing.soul_md != spec["soul_md"]:
-        existing.soul_md = spec["soul_md"]
-        existing.description = spec["description"]
-        logger.info("已更新系统智能体 soul: %s (%s)", spec["display_name"], spec["agent_name"])
+    else:
+        # Keep soul_md / description / memory_enabled in sync with code on updates.
+        if existing.soul_md != spec["soul_md"] or existing.memory_enabled != spec.get("memory_enabled", True):
+            existing.soul_md = spec["soul_md"]
+            existing.description = spec["description"]
+            existing.memory_enabled = spec.get("memory_enabled", True)
+            logger.info("已更新系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
 
 
 def bootstrap_agents(db: Session) -> None:
