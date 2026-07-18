@@ -111,18 +111,6 @@ vi.mock('@/api/agent', () => ({
   toggleAgent: vi.fn(() => Promise.resolve({})),
 }))
 
-// Mock the loading composable to prevent import.meta.hot initialization issues
-vi.mock('../../packages/auth/src/composables/loading', () => ({
-  useLoadingOverlay: () => ({
-    isLoading: { value: false },
-    isDismissing: { value: false },
-    increment: vi.fn(),
-    decrement: vi.fn(),
-    show: vi.fn(),
-    hide: vi.fn(),
-  }),
-}))
-
 // Mock the page loading composable
 vi.mock('@/composables/usePageLoading', () => ({
   usePageLoading: () => ({
