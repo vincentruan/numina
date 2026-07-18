@@ -262,7 +262,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { useAIReportStream } from '@/composables/useAIReportStream'
+import { useReportStream } from '@/composables/useReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
@@ -284,7 +284,7 @@ const router = useRouter()
 const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
-const stream = useAIReportStream()
+const stream = useReportStream()
 const isOwner = authStore.user?.role === 'owner'
 
 const currentReport = ref<AIReport | null>(null)
@@ -486,21 +486,12 @@ const alertCount = computed(() => {
   return sections.filter(s => s && typeof s.score === 'number' && s.score < 60).length
 })
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h
-
 async function loadReport() {
   try {
     const res = await getAIReport()
     if (res.data.report) {
       currentReport.value = res.data.report as unknown as AIReport
       reportGeneratedAt.value = res.data.generated_at ?? null
-      // Trigger background refresh if cache is stale (>24h)
-      if (reportGeneratedAt.value) {
-        const age = Date.now() - new Date(reportGeneratedAt.value).getTime()
-        if (age > CACHE_TTL_MS) {
-          refreshReport(true)
-        }
-      }
     }
   } catch {
     // no report yet
@@ -529,7 +520,9 @@ async function refreshReport(silent?: boolean) {
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
-    await stream.connect()
+    // force=true bypasses the 8h cache (plan step 6) — the refresh button
+    // means the user wants a fresh report, not the cached one.
+    await stream.connect(true)
     if (stream.report.value) {
       currentReport.value = stream.report.value as unknown as AIReport
       reportGeneratedAt.value = stream.generatedAt.value
