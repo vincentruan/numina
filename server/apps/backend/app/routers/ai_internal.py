@@ -793,6 +793,13 @@ def internal_upsert_session(
             row.last_model = body.last_model
         if body.agent_id and not row.agent_id:
             row.agent_id = int(body.agent_id)
+        # parent_thread_id is insert-first: a re-upsert may populate a missing
+        # lineage pointer (e.g. a branch row created before the column existed),
+        # but an existing lineage is never overwritten — branching is immutable
+        # once recorded. Guards against a stray re-upsert silently repointing a
+        # branch's parent.
+        if body.parent_thread_id and not row.parent_thread_id:
+            row.parent_thread_id = body.parent_thread_id
     db.commit()
     return {"ok": True}
 

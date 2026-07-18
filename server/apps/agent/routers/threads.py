@@ -12,7 +12,7 @@ import logging
 import shutil
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from deerflow.utils.time import coerce_iso, now_iso
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -123,6 +123,21 @@ class ThreadHistoryRequest(BaseModel):
 # Metadata key marking a thread as a branch (DeerFlow uses "deerflow_branch")
 _BRANCH_METADATA_KEY = "numina_branch"
 
+# Sandbox artifact clone outcome (single source of truth for the values that
+# cross the backend->frontend boundary as ``ThreadBranchResponse.workspace_clone_mode``
+# and the frontend ``branchCloneWarnKey`` switch). Mirrors DeerFlow's modes:
+# - ``current_thread_best_effort``: cloned from the latest turn
+# - ``skipped_historical_turn``: branch from an older turn — workspace files
+#   would leak a later timeline, so not cloned
+# - ``not_found``: source sandbox dir absent
+# - ``failed``: clone raised, branch still created (best-effort)
+WorkspaceCloneMode = Literal[
+    "current_thread_best_effort",
+    "skipped_historical_turn",
+    "not_found",
+    "failed",
+]
+
 class ThreadBranchRequest(BaseModel):
     """Request body for branching a thread from a completed assistant turn."""
     message_id: str = Field(description="AI message ID to branch from")
@@ -138,12 +153,12 @@ class ThreadBranchResponse(BaseModel):
     parent_thread_id: str
     parent_checkpoint_id: str
     branched_from_message_id: str
-    # Sandbox artifact clone outcome. Mirrors DeerFlow's
-    # workspace_clone_mode: "current_thread_best_effort" (cloned from latest
-    # turn), "skipped_historical_turn" (branch from an older turn — workspace
-    # files would leak a later timeline, so not cloned), "not_found" (source
-    # sandbox dir absent), "failed" (clone raised, branch still created).
-    workspace_clone_mode: str = Field(default="")
+    # Sandbox artifact clone outcome. Typed as ``WorkspaceCloneMode`` so a typo
+    # on either side of the backend->frontend boundary is a contract break, not
+    # a silent fall-through to the no-warning branch. Required — ``branch_thread``
+    # always sets it explicitly before returning. See ``WorkspaceCloneMode``
+    # above for the value semantics.
+    workspace_clone_mode: WorkspaceCloneMode
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -170,22 +185,44 @@ def get_checkpointer():
 # ---------------------------------------------------------------------------
 
 
-async def _find_branch_checkpoint(checkpointer, thread_id: str, target_message_ids: set[str]):
+async def _find_branch_checkpoint(
+    checkpointer, thread_id: str, target_message_ids: set[str]
+) -> tuple[Any, bool] | None:
     """Find the checkpoint containing the target message IDs.
 
     DeerFlow 参考：threads.py:135-145
     Scans checkpoint history (limit 100) and returns the first tuple whose
     ``channel_values.messages`` contains a message whose id is in
-    ``target_message_ids``.  Returns ``None`` when no match is found.
+    ``target_message_ids``. Returns ``None`` when no match is found.
+
+    The scan is newest-first (``alist`` yields newest-first), so the first
+    checkpoint holding the target messages IS the thread's latest turn that
+    contains them. The returned bool is whether those target messages form
+    the tail visible assistant turn in that checkpoint (i.e. the branch is
+    from the genuinely latest turn, safe to clone workspace files). Resolving
+    both the source checkpoint and the latest-turn decision in ONE scan
+    avoids a second ``alist`` call and its TOCTOU window (a concurrent run
+    checkpointing a newer turn between scans would otherwise downgrade a
+    latest-turn branch to ``skipped_historical_turn``).
     """
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-    async for checkpoint_tuple in checkpointer.alist(config, limit=100):
-        checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-        messages = checkpoint.get("channel_values", {}).get("messages", [])
-        for msg in messages:
-            msg_id = getattr(msg, "id", None) or (msg.get("id") if isinstance(msg, dict) else None)
-            if msg_id and msg_id in target_message_ids:
-                return checkpoint_tuple
+    try:
+        async for checkpoint_tuple in checkpointer.alist(
+            config, limit=_BRANCH_HISTORY_SCAN_LIMIT
+        ):
+            messages = _checkpoint_messages(checkpoint_tuple)
+            for msg in messages:
+                msg_id = getattr(msg, "id", None) or (msg.get("id") if isinstance(msg, dict) else None)
+                if msg_id and msg_id in target_message_ids:
+                    is_latest_turn = _matches_branch_target(messages, target_message_ids)
+                    return checkpoint_tuple, is_latest_turn
+    except Exception:
+        logger.warning(
+            "Failed to scan checkpoints for thread %s; branch cannot resolve source turn",
+            thread_id,
+            exc_info=True,
+        )
+        return None
     return None
 
 
@@ -283,51 +320,40 @@ def _matches_branch_target(messages: list[Any], target_message_ids: set[str]) ->
     )
 
 
-async def _branch_targets_latest_turn(
-    checkpointer, thread_id: str, target_message_ids: set[str]
-) -> bool:
-    """Return True when the target turn is the final visible turn in the thread.
-
-    DeerFlow threads.py:163-185. ``alist`` yields newest-first; take the newest
-    checkpoint that actually holds messages (thread creation writes an empty
-    checkpoint that must be skipped) and reuse ``_matches_branch_target`` to
-    check the target turn is its tail. Used to decide whether cloning the
-    (uncheckpointed) workspace onto a branch is safe: only a branch from the
-    latest turn shares the current workspace timeline. On any lookup failure we
-    fail closed (treat as historical) so a branch from an older turn never
-    inherits a later timeline's workspace files.
-    """
-    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-    try:
-        async for checkpoint_tuple in checkpointer.alist(
-            config, limit=_BRANCH_HISTORY_SCAN_LIMIT
-        ):
-            messages = _checkpoint_messages(checkpoint_tuple)
-            if not messages:
-                continue
-            return _matches_branch_target(messages, target_message_ids)
-    except Exception:
-        logger.warning(
-            "Failed to resolve latest turn for thread %s; treating branch as historical",
-            thread_id,
-            exc_info=True,
-        )
-    return False
-
-
 def _ignore_branch_user_data(directory: str, names: list[str]) -> set[str]:
     """shutil.copytree ignore predicate (DeerFlow threads.py:176-185).
 
-    Skips partial upload temp files (``.upload-*.part``) and symbolic links so
-    the branch does not inherit broken/partial artifacts.
+    Skips partial-upload temp files and symbolic links so the branch does not
+    inherit broken/partial artifacts. The temp-file patterns cover the
+    interrupted-upload markers the upload path produces (``.upload-*.part``)
+    plus common editor/transfer leftovers (``.tmp``, ``.partial``, ``.swp``,
+    ``.swo``) that would otherwise clone as fake downloadable artifacts.
+    Symlinks are skipped at every directory level copytree descends into (the
+    predicate is invoked per-directory), so nested symlinks are excluded too
+    rather than dereferenced and copied.
     """
     ignored: set[str] = set()
     base = Path(directory)
     for name in names:
         path = base / name
-        if (name.startswith(".upload-") and name.endswith(".part")) or path.is_symlink():
+        if path.is_symlink():
+            ignored.add(name)
+            continue
+        if _is_branch_temp_artifact(name):
             ignored.add(name)
     return ignored
+
+
+# Temp-file suffixes/patterns excluded from a branch clone. Extend here when a
+# new upload/transfer path introduces another partial-write marker.
+_BRANCH_TEMP_SUFFIXES = (".tmp", ".partial", ".part", ".swp", ".swo")
+
+
+def _is_branch_temp_artifact(name: str) -> bool:
+    """Return True for partial-upload temp files and editor/transfer leftovers."""
+    if name.startswith(".upload-") and name.endswith(".part"):
+        return True
+    return name.endswith(_BRANCH_TEMP_SUFFIXES)
 
 
 def _copy_branch_sandbox_sync(
@@ -345,16 +371,35 @@ def _copy_branch_sandbox_sync(
     aligning with DeerFlow's whole-user-data clone). Returns one of:
     ``"not_found"`` (source base absent), ``"current_thread_best_effort"`` (copied),
     ``"failed"`` (raised).
+
+    The target_thread_id is a freshly-generated UUID (a brand-new branch), so
+    any pre-existing occupant at the target path is a stale partial clone left
+    by an interrupted prior attempt or a lazy-mkdir empty. It is cleared before
+    copytree so the clone is the single source of truth — without this,
+    ``dirs_exist_ok=True`` would MERGE the new source over stale partial files
+    without removing them, yielding a mixed stale+new artifact set reported as
+    ``"current_thread_best_effort"`` (success).
     """
     base = Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes"
     source = base / source_thread_id
     target = base / target_thread_id
     if not source.exists():
         return "not_found"
+    if target.exists():
+        # Fresh branch UUID: a pre-existing target is a stale/partial clone.
+        # Clear it so copytree does not merge new over old.
+        shutil.rmtree(target, ignore_errors=True)
     shutil.copytree(
         source, target, ignore=_ignore_branch_user_data, dirs_exist_ok=True
     )
     return "current_thread_best_effort"
+
+
+# Upper bound on a single sandbox clone. AGENT_DATA_DIR may sit on a shared/NFS
+# volume; without a cap a large sandbox or stalled mount hangs the branch
+# request (and the frontend branch button) indefinitely. On timeout the clone
+# degrades to "failed" — the branch is already created, so this is best-effort.
+_BRANCH_CLONE_TIMEOUT_SECONDS = 60
 
 
 async def _copy_branch_user_data(
@@ -363,14 +408,27 @@ async def _copy_branch_user_data(
     """Async wrapper around the sync sandbox clone (DeerFlow threads.py:202-210).
 
     File IO is offloaded via ``asyncio.to_thread`` to avoid blocking the event
-    loop on large sandbox dirs. Failures are best-effort: the branch is already
-    created (checkpoint + session row written), so a clone failure only yields
+    loop on large sandbox dirs, and bounded by ``asyncio.wait_for`` so a large
+    sandbox or a stalled mount cannot hang the branch request indefinitely.
+    Failures are best-effort: the branch is already created (checkpoint +
+    session row written), so a clone failure or timeout only yields
     ``"failed"`` and a warning rather than aborting the branch.
     """
     try:
-        return await asyncio.to_thread(
-            _copy_branch_sandbox_sync, family_id, source_thread_id, target_thread_id
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                _copy_branch_sandbox_sync, family_id, source_thread_id, target_thread_id
+            ),
+            timeout=_BRANCH_CLONE_TIMEOUT_SECONDS,
         )
+    except TimeoutError:
+        logger.warning(
+            "Timed out copying sandbox for branch %s -> %s after %ss",
+            source_thread_id,
+            target_thread_id,
+            _BRANCH_CLONE_TIMEOUT_SECONDS,
+        )
+        return "failed"
     except Exception:
         logger.warning(
             "Failed to copy sandbox for branch %s -> %s",
@@ -483,8 +541,8 @@ async def search_threads(
                 # U3: branch lineage for the history page. is_branch is derived
                 # from source=="branch" (snake_case metadata key, aligned with
                 # is_pinned); parent_thread_id comes from the session row
-                # (U2 column). checkpoint-internal keys (numina_branch /
-                # branch_parent_thread_id) are not mixed in here.
+                # (U2 column). The checkpoint-internal numina_branch marker is
+                # not mixed in here.
                 "is_branch": r.get("source") == "branch",
                 "parent_thread_id": r.get("parent_thread_id"),
             },
@@ -534,6 +592,17 @@ async def get_thread(
 
     if record is None and checkpoint_tuple is None:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
+    # Defense-in-depth family ownership check on the record path. The backend
+    # BackendClient filters by X-Family-Id, but the invariant should be enforced
+    # locally too: U4's parent-link navigation pushes attacker-influenced
+    # parent_thread_id values into this endpoint, and any future record source
+    # that bypasses the backend filter must not leak cross-family state. Mirrors
+    # the checkpoint-fallback check below and branch_thread's source check.
+    if record is not None:
+        record_family_id = record.get("family_id")
+        if not record_family_id or str(record_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
     if record is None and checkpoint_tuple is not None:
         ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
@@ -856,15 +925,19 @@ async def branch_thread(
     if not source_family_id or str(source_family_id) != str(verified.family_id):
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
-    # 2. Find checkpoint containing the target message
+    # 2. Find checkpoint containing the target message (single alist scan).
+    #    The scan also resolves whether the target is the latest turn, so the
+    #    clone decision and the source checkpoint come from one pass with no
+    #    TOCTOU window between two scans.
     target_message_ids = {body.message_id, *body.message_ids}
-    checkpoint_tuple = await _find_branch_checkpoint(checkpointer, thread_id, target_message_ids)
+    branch_checkpoint = await _find_branch_checkpoint(checkpointer, thread_id, target_message_ids)
 
-    if checkpoint_tuple is None:
+    if branch_checkpoint is None:
         raise HTTPException(
             status_code=409,
             detail="This turn can no longer be branched from.",
         )
+    checkpoint_tuple, branch_from_latest_turn = branch_checkpoint
 
     parent_checkpoint_id = _checkpoint_id(checkpoint_tuple)
     if not parent_checkpoint_id:
@@ -878,11 +951,15 @@ async def branch_thread(
     now = now_iso()
 
     branch_metadata = {
+        # numina_branch is the checkpoint-level branch marker (DeerFlow-aligned).
+        # Frontend lineage (is_branch / parent_thread_id) is served from the
+        # session row (source=="branch" + the parent_thread_id column), NOT
+        # from these keys — see search_threads/get_thread. The per-branch
+        # parent_thread_id/checkpoint_id/message_id/created_at are recoverable
+        # from the session row + parent_checkpoint_id response field, so they
+        # are not duplicated into checkpoint metadata (previously written here
+        # but never read in production).
         _BRANCH_METADATA_KEY: True,
-        "branch_parent_thread_id": thread_id,
-        "branch_parent_checkpoint_id": parent_checkpoint_id,
-        "branch_parent_message_id": body.message_id,
-        "branch_created_at": now,
     }
 
     checkpoint = copy.deepcopy(getattr(checkpoint_tuple, "checkpoint", {}) or {})
@@ -898,7 +975,11 @@ async def branch_thread(
 
     # Derive title (DeerFlow threads.py:619-622)
     source_title = source_record.get("title") or ""
-    source_is_branch = (source_record.get("metadata") or {}).get(_BRANCH_METADATA_KEY) is True
+    # The session row carries lineage via the ``source`` field (== "branch"),
+    # not via checkpoint metadata — the session dict from ``repo.get_session``
+    # has no top-level ``metadata`` key. Using ``source`` (already the signal
+    # at lines 488/565/927) avoids double-prefixing a branch-of-branch title.
+    source_is_branch = source_record.get("source") == "branch"
     display_title = body.title or _default_branch_display_name(
         source_title, source_is_branch=source_is_branch
     )
@@ -943,10 +1024,8 @@ async def branch_thread(
     # thread state. Cloning them onto a branch from an older turn would leak
     # files created after that turn (message history rolls back, workspace
     # would not). Restrict the best-effort clone to branches taken from the
-    # latest turn so history and workspace stay consistent.
-    branch_from_latest_turn = await _branch_targets_latest_turn(
-        checkpointer, thread_id, target_message_ids
-    )
+    # latest turn so history and workspace stay consistent. The latest-turn
+    # decision was resolved in the same scan as the source checkpoint above.
     if branch_from_latest_turn:
         workspace_clone_mode = await _copy_branch_user_data(
             x_family_id, thread_id, new_thread_id

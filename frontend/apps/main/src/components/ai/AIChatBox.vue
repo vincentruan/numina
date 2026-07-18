@@ -9,6 +9,7 @@ import { useArtifacts } from '@/composables/ai-chat/useArtifacts'
 import { useAgentStore } from '@/stores/agent'
 import { useFamilyStore } from '@/stores/family'
 import { getThread, createThread, branchThreadFromTurn } from '@/api/ai-chat'
+import type { WorkspaceCloneMode } from '@/api/ai-chat'
 import { accumulateUsage } from '@/utils/ai-chat/token-usage-steps'
 import ChatHeader from '@/components/ai/ChatHeader.vue'
 import WelcomePage from '@/components/ai/WelcomePage.vue'
@@ -430,7 +431,10 @@ async function handleBranch(messageId: string, messageIds: string[]) {
     // may be missing in the branch. The branch itself is still created.
     const cloneWarnKey = branchCloneWarnKey(response.workspace_clone_mode)
     if (cloneWarnKey) {
-      showToast({ type: 'warning', message: t(cloneWarnKey) })
+      // Vant 4 ToastType is text|loading|success|fail — 'warning' is invalid
+      // and renders no icon. Use icon: 'warning-o' per frontend/CLAUDE.md
+      // §Key Invariants (cf. ChangePasswordPage.vue).
+      showToast({ message: t(cloneWarnKey), icon: 'warning-o' })
     }
     // Navigate to the new branch thread
     router.push({ name: 'AIChat', query: { thread_id: response.thread_id } })
@@ -442,8 +446,12 @@ async function handleBranch(messageId: string, messageIds: string[]) {
   }
 }
 
-/** U5: map workspace_clone_mode to an i18n warning key, or undefined for success. */
-function branchCloneWarnKey(mode?: string): string | undefined {
+/**
+ * U5: map workspace_clone_mode to an i18n warning key, or undefined for success.
+ * The mode is typed as WorkspaceCloneMode so an unhandled new value is a
+ * compile-time break, not a silent fall-through to the success branch.
+ */
+function branchCloneWarnKey(mode?: WorkspaceCloneMode): string | undefined {
   switch (mode) {
     case 'skipped_historical_turn': return 'aiChat.branchCloneSkippedHistorical'
     case 'not_found': return 'aiChat.branchCloneNotFound'

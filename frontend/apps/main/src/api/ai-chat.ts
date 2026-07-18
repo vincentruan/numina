@@ -211,9 +211,26 @@ export interface ThreadBranchResponse {
   parent_thread_id: string
   parent_checkpoint_id: string
   branched_from_message_id: string
-  /** Sandbox artifact clone outcome (U1/U5). Empty when not reported. */
-  workspace_clone_mode?: string
+  /**
+   * Sandbox artifact clone outcome (U1/U5). Mirrors the backend
+   * `WorkspaceCloneMode` Literal (server/apps/agent/routers/threads.py) so a
+   * typo on either side is a compile-time break, not a silent fall-through to
+   * the no-warning branch. Keep in sync with `branchCloneWarnKey` in
+   * AIChatBox.vue.
+   */
+  workspace_clone_mode?: WorkspaceCloneMode
 }
+
+/**
+ * Sandbox artifact clone outcome — single source of truth for the values that
+ * cross the backend->frontend boundary. Mirror of the backend
+ * `WorkspaceCloneMode` Literal.
+ */
+export type WorkspaceCloneMode =
+  | 'current_thread_best_effort'
+  | 'skipped_historical_turn'
+  | 'not_found'
+  | 'failed'
 
 export interface BranchThreadFromTurnInput {
   messageId: string
