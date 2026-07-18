@@ -15,6 +15,11 @@
     >
       <!-- Balance hero — progress ring card -->
       <div class="hero-card">
+        <HackerGreeting
+          :name="childAuthStore.childUser?.display_name ?? ''"
+          :balance="balance"
+          class="hero-greeting"
+        />
         <p class="hero-label">{{ t('home.myStars') }}</p>
         <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
         <ProgressRing
@@ -213,6 +218,7 @@ import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import ChallengeCard from '@/components/ChallengeCard.vue'
+import HackerGreeting from '@/components/HackerGreeting.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
 import { useFamilyStore } from '@/stores/family'
@@ -226,6 +232,7 @@ import { useReducedMotion } from '@/composables/useReducedMotion'
 import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
 import { useChildAuthStore } from '@numina/auth'
+import { getMainBaseUrl } from '@/utils/mainApp'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -386,7 +393,9 @@ async function handleLogout() {
     await childAuthStore.childLogout()
     showToast(t('toast.logoutSuccess'))
     // Redirect to main app login page (child app has no auth routes)
-    const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+    // Use getMainBaseUrl() so dev mode (port 5174) redirects to main app (5173);
+    // VITE_MAIN_APP_URL alone is empty in dev, which would hit /login on the child server → 404.
+    const baseUrl = getMainBaseUrl()
     window.location.href = `${baseUrl}/login`
   } catch {
     // User cancelled or logout failed
@@ -465,6 +474,9 @@ onMounted(load)
   font-weight: 600;
   margin: 0 0 8px;
   opacity: 0.75;
+}
+.hero-greeting {
+  margin-bottom: 4px;
 }
 .hero-balance {
   font-size: 32px;

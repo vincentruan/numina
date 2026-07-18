@@ -127,6 +127,15 @@ export default {
   },
   home: {
     myStars: 'My Star Coins ⭐',
+    greetingPhrases: [
+      'Hello, {name}! {balance} ⭐ loaded',
+      'System ready // {name}’s vault: {balance} ⭐',
+      'Welcome back, {name} · balance {balance} ⭐',
+      '> Auth OK: {name} · stars {balance} ⭐',
+      '{name}’s wealth stream synced · {balance} ⭐',
+    ],
+    greetingFallback: 'Hello, {name}! {balance} ⭐ loaded',
+    greetingFallbackName: 'Explorer',
     todayTasks: '📋 Today\'s Tasks',
     noTasks: 'No tasks today, enjoy your rest!',
     myWishes: 'My Wishes',

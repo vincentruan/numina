@@ -128,6 +128,15 @@ export default {
   },
   home: {
     myStars: '我的星星币 ⭐',
+    greetingPhrases: [
+      '你好，{name}！已加载 {balance} 颗星 ⭐',
+      '系统就绪 // {name} 的星库：{balance} ⭐',
+      '欢迎回来，{name} · 余额 {balance} ⭐',
+      '> 认证通过：{name} · 星币 {balance} ⭐',
+      '{name} 的财富流已同步 · {balance} ⭐',
+    ],
+    greetingFallback: '你好，{name}！已加载 {balance} 颗星 ⭐',
+    greetingFallbackName: '小探险家',
     todayTasks: '📋 今日任务',
     noTasks: '今天没有任务，好好休息吧！',
     myWishes: '我的心愿',
