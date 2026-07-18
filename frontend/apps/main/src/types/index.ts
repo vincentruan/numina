@@ -349,67 +349,6 @@ export interface RatesResponse {
 
 // ── AI types ──────────────────────────────────────────────────────────────────
 
-export interface AssetAlert {
-  id: string
-  asset_id: string
-  asset_name: string
-  alert_type: string
-  severity: 'low' | 'medium' | 'high'
-  suggestion: string | null
-  remaining_life_days: number | null
-  daily_cost: number | null
-  created_at: string
-}
-
-export interface DisposalSuggestion {
-  id: string
-  asset_id: string
-  asset_name: string
-  category_name: string
-  inefficiency_score: number | null
-  suggested_channel: string | null
-  estimated_resale_range: string | null
-  suggestion: string | null
-  daily_cost: number | null
-  created_at: string
-}
-
-export interface LiabilityStrategy {
-  strategy: string
-  strategy_name: string
-  priority_debt: string
-  estimated_interest_saved: number
-  order: Array<{ id: string; category: string; rate?: number }>
-}
-
-export interface LiabilityAdviceResponse {
-  has_result: boolean
-  has_liabilities: boolean
-  total_remaining: number | null
-  total_monthly_payment: number | null
-  liability_count: number | null
-  narrative: string | null
-  recommended_strategy: string | null
-  strategies: LiabilityStrategy[]
-  generated_at: string
-}
-
-export interface AllocationDriftItem {
-  category: string
-  target_pct: number
-  current_pct: number
-  drift: number
-  exceeds_threshold: boolean
-}
-
-export interface AllocationDriftResponse {
-  has_result: boolean
-  has_significant_drift: boolean
-  narrative: string | null
-  drifts: AllocationDriftItem[] | null
-  generated_at: string
-}
-
 export interface AIReportSection {
   score?: number
   label?: string

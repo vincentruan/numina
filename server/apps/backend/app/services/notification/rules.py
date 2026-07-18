@@ -96,30 +96,3 @@ def check_maturity(
             "amount": amt_str,
         },
     }
-
-
-def check_allocation_drift(
-    family_id: int,
-    category: str,
-    current_pct: float,
-    target_pct: float,
-    drift_threshold: float,
-) -> dict | None:
-    """资产配置失衡规则。偏差超过 drift_threshold 百分点则触发。"""
-    drift = abs(current_pct - target_pct)
-    if drift <= drift_threshold:
-        return None
-    return {
-        "family_id": family_id,
-        "reminder_type": "allocation_drift",
-        "title": f"资产配置失衡：{category}",
-        "body": f"「{category}」当前占比 {current_pct:.1f}%，目标 {target_pct:.1f}%，偏差 {drift:.1f}%。",
-        "severity": "warning",
-        "asset_id": None,
-        "template_vars": {
-            "category": category,
-            "current_pct": f"{current_pct:.1f}",
-            "target_pct": f"{target_pct:.1f}",
-            "drift_pct": f"{drift:.1f}",
-        },
-    }

@@ -277,21 +277,6 @@ const router = createRouter({
           component: () => import('@/pages/AIReportPage.vue')
         },
         {
-          path: 'ai/alerts',
-          name: 'AIAlerts',
-          component: () => import('@/pages/AIAlertsPage.vue')
-        },
-        {
-          path: 'ai/disposal',
-          name: 'AIDisposal',
-          component: () => import('@/pages/AIDisposalPage.vue')
-        },
-        {
-          path: 'ai/liability',
-          name: 'AILiability',
-          component: () => import('@/pages/AILiabilityAdvisorPage.vue')
-        },
-        {
           path: 'ai/chat/history',
           name: 'ChatHistory',
           component: () => import('@/pages/ChatHistoryPage.vue')
@@ -306,16 +291,6 @@ const router = createRouter({
           path: 'ai/time-machine',
           name: 'AITimeMachine',
           component: () => import('@/pages/AITimeMachinePage.vue')
-        },
-        {
-          path: 'ai/allocation',
-          name: 'AIAllocation',
-          component: () => import('@/pages/AIAllocationPage.vue')
-        },
-        {
-          path: 'ai/spending-leaks',
-          name: 'AISpendingLeaks',
-          component: () => import('@/pages/SpendingLeaksPage.vue')
         },
         {
           path: 'ai',

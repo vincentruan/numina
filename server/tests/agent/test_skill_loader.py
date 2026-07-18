@@ -17,12 +17,6 @@ def test_load_report_skill():
     assert config.prompt == ""  # prompts live in skills/custom/*/SKILL.md, loaded by DeerFlow harness
 
 
-def test_load_alerts_skill():
-    loader = SkillLoader()
-    config = loader.load("alerts")
-    assert config.thinking is True  # defaults to True when not specified in frontmatter
-
-
 def test_load_missing_skill_returns_minimal():
     loader = SkillLoader()
     config = loader.load("nonexistent_capability")
@@ -47,9 +41,11 @@ def test_invalidate_clears_cache():
 
 
 def test_all_capabilities_loadable():
+    """U7: 5 trigger skills deleted; remaining builtin skills + routing caps load."""
     loader = SkillLoader()
-    capabilities = ["report", "alerts", "disposal", "liability", "allocation",
-                    "spending_leak", "time_machine", "chat"]
+    # report stays until U5; chat is the SOUL; time_machine has no skill dir
+    # (returns minimal config) but is still a routing capability.
+    capabilities = ["report", "chat", "time_machine"]
     for cap in capabilities:
         config = loader.load(cap)
         assert config.capability == cap
@@ -72,8 +68,8 @@ async def test_load_for_family_with_empty_override_uses_base_prompt(monkeypatch)
 
     monkeypatch.setattr(loader, "_fetch_family_entry", fake_fetch)
 
-    config = await loader.load_for_family("alerts", "123", "http://x", "tok")
-    # base.prompt is "" because alerts.md has no body (only frontmatter)
+    config = await loader.load_for_family("report", "123", "http://x", "tok")
+    # base.prompt is "" (prompts live in DeerFlow custom skills, not builtin SKILL.md)
     assert config.prompt == ""
     assert config.is_enabled is True
 
@@ -88,7 +84,7 @@ async def test_load_for_family_with_custom_prompt_overrides(monkeypatch):
 
     monkeypatch.setattr(loader, "_fetch_family_entry", fake_fetch)
 
-    config = await loader.load_for_family("alerts", "123", "http://x", "tok")
+    config = await loader.load_for_family("report", "123", "http://x", "tok")
     assert config.prompt == "custom family prompt"
 
 
@@ -102,7 +98,7 @@ async def test_load_for_family_disabled_returns_empty_prompt(monkeypatch):
 
     monkeypatch.setattr(loader, "_fetch_family_entry", fake_fetch)
 
-    config = await loader.load_for_family("alerts", "123", "http://x", "tok")
+    config = await loader.load_for_family("report", "123", "http://x", "tok")
     assert config.prompt == ""
     assert config.is_enabled is False
 
@@ -117,6 +113,6 @@ async def test_load_for_family_fetch_failure_falls_back_to_base(monkeypatch):
 
     monkeypatch.setattr(loader, "_fetch_family_entry", exploding_fetch)
 
-    config = await loader.load_for_family("alerts", "123", "http://x", "tok")
+    config = await loader.load_for_family("report", "123", "http://x", "tok")
     assert config.prompt == ""
     assert config.is_enabled is True

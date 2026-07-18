@@ -218,29 +218,17 @@ app.add_middleware(
 # Router imports after app definition — noqa: E402
 from apps.agent.app.routers import cache as cache_router  # noqa: E402
 from apps.agent.app.routers import gateway as gateway_router  # noqa: E402
-from apps.agent.routers import alerts as alerts_router  # noqa: E402
-from apps.agent.routers import allocation as allocation_router  # noqa: E402
 from apps.agent.routers import capabilities as capabilities_router  # noqa: E402
-from apps.agent.routers import disposal as disposal_router  # noqa: E402
 from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
-from apps.agent.routers import liability as liability_router  # noqa: E402
 from apps.agent.routers import model_test as model_test_router  # noqa: E402
 from apps.agent.routers import report as report_router  # noqa: E402
 from apps.agent.routers import resume as resume_router  # noqa: E402
 from apps.agent.routers import runs_stream as runs_stream_router  # noqa: E402
-from apps.agent.routers import spending_leak as spending_leak_router  # noqa: E402
 from apps.agent.routers import suggest as suggest_router  # noqa: E402
 from apps.agent.routers import threads as threads_router  # noqa: E402
-from apps.agent.routers import time_machine as time_machine_router  # noqa: E402
 
 app.include_router(report_router.router)
 app.include_router(suggest_router.router)
-app.include_router(alerts_router.router)
-app.include_router(disposal_router.router)
-app.include_router(liability_router.router)
-app.include_router(allocation_router.router)
-app.include_router(spending_leak_router.router)
-app.include_router(time_machine_router.router)
 app.include_router(cache_router.router)
 app.include_router(gateway_router.router)
 app.include_router(import_parse_router.router)

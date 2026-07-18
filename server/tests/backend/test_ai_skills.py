@@ -7,17 +7,12 @@ from apps.backend.app.routers.ai_skills import (
 
 
 def test_builtin_capabilities_excludes_chat_and_time_machine():
-    """BUILTIN_CAPABILITIES must contain only the 6 business skills."""
-    assert set(BUILTIN_CAPABILITIES) == {
-        "report",
-        "alerts",
-        "allocation",
-        "disposal",
-        "liability",
-        "spending_leak",
-    }
+    """U7: 5 trigger skills deleted full-stack; report leaves the toggleable list
+    (becomes a fixed system flow in U5). BUILTIN_CAPABILITIES is empty."""
+    assert set(BUILTIN_CAPABILITIES) == set()
     assert "chat" not in BUILTIN_CAPABILITIES
     assert "time_machine" not in BUILTIN_CAPABILITIES
+    assert "report" not in BUILTIN_CAPABILITIES
 
 
 def test_reserved_names_contains_chat_and_time_machine():
@@ -35,19 +30,12 @@ def test_fixed_capabilities_constant_removed():
 
 
 def test_list_skills_returns_only_business_skills(client, auth_headers):
-    """GET /api/v1/ai/skills returns the 6 business skills, no chat or time_machine."""
+    """U7: BUILTIN_CAPABILITIES is empty — GET /api/v1/ai/skills returns no skills."""
     resp = client.get("/api/v1/ai/skills", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json().get("data", resp.json())
     capabilities = {item["capability"] for item in data}
-    assert capabilities == {
-        "report",
-        "alerts",
-        "allocation",
-        "disposal",
-        "liability",
-        "spending_leak",
-    }
+    assert capabilities == set()
     assert "chat" not in capabilities
     assert "time_machine" not in capabilities
 
@@ -64,17 +52,15 @@ def test_grouped_skills_fixed_section_is_empty(client, auth_headers):
     assert builtin_ids == set(BUILTIN_CAPABILITIES)
 
 
-def test_toggle_business_skill_succeeds(client, auth_headers):
-    """Toggling a business skill (e.g. report) succeeds — no FIXED_CAPABILITIES guard."""
+def test_toggle_report_returns_not_found(client, auth_headers):
+    """U7: report left BUILTIN_CAPABILITIES (becomes a fixed system flow in U5),
+    so toggling it via the skill-management endpoint returns 404."""
     resp = client.put(
         "/api/v1/ai/skills/report/toggle",
         json={"is_enabled": False},
         headers=auth_headers,
     )
-    assert resp.status_code == 200, resp.text
-    data = resp.json().get("data", resp.json())
-    assert data["id"] == "report"
-    assert data["is_enabled"] is False
+    assert resp.status_code in (404, 400), resp.text
 
 
 def test_toggle_chat_returns_not_found(client, auth_headers):
@@ -133,14 +119,15 @@ def test_create_custom_skill_with_time_machine_id_rejected(client, auth_headers)
     assert resp.status_code in (400, 422), resp.text
 
 
-def test_create_custom_skill_with_builtin_id_rejected(client, auth_headers):
-    """Creating a custom skill with skill_id='report' is rejected by BUILTIN_CAPABILITIES."""
+def test_create_custom_skill_with_internal_only_id_rejected(client, auth_headers):
+    """U7: BUILTIN_CAPABILITIES is empty, so builtin-id rejection is dormant.
+    INTERNAL_ONLY_SKILLS (e.g. skill-creator) still rejects custom skill creation."""
     resp = client.post(
         "/api/v1/ai/skills/custom",
         json={
-            "skill_id": "report",
-            "name": "My Report",
-            "icon": "📊",
+            "skill_id": "skill-creator",
+            "name": "My Creator",
+            "icon": "🛠️",
             "color": "#6366f1",
             "prompt_content": "Custom prompt",
         },
@@ -148,7 +135,7 @@ def test_create_custom_skill_with_builtin_id_rejected(client, auth_headers):
     )
     assert resp.status_code in (400, 422), resp.text
     body = resp.text
-    assert "内置技能" in body or "builtin" in body.lower()
+    assert "内部技能" in body or "internal" in body.lower()
 
 
 def test_create_custom_skill_with_unique_id_succeeds(client, auth_headers):

@@ -39,14 +39,9 @@ logger = logging.getLogger(__name__)
 
 # Business capabilities exposed to skill management (matches agent/skills/*.md).
 # 注意：`chat` 与 `time_machine` 不在此列 — 见 RESERVED_NAMES。
-BUILTIN_CAPABILITIES = [
-    "report",
-    "alerts",
-    "allocation",
-    "disposal",
-    "liability",
-    "spending_leak",
-]
+# U7: 5 外扩 trigger skill 全栈删除后，业务能力回归 numina SOUL（chat/SKILL.md），
+# 此列表为空；report 由 U5 处理（保留为内置固定流程）。
+BUILTIN_CAPABILITIES: list[str] = []
 
 # Reserved namespace — not skills, but blocked from custom skill_id collisions.
 RESERVED_NAMES = ["chat", "time_machine"]
@@ -54,13 +49,8 @@ RESERVED_NAMES = ["chat", "time_machine"]
 # Internal-only skills excluded from user-facing catalog and creation.
 INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer"}
 
-BUILTIN_DEFAULT_ORDER = {
+BUILTIN_DEFAULT_ORDER: dict[str, int] = {
     "report": 100,
-    "alerts": 101,
-    "allocation": 102,
-    "disposal": 103,
-    "liability": 104,
-    "spending_leak": 105,
 }
 
 SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")

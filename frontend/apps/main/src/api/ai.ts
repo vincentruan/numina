@@ -1,5 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
-import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse } from '@/types'
+import type { AIReport } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────
 
@@ -406,36 +406,6 @@ export interface AssetSuggestResult {
 
 export const suggestAssetFields = (data: AssetSuggestRequest) =>
   http.post<AssetSuggestResult>('/ai/suggest/asset', data)
-
-// Asset alerts
-export const getAssetAlerts = () =>
-  http.get<AssetAlert[]>('/ai/asset-alerts')
-
-
-export const dismissAssetAlert = (id: string) =>
-  http.post(`/ai/asset-alerts/${id}/dismiss`)
-
-// Disposal suggestions
-export const getDisposalSuggestions = () =>
-  http.get<DisposalSuggestion[]>('/ai/disposal-suggestions')
-
-
-export const dismissDisposalSuggestion = (id: string) =>
-  http.post(`/ai/disposal-suggestions/${id}/dismiss`)
-
-// Liability advice
-export const getLiabilityAdvice = () =>
-  http.get<LiabilityAdviceResponse>('/ai/liability-advice')
-
-// Allocation target & drift
-export const getAllocationTarget = () =>
-  http.get<{ has_target: boolean; category_targets?: Record<string, number>; drift_threshold?: number }>('/ai/allocation-target')
-
-export const setAllocationTarget = (data: { category_targets: Record<string, number>; drift_threshold: number }) =>
-  http.put('/ai/allocation-target', data)
-
-export const checkAllocationDrift = () =>
-  http.get<AllocationDriftResponse>('/ai/allocation-target/check')
 
 // P0-#3: Timeout wrapper for streaming fetch (matches backend 120s timeout)
 const STREAM_TIMEOUT_MS = 120000

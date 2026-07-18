@@ -6,7 +6,6 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from apps.backend.app.models.ai_allocation_target import AIAllocationTarget
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.notification_channel import NotificationChannel
 from apps.backend.app.models.notification_channel_config import NotificationChannelConfig
@@ -14,10 +13,8 @@ from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.notification_subscription import NotificationSubscription
 from apps.backend.app.models.reminder import Reminder
 from apps.backend.app.models.reminder_notification import ReminderNotification
-from apps.backend.app.models.user import User
 from apps.backend.app.schemas.reminder import ReminderSummary
 from apps.backend.app.services.notification.rules import (
-    check_allocation_drift,
     check_expiring_soon,
     check_large_purchase,
     check_maturity,
@@ -103,11 +100,10 @@ def check_on_asset_write(db: Session, asset: Asset) -> None:
 
 
 def run_scheduled_checks(db: Session) -> None:
-    """APScheduler 每日 09:20 调用：检测到期类 + 配置失衡 + 清理过期冷静期 + 重试失败推送。"""
+    """APScheduler 每日 09:20 调用：检测到期类 + 清理过期冷静期 + 重试失败推送。"""
     _resolve_expired_large_purchase(db)
     _check_expiring_assets(db)
     _check_maturity_assets(db)
-    _check_allocation_drift_all(db)
     _retry_failed_notifications(db)
 
 
@@ -172,41 +168,6 @@ def _check_maturity_assets(db: Session) -> None:
         )
         if result:
             ensure_reminder(db, result)
-
-
-def _check_allocation_drift_all(db: Session) -> None:
-    targets = db.query(AIAllocationTarget).all()
-    for target in targets:
-        family_id = target.family_id
-        total = (
-            db.query(func.sum(Asset.current_value))
-            .join(User, Asset.user_id == User.id)
-            .filter(User.family_id == family_id, Asset.is_archived == False)  # noqa: E712
-            .scalar()
-        ) or 0
-        if total == 0:
-            continue
-        for category, target_pct in target.category_targets.items():
-            current_val = (
-                db.query(func.sum(Asset.current_value))
-                .join(User, Asset.user_id == User.id)
-                .filter(
-                    User.family_id == family_id,
-                    Asset.is_archived == False,  # noqa: E712
-                    Asset.asset_type == category,
-                )
-                .scalar()
-            ) or 0
-            current_pct = (current_val / total) * 100
-            result = check_allocation_drift(
-                family_id=family_id,
-                category=category,
-                current_pct=current_pct,
-                target_pct=float(target_pct),
-                drift_threshold=target.drift_threshold,
-            )
-            if result:
-                ensure_reminder(db, result)
 
 
 def _get_channel_config(db: Session, channel: NotificationChannel) -> dict:

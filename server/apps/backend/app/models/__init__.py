@@ -1,30 +1,18 @@
 # ruff: noqa: F401  # re-exporting models for convenience imports + SQLAlchemy registration
 from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.ai_agent import AIAgent
-from apps.backend.app.models.ai_allocation_drift_result import (
-    AIAllocationDriftResult,
-)
-from apps.backend.app.models.ai_allocation_target import (
-    AIAllocationTarget,
-)
-from apps.backend.app.models.ai_asset_alert import AIAssetAlert
 from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
 from apps.backend.app.models.ai_chat_message import AIChatMessage
 from apps.backend.app.models.ai_chat_session import AIChatSession
-from apps.backend.app.models.ai_disposal_suggestion import (
-    AIDisposalSuggestion,
-)
 from apps.backend.app.models.ai_extraction_audit import AIExtractionAudit
 from apps.backend.app.models.ai_extraction_circuit import (
     AIExtractionCircuit,
 )
-from apps.backend.app.models.ai_liability_result import AILiabilityResult
 from apps.backend.app.models.ai_provider_config import (
     AIProviderConfig,
     AIProviderTestResult,
 )
 from apps.backend.app.models.ai_report import AIReport
-from apps.backend.app.models.ai_spending_leak import AISpendingLeak
 from apps.backend.app.models.ai_task import AITask
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.asset_lifecycle_event import (

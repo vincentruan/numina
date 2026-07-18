@@ -26,17 +26,9 @@ from apps.backend.app.middleware.request_id import RequestIDMiddleware
 
 # Import all models so Base.metadata knows about them
 from apps.backend.app.models.activity import Activity
-from apps.backend.app.models.ai_allocation_target import (
-    AIAllocationTarget,
-)
-from apps.backend.app.models.ai_asset_alert import AIAssetAlert
 from apps.backend.app.models.ai_chat_message import AIChatMessage
 from apps.backend.app.models.ai_chat_session import AIChatSession
-from apps.backend.app.models.ai_disposal_suggestion import (
-    AIDisposalSuggestion,
-)
 from apps.backend.app.models.ai_report import AIReport
-from apps.backend.app.models.ai_spending_leak import AISpendingLeak
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.blind_box_config import BlindBoxConfig
 from apps.backend.app.models.blind_box_draw import BlindBoxDraw
@@ -82,18 +74,13 @@ from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_
 from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
-from apps.backend.app.routers import ai_alerts as ai_alerts_router
-from apps.backend.app.routers import ai_allocation as ai_allocation_router
 from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
 from apps.backend.app.routers import ai_chat as ai_chat_router
 from apps.backend.app.routers import ai_config as ai_config_router
-from apps.backend.app.routers import ai_disposal as ai_disposal_router
 from apps.backend.app.routers import ai_internal as ai_internal_router
-from apps.backend.app.routers import ai_liability as ai_liability_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
 from apps.backend.app.routers import ai_report as ai_report_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
-from apps.backend.app.routers import ai_spending_leaks as ai_spending_leaks_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
 from apps.backend.app.routers import ai_threads as ai_threads_router
@@ -423,11 +410,6 @@ app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
-app.include_router(ai_alerts_router.router, prefix="/api/v1")
-app.include_router(ai_spending_leaks_router.router, prefix="/api/v1")
-app.include_router(ai_disposal_router.router, prefix="/api/v1")
-app.include_router(ai_liability_router.router, prefix="/api/v1")
-app.include_router(ai_allocation_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.sessions_router, prefix="/api/v1")
 app.include_router(ai_threads_router.router, prefix="/api/threads")

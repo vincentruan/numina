@@ -19,17 +19,13 @@ def test_overrides_contain_routing_capabilities():
     assert "time_machine" in _CAPABILITY_OVERRIDES
 
 
-def test_overrides_contain_six_business_skills():
-    """The six BUILTIN_CAPABILITIES skills each have an override."""
-    expected_skills = {
-        "report",
-        "alerts",
-        "allocation",
-        "disposal",
-        "liability",
-        "spending_leak",
-    }
-    assert expected_skills.issubset(_CAPABILITY_OVERRIDES.keys())
+def test_overrides_contain_report_business_skill():
+    """U7: 5 trigger skills removed from _CAPABILITY_OVERRIDES; report remains
+    (U5 will formalize it as a fixed system flow). chat/time_machine routing
+    capabilities are still present."""
+    assert "report" in _CAPABILITY_OVERRIDES
+    for removed in ("alerts", "allocation", "disposal", "liability", "spending_leak"):
+        assert removed not in _CAPABILITY_OVERRIDES
 
 
 def test_apply_overrides_to_chat_yields_localized_name():

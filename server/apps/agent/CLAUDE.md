@@ -103,21 +103,15 @@ agent/
 │   ├── desensitize.py         # Structural PII stripping (assets/liabilities/members)
 │   ├── llm.py                 # LLMClient (Anthropic + OpenAI), ThinkingTagParser
 │   └── logging.py             # setup_logging()
-├── routers/                   # Top-level router registrations (14 routers)
+├── routers/                   # Top-level router registrations
 │   ├── agent_stream.py        # Generic agent NDJSON streaming endpoint
-│   ├── alerts.py              # POST /alerts/aging, /alerts/stream
-│   ├── allocation.py          # POST /allocation/drift, /allocation/stream
 │   ├── capabilities.py        # GET /capabilities
 │   ├── chat.py                # POST /chat/ask, /chat/ask/stream (NDJSON)
-│   ├── disposal.py            # POST /disposal/scan, /disposal/stream
 │   ├── import_parse.py        # POST /import/parse
-│   ├── liability.py           # POST /liability/analyze, /liability/stream
 │   ├── model_test.py          # POST /model-test — validate per-family LLM config (token, model, ping)
 │   ├── report.py              # POST /report/generate, /report/generate/stream
 │   ├── sessions.py            # GET /sessions, GET /sessions/{id}/events (NDJSON)
-│   ├── spending_leak.py       # POST /spending-leak, /spending-leak/stream
-│   ├── suggest.py             # POST /suggest/asset
-│   └── time_machine.py        # POST /time-machine/interpret, /time-machine/stream
+│   └── suggest.py             # POST /suggest/asset
 ├── services/
 │   ├── orchestrator.py        # Central dispatch pipeline (policy → context → PII → DeerFlow → audit)
 │   ├── deerflow_adapter/      # DeerFlow harness integration (mandatory execution path)

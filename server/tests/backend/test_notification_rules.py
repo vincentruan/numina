@@ -2,7 +2,6 @@
 from datetime import date, timedelta
 
 from apps.backend.app.services.notification.rules import (
-    check_allocation_drift,
     check_expiring_soon,
     check_large_purchase,
     check_maturity,
@@ -125,26 +124,3 @@ def test_check_maturity_within_7_days():
     )
     assert result is not None
     assert result["severity"] == "critical"
-
-
-def test_check_allocation_drift_triggered():
-    result = check_allocation_drift(
-        family_id=1,
-        category="financial",
-        current_pct=68.0,
-        target_pct=50.0,
-        drift_threshold=10.0,
-    )
-    assert result is not None
-    assert result["reminder_type"] == "allocation_drift"
-
-
-def test_check_allocation_drift_within_threshold():
-    result = check_allocation_drift(
-        family_id=1,
-        category="financial",
-        current_pct=55.0,
-        target_pct=50.0,
-        drift_threshold=10.0,
-    )
-    assert result is None
