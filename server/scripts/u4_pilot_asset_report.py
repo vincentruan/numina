@@ -104,8 +104,12 @@ async def _run_once(
         provider,
         timeout_seconds=240,
         subagent_enabled=False,
-        plan_mode=True,  # asset-report benefits from planning (3 steps)
+        plan_mode=False,  # align with production worker (_run_asset_report_pipeline)
         mcp_servers=mcp_servers,
+        # Isolate DeerMem bucket to match production (agent_name="asset-report"),
+        # so the F1 baseline reflects the memory-isolated path, not the shared
+        # lead-agent bucket. See plan Open Question (DeerMem pollution).
+        agent_name="asset-report",
     )
 
     saw_write_file = False
