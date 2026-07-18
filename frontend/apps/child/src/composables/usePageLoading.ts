@@ -10,6 +10,9 @@ let nprogressStarted: boolean = false
 // Track router's safety timeout ID so increment() can clear it (prevents TOCTOU race)
 let routerTimeoutId: ReturnType<typeof setTimeout> | null = null
 
+// Track stuck loading safety timeout ID
+let stuckTimeoutId: ReturnType<typeof setTimeout> | null = null
+
 // Track which instances have pending increments with count and active status
 // Key: instanceId symbol, Value: { count: number of pending increments, active: boolean }
 const pendingInstances = new Map<symbol, { count: number; active: boolean }>()
@@ -51,6 +54,17 @@ export function usePageLoading() {
     if (loadingCount.value === 1 && !nprogressStarted) {
       NProgress.start()
       nprogressStarted = true
+
+      // Start stuck safety timeout
+      if (stuckTimeoutId !== null) {
+        clearTimeout(stuckTimeoutId)
+      }
+      stuckTimeoutId = setTimeout(() => {
+        if (import.meta.env.DEV) {
+          console.warn('[usePageLoading] Loading operation stuck, forcing complete')
+        }
+        completeGlobalLoading()
+      }, 5000)
     }
   }
 
@@ -83,6 +97,11 @@ export function usePageLoading() {
     if (loadingCount.value === 0 && nprogressStarted) {
       NProgress.done()
       nprogressStarted = false
+
+      if (stuckTimeoutId !== null) {
+        clearTimeout(stuckTimeoutId)
+        stuckTimeoutId = null
+      }
     }
   }
 
@@ -95,10 +114,15 @@ export function usePageLoading() {
   function complete() {
     loadingCount.value = 0
     pendingInstances.clear()
-    if (nprogressStarted) {
-      NProgress.done()
-      nprogressStarted = false
+    if (stuckTimeoutId !== null) {
+      clearTimeout(stuckTimeoutId)
+      stuckTimeoutId = null
     }
+    // Always call NProgress.done() - this is a cleanup function
+    // Router beforeEach may have called NProgress.start() directly,
+    // so we must complete NProgress unconditionally
+    NProgress.done()
+    nprogressStarted = false
   }
 
   // Safety net: mark instance inactive and clear its pending contributions on unmount
@@ -118,9 +142,15 @@ export function usePageLoading() {
       pendingInstances.delete(instanceId)
 
       // Complete NProgress if all loading is now done
-      if (loadingCount.value === 0 && nprogressStarted) {
+      // Always call done() when loadingCount reaches 0 - router may have started NProgress directly
+      if (loadingCount.value === 0) {
         NProgress.done()
         nprogressStarted = false
+
+        if (stuckTimeoutId !== null) {
+          clearTimeout(stuckTimeoutId)
+          stuckTimeoutId = null
+        }
       }
     }
   })
@@ -142,10 +172,15 @@ export const globalLoadingCount: Ref<number> = loadingCount
 export function completeGlobalLoading(): void {
   loadingCount.value = 0
   pendingInstances.clear()
-  if (nprogressStarted) {
-    NProgress.done()
-    nprogressStarted = false
+  if (stuckTimeoutId !== null) {
+    clearTimeout(stuckTimeoutId)
+    stuckTimeoutId = null
   }
+  // Always call NProgress.done() - this is the emergency cleanup function
+  // Router beforeEach may have called NProgress.start() directly without setting nprogressStarted,
+  // so we must complete NProgress unconditionally to prevent stuck progress bar
+  NProgress.done()
+  nprogressStarted = false
 }
 
 /**
