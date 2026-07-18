@@ -262,6 +262,16 @@ async def _run_asset_report_pipeline(
             mcp_servers = []
 
         # 4. Build adapter. plan_mode=False (fixed 3-step flow, no TodoList).
+        # Read the agent's memory_enabled flag from the AgentRegistry (single
+        # source of truth: ai_agents.memory_enabled). asset-report declares
+        # memory_enabled=False on its system-agent row → DeerMem injection +
+        # write are disabled, so each run is stateless and fetches fresh MCP
+        # data (plan U4 Open Question: DeerMem pollution). agent_name is also
+        # passed for DeerMem bucket isolation (per (agent_name, user_id)).
+        from apps.agent.services.agent_registry import get_agent_registry
+        agent_meta = await get_agent_registry().get("asset-report", family_id)
+        memory_enabled = bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+
         adapter = create_family_adapter(
             family_id,
             selected_provider,
@@ -269,16 +279,12 @@ async def _run_asset_report_pipeline(
             subagent_enabled=False,
             plan_mode=False,
             mcp_servers=mcp_servers,
-            # Isolate DeerMem memory bucket: asset-report is a fixed pipeline that
-            # must fetch fresh MCP data each run, not reuse chat's accumulated
-            # memory (which caused LLM to skip write_file/read_file/MCP and answer
-            # from stale memory — see plan Open Question DeerMem pollution).
             agent_name="asset-report",
+            memory_enabled=memory_enabled,
             # U4 step 3: middleware path (AssetReportStep2Middleware) was
             # attempted but get_stream_writer() is no-op on numina's sync
             # stream() path (plan fallback condition). report.step2_json is
-            # worker-synthesized instead (see step 9 below). AssetReportStep2Middleware
-            # is kept for a future async-path migration.
+            # worker-synthesized instead (see step 9 below).
         )
 
         # 5. Synthetic trigger message (plan L117): report runs are backend-

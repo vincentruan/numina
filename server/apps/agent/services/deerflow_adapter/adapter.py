@@ -97,6 +97,7 @@ class DeerFlowAdapter:
         mcp_servers: list[dict[str, Any]] | None = None,
         agent_name: str | None = None,
         middlewares: list[Any] | None = None,
+        memory_enabled: bool = True,
     ) -> None:
         """Initialize adapter.
 
@@ -130,6 +131,7 @@ class DeerFlowAdapter:
                 mcp_servers=mcp_servers,
                 agent_name=agent_name,
                 middlewares=middlewares,
+                memory_enabled=memory_enabled,
             )
             self._is_family_mode = True
         elif config_path:
@@ -712,6 +714,7 @@ def create_family_adapter(
     mcp_servers: list[dict[str, Any]] | None = None,
     agent_name: str | None = None,
     middlewares: list[Any] | None = None,
+    memory_enabled: bool = True,
 ) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
@@ -724,6 +727,9 @@ def create_family_adapter(
         mcp_servers: MCP server configs to inject into DeerFlow config YAML
         agent_name: Optional DeerMem memory-bucket key (see DeerFlowAdapter.__init__)
         middlewares: Optional AgentMiddleware list (see DeerFlowAdapter.__init__)
+        memory_enabled: Whether DeerMem is enabled for this agent (read from
+            ai_agents.memory_enabled via AgentRegistry by the caller; False for
+            stateless fixed-flow agents like asset-report).
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
@@ -737,6 +743,7 @@ def create_family_adapter(
         mcp_servers=mcp_servers,
         agent_name=agent_name,
         middlewares=middlewares,
+        memory_enabled=memory_enabled,
     )
 
 

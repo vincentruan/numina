@@ -281,12 +281,19 @@ def _generate_temp_config(
     ai_config: dict[str, Any],
     family_id: str = "",
     mcp_servers: list[dict[str, Any]] | None = None,
+    memory_enabled: bool = True,
 ) -> Path:
     """生成临时配置文件，动态注入家庭的 AI 配置到 models 列表。
 
     Args:
         base_config_dir: 基础配置目录路径
         ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
+        family_id: 家庭 ID（用于 memory 存储路径隔离）
+        memory_enabled: Whether DeerMem injection + write are enabled for this
+            agent (read from ai_agents.memory_enabled via AgentRegistry by the
+            caller). Fixed-flow agents (asset-report) pass False to be
+            stateless — each run fetches fresh data instead of accumulating
+            history that pollutes later runs (plan U4 Open Question: DeerMem).
 
     Returns:
         临时配置文件的路径
@@ -517,6 +524,18 @@ def _generate_temp_config(
     backend_config["storage_path"] = str(memory_path)
     config["memory"]["backend_config"] = backend_config
 
+    # U4 Open Question (DeerMem pollution): agents with memory_enabled=False
+    # (read from ai_agents.memory_enabled via AgentRegistry by the caller) are
+    # stateless — disable DeerMem injection (DynamicContextMiddleware skips the
+    # <memory> block) + write (MemoryMiddleware skips fact writes). Fixed-flow
+    # agents (asset-report) declare memory_enabled=False on their ai_agents row;
+    # chat + custom agents keep the default True. The flag is a per-agent
+    # attribute, not an adapter-layer agent_name hardcode — adding a new
+    # stateless agent is just setting the column.
+    if not memory_enabled:
+        config["memory"]["enabled"] = False
+        config["memory"]["injection_enabled"] = False
+
     # [Integrated with Numina Multi-Tenant] — inject Numina's sandbox provider
     # so that the per-family config YAML uses the family-scoped provider.
     if "sandbox" not in config:
@@ -643,6 +662,7 @@ def get_family_adapter(
     mcp_servers: list[dict[str, Any]] | None = None,
     agent_name: str | None = None,
     middlewares: list[Any] | None = None,
+    memory_enabled: bool = True,
 ) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
@@ -687,8 +707,8 @@ def get_family_adapter(
     # chat client. (Both are module-singleton or per-pipeline lists, so id()
     # is stable across calls within a process.)
     middlewares_key = tuple(id(m) for m in middlewares) if middlewares else ()
-    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...]] = (
-        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key,
+    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...], bool] = (
+        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key, memory_enabled,
     )
 
     # Fast path: return cached client
@@ -714,7 +734,10 @@ def get_family_adapter(
     # Serialise reload_app_config() + DeerFlowClient() to prevent concurrent
     # threads from interleaving global DeerFlow config state. File I/O for
     # _generate_temp_config happens outside this lock to minimise contention.
-    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id, mcp_servers=mcp_servers)
+    # memory_enabled is read by the async caller (worker) via AgentRegistry and
+    # threaded down as a bool — get_family_adapter is sync (runs inside the
+    # adapter's ThreadPoolExecutor), so it cannot await the registry itself.
+    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id, mcp_servers=mcp_servers, memory_enabled=memory_enabled)
 
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
