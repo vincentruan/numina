@@ -561,13 +561,14 @@ onUnmounted(() => {
               </Transition>
             </Teleport>
 
-            <!-- [1] Agent button: clickable in welcome mode, static icon in chat mode -->
+            <!-- [1] Agent button in welcome mode: readonly -> info popup, else -> agent picker -->
             <button
               v-if="agents && agents.length > 0 && isWelcomeMode"
               class="control-btn control-btn--agent"
-              :aria-label="t('aiHub.selectAgent')"
-              :title="t('aiHub.selectAgent')"
-              @click="emit('selectAgent')"
+              :class="{ 'agent-chat-icon': readonly }"
+              :aria-label="readonly ? t('aiChat.agentInfoAria') : t('aiHub.selectAgent')"
+              :title="readonly ? displayAgentLabel : t('aiHub.selectAgent')"
+              @click="readonly ? onToggleAgentInfo() : emit('selectAgent')"
             >
               <!-- 小鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
@@ -675,8 +676,8 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <!-- Agent info popup (chat mode) - teleported to body to escape stacking context -->
-    <Teleport v-if="showAgentInfo && selectedAgent && !isWelcomeMode" to="body">
+    <!-- Agent info popup - teleported to body to escape stacking context -->
+    <Teleport v-if="showAgentInfo && selectedAgent" to="body">
       <div
         class="agent-info-backdrop"
         @click="showAgentInfo = false"

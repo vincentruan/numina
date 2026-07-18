@@ -488,7 +488,15 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
 
       <template v-if="store.isWelcomeMode">
         <!-- WelcomePage includes its own InputBox (DeerFlow pattern) -->
-        <WelcomePage :model-value="draftText" @start-chat="handleStartChat" />
+        <WelcomePage
+          :model-value="draftText"
+          :agent-id="activeAgent?.id"
+          :agents="activeAgent ? [{ id: activeAgent.id, display_name: activeAgent.display_name, agent_name: activeAgent.agent_name, icon: activeAgent.icon, color: activeAgent.color, description: activeAgent.description }] : []"
+          :agent-icon="activeAgent?.icon"
+          :agent-label="activeAgent?.display_name"
+          readonly
+          @start-chat="handleStartChat"
+        />
       </template>
       <template v-else>
         <MessageList
