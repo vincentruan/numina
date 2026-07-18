@@ -491,13 +491,20 @@ def _generate_temp_config(
     config.pop("llm", None)
 
     # 注入家庭级 memory 隔离路径：每家庭独立文件，防止跨家庭 facts 污染
-    # Context7 确认 DeerFlow memory 配置键为 storage_path（非 path）
+    # DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
+    # deermem storage path from the top-level ``memory.storage_path`` key into
+    # ``memory.backend_config.storage_path`` (parsed by DeerMemConfig). The
+    # top-level MemoryConfig now carries ``manager_class`` + ``backend_config``
+    # instead of a flat ``storage_path`` field.
     from apps.agent.app.config import settings
     memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory.json"
     memory_path.parent.mkdir(parents=True, exist_ok=True)
     if "memory" not in config:
         config["memory"] = {}
-    config["memory"]["storage_path"] = str(memory_path)
+    config["memory"]["manager_class"] = "deermem"
+    backend_config = config["memory"].get("backend_config") or {}
+    backend_config["storage_path"] = str(memory_path)
+    config["memory"]["backend_config"] = backend_config
 
     # [Integrated with Numina Multi-Tenant] — inject Numina's sandbox provider
     # so that the per-family config YAML uses the family-scoped provider.
@@ -505,6 +512,16 @@ def _generate_temp_config(
         config["sandbox"] = {
             "use": "apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider"
         }
+
+    # Inject host-resolved skills.path. The base config ships a container path
+    # (/app/apps/agent/skills/builtin) that does not resolve on the host dev
+    # machine, so DeerFlow's native skill scanner (LocalSkillStorage) would find
+    # zero skills. Resolve to the same builtin/public/ root that skill_loader.py
+    # uses (SKILLS_DIR's parent), computed from this file's location for both
+    # local dev and container layouts.
+    _skills_root = Path(__file__).resolve().parent.parent.parent / "skills" / "builtin"
+    config.setdefault("skills", {})
+    config["skills"]["path"] = str(_skills_root)
 
     if mcp_servers:
         config["mcp_servers"] = mcp_servers
@@ -521,18 +538,43 @@ def _generate_temp_config(
         provider_api_key = first_provider.get("api_key", "")
         provider_max_results = first_provider.get("max_results", 5)
 
-        # Find and update the web_search tool entry
-        tools = config.get("tools", [])
-        for tool in tools:
-            if tool.get("name") == "web_search":
-                tool["use"] = provider_class
-                tool["api_key"] = provider_api_key
-                tool["max_results"] = provider_max_results
-                break
+        # Guard: empty provider_class would cause resolve_variable("") to fail
+        if not provider_class:
+            logger.warning(
+                "[deerflow_config] web_search provider_class is empty for family=%s; "
+                "removing web_search tool",
+                family_id,
+            )
+            tools = config.get("tools", [])
+            config["tools"] = [t for t in tools if t.get("name") != "web_search"]
+        else:
+            # Find and update the web_search tool entry
+            tools = config.get("tools", [])
+            for tool in tools:
+                if tool.get("name") == "web_search":
+                    tool["use"] = provider_class
+                    tool["api_key"] = provider_api_key
+                    tool["max_results"] = provider_max_results
+                    break
+
+            # Inject web_fetch tool (Jina AI-based page content fetcher).
+            # chat-search/SKILL.md declares allowed-tools: [web_search, web_fetch];
+            # without this entry the tool policy silently drops web_fetch and the
+            # LLM only sees web_search.
+            tools = config.get("tools", [])
+            if not any(t.get("name") == "web_fetch" for t in tools):
+                tools.append({
+                    "name": "web_fetch",
+                    "group": "web",
+                    "use": "deerflow.community.jina_ai.tools:web_fetch_tool",
+                    "timeout": 10,
+                    "trust_env": False,
+                })
+                config["tools"] = tools
     else:
         # No native providers — remove web_search tool (MCP fallback handled separately)
         tools = config.get("tools", [])
-        config["tools"] = [t for t in tools if t.get("name") != "web_search"]
+        config["tools"] = [t for t in tools if t.get("name") not in ("web_search", "web_fetch")]
 
         # Inject web search MCP servers from ai_config if available and not already injected
         # The mcp_servers parameter may contain general MCP servers; web_search_mcp_servers

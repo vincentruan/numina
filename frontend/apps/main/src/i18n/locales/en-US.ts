@@ -797,6 +797,7 @@ export default {
     choreRedoConfirm: 'Return 「{name}」 for child to redo?',
     choreApproveSuccess: 'Chore approved',
     choreApproveFailed: 'Approval failed, please retry',
+    choreAlreadyApproved: 'This chore is already approved — refreshed',
     choreRedoSuccess: 'Chore returned for redo',
     choreRedoFailed: 'Return failed, please retry',
     wishGroupPending: 'Pending ⏳',

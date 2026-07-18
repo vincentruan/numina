@@ -1178,6 +1178,7 @@ export default {
     choreRedoConfirm: '确定退回「{name}」让孩子重做？',
     choreApproveSuccess: '任务已批准',
     choreApproveFailed: '批准失败，请重试',
+    choreAlreadyApproved: '该任务已审批，已为你刷新',
     choreRedoSuccess: '任务已退回重做',
     choreRedoFailed: '退回失败，请重试',
     wishGroupPending: '待审批',

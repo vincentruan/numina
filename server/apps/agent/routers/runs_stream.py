@@ -17,7 +17,7 @@ import asyncio
 import logging
 from typing import Any, Literal
 
-from deerflow.runtime import RunManager
+from deerflow.runtime import CancelOutcome, RunManager
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -161,7 +161,7 @@ async def cancel_run(
     checking the run's ``family_id`` metadata against the verified family. A
     mismatched or unknown run returns 404 so existence is not leaked.
     """
-    record = run_mgr.get(run_id)
+    record = await run_mgr.get(run_id)
     if (
         record is None
         or record.thread_id != thread_id
@@ -169,4 +169,4 @@ async def cancel_run(
     ):
         raise HTTPException(status_code=404, detail="运行不存在")
     cancelled = await run_mgr.cancel(run_id, action=action)
-    return {"run_id": run_id, "cancelled": cancelled}
+    return {"run_id": run_id, "cancelled": cancelled is CancelOutcome.cancelled}

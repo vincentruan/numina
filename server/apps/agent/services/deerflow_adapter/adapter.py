@@ -630,9 +630,14 @@ class DeerFlowAdapter:
         the LLM trusting injected empty data over calling its MCP tools. The chat
         worker (worker.py) builds a minimal context with only family_id + free_text;
         pre-fetched skills that actually populate data still emit those fields.
+
+        Note: ``skill_name`` is no longer prefixed as ``[SKILL:{name}]`` — that
+        prefix had no consumer. Skill content is injected by DeerFlow's native
+        ``<skill_system>`` system-prompt section (filtered by ``available_skills``
+        passed to ``DeerFlowClient``), so the user message only needs the context.
         """
         ctx_dict = context.model_dump(exclude={"redaction_log"}, exclude_defaults=True)
-        return f"[SKILL:{skill_name}]\n{json.dumps(ctx_dict, ensure_ascii=False, indent=2)}"
+        return json.dumps(ctx_dict, ensure_ascii=False, indent=2)
 
 
 def _make_adapter() -> DeerFlowAdapter | None:

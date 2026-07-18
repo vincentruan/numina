@@ -55,11 +55,9 @@ class SkillLoader:
         if capability in self._cache:
             return self._cache[capability]
 
-        # New path: skills/builtin/{capability}/SKILL.md
-        path = SKILLS_DIR / "builtin" / capability / "SKILL.md"
-        if not path.exists():
-            # Fallback old path: skills/{capability}.md
-            path = SKILLS_DIR / f"{capability}.md"
+        # skills/builtin/public/{capability}/SKILL.md
+        # (public/ category subdir required by DeerFlow's native skill scanner)
+        path = SKILLS_DIR / "builtin" / "public" / capability / "SKILL.md"
 
         if not path.exists():
             return SkillConfig(capability=capability, prompt="", thinking=False)
@@ -88,6 +86,36 @@ class SkillLoader:
 
     def thinking_enabled(self, capability: str) -> bool:
         return self.load(capability).thinking
+
+    def get_skill_config(self, capability: str) -> SkillConfig | None:
+        """Return the SkillConfig for *capability*, or None if not found."""
+        config = self.load(capability)
+        if not config.prompt and not config.mcp_tools:
+            # load() returns a bare SkillConfig for unknown capabilities;
+            # treat it as "not found" only when the file doesn't exist.
+            path = SKILLS_DIR / "builtin" / "public" / capability / "SKILL.md"
+            if not path.exists():
+                return None
+        return config
+
+    def list_enabled_skills(self) -> list[SkillConfig]:
+        """Scan builtin skills directory and return all enabled SkillConfigs."""
+        skills: list[SkillConfig] = []
+        # skills/builtin/public/{skill}/SKILL.md (public/ is the DeerFlow-native
+        # category subdir required by LocalSkillStorage._iter_skill_files).
+        builtin_dir = SKILLS_DIR / "builtin" / "public"
+        if not builtin_dir.is_dir():
+            return skills
+        for skill_dir in sorted(builtin_dir.iterdir()):
+            if not skill_dir.is_dir():
+                continue
+            skill_file = skill_dir / "SKILL.md"
+            if not skill_file.exists():
+                continue
+            config = self.load(skill_dir.name)
+            if config.is_enabled:
+                skills.append(config)
+        return skills
 
     # ── Per-family loading ────────────────────────────────────────────────────
 

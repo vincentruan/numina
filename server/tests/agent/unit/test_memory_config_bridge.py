@@ -28,10 +28,41 @@ def _make_family_config(storage_path: str):
     The bridge only touches ``cfg.memory`` (and pushes the object as the
     ContextVar override), so a SimpleNamespace carrying a real MemoryConfig is
     sufficient and avoids constructing a full AppConfig/SandboxConfig.
+
+    DeerFlow rev >=10890e10 (#4122) moved the deermem storage path into
+    ``MemoryConfig.backend_config.storage_path`` (parsed by DeerMemConfig).
     """
     from deerflow.config.memory_config import MemoryConfig
 
-    return types.SimpleNamespace(memory=MemoryConfig(storage_path=storage_path, enabled=True))
+    return types.SimpleNamespace(
+        memory=MemoryConfig(backend_config={"storage_path": storage_path}, enabled=True)
+    )
+
+
+def _memory_storage_path(cfg_memory) -> str:
+    """Read the deermem storage_path from a MemoryConfig across harness revs."""
+    backend = getattr(cfg_memory, "backend_config", None) or {}
+    return backend.get("storage_path")
+
+
+def _make_updater_and_queue(storage_path: str):
+    """Construct a real (DeerMemConfig, MemoryUpdater, MemoryUpdateQueue) triple.
+
+    DeerFlow rev >=10890e10 (#4122) made MemoryUpdater/Queue constructor-injected
+    (config + storage + updater), so tests can no longer use parameterless
+    ``MemoryUpdater()``. We build the minimal real chain against a temp file so
+    the bridge's patched class methods run against live instances.
+    """
+    from deerflow.agents.memory.backends.deermem.deermem.config import DeerMemConfig
+    from deerflow.agents.memory.backends.deermem.deermem.core.queue import MemoryUpdateQueue
+    from deerflow.agents.memory.backends.deermem.deermem.core.storage import FileMemoryStorage
+    from deerflow.agents.memory.backends.deermem.deermem.core.updater import MemoryUpdater
+
+    cfg = DeerMemConfig.from_backend_config({"storage_path": storage_path})
+    storage = FileMemoryStorage(cfg)
+    updater = MemoryUpdater(cfg, storage)
+    queue = MemoryUpdateQueue(cfg, updater)
+    return updater, queue
 
 
 @pytest.fixture(autouse=True)
@@ -54,19 +85,19 @@ def test_get_memory_config_is_contextvar_aware():
     memory_config_bridge.install()
 
     # Global fallback when no runtime config is active.
-    set_memory_config(MemoryConfig(storage_path="/tmp/global/memory.json"))
-    assert get_memory_config().storage_path == "/tmp/global/memory.json"
+    set_memory_config(MemoryConfig(backend_config={"storage_path": "/tmp/global/memory.json"}))
+    assert _memory_storage_path(get_memory_config()) == "/tmp/global/memory.json"
 
     # Runtime override takes precedence while pushed.
     family_cfg = _make_family_config("/tmp/famA/memory.json")
     push_current_app_config(family_cfg)
     try:
-        assert get_memory_config().storage_path == "/tmp/famA/memory.json"
+        assert _memory_storage_path(get_memory_config()) == "/tmp/famA/memory.json"
     finally:
         pop_current_app_config()
 
     # Falls back to global once popped.
-    assert get_memory_config().storage_path == "/tmp/global/memory.json"
+    assert _memory_storage_path(get_memory_config()) == "/tmp/global/memory.json"
 
 
 def test_snapshot_and_pop_roundtrip():
@@ -103,9 +134,16 @@ def test_update_replays_family_config_on_background_thread():
     This is the core regression: without the bridge, peek_current_app_config()
     on the timer thread is None and get_memory_config() returns the wrong
     family's (or empty) config, causing the IndexError / cross-family leak.
+
+    DeerFlow rev >=10890e10 (#4122) split the memory module: MemoryUpdateQueue /
+    MemoryUpdater moved to deerflow.agents.memory.backends.deermem.deermem.core.*,
+    and the global get_memory_queue()/reset_memory_queue() accessors were removed
+    in favor of the MemoryManager abstraction. The bridge patches the class
+    methods directly, so we exercise them via the class (bypassing the manager)
+    and construct a bare MemoryUpdater via __new__ (its __init__ now requires a
+    config + storage we do not need for this patch-level test).
     """
-    from deerflow.agents.memory.queue import get_memory_queue, reset_memory_queue
-    from deerflow.agents.memory.updater import MemoryUpdater
+    from deerflow.agents.memory.backends.deermem.deermem.core.updater import MemoryUpdater
     from deerflow.config.app_config import (
         peek_current_app_config,
         pop_current_app_config,
@@ -122,28 +160,34 @@ def test_update_replays_family_config_on_background_thread():
         # Runs inside _do_update_memory_sync, on the bare thread, AFTER the
         # bridge has replayed the family config.
         observed["app_cfg"] = peek_current_app_config()
-        observed["storage_path"] = get_memory_config().storage_path
+        observed["storage_path"] = _memory_storage_path(get_memory_config())
         return None  # short-circuit; _do_update_memory_sync returns False
 
     messages = [{"type": "human", "content": "hi"}, {"type": "ai", "content": "hello"}]
+    updater, queue = _make_updater_and_queue("/tmp/famA/agent/memory.json")
 
     # Enqueue while the family ContextVar is active (mirrors MemoryMiddleware.after_agent
-    # running on the agent executor thread inside _produce).
+    # running on the agent executor thread inside _produce). The bridge patches
+    # MemoryUpdateQueue.add to snapshot the config at enqueue time.
     push_current_app_config(family_cfg)
     try:
-        get_memory_queue().add(thread_id="t-A", messages=messages, agent_name=None, user_id=None)
+        queue.add(thread_id="t-A", messages=messages, agent_name=None, user_id=None)
     finally:
         pop_current_app_config()
 
     # Run the update on a bare thread — no ContextVar is inherited, exactly
-    # like the threading.Timer callback.
+    # like the threading.Timer callback. _do_update_memory_sync is patched by
+    # the bridge to replay the snapshot before delegating to _prepare_update_prompt.
     run_error: dict = {}
 
     def _run():
         try:
             with patch.object(MemoryUpdater, "_prepare_update_prompt", fake_prepare):
-                MemoryUpdater().update_memory(
-                    messages=messages, thread_id="t-A", agent_name=None, user_id=None
+                updater._do_update_memory_sync(
+                    messages=messages,
+                    thread_id="t-A",
+                    agent_name=None,
+                    user_id=None,
                 )
         except Exception as exc:  # noqa: BLE001 — re-raised on the main thread
             run_error["exc"] = exc
@@ -152,7 +196,7 @@ def test_update_replays_family_config_on_background_thread():
     t.start()
     t.join()
 
-    reset_memory_queue()
+    memory_config_bridge.clear_stash()
 
     assert "exc" not in run_error, f"background update raised: {run_error.get('exc')!r}"
     assert observed.get("app_cfg") is family_cfg, "family AppConfig was not replayed on the timer thread"
@@ -161,7 +205,7 @@ def test_update_replays_family_config_on_background_thread():
 
 def test_update_without_snapshot_falls_back_gracefully():
     """A direct update call (no prior enqueue) does not crash when no snapshot exists."""
-    from deerflow.agents.memory.updater import MemoryUpdater
+    from deerflow.agents.memory.backends.deermem.deermem.core.updater import MemoryUpdater
 
     memory_config_bridge.install()
 
@@ -171,12 +215,13 @@ def test_update_without_snapshot_falls_back_gracefully():
         observed["called"] = True
         return None
 
+    updater, _ = _make_updater_and_queue("/tmp/no-snapshot/agent/memory.json")
     run_error: dict = {}
 
     def _run():
         try:
             with patch.object(MemoryUpdater, "_prepare_update_prompt", fake_prepare):
-                MemoryUpdater().update_memory(
+                updater._do_update_memory_sync(
                     messages=[{"type": "human", "content": "x"}],
                     thread_id="t-no-snapshot",
                     agent_name=None,

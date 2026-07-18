@@ -20,6 +20,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
+
 
 # ---------------------------------------------------------------------------
 # Stub adapter — deterministic SSE frame sequence
@@ -35,6 +37,9 @@ def _make_stub_adapter():
         context: Any,
         thread_id: str,
         enable_thinking: bool = False,
+        subagent_enabled: bool | None = None,
+        plan_mode: bool | None = None,
+        resume_answer: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         # 1. metadata is emitted by worker.py itself (not the adapter), so
         #    the adapter starts with messages events.
@@ -128,8 +133,17 @@ def client():
     ):
         from apps.agent.app.main import app
 
-        with TestClient(app) as test_client:
-            yield test_client
+        # Bypass JWT auth — tests send only X-Family-Id/X-User-Id headers.
+        # Override verify_family_token with a stub returning the same identity,
+        # matching the pattern in test_runs_cancel.py.
+        app.dependency_overrides[verify_family_token] = lambda: VerifiedFamily(
+            family_id="family-1", user_id="user-1", role="member"
+        )
+        try:
+            with TestClient(app) as test_client:
+                yield test_client
+        finally:
+            app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------

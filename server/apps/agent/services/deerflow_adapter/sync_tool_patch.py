@@ -71,22 +71,29 @@ def apply_sync_tool_patches() -> None:
     # ``return`` statement runs tools through ``_ensure_sync_invocable_tool``;
     # the older code only wraps ``loaded_tools`` (line ~44) but leaves
     # ``SUBAGENT_TOOLS`` (``task``) and other builtins unwrapped.
+    #
+    # IMPORTANT: Even when the upstream fix is present, we MUST still patch
+    # get_available_tools to replace DeerFlow's placeholder ask_clarification
+    # with Numina's interrupt-based version. The upstream fix only handles
+    # sync wrapping — it does NOT know about our interrupt mechanism.
+    upstream_fix_present = False
     try:
         source = inspect.getsource(_orig_get_available_tools)
         return_section = source.rsplit("return", 1)[-1]
         if "_ensure_sync_invocable_tool" in return_section:
-            logger.debug("[sync_tool_patch] upstream fix already present; skipping get_available_tools patch")
-            _patched = True
-            _apply_contextvar_propagation_patch()
-            _apply_mcp_proxy_bypass_patch()
-            return
+            upstream_fix_present = True
+            logger.debug("[sync_tool_patch] upstream sync-wrap fix detected; will still patch for interrupt tools")
     except Exception:
         pass
 
     def _patched_get_available_tools(*args, **kwargs):
         tools = _orig_get_available_tools(*args, **kwargs)
-        for t in tools:
-            _ensure_sync_invocable_tool(t)
+
+        # When the upstream fix is present, tools are already sync-wrapped.
+        # When it's absent, we must wrap them ourselves.
+        if not upstream_fix_present:
+            for t in tools:
+                _ensure_sync_invocable_tool(t)
 
         # Remove DeerFlow's placeholder ask_clarification before adding our interrupt tool.
         # DeerFlow's builtin returns a static string and does NOT call interrupt(),
@@ -96,8 +103,25 @@ def apply_sync_tool_patches() -> None:
         # Add interrupt tools
         interrupt_tools = get_interrupt_tools()
         for t in interrupt_tools:
-            _ensure_sync_invocable_tool(t)
+            if not upstream_fix_present:
+                _ensure_sync_invocable_tool(t)
         tools.extend(interrupt_tools)
+
+        # Note: describe_skill is NOT injected here. DeerFlow registers its native
+        # describe_skill tool (deerflow.skills.describe.build_describe_skill_tool)
+        # only when skills.deferred_discovery=True (lead_agent/agent.py:540-566).
+        # With deferred_discovery=False (Numina default), the full skill metadata is
+        # inlined into the system prompt's <available_skills> and the LLM loads the
+        # full SKILL.md directly via read_file — describe_skill is unneeded.
+
+        # Restrict tools to the active skill's declared allowed-tools whitelist.
+        # Numina's worker pre-selects one skill per chat run (chat / chat-search)
+        # and sets it via active_skill_context. DeerFlow's native
+        # SkillToolPolicyMiddleware is passive (no slash activation, no
+        # skill_context load) in our flow, so we filter here using the pure
+        # filter_tools_by_skill_allowed_tools function. Skills without an
+        # allowed-tools declaration (None) → allow-all (no filtering).
+        tools = _apply_active_skill_tool_filter(tools)
 
         return tools
 
@@ -120,6 +144,57 @@ def apply_sync_tool_patches() -> None:
     _patched = True
     _apply_contextvar_propagation_patch()
     _apply_mcp_proxy_bypass_patch()
+
+
+def _apply_active_skill_tool_filter(tools):
+    """Filter tools to the active skill's allowed-tools whitelist.
+
+    Called from the patched ``get_available_tools``. No active skill (e.g.
+    trigger-based feature dispatch, which loads tools via ``enable_tools``) →
+    return tools unchanged (legacy allow-all). Active skill with no
+    allowed-tools declaration (``allowed_tools is None``) → the filter returns
+    all tools (``allowed_tool_names_for_skills`` returns None for undeclared
+    skills, meaning allow-all). Only skills that declare ``allowed-tools`` (even
+    ``[]``) restrict the tool set.
+    """
+    try:
+        from apps.agent.services.deerflow_adapter.active_skill_context import get_active_skill
+        active_skill_name = get_active_skill()
+    except Exception:
+        return tools
+    if not active_skill_name:
+        return tools
+    try:
+        from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
+        from deerflow.skills.tool_policy import (
+            ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
+            filter_tools_by_skill_allowed_tools,
+        )
+        storage = LocalSkillStorage()
+        all_skills = storage.load_skills(enabled_only=True)
+        active_skills = [s for s in all_skills if s.name == active_skill_name]
+        if not active_skills:
+            logger.warning(
+                "[sync_tool_patch] active skill %r not found in skill storage; skipping tool filter",
+                active_skill_name,
+            )
+            return tools
+        filtered = filter_tools_by_skill_allowed_tools(
+            tools,
+            active_skills,
+            always_allowed_tool_names=ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
+        )
+        if len(filtered) < len(tools):
+            logger.debug(
+                "[sync_tool_patch] filtered tools %d -> %d for active skill %r",
+                len(tools), len(filtered), active_skill_name,
+            )
+        return filtered
+    except Exception as e:
+        logger.warning(
+            "[sync_tool_patch] active-skill tool filter failed (allowing all): %s", e
+        )
+        return tools
 
 
 def _apply_contextvar_propagation_patch() -> None:

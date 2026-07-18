@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Titles that start with this were produced by the sync ``after_model`` fallback
 # using the raw ``[SKILL:chat]`` prompt wrapper - they are NOT real summaries and
-# must be replaced by a proper LLM-generated title.
+# must be replaced by a proper LLM-generated title. (Legacy checkpoints only;
+# the [SKILL:] prefix was removed, but old titles persist in the checkpointer DB.)
 _SKILL_PROMPT_PREFIX = "[SKILL:"
 _FALLBACK_TITLE_MAX_CHARS = 50
 
@@ -68,11 +69,28 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
 
 
 def _is_fallback_title(title: str | None) -> bool:
-    """Return True if the title is empty, the default placeholder, or a raw ``[SKILL:`` wrapper."""
+    """Return True if the title is empty, the placeholder, or a raw prompt wrapper.
+
+    A "raw prompt wrapper" is the context JSON the adapter sends as the user
+    message (``_build_prompt`` output) — either the legacy ``[SKILL:chat]``-prefixed
+    form or the current bare-JSON form (``{"free_text": ..., "family_id": ...}``).
+    These are NOT real summaries and must be replaced by an LLM-generated title.
+    """
     if not title or not str(title).strip():
         return True
     t = str(title).strip()
-    return t == "New Chat" or t.startswith(_SKILL_PROMPT_PREFIX)
+    if t == "New Chat" or t.startswith(_SKILL_PROMPT_PREFIX):
+        return True
+    # Bare-JSON context wrapper (current _build_prompt output). Detect by parsing;
+    # a real summary is never a JSON object of context fields.
+    if t.startswith("{"):
+        try:
+            parsed = json.loads(t)
+        except json.JSONDecodeError:
+            return False
+        if isinstance(parsed, dict) and any(k in parsed for k in ("free_text", "family_id")):
+            return True
+    return False
 
 
 def _text_fallback_title(text: str) -> str:

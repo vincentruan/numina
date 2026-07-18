@@ -73,6 +73,7 @@ export function extractToolCalls(message: ChatMessage): ToolCallSummary[] {
     id: tc.id,
     name: tc.name,
     displayName: tc.displayName || tc.name,
+    displayKey: tc.displayKey,
     args: tc.args,
     result: tc.result,
     status: tc.status || 'pending',

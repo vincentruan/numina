@@ -25,7 +25,10 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
-from apps.agent.services.message_classifier import extract_tool_calls
+from apps.agent.services.message_classifier import (
+    extract_tool_calls,
+    resolve_tool_metadata,
+)
 from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
@@ -155,34 +158,37 @@ async def run_family_agent(
             )
             mcp_servers = []
 
-        # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
-        #
-        # subagent_enabled/plan_mode init-time defaults are False; per-call
-        # overrides (driven by the frontend's flash/thinking/pro/ultra mode
-        # selector) are extracted from ``config["configurable"]`` below and
-        # passed to typed_stream_dispatch as kwargs, which route them into
-        # DeerFlowClient.stream() -> _get_runnable_config() to override the
-        # init-time setting for this specific call. This mirrors the reference
-        # Gateway path (agent_dispatch.stream_agent_dispatch).
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=240,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-        )
-
         # 4a. Extract per-call execution-mode overrides from the RunnableConfig.
         # The frontend sends these in config.configurable (see reference
         # backend/app/gateway/services.py:merge_run_context_overrides). They
         # control DeerFlow's tool loading (subagent_enabled -> task tool) and
-        # planning middleware (plan_mode -> TodoList) on a per-call basis.
+        # planning middleware (plan_mode -> TodoList/write_todos) on a per-call
+        # basis.
+        #
+        # IMPORTANT: These values MUST be passed to create_family_adapter as
+        # init-time parameters (not just per-call overrides). The cache key in
+        # family_adapter_cache.py includes (subagent_enabled, plan_mode), so
+        # different mode combinations get distinct DeerFlowClient instances.
+        # If we pass hardcoded False here, the DeerFlowClient is created with
+        # plan_mode=False, and while _ensure_agent() can rebuild the agent when
+        # per-call plan_mode=True arrives via stream(), this causes unnecessary
+        # agent rebuilds on every call and may miss the TodoMiddleware's
+        # write_todos tool if the rebuild doesn't fire correctly.
         configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
         call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
         call_plan_mode = bool(configurable.get("is_plan_mode", False))
         call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
         call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
+
+        # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
+        adapter = create_family_adapter(
+            family_id,
+            selected_provider,
+            timeout_seconds=240,
+            subagent_enabled=call_subagent_enabled,
+            plan_mode=call_plan_mode,
+            mcp_servers=mcp_servers,
+        )
 
         # 5. Extract user message for context
         if graph_input and "messages" in graph_input:
@@ -203,6 +209,13 @@ async def run_family_agent(
             ai_config.get("web_search_providers") or ai_config.get("web_search_mcp_servers")
         )
 
+        # 5b. Skill discovery is handled natively by DeerFlow: apply_prompt_template
+        # renders <skill_system> (with <available_skills> listing the active skill's
+        # metadata) into the system prompt, filtered by available_skills passed to
+        # DeerFlowClient. The LLM then calls read_file to load the full SKILL.md.
+        # The former self-built <skill_index> user-message injection duplicated this
+        # and leaked internal guidance into the user-visible message, so it was removed.
+
         # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
@@ -215,6 +228,10 @@ async def run_family_agent(
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
         capability = "chat-search" if (call_websearch_enabled and has_search_capability) else "chat"
+        # Set the active skill so sync_tool_patch can filter tools to this skill's
+        # declared allowed-tools whitelist (see active_skill_context module docstring).
+        from apps.agent.services.deerflow_adapter.active_skill_context import set_active_skill
+        _skill_token = set_active_skill(capability)
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
             context=redacted,
@@ -272,12 +289,25 @@ async def run_family_agent(
                     if tool_calls_raw:
                         # Use extract_tool_calls to properly handle LangChain ToolCall objects
                         for tc in extract_tool_calls(data):
-                            await bridge.publish(run_id, "custom", {
+                            raw_name = tc.get("name", "")
+                            # Resolve display metadata (display_name/icon/tool_type/
+                            # display_key) the same way agent_dispatch.py does, so the
+                            # /ai/chat planning-steps UI shows readable Chinese action
+                            # labels (e.g. "查询资产数据") instead of raw tool names
+                            # (e.g. "Numina Backend MCP_get_assets").
+                            tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                            payload: dict[str, Any] = {
                                 "type": "tool_call",
                                 "tool_call_id": tc.get("id", ""),
-                                "tool_name": tc.get("name", ""),
+                                "tool_name": raw_name,
                                 "args": tc.get("args", {}),
-                            })
+                                "display_name": display_name,
+                                "icon": icon,
+                                "tool_type": tool_type,
+                            }
+                            if display_key:
+                                payload["display_key"] = display_key
+                            await bridge.publish(run_id, "custom", payload)
 
                 elif msg_type == "tool":
                     # Tool result message — forward to frontend so ChainOfThought
@@ -331,6 +361,13 @@ async def run_family_agent(
         )
 
     finally:
+        # Clear the active-skill ContextVar so it cannot leak into a later run
+        # reusing this thread/coroutine. Guarded: _skill_token is only set if
+        # dispatch reached the skill-selection step (line ~234).
+        if "_skill_token" in locals():
+            from apps.agent.services.deerflow_adapter.active_skill_context import reset_active_skill
+            reset_active_skill(_skill_token)
+
         # 9. Audit log (Key Invariant #3)
         audit_logger.log_call(
             AuditEntry(

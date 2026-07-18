@@ -156,3 +156,155 @@ def test_exactly_one_ask_clarification_after_patch(_fresh_patch):
         f"Expected exactly one ask_clarification tool, found {len(ask_tools)}. "
         "DeerFlow's builtin placeholder must be filtered before adding our interrupt tool."
     )
+
+
+# ── Active-skill tool filtering (Path C) ──────────────────────────────────────
+
+
+def test_active_skill_filter_no_active_skill_returns_all(_fresh_patch):
+    """With no active skill set, _apply_active_skill_tool_filter returns all tools unchanged."""
+    from apps.agent.services.deerflow_adapter.active_skill_context import (
+        get_active_skill,
+    )
+    from apps.agent.services.deerflow_adapter.sync_tool_patch import (
+        _apply_active_skill_tool_filter,
+    )
+
+    assert get_active_skill() is None  # no active skill in test context
+
+    class _T:
+        def __init__(self, name):
+            self.name = name
+
+    tools = [_T("web_search"), _T("read_file"), _T("task")]
+    assert _apply_active_skill_tool_filter(tools) is tools
+
+
+def test_active_skill_filter_chat_keeps_only_declared_tools_and_builtins(_fresh_patch, monkeypatch):
+    """Active skill = chat → only chat's allowed-tools + framework builtins remain.
+
+    chat/SKILL.md declares allowed-tools (prefixed MCP data tools). The filter
+    must keep those plus ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES (read_file,
+    describe_skill, tool_search, review_skill_package) and drop everything else
+    (web_search, task, unrelated MCP tools).
+    """
+    from apps.agent.services.deerflow_adapter import sync_tool_patch as mod
+    from apps.agent.services.deerflow_adapter.active_skill_context import (
+        reset_active_skill,
+        set_active_skill,
+    )
+
+    # Point LocalSkillStorage at the real builtin/public/ root so the chat skill
+    # (with its allowed-tools declaration) is discoverable. Without this the
+    # storage resolves a non-existent path and reports "active skill not found".
+    _builtin_root = (
+        __import__("pathlib").Path(__file__).resolve().parent.parent.parent
+        / "skills" / "builtin"
+    )
+    from deerflow.skills.storage import local_skill_storage as lss_mod
+
+    _orig_init = lss_mod.LocalSkillStorage.__init__
+
+    def _host_root_init(self, host_path=None, container_path="/mnt/skills", app_config=None):
+        _orig_init(self, host_path=str(_builtin_root), container_path=container_path, app_config=app_config)
+
+    monkeypatch.setattr(lss_mod.LocalSkillStorage, "__init__", _host_root_init)
+
+    class _T:
+        def __init__(self, name):
+            self.name = name
+
+    all_tools = [
+        _T("numina-family-data_get_family_overview"),
+        _T("numina-family-data_get_assets"),
+        _T("numina-family-data_get_liabilities"),
+        _T("web_search"),
+        _T("web_fetch"),
+        _T("read_file"),
+        _T("describe_skill"),
+        _T("tool_search"),
+        _T("task"),
+    ]
+    token = set_active_skill("chat")
+    try:
+        filtered = mod._apply_active_skill_tool_filter(list(all_tools))
+    finally:
+        reset_active_skill(token)
+    kept = sorted(t.name for t in filtered)
+    # Declared allowed-tools
+    assert "numina-family-data_get_family_overview" in kept
+    assert "numina-family-data_get_assets" in kept
+    # Framework builtins
+    assert "read_file" in kept
+    assert "describe_skill" in kept
+    # Dropped: web tools and subagent task (not in chat's allowed-tools)
+    assert "web_search" not in kept
+    assert "web_fetch" not in kept
+    assert "task" not in kept
+
+
+def test_active_skill_filter_chat_search_keeps_web_tools(_fresh_patch, monkeypatch):
+    """Active skill = chat-search → web_search/web_fetch kept, MCP data tools dropped."""
+    from apps.agent.services.deerflow_adapter import sync_tool_patch as mod
+    from apps.agent.services.deerflow_adapter.active_skill_context import (
+        reset_active_skill,
+        set_active_skill,
+    )
+
+    _builtin_root = (
+        __import__("pathlib").Path(__file__).resolve().parent.parent.parent
+        / "skills" / "builtin"
+    )
+    from deerflow.skills.storage import local_skill_storage as lss_mod
+
+    _orig_init = lss_mod.LocalSkillStorage.__init__
+
+    def _host_root_init(self, host_path=None, container_path="/mnt/skills", app_config=None):
+        _orig_init(self, host_path=str(_builtin_root), container_path=container_path, app_config=app_config)
+
+    monkeypatch.setattr(lss_mod.LocalSkillStorage, "__init__", _host_root_init)
+
+    class _T:
+        def __init__(self, name):
+            self.name = name
+
+    all_tools = [
+        _T("web_search"),
+        _T("web_fetch"),
+        _T("numina-family-data_get_assets"),
+        _T("read_file"),
+        _T("task"),
+    ]
+    token = set_active_skill("chat-search")
+    try:
+        filtered = mod._apply_active_skill_tool_filter(list(all_tools))
+    finally:
+        reset_active_skill(token)
+    kept = sorted(t.name for t in filtered)
+    assert "web_search" in kept
+    assert "web_fetch" in kept
+    assert "read_file" in kept
+    assert "numina-family-data_get_assets" not in kept
+    assert "task" not in kept
+
+
+def test_active_skill_filter_unknown_skill_returns_all(_fresh_patch):
+    """Active skill not in storage → filter skipped (allow-all), not fail-closed."""
+    from apps.agent.services.deerflow_adapter import sync_tool_patch as mod
+    from apps.agent.services.deerflow_adapter.active_skill_context import (
+        reset_active_skill,
+        set_active_skill,
+    )
+
+    class _T:
+        def __init__(self, name):
+            self.name = name
+
+    all_tools = [_T("web_search"), _T("read_file")]
+    token = set_active_skill("nonexistent-skill-xyz")
+    try:
+        filtered = mod._apply_active_skill_tool_filter(list(all_tools))
+    finally:
+        reset_active_skill(token)
+    # Unknown skill: returns tools unchanged (graceful, logged as warning)
+    assert sorted(t.name for t in filtered) == ["read_file", "web_search"]

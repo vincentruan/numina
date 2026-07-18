@@ -54,9 +54,14 @@ sandbox:
   allow_host_bash: false  # 生产环境禁止本地 bash 执行
 
 # Skills 路径
+# DeerFlow's SkillsConfig reads `path` (singular). The native skill scanner
+# (LocalSkillStorage._iter_skill_files) expects {path}/{category}/{skill}/SKILL.md
+# where category ∈ {public, custom, legacy}. Our builtin skills live under
+# builtin/public/{skill}/SKILL.md. The host-resolved absolute path is injected
+# per-family in family_adapter_cache._generate_temp_config (the /app/... value
+# here is the container default, overridden at runtime).
 skills:
-  paths:
-    - /app/apps/agent/skills/builtin
+  path: /app/apps/agent/skills/builtin
 
 # 子代理设置（默认关闭，按 skill 按需开启）
 subagents:
