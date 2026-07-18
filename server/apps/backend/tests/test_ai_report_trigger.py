@@ -181,3 +181,25 @@ def test_trigger_stale_cache_misses(client):
         response = client.post("/api/v1/ai/report/generate/events")
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
+
+
+def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
+    """security-lens #22 (U4 step 6): a cached report_json that fails schema
+    re-validation (missing required ``indicators``) must NOT be re-served — it
+    falls through to regeneration (agent stream), bypassing the stale cache.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    corrupt = type(
+        "R",
+        (),
+        {
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),  # noqa: UP017
+            # Missing required ``indicators`` → _validate_json(report) is False.
+            "report_json": {"overall_score": 65},
+        },
+    )()
+    with patch("apps.backend.app.routers.ai_report._latest_report", return_value=corrupt):
+        response = client.post("/api/v1/ai/report/generate/events")
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")

@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import shutil
 import time
+from pathlib import Path
 from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
@@ -30,6 +33,7 @@ from apps.agent.services.message_classifier import (
     resolve_tool_metadata,
 )
 from apps.agent.services.pii_redactor import pii_redactor
+from packages.core import get_path_manager
 
 from .asset_report_middleware import parse_report_json
 from .gc import schedule_run_cleanup
@@ -37,6 +41,14 @@ from .run_extras import generate_suggestions, sync_title_from_checkpoint
 from .sandbox_provider import set_family_sandbox_context
 
 logger = logging.getLogger(__name__)
+
+# LLM-declared filename in the asset-report AI text (SKILL.md §文件命名规则):
+# ``WRITE_FILE: report_{YYYYMMDD_HHMMSS}.md``. The native write_file tool only
+# returns ``"OK"`` (not a path), so the skill prompt instructs the LLM to
+# declare the filename it wrote — worker parses this to locate the sandbox file.
+_WRITE_FILE_DECL_RE = re.compile(
+    r"WRITE_FILE:\s*(report_[a-zA-Z0-9_-]+\.md)", re.IGNORECASE
+)
 
 # Track fire-and-forget background tasks so they don't get garbage collected prematurely
 _background_tasks: set[asyncio.Task] = set()
@@ -46,6 +58,75 @@ def _track_task(task: asyncio.Task) -> None:
     """Track a background task and auto-remove it when done."""
     _background_tasks.add(task)
     task.add_done_callback(lambda t: _background_tasks.discard(t))
+
+
+def _copy_asset_report_markdown(
+    *,
+    family_id: str,
+    thread_id: str,
+    run_id: str,
+    ai_text: str,
+) -> str | None:
+    """U4 step 3 / R5 path 契约: copy the step-1 markdown audit from the
+    per-thread sandbox into the tenant reports directory, returning the
+    persisted filename for ``AIReport.markdown_file_path``.
+
+    The LLM declares the filename it wrote via ``WRITE_FILE: <filename>``
+    (SKILL.md §文件命名规则) because the native ``write_file`` tool only
+    returns ``"OK"`` (not a path). The source sandbox file lives at
+    ``AGENT_DATA_DIR/{family_id}/sandboxes/{thread_id}/workspace/<filename>``.
+
+    The persisted filename is server-generated (plan R5 文件名碰撞防御):
+    ``report_{YYYYMMDD_HHMMSS}_{run_id[:8]}.md`` — the LLM's timestamp plus a
+    ``run_id`` suffix to eliminate same-second collision across retried/queued
+    runs. Matches ``^report_[a-zA-Z0-9_-]+\\.md$`` (``_`` already allowed).
+
+    Returns ``None`` (and logs) when the LLM declared no filename or the sandbox
+    file is missing — persistence is best-effort, a failure must not fail the run.
+    """
+    decl = _WRITE_FILE_DECL_RE.search(ai_text)
+    if decl is None:
+        logger.warning(
+            "[_run_asset_report_pipeline] no WRITE_FILE declaration in AI text, "
+            "markdown_file_path not persisted run=%s", run_id,
+        )
+        return None
+    declared_filename = decl.group(1)
+
+    # Source: per-thread sandbox workspace (NuminaLocalSandboxProvider layout).
+    sandbox_workspace = (
+        Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes" / thread_id / "workspace"
+    )
+    source_path = sandbox_workspace / declared_filename
+    if not source_path.is_file():
+        logger.warning(
+            "[_run_asset_report_pipeline] sandbox markdown not found at %s, "
+            "markdown_file_path not persisted run=%s", source_path, run_id,
+        )
+        return None
+
+    # Target: tenant reports dir, server-generated filename with run_id suffix.
+    # Reuse the LLM's timestamp (already validated to match report_*.md) and
+    # append run_id[:8] for same-second collision defense.
+    stem = declared_filename[:-3]  # strip ".md"
+    persisted_filename = f"{stem}_{run_id[:8]}.md"
+    try:
+        pm = get_path_manager()
+        # tenant_report_file validates the filename pattern + family_id scope.
+        target_path = pm.tenant_report_file(int(family_id), persisted_filename)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, target_path)
+        logger.info(
+            "[_run_asset_report_pipeline] persisted markdown %s -> %s run=%s",
+            source_path, target_path, run_id,
+        )
+        return persisted_filename
+    except Exception as exc:
+        logger.warning(
+            "[_run_asset_report_pipeline] copy markdown failed run=%s err=%s",
+            run_id, type(exc).__name__,
+        )
+        return None
 
 
 async def run_agent(
@@ -391,14 +472,29 @@ async def _run_asset_report_pipeline(
         # before the end frame (timing contract: strictly precedes end), then
         # persist. Best-effort persistence: a failure must not fail the run.
         if completion_status == "complete":
-            step2_payload = parse_report_json("".join(ai_response_parts))
+            ai_text = "".join(ai_response_parts)
+            step2_payload = parse_report_json(ai_text)
             if step2_payload is not None:
                 await bridge.publish(run_id, "custom", {
                     "type": "report.step2_json",
                     "payload": step2_payload,
                 })
+                # R5 path 契约 + Finding 4: persist markdown_file_path by
+                # copying the step-1 sandbox markdown into the tenant reports
+                # dir (server-generated filename with run_id suffix — collision
+                # defense). Best-effort: None when the LLM declared no filename
+                # or the sandbox file is missing.
+                markdown_file_path = _copy_asset_report_markdown(
+                    family_id=family_id,
+                    thread_id=thread_id,
+                    run_id=run_id,
+                    ai_text=ai_text,
+                )
                 try:
-                    await client.persist_report_result(report_json=step2_payload)
+                    await client.persist_report_result(
+                        report_json=step2_payload,
+                        markdown_file_path=markdown_file_path,
+                    )
                 except Exception as persist_exc:
                     logger.warning(
                         "[_run_asset_report_pipeline] persist_report_result failed run=%s err=%s",

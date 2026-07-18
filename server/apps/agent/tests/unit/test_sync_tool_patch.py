@@ -215,9 +215,9 @@ def test_active_skill_filter_chat_keeps_only_declared_tools_and_builtins(_fresh_
             self.name = name
 
     all_tools = [
-        _T("numina-family-data_get_family_overview"),
-        _T("numina-family-data_get_assets"),
-        _T("numina-family-data_get_liabilities"),
+        _T("get_family_overview"),
+        _T("get_assets"),
+        _T("get_liabilities"),
         _T("web_search"),
         _T("web_fetch"),
         _T("read_file"),
@@ -231,9 +231,9 @@ def test_active_skill_filter_chat_keeps_only_declared_tools_and_builtins(_fresh_
     finally:
         reset_active_skill(token)
     kept = sorted(t.name for t in filtered)
-    # Declared allowed-tools
-    assert "numina-family-data_get_family_overview" in kept
-    assert "numina-family-data_get_assets" in kept
+    # Declared allowed-tools (base names — 1a27f076 unified MCP tool_name_prefix=False)
+    assert "get_family_overview" in kept
+    assert "get_assets" in kept
     # Framework builtins
     assert "read_file" in kept
     assert "describe_skill" in kept

@@ -24,6 +24,10 @@ from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
+from apps.backend.app.services.ai_result_parser import (
+    _contains_markdown_table,
+    _validate_json,
+)
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 from packages.core.path_manager import PathManager
@@ -141,13 +145,28 @@ async def trigger_generate_events(
         if cached is not None and cached.generated_at is not None:
             age = datetime.now(timezone.utc).replace(tzinfo=None) - cached.generated_at  # noqa: UP017
             if age < REPORT_CACHE_TTL:
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "status": "cached",
-                        "generated_at": cached.generated_at.isoformat(),
-                        "report": cached.report_json,
-                    },
+                # security-lens Open Question #22 (P2, defense-in-depth): the
+                # cached report_json was validated on first write, but re-serving
+                # it bypasses fresh-generation output sanitization. Re-validate
+                # against the same report schema + markdown-table check before
+                # returning; a stale/corrupted cache falls through to regen.
+                cached_json = cached.report_json
+                if (
+                    isinstance(cached_json, dict)
+                    and _validate_json(cached_json, "report")
+                    and not _contains_markdown_table(cached_json)
+                ):
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "status": "cached",
+                            "generated_at": cached.generated_at.isoformat(),
+                            "report": cached_json,
+                        },
+                    )
+                logger.info(
+                    "[trigger_generate_events] cached report failed re-validation, "
+                    "regenerating family=%s", current_user.family_id,
                 )
 
     # Check if there's already a running task - resume it instead of 409
