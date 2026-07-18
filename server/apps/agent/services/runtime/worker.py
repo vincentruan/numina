@@ -379,6 +379,19 @@ async def _run_asset_report_pipeline(
                     "type": "report.step2_json",
                     "payload": step2_payload,
                 })
+                # Step 7: persist the parsed indicators JSON to ai_reports via
+                # backend internal endpoint (verify_agent_token auth). Best-effort
+                # — a persistence failure must not fail the run (the SSE stream
+                # already delivered report.step2_json to the frontend; the row is
+                # for subsequent GET /ai/report queries). markdown_file_path
+                # deferred to P1 (requires sandbox→tenant-reports file copy).
+                try:
+                    await client.persist_report_result(report_json=step2_payload)
+                except Exception as persist_exc:
+                    logger.warning(
+                        "[_run_asset_report_pipeline] persist_report_result failed run=%s err=%s",
+                        run_id, type(persist_exc).__name__,
+                    )
 
     except asyncio.CancelledError:
         error_type = "Cancelled"

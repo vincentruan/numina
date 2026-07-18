@@ -17,10 +17,22 @@ from apps.backend.app.utils.snowflake import next_id
 logger = logging.getLogger(__name__)
 
 
-def write_report_results(family_id: int, results: dict, db: Session) -> int:
+def write_report_results(
+    family_id: int,
+    results: dict,
+    db: Session,
+    *,
+    markdown_file_path: str | None = None,
+) -> int:
     """Write report results to ai_reports table.
 
     Replace strategy: clear previous reports for this family first.
+
+    Args:
+        markdown_file_path: Optional relative path to the step-1 markdown audit
+            file under the tenant reports directory (U4 step 7 — persisted so
+            the frontend can fall back to the markdown even if step-3 JSON
+            parsing failed on a later render).
     """
     try:
         # Clear previous reports for this family
@@ -37,6 +49,7 @@ def write_report_results(family_id: int, results: dict, db: Session) -> int:
             overall_score=results.get("overall_score"),
             data_completeness_score=results.get("data_completeness_score"),
             status="completed",
+            markdown_file_path=markdown_file_path,
         )
         db.add(report)
         db.commit()

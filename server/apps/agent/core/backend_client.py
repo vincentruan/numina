@@ -211,6 +211,19 @@ class BackendClient:
             title=title,
         )
 
+    async def persist_report_result(
+        self,
+        *,
+        report_json: dict,
+        markdown_file_path: str | None = None,
+    ) -> dict:
+        """U4 step 7: persist an asset-report result to ai_reports (backend)."""
+        return await persist_report_result(
+            self.family_id,
+            report_json=report_json,
+            markdown_file_path=markdown_file_path,
+        )
+
     async def update_session(
         self,
         *,
@@ -596,6 +609,32 @@ async def update_session_summary(
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
+
+
+async def persist_report_result(
+    family_id: str,
+    *,
+    report_json: dict,
+    markdown_file_path: str | None = None,
+) -> dict:
+    """U4 step 7: persist an asset-report result to ``ai_reports`` via backend.
+
+    Calls ``POST /api/v1/internal/ai/reports`` (verify_agent_token auth).
+    Returns the backend's response dict (``{"ok": True, "written": <count>}``).
+    Raises ``httpx.HTTPStatusError`` on non-2xx so the worker can catch + log.
+    """
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    payload: dict = {"report_json": report_json}
+    if markdown_file_path is not None:
+        payload["markdown_file_path"] = markdown_file_path
+    resp = await client.post(
+        "/api/v1/internal/ai/reports",
+        json=payload,
+        headers=_make_headers(validated_id),
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def update_session(

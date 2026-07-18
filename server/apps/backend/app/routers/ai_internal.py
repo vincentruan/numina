@@ -746,6 +746,13 @@ class SessionSummaryRequest(BaseModel):
     is_pinned: bool | None = None
 
 
+class ReportResultRequest(BaseModel):
+    """U4 step 7: agent worker → backend report persistence."""
+
+    report_json: dict
+    markdown_file_path: str | None = None
+
+
 def _session_to_dict(s: "object") -> dict:
     return {
         "session_id": str(s.id),  # type: ignore[attr-defined]
@@ -841,6 +848,31 @@ def internal_update_session_summary(
     db.commit()
     logger.info("[backend] session updated successfully session=%s title=%s", session_id, repr(row.title))
     return {"ok": True}
+
+
+@router.post("/ai/reports")
+def internal_persist_report(
+    body: ReportResultRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """U4 step 7: persist an asset-report result (agent worker → backend).
+
+    The agent worker's ``_run_asset_report_pipeline`` calls this after step 3
+    (json-repair) to store the indicators JSON + step-1 markdown audit path in
+    ``ai_reports``. Service-to-service auth via ``verify_agent_token``; the
+    family_id from the token scopes the write (defense in depth — the worker
+    also passes family_id in its payload path, but the token is the trust root).
+    """
+    from apps.backend.app.services.ai_result_writer import write_report_results
+
+    count = write_report_results(
+        int(family_id),
+        body.report_json,
+        db,
+        markdown_file_path=body.markdown_file_path,
+    )
+    return {"ok": True, "written": count}
 
 
 @router.get("/ai/sessions")

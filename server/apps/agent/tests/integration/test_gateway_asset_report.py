@@ -60,6 +60,11 @@ def client():
             return_value=[],
         ),
         patch(
+            "apps.agent.services.runtime.worker.BackendClient.persist_report_result",
+            new_callable=AsyncMock,
+            return_value={"ok": True, "written": 1},
+        ),
+        patch(
             "apps.agent.services.runtime.worker.create_family_adapter",
             return_value=_make_stub_adapter(),
         ),
@@ -124,10 +129,21 @@ def test_asset_report_run_rejects_bad_token(client):
 
 
 def test_asset_report_run_streams_step2_json(client):
-    """Valid token → SSE stream with report.step2_json custom event + complete end."""
-    with patch(
-        "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
-        _TOKEN,
+    """Valid token → SSE stream with report.step2_json custom event + complete end.
+
+    Also asserts the worker calls BackendClient.persist_report_result with the
+    parsed indicators JSON (U4 step 7 persistence).
+    """
+    with (
+        patch(
+            "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
+            _TOKEN,
+        ),
+        patch(
+            "apps.agent.services.runtime.worker.BackendClient.persist_report_result",
+            new_callable=AsyncMock,
+            return_value={"ok": True, "written": 1},
+        ) as mock_persist,
     ):
         response = client.post(
             "/internal/gateway/runs/asset-report/thread-ar",
@@ -142,5 +158,8 @@ def test_asset_report_run_streams_step2_json(client):
     ]
     assert len(step2) == 1, f"expected 1 report.step2_json, got {events}"
     assert step2[0]["data"]["payload"] == {"overall_score": 88}
+    # U4 step 7: worker persisted the parsed JSON to ai_reports via backend.
+    mock_persist.assert_awaited_once()
+    assert mock_persist.await_args.kwargs["report_json"] == {"overall_score": 88}
     end_events = [e for e in events if e["event"] == "end" and e["data"] is not None]
     assert end_events and end_events[0]["data"]["status"] == "complete"
