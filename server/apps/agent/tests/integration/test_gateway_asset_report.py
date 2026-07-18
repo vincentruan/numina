@@ -155,12 +155,15 @@ def test_asset_report_run_streams_step2_json(client):
         )
     assert response.status_code == 200
     events = _parse_sse_events(response.text)
-    # Worker must NOT emit step2 (middleware owns it now).
+    # U4 step 3: worker synthesizes report.step2_json (middleware path was
+    # attempted but get_stream_writer() is no-op on numina's sync stream() path
+    # — plan fallback condition; worker synthesis is the sanctioned fallback).
     step2 = [
         e for e in events
         if e["event"] == "custom" and isinstance(e["data"], dict) and e["data"].get("type") == "report.step2_json"
     ]
-    assert step2 == [], f"worker must not emit step2 (middleware owns it): {step2}"
+    assert len(step2) == 1, f"expected 1 report.step2_json, got {events}"
+    assert step2[0]["data"]["payload"] == {"overall_score": 88}
     # U4 step 7: worker persisted the parsed JSON to ai_reports via backend.
     mock_persist.assert_awaited_once()
     assert mock_persist.await_args.kwargs["report_json"] == {"overall_score": 88}

@@ -290,12 +290,12 @@ async def test_run_agent_dispatches_asset_report_to_pipeline():
     error_events = [d for ev, d in bridge.published if ev == "error"]
     assert not error_events, f"unexpected error event: {error_events}"
 
-    # U4 step 3: report.step2_json is now emitted by AssetReportStep2Middleware
-    # (in-graph via get_stream_writer), NOT by the worker. The stub adapter
-    # bypasses the real graph middleware path, so no step2 event appears here —
-    # the worker only persists the parsed JSON (asserted via persist mock below).
+    # U4 step 3: worker synthesizes report.step2_json (middleware path was
+    # attempted but get_stream_writer() is no-op on numina's sync stream() path
+    # — plan fallback condition; worker synthesis is the sanctioned fallback).
     step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
-    assert step2 == [], f"worker must not emit step2 (middleware owns it): {step2}"
+    assert len(step2) == 1, f"expected 1 report.step2_json, got {step2}: {bridge.published}"
+    assert step2[0]["payload"] == {"overall_score": 72}
 
     # end frame status = complete
     end_events = [d for ev, d in bridge.published if ev == "end" and d is not None]

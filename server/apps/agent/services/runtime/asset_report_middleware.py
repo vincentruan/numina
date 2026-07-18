@@ -57,17 +57,20 @@ class AssetReportStep2Middleware(AgentMiddleware):
     """Emit ``report.step2_json`` when the asset-report LLM outputs its JSON.
 
     Attached only to the asset-report adapter (via DeerFlowClient middlewares).
-    Best-effort: get_stream_writer() is no-op on the ThreadPoolExecutor sync-
-    tool path (see sync_tool_patch.py:211), but the async graph node / model-
-    call path works — which is exactly where awrap_model_call runs.
+    Both sync and async hooks are implemented because numina's adapter runs the
+    sync ``stream()`` path (PatchedChatOpenAI) — a middleware with only
+    awrap_model_call raises NotImplementedError on the sync path and the LLM
+    call fails. get_stream_writer() works on the graph model-call path (sync or
+    async); it is no-op only on the ThreadPoolExecutor sync-tool wrapper path
+    (sync_tool_patch.py:211), which this middleware does not run on.
     """
 
-    async def awrap_model_call(
-        self,
-        request: Any,
-        handler: Callable[[Any], Awaitable[Any]],
-    ) -> Any:
-        response = await handler(request)
+    def _maybe_emit_step2(self, response: Any) -> None:
+        """Parse the AI message content; emit report.step2_json if JSON found.
+
+        Best-effort: any failure (no JSON, get_stream_writer unavailable) is
+        logged at debug and swallowed — never fail the model call.
+        """
         try:
             content = _extract_ai_content(response)
             if content:
@@ -83,6 +86,25 @@ class AssetReportStep2Middleware(AgentMiddleware):
                 "[asset-report-step2] emit failed (best-effort, skipped)",
                 exc_info=True,
             )
+
+    def wrap_model_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Any],
+    ) -> Any:
+        """Sync hook — required for numina's sync stream() path."""
+        response = handler(request)
+        self._maybe_emit_step2(response)
+        return response
+
+    async def awrap_model_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Awaitable[Any]],
+    ) -> Any:
+        """Async hook — used when the agent runs via astream()/ainvoke()."""
+        response = await handler(request)
+        self._maybe_emit_step2(response)
         return response
 
 

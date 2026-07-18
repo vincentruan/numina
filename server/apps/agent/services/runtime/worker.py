@@ -31,8 +31,8 @@ from apps.agent.services.message_classifier import (
 )
 from apps.agent.services.pii_redactor import pii_redactor
 
+from .asset_report_middleware import parse_report_json
 from .gc import schedule_run_cleanup
-from .asset_report_middleware import AssetReportStep2Middleware, parse_report_json
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
 from .sandbox_provider import set_family_sandbox_context
 
@@ -274,11 +274,11 @@ async def _run_asset_report_pipeline(
             # memory (which caused LLM to skip write_file/read_file/MCP and answer
             # from stale memory — see plan Open Question DeerMem pollution).
             agent_name="asset-report",
-            # U4 step 3: emit report.step2_json via middleware (replicates
-            # DeerFlow get_stream_writer() pattern) instead of worker post-run
-            # synthesis. The middleware fires from inside the graph node path
-            # where get_stream_writer() works natively.
-            middlewares=[AssetReportStep2Middleware()],
+            # U4 step 3: middleware path (AssetReportStep2Middleware) was
+            # attempted but get_stream_writer() is no-op on numina's sync
+            # stream() path (plan fallback condition). report.step2_json is
+            # worker-synthesized instead (see step 9 below). AssetReportStep2Middleware
+            # is kept for a future async-path migration.
         )
 
         # 5. Synthetic trigger message (plan L117): report runs are backend-
@@ -377,16 +377,20 @@ async def _run_asset_report_pipeline(
             completion_status = "complete"
             success = record.status == RunStatus.success
 
-        # 9. Step 3 persistence: the report.step2_json custom event is now emitted
-        # by AssetReportStep2Middleware (in-graph, via get_stream_writer — plan
-        # step 3 preferred middleware path). The worker only persists the parsed
-        # JSON to ai_reports here (step 7). Best-effort: a persistence failure
-        # must not fail the run (the SSE stream already delivered step2_json to
-        # the frontend; the row is for subsequent GET /ai/report queries).
-        # markdown_file_path deferred to P1 (requires sandbox→tenant-reports copy).
+        # 9. Step 3 worker-synthesized report.step2_json emission + persistence.
+        # The middleware path (AssetReportStep2Middleware via get_stream_writer)
+        # was attempted but is no-op on numina's sync stream() path (plan step 3
+        # fallback condition: "numina 租户隔离动态加载阻断"). Worker synthesis is
+        # the plan-sanctioned fallback — emit exactly one report.step2_json
+        # before the end frame (timing contract: strictly precedes end), then
+        # persist. Best-effort persistence: a failure must not fail the run.
         if completion_status == "complete":
             step2_payload = parse_report_json("".join(ai_response_parts))
             if step2_payload is not None:
+                await bridge.publish(run_id, "custom", {
+                    "type": "report.step2_json",
+                    "payload": step2_payload,
+                })
                 try:
                     await client.persist_report_result(report_json=step2_payload)
                 except Exception as persist_exc:
@@ -658,7 +662,9 @@ async def _run_numina_agent(
         capability = "chat-search" if (call_websearch_enabled and has_search_capability) else "chat"
         # Set the active skill so sync_tool_patch can filter tools to this skill's
         # declared allowed-tools whitelist (see active_skill_context module docstring).
-        from apps.agent.services.deerflow_adapter.active_skill_context import set_active_skill
+        from apps.agent.services.deerflow_adapter.active_skill_context import (
+            set_active_skill,
+        )
         _skill_token = set_active_skill(capability)
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
@@ -793,7 +799,9 @@ async def _run_numina_agent(
         # reusing this thread/coroutine. Guarded: _skill_token is only set if
         # dispatch reached the skill-selection step (line ~234).
         if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import reset_active_skill
+            from apps.agent.services.deerflow_adapter.active_skill_context import (
+                reset_active_skill,
+            )
             reset_active_skill(_skill_token)
 
         # 9. Audit log (Key Invariant #3)
