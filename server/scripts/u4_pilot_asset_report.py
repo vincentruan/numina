@@ -59,31 +59,26 @@ from apps.agent.services.runtime.sandbox_provider import (
 _SYNTHETIC_TRIGGER = "/asset-report 生成家庭资产报告"
 
 
-def _build_mcp_servers(client: BackendClient, family_id: str, user_id: str | None) -> list[dict[str, Any]]:
+async def _build_mcp_servers(client: BackendClient, family_id: str, user_id: str | None) -> list[dict[str, Any]]:
     """Mirror worker.py's MCP server setup (lines ~133-153)."""
-    import asyncio as _aio
-
-    async def _fetch():
-        mcp_servers = await client.get_enabled_mcp_servers()
-        for srv in mcp_servers:
-            if srv.get("name") == "Numina Backend MCP":
-                expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                actual_url = (srv.get("url") or "").rstrip("/")
-                if not actual_url.startswith(expected_prefix):
-                    srv["url"] = expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
-                mcp_headers: dict[str, str] = {
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Family-Id": family_id,
-                }
-                if user_id:
-                    mcp_headers["X-Caller-User-Id"] = user_id
-                srv["headers"] = mcp_headers
-        return mcp_servers
-
-    return _aio.run(_fetch())
+    mcp_servers = await client.get_enabled_mcp_servers()
+    for srv in mcp_servers:
+        if srv.get("name") == "Numina Backend MCP":
+            expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
+            actual_url = (srv.get("url") or "").rstrip("/")
+            if not actual_url.startswith(expected_prefix):
+                srv["url"] = expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
+            mcp_headers: dict[str, str] = {
+                "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                "X-Family-Id": family_id,
+            }
+            if user_id:
+                mcp_headers["X-Caller-User-Id"] = user_id
+            srv["headers"] = mcp_headers
+    return mcp_servers
 
 
-def _run_once(
+async def _run_once(
     *,
     family_id: str,
     user_id: str | None,
@@ -148,7 +143,7 @@ def _run_once(
                 if sse_type == "custom" and isinstance(data, dict):
                     custom_events.append(data)
 
-        asyncio.run(_drive())
+        await _drive()
     finally:
         try:
             from apps.agent.services.deerflow_adapter.active_skill_context import (
@@ -228,7 +223,7 @@ async def _main_async(args: argparse.Namespace) -> int:
         print("FAIL: family has no AI providers configured", file=sys.stderr)
         return 1
     user_id = args.user_id
-    mcp_servers = _build_mcp_servers(client, args.family_id, user_id)
+    mcp_servers = await _build_mcp_servers(client, args.family_id, user_id)
 
     print(f"U4 pilot: skill={args.skill} family={args.family_id} runs={args.runs}")
     print(f"  provider={ai_config['providers'][0].get('provider')}")
@@ -237,7 +232,7 @@ async def _main_async(args: argparse.Namespace) -> int:
     for i in range(args.runs):
         thread_id = f"pilot-{args.skill}-{int(time.time())}-{i}"
         try:
-            r = _run_once(
+            r = await _run_once(
                 family_id=args.family_id,
                 user_id=user_id,
                 ai_config=ai_config,
