@@ -33,6 +33,7 @@ from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
+from .sandbox_provider import set_family_sandbox_context
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _track_task(task: asyncio.Task) -> None:
     task.add_done_callback(lambda t: _background_tasks.discard(t))
 
 
-async def run_family_agent(
+async def run_agent(
     *,
     bridge: StreamBridge,
     run_manager: RunManager,
@@ -60,7 +61,171 @@ async def run_family_agent(
     resume_answer: str | None = None,
     interrupt_id: str | None = None,
 ) -> None:
-    """Background agent execution for a family-scoped run.
+    """Multi-app dispatch entry point.
+
+    Reads ``record.metadata["app"]`` (default ``"numina"``) and delegates to
+    the matching per-app runner. The NuminaLocalSandboxProvider relies on a
+    coroutine-scoped family_id ContextVar (set here, in every branch) so that
+    write_file/read_file/str_replace resolve to the family-scoped sandbox —
+    without this the provider falls back to family_id="unknown" and tenant
+    isolation silently fails (Resolved-3 blocker A).
+
+    Apps:
+      - ``numina``        → ``_run_numina_agent`` (the /ai/chat path, live).
+      - ``asset-report``  → ``_run_asset_report_pipeline`` (U4 will land the
+                            3-step pipeline; until then a 503-style error is
+                            published so any premature dispatch is a handled
+                            error, not a runtime crash — Finding 15).
+      - ``import-parse``  → ``_run_import_parse_agent`` (U8; 503 placeholder).
+
+    The allowlist preventing unknown / asset-report / import-parse values from
+    reaching here is enforced upstream in ``sse_gateway.start_run`` (R1 gate).
+    """
+    # Resolved-3 blocker A: set the family_id ContextVar before any sandbox
+    # tool (write_file/read_file) can be invoked. Must run in all branches —
+    # numina and import-parse also depend on it once native tools are enabled.
+    set_family_sandbox_context(family_id)
+
+    app = record.metadata.get("app", "numina") if record.metadata else "numina"
+    if app == "asset-report":
+        await _run_asset_report_pipeline(
+            bridge=bridge,
+            run_manager=run_manager,
+            record=record,
+            family_id=family_id,
+            user_id=user_id,
+            thread_id=thread_id,
+            graph_input=graph_input,
+            config=config,
+        )
+        return
+    if app == "import-parse":
+        await _run_import_parse_agent(
+            bridge=bridge,
+            run_manager=run_manager,
+            record=record,
+            family_id=family_id,
+            user_id=user_id,
+            thread_id=thread_id,
+            graph_input=graph_input,
+            config=config,
+        )
+        return
+    # Default / "numina"
+    await _run_numina_agent(
+        bridge=bridge,
+        run_manager=run_manager,
+        record=record,
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        graph_input=graph_input,
+        config=config,
+        stream_modes=stream_modes,
+        resume_answer=resume_answer,
+        interrupt_id=interrupt_id,
+    )
+
+
+async def _publish_not_ready(
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    app: str,
+    landing_unit: str,
+) -> None:
+    """Publish a 503-style error for a dispatch branch whose pipeline is not
+    yet implemented.
+
+    Finding 15: placeholders must surface a *handled* error (frontend can show
+    a graceful message) rather than ``raise NotImplementedError`` (a runtime
+    crash). Marks the run ``error`` and publishes ``error`` + ``end`` frames
+    so the SSE stream closes cleanly.
+
+    Args:
+        app: The app value that was dispatched (e.g. ``"asset-report"``).
+        landing_unit: The plan unit that will implement this branch
+            (e.g. ``"U4"`` / ``"U8"``).
+    """
+    run_id = record.run_id
+    message = f"{app} 流水线未就绪，待 {landing_unit} 落地"
+    logger.warning("[run_agent] %s (app=%s run=%s)", message, app, run_id)
+    await run_manager.set_status(run_id, RunStatus.error, error=message)
+    await bridge.publish(run_id, "error", {"message": message, "name": "NotImplemented"})
+    await bridge.publish(run_id, "end", {"status": "error"})
+    await bridge.publish_end(run_id)
+    asyncio.create_task(bridge.cleanup(run_id, delay=60))
+
+
+async def _run_asset_report_pipeline(
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    family_id: str,
+    user_id: str | None,
+    thread_id: str,
+    graph_input: dict | None,
+    config: dict[str, Any],
+) -> None:
+    """Asset-report 3-step pipeline dispatch branch.
+
+    U2 placeholder: the 3-step pipeline (markdown → JSON → json-repair persist)
+    is implemented in U4. Until then any dispatch here is a premature caller
+    (backend ``trigger_generate_events`` should still use the legacy
+    ``dispatch(capability="report")`` path until U4 lands — U2 Finding 15).
+    """
+    await _publish_not_ready(
+        bridge=bridge,
+        run_manager=run_manager,
+        record=record,
+        app="asset-report",
+        landing_unit="U4",
+    )
+
+
+async def _run_import_parse_agent(
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    family_id: str,
+    user_id: str | None,
+    thread_id: str,
+    graph_input: dict | None,
+    config: dict[str, Any],
+) -> None:
+    """Import-parse (3rd stream_run agent) dispatch branch.
+
+    U2 placeholder: the import-parse agent is implemented in U8. Until then
+    backend ``/import/parse-pdf`` should keep using the legacy
+    ``dispatch(capability="import_parse")`` path (U2 Finding 15).
+    """
+    await _publish_not_ready(
+        bridge=bridge,
+        run_manager=run_manager,
+        record=record,
+        app="import-parse",
+        landing_unit="U8",
+    )
+
+
+async def _run_numina_agent(
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    family_id: str,
+    user_id: str | None,
+    thread_id: str,
+    graph_input: dict | None,
+    config: dict[str, Any],
+    stream_modes: list[str] | None = None,
+    resume_answer: str | None = None,
+    interrupt_id: str | None = None,
+) -> None:
+    """Background agent execution for the Numina (/ai/chat) application.
 
     Publishes events to the ``StreamBridge`` and uses the ``RunManager`` for
     lifecycle tracking.  Runs inside ``asyncio.create_task()`` so it does not
@@ -153,7 +318,7 @@ async def run_family_agent(
                     break
         except Exception as exc:
             logger.warning(
-                "[run_family_agent] get_enabled_mcp_servers failed family=%s err=%s",
+                "[_run_numina_agent] get_enabled_mcp_servers failed family=%s err=%s",
                 family_id, type(exc).__name__,
             )
             mcp_servers = []
@@ -275,14 +440,14 @@ async def run_family_agent(
                     tool_calls = data.get("tool_calls")
                     msg_id = data.get("id")
                     logger.info(
-                        "[run_family_agent] AI message received: run=%s id=%s content_len=%d has_tool_calls=%s",
+                        "[_run_numina_agent] AI message received: run=%s id=%s content_len=%d has_tool_calls=%s",
                         run_id, msg_id, len(content) if content else 0, bool(tool_calls),
                     )
                     if content:
                         ai_response_parts.append(content)
                     else:
                         logger.warning(
-                            "[run_family_agent] AI message with empty content: run=%s data_keys=%s",
+                            "[_run_numina_agent] AI message with empty content: run=%s data_keys=%s",
                             run_id, list(data.keys()),
                         )
                     tool_calls_raw = tool_calls
@@ -352,7 +517,7 @@ async def run_family_agent(
         raise
     except Exception as exc:
         error_type = type(exc).__name__
-        logger.warning("[run_family_agent] failed run=%s err=%s", run_id, error_type)
+        logger.warning("[_run_numina_agent] failed run=%s err=%s", run_id, error_type)
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
         await bridge.publish(
             run_id,

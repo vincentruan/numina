@@ -49,8 +49,13 @@ tools:
     max_results: 5
 
 # 沙盒安全设置
+# Use NuminaLocalSandboxProvider (extends DeerFlow LocalSandboxProvider with
+# family_id-scoped sandbox IDs + path mappings) so write_file/read_file/str_replace
+# isolate per tenant. The base LocalSandboxProvider has no tenant isolation —
+# _generate_temp_config's setdefault does not override an existing sandbox block,
+# so this base value is the authoritative provider. (Resolved-3 blocker B.)
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider
   allow_host_bash: false  # 生产环境禁止本地 bash 执行
 
 # Skills 路径

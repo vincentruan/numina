@@ -32,7 +32,7 @@ from .lifespan import get_run_manager, get_stream_bridge, init_runtime, shutdown
 from .sandbox_provider import NuminaLocalSandboxProvider, acquire_family_sandbox
 from .sse_gateway import format_sse, sse_consumer, start_run
 from .subagent_registry import FamilySubagentRegistry, get_family_subagent_registry
-from .worker import run_family_agent
+from .worker import run_agent
 
 __all__ = [
     # DeerFlow re-exports
@@ -60,7 +60,7 @@ __all__ = [
     "NuminaLocalSandboxProvider",
     "acquire_family_sandbox",
     "reconcile_orphaned_runs",
-    "run_family_agent",
+    "run_agent",
     "schedule_run_cleanup",
     "shutdown_runtime",
     "sse_consumer",

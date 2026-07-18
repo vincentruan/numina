@@ -23,10 +23,10 @@ from deerflow.runtime import (
     RunStatus,
     StreamBridge,
 )
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from .lifespan import get_run_manager, get_stream_bridge
-from .worker import run_family_agent
+from .worker import run_agent
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,17 @@ async def sse_consumer(
 
 
 # [Integrated with Numina Multi-Tenant] — family_id in metadata
+def _app_rejected_error(*, status_code: int, app: str, reason: str) -> HTTPException:
+    """Build an HTTPException rejecting a disallowed ``app`` dispatch value.
+
+    Used by ``start_run`` to enforce the R1 allowlist before the run is created.
+    """
+    return HTTPException(
+        status_code=status_code,
+        detail=f"app='{app}' 不允许直连：{reason}",
+    )
+
+
 async def start_run(
     body: Any,
     thread_id: str,
@@ -143,6 +154,36 @@ async def start_run(
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
+    # R1 security gate (P0): the ``app`` field in body.metadata controls which
+    # worker dispatch branch fires (numina / asset-report / import-parse). It
+    # originates from the client, so the server must validate it. allowlist is
+    # intentionally narrow here and widened only as each app's auth is wired:
+    #   - "numina" (default): always allowed (the /ai/chat path).
+    #   - "asset-report": REJECTED direct — the report pipeline must be entered
+    #     via the backend trigger_generate_events endpoint, which enforces
+    #     require_owner + require_ai_enabled + per-family concurrency gating.
+    #     Accepting it here would bypass that gating (R1 Finding 1).
+    #   - "import-parse": REJECTED until U8 wires its owner/member auth
+    #     (lockstep with allowlist — no U2→U8 window where the value is
+    #     accepted without /import/parse-pdf's guards).
+    #   - any other value: 400.
+    body_meta = getattr(body, "metadata", None) or {}
+    app = body_meta.get("app", "numina") if isinstance(body_meta, dict) else "numina"
+    if app == "asset-report":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="报告生成须经由后端触发端点，请勿直连 /runs/stream",
+        )
+    if app == "import-parse":
+        raise _app_rejected_error(
+            status_code=400,
+            app=app,
+            reason="import-parse 暂未启用，请使用 /import/parse-pdf",
+        )
+    if app != "numina":
+        raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
+
     disconnect = (
         DisconnectMode.cancel
         if getattr(body, "on_disconnect", "cancel") == "cancel"
@@ -157,6 +198,9 @@ async def start_run(
             **(getattr(body, "metadata", None) or {}),
             "family_id": family_id,
             "user_id": user_id,
+            # Normalise so worker.py can always read record.metadata["app"]
+            # without re-checking body shape. Defaults to "numina".
+            "app": app,
         },
         kwargs={
             "input": getattr(body, "input", None),
@@ -166,7 +210,7 @@ async def start_run(
     )
 
     task = asyncio.create_task(
-        run_family_agent(
+        run_agent(
             bridge=bridge,
             run_manager=run_mgr,
             record=record,
