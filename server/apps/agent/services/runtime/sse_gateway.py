@@ -136,6 +136,8 @@ async def start_run(
     request: Request,
     family_id: str,
     user_id: str | None,
+    *,
+    internal: bool = False,
 ) -> RunRecord:
     """Create a ``RunRecord`` and launch the background family agent task.
 
@@ -145,6 +147,12 @@ async def start_run(
         request: FastAPI request — used to retrieve singletons from ``app.state``.
         family_id: Numina family (tenant) ID.
         user_id: Optional user ID.
+        internal: When True, the caller is a trusted backend service (authenticated
+            via ``X-Agent-Token`` at the gateway endpoint, e.g. the asset-report
+            trigger). The R1 ``app`` allowlist gate is relaxed for internal calls
+            because the backend trigger endpoint already enforces owner +
+            require_ai_enabled + per-family concurrency gating — R1's purpose is
+            to stop *frontend* direct dispatch, not service-to-service dispatch.
 
     Returns:
         The created ``RunRecord`` with an attached ``asyncio.Task``.
@@ -163,13 +171,15 @@ async def start_run(
     #     via the backend trigger_generate_events endpoint, which enforces
     #     require_owner + require_ai_enabled + per-family concurrency gating.
     #     Accepting it here would bypass that gating (R1 Finding 1).
+    #     SKIPPED for internal callers (backend trigger via X-Agent-Token) —
+    #     those have already passed the backend's owner/concurrency gate.
     #   - "import-parse": REJECTED until U8 wires its owner/member auth
     #     (lockstep with allowlist — no U2→U8 window where the value is
     #     accepted without /import/parse-pdf's guards).
     #   - any other value: 400.
     body_meta = getattr(body, "metadata", None) or {}
     app = body_meta.get("app", "numina") if isinstance(body_meta, dict) else "numina"
-    if app == "asset-report":
+    if not internal and app == "asset-report":
         raise _app_rejected_error(
             status_code=409,
             app=app,
@@ -181,7 +191,7 @@ async def start_run(
             app=app,
             reason="import-parse 暂未启用，请使用 /import/parse-pdf",
         )
-    if app != "numina":
+    if app != "numina" and app != "asset-report":
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
     disconnect = (
