@@ -100,6 +100,31 @@ def test_trigger_streams_agent_sse(client):
     assert step2[0]["data"]["payload"] == {"overall_score": 77}
 
 
+def test_trigger_passes_family_id_as_string_to_agent(client):
+    """Regression: family_id/user_id must be sent as strings in the agent
+    request body — AssetReportRunRequest.family_id is pydantic ``str``, so an
+    int Snowflake value 422s at the agent gateway.
+    """
+    captured: dict = {}
+
+    @asynccontextmanager
+    async def _capturing_stream(method, endpoint, **kwargs):
+        captured["json"] = kwargs.get("json")
+        # Reuse the fake SSE frames so the trigger completes cleanly.
+        async with _fake_agent_sse_stream(
+            [("custom", {"type": "report.step2_json", "payload": {"overall_score": 1}})]
+        )(method, endpoint, **kwargs) as resp:
+            yield resp
+
+    with patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls:
+        mock_cls.return_value.stream = _capturing_stream
+        response = client.post("/api/v1/ai/report/generate/events?force=true")
+    assert response.status_code == 200
+    assert captured["json"]["family_id"] == "family-1"
+    assert captured["json"]["user_id"] == "1"
+    assert isinstance(captured["json"]["family_id"], str)
+
+
 def _fresh_cached_report():
     """An AIReport-like object generated < 8h ago (cache hit)."""
     from datetime import datetime, timedelta, timezone

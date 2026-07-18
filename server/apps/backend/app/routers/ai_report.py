@@ -94,7 +94,7 @@ async def _stream_asset_report_sse(
         async with agent_client.stream(
             "POST",
             agent_url,
-            json={"family_id": family_id, "user_id": user_id},
+            json={"family_id": str(family_id), "user_id": str(user_id)},
         ) as resp:
             if resp.status_code != 200:
                 body = await resp.aread()
