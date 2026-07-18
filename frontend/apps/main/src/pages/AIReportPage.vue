@@ -2,71 +2,55 @@
   <div class="ai-report-page">
     <PageHeader :title="t('aiReport.title')" />
 
-    <!-- Task console (streaming progress) -->
-    <div class="console-wrap">
-      <TaskConsole
-        v-model="isConsoleOpen"
-        :status="taskStatus"
-        :phase="taskPhase"
-        :think-content="taskChunks"
-        :elapsed-seconds="taskElapsed"
-        :error-code="errorCode"
-        :tool-steps="toolSteps"
-        :current-tool-label="currentToolLabel"
-        :plan-steps="planSteps"
-        :current-step-index="currentStepIndex"
-      />
-    </div>
+    <!-- Three-step timeline (shown when streaming or cache hit) -->
+    <ReportStepTimeline
+      v-if="isGenerating || stream.cached.value || stream.status.value === 'completed'"
+      :step1-status="stream.step1Status.value"
+      :step2-status="stream.step2Status.value"
+      :step3-status="stream.step3Status.value"
+      :step1-thinking="stream.step1Thinking.value"
+      :tool-calls="stream.toolCalls.value"
+      :tool-results="stream.toolResults.value"
+      :step2-json="stream.step2Json.value"
+      :streaming="isGenerating"
+      :cached="stream.cached.value"
+      :progress-message="stream.progressMessage.value"
+      :has-markdown-fallback="hasMarkdownFallback"
+      @force="onGenerate(true)"
+      @view-markdown="loadFallbackMarkdown"
+    />
 
     <!-- Failed state (show regardless of whether there's an existing report) -->
-    <div v-if="taskStatus === 'failed'" class="failed-placeholder">
+    <div v-if="stream.status.value === 'error'" class="failed-placeholder">
       <van-icon name="warning-o" size="48" class="failed-icon" />
-      <!-- Elastic fallback: show markdown preview if Phase 1 succeeded but Phase 2 failed -->
-      <template v-if="hasMarkdownFallback && errorCode === 'structured_conversion_failed'">
+      <!-- Elastic fallback: step1 markdown 落盘 succeeded but step2/3 failed -->
+      <template v-if="hasMarkdownFallback">
         <p class="failed-text">{{ t('aiReport.conversionFailedButMarkdown') }}</p>
         <van-button type="primary" size="small" @click="loadFallbackMarkdown">
           {{ t('aiReport.viewMarkdownFallback') }}
         </van-button>
       </template>
       <template v-else>
-        <p class="failed-text">
-          {{ errorCode === 'extraction_failed'
-            ? t('aiReport.extractionFailed')
-            : errorCode === 'structured_write_failed'
-            ? t('aiReport.writeFailed')
-            : errorCode === 'post_processing_timeout'
-            ? t('aiReport.timeoutFailed')
-            : errorCode === 'markdown_generation_failed'
-            ? t('aiReport.markdownFailed')
-            : errorCode === 'structured_conversion_failed'
-            ? t('aiReport.conversionFailed')
-            : t('toast.aiGenerateFailed') }}
-        </p>
+        <p class="failed-text">{{ stream.errorMessage.value || t('toast.aiGenerateFailed') }}</p>
       </template>
-      <van-button plain size="small" :loading="false" @click="onGenerate" style="margin-top: 8px">
+      <van-button plain size="small" :loading="false" @click="onGenerate()" style="margin-top: 8px">
         {{ t('aiTask.retryBtn') }}
       </van-button>
     </div>
 
-    <!-- No report yet (only show when not failed) -->
-    <div v-else-if="!currentReport" class="empty-state">
+    <!-- No report yet (only show when not failed/generating) -->
+    <div v-else-if="!currentReport && !isGenerating" class="empty-state">
       <EmptyState image="search" :description="t('aiReport.noReport')" />
       <div class="empty-actions">
-        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onGenerate">
+        <van-button type="primary" block :loading="isGenerating" @click="onGenerate()">
           {{ t('aiTask.startBtn') }}
         </van-button>
         <p class="empty-tip">{{ t('aiReport.startAnalyze') }}</p>
       </div>
     </div>
 
-    <!-- Generating placeholder (shown during regeneration when old report exists) -->
-    <div v-else-if="currentReport && (taskStatus === 'running' || taskStatus === 'post_processing')" class="generating-placeholder">
-      <ProcessingIcon :active="true" class="generating-icon" />
-      <p class="generating-text">{{ t('aiReport.generating') }}</p>
-    </div>
-
-    <!-- Report content (show when report exists and not generating/failed) -->
-    <template v-else-if="currentReport">
+    <!-- Report content (show when report exists and not generating) -->
+    <template v-else-if="currentReport && !isGenerating">
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">
@@ -249,7 +233,7 @@
 
       <!-- Regenerate -->
       <div class="regen-section">
-        <van-button plain block :loading="taskStatus === 'running'" @click="onGenerate">
+        <van-button plain block :loading="isGenerating" @click="onGenerate()">
           {{ t('aiTask.regenBtn') }}
         </van-button>
       </div>
@@ -274,12 +258,11 @@ import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
 import { getAIReport, getAIReportMarkdown } from '@/api/ai'
 import type { AIReport, AIReportIndicator } from '@/types'
-import { useAITask } from '@/composables/useAITask'
+import { useReportStream } from '@/composables/useReportStream'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
-import TaskConsole from '@/components/ai/TaskConsole.vue'
+import ReportStepTimeline from '@/components/ai/ReportStepTimeline.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import ProcessingIcon from '@/components/common/ProcessingIcon.vue'
 import ReportMarkdownPreview from '@/components/ai/ReportMarkdownPreview.vue'
 
 const SUMMARY_PURIFY_CONFIG = {
@@ -293,14 +276,12 @@ const aiStore = useAIStore()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
-const hasMarkdownFallback = ref(false)  // Track if we have markdown but no structured data
 
 // Markdown preview state
 const markdownVisible = ref(false)
 const markdownContent = ref('')
 const markdownFilename = ref('')
 const markdownFileSize = ref(0)
-const fallbackMarkdownPath = ref<string | null>(null)  // Phase 1 success path for elastic fallback
 
 // Indicator icon mapping
 const INDICATOR_ICON_MAP: Record<string, string> = {
@@ -333,7 +314,6 @@ async function loadExistingReport() {
     if (res.data.report) {
       currentReport.value = res.data.report
       reportGeneratedAt.value = res.data.generated_at ?? null
-      hasMarkdownFallback.value = false  // We have structured data, no need for fallback
     }
   } catch {
     showFailToast(t('toast.operationFailed'))
@@ -342,10 +322,6 @@ async function loadExistingReport() {
 
 // Load markdown for elastic fallback when structured conversion failed
 async function loadFallbackMarkdown() {
-  if (!fallbackMarkdownPath.value) {
-    showFailToast(t('toast.operationFailed'))
-    return
-  }
   try {
     const res = await getAIReportMarkdown()
     markdownContent.value = res.data.content
@@ -373,32 +349,20 @@ async function loadMarkdownPreview() {
   }
 }
 
-const {
-  status: taskStatus,
-  thinkContent: taskChunks,
-  elapsedSeconds: taskElapsed,
-  isConsoleOpen,
-  errorCode,
-  phase: taskPhase,
-  toolSteps,
-  currentToolLabel,
-  planSteps,
-  currentStepIndex,
-  markdownFilePath,
-  isBackground,
-  startStream,
-} = useAITask('report', '/ai/report/generate/events', async () => {
-  // onComplete callback: load report after task finishes
-  await loadExistingReport()
-  // Clear background task from registry
-  aiStore.clearBackgroundTask('report')
-})
+const stream = useReportStream()
 
-// Handler for markdown generated (Phase 1 success) - for elastic fallback
-function onMarkdownGenerated(path: string) {
-  fallbackMarkdownPath.value = path
-  hasMarkdownFallback.value = true
-}
+// Whether a generation is in flight (streaming or connecting).
+const isGenerating = computed(() =>
+  stream.status.value === 'connecting' || stream.status.value === 'streaming',
+)
+
+// Elastic fallback: step1 markdown 落盘 succeeded (write_file tool_result
+// arrived) even if step2/3 later failed — the markdown file exists on disk
+// and can be viewed via getAIReportMarkdown().
+const hasMarkdownFallback = computed(() =>
+  stream.step1Status.value === 'finish' &&
+  stream.toolResults.value.some((r) => r.tool_name.includes('write_file')),
+)
 
 // Detect which format the report uses
 const hasIndicatorsFormat = computed(() => {
@@ -514,41 +478,36 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-async function onGenerate() {
+async function onGenerate(force = false) {
   if (!aiStore.config?.ai_enabled) {
     showToast(t('toast.aiNotEnabled'))
     return
   }
-  // Reset fallback state
-  hasMarkdownFallback.value = false
-  fallbackMarkdownPath.value = null
-  // Start stream with background mode enabled for non-blocking execution
-  await startStream({ background: true, onMarkdownGenerated })
-  // For foreground mode, load report data after streaming completes
-  if (!isBackground.value) {
-    await loadExistingReport()
+  stream.reset()
+  try {
+    await stream.connect(force)
+    // Cache hit → stream.report holds the cached report.
+    if (stream.cached.value && stream.report.value) {
+      currentReport.value = stream.report.value as unknown as AIReport
+      reportGeneratedAt.value = stream.generatedAt.value
+    } else if (stream.status.value === 'completed') {
+      // Fresh generation finished → reload the persisted report (step 7 落库).
+      await loadExistingReport()
+    }
+    aiStore.clearBackgroundTask('report')
+  } catch {
+    showFailToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   }
 }
 
 onMounted(async () => {
   await aiStore.fetchConfig()
   await loadExistingReport()
-
-  // Check for running background task and reconnect if needed
-  const bgTask = aiStore.getBackgroundTask('report')
-  if (bgTask && (bgTask.status === 'running' || bgTask.status === 'post_processing' || bgTask.status === 'queued')) {
-    // Task is running in background - the useAITask composable's checkAndResume will handle reconnection
-    // Just ensure the console shows the status
-    if (bgTask.markdownFilePath) {
-      fallbackMarkdownPath.value = bgTask.markdownFilePath
-      hasMarkdownFallback.value = true
-    }
-  }
 })
 
 onUnmounted(() => {
-  // If task is still running, keep it registered for background execution
-  // The useAITask composable will handle visibility change and cleanup
+  // Abort any in-flight stream when leaving the page.
+  stream.abort()
 })
 </script>
 
