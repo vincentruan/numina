@@ -192,7 +192,7 @@ export default {
     sectionRealized: '🎊 Realized',
     sectionRejected: '❌ Rejected',
     progressFull: 'Enough coins! Ask your parents to make it happen 🎉',
-    progressDays: 'About {days} more days of tasks 🎯',
+    progressDays: 'At your recent pace, about {days} more days of tasks 🎯',
     waitingGoal: '⏳ Waiting for parents to set a goal',
     redeemBtn: '🎉 Ask Parents to Redeem!',
     waitingRedemption: 'Waiting for parents to redeem 🎁',
@@ -233,7 +233,7 @@ export default {
       headlineZeroNoEstimate: 'Keep doing chores to grow your stars',
       detailUnknown: 'This wish was not found',
     },
-    timeUnitDays: '≈ {days} days',
+    timeUnitDays: 'about {days} days at your pace',
     timeUnitPlaceholder: 'Keep going — estimate stabilizes',
     peek: {
       confirmTag: 'You can have this one ✨',

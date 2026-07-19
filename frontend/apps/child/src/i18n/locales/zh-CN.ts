@@ -193,7 +193,7 @@ export default {
     sectionRealized: '🎊 已实现',
     sectionRejected: '❌ 未通过',
     progressFull: '积分已够！快让爸妈实现吧 🎉',
-    progressDays: '再做约 {days} 天家务 🎯',
+    progressDays: '按最近速度，大约还要做 {days} 天家务 🎯',
     waitingGoal: '⏳ 等待爸妈设定目标',
     redeemBtn: '🎉 让爸妈实现！',
     waitingRedemption: '等待爸妈兑现 🎁',
@@ -234,7 +234,7 @@ export default {
       headlineZeroNoEstimate: '继续做家务，慢慢攒星星',
       detailUnknown: '没找到这个心愿',
     },
-    timeUnitDays: '≈ {days} 天',
+    timeUnitDays: '按最近速度约 {days} 天',
     timeUnitPlaceholder: '继续做家务，几天后能更准估计',
     peek: {
       confirmTag: '这个就能拿到啦 ✨',
