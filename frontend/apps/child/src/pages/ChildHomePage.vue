@@ -13,6 +13,10 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
+      <!-- Settings entry — top-right gear, out of the main scroll flow -->
+      <router-link to="/settings" class="home-settings-link" :aria-label="t('home.settings')">
+        <van-icon name="setting-o" size="20" />
+      </router-link>
       <!-- Greeting (home-only) -->
       <HackerGreeting
         :name="childAuthStore.childUser?.display_name ?? ''"
@@ -109,43 +113,6 @@
     </div>
     </van-pull-refresh>
 
-    <!-- Settings section — collapsible -->
-    <div class="settings-section">
-      <button class="settings-toggle" @click="settingsExpanded = !settingsExpanded">
-        <span>{{ t('home.settings') }}</span>
-        <van-icon :name="settingsExpanded ? 'arrow-up' : 'arrow-down'" size="14" />
-      </button>
-      <div v-if="settingsExpanded" class="settings-body">
-        <p class="settings-label">{{ t('home.settingsTheme') }}</p>
-        <div class="theme-options">
-          <button
-            v-for="opt in themeOptions"
-            :key="opt.value"
-            class="theme-btn"
-            :class="{ active: themeMode === opt.value }"
-            @click="setMode(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <p class="settings-label">{{ t('home.settingsLanguage') }}</p>
-        <div class="theme-options">
-          <button
-            v-for="opt in languageOptions"
-            :key="opt.value"
-            class="theme-btn"
-            :class="{ active: currentLocale === opt.value }"
-            @click="setLocale(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <button class="logout-btn" @click="handleLogout">
-          {{ t('home.logout') }}
-        </button>
-      </div>
-    </div>
-
     <!-- Celebration animation -->
     <CelebrationAnimation
       :visible="celebrationVisible"
@@ -165,7 +132,6 @@ import ProgressRing from '@/components/ProgressRing.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
 import { getMyChores, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
@@ -180,20 +146,15 @@ import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
 import { useFamilyStore } from '@/stores/family'
 
 const noTasksSvg = noTasksSvgRaw
-import { useDarkMode } from '@/utils/darkMode'
-import { useLocale } from '@/utils/locale'
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { useChildAuthStore } from '@numina/auth'
-import { getMainBaseUrl } from '@/utils/mainApp'
 
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 const { complete: completeLoading } = usePageLoading()
-const { themeMode, setMode } = useDarkMode()
-const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
 
 // Balance polling via composable (singleton auto-refreshes; no manual refresh needed)
@@ -208,7 +169,6 @@ const completedChores = computed(() => todayChores.value.filter(c => c.status ==
 const pendingChores = computed(() => todayChores.value.filter(c => c.status === 'pending_approval').length)
 const totalChoreCoins = computed(() => todayChores.value.reduce((sum, c) => sum + (c.coin_reward ?? 0), 0))
 const topWish = ref<ChildWish | null>(null)
-const settingsExpanded = ref(false)
 
 // Celebration state via composable
 const {
@@ -218,17 +178,6 @@ const {
   onCelebrationDismiss,
   checkAndTriggerCelebration,
 } = useCelebration()
-
-const themeOptions = computed(() => [
-  { value: 'system' as const, label: t('home.themeSystem') },
-  { value: 'light' as const, label: t('home.themeLight') },
-  { value: 'dark' as const, label: t('home.themeDark') },
-])
-
-const languageOptions = computed(() => [
-  { value: 'zh-CN' as const, label: t('home.langZhCN') },
-  { value: 'en-US' as const, label: t('home.langEnUS') },
-])
 
 // Streak tier helper: returns threshold value (7, 14, 30) or '0' for below 7
 function streakTier(count: number): string {
@@ -245,26 +194,6 @@ function statusLabel(status: ChoreInstance['status']): string {
     case 'approved': return t('chore.approved')
     case 'rejected': return t('chore.rejected')
     default: return ''
-  }
-}
-
-async function handleLogout() {
-  try {
-    await showConfirmDialog({
-      title: t('common.confirm'),
-      message: t('home.logoutConfirm'),
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-    })
-    await childAuthStore.childLogout()
-    showToast(t('toast.logoutSuccess'))
-    // Redirect to main app login page (child app has no auth routes)
-    // Use getMainBaseUrl() so dev mode (port 5174) redirects to main app (5173);
-    // VITE_MAIN_APP_URL alone is empty in dev, which would hit /login on the child server → 404.
-    const baseUrl = getMainBaseUrl()
-    window.location.href = `${baseUrl}/login`
-  } catch {
-    // User cancelled or logout failed
   }
 }
 
@@ -308,6 +237,7 @@ onMounted(load)
 <style scoped>
 /* ── Canvas ── */
 .home-page {
+  position: relative;
   padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
@@ -499,82 +429,22 @@ onMounted(load)
   font-weight: 600;
 }
 
-/* ── Settings section ── */
-.settings-section {
-  margin-top: 8px;
-  margin-bottom: var(--space-lg);
-  background: var(--color-surface-card);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-hairline);
-  overflow: hidden;
-}
-.settings-toggle {
-  width: 100%;
+/* ── Settings entry — top-right gear, floats above the hero ── */
+.home-settings-link {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-ink);
-  min-height: 44px;
-}
-.settings-body {
-  padding: 0 16px 16px;
-  border-top: 1px solid var(--color-hairline);
-}
-.settings-label {
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--color-muted);
-  margin: 12px 0 10px;
-}
-.theme-options {
-  display: flex;
-  gap: 8px;
-}
-.theme-btn {
-  flex: 1;
-  padding: 10px 4px;
-  border-radius: var(--radius-md);
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-hairline);
-  background: var(--color-surface-soft);
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
   color: var(--color-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  min-height: 44px;
+  z-index: 5;
+  transition: background 0.15s, color 0.15s;
 }
-.theme-btn.active {
-  background: var(--color-brand-ochre);
-  border-color: var(--color-brand-ochre);
-  color: var(--color-ink);
-  font-weight: 600;
-}
-.theme-btn:active { transform: scale(0.96); }
-.logout-btn {
-  width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-hairline);
-  background: var(--color-surface-soft);
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  min-height: 44px;
-}
-.logout-btn:active { transform: scale(0.96); }
+.home-settings-link:active { transform: scale(0.92); color: var(--color-ink); }
 </style>

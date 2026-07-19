@@ -76,6 +76,11 @@ const router = createRouter({
           component: () => import('@/pages/ChildDayDetailPage.vue'),
           meta: { hasSkeleton: true }
         },
+        {
+          path: 'settings',
+          name: 'ChildSettings',
+          component: () => import('@/pages/ChildSettingsPage.vue'),
+        },
       ],
     },
     // Catch-all redirect — must stay within child app
