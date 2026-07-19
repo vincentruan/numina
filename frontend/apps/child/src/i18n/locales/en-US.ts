@@ -134,6 +134,7 @@ export default {
     greetingFallback: 'Hello, {name}! {balance} ⭐ loaded',
     greetingFallbackName: 'Explorer',
     todayTasks: '📋 Today\'s Tasks',
+    viewAllTasks: 'All Tasks',
     noTasks: 'No tasks today, enjoy your rest!',
     myWishes: 'My Wishes',
     myCalendar: '📅 My Calendar',

@@ -135,6 +135,7 @@ export default {
     greetingFallback: '你好，{name}！已加载 {balance} 颗星 ⭐',
     greetingFallbackName: '小探险家',
     todayTasks: '📋 今日任务',
+    viewAllTasks: '全部任务',
     noTasks: '今天没有任务，好好休息吧！',
     myWishes: '我的心愿',
     myCalendar: '📅 我的日历',
