@@ -13,7 +13,7 @@ if the LLM call fails.
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from apps.agent.services.runtime.run_extras import sync_title_from_checkpoint
+from apps.agent.services.runtime.run_extras import sync_title_from_checkpoint, _is_fallback_title
 
 
 def _checkpoint_with_title(title: str | None) -> SimpleNamespace:
@@ -161,3 +161,22 @@ async def test_sync_title_no_save_without_checkpoint_or_message():
         await sync_title_from_checkpoint("thread-1", "family-1")
 
     repo.update_summary.assert_not_called()
+
+
+def test_is_fallback_title_detects_truncated_context_json():
+    """A truncated raw-context JSON (TitleMiddleware/DB column cut mid-string)
+    must still be detected as a fallback.
+
+    Regression: the e2e chat title leaked ``family_id`` because the DB stored a
+    truncated ``{"family_id": "...", "free_tex`` (unterminated string). The old
+    json.loads-based check raised JSONDecodeError → returned False → the title
+    was kept instead of being replaced by an LLM-generated one. The substring
+    guard (``"family_id" in t or "free_text" in t``) catches this without parse.
+    """
+    truncated = '{\n  "family_id": "321210384289632256",\n  "free_tex'
+    assert _is_fallback_title(truncated) is True
+    # Full (un-truncated) raw context JSON still detected.
+    assert _is_fallback_title('{"family_id": "123", "free_text": "帮我看看资产"}') is True
+    # Real titles and LLM JSON without context keys must NOT be flagged.
+    assert _is_fallback_title("家庭资产总览分析") is False
+    assert _is_fallback_title('{"summary": "资产配置建议"}') is False

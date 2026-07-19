@@ -113,8 +113,13 @@ async def parse_import(
         paths_list = "\n".join(f"  - {p}" for p in image_paths)
         user_content = (
             f"{body.text}\n\n"
-            f"以下是文档的页面图片路径，请先用 view_image 工具逐张读取所有图片，"
-            f"再综合文本与图片内容解析持仓：\n{paths_list}"
+            f"【图片模式】以下是该文档的页面图片路径，你必须按以下步骤执行，"
+            f"不得跳过第 1 步直接输出 JSON：\n"
+            f"1. 对下面列出的每一个路径调用 view_image 工具（参数 image_path=该路径），"
+            f"逐张读取所有图片。这是强制前置条件。\n"
+            f"2. 所有图片读完后，综合图片内容（以及上方文本，若有）提取持仓条目。\n"
+            f"3. 输出最终 JSON 代码块。\n\n"
+            f"待读取的图片路径：\n{paths_list}"
         )
     graph_input = {"messages": [{"role": "user", "content": user_content}]}
 

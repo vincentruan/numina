@@ -164,12 +164,26 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     # If neither a caller-supplied ``user_id`` nor a family context is set
     # (legacy/script paths), we defer to the parent so behaviour matches
     # DeerFlow's ``"default"`` fallback exactly.
+    #
+    # NOTE: the harness's ``build_middlewares`` / ``tools.py`` call
+    # ``provider.acquire(thread_id, user_id=resolve_runtime_user_id(runtime))``,
+    # and Numina never sets DeerFlow's ``_current_user`` ContextVar — so
+    # ``resolve_runtime_user_id`` always returns ``"default"`` (DEFAULT_USER_ID),
+    # passed here EXPLICITLY. The original ``if user_id is None`` guard never
+    # fired because the harness always supplies "default". The fix: when a
+    # family context is set, OVERRIDE any caller-supplied user_id (including
+    # the harness "default") so the LRU cache key + sandbox ID are family-scoped
+    # — otherwise two families sharing a thread_id hit the same cached
+    # LocalSandbox with the first family's path mappings (cross-tenant read).
     def acquire(self, thread_id: str | None = None, *, user_id: str | None = None) -> str:
-        effective_user_id = user_id
-        if effective_user_id is None:
-            family_id = get_family_sandbox_context()
-            if family_id is not None:
-                effective_user_id = family_id
+        family_id = get_family_sandbox_context()
+        if family_id is not None:
+            # Family context is the tenant truth — override any harness-supplied
+            # user_id (Numina does not use DeerFlow's user_id mechanism).
+            effective_user_id = family_id
+        else:
+            # No family context (legacy/script paths) — defer to caller/default.
+            effective_user_id = user_id
         return super().acquire(thread_id, user_id=effective_user_id)
 
 

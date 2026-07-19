@@ -155,6 +155,21 @@ def test_acquire_keys_sandbox_by_family_id():
         # Same family + thread_id must be stable (cache hit returns same ID).
         set_family_sandbox_context("family-A")
         assert provider.acquire(thread_id) == sandbox_id_a
+
+        # The harness's build_middlewares/tools.py calls
+        # provider.acquire(thread_id, user_id=resolve_runtime_user_id(runtime)),
+        # and resolve_runtime_user_id returns "default" (Numina never sets
+        # DeerFlow's _current_user). The override MUST override this explicitly
+        # supplied "default" too — otherwise the cache key collapses to
+        # ("default", thread_id) and cross-tenant reads recur (e2e regression
+        # found 2026-07-19: view_image "file not found" because a stale cached
+        # sandbox mapped uploads/ to a different family's path).
+        set_family_sandbox_context("family-A")
+        sandbox_id_explicit_default = provider.acquire(thread_id, user_id="default")
+        assert sandbox_id_explicit_default == sandbox_id_a, (
+            "harness-supplied user_id='default' was not overridden by family context; "
+            f"got {sandbox_id_explicit_default!r} expected {sandbox_id_a!r}"
+        )
     finally:
         provider.reset()
 

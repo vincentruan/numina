@@ -84,6 +84,13 @@ def _is_fallback_title(title: str | None) -> bool:
     # Bare-JSON context wrapper (current _build_prompt output). Detect by parsing;
     # a real summary is never a JSON object of context fields.
     if t.startswith("{"):
+        # Substring check first: the TitleMiddleware / DB column may truncate
+        # the raw context JSON mid-string (e.g. ``{"family_id": "...", "free_tex``),
+        # which makes json.loads fail with UnterminatedString. Such a truncated
+        # blob still leaking ``family_id``/``free_text`` keys is unambiguously a
+        # fallback wrapper, not a real summary — detect it without full parse.
+        if '"family_id"' in t or '"free_text"' in t:
+            return True
         try:
             parsed = json.loads(t)
         except json.JSONDecodeError:
