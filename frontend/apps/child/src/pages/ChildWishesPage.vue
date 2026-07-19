@@ -69,9 +69,14 @@
                 :class="jarClass(wish.progress)"
                 :style="{ width: Math.min((wish.progress ?? 0) * 100, 100) + '%' }"
               />
-              <span class="progress-star" :style="{ left: '25%' }">⭐</span>
-              <span class="progress-star" :style="{ left: '50%' }">⭐</span>
-              <span class="progress-star" :style="{ left: '75%' }">⭐</span>
+              <span
+                v-for="(pos, i) in [0.25, 0.5, 0.75]"
+                :key="i"
+                class="progress-star"
+                :class="{ lit: (wish.progress ?? 0) >= pos }"
+                :style="{ left: pos * 100 + '%' }"
+                :aria-hidden="true"
+              >⭐</span>
             </div>
             <div class="progress-footer">
               <span class="progress-pct" :class="{ 'pct-full': (wish.progress ?? 0) >= 1 }">
@@ -475,7 +480,16 @@ onMounted(load)
   font-size: 14px;
   z-index: 1;
   pointer-events: none;
-  opacity: 0.6;
+  /* Unlit milestone marker: dim and desaturated so it reads as "not yet",
+     not as real data. Lights up gold once progress crosses its threshold. */
+  filter: grayscale(1);
+  opacity: 0.35;
+  transition: filter 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+}
+.progress-star.lit {
+  filter: none;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.12);
 }
 .progress-footer {
   display: flex;
