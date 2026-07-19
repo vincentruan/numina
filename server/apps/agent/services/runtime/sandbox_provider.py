@@ -46,6 +46,29 @@ _caller_user_id_context: contextvars.ContextVar[str | None] = contextvars.Contex
     "numina_caller_user_id", default=None
 )
 
+# Per-run extensions_config.json path for MCP tool loading.
+#
+# DeerFlow's ``ExtensionsConfig.from_file()`` resolves the MCP server config
+# file via the process-global ``DEER_FLOW_EXTENSIONS_CONFIG_PATH`` env var
+# (see ``ExtensionsConfig.resolve_config_path``). Setting that env var per run
+# is NOT safe under multi-family concurrency: it is a single process-wide slot,
+# so two interleaved family runs overwrite each other's value, and a run whose
+# MCP tools load late (e.g. during a context switch) reads the OTHER family's
+# path — leaking family-A's MCP SSE URL (which embeds family-A's id) into
+# family-B's run, 403-ing, and loading zero MCP tools.
+#
+# This ContextVar replaces the env var. The adapter sets it per run (alongside
+# family_id), and ``_patched_get_mcp_tools`` reads it and passes it explicitly
+# to ``ExtensionsConfig.from_file(config_path=...)``, which bypasses the env
+# lookup entirely (resolve_config_path priority 1 = explicit param). ContextVars
+# are coroutine-scoped and propagated into the deerflow executor thread + the
+# sync tool-executor pool (via _run_in_executor_with_context + the
+# make_sync_tool_wrapper contextvar patch), so each run sees its own path with
+# no cross-family leakage.
+_extensions_config_path_context: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "numina_extensions_config_path", default=None
+)
+
 
 def set_family_sandbox_context(family_id: str, caller_user_id: str | None = None) -> None:
     """Set the current family_id for sandbox path resolution + DeerFlow user.
@@ -83,6 +106,25 @@ def get_caller_user_id_context() -> str | None:
     return _caller_user_id_context.get()
 
 
+def set_extensions_config_path(path: str | None) -> None:
+    """Set the per-run extensions_config.json path (MCP server config source).
+
+    Replaces the process-global ``DEER_FLOW_EXTENSIONS_CONFIG_PATH`` env var.
+    See ``_extensions_config_path_context`` for the multi-family leak rationale.
+    """
+    _extensions_config_path_context.set(path)
+
+
+def get_extensions_config_path() -> str | None:
+    """Return the current run's extensions_config.json path, or ``None``.
+
+    ``None`` means "no per-run override" — ``ExtensionsConfig.from_file(None)``
+    then falls back to DeerFlow's default resolution (env var / project search),
+    which is correct for global-config-mode runs that have no family config.
+    """
+    return _extensions_config_path_context.get()
+
+
 def reset_family_sandbox_context() -> None:
     """Reset the family_id context + DeerFlow user token (mirrors set order).
 
@@ -91,6 +133,7 @@ def reset_family_sandbox_context() -> None:
     """
     _family_id_context.set(None)
     _caller_user_id_context.set(None)
+    _extensions_config_path_context.set(None)
     token = _current_user_token.get()
     if token is not None:
         try:

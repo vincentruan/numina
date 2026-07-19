@@ -261,24 +261,48 @@ class DeerFlowAdapter:
 
         async with _get_semaphore():
             loop = asyncio.get_running_loop()
-            import queue as thread_queue
             queue = asyncio.Queue()
 
             def _produce() -> None:
                 try:
                     if self._config_path:
-                        from deerflow.config.app_config import pop_current_app_config, push_current_app_config, reload_app_config
+                        from deerflow.config.app_config import (
+                            pop_current_app_config,
+                            push_current_app_config,
+                            reload_app_config,
+                        )
                         family_config = reload_app_config(str(self._config_path))
                         push_current_app_config(family_config)
 
-                        import os as _os
+                        # Set the per-run extensions_config path via ContextVar.
+                        # DeerFlow's ExtensionsConfig.from_file() reads MCP server
+                        # configs from this file. The extensions_config.json is
+                        # generated alongside config.yaml in
+                        # family_adapter_cache._generate_temp_config() when
+                        # mcp_servers is provided.
+                        #
+                        # We use a coroutine-scoped ContextVar instead of the
+                        # process-global DEER_FLOW_EXTENSIONS_CONFIG_PATH env var:
+                        # the env var is a single process-wide slot that two
+                        # concurrent family runs overwrite, leaking family-A's MCP
+                        # SSE URL (which embeds family-A's id) into family-B's run.
+                        # The ContextVar is propagated into the deerflow executor
+                        # thread + sync tool-executor pool, so _patched_get_mcp_tools
+                        # reads the correct per-run path. No env restore needed —
+                        # ContextVar isolation is automatic.
                         from pathlib import Path as _Path
+
+                        from apps.agent.services.runtime.sandbox_provider import (
+                            set_extensions_config_path,
+                        )
                         extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                        prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
                         if extensions_path.exists():
-                            _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                            set_extensions_config_path(str(extensions_path))
+                            # Reset MCP cache so DeerFlow picks up the new config
                             try:
-                                from deerflow.config.extensions_config import reset_extensions_config
+                                from deerflow.config.extensions_config import (
+                                    reset_extensions_config,
+                                )
                                 from deerflow.mcp.cache import reset_mcp_tools_cache
                                 reset_mcp_tools_cache()
                                 reset_extensions_config()
@@ -288,7 +312,6 @@ class DeerFlowAdapter:
                         try:
                             if resume_answer is not None:
                                 # Resume mode: use Command(resume=answer) instead of a new message
-                                from langgraph.types import Command
                                 message = self._build_prompt(skill_name, context)
                                 for event in self._client.stream(
                                     message,
@@ -302,10 +325,8 @@ class DeerFlowAdapter:
                                 for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
                                     loop.call_soon_threadsafe(queue.put_nowait, event)
                         finally:
-                            if prev_extensions_env is not None:
-                                _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-                            elif extensions_path.exists():
-                                _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                            if extensions_path.exists():
+                                set_extensions_config_path(None)
                             pop_current_app_config()
                     else:
                         if resume_answer is not None:
@@ -529,16 +550,19 @@ class DeerFlowAdapter:
                     family_config = reload_app_config(str(self._config_path))
                     push_current_app_config(family_config)
 
-                    # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading.
-                    # DeerFlow's ExtensionsConfig.from_file() reads MCP server configs from
-                    # this file. The extensions_config.json is generated alongside config.yaml
-                    # in family_adapter_cache._generate_temp_config() when mcp_servers is provided.
-                    import os as _os
+                    # Set the per-run extensions_config path via ContextVar.
+                    # See raw_stream_dispatch._produce for the multi-family leak
+                    # rationale (process-global env var → cross-family MCP URL
+                    # leak). ContextVar is coroutine-scoped and propagated into
+                    # the deerflow executor thread + sync tool pool.
                     from pathlib import Path as _Path
+
+                    from apps.agent.services.runtime.sandbox_provider import (
+                        set_extensions_config_path,
+                    )
                     extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                    prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
                     if extensions_path.exists():
-                        _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                        set_extensions_config_path(str(extensions_path))
                         # Reset MCP cache so DeerFlow picks up the new config
                         try:
                             from deerflow.config.extensions_config import (
@@ -555,11 +579,8 @@ class DeerFlowAdapter:
                         for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
                             _process_event(event)
                     finally:
-                        # Restore previous extensions config path env var
-                        if prev_extensions_env is not None:
-                            _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-                        elif extensions_path.exists():
-                            _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                        if extensions_path.exists():
+                            set_extensions_config_path(None)
                         pop_current_app_config()
                 else:
                     # Global config mode — no per-family override needed
@@ -607,13 +628,17 @@ class DeerFlowAdapter:
                 family_config = reload_app_config(str(self._config_path))
                 push_current_app_config(family_config)
 
-                # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading.
-                import os as _os
+                # Set the per-run extensions_config path via ContextVar.
+                # See raw_stream_dispatch._produce for the multi-family leak
+                # rationale (process-global env var → cross-family MCP URL leak).
                 from pathlib import Path as _Path
+
+                from apps.agent.services.runtime.sandbox_provider import (
+                    set_extensions_config_path,
+                )
                 extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
                 if extensions_path.exists():
-                    _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                    set_extensions_config_path(str(extensions_path))
                     # Reset MCP cache so DeerFlow picks up the new config
                     try:
                         from deerflow.config.extensions_config import (
@@ -641,11 +666,8 @@ class DeerFlowAdapter:
                             if isinstance(content, str) and content:
                                 chunks.append(content)
                 finally:
-                    # Restore previous extensions config path env var
-                    if prev_extensions_env is not None:
-                        _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-                    elif extensions_path.exists():
-                        _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                    if extensions_path.exists():
+                        set_extensions_config_path(None)
                     pop_current_app_config()
             else:
                 for event in self._client.stream(

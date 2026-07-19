@@ -10,7 +10,6 @@ No global singleton mutation. No ContextVar. No reload_app_config().
 import asyncio
 import contextlib
 import hashlib
-import os
 import re
 import time
 import uuid
@@ -438,7 +437,6 @@ async def stream_agent_dispatch(
     # 4a. Prepare extensions_config.json for MCP tool loading
     # DeerFlow reads MCP servers from extensions_config.json via DEER_FLOW_EXTENSIONS_CONFIG_PATH.
     extensions_config_path = effective.extensions_config_path
-    prev_extensions_env: str | None = None
 
     # 5. Determine thread_id
     if not thread_id:
@@ -510,11 +508,17 @@ async def stream_agent_dispatch(
         ).to_ndjson()
         return
 
-    # 8a. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading
+    # 8a. Set per-run extensions_config path via ContextVar (NOT process-global env).
     # DeerFlow reads MCP server configs from this file. Must be set before make_lead_agent.
     # CRITICAL: Reset MCP tools cache because the cache tracks mtime of a SINGLE file path.
     # In multi-family architecture, each family gets a DIFFERENT temp config file path.
     # Without reset, the cache would keep using stale tools from a previous family's config.
+    #
+    # NOTE: The previous implementation set the process-global
+    # DEER_FLOW_EXTENSIONS_CONFIG_PATH env var, which is a single process-wide slot
+    # that concurrent family runs overwrite → cross-family MCP SSE URL leak (the URL
+    # embeds a family_id). The ContextVar is coroutine-scoped and propagated into the
+    # deerflow executor thread + sync tool pool, so each run sees its own path.
     if extensions_config_path:
         try:
             from deerflow.config.extensions_config import reset_extensions_config
@@ -533,8 +537,10 @@ async def stream_agent_dispatch(
             logger.warning(
                 "[agent_dispatch] deerflow cache reset functions not available"
             )
-        prev_extensions_env = os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
-        os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = extensions_config_path
+        from apps.agent.services.runtime.sandbox_provider import (
+            set_extensions_config_path,
+        )
+        set_extensions_config_path(extensions_config_path)
 
     # All control flow from here lives inside `try/finally` so the persistence
     # hook + audit emit fire whether the stream completes, errors, or returns
@@ -834,11 +840,13 @@ async def stream_agent_dispatch(
         ).to_ndjson()
         success = True
     finally:
-        # Restore DEER_FLOW_EXTENSIONS_CONFIG_PATH env var
-        if extensions_config_path and prev_extensions_env is not None:
-            os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-        elif extensions_config_path:
-            os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+        # Clear the per-run extensions_config path ContextVar so a reused
+        # worker coroutine cannot leak it into a subsequent run.
+        if extensions_config_path:
+            from apps.agent.services.runtime.sandbox_provider import (
+                set_extensions_config_path,
+            )
+            set_extensions_config_path(None)
 
         audit_state["success"] = success
         # Audit emit FIRST so the invariant lands even if the persistence

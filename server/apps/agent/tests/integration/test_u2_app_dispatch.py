@@ -431,7 +431,7 @@ async def test_run_agent_sets_family_sandbox_context_before_dispatch():
             graph_input=None,
             config={},
         )
-        mock_set.assert_called_once_with("family-42")
+        mock_set.assert_called_once_with("family-42", caller_user_id="user-1")
 
 
 async def test_config_yaml_uses_numina_sandbox_provider():

@@ -308,3 +308,89 @@ def test_active_skill_filter_unknown_skill_returns_all(_fresh_patch):
         reset_active_skill(token)
     # Unknown skill: returns tools unchanged (graceful, logged as warning)
     assert sorted(t.name for t in filtered) == ["read_file", "web_search"]
+
+
+def test_resolve_config_path_reads_contextvar_before_env(_fresh_patch, monkeypatch):
+    """resolve_config_path consults the per-run ContextVar before the env var.
+
+    Regression: DeerFlow's ``ExtensionsConfig.resolve_config_path`` reads the
+    process-global ``DEER_FLOW_EXTENSIONS_CONFIG_PATH`` env var (priority 2),
+    which is a single process-wide slot that concurrent family runs overwrite →
+    cross-family MCP SSE URL leak. The patch inserts a priority-0 ContextVar
+    lookup so each run resolves its own extensions config path. An explicit
+    ``config_path`` argument still wins (priority 1, original contract).
+    """
+    from deerflow.config.extensions_config import ExtensionsConfig
+
+    from apps.agent.services.runtime import sandbox_provider as sp
+
+    # No process-global env var — the ContextVar must be the source of truth.
+    monkeypatch.delenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", raising=False)
+
+    # ContextVar unset → resolve_config_path returns None (no leak, no env).
+    assert ExtensionsConfig.resolve_config_path() is None
+
+    # ContextVar set → returns that path (verified to exist by the original
+    # resolver, so use a real temp file).
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        f.write(b"{}")
+        ctx_path = f.name
+    try:
+        tok = sp._extensions_config_path_context.set(ctx_path)
+        try:
+            resolved = ExtensionsConfig.resolve_config_path()
+            assert resolved == Path(ctx_path)
+        finally:
+            sp._extensions_config_path_context.reset(tok)
+
+        # After reset, ContextVar is unset again → back to None (no stale leak).
+        assert ExtensionsConfig.resolve_config_path() is None
+
+        # Explicit config_path arg still takes precedence over the ContextVar.
+        tok2 = sp._extensions_config_path_context.set(ctx_path)
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f2:
+                f2.write(b"{}")
+                explicit_path = f2.name
+            resolved_explicit = ExtensionsConfig.resolve_config_path(explicit_path)
+            assert resolved_explicit == Path(explicit_path)
+        finally:
+            sp._extensions_config_path_context.reset(tok2)
+    finally:
+        Path(ctx_path).unlink(missing_ok=True)
+
+
+def test_resolve_config_path_isolated_across_contexts(_fresh_patch, monkeypatch):
+    """ContextVar-set path does not leak into another run after reset.
+
+    Mirrors the multi-family leak scenario: family-A's run sets its path, then
+    family-B's run must NOT see family-A's path (which embeds family-A's id in
+    the MCP SSE URL). Process-global env var leaks here because it is a single
+    slot; ContextVar is reset per run.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from deerflow.config.extensions_config import ExtensionsConfig
+
+    from apps.agent.services.runtime import sandbox_provider as sp
+
+    monkeypatch.delenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", raising=False)
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as fa:
+        fa.write(b"{}")
+        path_a = fa.name
+
+    try:
+        # Run A: family-A path set, then reset
+        tok_a = sp._extensions_config_path_context.set(path_a)
+        assert ExtensionsConfig.resolve_config_path() == Path(path_a)
+        sp._extensions_config_path_context.reset(tok_a)
+
+        # Run B: NO path set — must NOT see family-A's stale path
+        assert ExtensionsConfig.resolve_config_path() is None
+    finally:
+        Path(path_a).unlink(missing_ok=True)

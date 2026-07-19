@@ -411,7 +411,14 @@ def _apply_mcp_proxy_bypass_patch() -> None:
         return
 
     async def _patched_get_mcp_tools():
-        """Patched get_mcp_tools that injects trust_env=False into SSE/HTTP."""
+        """Patched get_mcp_tools that injects trust_env=False into SSE/HTTP.
+
+        The extensions config path is resolved inside ``ExtensionsConfig.from_file``
+        via the patched ``resolve_config_path`` (see
+        ``_apply_extensions_config_path_patch``), which consults Numina's per-run
+        ContextVar before the process-global env var — so no explicit path needs
+        to be passed here.
+        """
         extensions_config = ExtensionsConfig.from_file()
         servers_config = build_servers_config(extensions_config)
         if not servers_config:
@@ -495,3 +502,48 @@ def _apply_mcp_proxy_bypass_patch() -> None:
 
     _mcp_mod.get_mcp_tools = _patched_get_mcp_tools
     logger.info("[sync_tool_patch] patched get_mcp_tools to bypass system proxy (trust_env=False) on SSE/HTTP MCP connections")
+    _apply_extensions_config_path_patch()
+
+
+def _apply_extensions_config_path_patch() -> None:
+    """Patch ``ExtensionsConfig.resolve_config_path`` to read the per-run ContextVar.
+
+    DeerFlow resolves the MCP extensions config file via
+    ``ExtensionsConfig.resolve_config_path(config_path=None)``, which consults the
+    process-global ``DEER_FLOW_EXTENSIONS_CONFIG_PATH`` env var (priority 2). That
+    env var is a single process-wide slot — under multi-family concurrency two
+    interleaved runs overwrite each other's value, leaking family-A's MCP SSE URL
+    (which embeds family-A's id) into family-B's run.
+
+    This patch inserts a new priority-0 step: when no explicit ``config_path``
+    argument is passed, consult Numina's coroutine-scoped
+    ``numina_extensions_config_path`` ContextVar (set by the adapter alongside
+    family_id). The ContextVar is propagated into the deerflow executor thread
+    and the sync tool-executor pool, so every call site that resolves the
+    extensions config — ``get_available_tools``' gate check, the MCP cache's
+    staleness check, and ``_patched_get_mcp_tools`` — all see the same per-run
+    path with no cross-family leakage. An explicit ``config_path`` argument
+    still takes precedence (priority 1), preserving the original API contract.
+    """
+    try:
+        from deerflow.config.extensions_config import ExtensionsConfig
+    except ImportError:
+        logger.warning("[sync_tool_patch] ExtensionsConfig not found; skipping resolve_config_path patch")
+        return
+
+    _orig_resolve_config_path = ExtensionsConfig.resolve_config_path
+
+    def _patched_resolve_config_path(cls, config_path=None):  # type: ignore[no-untyped-def]
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_extensions_config_path as _get_ext_path,
+        )
+        if config_path is None:
+            ctx_path = _get_ext_path()
+            if ctx_path:
+                # Hand off to the original resolver with an explicit path so it
+                # still validates existence and returns a Path (priority 1 path).
+                return _orig_resolve_config_path.__func__(cls, ctx_path)
+        return _orig_resolve_config_path.__func__(cls, config_path)
+
+    ExtensionsConfig.resolve_config_path = classmethod(_patched_resolve_config_path)  # type: ignore[assignment]
+    logger.info("[sync_tool_patch] patched ExtensionsConfig.resolve_config_path to consult per-run ContextVar before env var")
