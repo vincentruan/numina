@@ -427,7 +427,7 @@ onMounted(load)
   white-space: nowrap;
 }
 
-/* Priority badges */
+/* Want-level badges */
 .priority-badge {
   font-family: Inter, sans-serif;
   font-size: 11px;

@@ -17,9 +17,9 @@ const i18n = createI18n({
       common: { loading: '加载中...', back: '返回' },
       wishes: {
         sectionActive: '✨ 进行中',
-        priorityLabelHigh: '高优先级 🔥',
-        priorityLabelMedium: '中优先级 ⭐',
-        priorityLabelLow: '低优先级 💤',
+        priorityLabelHigh: '最想要 🔥',
+        priorityLabelMedium: '比较想 ⭐',
+        priorityLabelLow: '以后再说 💤',
         progressFull: '积分已够',
         waitingGoal: '等待爸妈',
         waitingRedemption: '等待兑现',
