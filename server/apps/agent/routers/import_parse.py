@@ -101,6 +101,17 @@ async def parse_import(
     # _extract_import_parse_document reads messages[-1].content).
     graph_input = {"messages": [{"role": "user", "content": body.text}]}
 
+    # Resolved-3 blocker A (P1 fix): this endpoint calls _run_import_parse_agent
+    # DIRECTLY (bypassing worker.run_agent, which sets the sandbox ContextVar at
+    # its dispatch entry). Without setting it here, NuminaLocalSandboxProvider
+    # ._build_thread_path_mappings sees get_family_sandbox_context()==None and
+    # returns [] → read_file/str_replace fall back to DeerFlow's default-user
+    # sandbox (.deer-flow/users/default/...), breaking family-scoped isolation.
+    # Mirror worker.py:245's set_family_sandbox_context(family_id) call.
+    from apps.agent.services.runtime.sandbox_provider import set_family_sandbox_context
+
+    set_family_sandbox_context(family_id)
+
     bridge = _CapturingBridge()
     try:
         await _run_import_parse_agent(

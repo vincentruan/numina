@@ -2002,7 +2002,6 @@ export default {
     physicalExpiryHint: '实物资产到期是正常生命周期，可按需更换',
     types: {
       large_purchase: '大额消费',
-      allocation_drift: '配置失衡',
       expiring_soon: '保修到期',
       maturity: '理财到期',
     },

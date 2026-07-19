@@ -863,12 +863,40 @@ def internal_persist_report(
     ``ai_reports``. Service-to-service auth via ``verify_agent_token``; the
     family_id from the token scopes the write (defense in depth — the worker
     also passes family_id in its payload path, but the token is the trust root).
+
+    Security-lens Open Question #22 (P0, defense-in-depth): the cache-read path
+    (``trigger_generate_events``) re-validates ``report_json`` against the report
+    schema + markdown-table check before re-serving. The write path MUST apply
+    the same validation — otherwise malformed/LLM-injected output is persisted
+    and later re-served from cache, bypassing fresh-generation sanitization. A
+    validation failure returns an error so the worker marks the run as error
+    rather than persisting unvalidated data.
     """
+    import logging
+
+    from apps.backend.app.services.ai_result_parser import (
+        _contains_markdown_table,
+        _validate_json,
+    )
     from apps.backend.app.services.ai_result_writer import write_report_results
+
+    logger = logging.getLogger(__name__)
+
+    report_json = body.report_json
+    if not (
+        isinstance(report_json, dict)
+        and _validate_json(report_json, "report")
+        and not _contains_markdown_table(report_json)
+    ):
+        logger.warning(
+            "[internal_persist_report] rejected unvalidated report_json family=%s",
+            family_id,
+        )
+        raise AppError(ErrorCode.AI_DATA_WRITE_FAILED)
 
     count = write_report_results(
         int(family_id),
-        body.report_json,
+        report_json,
         db,
         markdown_file_path=body.markdown_file_path,
     )

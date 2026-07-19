@@ -17,7 +17,6 @@
             <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
             <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
             <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
-            <template v-if="store.summary.allocation_drift > 0"> · {{ t('reminders.types.allocation_drift') }} {{ store.summary.allocation_drift }}</template>
             <template v-if="store.summary.large_purchase > 0"> · {{ t('reminders.types.large_purchase') }} {{ store.summary.large_purchase }}</template>
           </span>
           <span v-else class="reminder-summary reminder-summary--empty">{{ t('reminders.empty') }}</span>

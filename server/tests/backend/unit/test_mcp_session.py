@@ -34,8 +34,6 @@ async def test_list_tools_returns_seven_tools():
         "get_liabilities",
         "get_members",
         "get_recent_alerts",
-        "read_numina_report",
-        "write_numina_report",
     }
 
 

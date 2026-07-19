@@ -60,12 +60,9 @@ _TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     "load_skill": ("internal", "加载分析能力", "🧩", "toolName.loadSkill"),
     "write_file": ("execution", "保存文件", "💾", "toolName.writeFile"),
     "read_file": ("execution", "读取文件", "📂", "toolName.readFile"),
-    # Numina MCP report tools (domain-specific, avoid collision with DeerFlow built-in read_file/write_file)
-    "write_numina_report": ("report_gen", "写入小鸣报告", "💾", "toolName.writeNuminaReport"),
-    "read_numina_report": ("report_gen", "读取小鸣报告", "📂", "toolName.readNuminaReport"),
-    # Numina MCP namespaced variants (LangChain MCP adapter format: "Server Name_tool_name")
-    "Numina Backend MCP_write_numina_report": ("report_gen", "写入小鸣报告", "💾", "toolName.writeNuminaReport"),
-    "Numina Backend MCP_read_numina_report": ("report_gen", "读取小鸣报告", "📂", "toolName.readNuminaReport"),
+    # Resolved-3 (U5 cleanup): write_numina_report / read_numina_report MCP tools
+    # deleted — asset-report uses DeerFlow native write_file/read_file/str_replace
+    # sandbox tools now. Namespaced variants removed too.
 }
 
 # DeerFlow built-in tool suffixes that are safe to match on namespaced variants

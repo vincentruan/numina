@@ -231,6 +231,13 @@ export function useReportStream(): UseReportStreamReturn {
 
   /** end frame → step3 finish (ai_reports written) on complete status. */
   function handleEnd(data: { status?: string } | null): void {
+    // Plan U4 step 9 design-lens Finding 7: if step2 never received
+    // report.step2_json (step2Status still 'process' at stream end), the
+    // indicators JSON parse failed → mark step2 error so the "指标 JSON 解析失败"
+    // panel renders and step3 stays waiting (not silently stuck 'process').
+    if (step2Status.value === 'process') {
+      step2Status.value = 'error'
+    }
     if (data?.status === 'complete') {
       if (step3Status.value !== 'error') step3Status.value = 'finish'
       status.value = 'completed'

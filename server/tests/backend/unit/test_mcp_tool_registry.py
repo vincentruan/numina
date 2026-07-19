@@ -15,15 +15,15 @@ from apps.backend.app.services.mcp_tool_registry import (
 
 
 class TestRegistryContents:
-    def test_registry_contains_all_seven_tools(self):
+    def test_registry_contains_all_five_tools(self):
+        # Resolved-3 (U5 cleanup): write_numina_report / read_numina_report
+        # deleted — asset-report uses DeerFlow native sandbox tools now.
         expected_names = {
             "get_family_overview",
             "get_assets",
             "get_liabilities",
             "get_members",
             "get_recent_alerts",
-            "read_numina_report",
-            "write_numina_report",
         }
         assert set(_REGISTRY.keys()) == expected_names
 
@@ -53,12 +53,13 @@ class TestGetTool:
 class TestListToolsForRole:
     def test_list_tools_for_role_owner(self):
         tools = list_tools_for_role("owner")
-        assert len(tools) == 7
+        # Resolved-3 (U5 cleanup): 2 report tools deleted → 5 tools remain.
+        assert len(tools) == 5
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 7
+        assert len(tools) == 5
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")

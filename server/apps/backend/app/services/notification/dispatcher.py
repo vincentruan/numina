@@ -67,7 +67,6 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
         counts[rtype] = counts.get(rtype, 0) + 1
     return ReminderSummary(
         large_purchase=counts.get("large_purchase", 0),
-        allocation_drift=counts.get("allocation_drift", 0),
         expiring_soon=counts.get("expiring_soon", 0),
         maturity=counts.get("maturity", 0),
         total=sum(counts.values()),

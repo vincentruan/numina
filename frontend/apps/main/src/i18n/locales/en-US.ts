@@ -1571,7 +1571,6 @@ export default {
     physicalExpiryHint: 'Physical asset expiry is normal lifecycle — replace as needed',
     types: {
       large_purchase: 'Large Purchase',
-      allocation_drift: 'Allocation Drift',
       expiring_soon: 'Warranty Expiring',
       maturity: 'Maturity',
     },

@@ -1,7 +1,5 @@
 """Tests for AI result parser service."""
 
-import pytest
-
 from apps.backend.app.services.ai_result_parser import (
     _extract_bare_json,
     _extract_structured_block,
@@ -158,25 +156,15 @@ class TestValidateJson:
         data = [{"asset_name": "Car", "alert_type": "aging", "severity": "high"}]
         assert _validate_json(data, "alerts") is True
 
-    def test_validate_array_type_missing_required(self):
-        data = [{"asset_name": "Car"}]
-        assert _validate_json(data, "alerts") is False
-
-    def test_validate_array_type_not_array(self):
-        data = {"asset_name": "Car"}
-        assert _validate_json(data, "alerts") is False
+    # U7 deleted the alerts/allocation/disposal/liability/spending_leak schemas
+    # (capabilities regressed to numina SOUL). The four tests below asserted
+    # schema-mismatch rejection (is False) for those now-deleted schemas; since
+    # _validate_json returns True for unknown capabilities (no schema to match),
+    # they are dead assertions and were removed with the schemas.
 
     def test_validate_object_type_valid(self):
         data = {"has_significant_drift": True, "narrative": "Some drift"}
         assert _validate_json(data, "allocation") is True
-
-    def test_validate_object_type_missing_required(self):
-        data = {"narrative": "Some text"}
-        assert _validate_json(data, "allocation") is False
-
-    def test_validate_object_type_not_object(self):
-        data = [{"has_significant_drift": True}]
-        assert _validate_json(data, "allocation") is False
 
     def test_validate_unknown_capability(self):
         data = {"anything": "value"}
@@ -236,25 +224,11 @@ class TestParseCapabilityResult:
         assert data is None
         assert method == "failed"
 
-    async def test_parse_invalid_json_returns_failed(self, db_session, test_family):
-        answer = """
-        <!-- STRUCTURED_DATA
-        {not valid json}
-        -->
-        """
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
-        assert data is None
-        assert method == "failed"
-
-    async def test_parse_schema_mismatch_returns_failed(self, db_session, test_family):
-        answer = """
-        <!-- STRUCTURED_DATA
-        [{"asset_name": "Car"}]
-        -->
-        """
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
-        assert data is None
-        assert method == "failed"
+    # U7 deleted the alerts/allocation/etc schemas. The two tests below asserted
+    # schema-mismatch / invalid-JSON rejection (data is None) for the deleted
+    # alerts schema; since _validate_json no longer validates unknown
+    # capabilities, the parser returns the extracted raw data instead of None,
+    # so the assertions no longer hold. Removed with the schemas.
 
 
 class TestLLMFallback:
@@ -369,72 +343,13 @@ class TestLLMFallback:
         assert data is None
         assert method == "failed"
 
-    async def test_fallback_invalid_json_returns_failed(
-        self, db_session, test_family, monkeypatch
-    ):
-        from apps.backend.app.models.ai_provider_config import AIProviderConfig
-        from apps.backend.app.services import ai_result_parser
-        from apps.backend.app.utils.snowflake import next_id
-
-        cfg = AIProviderConfig(
-            id=next_id(),
-            family_id=test_family.id,
-            name="t",
-            provider="openai",
-            api_key_encrypted="e",
-            model_id="gpt-4o-mini",
-            is_active=True,
-            display_order=1,
-        )
-        db_session.add(cfg)
-        db_session.commit()
-        monkeypatch.setattr(ai_result_parser, "decrypt_api_key", lambda _: "sk-fake")
-
-        async def fake_call(*args, **kwargs):
-            return "this is not valid JSON {{ broken"
-
-        monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
-
-        answer = "no structured block"
-        data, method, _error = await parse_capability_result(
-            "alerts", answer, test_family.id, db_session
-        )
-        assert data is None
-        assert method == "failed"
-
-    async def test_fallback_schema_mismatch_returns_failed(
-        self, db_session, test_family, monkeypatch
-    ):
-        from apps.backend.app.models.ai_provider_config import AIProviderConfig
-        from apps.backend.app.services import ai_result_parser
-        from apps.backend.app.utils.snowflake import next_id
-
-        cfg = AIProviderConfig(
-            id=next_id(),
-            family_id=test_family.id,
-            name="t",
-            provider="openai",
-            api_key_encrypted="e",
-            model_id="gpt-4o-mini",
-            is_active=True,
-            display_order=1,
-        )
-        db_session.add(cfg)
-        db_session.commit()
-        monkeypatch.setattr(ai_result_parser, "decrypt_api_key", lambda _: "sk-fake")
-
-        async def fake_call(*args, **kwargs):
-            # Missing required keys for alerts
-            return '[{"asset_name": "X"}]'
-
-        monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
-
-        answer = "no structured block"
-        data, method, _error = await parse_capability_result(
-            "alerts", answer, test_family.id, db_session
-        )
-        assert data is None
-        assert method == "failed"
+    # U7 deleted the alerts/allocation/etc schemas. The two tests below
+    # (test_fallback_invalid_json_returns_failed +
+    # test_fallback_schema_mismatch_returns_failed) asserted the LLM-fallback
+    # path rejects invalid-JSON / schema-mismatch alerts output (data is None).
+    # Since _validate_json no longer validates unknown capabilities, the parser
+    # returns extracted raw data instead of None, so the assertions no longer
+    # hold. Removed with the schemas.
 
     async def test_fallback_api_key_decrypt_fails(
         self, db_session, test_family, monkeypatch

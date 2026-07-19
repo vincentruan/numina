@@ -89,49 +89,11 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=False,
     ),
-    # Domain-specific report tools — named to avoid collision with DeerFlow's
-    # built-in read_file/write_file sandbox tools.  The built-in tools operate
-    # on absolute virtual paths (/mnt/user-data/...) for general file I/O;
-    # these tools are scoped to the tenant report directory and accept simple
-    # filenames, so the agent should always prefer these for report operations.
-    "write_numina_report": MCPToolMeta(
-        name="write_numina_report",
-        description="将内容写入租户报告目录的文件。仅支持 markdown 报告文件。",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "filename": {
-                    "type": "string",
-                    "description": "文件名，必须符合 report_*.md 格式",
-                    "pattern": "^report_[a-zA-Z0-9_-]+\\.md$",
-                },
-                "content": {
-                    "type": "string",
-                    "description": "文件内容（markdown 格式）",
-                },
-            },
-            "required": ["filename", "content"],
-        },
-        allowed_roles=frozenset({"owner", "member"}),
-        requires_write=True,
-    ),
-    "read_numina_report": MCPToolMeta(
-        name="read_numina_report",
-        description="读取租户报告目录中的文件内容。仅支持 markdown 报告文件。",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "filename": {
-                    "type": "string",
-                    "description": "文件名，必须符合 report_*.md 格式",
-                    "pattern": "^report_[a-zA-Z0-9_-]+\\.md$",
-                },
-            },
-            "required": ["filename"],
-        },
-        allowed_roles=frozenset({"owner", "member"}),
-        requires_write=False,
-    ),
+    # Resolved-3 (U5 cleanup): the domain-specific ``write_numina_report`` /
+    # ``read_numina_report`` MCP tools were deleted — asset-report now uses
+    # DeerFlow's native ``write_file``/``read_file``/``str_replace`` sandbox
+    # tools (NuminaLocalSandboxProvider, family-scoped) via the ``asset-report``
+    # skill. No MCP report tools remain.
 }
 
 
