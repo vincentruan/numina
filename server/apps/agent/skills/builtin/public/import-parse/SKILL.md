@@ -17,8 +17,12 @@ trigger_phrases:
 # family-data MCP 工具用基名（sync_tool_patch.py MultiServerMCPClient
 # tool_name_prefix=False），allowed-tools 必须用基名全名匹配
 # （filter_tools_by_skill_allowed_tools 全名精确匹配，非前缀匹配）。
-# 注：MCP 批量写入工具 import_*_batch 为 U8 follow-up（plan 前提链 dependent #2），
-# 本轮 import-parse 仅做解析输出 JSON，写入仍由 backend /import/confirm 完成。
+# 注：MCP 批量写入工具 import_assets_batch / import_liabilities_batch /
+# import_credit_cards_batch 已在 #11 (U8 follow-up) 注册到 MCP tool registry
+# （mcp_tool_registry.py），但本轮 import-parse 的 live 流程仍为"解析输出 JSON →
+# backend /import/confirm 写库"的预览流程（用户确认环节不丢）。这些 MCP 工具供
+# 未来 C1 直接写入流程或其它 agent 场景调用；当前 SKILL 不把它们列入
+# allowed-tools，避免 LLM 在预览流程里绕过用户确认直接写库。
 allowed-tools:
   - get_assets
   - read_file

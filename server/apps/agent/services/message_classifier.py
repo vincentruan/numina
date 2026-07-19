@@ -51,6 +51,16 @@ _TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     "get_liabilities": ("data_collect", "查询负债数据", "📋", "toolName.getLiabilitiesData"),
     "get_members": ("data_collect", "获取家庭成员", "👥", "toolName.getMembers"),
     "get_recent_alerts": ("data_collect", "获取近期预警", "🔔", "toolName.getRecentAlerts"),
+    # #11 import-parse batch-write tools (MCP). Registered but not yet wired
+    # into the live agent path (preview flow preserved); display_key left empty
+    # so resolve_tool_metadata falls back to display_name until i18n keys are
+    # added when the C1 direct-write flow is enabled.
+    "numina-family-data_import_assets_batch": ("data_write", "批量导入资产", "📥", ""),
+    "numina-family-data_import_liabilities_batch": ("data_write", "批量导入负债", "📥", ""),
+    "numina-family-data_import_credit_cards_batch": ("data_write", "批量导入信用卡", "📥", ""),
+    "import_assets_batch": ("data_write", "批量导入资产", "📥", ""),
+    "import_liabilities_batch": ("data_write", "批量导入负债", "📥", ""),
+    "import_credit_cards_batch": ("data_write", "批量导入信用卡", "📥", ""),
     # DeerFlow built-in tools
     "execute_code": ("execution", "执行分析代码", "⚙️", "toolName.executeCode"),
     "bash": ("execution", "执行命令", "⚙️", "toolName.bash"),

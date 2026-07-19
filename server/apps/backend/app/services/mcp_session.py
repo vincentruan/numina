@@ -7,6 +7,7 @@ Tenant + caller isolation via __slots__:
 
 import json
 import logging
+from datetime import date
 from typing import Any
 
 from mcp.server import Server
@@ -17,6 +18,120 @@ from apps.backend.app.database import SessionLocal
 from apps.backend.app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_date(value: Any) -> date | None:
+    """Parse a YYYY-MM-DD string (or None) into a date; None/invalid → None."""
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
+def _import_assets_batch(
+    db: Session, user: User, items: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Batch-create financial assets via ``asset.create_asset``.
+
+    Mirrors ``import_report._resolve_category_id``: category_hint → Category.name
+    match; items whose hint matches no system category are skipped (status
+    "skipped") rather than failing the whole batch — the agent can retry with
+    a supported hint. Returns ``{created, skipped, items}`` where each item
+    echoes the caller's ``temp_id`` for correlation.
+    """
+    from apps.backend.app.models.category import Category
+    from apps.backend.app.schemas.asset import AssetCreate
+    from apps.backend.app.services import asset as asset_service
+
+    results: list[dict[str, Any]] = []
+    created = 0
+    skipped = 0
+    for raw in items:
+        temp_id = raw.get("temp_id", "")
+        hint = raw.get("category_hint", "")
+        cat = db.query(Category).filter(Category.name == hint).first()
+        if not cat:
+            skipped += 1
+            results.append({
+                "temp_id": temp_id, "name": raw.get("name", ""),
+                "status": "skipped",
+                "reason": f"未知分类: {hint}",
+            })
+            continue
+        try:
+            req = AssetCreate(
+                category_id=cat.id,
+                name=raw["name"],
+                asset_type=raw.get("asset_type", "financial"),
+                current_value=raw.get("current_value"),
+                purchase_price=raw.get("current_value"),
+                currency=raw.get("currency", "CNY"),
+                notes=raw.get("notes"),
+                status="in_use",
+            )
+            asset = asset_service.create_asset(db, user, req)
+            created += 1
+            results.append({
+                "temp_id": temp_id, "id": str(asset.id), "name": asset.name,
+                "status": "created",
+            })
+        except Exception as e:
+            skipped += 1
+            results.append({
+                "temp_id": temp_id, "name": raw.get("name", ""),
+                "status": "error", "reason": str(e),
+            })
+    return {"created": created, "skipped": skipped, "items": results}
+
+
+def _import_liabilities_batch(
+    db: Session, user: User, items: list[dict[str, Any]], *, category_override: str | None = None
+) -> dict[str, Any]:
+    """Batch-create liabilities via ``liability.create_liability``.
+
+    ``category_override`` (used by ``import_credit_cards_batch`` = "credit_card")
+    forces the category, ignoring any per-item ``category``. Returns the same
+    ``{created, skipped, items}`` shape as the assets batch.
+    """
+    from apps.backend.app.schemas.liability import LiabilityCreate
+    from apps.backend.app.services import liability as liability_service
+
+    results: list[dict[str, Any]] = []
+    created = 0
+    skipped = 0
+    for raw in items:
+        temp_id = raw.get("temp_id", "")
+        try:
+            req = LiabilityCreate(
+                category=category_override or raw.get("category", "other"),
+                name=raw["name"],
+                original_amount=float(raw["original_amount"]),
+                remaining_amount=float(raw["remaining_amount"]),
+                monthly_payment=raw.get("monthly_payment"),
+                interest_rate=raw.get("interest_rate"),
+                start_date=_parse_date(raw.get("start_date")),
+                end_date=_parse_date(raw.get("end_date")),
+                institution=raw.get("institution"),
+                currency=raw.get("currency", "CNY"),
+                notes=raw.get("notes"),
+            )
+            liability = liability_service.create_liability(db, user, req)
+            created += 1
+            results.append({
+                "temp_id": temp_id, "id": str(liability.id), "name": liability.name,
+                "status": "created",
+            })
+        except Exception as e:
+            skipped += 1
+            results.append({
+                "temp_id": temp_id, "name": raw.get("name", ""),
+                "status": "error", "reason": str(e),
+            })
+    return {"created": created, "skipped": skipped, "items": results}
 
 
 def _get_caller_user(family_id: str, caller_user_id: str, db: Session) -> User:
@@ -156,6 +271,19 @@ class MCPSession:
                 elif name == "get_recent_alerts":
                     limit = int(arguments.get("limit", 10))
                     data = dashboard_service.get_recent_alerts(db, user, limit=limit)
+                elif name == "import_assets_batch":
+                    data = _import_assets_batch(
+                        db, user, arguments.get("items") or []
+                    )
+                elif name == "import_liabilities_batch":
+                    data = _import_liabilities_batch(
+                        db, user, arguments.get("items") or []
+                    )
+                elif name == "import_credit_cards_batch":
+                    data = _import_liabilities_batch(
+                        db, user, arguments.get("items") or [],
+                        category_override="credit_card",
+                    )
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

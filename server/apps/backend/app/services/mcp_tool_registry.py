@@ -94,6 +94,126 @@ _REGISTRY: dict[str, MCPToolMeta] = {
     # DeerFlow's native ``write_file``/``read_file``/``str_replace`` sandbox
     # tools (NuminaLocalSandboxProvider, family-scoped) via the ``asset-report``
     # skill. No MCP report tools remain.
+    #
+    # #11 (U8 follow-up): batch-write tools for the import-parse pipeline.
+    # The agent parses a financial document into structured items and calls
+    # these to persist them in one shot (plan U8 step 4-5). They reuse the
+    # service-layer ``create_asset``/``create_liability`` paths so validation,
+    # notification dispatch, and snowflake IDs match the REST endpoints.
+    # ``requires_write=True`` → owner/member only (no child role).
+    "import_assets_batch": MCPToolMeta(
+        name="import_assets_batch",
+        description=(
+            "批量创建金融资产条目（导入持仓用）。一次写入多条，返回每条的创建"
+            "结果（id/temp_id/status）。category_hint 自动匹配系统分类"
+            "（股票/基金/债券/存款/理财产品/数字货币/其他），匹配不到则跳过该条。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "description": "待创建的资产条目列表",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "temp_id": {
+                                "type": "string",
+                                "description": "调用方生成的临时 ID，回传以便对应结果",
+                            },
+                            "name": {"type": "string"},
+                            "asset_type": {
+                                "type": "string",
+                                "description": "固定 financial（导入仅处理金融资产）",
+                            },
+                            "category_hint": {
+                                "type": "string",
+                                "description": "股票|基金|债券|存款|理财产品|数字货币|其他",
+                            },
+                            "current_value": {"type": "number"},
+                            "currency": {"type": "string", "default": "CNY"},
+                            "quantity": {"type": "number"},
+                            "notes": {"type": "string"},
+                        },
+                        "required": ["temp_id", "name", "category_hint", "current_value"],
+                    },
+                }
+            },
+            "required": ["items"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=True,
+    ),
+    "import_liabilities_batch": MCPToolMeta(
+        name="import_liabilities_batch",
+        description=(
+            "批量创建负债条目（贷款等）。一次写入多条，返回每条创建结果。"
+            "category 为负债类型字符串（如 mortgage/car_loan/other）。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "temp_id": {"type": "string"},
+                            "category": {"type": "string"},
+                            "name": {"type": "string"},
+                            "original_amount": {"type": "number"},
+                            "remaining_amount": {"type": "number"},
+                            "monthly_payment": {"type": "number"},
+                            "interest_rate": {"type": "number"},
+                            "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+                            "end_date": {"type": "string", "description": "YYYY-MM-DD"},
+                            "institution": {"type": "string"},
+                            "currency": {"type": "string", "default": "CNY"},
+                            "notes": {"type": "string"},
+                        },
+                        "required": ["temp_id", "category", "name", "original_amount", "remaining_amount"],
+                    },
+                }
+            },
+            "required": ["items"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=True,
+    ),
+    "import_credit_cards_batch": MCPToolMeta(
+        name="import_credit_cards_batch",
+        description=(
+            "批量创建信用卡负债条目（category 固定为 credit_card 的 import_liabilities_batch 特化）。"
+            "用于导入信用卡账单。original_amount=额度/账单金额，remaining_amount=未还金额。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "temp_id": {"type": "string"},
+                            "name": {"type": "string", "description": "信用卡名称（如招商银行信用卡）"},
+                            "original_amount": {"type": "number", "description": "额度或账单金额"},
+                            "remaining_amount": {"type": "number", "description": "未还金额"},
+                            "monthly_payment": {"type": "number"},
+                            "interest_rate": {"type": "number"},
+                            "end_date": {"type": "string", "description": "到期日 YYYY-MM-DD"},
+                            "institution": {"type": "string"},
+                            "currency": {"type": "string", "default": "CNY"},
+                            "notes": {"type": "string"},
+                        },
+                        "required": ["temp_id", "name", "original_amount", "remaining_amount"],
+                    },
+                }
+            },
+            "required": ["items"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=True,
+    ),
 }
 
 
