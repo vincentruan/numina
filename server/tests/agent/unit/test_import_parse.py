@@ -174,3 +174,46 @@ async def test_parse_times_out_and_returns_empty_result():
         )
     assert resp.status_code == 200
     assert resp.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_parse_with_image_paths_injects_view_image_hint_and_reuses_thread_id():
+    """C 方案（vision）：backend 传 thread_id + image_paths 时，agent router
+    复用该 thread_id（PNG 已落其沙箱 uploads/）并把 image_paths 提示注入
+    user message（引导 LLM 先 view_image 读图）。"""
+    from fastapi.testclient import TestClient
+
+    from apps.agent.app.main import app
+
+    captured: dict = {}
+
+    async def _fake_capture(*, bridge, run_manager, record, family_id, user_id, thread_id, graph_input, config):
+        captured["thread_id"] = thread_id
+        captured["content"] = graph_input["messages"][-1]["content"]
+        await bridge.publish(record.run_id, "custom", {
+            "type": "import-parse.result",
+            "payload": {"source": "", "report_date": None, "items": []},
+        })
+        await bridge.publish(record.run_id, "end", {"status": "complete"})
+
+    supplied_thread_id = "importparse-thread-supplied123"
+    with patch(
+        "apps.agent.routers.import_parse._run_import_parse_agent",
+        new=AsyncMock(side_effect=_fake_capture),
+    ):
+        client = TestClient(app)
+        resp = client.post(
+            "/import/parse",
+            json={
+                "text": "文档文本",
+                "thread_id": supplied_thread_id,
+                "image_paths": ["/mnt/user-data/uploads/page_1.png"],
+            },
+            headers={"X-Agent-Token": VALID_TOKEN, "X-Family-Id": "fam1"},
+        )
+    assert resp.status_code == 200
+    # thread_id 复用 backend 传入的（沙箱 PNG 已落该 thread）
+    assert captured["thread_id"] == supplied_thread_id
+    # image_paths 提示注入 user message
+    assert "/mnt/user-data/uploads/page_1.png" in captured["content"]
+    assert "view_image" in captured["content"]

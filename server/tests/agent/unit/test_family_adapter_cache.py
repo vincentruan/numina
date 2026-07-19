@@ -450,6 +450,61 @@ class TestIU6CacheKeyAndCapabilities:
         model_entry = content["models"][0]
         assert model_entry.get("supports_thinking") is True
 
+    def test_vision_supported_from_model_1_capabilities(self, base_config_dir):
+        """supports_vision must be True when 'vision' is in model_1_capabilities.
+
+        This wiring lets the DeerFlow harness assembly-time gate view_image_tool
+        (tools.py:110) and mount ViewImageMiddleware (agent.py:352) — without it
+        the agent cannot read images even when the underlying model supports them.
+        """
+        import yaml
+
+        cfg_vision = {
+            "config_id": "cfg-vision",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-sonnet-4-6",
+            "ai_provider": "anthropic",
+            "model_1_capabilities": ["text_generation", "vision"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_vision)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is True
+
+    def test_vision_supported_from_vision_model_id(self, base_config_dir):
+        """supports_vision must be True when vision_model_id is set (mirrors
+        ai_config.py:579's ``or bool(cfg.vision_model_id)`` logic)."""
+        import yaml
+
+        cfg_vision_model = {
+            "config_id": "cfg-vm",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-haiku-4-5",
+            "ai_provider": "anthropic",
+            "vision_model_id": "claude-sonnet-4-6",
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_vision_model)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is True
+
+    def test_vision_not_supported_without_vision_config(self, base_config_dir):
+        """supports_vision must be False when neither 'vision' capability nor
+        vision_model_id is set."""
+        import yaml
+
+        cfg_no_vision = {
+            "config_id": "cfg-novision",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-haiku-4-5",
+            "ai_provider": "anthropic",
+            "model_1_capabilities": ["text_generation"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_no_vision)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is False
+
     def test_batch_invalidate_clears_all_entries_for_family(self, base_config_dir, ai_config):
         """invalidate_family_adapter_cache(family_id) must clear all (family_id, *) entries."""
         clear_cache()

@@ -12,11 +12,17 @@ trigger_phrases:
   - 解析金融文档
   - 导入资产
 
-# 原生 DeerFlow sandbox 工具（非 MCP）—— read_file/str_replace 经
+# 原生 DeerFlow sandbox 工具（非 MCP）—— read_file/str_replace/view_image 经
 # NuminaLocalSandboxProvider 走 family_id-scoped 沙箱（Resolved-3 阻塞点 A/B/C）。
 # family-data MCP 工具用基名（sync_tool_patch.py MultiServerMCPClient
 # tool_name_prefix=False），allowed-tools 必须用基名全名匹配
 # （filter_tools_by_skill_allowed_tools 全名精确匹配，非前缀匹配）。
+# view_image 不在 ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES（仅 describe_skill/read_file/
+# review_skill_package/tool_search 豁免白名单过滤），必须显式列入 allowed-tools 才
+# 不被 filter_tools_by_skill_allowed_tools 过滤掉。view_image 仅当家庭 AI 配置的
+# 模型 supports_vision=True 时由 harness 自动注册（tools.py:110 + agent.py:352 自动
+# 挂 ViewImageMiddleware）；非 vision 模型下 view_image 不会出现在工具列表里，
+# 列在 allowed-tools 也无副作用（filter 找不到该工具就跳过）。
 # 注：MCP 批量写入工具 import_assets_batch / import_liabilities_batch /
 # import_credit_cards_batch 已在 #11 (U8 follow-up) 注册到 MCP tool registry
 # （mcp_tool_registry.py），但本轮 import-parse 的 live 流程仍为"解析输出 JSON →
@@ -27,24 +33,28 @@ allowed-tools:
   - get_assets
   - read_file
   - str_replace
+  - view_image
 
 thinking: false
-max_tokens: 4000
+max_tokens: 8000
 ---
 
 ## 角色
 
-你是金融文档持仓解析器，在**单次响应内**完成：读取文档文本 → 提取持仓/资产条目 → 输出结构化 JSON。
+你是金融文档持仓解析器，在**单次响应内**完成：读取文档内容 → 提取持仓/资产条目 → 输出结构化 JSON。
 
-本 skill 由 backend 以合成触发消息 `/import-parse` 发起（系统内置固定流程，非用户对话触发）。用户上传的 PDF 已由 backend 提取为纯文本，作为文档内容注入。
+本 skill 由 backend 以合成触发消息 `/import-parse` 发起（系统内置固定流程，非用户对话触发）。文档内容可能以两种形式注入：
+1. **纯文本**：backend 已从文本型 PDF 提取的文本，直接在消息内容中。
+2. **图片文件**：扫描件 PDF / 图片型文档，backend 已将每页渲染为 PNG 并提供沙箱虚拟路径列表（形如 `/mnt/user-data/uploads/page_1.png`）。此时**必须先用 `view_image` 工具逐张读取所有图片**，再根据图片内容解析。
 
 ## 最重要的规则（必须严格遵守）
 
 1. **只提取持仓/资产信息**，忽略交易流水、消费记录、账户登录信息、广告。
-2. **最终输出仅一个 ```json 代码块**，不要有任何其他内容。
-3. **JSON 必须合法**：无尾逗号、无注释、字符串正确转义。
-4. **current_value 必须是数字**（float/int），不能是字符串；识别不到金额时为 null。
-5. **识别不到任何资产时**返回 `{"source": "", "report_date": null, "items": []}`。
+2. **有图片时必须先 `view_image` 全部读完**，再综合文本 + 图片内容解析；不要跳过任何一张图片。
+3. **最终输出仅一个 ```json 代码块**，不要有任何其他内容（view_image 调用后的最终回复只放 JSON）。
+4. **JSON 必须合法**：无尾逗号、无注释、字符串正确转义。
+5. **current_value 必须是数字**（float/int），不能是字符串；识别不到金额时为 null。
+6. **识别不到任何资产时**返回 `{"source": "", "report_date": null, "items": []}`。
 
 ## 输出格式
 

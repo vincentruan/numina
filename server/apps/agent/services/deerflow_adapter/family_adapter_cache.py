@@ -340,6 +340,17 @@ def _generate_temp_config(
     else:
         thinking_supported = bool(ai_config.get("thinking_supported", False))
 
+    # Vision capability: "vision" in model_1_capabilities, or a dedicated
+    # vision_model_id configured (mirrors ai_config.py:579's logic). Wiring
+    # supports_vision into the model entry lets the DeerFlow harness
+    # assembly-time gate the view_image_tool (tools.py:110) and mount
+    # ViewImageMiddleware (factory.py:270) — without it the agent cannot read
+    # images even when the underlying model supports them.
+    if model_1_caps is not None:
+        vision_supported = "vision" in model_1_caps or bool(ai_config.get("vision_model_id"))
+    else:
+        vision_supported = bool(ai_config.get("vision_model_id"))
+
     # Select appropriate LangChain model class based on provider and thinking support.
     # DeerFlow provides patched model classes for vendor-specific reasoning_content
     # extraction. Native OpenAI uses the stock class because reasoning is delivered
@@ -373,6 +384,7 @@ def _generate_temp_config(
         "model": model_id,
         "api_key": api_key,
         "supports_thinking": thinking_supported,
+        "supports_vision": vision_supported,
     }
 
     # Resolve max_tokens with three-tier priority: user (DB) > yaml prefix > None.

@@ -33,6 +33,11 @@ _EMPTY_RESULT: dict[str, Any] = {"source": "", "report_date": None, "items": []}
 
 class ImportParseRequest(BaseModel):
     text: str
+    # C 方案（vision）：backend 预生成 thread_id + 渲染 PDF 页图后传入。
+    # thread_id 让 agent 用同一沙箱（PNG 已落 uploads/）；image_paths 是容器
+    # 虚拟路径列表，agent 用 view_image 读取。纯文本解析时这两项为空（向后兼容）。
+    thread_id: str | None = None
+    image_paths: list[str] | None = None
 
 
 class _CapturingBridge:
@@ -75,9 +80,12 @@ async def parse_import(
     from deerflow.runtime import RunStatus
 
     run_id = f"importparse-{uuid.uuid4().hex[:12]}"
-    thread_id = f"importparse-thread-{uuid.uuid4().hex[:12]}"
+    # C 方案（vision）：backend 预生成 thread_id 时复用（PNG 已渲染到该 thread 沙箱）；
+    # 否则自生成（纯文本路径，向后兼容）。
+    thread_id = body.thread_id or f"importparse-thread-{uuid.uuid4().hex[:12]}"
     family_id = x_family_id
     user_id = x_user_id
+    image_paths = body.image_paths or []
 
     # Build a minimal RunRecord duck-typed for _run_import_parse_agent (mirrors
     # what RunManager.create_or_reject produces; only run_id/status/abort_event
@@ -99,7 +107,16 @@ async def parse_import(
 
     # The document text is injected as the run's user message (the worker's
     # _extract_import_parse_document reads messages[-1].content).
-    graph_input = {"messages": [{"role": "user", "content": body.text}]}
+    # C 方案（vision）：有 image_paths 时附加提示，引导 LLM 先 view_image 读图。
+    user_content = body.text
+    if image_paths:
+        paths_list = "\n".join(f"  - {p}" for p in image_paths)
+        user_content = (
+            f"{body.text}\n\n"
+            f"以下是文档的页面图片路径，请先用 view_image 工具逐张读取所有图片，"
+            f"再综合文本与图片内容解析持仓：\n{paths_list}"
+        )
+    graph_input = {"messages": [{"role": "user", "content": user_content}]}
 
     # Resolved-3 blocker A (P1 fix): this endpoint calls _run_import_parse_agent
     # DIRECTLY (bypassing worker.run_agent, which sets the sandbox ContextVar at
