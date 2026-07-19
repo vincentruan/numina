@@ -52,12 +52,20 @@ def _import_assets_batch(
     skipped = 0
     for raw in items:
         temp_id = raw.get("temp_id", "")
-        hint = raw.get("category_hint", "")
-        cat = db.query(Category).filter(Category.name == hint).first()
+        hint = raw.get("category_hint") or ""
+        name = raw.get("name")
+        if not name:
+            skipped += 1
+            results.append({
+                "temp_id": temp_id, "name": "",
+                "status": "skipped", "reason": "缺少 name 字段",
+            })
+            continue
+        cat = db.query(Category).filter(Category.name == hint).first() if hint else None
         if not cat:
             skipped += 1
             results.append({
-                "temp_id": temp_id, "name": raw.get("name", ""),
+                "temp_id": temp_id, "name": name,
                 "status": "skipped",
                 "reason": f"未知分类: {hint}",
             })
@@ -65,8 +73,8 @@ def _import_assets_batch(
         try:
             req = AssetCreate(
                 category_id=cat.id,
-                name=raw["name"],
-                asset_type=raw.get("asset_type", "financial"),
+                name=name,
+                asset_type=raw.get("asset_type") or "financial",
                 current_value=raw.get("current_value"),
                 purchase_price=raw.get("current_value"),
                 currency=raw.get("currency", "CNY"),

@@ -28,7 +28,7 @@ from apps.backend.app.services.agent_client import AgentClient
 router = APIRouter(prefix="/import", tags=["import"])
 logger = logging.getLogger(__name__)
 
-_MAX_PDF_BYTES = 10 * 1024 * 1024  # 10 MB
+_MAX_PDF_BYTES = 25 * 1024 * 1024  # 25 MB (扫描件 PDF 图片层较大，10MB 易超)
 
 # Image-based PDF detection threshold (chars/page). Mirrors DeerFlow's
 # file_conversion._MIN_CHARS_PER_PAGE: normal text PDFs yield 200-2000
@@ -115,7 +115,7 @@ def _render_pdf_pages_to_sandbox(
                 pix.save(str(uploads_dir / filename))
                 virtual_paths.append(f"/mnt/user-data/uploads/{filename}")
     except Exception as e:
-        logger.error("[parse_pdf] PDF page render failed family=%s err=%s", family_id, e)
+        logger.error("[parse_pdf] PDF page render failed family=%s err=%s exc=%s", family_id, e, type(e).__name__, exc_info=True)
         return []
     return virtual_paths
 
@@ -363,3 +363,88 @@ def confirm_import(
 
     db.commit()
     return stats
+
+
+@router.post("/confirm-via-agent")
+async def confirm_import_via_agent(
+    req: ConfirmRequest,
+    current_user: User = Depends(require_adult),
+):
+    """C1 直接写入流程：用户确认后由 agent 调 import_assets_batch MCP 工具写库。
+
+    与 /confirm（backend 直接写 DB）不同，本端点把用户确认的 create 条目转发给
+    agent /import/parse（confirm_items），agent 走 SKILL.md §C1 写入模式调
+    import_assets_batch 一次性批量写入——符合 DeerFlow 范式（agent 写业务数据
+    唯一通道是 MCP 工具）。update 条目仍走 backend 直写（资产匹配+更新无需 LLM）。
+    返回 {updated, created, skipped, items[]}。
+    """
+    from apps.backend.app.database import SessionLocal
+    from apps.backend.app.services.agent_client import AgentClient
+
+    # update 条目：backend 直写（复用 /confirm 的 update 逻辑）
+    updated = 0
+    update_items = [item for item in req.items if item.action == "update" and item.matched_asset_id]
+    if update_items:
+        with SessionLocal() as db:
+            for item in update_items:
+                asset = (
+                    db.query(Asset)
+                    .filter(
+                        Asset.id == item.matched_asset_id,
+                        Asset.family_id == current_user.family_id,
+                    )
+                    .first()
+                )
+                if asset:
+                    asset.current_value = item.current_value
+                    if item.currency:
+                        asset.currency = item.currency
+                    if item.notes:
+                        asset.notes = item.notes
+                    updated += 1
+            db.commit()
+
+    # create 条目：交给 agent 调 import_assets_batch 写入
+    create_items = [
+        {
+            "temp_id": item.temp_id,
+            "name": item.name,
+            "asset_type": item.asset_type,
+            "category_hint": item.category_hint,
+            "current_value": item.current_value,
+            "currency": item.currency,
+            "quantity": item.quantity,
+            "notes": item.notes,
+        }
+        for item in req.items
+        if item.action == "create"
+    ]
+    write_result: dict = {"created": 0, "skipped": 0, "items": []}
+    if create_items:
+        try:
+            agent_client = AgentClient(
+                str(current_user.family_id),
+                user_id=str(current_user.id),
+                timeout=120.0,
+            )
+            resp = await agent_client.post(
+                "/import/parse",
+                json={"text": "", "confirm_items": create_items},
+            )
+            resp.raise_for_status()
+            agent_data = resp.json()
+            wr = agent_data.get("write_result")
+            if isinstance(wr, dict):
+                write_result = wr
+        except httpx.TimeoutException as e:
+            raise AppError(ErrorCode.IMPORT_AGENT_TIMEOUT) from e
+        except Exception as e:
+            logger.error(f"Agent confirm-via-agent failed: {e}")
+            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
+
+    return {
+        "updated": updated,
+        "created": write_result.get("created", 0),
+        "skipped": write_result.get("skipped", 0),
+        "items": write_result.get("items", []),
+    }

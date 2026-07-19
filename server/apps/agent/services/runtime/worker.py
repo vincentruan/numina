@@ -229,7 +229,7 @@ async def run_agent(
     # Resolved-3 blocker A: set the family_id ContextVar before any sandbox
     # tool (write_file/read_file) can be invoked. Must run in all branches —
     # numina and import-parse also depend on it once native tools are enabled.
-    set_family_sandbox_context(family_id)
+    set_family_sandbox_context(family_id, caller_user_id=user_id)
 
     app = record.metadata.get("app", "numina") if record.metadata else "numina"
     if app == "asset-report":

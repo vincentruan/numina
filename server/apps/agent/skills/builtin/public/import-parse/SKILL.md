@@ -23,17 +23,17 @@ trigger_phrases:
 # 模型 supports_vision=True 时由 harness 自动注册（tools.py:110 + agent.py:352 自动
 # 挂 ViewImageMiddleware）；非 vision 模型下 view_image 不会出现在工具列表里，
 # 列在 allowed-tools 也无副作用（filter 找不到该工具就跳过）。
-# 注：MCP 批量写入工具 import_assets_batch / import_liabilities_batch /
-# import_credit_cards_batch 已在 #11 (U8 follow-up) 注册到 MCP tool registry
-# （mcp_tool_registry.py），但本轮 import-parse 的 live 流程仍为"解析输出 JSON →
-# backend /import/confirm 写库"的预览流程（用户确认环节不丢）。这些 MCP 工具供
-# 未来 C1 直接写入流程或其它 agent 场景调用；当前 SKILL 不把它们列入
-# allowed-tools，避免 LLM 在预览流程里绕过用户确认直接写库。
+# 注：MCP 批量写入工具 import_assets_batch 已在 #11 (U8 follow-up) 注册到 MCP tool
+# registry（mcp_tool_registry.py），C1 直接写入流程（2026-07-19）将其列入
+# allowed-tools——当 backend 传入 confirm_items 时 agent 调 import_assets_batch
+# 一次批量写入 DB。其余 import_liabilities_batch / import_credit_cards_batch 仍
+# 备而不用（import-parse 当前仅处理资产持仓）。
 allowed-tools:
   - get_assets
   - read_file
   - str_replace
   - view_image
+  - import_assets_batch
 
 thinking: false
 max_tokens: 8000
@@ -126,3 +126,23 @@ max_tokens: 8000
   ]
 }
 ```
+
+## C1 直接写入流程（write_mode）
+
+当 user message 含 `【写入模式】` 标记 + 一个 JSON 数组（用户已确认的持仓条目）时，
+进入**写入模式**而非解析模式：
+
+1. **读取 JSON 数组**：user message 会包含形如
+   `【写入模式】请将以下已确认的持仓条目写入资产：[{"temp_id":"...","name":"...","category_hint":"...","current_value":...}, ...]`
+   的内容。提取其中的 items 数组。
+2. **调用 `import_assets_batch` 工具批量写入**：将 items 数组作为 `items` 参数传入
+   `import_assets_batch` 工具（每条含 temp_id/name/category_hint/current_value/currency/quantity）。
+   **只调用一次**，批量写入，不要逐条调用。
+3. **输出写入结果 JSON**：根据 `import_assets_batch` 的返回值，输出形如
+   ```json
+   {"source": "", "report_date": null, "items": [], "write_result": {"created": N, "skipped": N, "items": [{"temp_id":"...","status":"created","id":"..."}, ...]}}
+   ```
+   的 JSON 代码块。`write_result.created` = 成功创建数，`write_result.skipped` = 跳过数
+   （category_hint 未知等原因），`write_result.items[]` 每条 echo 输入的 temp_id + 写入状态。
+
+写入模式下**不要**调用 view_image / read_file / 解析文档——用户已确认条目，直接写库即可。

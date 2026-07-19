@@ -458,7 +458,7 @@ async def stream_agent_dispatch(
     from apps.agent.services.runtime.sandbox_provider import (
         set_family_sandbox_context,
     )
-    set_family_sandbox_context(family_id)
+    set_family_sandbox_context(family_id, caller_user_id=user_id)
 
     app_config_dict = dict(effective.config_dict)
     app_config_dict.setdefault(

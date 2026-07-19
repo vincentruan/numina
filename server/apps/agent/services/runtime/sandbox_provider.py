@@ -38,8 +38,16 @@ _current_user_token: contextvars.ContextVar[object | None] = contextvars.Context
     "numina_current_user_token", default=None
 )
 
+# Caller user_id for MCP SSE auth (mcp_internal.py requires X-Caller-User-Id).
+# The worker sets this alongside family_id; _patched_get_mcp_tools reads it to
+# inject X-Caller-User-Id into the MCP SSE connection headers (the MCP client
+# reads from extensions_config file which has no runtime caller user_id).
+_caller_user_id_context: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "numina_caller_user_id", default=None
+)
 
-def set_family_sandbox_context(family_id: str) -> None:
+
+def set_family_sandbox_context(family_id: str, caller_user_id: str | None = None) -> None:
     """Set the current family_id for sandbox path resolution + DeerFlow user.
 
     Must be called before ``acquire(thread_id)`` in the same coroutine.
@@ -60,6 +68,7 @@ def set_family_sandbox_context(family_id: str) -> None:
       breaking family isolation and mismatching the sandbox path mappings.
     """
     _family_id_context.set(family_id)
+    _caller_user_id_context.set(caller_user_id)
     try:
         from deerflow.runtime.user_context import set_current_user
 
@@ -69,6 +78,11 @@ def set_family_sandbox_context(family_id: str) -> None:
         logger.debug("[sandbox] set_current_user failed (deerflow user_context unavailable)", exc_info=True)
 
 
+def get_caller_user_id_context() -> str | None:
+    """Return the current coroutine's caller user_id (for MCP SSE auth), or None."""
+    return _caller_user_id_context.get()
+
+
 def reset_family_sandbox_context() -> None:
     """Reset the family_id context + DeerFlow user token (mirrors set order).
 
@@ -76,6 +90,7 @@ def reset_family_sandbox_context() -> None:
     into a subsequent run in the same coroutine (e.g. a reused worker task).
     """
     _family_id_context.set(None)
+    _caller_user_id_context.set(None)
     token = _current_user_token.get()
     if token is not None:
         try:

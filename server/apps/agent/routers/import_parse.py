@@ -38,6 +38,10 @@ class ImportParseRequest(BaseModel):
     # 虚拟路径列表，agent 用 view_image 读取。纯文本解析时这两项为空（向后兼容）。
     thread_id: str | None = None
     image_paths: list[str] | None = None
+    # C1 直接写入流程：当传入 confirm_items（用户已确认的持仓条目）时，agent
+    # 进入写入模式——调 import_assets_batch MCP 工具批量写库，而非解析文档。
+    # backend /import/confirm-via-agent 转发用户确认后的条目到这里。
+    confirm_items: list[dict[str, Any]] | None = None
 
 
 class _CapturingBridge:
@@ -108,8 +112,20 @@ async def parse_import(
     # The document text is injected as the run's user message (the worker's
     # _extract_import_parse_document reads messages[-1].content).
     # C 方案（vision）：有 image_paths 时附加提示，引导 LLM 先 view_image 读图。
+    # C1 直接写入：有 confirm_items 时进入写入模式（调 import_assets_batch）。
+    confirm_items = body.confirm_items
     user_content = body.text
-    if image_paths:
+    if confirm_items:
+        import json as _json
+
+        items_json = _json.dumps(confirm_items, ensure_ascii=False)
+        user_content = (
+            f"【写入模式】请将以下已确认的持仓条目写入资产。按 SKILL.md §C1 直接写入流程："
+            f"调一次 import_assets_batch 工具批量写入（items 参数=下方数组），然后输出"
+            f"write_result JSON。不要解析文档、不要 view_image。\n\n"
+            f"待写入条目：\n{items_json}"
+        )
+    elif image_paths:
         paths_list = "\n".join(f"  - {p}" for p in image_paths)
         user_content = (
             f"{body.text}\n\n"
@@ -132,7 +148,7 @@ async def parse_import(
     # Mirror worker.py:245's set_family_sandbox_context(family_id) call.
     from apps.agent.services.runtime.sandbox_provider import set_family_sandbox_context
 
-    set_family_sandbox_context(family_id)
+    set_family_sandbox_context(family_id, caller_user_id=user_id)
 
     bridge = _CapturingBridge()
     try:

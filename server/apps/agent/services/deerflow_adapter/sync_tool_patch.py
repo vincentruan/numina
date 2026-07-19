@@ -158,7 +158,9 @@ def _apply_active_skill_tool_filter(tools):
     ``[]``) restrict the tool set.
     """
     try:
-        from apps.agent.services.deerflow_adapter.active_skill_context import get_active_skill
+        from apps.agent.services.deerflow_adapter.active_skill_context import (
+            get_active_skill,
+        )
         active_skill_name = get_active_skill()
     except Exception:
         return tools
@@ -418,9 +420,34 @@ def _apply_mcp_proxy_bypass_patch() -> None:
 
         # Inject the no-proxy httpx client factory into every SSE/HTTP server
         # so internal MCP calls bypass system proxy env vars.
+        # Also inject X-Agent-Token + X-Family-Id headers — the Numina Backend MCP
+        # SSE endpoint (mcp_internal.py:72) requires X-Agent-Token; without it the
+        # connection 403s and ALL MCP tools (get_assets/import_assets_batch/...) are
+        # unavailable. The worker sets srv["headers"] on the runtime mcp_servers
+        # dict, but the MCP client reads from extensions_config (file-based) which
+        # has no auth headers — so inject them here from settings + family context.
+        from apps.agent.app.config import settings as _agent_settings
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_caller_user_id_context as _get_caller,
+        )
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_family_sandbox_context as _get_family,
+        )
+        _mcp_family_id = _get_family()
+        _mcp_caller_user_id = _get_caller()
+        _mcp_agent_token = getattr(_agent_settings, "AGENT_INTERNAL_TOKEN", None)
         for _name, cfg in servers_config.items():
             if cfg.get("transport") in ("sse", "http"):
                 cfg["httpx_client_factory"] = _no_proxy_httpx_client
+                if _mcp_agent_token or _mcp_family_id or _mcp_caller_user_id:
+                    existing_headers = dict(cfg.get("headers", {}))
+                    if _mcp_agent_token:
+                        existing_headers["X-Agent-Token"] = _mcp_agent_token
+                    if _mcp_family_id:
+                        existing_headers["X-Family-Id"] = _mcp_family_id
+                    if _mcp_caller_user_id:
+                        existing_headers["X-Caller-User-Id"] = _mcp_caller_user_id
+                    cfg["headers"] = existing_headers
 
         # Replicate the original OAuth header + interceptor handling.
         initial_oauth_headers = await get_initial_oauth_headers(extensions_config)
