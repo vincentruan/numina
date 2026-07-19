@@ -136,6 +136,8 @@ export default {
     greetingFallbackName: '小探险家',
     todayTasks: '📋 今日任务',
     viewAllTasks: '全部任务',
+    coinTiersShow: '看零钱',
+    coinTiersHide: '收起',
     noTasks: '今天没有任务，好好休息吧！',
     myWishes: '我的心愿',
     myCalendar: '📅 我的日历',

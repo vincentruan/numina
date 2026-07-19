@@ -21,7 +21,7 @@
       />
 
       <!-- Balance hero — shared component -->
-      <BalanceHero :amount="balance" variant="home" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+      <BalanceHero :amount="balance" variant="home" coin-tiers-mode="collapsible" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
 
       <!-- Progress ring — own row below the hero -->
       <ProgressRing

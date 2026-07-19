@@ -135,6 +135,8 @@ export default {
     greetingFallbackName: 'Explorer',
     todayTasks: '📋 Today\'s Tasks',
     viewAllTasks: 'All Tasks',
+    coinTiersShow: 'See coins',
+    coinTiersHide: 'Hide',
     noTasks: 'No tasks today, enjoy your rest!',
     myWishes: 'My Wishes',
     myCalendar: '📅 My Calendar',

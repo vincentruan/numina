@@ -1,10 +1,22 @@
 <template>
-  <div class="balance-hero" :class="variant" :data-reacting="reacting">
+  <div class="balance-hero" :class="[variant, { 'coins-collapsible': coinTiersMode === 'collapsible' }]" :data-reacting="reacting">
     <div class="balance-hero-total">
       <span class="balance-hero-num">{{ amount }}</span>
       <span class="balance-hero-star">⭐</span>
     </div>
-    <div class="balance-hero-coins">
+    <!-- Coin tiers: always visible, or collapsible behind a toggle (Home) -->
+    <button
+      v-if="coinTiersMode === 'collapsible'"
+      type="button"
+      class="balance-hero-toggle"
+      :aria-expanded="coinsExpanded"
+      :aria-label="coinsExpanded ? t('home.coinTiersHide') : t('home.coinTiersShow')"
+      @click="coinsExpanded = !coinsExpanded"
+    >
+      <span class="balance-hero-toggle-label">{{ coinsExpanded ? t('home.coinTiersHide') : t('home.coinTiersShow') }}</span>
+      <van-icon :name="coinsExpanded ? 'arrow-up' : 'arrow-down'" size="12" />
+    </button>
+    <div v-show="coinTiersMode !== 'collapsible' || coinsExpanded" class="balance-hero-coins">
       <CoinDisplay
         :amount="amount"
         :icon-size="iconSize"
@@ -17,7 +29,11 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+
+const { t } = useI18n()
 
 withDefaults(
   defineProps<{
@@ -30,6 +46,9 @@ withDefaults(
     animateChanges?: boolean
     /** Optional pop/glow reaction (Tasks page balance bump on parent grant). */
     reacting?: 'pop' | 'invert' | null
+    /** 'always' shows tiers inline (Tasks/Wishes/Ledger); 'collapsible' hides
+        them behind a toggle until tapped (Home reduces first-glance load). */
+    coinTiersMode?: 'always' | 'collapsible'
   }>(),
   {
     variant: 'home',
@@ -38,8 +57,11 @@ withDefaults(
     silverToGold: 10,
     animateChanges: false,
     reacting: null,
+    coinTiersMode: 'always',
   },
 )
+
+const coinsExpanded = ref(false)
 </script>
 
 <style scoped>
@@ -78,6 +100,61 @@ withDefaults(
 }
 .balance-hero-coins {
   flex-shrink: 0;
+}
+
+/* ── Collapsible coin tiers (Home) ── */
+/* Collapsible mode: hero wraps so the toggle sits beside the total on row 1,
+   and the coin tiers drop to row 2 when expanded. */
+.balance-hero.coins-collapsible {
+  flex-wrap: wrap;
+}
+.balance-hero-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  cursor: pointer;
+  min-height: 32px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.balance-hero-toggle:active { transform: scale(0.96); }
+.balance-hero-toggle-label {
+  letter-spacing: 0.2px;
+}
+/* When tiers expand, they claim the full second row */
+.balance-hero.coins-collapsible .balance-hero-coins {
+  flex-basis: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-hairline-soft);
+}
+/* On colored variants the toggle reads as ink */
+.balance-hero.tasks .balance-hero-toggle,
+.balance-hero.wishes .balance-hero-toggle,
+.balance-hero.ledger .balance-hero-toggle {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--color-ink);
+}
+.balance-hero.ledger .balance-hero-toggle {
+  color: var(--color-on-dark);
+}
+[data-theme="dark"] .balance-hero.tasks .balance-hero-toggle,
+[data-theme="dark"] .balance-hero.wishes .balance-hero-toggle,
+[data-theme="dark"] .balance-hero.ledger .balance-hero-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-on-feature-ochre);
+}
+[data-theme="dark"] .balance-hero.ledger .balance-hero-toggle {
+  color: var(--color-on-feature-teal);
 }
 
 /* ── Variant backgrounds — per-page color nav ── */
