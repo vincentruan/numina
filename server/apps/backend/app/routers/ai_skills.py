@@ -52,7 +52,8 @@ BUILTIN_CAPABILITIES: list[str] = []
 #   放 prompt 但用户不可开关、不可创建同名 custom skill。
 # U5/KTD-9: ``time_machine`` 已移除（非 AI skill，纯计算应用，从 skill 系统解耦）。
 # U8: ``import-parse`` 加入（系统内置固定流程：金融文档持仓解析，KTD-8）。
-RESERVED_NAMES = ["chat", "asset-report", "import-parse"]
+# Plan A: ``finance-coach`` 加入（系统内置固定流程：家庭财务处方建议，KTD-8）。
+RESERVED_NAMES = ["chat", "asset-report", "import-parse", "finance-coach"]
 
 # Internal-only skills excluded from user-facing catalog and creation.
 INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer"}
