@@ -16,8 +16,13 @@ def test_builtin_capabilities_excludes_chat_and_time_machine():
 
 
 def test_reserved_names_contains_chat_and_time_machine():
-    """RESERVED_NAMES protects chat and time_machine from custom skill collisions."""
-    assert RESERVED_NAMES == ["chat", "time_machine"]
+    """RESERVED_NAMES protects system fixed-flows from custom skill collisions.
+
+    U7 deleted ``time_machine`` (and 4 other trigger skills); U8 added
+    ``import-parse``; Plan A T1 added ``finance-coach``. The current reserved
+    set is the post-U7 + Plan A state — ``time_machine`` is intentionally gone.
+    """
+    assert RESERVED_NAMES == ["chat", "asset-report", "import-parse", "finance-coach"]
 
 
 def test_fixed_capabilities_constant_removed():
@@ -104,13 +109,18 @@ def test_create_custom_skill_with_chat_id_rejected(client, auth_headers):
 
 
 def test_create_custom_skill_with_time_machine_id_rejected(client, auth_headers):
-    """Creating a custom skill with skill_id='time_machine' is rejected by RESERVED_NAMES."""
+    """Creating a custom skill with a RESERVED_NAMES skill_id is rejected.
+
+    U7 removed ``time_machine`` from RESERVED_NAMES, so that id is no longer
+    rejected. ``finance-coach`` (Plan A T1) is now a reserved system
+    fixed-flow — use it to verify the reserved-name rejection path stays alive.
+    """
     resp = client.post(
         "/api/v1/ai/skills/custom",
         json={
-            "skill_id": "time_machine",
-            "name": "My Time Machine",
-            "icon": "⏰",
+            "skill_id": "finance-coach",
+            "name": "My Finance Coach",
+            "icon": "💰",
             "color": "#a855f7",
             "prompt_content": "Custom prompt",
         },
