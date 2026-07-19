@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.constants.system_ids import (
     ASSET_REPORT_AGENT_ID,
+    FINANCE_COACH_AGENT_ID,
     IMPORT_PARSE_AGENT_ID,
     NUMINA_AGENT_ID,
 )
@@ -175,6 +176,29 @@ _IMPORT_PARSE_AGENT = {
 }
 
 
+# System agent dedicated to finance-coach (家庭财务处方建议).
+# Plan A: a 4th stream_run agent (app="finance-coach"). Statelessness is
+# required — each run builds a fresh family finance snapshot from MCP data;
+# DeerMem would only pollute advice with stale snapshots from prior runs.
+# soul_md is a minimal persona (the real advice contract lives in
+# skills/builtin/public/finance-coach/SKILL.md, loaded by the harness at
+# runtime); bootstrap just seeds agent_type + memory_enabled.
+_FINANCE_COACH_AGENT = {
+    "id": FINANCE_COACH_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "finance-coach",
+    "display_name": "财务教练",
+    "description": "家庭财务处方建议智能体。读取家庭财务快照，输出结构化 suggestions JSON（前 3 条优先建议）。",
+    "icon": "🎯",
+    "color": "#10b981",
+    "soul_md": "你是家庭财务教练，在单次响应内完成：读取家庭财务快照 → 识别高息负债/闲置资产/储蓄缺口 → 输出结构化 suggestions JSON。",
+    "skills": ["finance-coach"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 40,
+}
+
+
 def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     """Insert or update a builtin system agent from its spec dict."""
     from apps.backend.app.models.ai_agent import AIAgent
@@ -211,4 +235,5 @@ def bootstrap_agents(db: Session) -> None:
     _upsert_builtin_agent(db, _NUMINA_AGENT)
     _upsert_builtin_agent(db, _ASSET_REPORT_AGENT)
     _upsert_builtin_agent(db, _IMPORT_PARSE_AGENT)
+    _upsert_builtin_agent(db, _FINANCE_COACH_AGENT)
     db.commit()

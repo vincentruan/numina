@@ -9,3 +9,8 @@ excluded from this module — do not import from here in migration scripts.
 NUMINA_AGENT_ID: int = 100000000000005
 ASSET_REPORT_AGENT_ID: int = 100000000000006
 IMPORT_PARSE_AGENT_ID: int = 100000000000007
+# Plan A: finance-coach system agent (家庭财务处方建议). Stateless stream_run
+# agent — each run builds a fresh family finance snapshot; DeerMem would
+# pollute advice with stale snapshots. soul_md is a minimal persona (the real
+# advice contract lives in skills/builtin/public/finance-coach/SKILL.md).
+FINANCE_COACH_AGENT_ID: int = 100000000000008
