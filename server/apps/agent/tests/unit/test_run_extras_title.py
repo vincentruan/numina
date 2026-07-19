@@ -13,7 +13,10 @@ if the LLM call fails.
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from apps.agent.services.runtime.run_extras import sync_title_from_checkpoint, _is_fallback_title
+from apps.agent.services.runtime.run_extras import (
+    _is_fallback_title,
+    sync_title_from_checkpoint,
+)
 
 
 def _checkpoint_with_title(title: str | None) -> SimpleNamespace:

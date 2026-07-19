@@ -80,15 +80,22 @@ def _render_pdf_pages_to_sandbox(
     """渲染 PDF 每页为 PNG，落 family-scoped 沙箱 uploads 目录。
 
     Q2-B 决策：最多渲染 _MAX_RENDERED_PAGES 页（token 成本控制）。
-    路径 = AGENT_DATA_DIR/{family_id}/sandboxes/{thread_id}/uploads/page_{n}.png
-    （backend/agent 共享 /app/.numina/data/workspaces 文件系统，见 ai_chat.py:579 先例）。
-    agent 的 NuminaLocalSandboxProvider 把 /mnt/user-data/uploads 映射到该目录，
-    故 agent 调 view_image("/mnt/user-data/uploads/page_1.png") 即可读取。
+
+    路径 = {DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/uploads/page_{n}.png
+    — 统一 DeerFlow 布局（2026-07-19）。agent 的 DEER_FLOW_HOME = AGENT_DATA_DIR
+    = {DATA_ROOT}/workspaces，backend/agent 共享该文件系统。thread_data_middleware
+    用 get_effective_user_id()=family_id 解析到同一目录，故 agent 调
+    view_image("/mnt/user-data/uploads/page_1.png") 能读到该文件。
 
     返回容器虚拟路径列表（供 agent view_image 使用）。
     """
     data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, "DATA_ROOT") else Path.home() / ".numina" / "data"
-    uploads_dir = data_root / "workspaces" / str(family_id) / "sandboxes" / thread_id / "uploads"
+    # DeerFlow 布局：{DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/user-data/uploads/
+    # DEER_FLOW_HOME 在 agent 侧 = AGENT_DATA_DIR = {DATA_ROOT}/workspaces
+    uploads_dir = (
+        data_root / "workspaces" / "users" / str(family_id)
+        / "threads" / thread_id / "user-data" / "uploads"
+    )
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     virtual_paths: list[str] = []
@@ -272,17 +279,26 @@ async def parse_pdf(
 
     preview_items: list[ImportPreviewItem] = []
     for raw_item in raw_items:
-        matched = _match_asset(raw_item["name"], str(current_user.family_id), db)
+        # LLM 输出 schema 可能漂移（vision 模式下曾返回 code/market_value 而非
+        # name/current_value），用 .get() + 别名兜底避免 KeyError 崩溃。
+        item_name = raw_item.get("name") or raw_item.get("code") or raw_item.get("asset_name")
+        if not item_name:
+            # 无可识别名称的条目跳过（无法匹配/创建资产）
+            continue
+        current_value = raw_item.get("current_value")
+        if current_value is None:
+            current_value = raw_item.get("market_value")
+        matched = _match_asset(item_name, str(current_user.family_id), db)
         warning = None
-        if raw_item.get("current_value") is None:
+        if current_value is None:
             warning = "金额未识别，请手动补充"
 
         preview_items.append(ImportPreviewItem(
             temp_id=f"tmp_{uuid.uuid4().hex[:8]}",
-            name=raw_item["name"],
+            name=item_name,
             asset_type=raw_item.get("asset_type", "financial"),
             category_hint=raw_item.get("category_hint", ""),
-            current_value=raw_item.get("current_value"),
+            current_value=current_value,
             currency=raw_item.get("currency", "CNY"),
             quantity=raw_item.get("quantity"),
             matched_asset_id=str(matched.id) if matched else None,

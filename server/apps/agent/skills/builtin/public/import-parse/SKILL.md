@@ -70,8 +70,9 @@ max_tokens: 8000
 2. **图片模式下，第 1 步 `view_image` 是强制前置条件**——未 `view_image` 读完全部图片就输出 JSON 属于违规。不要因为"可能没资产"就跳过 `view_image`。
 3. **最终输出仅一个 ```json 代码块**，不要有任何其他内容（`view_image` 调用后的最终回复只放 JSON）。
 4. **JSON 必须合法**：无尾逗号、无注释、字符串正确转义。
-5. **current_value 必须是数字**（float/int），不能是字符串；识别不到金额时为 null。
-6. **图片模式下**，只有 `view_image` 读完所有图片后仍确认无任何持仓时，才返回 `{"source": "", "report_date": null, "items": []}`。**文本模式下**识别不到任何资产时同此空结果。
+5. **字段名严格按"输出格式"**：每条 item 必须用 `name`（资产名称，如"贵州茅台"而非股票代码"600519"）、`current_value`（当前市值，数字）、`category_hint`（分类提示）。**不要**用 `code`/`market_value`/`unit_price` 等其它字段名——backend 会因字段缺失而崩溃。股票代码可放在 name 里（如"贵州茅台(600519)"）但 `name` 必须是可读名称。
+6. **current_value 必须是数字**（float/int），不能是字符串；识别不到金额时为 null。
+7. **图片模式下**，只有 `view_image` 读完所有图片后仍确认无任何持仓时，才返回 `{"source": "", "report_date": null, "items": []}`。**文本模式下**识别不到任何资产时同此空结果。
 
 ## 输出格式
 

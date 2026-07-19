@@ -8,6 +8,7 @@
 4. 类中的默认值
 """
 
+import os
 from pathlib import Path
 
 from pydantic import model_validator
@@ -90,6 +91,18 @@ class AgentSettings(BaseSettings):
 
         if _OLD_DEFAULTS["AGENT_DATA_DIR"] == self.AGENT_DATA_DIR or not self.AGENT_DATA_DIR:
             self.AGENT_DATA_DIR = str(Path(root) / "workspaces")
+
+        # Unified path layout (2026-07-19): DeerFlow's runtime_home() defaults to
+        # ``{project}/.deer-flow``, which is NOT shared with the backend process
+        # (different working dir / not mounted in Docker). Set DEER_FLOW_HOME to
+        # the shared AGENT_DATA_DIR so DeerFlow's layout
+        # ``{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/...``
+        # lands in the same host tree the backend reads (artifact/markdown/
+        # page-image files). This makes thread_data_middleware (view_image / path
+        # resolve) + write_file reverse-resolve + NuminaLocalSandboxProvider
+        # path mappings all resolve to identical host paths.
+        if not os.environ.get("DEER_FLOW_HOME"):
+            os.environ["DEER_FLOW_HOME"] = self.AGENT_DATA_DIR
 
         if not self.LOG_DIR:
             self.LOG_DIR = str(Path(root) / "logs")

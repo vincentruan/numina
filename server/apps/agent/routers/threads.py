@@ -20,7 +20,6 @@ from langgraph.checkpoint.base import empty_checkpoint, uuid6
 from pydantic import BaseModel, Field, field_validator
 
 from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
-from apps.agent.app.config import settings
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _get_shared_checkpointer,
 )
@@ -359,17 +358,17 @@ def _is_branch_temp_artifact(name: str) -> bool:
 def _copy_branch_sandbox_sync(
     family_id: str, source_thread_id: str, target_thread_id: str
 ) -> str:
-    """Synchronously copy the source thread's sandbox base dir onto the branch.
+    """Synchronously copy the source thread's sandbox user-data dir onto the branch.
 
-    Resolves the sandbox **base directory** ``AGENT_DATA_DIR/{family_id}/sandboxes/
-    {thread_id}`` — aligned with ``sandbox_provider.py:94``
-    (``Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes" / thread_id``).
+    Resolves the sandbox thread directory via DeerFlow's paths API (unified
+    layout 2026-07-19): ``{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/``
+    — aligned with ``sandbox_provider.py`` which uses the same DeerFlow layout.
     The family_id is used in its raw string form exactly as the sandbox provider
     receives it (it is NOT cast to int here — the provider uses the string form,
     and casting would mismatch the on-disk path for non-numeric family IDs).
-    ``copytree`` covers ``workspace``/``uploads``/``outputs`` (the full base dir,
-    aligning with DeerFlow's whole-user-data clone). Returns one of:
-    ``"not_found"`` (source base absent), ``"current_thread_best_effort"`` (copied),
+    ``copytree`` covers ``user-data/{workspace,uploads,outputs}`` (the full
+    thread dir, aligning with DeerFlow's whole-user-data clone). Returns one of:
+    ``"not_found"`` (source thread dir absent), ``"current_thread_best_effort"`` (copied),
     ``"failed"`` (raised).
 
     The target_thread_id is a freshly-generated UUID (a brand-new branch), so
@@ -380,9 +379,12 @@ def _copy_branch_sandbox_sync(
     without removing them, yielding a mixed stale+new artifact set reported as
     ``"current_thread_best_effort"`` (success).
     """
-    base = Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes"
-    source = base / source_thread_id
-    target = base / target_thread_id
+    from deerflow.config.paths import get_paths
+
+    paths = get_paths()
+    # DeerFlow layout: {DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/
+    source = Path(paths.host_thread_dir(source_thread_id, user_id=family_id))
+    target = Path(paths.host_thread_dir(target_thread_id, user_id=family_id))
     if not source.exists():
         return "not_found"
     if target.exists():

@@ -569,36 +569,39 @@ async def get_artifact(
         raise AppError(ErrorCode.NOT_FOUND)
 
     # Try to find artifact in two locations (search order matters):
-    # 1. Per-thread sandbox outputs: workspaces/{family_id}/sandboxes/{thread_id}/outputs/
-    #    (MCP tools with thread_id write here — per-thread isolation)
+    # 1. Per-thread sandbox outputs (DeerFlow layout, unified 2026-07-19):
+    #    workspaces/users/{family_id}/threads/{thread_id}/user-data/outputs/
+    #    (agent write_file/str_replace with thread_id write here — per-thread isolation)
     # 2. Tenant reports directory: workspaces/tenants/{family_id}/reports/
     #    (MCP tools without thread_id, or old files — per-family fallback)
     family_id = current_user.family_id
     data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
 
-    family_sandboxes = data_root / "workspaces" / str(family_id) / "sandboxes"
+    # DeerFlow layout: {DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/user-data/outputs/
+    # DEER_FLOW_HOME (agent) = AGENT_DATA_DIR = {DATA_ROOT}/workspaces
+    family_threads = data_root / "workspaces" / "users" / str(family_id) / "threads"
     possible_paths = [
-        # Per-thread sandbox outputs (primary — MCP tools with thread_id write here)
-        family_sandboxes / session_id / "outputs" / decoded_filepath,
+        # Per-thread sandbox outputs (primary — agent writes with thread_id here)
+        family_threads / session_id / "user-data" / "outputs" / decoded_filepath,
         # Tenant reports (backward compat — MCP tools without thread_id)
         data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
     ]
-    # Fallback: scan all per-thread sandbox dirs for the family. This handles
-    # the case where session_id is a Snowflake int (MCP writes use a UUID
-    # thread_id via X-Thread-Id header, so files land in a different sandbox
-    # subdir than the session_id would suggest). The filename regex validation
-    # above ensures the glob only matches safe filenames.
-    if family_sandboxes.exists():
-        for match in family_sandboxes.glob(f"*/outputs/{decoded_filepath}"):
+    # Fallback: scan all per-thread user-data/outputs dirs for the family. This
+    # handles the case where session_id is a Snowflake int (agent writes use a
+    # UUID thread_id, so files land in a different thread dir than session_id
+    # would suggest). The filename regex validation above ensures the glob
+    # only matches safe filenames.
+    if family_threads.exists():
+        for match in family_threads.glob(f"*/user-data/outputs/{decoded_filepath}"):
             possible_paths.append(match)
 
     allowed_dirs = [
-        (family_sandboxes / session_id / "outputs").resolve(),
+        (family_threads / session_id / "user-data" / "outputs").resolve(),
         (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
     ]
-    # Also allow any resolved sandbox subdir (for the glob fallback above)
-    if family_sandboxes.exists():
-        allowed_dirs.append(family_sandboxes.resolve())
+    # Also allow any resolved thread user-data/outputs dir (for the glob fallback)
+    if family_threads.exists():
+        allowed_dirs.append(family_threads.resolve())
 
     artifact_path = None
     for candidate_path in possible_paths:

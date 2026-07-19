@@ -66,22 +66,20 @@ def _track_task(task: asyncio.Task) -> None:
 def _deerflow_default_workspace_md(
     thread_id: str, user_id: str | None, filename: str
 ) -> Path | None:
-    """Resolve the DeerFlow default host sandbox workspace path for a filename.
+    """Resolve the DeerFlow host sandbox workspace path for a filename.
 
-    When the LLM passes write_file the host path it learned from a prior
-    read_file (rather than the container path /mnt/user-data/workspace/...),
-    ``LocalSandbox._resolve_path`` reverse-resolves the local_path match back
-    to DeerFlow's default host layout:
-    ``{host_base}/users/{effective_user}/threads/{thread_id}/user-data/workspace/<file>``.
+    With the unified DeerFlow layout (2026-07-19), ``set_family_sandbox_context``
+    sets ``_current_user`` so ``get_effective_user_id()`` returns ``family_id``.
+    write_file therefore lands at
+    ``{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/workspace/<file>``,
+    and this function resolves exactly that path.
 
     Returns the resolved Path, or None if DeerFlow's paths API is unavailable.
 
     ``effective_user`` is DeerFlow's own resolution (``get_effective_user_id``,
-    falling back to ``"default"``) — NOT Numina's ``user_id`` arg, because
-    Numina does not set DeerFlow's ``_current_user`` ContextVar (Numina
-    isolates by family_id via a separate ContextVar). The ``user_id`` arg is
-    accepted for symmetry but the effective DeerFlow user is always queried
-    fresh so it matches whatever ``write_file`` actually used at runtime.
+    now family_id after set_current_user). The ``user_id`` arg is accepted for
+    symmetry but the effective DeerFlow user is always queried fresh so it
+    matches whatever ``write_file`` actually used at runtime.
     """
     try:
         from deerflow.config.paths import get_paths
@@ -153,34 +151,23 @@ def _copy_asset_report_markdown(
         )
         return None
 
-    # Source: locate the sandbox markdown the LLM wrote. e2e showed write_file
-    # lands the file at one of two possible host paths depending on which path
-    # form the LLM passed:
-    #   1. Numina family-scoped layout (when LLM passes the container path
-    #      /mnt/user-data/workspace/<file>, NuminaLocalSandboxProvider maps it
-    #      here): AGENT_DATA_DIR/{family_id}/sandboxes/{thread_id}/workspace/<file>
-    #   2. DeerFlow default layout (when LLM passes the host path it learned
-    #      from a prior read_file, LocalSandbox._resolve_path reverse-resolves
-    #      the local_path match back to this host path):
-    #      {deerflow_host_base}/users/{user_id}/threads/{thread_id}/user-data/workspace/<file>
-    # write_file tool_call args.path is often empty in the SSE messages event
-    # (LangGraph fills positional args at execution time), so we cannot rely on
-    # write_file_paths alone — search both candidate roots by declared filename.
+    # Source: locate the sandbox markdown the LLM wrote via write_file. With the
+    # unified DeerFlow layout (2026-07-19), write_file always lands at:
+    #   {DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/workspace/<file>
+    # (family_id is set as DeerFlow's effective user via set_current_user in
+    # set_family_sandbox_context, so LocalSandbox._resolve_path + thread_data both
+    # resolve to the same path). write_file tool_call args.path is often empty in
+    # the SSE messages event (LangGraph fills positional args at execution time),
+    # so we cannot rely on write_file_paths alone — resolve the host workspace
+    # dir via DeerFlow's paths API + the declared filename.
     declared_filename_str = declared_filename
-    numina_workspace = (
-        Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes" / thread_id / "workspace"
-    )
-    source_path = numina_workspace / declared_filename_str
-    if not source_path.is_file():
-        # Fallback: DeerFlow default host sandbox layout. user_id defaults to
-        # "default" when no effective user is set (resolve_runtime_user_id).
-        source_path = _deerflow_default_workspace_md(thread_id, user_id, declared_filename_str)
+    source_path = _deerflow_default_workspace_md(thread_id, user_id, declared_filename_str)
     if source_path is None or not source_path.is_file():
         logger.warning(
-            "[_run_asset_report_pipeline] sandbox markdown not found under "
-            "%s or DeerFlow default layout, markdown_file_path not persisted "
-            "run=%s (declared_filename=%s)",
-            numina_workspace, run_id, declared_filename_str,
+            "[_run_asset_report_pipeline] sandbox markdown not found at %s "
+            "(DeerFlow layout), markdown_file_path not persisted run=%s "
+            "(declared_filename=%s)",
+            source_path, run_id, declared_filename_str,
         )
         return None
 

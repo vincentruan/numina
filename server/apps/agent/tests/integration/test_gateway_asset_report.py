@@ -184,21 +184,32 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
 
     F2: markdown_file_path non-empty + file exists + lands under tenant_report_dir.
     """
-    # Sandbox layout: AGENT_DATA_DIR/{family}/sandboxes/{thread}/workspace/<file>
+    # Unified DeerFlow layout (2026-07-19):
+    # {DEER_FLOW_HOME}/users/{family}/threads/{thread}/user-data/workspace/<file>
+    # DEER_FLOW_HOME = AGENT_DATA_DIR (set via env in app/config.py).
     family_id = "321210384289632256"
     thread_id = "thread-md"
-    sandbox_workspace = tmp_path / family_id / "sandboxes" / thread_id / "workspace"
+    sandbox_workspace = (
+        tmp_path / "users" / family_id / "threads" / thread_id / "user-data" / "workspace"
+    )
     sandbox_workspace.mkdir(parents=True)
     declared = "report_20260719_100530.md"
     (sandbox_workspace / declared).write_text("# 报告\n## 评分 65/100", encoding="utf-8")
 
-    # Point the worker's AGENT_DATA_DIR at tmp_path so the sandbox file resolves.
-    monkeypatch.setattr(
-        "apps.agent.services.runtime.worker.settings.AGENT_DATA_DIR",
-        str(tmp_path),
-    )
+    # Point DEER_FLOW_HOME (read by deerflow.config.paths.runtime_home) at tmp_path
+    # so _deerflow_default_workspace_md resolves the sandbox file under tmp_path.
+    monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
     # PathManager must write tenant reports under tmp_path too (isolated DATA_ROOT).
+    from types import SimpleNamespace
+
+    from deerflow.runtime.user_context import reset_current_user, set_current_user
+
     from packages.core.path_manager import PathManager as _RealPM
+
+    # Set family_id as DeerFlow effective user so get_effective_user_id() returns it
+    # (the worker sets this via set_family_sandbox_context, but this stubbed path
+    # skips worker.run_agent — set it directly).
+    user_token = set_current_user(SimpleNamespace(id=family_id))
 
     # Delegate to a real PathManager rooted at tmp_path via its data_root.
     real = _RealPM(data_root=tmp_path)
@@ -264,6 +275,8 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
     target = real.tenant_report_file(int(family_id), md_path)
     assert target.is_file(), f"persisted markdown missing at {target}"
     assert target.resolve().relative_to(real.tenant_report_dir(int(family_id)).resolve())
+    # Restore DeerFlow user context so it does not leak into subsequent tests.
+    reset_current_user(user_token)
 
 
 def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch):
@@ -277,16 +290,22 @@ def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch
     """
     family_id = "321210384289632256"
     thread_id = "thread-tc"
-    sandbox_workspace = tmp_path / family_id / "sandboxes" / thread_id / "workspace"
+    # Unified DeerFlow layout: {DEER_FLOW_HOME}/users/{family}/threads/{thread}/user-data/workspace/
+    sandbox_workspace = (
+        tmp_path / "users" / family_id / "threads" / thread_id / "user-data" / "workspace"
+    )
     sandbox_workspace.mkdir(parents=True)
     declared = "report_20260719_120000.md"
     (sandbox_workspace / declared).write_text("# 报告\n## 评分 71/100", encoding="utf-8")
 
-    monkeypatch.setattr(
-        "apps.agent.services.runtime.worker.settings.AGENT_DATA_DIR",
-        str(tmp_path),
-    )
+    monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
+    from types import SimpleNamespace
+
+    from deerflow.runtime.user_context import reset_current_user, set_current_user
+
     from packages.core.path_manager import PathManager as _RealPM
+
+    user_token = set_current_user(SimpleNamespace(id=family_id))
 
     real = _RealPM(data_root=tmp_path)
     monkeypatch.setattr(
@@ -355,111 +374,6 @@ def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch
     assert md_path.endswith(".md")
     target = real.tenant_report_file(int(family_id), md_path)
     assert target.is_file(), f"persisted markdown missing at {target}"
+    # Restore DeerFlow user context so it does not leak into subsequent tests.
+    reset_current_user(user_token)
 
-
-def test_asset_report_markdown_falls_back_to_deerflow_default_layout(
-    client, tmp_path, monkeypatch
-):
-    """F2: when write_file lands the markdown on DeerFlow's default host layout
-    (``.deer-flow/users/{user_id}/threads/{thread_id}/user-data/workspace/``)
-    rather than the Numina family-scoped sandbox, the worker still locates and
-    persists it.
-
-    e2e showed the LLM passes write_file the host path it learned from a prior
-    read_file; LocalSandbox._resolve_path then reverse-resolves the local_path
-    match back to DeerFlow's default host layout, so the file never appears
-    under ``AGENT_DATA_DIR/{family}/sandboxes/{thread}/workspace/``. The worker
-    must fall back to the DeerFlow default layout or markdown_file_path is lost.
-    """
-    family_id = "321210384289632256"
-    thread_id = "thread-df"
-    user_id = "user-1"
-    declared = "report_20260719_143000.md"
-
-    # Numina family-scoped workspace is EMPTY (file landed elsewhere).
-    numina_workspace = tmp_path / family_id / "sandboxes" / thread_id / "workspace"
-    numina_workspace.mkdir(parents=True)
-
-    # DeerFlow default layout under tmp_path — where the file actually lives.
-    from deerflow.config.paths import get_paths as _real_get_paths
-
-    df_workspace = tmp_path / ".deer-flow" / "users" / user_id / "threads" / thread_id / "user-data" / "workspace"
-    df_workspace.mkdir(parents=True)
-    (df_workspace / declared).write_text("# 报告\n## 评分 66/100", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "apps.agent.services.runtime.worker.settings.AGENT_DATA_DIR",
-        str(tmp_path),
-    )
-    from packages.core.path_manager import PathManager as _RealPM
-
-    real = _RealPM(data_root=tmp_path)
-    monkeypatch.setattr(
-        "apps.agent.services.runtime.worker.get_path_manager",
-        lambda: real,
-    )
-
-    # Force DeerFlow's get_paths() to resolve host_sandbox_work_dir under tmp_path.
-    real_paths = _real_get_paths()
-    monkeypatch.setattr(
-        real_paths,
-        "host_sandbox_work_dir",
-        lambda tid, user_id=None: str(df_workspace),
-    )
-
-    stub = AsyncMock()
-
-    async def typed_stream_dispatch(
-        skill_name: str,
-        context: Any,
-        thread_id: str,
-        enable_thinking: bool = False,
-    ) -> AsyncGenerator[tuple[str, dict], None]:
-        ai_content = (
-            f"WRITE_FILE: {declared}\n"
-            '```json\n{"overall_score": 66}\n```'
-        )
-        yield (
-            "messages",
-            {
-                "type": "ai",
-                "content": ai_content,
-                "tool_calls": None,
-                "id": "m1",
-            },
-        )
-        yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
-
-    stub.typed_stream_dispatch = typed_stream_dispatch
-
-    with (
-        patch(
-            "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
-            _TOKEN,
-        ),
-        patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
-            return_value=stub,
-        ),
-        patch(
-            "apps.agent.services.runtime.worker.BackendClient.persist_report_result",
-            new_callable=AsyncMock,
-            return_value={"ok": True, "written": 1},
-        ) as mock_persist,
-    ):
-        response = client.post(
-            f"/internal/gateway/runs/asset-report/{thread_id}",
-            headers={"X-Agent-Token": _TOKEN},
-            json={"family_id": family_id, "user_id": user_id},
-        )
-    assert response.status_code == 200
-
-    mock_persist.assert_awaited_once()
-    md_path = mock_persist.await_args.kwargs.get("markdown_file_path")
-    assert md_path is not None, (
-        "markdown_file_path must be recovered from DeerFlow default layout fallback"
-    )
-    assert md_path.startswith("report_20260719_143000_")
-    assert md_path.endswith(".md")
-    target = real.tenant_report_file(int(family_id), md_path)
-    assert target.is_file(), f"persisted markdown missing at {target}"

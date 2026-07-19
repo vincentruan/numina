@@ -4,21 +4,19 @@ Extends DeerFlow's ``LocalSandboxProvider`` with family_id-scoped sandbox IDs
 and path mappings, ensuring different families get isolated sandbox environments
 even when they share the same thread_id.
 
-# [Integrated with Numina Multi-Tenant] — family_id in sandbox ID and paths
+# [Integrated with Numina Multi-Tenant] — family_id as DeerFlow effective user
 """
 
 from __future__ import annotations
 
 import contextvars
-import hashlib
 import logging
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 from deerflow.sandbox.local.local_sandbox import PathMapping
 from deerflow.sandbox.local.local_sandbox_provider import LocalSandboxProvider
-
-from apps.agent.app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +32,59 @@ _family_id_context: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "sandbox_family_id", default=None
 )
 
+# Token for resetting the DeerFlow _current_user ContextVar so the family_id
+# override does not leak past the run that set it.
+_current_user_token: contextvars.ContextVar[object | None] = contextvars.ContextVar(
+    "numina_current_user_token", default=None
+)
+
 
 def set_family_sandbox_context(family_id: str) -> None:
-    """Set the current family_id for sandbox path resolution.
+    """Set the current family_id for sandbox path resolution + DeerFlow user.
 
     Must be called before ``acquire(thread_id)`` in the same coroutine.
+
+    This sets BOTH:
+    - Numina's ``sandbox_family_id`` ContextVar (read by
+      ``_build_thread_path_mappings`` and ``acquire`` to scope sandbox IDs /
+      path mappings by family).
+    - DeerFlow's ``_current_user`` ContextVar (via ``set_current_user``) so
+      ``get_effective_user_id()`` returns ``family_id`` everywhere — this is
+      the unified-tenant-isolation contract: ``thread_data_middleware`` (which
+      view_image / path resolution use), ``write_file`` reverse-resolve, and
+      ``LocalSandboxProvider.acquire`` all read the same effective user and
+      resolve paths to the same DeerFlow layout
+      ``{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/...``.
+      Without setting ``_current_user``, those DeerFlow paths would resolve
+      with ``user_id="default"`` and land in a shared ``users/default/`` tree,
+      breaking family isolation and mismatching the sandbox path mappings.
     """
     _family_id_context.set(family_id)
+    try:
+        from deerflow.runtime.user_context import set_current_user
+
+        token = set_current_user(SimpleNamespace(id=family_id))
+        _current_user_token.set(token)
+    except Exception:
+        logger.debug("[sandbox] set_current_user failed (deerflow user_context unavailable)", exc_info=True)
+
+
+def reset_family_sandbox_context() -> None:
+    """Reset the family_id context + DeerFlow user token (mirrors set order).
+
+    Called at run end to prevent the family_id / DeerFlow user from leaking
+    into a subsequent run in the same coroutine (e.g. a reused worker task).
+    """
+    _family_id_context.set(None)
+    token = _current_user_token.get()
+    if token is not None:
+        try:
+            from deerflow.runtime.user_context import reset_current_user
+
+            reset_current_user(token)  # type: ignore[arg-type]
+        except Exception:
+            logger.debug("[sandbox] reset_current_user failed", exc_info=True)
+        _current_user_token.set(None)
 
 
 def get_family_sandbox_context() -> str | None:
@@ -59,8 +103,9 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     Overrides two static methods from the parent class:
     - ``_deterministic_sandbox_id`` — mixes ``family_id`` into the hash so two
       families with the same ``thread_id`` get different sandbox IDs.
-    - ``_build_thread_path_mappings`` — resolves directories under
-      ``settings.AGENT_DATA_DIR / family_id / sandboxes / thread_id/``.
+    - ``_build_thread_path_mappings`` — resolves directories under DeerFlow's
+      layout ``users/{family_id}/threads/{thread_id}/user-data/{workspace,uploads,outputs}``
+      (family_id used as the DeerFlow effective user via ``set_current_user``).
     """
 
     # [Integrated with Numina Multi-Tenant]
@@ -75,47 +120,69 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
         """
         family_id = get_family_sandbox_context() or "unknown"
         composite = f"family-{family_id}-thread-{thread_id}"
+        import hashlib
+
         return hashlib.sha256(composite.encode()).hexdigest()[:8]
 
-    # [Integrated with Numina Multi-Tenant]
-    # DeerFlow uses: get_paths().sandbox_work_dir(thread_id, user_id)
-    # Numina uses:  settings.AGENT_DATA_DIR / family_id / sandboxes / thread_id/
+    # [Integrated with Numina Multi-Tenant — unified DeerFlow layout]
     #
-    # harness rev >=10890e10: parent ``_build_thread_path_mappings`` gained a
-    # keyword-only ``user_id`` param (local_sandbox_provider.py:234), and
-    # ``acquire`` passes it (L363). Numina's multi-tenant isolation is by
-    # ``family_id`` (ContextVar), NOT by harness ``user_id`` — so we accept
-    # ``user_id`` for signature compatibility but ignore it, keeping paths
-    # scoped to family_id.
+    # Numina uses family_id as DeerFlow's effective user (set via
+    # ``set_current_user`` in ``set_family_sandbox_context``). Path mappings
+    # therefore resolve to DeerFlow's standard layout
+    # ``{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/{workspace,uploads,outputs}``
+    # — the SAME layout ``thread_data_middleware`` (view_image / path resolve)
+    # and ``write_file`` reverse-resolve use, so all path consumers agree.
+    #
+    # ``DEER_FLOW_HOME`` defaults to ``{AGENT_DATA_DIR}`` (configured in
+    # ``app/config.py``) so backend + agent share the same host tree.
+    #
+    # ``user_id`` is accepted for signature compatibility with the parent
+    # class (harness rev >=10890e10) but the family_id ContextVar is the
+    # tenant truth (the harness-supplied user_id is already family_id after
+    # the acquire override + set_current_user, but we re-read the ContextVar
+    # to be robust against any caller that bypasses acquire).
     @staticmethod
     def _build_thread_path_mappings(
         thread_id: str, *, user_id: str | None = None
     ) -> list[PathMapping]:
-        """Build per-thread path mappings scoped to family_id.
+        """Build per-thread path mappings scoped to family_id (DeerFlow layout).
 
         Directories are created lazily under:
-        ``{AGENT_DATA_DIR}/{family_id}/sandboxes/{thread_id}/{workspace,uploads,outputs}``
+        ``{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/{workspace,uploads,outputs}``
 
-        ``user_id`` is accepted for signature compatibility with the parent
-        class (harness rev >=10890e10) but ignored — Numina isolates by
-        ``family_id`` via the coroutine-scoped ContextVar, not by user_id.
+        Uses DeerFlow's ``Paths`` API (``sandbox_*_dir``) so the host layout
+        matches what ``thread_data_middleware`` and ``write_file`` resolve.
         """
         family_id = get_family_sandbox_context()
         if not family_id:
             return []
 
-        base = Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes" / thread_id
-        workspace = base / "workspace"
-        uploads = base / "uploads"
-        outputs = base / "outputs"
-        workspace.mkdir(parents=True, exist_ok=True)
-        uploads.mkdir(parents=True, exist_ok=True)
-        outputs.mkdir(parents=True, exist_ok=True)
+        try:
+            from deerflow.config.paths import get_paths
+
+            paths = get_paths()
+            workspace = Path(paths.sandbox_work_dir(thread_id, user_id=family_id))
+            uploads = Path(paths.sandbox_uploads_dir(thread_id, user_id=family_id))
+            outputs = Path(paths.sandbox_outputs_dir(thread_id, user_id=family_id))
+            user_data = Path(paths.sandbox_user_data_dir(thread_id, user_id=family_id))
+        except Exception:
+            logger.debug(
+                "[sandbox] DeerFlow paths API unavailable; falling back to "
+                "AGENT_DATA_DIR layout",
+                exc_info=True,
+            )
+            return []
+
+        # Ensure dirs exist (DeerFlow ensure_thread_dirs also does this, but
+        # the sandbox provider may be queried before thread_data_middleware
+        # runs — eager creation is harmless and keeps write_file fail-safe).
+        for d in (workspace, uploads, outputs):
+            d.mkdir(parents=True, exist_ok=True)
 
         return [
             PathMapping(
                 container_path="/mnt/user-data",
-                local_path=str(base),
+                local_path=str(user_data),
                 read_only=False,
             ),
             PathMapping(
@@ -140,50 +207,20 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     # harness rev >=10890e10: ``LocalSandboxProvider.acquire`` keys its LRU
     # cache by ``_thread_key(thread_id, effective_user_id)`` and emits sandbox
     # IDs via ``_sandbox_id_for_thread(thread_id, effective_user_id)`` (i.e.
-    # ``f"local:{user_id}:{thread_id}"``). ``effective_user_id`` resolves from
-    # DeerFlow's ``_current_user`` ContextVar / ``runtime.context["user_id"]``,
-    # both of which Numina never sets — so without an override the harness
-    # always resolves ``"default"`` and keys/IDs collapse to
-    # ``("default", thread_id)`` / ``"local:default:{thread_id}"``.
+    # ``f"local:{user_id}:{thread_id}"``).
     #
-    # Path mappings are already family-scoped (Numina's
-    # ``_build_thread_path_mappings`` override reads the family_id ContextVar),
-    # but the **LRU cache key + sandbox ID** are NOT — so two families sharing
-    # a thread_id (UUID collision, or thread_id reuse) would hit the same
-    # cached LocalSandbox instance and read each other's mapped paths.
-    #
-    # Override ``acquire`` to pass ``family_id`` as the effective ``user_id``
-    # when the caller didn't provide one and a family context is set. This
-    # flows family_id into the parent's ``_thread_key`` /
-    # ``_sandbox_id_for_thread`` / LRU cache so the cache key and sandbox ID
-    # are family-scoped: ``("default", thread_id)`` →
-    # ``(family_id, thread_id)`` / ``f"local:{family_id}:{thread_id}"``.
-    # ``_build_thread_path_mappings`` ignores this ``user_id`` (still reads
-    # the ContextVar), so path resolution is unchanged.
-    #
-    # If neither a caller-supplied ``user_id`` nor a family context is set
-    # (legacy/script paths), we defer to the parent so behaviour matches
-    # DeerFlow's ``"default"`` fallback exactly.
-    #
-    # NOTE: the harness's ``build_middlewares`` / ``tools.py`` call
-    # ``provider.acquire(thread_id, user_id=resolve_runtime_user_id(runtime))``,
-    # and Numina never sets DeerFlow's ``_current_user`` ContextVar — so
-    # ``resolve_runtime_user_id`` always returns ``"default"`` (DEFAULT_USER_ID),
-    # passed here EXPLICITLY. The original ``if user_id is None`` guard never
-    # fired because the harness always supplies "default". The fix: when a
-    # family context is set, OVERRIDE any caller-supplied user_id (including
-    # the harness "default") so the LRU cache key + sandbox ID are family-scoped
-    # — otherwise two families sharing a thread_id hit the same cached
-    # LocalSandbox with the first family's path mappings (cross-tenant read).
+    # After ``set_family_sandbox_context`` sets DeerFlow's ``_current_user``,
+    # ``resolve_runtime_user_id`` returns family_id — so the harness-supplied
+    # ``user_id`` is ALREADY family_id. The override below is a defense-in-
+    # depth: it re-reads the family_id ContextVar and overrides any stale
+    # ``"default"`` (e.g. if a caller invokes acquire before the ContextVar
+    # propagated) so the LRU cache key + sandbox ID are always family-scoped.
     def acquire(self, thread_id: str | None = None, *, user_id: str | None = None) -> str:
         family_id = get_family_sandbox_context()
-        if family_id is not None:
-            # Family context is the tenant truth — override any harness-supplied
-            # user_id (Numina does not use DeerFlow's user_id mechanism).
-            effective_user_id = family_id
-        else:
-            # No family context (legacy/script paths) — defer to caller/default.
-            effective_user_id = user_id
+        # Family context is the tenant truth — override any harness-supplied
+        # user_id (Numina uses family_id as DeerFlow's effective user). When no
+        # family context is set (legacy/script paths), defer to caller/default.
+        effective_user_id = family_id if family_id is not None else user_id
         return super().acquire(thread_id, user_id=effective_user_id)
 
 
