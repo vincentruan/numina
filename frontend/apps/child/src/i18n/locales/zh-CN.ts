@@ -112,9 +112,6 @@ export default {
     wishProgressBump: '✨ +{stars} ⭐ 离「{wishName}」又近一步!',
     daysToBonus: '🔥 还差 {days} 天获得连击奖励!',
   },
-  tasks: {
-    myStars: '我的星星币 ⭐',
-  },
   challenge: {
     taskCount: '累计任务',
     streakLength: '连续打卡',
@@ -162,10 +159,8 @@ export default {
     progressRingSubtitle: '还差 {remaining} 颗 ⭐ 就全部完成啦',
     progressRingAllDone: '今天的任务全部完成啦！🎉',
     progressRingAriaLabel: '今日任务进度：已完成 {completed} 项，共 {total} 项',
-    coinTotalLabel: '我的星星币',
   },
   ledger: {
-    myStars: '我的星星币',
     giftBtn: '🎁 送给兄弟姐妹',
     empty: '还没有记录，快去完成家务吧！',
     sheetTitle: '🎁 送星星币',

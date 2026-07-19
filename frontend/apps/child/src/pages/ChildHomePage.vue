@@ -13,33 +13,26 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-      <!-- Balance hero — greeting on top, coins + progress ring side by side -->
-      <div class="hero-card">
-        <HackerGreeting
-          :name="childAuthStore.childUser?.display_name ?? ''"
-          :balance="balance"
-          class="hero-greeting"
-        />
-        <div class="hero-body">
-          <div class="hero-coins">
-            <div class="hero-coin-total">
-              <span class="hero-coin-total-num">{{ balance }}</span>
-              <span class="hero-coin-total-star">⭐</span>
-            </div>
-            <div class="hero-coin-label">{{ t('home.coinTotalLabel') }}</div>
-            <CoinDisplay :amount="balance" :icon-size="22" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-          </div>
-          <ProgressRing
-            v-if="!loadingChores && todayChores.length > 0"
-            :completed="completedChores"
-            :pending="pendingChores"
-            :total="todayChores.length"
-            :total-coins="totalChoreCoins"
-            :loading="loadingChores"
-            class="hero-ring"
-          />
-        </div>
-      </div>
+      <!-- Greeting (home-only) -->
+      <HackerGreeting
+        :name="childAuthStore.childUser?.display_name ?? ''"
+        :balance="balance"
+        class="hero-greeting"
+      />
+
+      <!-- Balance hero — shared component -->
+      <BalanceHero :amount="balance" variant="home" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+
+      <!-- Progress ring — own row below the hero -->
+      <ProgressRing
+        v-if="!loadingChores && todayChores.length > 0"
+        :completed="completedChores"
+        :pending="pendingChores"
+        :total="todayChores.length"
+        :total-coins="totalChoreCoins"
+        :loading="loadingChores"
+        class="home-progress-ring"
+      />
 
     <!-- Today's chores -->
     <div class="section">
@@ -231,7 +224,7 @@ import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreIns
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import { getCoinBalance } from '@/api/coins'
-import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import BalanceHero from '@/components/BalanceHero.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import ChallengeCard from '@/components/ChallengeCard.vue'
@@ -470,114 +463,15 @@ onMounted(load)
   min-height: 100vh;
 }
 
-/* ── Hero card — soft neutral feature card ── */
-.hero-card {
-  background: var(--color-surface-soft);
-  border-radius: var(--radius-xl);
-  padding: 28px 20px 24px;
-  color: var(--color-ink);
-  margin-bottom: var(--space-lg);
-  border: 1px solid var(--color-hairline-soft);
-  --coin-text-gold:   var(--color-ink);
-  --coin-text-silver: var(--color-ink);
-  --coin-text-copper: var(--color-ink);
-}
-[data-theme="dark"] .hero-card {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    var(--color-surface-card);
-  color: var(--color-ink);
-  border-color: var(--color-hairline);
-  --coin-text-gold:   var(--color-ink);
-  --coin-text-silver: var(--color-ink);
-  --coin-text-copper: var(--color-ink);
-}
-/* Dark-mode coin legibility: metallic coin SVGs (esp. copper #B87333) lose
-   separation against the deep teal surface. A soft per-row capsule + drop
-   shadow lifts the coins off the background without recoloring the metal. */
-[data-theme="dark"] .hero-coins :deep(.coin-display) {
-  padding: 4px 8px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-[data-theme="dark"] .hero-coins :deep(svg) {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-}
-[data-theme="dark"] .hero-coin-total-num {
-  /* Brighten the ochre total against dark teal so the big number stays punchy */
-  color: var(--color-coin-gold-text);
-}
+/* ── Greeting (home-only, sits above the shared balance hero) ── */
 .hero-greeting {
   text-align: center;
+  margin-bottom: var(--space-md);
 }
 
-/* ── Hero body: coins (left) + progress ring (right) side by side ── */
-.hero-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-/* Coin stack: three coin tiers arranged vertically.
-   CoinDisplay renders icon+count pairs in DOM order; CSS grid pairs each
-   icon with its count on a row, then stacks the three rows vertically. */
-.hero-coins {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-.hero-coin-total {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-family: Inter, sans-serif;
-  line-height: 1;
-}
-.hero-coin-total-num {
-  font-size: 30px;
-  font-weight: 800;
-  color: var(--color-brand-ochre);
-  font-variant-numeric: tabular-nums;
-}
-.hero-coin-total-star {
-  font-size: 20px;
-}
-.hero-coin-label {
-  font-family: Inter, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: var(--color-muted);
-  margin-bottom: 4px;
-}
-.hero-coins :deep(.coin-display) {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: center;
-  justify-content: start;
-  column-gap: 6px;
-  row-gap: 6px;
-}
-.hero-coins :deep(.coin-count) {
-  font-size: 18px;
-  margin-right: 0;
-}
-
-/* When there are no tasks, the progress ring is absent — center the coins. */
-.hero-body:has(.hero-ring) .hero-coins {
-  flex: 1;
-}
-.hero-body:not(:has(.hero-ring)) {
-  justify-content: center;
-}
-
-.hero-ring {
-  flex-shrink: 0;
+/* Progress ring — its own row below the hero */
+.home-progress-ring {
+  margin-bottom: var(--space-lg);
 }
 
 /* ── Sections ── */

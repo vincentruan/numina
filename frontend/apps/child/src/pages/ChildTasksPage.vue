@@ -37,14 +37,17 @@
       <div v-else class="nav-btn-placeholder" />
     </div>
 
-    <!-- Balance hero — ochre feature card -->
-    <div
-      ref="balanceCardRef"
-      class="balance-card"
-      :data-reacting="balanceReactMode"
-    >
-      <p class="balance-label">{{ t('tasks.myStars') }}</p>
-      <CoinDisplay :amount="balance" :icon-size="28" class="balance-display" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" animate-changes />
+    <!-- Balance hero — shared component (wrapper hosts star-flight target ref) -->
+    <div ref="balanceCardRef">
+      <BalanceHero
+        :amount="balance"
+        variant="tasks"
+        :icon-size="26"
+        :copper-to-silver="familyStore.coinCopperToSilver"
+        :silver-to-gold="familyStore.coinSilverToGold"
+        animate-changes
+        :reacting="balanceReactMode"
+      />
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -243,7 +246,7 @@ import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import CandleFlame from '@/components/celebration/CandleFlame.vue'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
-import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import BalanceHero from '@/components/BalanceHero.vue'
 import { childBlindBoxApi } from '@/api/blindBox'
 import type { BlindBoxDraw } from '@/types/blindBox'
 import http from '@/api/index'
@@ -675,71 +678,7 @@ onUnmounted(() => {
   min-height: 48px;
 }
 
-/* ── Balance hero — ochre feature card ── */
-.balance-card {
-  position: relative;
-  background: linear-gradient(135deg, var(--color-brand-ochre), var(--color-brand-peach));
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  margin-bottom: var(--space-lg);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: box-shadow 300ms ease-out;
-  --coin-text-gold:   var(--color-ink);
-  --coin-text-silver: var(--color-ink);
-  --coin-text-copper: var(--color-ink);
-}
-
-[data-theme="dark"] .balance-card {
-  background:
-    linear-gradient(135deg, rgba(var(--color-brand-ochre-rgb), 0.16), rgba(var(--color-brand-peach-rgb), 0.10)),
-    var(--color-surface-card);
-  --coin-text-gold:   var(--color-on-feature-ochre);
-  --coin-text-silver: var(--color-on-feature-ochre);
-  --coin-text-copper: var(--color-on-feature-ochre);
-}
-
-.balance-card[data-reacting='pop'] {
-  animation: balance-pop 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
-             balance-glow 1500ms ease-out;
-  box-shadow: 0 0 40px rgba(232, 185, 74, 0.6);
-}
-
-.balance-card[data-reacting='invert'] {
-  animation: balance-color-invert 400ms ease-out;
-}
-
-@keyframes balance-pop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-  100% { transform: scale(1); }
-}
-
-@keyframes balance-glow {
-  0%   { box-shadow: 0 0 0 rgba(232, 185, 74, 0); }
-  20%  { box-shadow: 0 0 48px rgba(232, 185, 74, 0.75); }
-  60%  { box-shadow: 0 0 32px rgba(232, 185, 74, 0.55); }
-  100% { box-shadow: 0 0 0 rgba(232, 185, 74, 0); }
-}
-
-@keyframes balance-color-invert {
-  0% { filter: hue-rotate(0); }
-  50% { filter: hue-rotate(60deg) brightness(1.1); }
-  100% { filter: hue-rotate(0); }
-}
-
-.balance-label {
-  font-family: Inter, sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-on-dark);
-  margin: 0;
-}
-
-.balance-display {
-  flex-shrink: 0;
-}
+/* ── Balance hero is now the shared <BalanceHero> component ── */
 
 .date-display {
   flex: 1;

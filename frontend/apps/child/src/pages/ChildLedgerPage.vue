@@ -13,14 +13,9 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-    <!-- Balance hero — teal feature card -->
-    <div class="balance-card">
-      <p class="balance-label">{{ t('ledger.myStars') }}</p>
-      <p class="balance-value">
-        <CoinDisplay :amount="balance" :icon-size="28" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-      </p>
-      <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">{{ t('ledger.giftBtn') }}</button>
-    </div>
+    <!-- Balance hero — shared component -->
+    <BalanceHero :amount="balance" variant="ledger" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+    <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">{{ t('ledger.giftBtn') }}</button>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
@@ -94,7 +89,7 @@ import ChildLedgerSkeleton from '@/components/skeletons/ChildLedgerSkeleton.vue'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
-import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import BalanceHero from '@/components/BalanceHero.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import noRecordsSvgRaw from '@/assets/empty-states/no-records.svg?raw'
 
@@ -167,39 +162,14 @@ onMounted(load)
   min-height: 100vh;
 }
 
-/* ── Balance card — teal feature card ── */
-.balance-card {
-  background: var(--color-brand-teal);
-  border-radius: var(--radius-xl);
-  padding: 32px 24px;
-  text-align: center;
-  margin-bottom: var(--space-lg);
-  color: var(--color-on-dark);
-}
-[data-theme="dark"] .balance-card {
-  background:
-    linear-gradient(135deg, rgba(var(--color-brand-mint-rgb), 0.14), rgba(var(--color-brand-mint-rgb), 0.06)),
-    var(--color-surface-card);
-  color: var(--color-on-feature-teal);
-}
-.balance-label {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-  opacity: 0.75;
-}
-.balance-value {
-  font-size: 32px;
-  font-weight: 600;
-  margin: 8px 0 0;
-}
-
-/* Gift button — button-on-color spec: canvas bg, ink text */
+/* Gift button — secondary action below the hero */
 .gift-btn {
-  margin-top: 16px;
-  background: var(--color-canvas);
-  border: none;
+  margin-top: -8px;
+  margin-bottom: var(--space-lg);
+  margin-left: auto;
+  display: block;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-hairline);
   color: var(--color-ink);
   border-radius: var(--radius-md);
   padding: 0 20px;
@@ -207,7 +177,7 @@ onMounted(load)
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  height: 44px;
+  height: 40px;
   transition: opacity 0.15s;
 }
 .gift-btn:active { opacity: 0.8; }

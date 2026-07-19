@@ -111,9 +111,6 @@ export default {
     wishProgressBump: '✨ +{stars} ⭐ closer to {wishName}!',
     daysToBonus: '🔥 {days} more days to streak bonus!',
   },
-  tasks: {
-    myStars: 'My Star Coins ⭐',
-  },
   challenge: {
     taskCount: 'Total Tasks',
     streakLength: 'Daily Streak',
@@ -161,10 +158,8 @@ export default {
     progressRingSubtitle: '{remaining} ⭐ left to finish them all',
     progressRingAllDone: 'All tasks done today! 🎉',
     progressRingAriaLabel: 'Today\'s task progress: {completed} of {total} done',
-    coinTotalLabel: 'My Star Coins',
   },
   ledger: {
-    myStars: 'My Star Coins',
     giftBtn: '🎁 Gift to Sibling',
     empty: 'No records yet, go complete some tasks!',
     sheetTitle: '🎁 Gift Star Coins',
