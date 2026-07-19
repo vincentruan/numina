@@ -37,8 +37,8 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 - `server/apps/backend/app/routers/ai_finance_coach.py` — backend trigger endpoint `POST /ai/finance-coach/generate` (require_ai_enabled + require_adult + 8h cache + circuit breaker + delegate to agent gateway route). Mirrors `ai_report.py:trigger_generate_events` shape but capability-scoped.
 - `server/apps/agent/tests/unit/test_finance_coach_skill.py` — SKILL.md frontmatter + allowed-tools base-name assertion.
 - `server/apps/agent/tests/integration/test_gateway_finance_coach.py` — gateway route + R1 allowlist + worker dispatch branch integration (mirrors `test_gateway_asset_report.py`).
-- `server/apps/backend/tests/routers/test_ai_finance_coach.py` — cache hit/miss/invalidation + circuit breaker + capability isolation (finance_coach vs report don't pollute).
-- `server/apps/backend/tests/services/test_finance_coach_cache.py` — `_latest_by_capability` isolation, `invalidate_capability` correctness, reconciliation.
+- `server/tests/backend/routers/test_ai_finance_coach.py` — cache hit/miss/invalidation + circuit breaker + capability isolation (finance_coach vs report don't pollute).
+- `server/tests/backend/services/test_finance_coach_cache.py` — `_latest_by_capability` isolation, `invalidate_capability` correctness, reconciliation.
 
 **Modify:**
 - `server/apps/backend/app/routers/ai_skills.py:55` — add `"finance-coach"` to `RESERVED_NAMES`.
@@ -57,7 +57,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 
 **Files:**
 - Modify: `server/apps/backend/app/routers/ai_skills.py:55`
-- Test: `server/apps/backend/tests/routers/test_ai_skills.py` (add one assertion)
+- Test: `server/tests/backend/test_ai_skills.py` (add one assertion)
 
 **Interfaces:**
 - Consumes: existing `RESERVED_NAMES` list.
@@ -65,7 +65,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `server/apps/backend/tests/routers/test_ai_skills.py` (create the test function; if a `test_reserved_names` already exists, extend it instead of duplicating):
+Append to `server/tests/backend/test_ai_skills.py` (create the test function; if a `test_reserved_names` already exists, extend it instead of duplicating):
 
 ```python
 def test_reserved_names_includes_finance_coach():
@@ -76,7 +76,7 @@ def test_reserved_names_includes_finance_coach():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_skills.py::test_reserved_names_includes_finance_coach -v`
+Run: `cd server && uv run pytest tests/backend/test_ai_skills.py::test_reserved_names_includes_finance_coach -v`
 Expected: FAIL with `AssertionError: assert 'finance-coach' in ['chat', 'asset-report', 'import-parse']`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -97,18 +97,18 @@ RESERVED_NAMES = ["chat", "asset-report", "import-parse", "finance-coach"]
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_skills.py::test_reserved_names_includes_finance_coach -v`
+Run: `cd server && uv run pytest tests/backend/test_ai_skills.py::test_reserved_names_includes_finance_coach -v`
 Expected: PASS
 
 - [ ] **Step 5: Lint + typecheck the touched file**
 
-Run: `cd server && uv run ruff check apps/backend/app/routers/ai_skills.py apps/backend/tests/routers/test_ai_skills.py && uv run mypy apps/backend/app/routers/ai_skills.py`
+Run: `cd server && uv run ruff check apps/backend/app/routers/ai_skills.py tests/backend/test_ai_skills.py && uv run mypy apps/backend/app/routers/ai_skills.py`
 Expected: no errors
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add server/apps/backend/app/routers/ai_skills.py server/apps/backend/tests/routers/test_ai_skills.py
+git add server/apps/backend/app/routers/ai_skills.py server/tests/backend/test_ai_skills.py
 git commit -m "feat(ai-skills): reserve 'finance-coach' system capability name (Plan A T1)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -227,7 +227,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Modify: `server/apps/backend/app/constants/system_ids.py` — add `FINANCE_COACH_AGENT_ID = 100000000000008` (after `IMPORT_PARSE_AGENT_ID` at line 11)
 - Modify: `server/apps/backend/app/bootstrap/agents.py` (add import + `_FINANCE_COACH_AGENT` dict + upsert call)
-- Test: `server/apps/backend/tests/bootstrap/test_bootstrap_agents.py` (add finance-coach assertion)
+- Test: `server/tests/backend/bootstrap/test_bootstrap_agents.py` (add finance-coach assertion)
 
 **Interfaces:**
 - Consumes: `_upsert_builtin_agent` helper (line 178) and `bootstrap_agents` (line 209). Existing constants imported from `apps.backend.app.constants.system_ids` (agents.py:5-9): `NUMINA_AGENT_ID` / `ASSET_REPORT_AGENT_ID` / `IMPORT_PARSE_AGENT_ID`. The existing values are `NUMINA_AGENT_ID=100000000000005`, `ASSET_REPORT_AGENT_ID=100000000000006`, `IMPORT_PARSE_AGENT_ID=100000000000007` — so finance-coach takes `100000000000008`.
@@ -235,7 +235,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `server/apps/backend/tests/bootstrap/test_bootstrap_agents.py` (create file if absent):
+Add to `server/tests/backend/bootstrap/test_bootstrap_agents.py` (create file if absent):
 
 ```python
 """bootstrap_agents idempotently seeds all system agents including finance-coach."""
@@ -264,11 +264,11 @@ def test_bootstrap_finance_coach_is_idempotent(db_session):
     assert count == 1
 ```
 
-> **Note:** `db_session` is the repo's existing test fixture — confirm the fixture name in `server/apps/backend/tests/conftest.py`; if it's `session` not `db_session`, use that name instead. If no `tests/bootstrap/` dir exists, create it with an `__init__.py`.
+> **Note:** `db_session` is the repo's existing test fixture — confirm the fixture name in `server/tests/backend/conftest.py`; if it's `session` not `db_session`, use that name instead. If no `tests/bootstrap/` dir exists, create it with an `__init__.py`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/bootstrap/test_bootstrap_agents.py -v`
+Run: `cd server && uv run pytest tests/backend/bootstrap/test_bootstrap_agents.py -v`
 Expected: FAIL with `ImportError: cannot import name 'FINANCE_COACH_AGENT_ID'` (the constant doesn't exist yet in `system_ids.py`).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -334,18 +334,18 @@ def bootstrap_agents(db: Session) -> None:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/bootstrap/test_bootstrap_agents.py -v`
+Run: `cd server && uv run pytest tests/backend/bootstrap/test_bootstrap_agents.py -v`
 Expected: both tests PASS.
 
 - [ ] **Step 5: Lint + typecheck**
 
-Run: `cd server && uv run ruff check apps/backend/app/constants/system_ids.py apps/backend/app/bootstrap/agents.py apps/backend/tests/bootstrap/ && uv run mypy apps/backend/app/bootstrap/agents.py`
+Run: `cd server && uv run ruff check apps/backend/app/constants/system_ids.py apps/backend/app/bootstrap/agents.py tests/backend/bootstrap/ && uv run mypy apps/backend/app/bootstrap/agents.py`
 Expected: no errors.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add server/apps/backend/app/constants/system_ids.py server/apps/backend/app/bootstrap/agents.py server/apps/backend/tests/bootstrap/
+git add server/apps/backend/app/constants/system_ids.py server/apps/backend/app/bootstrap/agents.py server/tests/backend/bootstrap/
 git commit -m "feat(bootstrap): add finance-coach system agent spec (Plan A T3)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1150,7 +1150,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Create: `server/apps/backend/alembic/versions/b9c7d2e4f6a8_add_capability_to_ai_reports.py`
 - Modify: `server/apps/backend/app/models/ai_report.py` — add `capability: Mapped[str]` column (line ~30, after `markdown_file_path`)
 - Create: `server/apps/backend/app/services/finance_coach_cache.py`
-- Test: `server/apps/backend/tests/services/test_finance_coach_cache.py`
+- Test: `server/tests/backend/services/test_finance_coach_cache.py`
 
 **Interfaces:**
 - Consumes: `down_revision = "c4d5e6f7a8b9"` (the finance-coach system-agent migration from Task 2 — so the head stays linear). Existing `AIReport` model + `_latest_report` (ai_report.py:47).
@@ -1160,7 +1160,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `server/apps/backend/tests/services/test_finance_coach_cache.py`:
+Create `server/tests/backend/services/test_finance_coach_cache.py`:
 
 ```python
 """capability-cache isolation + invalidation (Plan A T7)."""
@@ -1231,11 +1231,11 @@ def test_upsert_capability_result_sets_capability_column(db_session):
     assert row.family_id == "fam-5" or str(row.family_id) == "fam-5"
 ```
 
-> **Fixture note:** confirm the DB session fixture name in `server/apps/backend/tests/conftest.py` — if it's `session` not `db_session`, rename the parameter in every test above. The `family_id` is passed as a `str` here (matching how `ai_report.py` receives `current_user.family_id` as str); `upsert_capability_result` coerces to int internally (see implementation below).
+> **Fixture note:** confirm the DB session fixture name in `server/tests/backend/conftest.py` — if it's `session` not `db_session`, rename the parameter in every test above. The `family_id` is passed as a `str` here (matching how `ai_report.py` receives `current_user.family_id` as str); `upsert_capability_result` coerces to int internally (see implementation below).
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/services/test_finance_coach_cache.py -v`
+Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_cache.py -v`
 Expected: FAIL — `ImportError: cannot import name 'CAPABILITY_TTL'` (service module + column don't exist yet).
 
 - [ ] **Step 3: Create the migration**
@@ -1424,12 +1424,12 @@ Expected: revision `b9c7d2e4f6a8` applies; `alembic current` shows `b9c7d2e4f6a8
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/services/test_finance_coach_cache.py -v`
+Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_cache.py -v`
 Expected: all 5 tests PASS.
 
 - [ ] **Step 8: Verify report regression — existing report cache still works**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_report.py -v 2>/dev/null || uv run pytest apps/backend/tests/routers/ -k report -v`
+Run: `cd server && uv run pytest tests/backend/test_ai_report.py -v 2>/dev/null || uv run pytest tests/backend/routers/ -k report -v`
 Expected: existing report tests still PASS (the column has server_default='report', so existing report rows read back with capability='report'). If a test asserts the exact column set of AIReport, update it to include `capability`.
 
 - [ ] **Step 9: Update `_latest_report` + `REPORT_CACHE_TTL` in ai_report.py to be capability-aware**
@@ -1453,13 +1453,13 @@ REPORT_CACHE_TTL = CAPABILITY_TTL["report"]  # keep existing report behavior
 
 - [ ] **Step 10: Lint + typecheck**
 
-Run: `cd server && uv run ruff check apps/backend/app/models/ai_report.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/routers/ai_report.py apps/backend/tests/services/test_finance_coach_cache.py && uv run mypy apps/backend/app/models/ai_report.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/routers/ai_report.py`
+Run: `cd server && uv run ruff check apps/backend/app/models/ai_report.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/routers/ai_report.py tests/backend/services/test_finance_coach_cache.py && uv run mypy apps/backend/app/models/ai_report.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/routers/ai_report.py`
 Expected: no errors.
 
 - [ ] **Step 11: Commit**
 
 ```bash
-git add server/apps/backend/alembic/versions/b9c7d2e4f6a8_add_capability_to_ai_reports.py server/apps/backend/app/models/ai_report.py server/apps/backend/app/services/finance_coach_cache.py server/apps/backend/app/routers/ai_report.py server/apps/backend/tests/services/test_finance_coach_cache.py
+git add server/apps/backend/alembic/versions/b9c7d2e4f6a8_add_capability_to_ai_reports.py server/apps/backend/app/models/ai_report.py server/apps/backend/app/services/finance_coach_cache.py server/apps/backend/app/routers/ai_report.py server/tests/backend/services/test_finance_coach_cache.py
 git commit -m "feat(cache): add capability column + finance_coach cache service (Plan A T7)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1473,7 +1473,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Create: `server/apps/backend/app/routers/ai_finance_coach.py`
 - Modify: `server/apps/backend/app/main.py` (or wherever routers are registered) — register the new router
 - Create: `server/apps/backend/app/services/finance_coach_snapshot.py` — builds the PII-minimized family finance snapshot the worker ingests
-- Test: `server/apps/backend/tests/routers/test_ai_finance_coach.py`
+- Test: `server/tests/backend/routers/test_ai_finance_coach.py`
 
 **Interfaces:**
 - Consumes:
@@ -1488,7 +1488,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `server/apps/backend/tests/routers/test_ai_finance_coach.py`:
+Create `server/tests/backend/routers/test_ai_finance_coach.py`:
 
 ```python
 """finance_coach trigger endpoint: cache hit / miss / force / circuit breaker (Plan A T8)."""
@@ -1539,11 +1539,11 @@ def test_generate_blocked_by_circuit_breaker(client, auth_headers):
     assert resp.json()["status"] == "circuit_open"
 ```
 
-> **Fixture note:** confirm `client` + `auth_headers` fixture names in `server/apps/backend/tests/conftest.py` and the API prefix (`/api/v1` per the existing routers — confirm by grepping an existing router test). If the prefix differs, adjust. The `family_id` in the upsert must match the authenticated user's family in the test setup; if the test user's family differs, use that family id.
+> **Fixture note:** confirm `client` + `auth_headers` fixture names in `server/tests/backend/conftest.py` and the API prefix (`/api/v1` per the existing routers — confirm by grepping an existing router test). If the prefix differs, adjust. The `family_id` in the upsert must match the authenticated user's family in the test setup; if the test user's family differs, use that family id.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_finance_coach.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_ai_finance_coach.py -v`
 Expected: FAIL — 404 (route not registered) / `ImportError` for the router module.
 
 - [ ] **Step 3: Create the snapshot builder**
@@ -1835,18 +1835,18 @@ app.include_router(ai_finance_coach.router, prefix="/api/v1")
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_finance_coach.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_ai_finance_coach.py -v`
 Expected: all 3 tests PASS.
 
 - [ ] **Step 7: Lint + typecheck**
 
-Run: `cd server && uv run ruff check apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_snapshot.py apps/backend/tests/routers/test_ai_finance_coach.py && uv run mypy apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_snapshot.py`
+Run: `cd server && uv run ruff check apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_snapshot.py tests/backend/routers/test_ai_finance_coach.py && uv run mypy apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_snapshot.py`
 Expected: no errors.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add server/apps/backend/app/routers/ai_finance_coach.py server/apps/backend/app/services/finance_coach_snapshot.py server/apps/backend/app/main.py server/apps/backend/tests/routers/test_ai_finance_coach.py
+git add server/apps/backend/app/routers/ai_finance_coach.py server/apps/backend/app/services/finance_coach_snapshot.py server/apps/backend/app/main.py server/tests/backend/routers/test_ai_finance_coach.py
 git commit -m "feat(backend): finance_coach trigger endpoint + snapshot builder (Plan A T8)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1860,7 +1860,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `server/apps/backend/app/services/asset.py` (or `server/apps/backend/app/routers/assets.py` — wherever the asset POST/PUT/PATCH/DELETE commit lives)
 - Modify: `server/apps/backend/app/services/liability.py` (or `routers/liabilities.py`)
 - Modify: `server/apps/backend/app/services/wish.py` — `create_wish` (line 35), `update_wish` (line 52), `delete_wish` (line 65), `realize_wish` (line 73)
-- Test: `server/apps/backend/tests/services/test_finance_coach_invalidation.py`
+- Test: `server/tests/backend/services/test_finance_coach_invalidation.py`
 
 **Interfaces:**
 - Consumes: `invalidate_capability(family_id, "finance_coach", db)` (Task 7 service). The existing write endpoints' commit points.
@@ -1870,7 +1870,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `server/apps/backend/tests/services/test_finance_coach_invalidation.py`:
+Create `server/tests/backend/services/test_finance_coach_invalidation.py`:
 
 ```python
 """Entity-change invalidation of the finance_coach cache (Plan A T9)."""
@@ -1929,7 +1929,7 @@ def test_asset_write_invalidates_finance_coach_cache(db_session, asset_owner_use
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/services/test_finance_coach_invalidation.py -v`
+Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_invalidation.py -v`
 Expected: FAIL — `invalidate_capability` not called (the service functions don't call it yet).
 
 - [ ] **Step 3: Add invalidation to wish_service**
@@ -1978,23 +1978,23 @@ If asset/liability writes live in the router (not a service module), add the cal
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/services/test_finance_coach_invalidation.py -v`
+Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_invalidation.py -v`
 Expected: all 5 tests PASS.
 
 - [ ] **Step 6: Run regression on existing asset/liability/wish tests**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_wishes.py apps/backend/tests/routers/test_liabilities.py apps/backend/tests/routers/test_assets.py -v 2>/dev/null || uv run pytest apps/backend/tests/ -k "wish or liabilit or asset" -v`
+Run: `cd server && uv run pytest tests/backend/test_wishes.py tests/backend/test_liabilities.py tests/backend/test_assets.py -v 2>/dev/null || uv run pytest tests/backend/ -k "wish or liabilit or asset" -v`
 Expected: existing tests still PASS (invalidation is a delete that no-ops when no cache row exists; it does not change the write's observable result).
 
 - [ ] **Step 7: Lint + typecheck**
 
-Run: `cd server && uv run ruff check apps/backend/app/services/wish.py apps/backend/app/services/liability.py apps/backend/app/services/asset.py apps/backend/tests/services/test_finance_coach_invalidation.py && uv run mypy apps/backend/app/services/wish.py apps/backend/app/services/liability.py apps/backend/app/services/asset.py`
+Run: `cd server && uv run ruff check apps/backend/app/services/wish.py apps/backend/app/services/liability.py apps/backend/app/services/asset.py tests/backend/services/test_finance_coach_invalidation.py && uv run mypy apps/backend/app/services/wish.py apps/backend/app/services/liability.py apps/backend/app/services/asset.py`
 Expected: no errors. (If the service functions live in routers, typecheck those instead.)
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add server/apps/backend/app/services/wish.py server/apps/backend/app/services/liability.py server/apps/backend/app/services/asset.py server/apps/backend/tests/services/test_finance_coach_invalidation.py
+git add server/apps/backend/app/services/wish.py server/apps/backend/app/services/liability.py server/apps/backend/app/services/asset.py server/tests/backend/services/test_finance_coach_invalidation.py
 git commit -m "feat(cache): entity-change invalidation for finance_coach (Plan A T9)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -2024,7 +2024,9 @@ Expected: each grep returns at least one match; the system-agent print shows `10
 
 - [ ] **Step 2: Run the Plan A unit + integration test suite together**
 
-Run: `cd server && uv run pytest apps/agent/tests/unit/test_finance_coach_skill.py apps/agent/tests/unit/test_worker_finance_coach.py apps/agent/tests/integration/test_gateway_finance_coach.py apps/backend/tests/routers/test_ai_skills.py apps/backend/tests/bootstrap/test_bootstrap_agents.py apps/backend/tests/services/test_finance_coach_cache.py apps/backend/tests/routers/test_ai_finance_coach.py apps/backend/tests/services/test_finance_coach_invalidation.py -v`
+Run: `cd server && uv run pytest apps/agent/tests/unit/test_finance_coach_skill.py apps/agent/tests/unit/test_worker_finance_coach.py apps/agent/tests/integration/test_gateway_finance_coach.py tests/backend/test_ai_skills.py tests/backend/bootstrap/test_bootstrap_agents.py tests/backend/services/test_finance_coach_cache.py tests/backend/routers/test_ai_finance_coach.py tests/backend/services/test_finance_coach_invalidation.py -v`
+
+> **Path note.** The repo has `testpaths = ["tests"]` in `pyproject.toml`, and all 107 backend tests live under `server/tests/backend/` with a shared root `conftest.py` (DB/app fixtures). The `server/apps/backend/tests/` root is a leftover from the U4 report refactor containing only 5 files and **no conftest** — it is not on pytest's discovery path. T7/T8/T9 tests were correctly written into `tests/backend/`; earlier drafts of this command used the `apps/backend/tests/...` layout by mistake. The command above uses the real paths.
 Expected: all PASS.
 
 - [ ] **Step 3: Lint + typecheck the full Plan A surface**
@@ -2058,6 +2060,33 @@ Run this self-review checklist against the spec (`docs/superpowers/specs/2026-07
 - [ ] **Step 5: Commit the final Plan A state (if any test-fix commits are needed)**
 
 If Steps 2-3 surfaced any fix, commit it. Otherwise no commit needed — Plan A is complete.
+
+- [ ] **Step 6: Housekeeping — reconcile the duplicate `apps/backend/tests/` leftovers**
+
+While verifying T10 Step 2 it was discovered that the repo has a stray second backend test root. The authoritative root is `server/tests/backend/` (on `pyproject.toml`'s `testpaths`, has the root `conftest.py`, 107 test files). The legacy `server/apps/backend/tests/` root holds only **5 files, has no conftest, and is NOT on pytest's discovery path** — so anything that lives there is silently never collected by a bare `uv run pytest`.
+
+Three of those 5 files are **same-name forks** of tests that also exist (in expanded form) under `tests/backend/`. They are NOT byte-identical — the `apps/backend/tests/` copies are earlier, smaller U4-era versions; the `tests/backend/` copies are the later expanded versions:
+
+| `apps/backend/tests/` copy (legacy, NOT collected) | `tests/backend/` copy (canonical) | Sizes |
+|---|---|---|
+| `apps/backend/tests/unit/test_ai_result_parser.py` | `tests/backend/test_ai_result_parser.py` | 269 vs 481 lines |
+| `apps/backend/tests/unit/test_ai_result_writer.py` | `tests/backend/test_ai_result_writer.py` | 62 vs 43 lines |
+| `apps/backend/tests/routers/test_ai_skills.py` | `tests/backend/test_ai_skills.py` | 13 vs 157 lines |
+
+The other 2 files in `apps/backend/tests/` have no canonical counterpart and need a content decision:
+- `apps/backend/tests/test_ai_report_trigger.py`
+- `apps/backend/tests/unit/test_ai_internal_session_title.py`
+
+**Do not blindly delete** — the legacy copies may contain assertions the canonical versions dropped. For each of the 5 files:
+1. `diff` the legacy copy against its canonical counterpart (where one exists). Identify any test cases / assertions present only in the legacy copy.
+2. If the legacy-only cases are still valid, port them into the canonical copy under `tests/backend/`.
+3. Delete the legacy file from `apps/backend/tests/`.
+4. For the 2 files with no counterpart: decide whether to move (into `tests/backend/` with any needed fixture alignment) or delete outright. `test_ai_report_trigger.py` likely overlaps with `tests/backend/test_ai_report.py` — check before moving.
+5. Once `apps/backend/tests/` is empty (or only `__pycache__`), remove the directory.
+
+**Verification:** `find server/apps/backend/tests -name 'test_*.py'` returns nothing; `cd server && uv run pytest tests/backend/test_ai_result_parser.py tests/backend/test_ai_result_writer.py tests/backend/test_ai_skills.py tests/backend/test_ai_report.py -v` passes (covers the ported + canonical tests).
+
+This is a long-standing test-debt cleanup surfaced by the T10 path review — it is **not** part of the finance_coach capability itself, but doing it now prevents the next person from being misled by the silent second test root. Commit it separately from any T10 test fix, with message like `chore(tests): remove stray apps/backend/tests/ root — consolidate into tests/backend/`.
 
 ---
 
