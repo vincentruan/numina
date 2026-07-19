@@ -453,5 +453,14 @@ finance_coach capability ──┬─→ D2/A1a (主动卡片)
 - §8：实现顺序反映 finance_coach 接入与 A1b greenfield 是重单元
 - §10：风险表更新（dual-util 漂移消除，新增接入/greenfield/nullable-rate/counter drift/advice wrong output/闭环结构性）
 
-**未决（留 writing-plans）**：finance_coach 接入是否拆独立 plan；capability-cache 用 `ai_reports` 加列 vs 新表；A1b entity summary endpoint 路由归属。
+**未决（留 writing-plans）**：~~finance_coach 接入是否拆独立 plan~~ → **拆独立 plan**（决策 2026-07-19）；~~capability-cache 用 `ai_reports` 加列 vs 新表~~ → **`ai_reports` 加 `capability` 列**（决策 2026-07-19）；~~A1b entity summary endpoint 路由归属~~ → **统一到 `/ai/context`**（`?source=&id=`，决策 2026-07-19）。
+
+### 13. writing-plans 拆分（决策 2026-07-19）
+
+finance_coach 接入是重单元，拆为独立 plan 先行，其余 P0 项依赖它。建议拆 2 个 plan：
+
+- **Plan A — finance_coach capability 接入**（先行）：§7.1 完整接入链路（RESERVED_NAMES + system-agent Alembic + gateway 路由 + R1 allowlist + worker 分支 + SKILL.md 基名 allowed-tools）+ capability-cache（`ai_reports` 加 `capability` 列 + 参数化 TTL + entity 变更失效）+ PII 最小化 + advice baseline guardrails。产出可独立调用的 finance_coach capability + 缓存基础设施。
+- **Plan B — P0 业务触点**（后行，依赖 Plan A）：W1（储蓄字段+日志+授权+不变量）、L1+L2（single-source util + `/liabilities/simulate`）、W2（afford bar）、D2/A1a（Dashboard 卡片）、A1b（被动按钮 + `/ai/context` 统一 endpoint + greenfield context 注入）、W4（心愿建议卡片，独立 AI prompt）、W5（联动提示）。
+
+`/ai/context` 统一 endpoint（A1b 用）：`GET /ai/context?source={liability_detail|wish_detail|liability_strategy|wish_advice}&id={id}` → 按 source 路由拉取 entity summary（family-scoped，`entity.family_id == caller.family_id` 否则 404），返回注入用 context JSON（已 sanitization）。
 
