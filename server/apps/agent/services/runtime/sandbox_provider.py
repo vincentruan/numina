@@ -86,10 +86,7 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     # ``acquire`` passes it (L363). Numina's multi-tenant isolation is by
     # ``family_id`` (ContextVar), NOT by harness ``user_id`` — so we accept
     # ``user_id`` for signature compatibility but ignore it, keeping paths
-    # scoped to family_id. NOTE: ``acquire`` (L370) now builds sandbox IDs via
-    # ``_sandbox_id_for_thread(thread_id, effective_user_id)`` and bypasses the
-    # ``_deterministic_sandbox_id`` override below — family_id no longer enters
-    # the sandbox ID, a separate tenant-isolation regression to track.
+    # scoped to family_id.
     @staticmethod
     def _build_thread_path_mappings(
         thread_id: str, *, user_id: str | None = None
@@ -137,6 +134,43 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
                 read_only=False,
             ),
         ]
+
+    # [Integrated with Numina Multi-Tenant]
+    #
+    # harness rev >=10890e10: ``LocalSandboxProvider.acquire`` keys its LRU
+    # cache by ``_thread_key(thread_id, effective_user_id)`` and emits sandbox
+    # IDs via ``_sandbox_id_for_thread(thread_id, effective_user_id)`` (i.e.
+    # ``f"local:{user_id}:{thread_id}"``). ``effective_user_id`` resolves from
+    # DeerFlow's ``_current_user`` ContextVar / ``runtime.context["user_id"]``,
+    # both of which Numina never sets — so without an override the harness
+    # always resolves ``"default"`` and keys/IDs collapse to
+    # ``("default", thread_id)`` / ``"local:default:{thread_id}"``.
+    #
+    # Path mappings are already family-scoped (Numina's
+    # ``_build_thread_path_mappings`` override reads the family_id ContextVar),
+    # but the **LRU cache key + sandbox ID** are NOT — so two families sharing
+    # a thread_id (UUID collision, or thread_id reuse) would hit the same
+    # cached LocalSandbox instance and read each other's mapped paths.
+    #
+    # Override ``acquire`` to pass ``family_id`` as the effective ``user_id``
+    # when the caller didn't provide one and a family context is set. This
+    # flows family_id into the parent's ``_thread_key`` /
+    # ``_sandbox_id_for_thread`` / LRU cache so the cache key and sandbox ID
+    # are family-scoped: ``("default", thread_id)`` →
+    # ``(family_id, thread_id)`` / ``f"local:{family_id}:{thread_id}"``.
+    # ``_build_thread_path_mappings`` ignores this ``user_id`` (still reads
+    # the ContextVar), so path resolution is unchanged.
+    #
+    # If neither a caller-supplied ``user_id`` nor a family context is set
+    # (legacy/script paths), we defer to the parent so behaviour matches
+    # DeerFlow's ``"default"`` fallback exactly.
+    def acquire(self, thread_id: str | None = None, *, user_id: str | None = None) -> str:
+        effective_user_id = user_id
+        if effective_user_id is None:
+            family_id = get_family_sandbox_context()
+            if family_id is not None:
+                effective_user_id = family_id
+        return super().acquire(thread_id, user_id=effective_user_id)
 
 
 # ---------------------------------------------------------------------------

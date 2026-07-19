@@ -114,16 +114,41 @@ async def parse_import(
 
     bridge = _CapturingBridge()
     try:
-        await _run_import_parse_agent(
-            bridge=bridge,  # type: ignore[arg-type]
-            run_manager=_RM(),  # type: ignore[arg-type]
-            record=record,
-            family_id=family_id,
-            user_id=user_id,
-            thread_id=thread_id,
-            graph_input=graph_input,
-            config={},
+        # P2 #14: bound the agent run with a hard timeout strictly shorter than
+        # the backend's 120s httpx timeout (IMPORT_PARSE_TIMEOUT_SECONDS=110s)
+        # so a hanging LLM / MCP call returns the empty-result contract before
+        # the backend disconnects — otherwise the orphaned agent run keeps
+        # consuming LLM tokens + sandbox resources after the client is gone.
+        # ``asyncio.timeout`` raises ``TimeoutError``, which we map to the same
+        # empty-result fallback as any other agent failure.
+        async with asyncio.timeout(settings.IMPORT_PARSE_TIMEOUT_SECONDS):
+            await _run_import_parse_agent(
+                bridge=bridge,  # type: ignore[arg-type]
+                run_manager=_RM(),  # type: ignore[arg-type]
+                record=record,
+                family_id=family_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                graph_input=graph_input,
+                config={},
+            )
+    except asyncio.CancelledError:
+        # Client (backend) disconnected before the run finished — cooperative
+        # cancel so the in-flight LLM call stops ASAP rather than running to
+        # completion as an orphan. ``_run_import_parse_agent`` handles
+        # ``CancelledError`` internally and sets run status; we re-raise so
+        # FastAPI closes the request cleanly.
+        record.abort_event.set()
+        logger.info("[parse_import] client disconnected, aborting run=%s", run_id)
+        raise
+    except TimeoutError:
+        # ``asyncio.timeout`` expired — fall through to the empty-result return
+        # (the ``for`` loop below finds no result event).
+        logger.warning(
+            "[parse_import] agent run timed out after %.1fs family=%s run=%s",
+            settings.IMPORT_PARSE_TIMEOUT_SECONDS, family_id, run_id,
         )
+        record.abort_event.set()
     except Exception as exc:
         logger.warning("[parse_import] agent run failed family=%s err=%s", family_id, type(exc).__name__)
         return dict(_EMPTY_RESULT)

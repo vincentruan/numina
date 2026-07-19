@@ -144,9 +144,9 @@ class DeerFlowAdapter:
                 memory from others (e.g. asset-report vs chat/lead-agent). None
                 falls back to the client default (lead-agent global bucket).
             middlewares: Optional list of AgentMiddleware instances to inject into
-                the DeerFlow agent (e.g. AssetReportStep2Middleware to emit
-                report.step2_json via get_stream_writer). None = no custom
-                middlewares (chat path).
+                the DeerFlow agent. None = no custom middlewares (the default
+                for all current numina paths — report.step2_json is
+                worker-synthesized, not middleware-emitted).
         """
         self._timeout = timeout_seconds
         self._family_id = family_id

@@ -677,8 +677,8 @@ def get_family_adapter(
     agent_name is in the key because it selects a distinct DeerMem memory
     bucket (per (agent_name, user_id)) — an asset-report client must not share
     a chat client's memory. middlewares is in the key (as id() tuple) because
-    a client with AssetReportStep2Middleware must not be reused for a chat run
-    that should not emit report.step2_json.
+    a client with a custom middleware must not be reused for a chat run
+    that should not emit that middleware's events.
 
     Thread safety:
     - _cache_lock guards all reads/writes to _adapter_cache.
@@ -703,7 +703,7 @@ def get_family_adapter(
 
     config_id: str = ai_config.get("config_id", "")
     # middlewares are unhashable objects; key by their id() tuple so a client
-    # built with AssetReportStep2Middleware never collides with a no-middleware
+    # built with a custom middleware never collides with a no-middleware
     # chat client. (Both are module-singleton or per-pipeline lists, so id()
     # is stable across calls within a process.)
     middlewares_key = tuple(id(m) for m in middlewares) if middlewares else ()

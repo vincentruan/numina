@@ -150,23 +150,53 @@ class TestExtractBareJson:
 
 
 class TestValidateJson:
-    """Tests for _validate_json schema validation (unchanged from existing behavior)."""
+    """Tests for _validate_json schema validation.
 
-    def test_validate_array_type_valid(self):
-        data = [{"asset_name": "Car", "alert_type": "aging", "severity": "high"}]
-        assert _validate_json(data, "alerts") is True
+    P2 #12 (U7 SOUL schema-coverage quality gate): U7 deleted the
+    alerts/allocation/disposal/liability/spending_leak schemas, leaving
+    ``report`` as the only live schema in ``CAPABILITY_SCHEMAS``. These tests
+    pin the report schema's validation contract so a future edit that breaks
+    it (dropping a required field, changing the type, etc.) is caught here
+    rather than silently accepting malformed reports at the cache-read path
+    (``ai_internal.internal_persist_report`` calls ``_validate_json`` before
+    ``write_report_results``).
+    """
 
-    # U7 deleted the alerts/allocation/disposal/liability/spending_leak schemas
-    # (capabilities regressed to numina SOUL). The four tests below asserted
-    # schema-mismatch rejection (is False) for those now-deleted schemas; since
-    # _validate_json returns True for unknown capabilities (no schema to match),
-    # they are dead assertions and were removed with the schemas.
+    def test_validate_report_valid(self):
+        """A well-formed report object passes validation."""
+        data = {
+            "overall_score": 65,
+            "indicators": [
+                {"key": "liquidity", "label": "流动性", "score": 3, "narrative": "ok"},
+            ],
+        }
+        assert _validate_json(data, "report") is True
 
-    def test_validate_object_type_valid(self):
-        data = {"has_significant_drift": True, "narrative": "Some drift"}
-        assert _validate_json(data, "allocation") is True
+    def test_validate_report_missing_required_field_fails(self):
+        """Missing a top-level required field (indicators) is rejected."""
+        data = {"overall_score": 65}  # no "indicators"
+        assert _validate_json(data, "report") is False
 
-    def test_validate_unknown_capability(self):
+    def test_validate_report_missing_overall_score_fails(self):
+        """Missing overall_score is rejected."""
+        data = {"indicators": []}
+        assert _validate_json(data, "report") is False
+
+    def test_validate_report_wrong_type_fails(self):
+        """A list instead of an object is rejected (report is type=object)."""
+        assert _validate_json([{"overall_score": 65}], "report") is False
+
+    def test_validate_report_envelope_unwrapped(self):
+        """A backend-style envelope is unwrapped before validation."""
+        data = {
+            "code": "OK",
+            "message": "",
+            "data": {"report": {"overall_score": 70, "indicators": []}},
+        }
+        assert _validate_json(data, "report") is True
+
+    def test_validate_unknown_capability_returns_true(self):
+        """Unknown capabilities skip validation (no schema to match)."""
         data = {"anything": "value"}
         assert _validate_json(data, "unknown_capability") is True
 

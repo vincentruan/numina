@@ -137,3 +137,40 @@ async def test_parse_returns_empty_result_on_agent_exception():
         )
     assert resp.status_code == 200
     assert resp.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_parse_times_out_and_returns_empty_result():
+    """P2 #14: a hanging agent run is bounded by IMPORT_PARSE_TIMEOUT_SECONDS.
+
+    When ``_run_import_parse_agent`` exceeds the timeout, the router returns the
+    empty-result fallback — instead of hanging forever and leaving an orphaned
+    run after the backend's 120s httpx timeout disconnects. The timeout cancels
+    the agent coroutine (``asyncio.timeout`` raises ``TimeoutError``); the
+    router maps that to the empty-result contract.
+    """
+    import asyncio as _asyncio
+
+    from fastapi.testclient import TestClient
+
+    from apps.agent.app.main import app
+
+    async def _fake_hang(*, bridge, run_manager, record, family_id, user_id, thread_id, graph_input, config):
+        # Simulate a hanging LLM call: sleep well past the (patched) timeout.
+        # The router's ``asyncio.timeout`` cancels this coroutine.
+        await _asyncio.sleep(30)
+
+    with patch(
+        "apps.agent.routers.import_parse._run_import_parse_agent",
+        new=AsyncMock(side_effect=_fake_hang),
+    ), patch(
+        "apps.agent.app.config.settings.IMPORT_PARSE_TIMEOUT_SECONDS", 0.05
+    ):
+        client = TestClient(app)
+        resp = client.post(
+            "/import/parse",
+            json={"text": "贵州茅台 100股"},
+            headers={"X-Agent-Token": VALID_TOKEN, "X-Family-Id": "fam1"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []

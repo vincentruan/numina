@@ -110,6 +110,56 @@ def test_run_in_executor_with_context_propagates_family_sandbox_contextvar():
     )
 
 
+def test_acquire_keys_sandbox_by_family_id():
+    """``NuminaLocalSandboxProvider.acquire`` incorporates family_id into the
+    LRU cache key and sandbox ID (P2 #13 tenant-isolation fix).
+
+    Without the ``acquire`` override, the harness resolves
+    ``effective_user_id="default"`` (Numina never sets DeerFlow's
+    ``_current_user`` ContextVar), so the cache key collapses to
+    ``("default", thread_id)`` and two families sharing a thread_id would hit
+    the same cached LocalSandbox — a cross-tenant read of mapped paths.
+
+    The override passes ``family_id`` as the effective ``user_id`` when no
+    explicit ``user_id`` is supplied and a family context is set, so the cache
+    key and sandbox ID become family-scoped
+    (``("default", thread_id)`` → ``(family_id, thread_id)`` /
+    ``f"local:{family_id}:{thread_id}"``).
+    """
+    from apps.agent.services.runtime.sandbox_provider import (
+        get_sandbox_provider,
+        set_family_sandbox_context,
+    )
+
+    provider = get_sandbox_provider()
+    # Isolate from any cache state left by other tests.
+    provider.reset()
+
+    thread_id = "thread-13-isolation-test"
+    try:
+        set_family_sandbox_context("family-A")
+        sandbox_id_a = provider.acquire(thread_id)
+        assert sandbox_id_a.startswith("local:family-A:"), sandbox_id_a
+
+        set_family_sandbox_context("family-B")
+        sandbox_id_b = provider.acquire(thread_id)
+        assert sandbox_id_b.startswith("local:family-B:"), sandbox_id_b
+
+        # Distinct families with the same thread_id MUST get distinct sandbox
+        # IDs (and therefore distinct cache entries / LocalSandbox instances).
+        assert sandbox_id_a != sandbox_id_b, (
+            "family_id did not enter the sandbox ID; both families collapsed to "
+            f"{sandbox_id_a!r} (P2 #13 tenant-isolation regression)"
+        )
+
+        # Same family + thread_id must be stable (cache hit returns same ID).
+        set_family_sandbox_context("family-A")
+        assert provider.acquire(thread_id) == sandbox_id_a
+    finally:
+        provider.reset()
+
+
+
 def test_run_in_executor_with_context_propagates_active_skill_contextvar():
     """Same propagation contract for the ``numina_active_skill_name`` ContextVar.
 

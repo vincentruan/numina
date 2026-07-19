@@ -131,11 +131,12 @@ def test_asset_report_run_rejects_bad_token(client):
 def test_asset_report_run_streams_step2_json(client):
     """Valid token → SSE stream completes; worker persists parsed JSON (step 7).
 
-    U4 step 3: report.step2_json is now emitted by AssetReportStep2Middleware
-    (in-graph via get_stream_writer). The stub adapter bypasses the real graph
-    middleware path, so no step2 event appears in this SSE stream — the worker
-    only persists the parsed JSON (asserted via persist mock). The middleware's
-    in-graph emission is covered by the F1 e2e run, not this unit test.
+    U4 step 3: report.step2_json is worker-synthesized from the final AI
+    message text (the in-graph middleware path was abandoned —
+    get_stream_writer() is no-op on numina's sync stream() path). The stub
+    adapter bypasses the real graph, so this unit test only asserts the worker
+    persists the parsed JSON (via persist mock). The worker-synthesized
+    emission is covered by the F1 e2e run, not this unit test.
     """
     with (
         patch(

@@ -60,6 +60,14 @@ class AgentSettings(BaseSettings):
     SUBAGENT_MAX_CONCURRENT: int = 3
     SUBAGENT_TIMEOUT_SECONDS: int = 900
 
+    # Import-parse sync endpoint (routers/import_parse.py). The backend calls
+    # /import/parse with a 120s httpx timeout (apps/backend import_report.py);
+    # the agent-side timeout MUST be strictly shorter so the agent returns the
+    # empty-result contract before the backend's httpx client gives up —
+    # otherwise a hanging LLM call leaves an orphaned agent run after the
+    # backend disconnects (P2 #14).
+    IMPORT_PARSE_TIMEOUT_SECONDS: float = 110.0
+
     # Sandbox
     SANDBOX_MAX_CACHED_THREADS: int = 256
     SANDBOX_IDLE_TIMEOUT_SECONDS: int = 600
