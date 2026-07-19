@@ -194,6 +194,7 @@ tests/test-results/
 
 # Screenshot test runtime screenshots
 tests/screenshot/screenshots/
+tmp-test-screenshots/
 .claude/worktrees/
 .gstack/
 .worktrees/
