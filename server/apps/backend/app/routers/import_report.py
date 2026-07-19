@@ -285,7 +285,7 @@ async def parse_pdf(
             current_value=raw_item.get("current_value"),
             currency=raw_item.get("currency", "CNY"),
             quantity=raw_item.get("quantity"),
-            matched_asset_id=matched.id if matched else None,
+            matched_asset_id=str(matched.id) if matched else None,
             matched_asset_name=matched.name if matched else None,
             action="update" if matched else "create",
             warning=warning,

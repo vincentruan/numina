@@ -471,6 +471,24 @@ class TestIU6CacheKeyAndCapabilities:
         model_entry = content["models"][0]
         assert model_entry.get("supports_vision") is True
 
+    def test_vision_supported_from_vision_understanding_capability(self, base_config_dir):
+        """supports_vision must be True when 'vision_understanding' is in
+        model_1_capabilities. Frontend CapabilityPickerSheet stores this key
+        (not 'vision'); both must be accepted to match the actual DB value."""
+        import yaml
+
+        cfg_vu = {
+            "config_id": "cfg-vu",
+            "api_key": "sk-test",
+            "ai_model_id": "qwen-vl-plus",
+            "ai_provider": "openai_compatible",
+            "model_1_capabilities": ["text_generation", "deep_thinking", "vision_understanding"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_vu)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is True
+
     def test_vision_supported_from_vision_model_id(self, base_config_dir):
         """supports_vision must be True when vision_model_id is set (mirrors
         ai_config.py:579's ``or bool(cfg.vision_model_id)`` logic)."""

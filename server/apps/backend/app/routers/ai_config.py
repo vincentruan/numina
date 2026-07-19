@@ -576,7 +576,7 @@ def get_tenant_models(
 
             # Determine capability flags
             supports_thinking = "deep_thinking" in capabilities or cfg.thinking_supported
-            supports_vision = "vision" in capabilities or bool(cfg.vision_model_id)
+            supports_vision = "vision" in capabilities or "vision_understanding" in capabilities or bool(cfg.vision_model_id)
             supports_tool_calling = "tool_calling" in capabilities  # Default True if not specified
 
             # Build display name from model_id

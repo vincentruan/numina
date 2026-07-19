@@ -340,14 +340,19 @@ def _generate_temp_config(
     else:
         thinking_supported = bool(ai_config.get("thinking_supported", False))
 
-    # Vision capability: "vision" in model_1_capabilities, or a dedicated
-    # vision_model_id configured (mirrors ai_config.py:579's logic). Wiring
-    # supports_vision into the model entry lets the DeerFlow harness
-    # assembly-time gate the view_image_tool (tools.py:110) and mount
-    # ViewImageMiddleware (factory.py:270) — without it the agent cannot read
-    # images even when the underlying model supports them.
+    # Vision capability: "vision" or "vision_understanding" in model_1_capabilities
+    # (frontend CapabilityPickerSheet stores "vision_understanding"; accept both for
+    # backward compat), or a dedicated vision_model_id configured (mirrors
+    # ai_config.py:579's logic). Wiring supports_vision into the model entry lets
+    # the DeerFlow harness assembly-time gate the view_image_tool (tools.py:110)
+    # and mount ViewImageMiddleware (factory.py:270) — without it the agent cannot
+    # read images even when the underlying model supports them.
     if model_1_caps is not None:
-        vision_supported = "vision" in model_1_caps or bool(ai_config.get("vision_model_id"))
+        vision_supported = (
+            "vision" in model_1_caps
+            or "vision_understanding" in model_1_caps
+            or bool(ai_config.get("vision_model_id"))
+        )
     else:
         vision_supported = bool(ai_config.get("vision_model_id"))
 
