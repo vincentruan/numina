@@ -7,6 +7,7 @@
 
 import asyncio
 import contextlib
+import contextvars
 import json
 import logging
 import os
@@ -66,6 +67,37 @@ def _get_executor() -> ThreadPoolExecutor:
                     thread_name_prefix="deerflow",
                 )
     return _executor
+
+
+def _run_in_executor_with_context(
+    loop: asyncio.AbstractEventLoop,
+    executor: ThreadPoolExecutor,
+    func: Any,
+    *args: Any,
+) -> asyncio.Future:
+    """Submit ``func`` to ``executor`` preserving the caller's contextvars.
+
+    ``loop.run_in_executor`` does NOT propagate ``contextvars`` from the
+    calling task into the pool thread. Numina relies on two coroutine-scoped
+    ContextVars set in ``worker.run_agent`` before dispatch:
+
+    - ``sandbox_family_id`` (``set_family_sandbox_context``) —
+      ``NuminaLocalSandboxProvider._build_thread_path_mappings`` reads it to
+      scope sandbox paths under ``AGENT_DATA_DIR/{family_id}/sandboxes/...``.
+      Without propagation the provider sees ``family_id=None`` and returns
+      empty path mappings, so ``write_file`` finds no mapping for
+      ``/mnt/user-data/workspace`` and the file silently never lands on disk
+      (the tool still returns ``"OK"`` — fail-open). This is the F2 root cause.
+    - ``numina_active_skill_name`` (``set_active_skill``) — runtime tool
+      filtering via ``filter_tools_by_skill_allowed_tools``.
+
+    Capturing ``contextvars.copy_context()`` here and running ``func`` inside
+    it (the same mechanism ``asyncio.to_thread`` uses) makes both ContextVars
+    visible inside the deerflow stream thread, where LangGraph's ToolNode
+    invokes sandbox tools (``write_file``/``read_file``) synchronously.
+    """
+    ctx = contextvars.copy_context()
+    return loop.run_in_executor(executor, lambda: ctx.run(func, *args))
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -155,7 +187,8 @@ class DeerFlowAdapter:
             try:
                 loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(
+                    _run_in_executor_with_context(
+                        loop,
                         _get_executor(),
                         self._sync_dispatch,
                         skill_name,
@@ -294,7 +327,7 @@ class DeerFlowAdapter:
                 finally:
                     loop.call_soon_threadsafe(queue.put_nowait, None)
 
-            future = loop.run_in_executor(_get_executor(), _produce)
+            future = _run_in_executor_with_context(loop, _get_executor(), _produce)
             try:
                 while True:
                     item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
@@ -539,7 +572,7 @@ class DeerFlowAdapter:
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
-        future = loop.run_in_executor(_get_executor(), _produce)
+        future = _run_in_executor_with_context(loop, _get_executor(), _produce)
         try:
             while True:
                 item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
