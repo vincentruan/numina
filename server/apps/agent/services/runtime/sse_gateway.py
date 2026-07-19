@@ -173,9 +173,11 @@ async def start_run(
     #     Accepting it here would bypass that gating (R1 Finding 1).
     #     SKIPPED for internal callers (backend trigger via X-Agent-Token) —
     #     those have already passed the backend's owner/concurrency gate.
-    #   - "import-parse": REJECTED until U8 wires its owner/member auth
-    #     (lockstep with allowlist — no U2→U8 window where the value is
-    #     accepted without /import/parse-pdf's guards).
+    #   - "import-parse": REJECTED direct (U8) — the parse pipeline must be
+    #     entered via the backend /import/parse-pdf endpoint, which enforces
+    #     require_adult (owner/member) gating. SKIPPED for internal callers
+    #     (backend trigger via X-Agent-Token gateway) — those have already
+    #     passed the backend's auth gate (lockstep with allowlist, no window).
     #   - any other value: 400.
     body_meta = getattr(body, "metadata", None) or {}
     app = body_meta.get("app", "numina") if isinstance(body_meta, dict) else "numina"
@@ -185,13 +187,13 @@ async def start_run(
             app=app,
             reason="报告生成须经由后端触发端点，请勿直连 /runs/stream",
         )
-    if app == "import-parse":
+    if not internal and app == "import-parse":
         raise _app_rejected_error(
-            status_code=400,
+            status_code=409,
             app=app,
-            reason="import-parse 暂未启用，请使用 /import/parse-pdf",
+            reason="导入解析须经由后端 /import/parse-pdf 端点，请勿直连 /runs/stream",
         )
-    if app != "numina" and app != "asset-report":
+    if app != "numina" and app != "asset-report" and app != "import-parse":
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
     disconnect = (

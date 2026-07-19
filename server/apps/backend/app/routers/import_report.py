@@ -44,8 +44,12 @@ def _extract_pdf_text(data: bytes) -> str:
 
 
 async def _call_agent_parse(text: str, family_id: str) -> dict:
-    """调用 Agent 微服务解析文本，返回原始 dict。"""
-    agent_client = AgentClient(family_id, timeout=30.0)
+    """调用 Agent 微服务解析文本，返回原始 dict。
+
+    U8: agent /import/parse 现在内联运行 ``app="import-parse"`` stream_run agent
+    （单次 LLM 解析），不再是 dispatch 即返；timeout 提至 120s 以容纳 agent run。
+    """
+    agent_client = AgentClient(family_id, timeout=120.0)
     resp = await agent_client.post(
         "/import/parse",
         json={"text": text},

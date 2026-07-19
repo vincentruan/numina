@@ -6,13 +6,13 @@ Verifies the ``app`` field in ``body.metadata`` is validated server-side in
 - ``numina`` (default): accepted, dispatches to ``_run_numina_agent``.
 - ``asset-report``: rejected with 409 (must enter via trigger endpoint so
   require_owner + require_ai_enabled + concurrency gating apply — R1 Finding 1).
-- ``import-parse``: rejected with 400 (U8 will wire owner/member auth in
-  lockstep with widening the allowlist — no U2→U8 trust-boundary window).
+- ``import-parse``: rejected with 409 (U8: must enter via backend
+  /import/parse-pdf so require_adult gating applies — lockstep with allowlist).
 - unknown value: rejected with 400.
 
 Also verifies the worker dispatch entry point (``run_agent``) routes to the
-correct per-app runner and that the placeholder branches publish a 503-style
-error rather than crashing (Finding 15).
+correct per-app runner. U8 replaces the import-parse 503 placeholder with a
+real ``_run_import_parse_agent`` run (mirrors the asset-report pipeline test).
 """
 
 from __future__ import annotations
@@ -145,8 +145,9 @@ def test_app_asset_report_rejected_with_409(client):
     assert "asset-report" in response.json()["detail"]
 
 
-def test_app_import_parse_rejected_with_400(client):
-    """app='import-parse' rejected with 400 until U8 wires its auth (lockstep)."""
+def test_app_import_parse_rejected_direct_with_409(client):
+    """app='import-parse' rejected direct with 409 — must enter via backend
+    /import/parse-pdf (U8 wired owner/member auth lockstep with allowlist)."""
     response = client.post(
         "/api/threads/u2-import-parse/runs/stream",
         headers={"X-Family-Id": "family-1", "X-User-Id": "user-1"},
@@ -155,7 +156,7 @@ def test_app_import_parse_rejected_with_400(client):
             "metadata": {"app": "import-parse"},
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert "import-parse" in response.json()["detail"]
 
 
@@ -338,42 +339,88 @@ async def test_run_agent_asset_report_no_json_skips_step2_event():
     assert step2 == [], f"expected no report.step2_json for non-JSON output: {step2}"
 
 
-async def test_run_agent_dispatches_import_parse_to_503_placeholder():
-    """app='import-parse' → _run_import_parse_agent publishes a 503-style error."""
+async def test_run_agent_dispatches_import_parse_to_pipeline():
+    """app='import-parse' → _run_import_parse_agent runs the parse pipeline.
+
+    U8: the 503 placeholder is replaced by a real adapter stream. Stubs the
+    adapter to yield an AI message with a fenced JSON block (the parsed
+    holdings), then verifies the worker forwards frames, emits exactly one
+    ``import-parse.result`` custom event (worker-synthesized), and completes
+    with status='complete'.
+    """
     from apps.agent.services.runtime.worker import run_agent
 
-    record = await _make_record("import-parse")
-    bridge = _FakeBridge()
-    rm = _FakeRunManager()
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
+        yield ("messages", {"type": "ai", "content": '```json\n{"source": "华泰证券", "report_date": "2026-04-01", "items": [{"name": "贵州茅台", "asset_type": "financial", "category_hint": "股票", "current_value": 158000.0, "currency": "CNY", "quantity": 100}]}\n```', "tool_calls": None, "id": "m1"})
+        yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
 
-    await run_agent(
-        bridge=bridge,  # type: ignore[arg-type]
-        run_manager=rm,  # type: ignore[arg-type]
-        record=record,
-        family_id="family-1",
-        user_id="user-1",
-        thread_id="thread-ip",
-        graph_input=None,
-        config={},
-    )
+    stub_adapter = AsyncMock()
+    stub_adapter.typed_stream_dispatch = _stub_stream
 
+    mock_ai_config = {
+        "ai_enabled": True,
+        "providers": [{"is_active": True, "provider": "openai", "api_key": "k", "base_url": "u"}],
+    }
+    with (
+        patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
+        patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
+        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+    ):
+        record = await _make_record("import-parse")
+        bridge = _FakeBridge()
+        rm = _FakeRunManager()
+        await run_agent(
+            bridge=bridge,  # type: ignore[arg-type]
+            run_manager=rm,  # type: ignore[arg-type]
+            record=record,
+            family_id="family-1",
+            user_id="user-1",
+            thread_id="thread-ip",
+            graph_input=None,
+            config={},
+        )
+
+    # No error event (pipeline completed cleanly)
     error_events = [d for ev, d in bridge.published if ev == "error"]
-    assert error_events, f"no error event published: {bridge.published}"
-    assert "import-parse" in error_events[0]["message"]
-    assert "U8" in error_events[0]["message"]
+    assert not error_events, f"unexpected error event: {error_events}"
+
+    # U8: worker synthesizes import-parse.result with the parsed holdings.
+    result = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "import-parse.result"]
+    assert len(result) == 1, f"expected 1 import-parse.result, got {result}: {bridge.published}"
+    payload = result[0]["payload"]
+    assert payload["source"] == "华泰证券"
+    assert payload["items"][0]["name"] == "贵州茅台"
+    assert payload["items"][0]["current_value"] == 158000.0
+
+    # end frame status = complete
+    end_events = [d for ev, d in bridge.published if ev == "end" and d is not None]
+    assert end_events and end_events[0]["status"] == "complete", bridge.published
 
 
 async def test_run_agent_sets_family_sandbox_context_before_dispatch():
     """Resolved-3 blocker A: set_family_sandbox_context called with family_id."""
     from apps.agent.services.runtime import worker
 
-    record = await _make_record("import-parse")  # placeholder path, no real LLM
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
+        yield ("messages", {"type": "ai", "content": "ok", "tool_calls": None, "id": "m1"})
+        yield ("end", {})
+
+    stub_adapter = AsyncMock()
+    stub_adapter.typed_stream_dispatch = _stub_stream
+    mock_ai_config = {"ai_enabled": True, "providers": [{"is_active": True, "provider": "openai", "api_key": "k", "base_url": "u"}]}
+
+    record = await _make_record("import-parse")
     bridge = _FakeBridge()
     rm = _FakeRunManager()
 
-    with patch(
-        "apps.agent.services.runtime.worker.set_family_sandbox_context"
-    ) as mock_set:
+    with (
+        patch("apps.agent.services.runtime.worker.set_family_sandbox_context") as mock_set,
+        patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
+        patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
+        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+    ):
         await worker.run_agent(
             bridge=bridge,  # type: ignore[arg-type]
             run_manager=rm,  # type: ignore[arg-type]

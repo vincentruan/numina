@@ -2,7 +2,11 @@
 
 from sqlalchemy.orm import Session
 
-from apps.backend.app.constants.system_ids import ASSET_REPORT_AGENT_ID, NUMINA_AGENT_ID
+from apps.backend.app.constants.system_ids import (
+    ASSET_REPORT_AGENT_ID,
+    IMPORT_PARSE_AGENT_ID,
+    NUMINA_AGENT_ID,
+)
 from apps.backend.app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -148,6 +152,28 @@ _ASSET_REPORT_AGENT = {
     "display_order": 20,
 }
 
+# System agent dedicated to import-parse (金融文档持仓解析).
+# U8 (Resolved-10): import_parse is refactored from orchestrator.dispatch to a
+# 3rd stream_run agent. Statelessness is required — each run parses the
+# backend-injected document fresh; DeerMem would only pollute the parse with
+# stale holdings from prior runs. soul_md is a minimal persona (the real parse
+# contract lives in skills/builtin/public/import-parse/SKILL.md, loaded by the
+# harness at runtime); bootstrap just seeds the agent_type + memory_enabled.
+_IMPORT_PARSE_AGENT = {
+    "id": IMPORT_PARSE_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "import-parse",
+    "display_name": "导入解析",
+    "description": "金融文档持仓解析智能体。读取上传的金融文档文本，提取持仓/资产条目，输出结构化 JSON。",
+    "icon": "📄",
+    "color": "#3b82f6",
+    "soul_md": "你是金融文档持仓解析器，在单次响应内完成：读取文档文本 → 提取持仓/资产条目 → 输出结构化 JSON。",
+    "skills": ["import-parse"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 30,
+}
+
 
 def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     """Insert or update a builtin system agent from its spec dict."""
@@ -184,4 +210,5 @@ def bootstrap_agents(db: Session) -> None:
     """Ensure builtin agents exist and their soul matches code. Idempotent."""
     _upsert_builtin_agent(db, _NUMINA_AGENT)
     _upsert_builtin_agent(db, _ASSET_REPORT_AGENT)
+    _upsert_builtin_agent(db, _IMPORT_PARSE_AGENT)
     db.commit()

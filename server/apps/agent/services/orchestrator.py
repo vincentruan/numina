@@ -1,40 +1,17 @@
-"""Orchestrator — central dispatch pipeline for all agent capabilities.
+"""Provider selection + retry helpers shared across agent dispatch paths.
 
-Pipeline per request:
-  1. PolicyGuard.check()          — enforce admin switches
-  2. BackendClient.fetch_context() — pull family data
-  3. PIIRedactor.redact()          — strip PII before any LLM call
-  4. DeerFlowAdapter.dispatch()    — mandatory execution path
-  5. AuditLogger.log_call()        — structured audit entry
-
-DeerFlow failures are surfaced to the caller as structured error responses.
-There is no silent fallback to a direct LLM path.
+U8 (Resolved-10): the ``Orchestrator`` class and its ``dispatch`` method have
+been deleted — all AI capabilities now route through ``stream_run`` agents
+(numina / asset-report / import-parse) in ``runtime/worker.py`` or lightweight
+LLM single calls (suggest) in ``routers/suggest.py``. This module retains the
+module-level helpers that ``agent_dispatch.py`` still imports
+(``_fire_and_forget`` + ``_select_model``, with try/except fallback) plus the
+provider-selection / circuit-breaker helpers they share.
 """
 
 import asyncio
 import logging
 import random
-import time
-import uuid
-from collections.abc import AsyncGenerator
-
-from apps.agent.app.config import settings
-from apps.agent.core.backend_client import BackendClient
-from apps.agent.schemas.policy import CapabilityPolicy
-from apps.agent.schemas.response import AgentResponse
-from apps.agent.services.audit_logger import AuditEntry, audit_logger
-from apps.agent.services.chat_adapter import ChatAdapter
-from apps.agent.services.deerflow_adapter.adapter import (
-    DeerFlowTimeoutError,
-    StreamChunk,
-)
-from apps.agent.services.deerflow_adapter.adapter import (
-    create_family_adapter as _create_family_adapter,
-)
-from apps.agent.services.deerflow_adapter.skill_loader import skill_loader
-from apps.agent.services.output_mapper import output_mapper
-from apps.agent.services.pii_redactor import pii_redactor
-from apps.agent.services.policy_guard import policy_guard
 
 logger = logging.getLogger(__name__)
 
@@ -197,123 +174,12 @@ def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-ar
 _deerflow_adapter = None
 
 
-class Orchestrator:
-    """Routes a capability request through the full dispatch pipeline."""
+# U8 (Resolved-10): the ``Orchestrator`` class + ``dispatch`` method have been
+# deleted. All AI capabilities now route through either:
+#   - ``stream_run`` agent (numina / asset-report / import-parse) via the worker,
+#   - lightweight LLM single call (suggest) via ``_create_lightweight_llm``.
+# The module-level helpers below (``_select_model`` / ``_fire_and_forget`` /
+# ``_select_provider_with_retry`` / ``_is_transient_error`` /
+# ``_should_route_to_half_open``) are retained because ``agent_dispatch.py``
+# imports ``_fire_and_forget`` + ``_select_model`` (with try/except fallback).
 
-    def __init__(self) -> None:
-        self._chat_adapter = ChatAdapter(
-            backend_base_url=settings.BACKEND_BASE_URL,
-            internal_token=settings.AGENT_INTERNAL_TOKEN,
-        )
-
-    async def dispatch(
-        self,
-        capability: str,
-        family_id: str,
-        user_id: str | None = None,
-        free_text: str | None = None,
-        thread_id: str | None = None,
-    ) -> AgentResponse:
-        """Run the full pipeline. Never raises — always returns AgentResponse."""
-        audit_id = str(uuid.uuid4())
-        effective_thread_id = thread_id if thread_id is not None else audit_id
-        start_ms = int(time.monotonic() * 1000)
-        error_type: str | None = None
-        deerflow_attempted = False
-        response: AgentResponse | None = None
-
-        try:
-            # ── 1. Fetch AI config & build policy ──────────────────────────
-            client = BackendClient(family_id=family_id)
-            try:
-                ai_config = await client.get_family_ai_config()
-            except Exception as e:
-                logger.error("[orchestrator] fetch ai_config failed family=%s: %s", family_id, e)
-                error_type = type(e).__name__
-                return self._error_response(capability, audit_id, "无法获取 AI 配置，请稍后重试")
-
-            policy = CapabilityPolicy(
-                ai_enabled=ai_config.get("ai_enabled", False),
-                allowed_capabilities=ai_config.get("allowed_capabilities", []),
-                admin_only_capabilities=ai_config.get("admin_only_capabilities", []),
-                member_role=ai_config.get("member_role", "member"),
-            )
-
-            # ── 2. Policy check ────────────────────────────────────────────
-            decision = policy_guard.check(policy, capability)
-            if not decision.allowed:
-                error_type = "PolicyDenied"
-                return AgentResponse(
-                    capability=capability,
-                    summary=decision.reason,
-                    fallback_used=False,
-                    audit_id=audit_id,
-                )
-
-            # ── 3. Fetch family context ────────────────────────────────────
-            # U6: suggest 重构为轻量 LLM 单次调用（routers/suggest.py），不再走
-            # orchestrator.dispatch；此处仅 import_parse（U8 待迁）走通用 context 构造。
-            raw_context = await self._build_context(client, family_id, free_text)
-
-            # ── 4. PII redaction ───────────────────────────────────────────
-            redacted = pii_redactor.redact(raw_context)
-
-            # ── 5. DeerFlow dispatch ───────────────────────────────────────
-            deerflow_attempted = True
-            try:
-                providers = ai_config.get("providers", [])
-                if not providers:
-                    raise ValueError("No AI providers configured for this family")
-                selected_provider, _, _ = _select_model(providers, "text")
-                family_adapter = _deerflow_adapter or _create_family_adapter(
-                    family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 240)
-                )
-                raw_output = await family_adapter.dispatch(
-                    skill_name=capability,
-                    context=redacted,
-                    thread_id=effective_thread_id,
-                )
-                response = output_mapper.from_deerflow(raw_output, capability, audit_id)
-            except Exception as e:
-                logger.error("[orchestrator] DeerFlow failed capability=%s: %s", capability, e)
-                error_type = type(e).__name__
-                response = self._error_response(capability, audit_id, "AI 服务暂时不可用，请稍后重试")
-
-        except Exception as e:
-            logger.error("[orchestrator] unhandled error capability=%s: %s", capability, e)
-            error_type = type(e).__name__
-            response = self._error_response(capability, audit_id)
-
-        finally:
-            duration_ms = int(time.monotonic() * 1000) - start_ms
-            if response is None:
-                response = self._error_response(capability, audit_id)
-            raw_summary = response.summary[:200] if response.summary else None
-            if raw_summary:
-                raw_summary = pii_redactor.redact_text(raw_summary)[0]
-            audit_logger.log_call(AuditEntry(
-                family_id=family_id,
-                capability=capability,
-                success=error_type is None,
-                audit_id=audit_id,
-                user_id=user_id,
-                skill_triggered=capability if error_type is None else None,
-                fallback_used=False,
-                deerflow_attempted=deerflow_attempted,
-                duration_ms=duration_ms,
-                error_type=error_type,
-                output_summary=raw_summary,
-            ))
-
-        return response
-
-    def _error_response(self, capability: str, audit_id: str, summary: str = "服务暂时不可用，请稍后重试") -> AgentResponse:
-        """Return a fallback AgentResponse for error cases."""
-        return AgentResponse(
-            capability=capability,
-            summary=summary,
-            fallback_used=True,
-            audit_id=audit_id,
-        )
-
-orchestrator = Orchestrator()

@@ -51,7 +51,8 @@ BUILTIN_CAPABILITIES: list[str] = []
 # - ``asset-report`` 是系统内置固定流程（三步流水线，KTD-8），有独立 skill 目录
 #   放 prompt 但用户不可开关、不可创建同名 custom skill。
 # U5/KTD-9: ``time_machine`` 已移除（非 AI skill，纯计算应用，从 skill 系统解耦）。
-RESERVED_NAMES = ["chat", "asset-report"]
+# U8: ``import-parse`` 加入（系统内置固定流程：金融文档持仓解析，KTD-8）。
+RESERVED_NAMES = ["chat", "asset-report", "import-parse"]
 
 # Internal-only skills excluded from user-facing catalog and creation.
 INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer"}
