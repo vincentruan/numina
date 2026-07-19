@@ -63,11 +63,47 @@ def _track_task(task: asyncio.Task) -> None:
     task.add_done_callback(lambda t: _background_tasks.discard(t))
 
 
+def _deerflow_default_workspace_md(
+    thread_id: str, user_id: str | None, filename: str
+) -> Path | None:
+    """Resolve the DeerFlow default host sandbox workspace path for a filename.
+
+    When the LLM passes write_file the host path it learned from a prior
+    read_file (rather than the container path /mnt/user-data/workspace/...),
+    ``LocalSandbox._resolve_path`` reverse-resolves the local_path match back
+    to DeerFlow's default host layout:
+    ``{host_base}/users/{effective_user}/threads/{thread_id}/user-data/workspace/<file>``.
+
+    Returns the resolved Path, or None if DeerFlow's paths API is unavailable.
+
+    ``effective_user`` is DeerFlow's own resolution (``get_effective_user_id``,
+    falling back to ``"default"``) — NOT Numina's ``user_id`` arg, because
+    Numina does not set DeerFlow's ``_current_user`` ContextVar (Numina
+    isolates by family_id via a separate ContextVar). The ``user_id`` arg is
+    accepted for symmetry but the effective DeerFlow user is always queried
+    fresh so it matches whatever ``write_file`` actually used at runtime.
+    """
+    try:
+        from deerflow.config.paths import get_paths
+        from deerflow.runtime.user_context import get_effective_user_id
+    except Exception:
+        return None
+    try:
+        # user_id arg is intentionally not used for path resolution — see above.
+        _ = user_id
+        effective_user = get_effective_user_id()
+        host_workspace = get_paths().host_sandbox_work_dir(thread_id, user_id=effective_user)
+        return Path(host_workspace) / filename
+    except Exception:
+        return None
+
+
 def _copy_asset_report_markdown(
     *,
     family_id: str,
     thread_id: str,
     run_id: str,
+    user_id: str | None,
     ai_text: str,
     write_file_paths: list[str],
 ) -> str | None:
@@ -117,15 +153,34 @@ def _copy_asset_report_markdown(
         )
         return None
 
-    # Source: per-thread sandbox workspace (NuminaLocalSandboxProvider layout).
-    sandbox_workspace = (
+    # Source: locate the sandbox markdown the LLM wrote. e2e showed write_file
+    # lands the file at one of two possible host paths depending on which path
+    # form the LLM passed:
+    #   1. Numina family-scoped layout (when LLM passes the container path
+    #      /mnt/user-data/workspace/<file>, NuminaLocalSandboxProvider maps it
+    #      here): AGENT_DATA_DIR/{family_id}/sandboxes/{thread_id}/workspace/<file>
+    #   2. DeerFlow default layout (when LLM passes the host path it learned
+    #      from a prior read_file, LocalSandbox._resolve_path reverse-resolves
+    #      the local_path match back to this host path):
+    #      {deerflow_host_base}/users/{user_id}/threads/{thread_id}/user-data/workspace/<file>
+    # write_file tool_call args.path is often empty in the SSE messages event
+    # (LangGraph fills positional args at execution time), so we cannot rely on
+    # write_file_paths alone — search both candidate roots by declared filename.
+    declared_filename_str = declared_filename
+    numina_workspace = (
         Path(settings.AGENT_DATA_DIR) / family_id / "sandboxes" / thread_id / "workspace"
     )
-    source_path = sandbox_workspace / declared_filename
+    source_path = numina_workspace / declared_filename_str
     if not source_path.is_file():
+        # Fallback: DeerFlow default host sandbox layout. user_id defaults to
+        # "default" when no effective user is set (resolve_runtime_user_id).
+        source_path = _deerflow_default_workspace_md(thread_id, user_id, declared_filename_str)
+    if source_path is None or not source_path.is_file():
         logger.warning(
-            "[_run_asset_report_pipeline] sandbox markdown not found at %s, "
-            "markdown_file_path not persisted run=%s", source_path, run_id,
+            "[_run_asset_report_pipeline] sandbox markdown not found under "
+            "%s or DeerFlow default layout, markdown_file_path not persisted "
+            "run=%s (declared_filename=%s)",
+            numina_workspace, run_id, declared_filename_str,
         )
         return None
 
@@ -523,6 +578,7 @@ async def _run_asset_report_pipeline(
                     family_id=family_id,
                     thread_id=thread_id,
                     run_id=run_id,
+                    user_id=user_id,
                     ai_text=ai_text,
                     write_file_paths=write_file_paths,
                 )
