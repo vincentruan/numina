@@ -4,6 +4,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.liability import LiabilityCreate, LiabilityUpdate
+from apps.backend.app.services.finance_coach_cache import invalidate_capability
 
 
 def list_liabilities(db: Session, user: User, is_active: bool | None = None) -> list[Liability]:
@@ -41,6 +42,7 @@ def create_liability(db: Session, user: User, req: LiabilityCreate) -> Liability
         notes=req.notes,
     )
     db.add(liability)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(liability)
     return liability
@@ -51,6 +53,7 @@ def update_liability(db: Session, user: User, liability_id: str, req: LiabilityU
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(liability, key, value)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(liability)
     return liability
@@ -59,6 +62,7 @@ def update_liability(db: Session, user: User, liability_id: str, req: LiabilityU
 def delete_liability(db: Session, user: User, liability_id: str) -> None:
     liability = get_liability(db, user, liability_id)
     db.delete(liability)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
 
 
@@ -70,6 +74,7 @@ def record_payment(db: Session, user: User, liability_id: str, amount: float) ->
         liability.is_active = False
     record = PaymentRecord(liability_id=liability_id, amount=amount)
     db.add(record)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(liability)
     return liability

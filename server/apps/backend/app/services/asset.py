@@ -15,6 +15,7 @@ from apps.backend.app.schemas.asset import (
     BatchItemError,
     BatchOperationResponse,
 )
+from apps.backend.app.services.finance_coach_cache import invalidate_capability
 
 
 def list_assets(
@@ -120,6 +121,7 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
         tags = db.query(Tag).filter(Tag.id.in_(req.tag_ids), Tag.family_id == user.family_id).all()
         asset.tags = tags
     db.add(asset)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
@@ -142,6 +144,7 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
         tags = db.query(Tag).filter(Tag.id.in_(tag_ids), Tag.family_id == user.family_id).all()
         asset.tags = tags
 
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
@@ -155,6 +158,7 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
 def archive_asset(db: Session, user: User, asset_id: str) -> Asset:
     asset = get_asset(db, user, asset_id)
     asset.is_archived = True
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
@@ -166,6 +170,7 @@ def update_asset_value(db: Session, user: User, asset_id: str, value: float) -> 
     asset.current_value = value
     valuation = AssetValuation(asset_id=asset.id, value=value)
     db.add(valuation)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
@@ -199,6 +204,7 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     )
     db.add(event)
 
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
 
@@ -228,6 +234,7 @@ def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
     )
     db.add(event)
 
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
@@ -238,6 +245,7 @@ def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
     if asset.status not in ('retired', 'idle'):
         raise AppError(ErrorCode.ASSET_FORBIDDEN)
     asset.status = 'in_use'
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset

@@ -7,6 +7,7 @@ from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
 from apps.backend.app.schemas.wish import WishCreate, WishRealizeRequest, WishUpdate
+from apps.backend.app.services.finance_coach_cache import invalidate_capability
 
 
 def list_wishes(db: Session, user: User, status_filter: str | None = None) -> list[Wish]:
@@ -44,6 +45,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         converts_to_asset=req.converts_to_asset,
     )
     db.add(wish)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(wish)
     return wish
@@ -57,6 +59,7 @@ def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(wish, key, value)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(wish)
     return wish
@@ -67,6 +70,7 @@ def delete_wish(db: Session, user: User, wish_id: str) -> None:
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
 
 
@@ -112,6 +116,7 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
         wish.fulfilled_at = datetime.now(UTC)
         asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
+        invalidate_capability(db, user.family_id, "finance_coach")
         db.commit()
         db.refresh(asset)
         return asset
