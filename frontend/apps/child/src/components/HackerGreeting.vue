@@ -30,7 +30,15 @@ const props = defineProps<{
 const { tm, t } = useI18n()
 const reducedMotion = useReducedMotion()
 
-const HOLD_MS = 4000
+// Hold each phrase for a randomized 7–9s window. A fixed 4s cadence cut low-age
+// readers off mid-sentence; the jitter also keeps the rotation from feeling
+// mechanical. Deterministic pseudo-random (no Math.random) so tests stay
+// reproducible — the per-advance index makes each window differ.
+function holdMs(): number {
+  const idx = phraseIndex
+  const span = 9000 - 7000 // 2000ms window
+  return 7000 + ((idx * 7 + 3) % span)
+}
 
 // Raw i18n phrase list (array of strings with {name}/{balance} placeholders).
 // Using tm() so the list is reactive to locale switches.
@@ -78,14 +86,15 @@ function advance() {
 // drive rotation — we fall back to a plain interval there.
 watch(settled, (isSettled) => {
   if (!isSettled || reducedMotion.value) return
-  holdTimer = setTimeout(advance, HOLD_MS)
+  holdTimer = setTimeout(advance, holdMs())
 })
 
 // Reduced-motion rotation: interval-based, decoupled from settled transitions.
+// setInterval takes a fixed delay, so use the midpoint of the 7–9s window.
 let reducedInterval: ReturnType<typeof setInterval> | null = null
 function startReducedRotation() {
   if (reducedInterval) return
-  reducedInterval = setInterval(advance, HOLD_MS)
+  reducedInterval = setInterval(advance, 8000)
 }
 function stopReducedRotation() {
   if (reducedInterval) {

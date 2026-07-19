@@ -22,7 +22,12 @@
         />
         <div class="hero-body">
           <div class="hero-coins">
-            <CoinDisplay :amount="balance" :icon-size="28" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+            <div class="hero-coin-total">
+              <span class="hero-coin-total-num">{{ balance }}</span>
+              <span class="hero-coin-total-star">⭐</span>
+            </div>
+            <div class="hero-coin-label">{{ t('home.coinTotalLabel') }}</div>
+            <CoinDisplay :amount="balance" :icon-size="22" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
           </div>
           <ProgressRing
             v-if="!loadingChores && todayChores.length > 0"
@@ -77,16 +82,25 @@
             <template v-else-if="c.status === 'available'">
               <button
                 class="btn-complete"
+                :class="{ 'is-done-flash': justCompletedId === c.id }"
                 :disabled="submittingId === c.id"
                 @click="complete(c.id)"
-              >{{ t('chore.complete') }}</button>
+              >
+                <span v-if="justCompletedId === c.id" class="done-check">✓</span>
+                <span v-else>{{ t('chore.complete') }}</span>
+              </button>
               <button
-                class="btn-abandon"
+                class="btn-abandon-link"
                 :disabled="submittingId === c.id || claimingId === c.id || abandoningId === c.id"
                 @click="abandon(c)"
-              >{{ t('chore.abandon') }}</button>
+              >{{ t('chore.abandonLink') }}</button>
             </template>
-            <span v-else class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
+            <span v-else class="chore-status-badge" :class="c.status">
+              <van-icon v-if="c.status === 'approved'" name="success" size="14" />
+              <van-icon v-else-if="c.status === 'rejected'" name="warning-o" size="14" />
+              <van-icon v-else name="clock-o" size="14" />
+              <span class="chore-status-text">{{ statusLabel(c.status) }}</span>
+            </span>
           </div>
           <p
             v-if="c.is_pool_unclaimed && claimDisabledReason(c)"
@@ -259,6 +273,7 @@ const totalChoreCoins = computed(() => todayChores.value.reduce((sum, c) => sum 
 const submittingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
 const abandoningId = ref<string | null>(null)
+const justCompletedId = ref<string | null>(null)
 const abandonSheetVisible = ref(false)
 const abandonTarget = ref<ChoreInstance | null>(null)
 const topWish = ref<ChildWish | null>(null)
@@ -329,6 +344,11 @@ async function complete(instanceId: string) {
     if (idx !== -1) todayChores.value[idx] = updated
     // Haptic feedback after successful completion
     tryVibrate(MOTION.haptic.rewardPulse)
+    // Instant visual reward: flash a checkmark on the completing button briefly
+    justCompletedId.value = instanceId
+    setTimeout(() => {
+      if (justCompletedId.value === instanceId) justCompletedId.value = null
+    }, 900)
     // Wish progress bump toast if active wish exists
     if (topWish.value) {
       const chore = todayChores.value.find(c => c.id === instanceId)
@@ -472,6 +492,22 @@ onMounted(load)
   --coin-text-silver: var(--color-ink);
   --coin-text-copper: var(--color-ink);
 }
+/* Dark-mode coin legibility: metallic coin SVGs (esp. copper #B87333) lose
+   separation against the deep teal surface. A soft per-row capsule + drop
+   shadow lifts the coins off the background without recoloring the metal. */
+[data-theme="dark"] .hero-coins :deep(.coin-display) {
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .hero-coins :deep(svg) {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+[data-theme="dark"] .hero-coin-total-num {
+  /* Brighten the ochre total against dark teal so the big number stays punchy */
+  color: var(--color-coin-gold-text);
+}
 .hero-greeting {
   text-align: center;
 }
@@ -490,6 +526,34 @@ onMounted(load)
 .hero-coins {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.hero-coin-total {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: Inter, sans-serif;
+  line-height: 1;
+}
+.hero-coin-total-num {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--color-brand-ochre);
+  font-variant-numeric: tabular-nums;
+}
+.hero-coin-total-star {
+  font-size: 20px;
+}
+.hero-coin-label {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--color-muted);
+  margin-bottom: 4px;
 }
 .hero-coins :deep(.coin-display) {
   display: grid;
@@ -614,33 +678,55 @@ onMounted(load)
   font-weight: 600;
   cursor: pointer;
   height: 36px;
+  min-width: 64px;
   white-space: nowrap;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: opacity 0.15s, transform 0.1s, background 0.2s;
 }
 .btn-complete:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-complete:active:not(:disabled) { transform: scale(0.96); }
 
-/* Abandon button */
-.btn-abandon {
-  background: var(--color-surface-soft);
-  color: var(--color-muted);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
-  padding: 0 10px;
+/* Instant reward flash: button morphs to a green check + bounce on completion */
+.btn-complete.is-done-flash {
+  background: var(--color-brand-mint);
+  animation: done-pop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.btn-complete.is-done-flash.reduced-motion,
+.btn-complete.is-done-flash:disabled { animation: none; }
+.done-check {
+  display: inline-block;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+@keyframes done-pop {
+  0% { transform: scale(0.96); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* Abandon — demoted to a secondary text link, visually subordinate to Complete */
+.btn-abandon-link {
+  background: none;
+  border: none;
+  color: var(--color-muted-soft);
   font-family: Inter, sans-serif;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  height: 36px;
-  white-space: nowrap;
-  transition: opacity 0.15s, transform 0.1s;
-  margin-left: 8px;
+  padding: 6px 4px;
+  margin-left: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
 }
-.btn-abandon:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-abandon:active:not(:disabled) { transform: scale(0.96); }
+.btn-abandon-link:disabled { opacity: 0.4; cursor: not-allowed; text-decoration: none; }
+.btn-abandon-link:active:not(:disabled) { color: var(--color-muted); }
 
-/* Status badge — pill with color per state */
+/* Status badge — pill with Vant icon + label, color per state */
 .chore-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: Inter, sans-serif;
   font-size: 12px;
   font-weight: 500;
@@ -649,11 +735,6 @@ onMounted(load)
   border-radius: var(--radius-pill);
   background: var(--color-surface-card);
   color: var(--color-muted);
-}
-.chore-status-badge.available {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-weight: 600;
 }
 .chore-status-badge.approved {
   background: var(--color-brand-mint);

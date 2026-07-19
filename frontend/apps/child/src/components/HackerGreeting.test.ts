@@ -101,8 +101,9 @@ describe('HackerGreeting', () => {
     flushRaf(200)
     await flushPromises()
     expect(wrapper.find('.hg-text').text()).toBe('你好，小明！已加载 42 颗星 ⭐')
-    // Advance the hold timer scheduled by the settled-watch.
-    vi.advanceTimersByTime(4000)
+    // Advance the hold timer scheduled by the settled-watch. The hold window is
+    // now a randomized 7–9s; stepping past 9s covers any value in range.
+    vi.advanceTimersByTime(9500)
     await flushPromises()
     // advance() called setTarget → new rAF queued; decode the second phrase.
     flushRaf(200)

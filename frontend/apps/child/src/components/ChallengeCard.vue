@@ -13,7 +13,7 @@
     <div v-else class="challenge-list">
       <div v-for="ch in challenges" :key="ch.id" class="challenge-card" :class="ch.status">
         <div class="challenge-header">
-          <span class="challenge-icon">{{ typeIcon(ch.target_type) }}</span>
+          <span class="challenge-icon"><van-icon :name="typeIcon(ch.target_type)" size="22" /></span>
           <div class="challenge-info">
             <p class="challenge-type">{{ typeLabel(ch.target_type) }}</p>
             <p v-if="ch.message" class="challenge-message">{{ ch.message }}</p>
@@ -68,11 +68,11 @@ async function load() {
 
 function typeIcon(type: ChildChallenge['target_type']): string {
   switch (type) {
-    case 'task_count': return '📋'
-    case 'streak_length': return '🔥'
-    case 'specific_chore': return '✅'
-    case 'star_earnings': return '⭐'
-    default: return '🎯'
+    case 'task_count': return 'todo-list-o'
+    case 'streak_length': return 'fire-o'
+    case 'specific_chore': return 'checked'
+    case 'star_earnings': return 'star-o'
+    default: return 'aim'
   }
 }
 
@@ -171,7 +171,13 @@ defineExpose({ load })
 }
 
 .challenge-icon {
-  font-size: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--color-brand-ochre);
 }
 
 .challenge-info {
