@@ -178,6 +178,11 @@ async def start_run(
     #     require_adult (owner/member) gating. SKIPPED for internal callers
     #     (backend trigger via X-Agent-Token gateway) — those have already
     #     passed the backend's auth gate (lockstep with allowlist, no window).
+    #   - "finance-coach": REJECTED direct (Plan A) — the advice pipeline must
+    #     be entered via the backend /ai/finance-coach/generate endpoint, which
+    #     enforces require_ai_enabled + require_adult + per-family concurrency
+    #     gating. SKIPPED for internal callers (backend trigger via X-Agent-Token
+    #     gateway) — those have already passed the backend's auth gate.
     #   - any other value: 400.
     body_meta = getattr(body, "metadata", None) or {}
     app = body_meta.get("app", "numina") if isinstance(body_meta, dict) else "numina"
@@ -193,7 +198,13 @@ async def start_run(
             app=app,
             reason="导入解析须经由后端 /import/parse-pdf 端点，请勿直连 /runs/stream",
         )
-    if app != "numina" and app != "asset-report" and app != "import-parse":
+    if not internal and app == "finance-coach":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="财务教练建议须经由后端 /ai/finance-coach/generate 端点，请勿直连 /runs/stream",
+        )
+    if app != "numina" and app != "asset-report" and app != "import-parse" and app != "finance-coach":
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
     disconnect = (
