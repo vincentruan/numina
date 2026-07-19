@@ -1,8 +1,6 @@
 <template>
   <p class="hacker-greeting" :class="{ 'is-scrambling': !settled }">
-    <span class="hg-prompt">&gt;&nbsp;</span>
     <span class="hg-text">{{ display }}</span>
-    <span class="hg-cursor" :class="{ blink: settled }">▮</span>
   </p>
 </template>
 
@@ -140,48 +138,52 @@ onUnmounted(() => {
 <style scoped>
 .hacker-greeting {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: baseline;
+  gap: 4px;
   font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, Inter, monospace;
-  font-size: 13px;
-  font-weight: 500;
-  margin: 0 0 6px;
-  min-height: 18px;
-  letter-spacing: 0.2px;
-  opacity: 0.9;
+  font-size: clamp(15px, 4.5vw, 19px);
+  font-weight: 600;
+  margin: 0 0 10px;
+  min-height: 22px;
+  letter-spacing: 0.1px;
   /* Truncate very long greetings gracefully on narrow screens */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.hg-prompt {
-  opacity: 0.6;
-  flex-shrink: 0;
 }
 .hg-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Multi-color gradient sweep across the greeting text —
+     mirrors the main app 数鸣智能体 shimmer effect (background-clip: text). */
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-pink) 0%,
+    var(--color-brand-lavender) 25%,
+    var(--color-brand-peach) 50%,
+    var(--color-brand-mint) 75%,
+    var(--color-brand-pink) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: hg-shimmer 4s ease-in-out infinite;
 }
-.hg-cursor {
-  flex-shrink: 0;
-  opacity: 0.85;
-  font-weight: 700;
-}
-.hg-cursor.blink {
-  animation: hg-blink 1s steps(2, start) infinite;
-}
-.hacker-greeting.is-scrambling .hg-cursor {
+/* While scrambling, freeze the gradient so the glyph noise reads cleanly. */
+.hacker-greeting.is-scrambling .hg-text {
   animation: none;
-  opacity: 0.95;
 }
 @media (prefers-reduced-motion: reduce) {
-  .hg-cursor.blink { animation: none; }
-  .hacker-greeting.is-scrambling .hg-cursor { animation: none; }
+  .hg-text { animation: none; }
+  .hacker-greeting.is-scrambling .hg-text { animation: none; }
 }
-@keyframes hg-blink {
-  0%, 50% { opacity: 0.95; }
-  50.01%, 100% { opacity: 0; }
+@keyframes hg-shimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 </style>

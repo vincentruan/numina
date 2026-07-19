@@ -13,24 +13,27 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-      <!-- Balance hero — progress ring card -->
+      <!-- Balance hero — greeting on top, coins + progress ring side by side -->
       <div class="hero-card">
         <HackerGreeting
           :name="childAuthStore.childUser?.display_name ?? ''"
           :balance="balance"
           class="hero-greeting"
         />
-        <p class="hero-label">{{ t('home.myStars') }}</p>
-        <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-        <ProgressRing
-          v-if="!loadingChores && todayChores.length > 0"
-          :completed="completedChores"
-          :pending="pendingChores"
-          :total="todayChores.length"
-          :total-coins="totalChoreCoins"
-          :loading="loadingChores"
-          class="hero-ring"
-        />
+        <div class="hero-body">
+          <div class="hero-coins">
+            <CoinDisplay :amount="balance" :icon-size="28" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+          </div>
+          <ProgressRing
+            v-if="!loadingChores && todayChores.length > 0"
+            :completed="completedChores"
+            :pending="pendingChores"
+            :total="todayChores.length"
+            :total-coins="totalChoreCoins"
+            :loading="loadingChores"
+            class="hero-ring"
+          />
+        </div>
       </div>
 
     <!-- Today's chores -->
@@ -447,43 +450,70 @@ onMounted(load)
   min-height: 100vh;
 }
 
-/* ── Hero card — ochre feature card ── */
+/* ── Hero card — soft neutral feature card ── */
 .hero-card {
-  background: var(--color-brand-ochre);
+  background: var(--color-surface-soft);
   border-radius: var(--radius-xl);
-  padding: 32px 20px;
-  text-align: center;
+  padding: 28px 20px 24px;
   color: var(--color-ink);
   margin-bottom: var(--space-lg);
+  border: 1px solid var(--color-hairline-soft);
   --coin-text-gold:   var(--color-ink);
   --coin-text-silver: var(--color-ink);
   --coin-text-copper: var(--color-ink);
 }
 [data-theme="dark"] .hero-card {
   background:
-    linear-gradient(135deg, rgba(var(--color-brand-ochre-rgb), 0.16), rgba(var(--color-brand-ochre-rgb), 0.08)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
     var(--color-surface-card);
-  color: var(--color-on-feature-ochre);
-  --coin-text-gold:   var(--color-on-feature-ochre);
-  --coin-text-silver: var(--color-on-feature-ochre);
-  --coin-text-copper: var(--color-on-feature-ochre);
-}
-.hero-label {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0 0 8px;
-  opacity: 0.75;
+  color: var(--color-ink);
+  border-color: var(--color-hairline);
+  --coin-text-gold:   var(--color-ink);
+  --coin-text-silver: var(--color-ink);
+  --coin-text-copper: var(--color-ink);
 }
 .hero-greeting {
-  margin-bottom: 4px;
+  text-align: center;
 }
-.hero-balance {
-  font-size: 32px;
-  font-weight: 600;
+
+/* ── Hero body: coins (left) + progress ring (right) side by side ── */
+.hero-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
+
+/* Coin stack: three coin tiers arranged vertically.
+   CoinDisplay renders icon+count pairs in DOM order; CSS grid pairs each
+   icon with its count on a row, then stacks the three rows vertically. */
+.hero-coins {
+  flex: 1;
+  min-width: 0;
+}
+.hero-coins :deep(.coin-display) {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: start;
+  column-gap: 6px;
+  row-gap: 6px;
+}
+.hero-coins :deep(.coin-count) {
+  font-size: 18px;
+  margin-right: 0;
+}
+
+/* When there are no tasks, the progress ring is absent — center the coins. */
+.hero-body:has(.hero-ring) .hero-coins {
+  flex: 1;
+}
+.hero-body:not(:has(.hero-ring)) {
+  justify-content: center;
+}
+
 .hero-ring {
-  margin-top: 20px;
+  flex-shrink: 0;
 }
 
 /* ── Sections ── */

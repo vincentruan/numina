@@ -126,7 +126,6 @@ export default {
     emptyState: 'No challenges right now',
   },
   home: {
-    myStars: 'My Star Coins ⭐',
     greetingPhrases: [
       'Hello, {name}! {balance} ⭐ loaded',
       'System ready // {name}’s vault: {balance} ⭐',

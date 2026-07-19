@@ -127,7 +127,6 @@ export default {
     emptyState: '暂无挑战任务',
   },
   home: {
-    myStars: '我的星星币 ⭐',
     greetingPhrases: [
       '你好，{name}！已加载 {balance} 颗星 ⭐',
       '系统就绪 // {name} 的星库：{balance} ⭐',

@@ -126,16 +126,4 @@ describe('HackerGreeting', () => {
     expect(rafQueue.length).toBe(0)
     wrapper.unmount()
   })
-
-  it('renders a terminal prompt prefix and cursor', async () => {
-    const { default: HackerGreeting } = await import('./HackerGreeting.vue')
-    const wrapper = mount(HackerGreeting, {
-      props: { name: '小明', balance: 1 },
-      global: { plugins: [i18n] },
-    })
-    await flushPromises()
-    expect(wrapper.find('.hg-prompt').exists()).toBe(true)
-    expect(wrapper.find('.hg-cursor').exists()).toBe(true)
-    wrapper.unmount()
-  })
 })
