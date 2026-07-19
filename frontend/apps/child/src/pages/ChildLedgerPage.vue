@@ -67,14 +67,23 @@
           :label="t('ledger.amountLabel')"
           :placeholder="t('ledger.amountPlaceholder')"
           class="sheet-field"
+          :class="{ 'field-error': giftExceedsBalance }"
         />
+        <p v-if="giftAmountStr" class="gift-preview" :class="{ 'is-error': giftExceedsBalance }">
+          <template v-if="giftExceedsBalance">
+            {{ t('ledger.giftInsufficient', { max: balance }) }}
+          </template>
+          <template v-else>
+            {{ t('ledger.giftRemaining', { remaining: giftRemaining }) }}
+          </template>
+        </p>
         <van-button
           block
           type="primary"
-          :disabled="!selectedSiblingId || !giftAmountStr"
+          :disabled="!giftCanSubmit"
           class="btn-confirm"
           @click="doGift"
-        >{{ t('ledger.confirmGift') }}</van-button>
+        >{{ giftCanSubmit ? t('ledger.confirmGiftWithRemaining', { remaining: giftRemaining }) : t('ledger.confirmGift') }}</van-button>
       </div>
     </van-popup>
     </template>
@@ -114,6 +123,18 @@ const giftAmountStr = ref('')
 
 const hasSiblings = computed(() => siblings.value.length > 0)
 
+// Gift preview: show "after this transfer you'll have N ⭐" so the
+// consequence is visible before the irreversible submit, and block amounts
+// that exceed the current balance.
+const giftAmount = computed(() => parseInt(giftAmountStr.value) || 0)
+const giftExceedsBalance = computed(() => giftAmount.value > balance.value)
+const giftRemaining = computed(() => Math.max(0, balance.value - giftAmount.value))
+const giftCanSubmit = computed(() =>
+  !!selectedSiblingId.value &&
+  giftAmount.value > 0 &&
+  !giftExceedsBalance.value,
+)
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -136,8 +157,8 @@ async function onRefresh() {
 }
 
 async function doGift() {
-  const amount = parseInt(giftAmountStr.value)
-  if (!selectedSiblingId.value || !amount || amount <= 0) return
+  if (!giftCanSubmit.value) return
+  const amount = giftAmount.value
   try {
     const res = await giftCoins(selectedSiblingId.value, amount, '🎁')
     showToast(t('toast.childGrantedStars', { amount: res.sent_amount, name: res.to_display_name }))
@@ -287,6 +308,20 @@ onMounted(load)
   margin-top: 16px;
   border-radius: var(--radius-md);
   background: var(--color-surface-soft);
+}
+.sheet-field.field-error :deep(.van-field__control) {
+  color: var(--color-brand-coral);
+}
+.gift-preview {
+  margin: 8px 4px 0;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-brand-mint);
+  line-height: 1.4;
+}
+.gift-preview.is-error {
+  color: var(--color-brand-coral);
 }
 .btn-confirm {
   margin-top: 16px;

@@ -169,6 +169,9 @@ export default {
     amountLabel: 'Amount',
     amountPlaceholder: 'Enter amount',
     confirmGift: 'Confirm Gift',
+    confirmGiftWithRemaining: 'Confirm ({remaining} ⭐ left after)',
+    giftRemaining: 'You\'ll have {remaining} ⭐ left after',
+    giftInsufficient: 'Not enough stars — max {max} ⭐',
     txType: {
       parent_grant: 'Allowance',
       wish_spend: 'Wish Redeemed',

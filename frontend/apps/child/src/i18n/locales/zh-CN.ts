@@ -170,6 +170,9 @@ export default {
     amountLabel: '数量',
     amountPlaceholder: '输入星星币数量',
     confirmGift: '确认赠送',
+    confirmGiftWithRemaining: '确认赠送（转出后剩 {remaining} ⭐）',
+    giftRemaining: '转出后你还剩 {remaining} ⭐',
+    giftInsufficient: '余额不足，最多可转 {max} ⭐',
     txType: {
       parent_grant: '零花钱',
       wish_spend: '兑换心愿',
