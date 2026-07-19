@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from apps.agent.core.backend_client import BackendClient
@@ -27,16 +28,39 @@ logger = logging.getLogger(__name__)
 # Sentinel for "lookup failed / not found" — distinct from a cached None.
 _NOT_FOUND = object()
 
+# How long a transient-failure negative cache entry lives before re-fetching.
+# Permanent negative caching (no TTL) would let a single transient backend
+# blip (503/timeout/connection reset) pin memory_enabled to its True fallback
+# for the whole process lifetime — re-enabling DeerMem for stateless agents
+# like asset-report. A short TTL bounds the blast radius while still avoiding
+# a retry storm on a genuinely-down backend. See ce-code-review 2026-07-19.
+_NEGATIVE_CACHE_TTL_SECONDS = 60.0
+
 
 class AgentRegistry:
     """Async singleton caching agent attributes by (family_id, agent_name)."""
 
     def __init__(self) -> None:
-        # key: (family_id, agent_name) → agent dict (or _NOT_FOUND on miss)
+        # key: (family_id, agent_name) → agent dict (or _NOT_FOUND on miss).
+        # A _NOT_FOUND entry is stored as (sentinel, expires_at_monotonic) so a
+        # transient failure does not pin the negative cache for the process
+        # lifetime — after _NEGATIVE_CACHE_TTL_SECONDS it is re-fetched.
         self._cache: dict[tuple[str, str], Any] = {}
         # Per-key locks so concurrent first-access calls don't double-fetch.
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
         self._lock = asyncio.Lock()
+
+    def _negative_entry(self) -> tuple[object, float]:
+        return (_NOT_FOUND, time.monotonic() + _NEGATIVE_CACHE_TTL_SECONDS)
+
+    def _is_negative_expired(self, cached: Any) -> bool:
+        """True if a cached entry is a stale _NOT_FOUND that should be re-fetched."""
+        return (
+            isinstance(cached, tuple)
+            and len(cached) == 2
+            and cached[0] is _NOT_FOUND
+            and cached[1] < time.monotonic()
+        )
 
     async def get(self, agent_name: str, family_id: str) -> dict | None:
         """Return the cached agent dict, fetching from backend on miss.
@@ -50,8 +74,8 @@ class AgentRegistry:
         cached = self._cache.get(key)
         if cached is _NOT_FOUND:
             return None
-        if cached is not None:
-            return cached
+        if cached is not None and not self._is_negative_expired(cached):
+            return None if (isinstance(cached, tuple) and cached[0] is _NOT_FOUND) else cached
 
         # Per-key lock: avoid double-fetch on concurrent first access.
         async with self._lock:
@@ -61,8 +85,8 @@ class AgentRegistry:
             cached = self._cache.get(key)
             if cached is _NOT_FOUND:
                 return None
-            if cached is not None:
-                return cached
+            if cached is not None and not self._is_negative_expired(cached):
+                return None if (isinstance(cached, tuple) and cached[0] is _NOT_FOUND) else cached
 
             try:
                 client = BackendClient(family_id=family_id)
@@ -76,11 +100,15 @@ class AgentRegistry:
             except Exception as exc:
                 # Backend unreachable / 404 — cache the miss so we don't retry
                 # every run (the caller falls back to memory_enabled=True).
-                self._cache[key] = _NOT_FOUND
+                # TTL-bounded: a transient failure is re-fetched after
+                # _NEGATIVE_CACHE_TTL_SECONDS rather than pinned for the
+                # process lifetime.
+                self._cache[key] = self._negative_entry()
                 logger.warning(
                     "[AgentRegistry] lookup failed agent=%s family=%s: %s — "
-                    "falling back to defaults (memory_enabled=True)",
+                    "falling back to defaults (memory_enabled=True, TTL=%ss)",
                     agent_name, family_id, type(exc).__name__,
+                    int(_NEGATIVE_CACHE_TTL_SECONDS),
                 )
                 return None
 

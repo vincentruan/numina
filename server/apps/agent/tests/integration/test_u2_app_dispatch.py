@@ -270,6 +270,7 @@ async def test_run_agent_dispatches_asset_report_to_pipeline():
     with (
         patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
         patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
+        patch("apps.agent.services.runtime.worker.BackendClient.persist_report_result", new_callable=AsyncMock, return_value=None),
         patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
         patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
     ):
@@ -337,6 +338,60 @@ async def test_run_agent_asset_report_no_json_skips_step2_event():
 
     step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
     assert step2 == [], f"expected no report.step2_json for non-JSON output: {step2}"
+
+
+async def test_run_agent_asset_report_persist_failure_downgrades_status():
+    """P1 green-while-red fix: if persist_report_result raises, the run must
+    NOT end with status='complete'. The step2_json event still ships (step2
+    already finished on the frontend), but the terminal end frame + run status
+    must downgrade to 'error' + emit an error event so the UI reflects that
+    ai_reports has no row.
+    """
+    from apps.agent.services.runtime.worker import run_agent
+
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
+        yield ("messages", {"type": "ai", "content": '```json\n{"overall_score": 72}\n```', "tool_calls": None, "id": "m1"})
+        yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
+
+    stub_adapter = AsyncMock()
+    stub_adapter.typed_stream_dispatch = _stub_stream
+
+    mock_ai_config = {"ai_enabled": True, "providers": [{"is_active": True, "provider": "openai", "api_key": "k", "base_url": "u"}]}
+    with (
+        patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
+        patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
+        patch("apps.agent.services.runtime.worker.BackendClient.persist_report_result", new_callable=AsyncMock, side_effect=RuntimeError("backend down")),
+        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+    ):
+        record = await _make_record("asset-report")
+        bridge = _FakeBridge()
+        rm = _FakeRunManager()
+        await run_agent(
+            bridge=bridge,  # type: ignore[arg-type]
+            run_manager=rm,  # type: ignore[arg-type]
+            record=record,
+            family_id="family-1",
+            user_id="user-1",
+            thread_id="thread-ar3",
+            graph_input=None,
+            config={},
+        )
+
+    # step2_json still emitted (step2 finished before the persist attempt)
+    step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
+    assert len(step2) == 1, f"expected 1 report.step2_json before persist failure: {step2}"
+
+    # error event emitted (downgrade surfaces the persist failure)
+    error_events = [d for ev, d in bridge.published if ev == "error"]
+    assert error_events, f"expected an error event on persist failure: {bridge.published}"
+
+    # end frame status MUST be 'error', NOT 'complete' (green-while-red fix)
+    end_events = [d for ev, d in bridge.published if ev == "end" and d is not None]
+    assert end_events and end_events[0]["status"] == "error", bridge.published
+
+    # run status also downgraded (so /runs polling sees failure)
+    assert rm.status[-1][1] == "error", rm.status
 
 
 async def test_run_agent_dispatches_import_parse_to_pipeline():

@@ -38,7 +38,7 @@ from packages.core import get_path_manager
 from .asset_report_middleware import parse_report_json
 from .gc import schedule_run_cleanup
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
-from .sandbox_provider import set_family_sandbox_context
+from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +231,39 @@ async def run_agent(
     # numina and import-parse also depend on it once native tools are enabled.
     set_family_sandbox_context(family_id, caller_user_id=user_id)
 
-    app = record.metadata.get("app", "numina") if record.metadata else "numina"
-    if app == "asset-report":
-        await _run_asset_report_pipeline(
+    # Resolved-3 blocker A reset (P0, ce-code-review 2026-07-19): the family_id
+    # + extensions_config_path ContextVars are coroutine-scoped and would leak
+    # into a subsequent run if this coroutine is reused (shared worker task /
+    # executor thread). Mirror the active-skill reset pattern: set above, reset
+    # in a finally that wraps all three dispatch branches + any exception path.
+    try:
+        app = record.metadata.get("app", "numina") if record.metadata else "numina"
+        if app == "asset-report":
+            await _run_asset_report_pipeline(
+                bridge=bridge,
+                run_manager=run_manager,
+                record=record,
+                family_id=family_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                graph_input=graph_input,
+                config=config,
+            )
+            return
+        if app == "import-parse":
+            await _run_import_parse_agent(
+                bridge=bridge,
+                run_manager=run_manager,
+                record=record,
+                family_id=family_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                graph_input=graph_input,
+                config=config,
+            )
+            return
+        # Default / "numina"
+        await _run_numina_agent(
             bridge=bridge,
             run_manager=run_manager,
             record=record,
@@ -242,34 +272,12 @@ async def run_agent(
             thread_id=thread_id,
             graph_input=graph_input,
             config=config,
+            stream_modes=stream_modes,
+            resume_answer=resume_answer,
+            interrupt_id=interrupt_id,
         )
-        return
-    if app == "import-parse":
-        await _run_import_parse_agent(
-            bridge=bridge,
-            run_manager=run_manager,
-            record=record,
-            family_id=family_id,
-            user_id=user_id,
-            thread_id=thread_id,
-            graph_input=graph_input,
-            config=config,
-        )
-        return
-    # Default / "numina"
-    await _run_numina_agent(
-        bridge=bridge,
-        run_manager=run_manager,
-        record=record,
-        family_id=family_id,
-        user_id=user_id,
-        thread_id=thread_id,
-        graph_input=graph_input,
-        config=config,
-        stream_modes=stream_modes,
-        resume_answer=resume_answer,
-        interrupt_id=interrupt_id,
-    )
+    finally:
+        reset_family_sandbox_context()
 
 
 async def _run_asset_report_pipeline(
@@ -541,9 +549,30 @@ async def _run_asset_report_pipeline(
                         markdown_file_path=markdown_file_path,
                     )
                 except Exception as persist_exc:
+                    # P1 green-while-red fix (ce-code-review 2026-07-19): a
+                    # persist failure must NOT leave the run looking complete —
+                    # the step2_json custom event already shipped (step2=finish
+                    # on the frontend), so downgrade the terminal status to
+                    # "error" before the end frame so the UI reflects that
+                    # ai_reports has no row. Run status is set too so retries /
+                    # /runs polling see failure.
                     logger.warning(
                         "[_run_asset_report_pipeline] persist_report_result failed run=%s err=%s",
                         run_id, type(persist_exc).__name__,
+                    )
+                    completion_status = "error"
+                    error_type = type(persist_exc).__name__
+                    success = False
+                    await run_manager.set_status(
+                        run_id, RunStatus.error, error=str(persist_exc)
+                    )
+                    await bridge.publish(
+                        run_id,
+                        "error",
+                        {
+                            "message": "结构化结果保存失败，可参考上方文本",
+                            "name": error_type,
+                        },
                     )
 
     except asyncio.CancelledError:
