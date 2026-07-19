@@ -2031,7 +2031,11 @@ Expected: all PASS.
 
 - [ ] **Step 3: Lint + typecheck the full Plan A surface**
 
-Run: `cd server && uv run ruff check apps/agent/services/runtime/worker.py apps/agent/app/routers/gateway.py apps/agent/services/runtime/sse_gateway.py apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/services/finance_coach_snapshot.py apps/backend/app/models/ai_report.py apps/backend/app/bootstrap/agents.py && uv run mypy apps/agent/services/runtime/worker.py apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_cache.py`
+Run: `cd server && uv run ruff check apps/agent/services/runtime/worker.py apps/agent/app/routers/gateway.py apps/agent/services/runtime/sse_gateway.py apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/services/finance_coach_snapshot.py apps/backend/app/models/ai_report.py apps/backend/app/bootstrap/agents.py && uv run mypy apps/agent/services/runtime/worker.py apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_cache.py --explicit-package-bases`
+
+> **mypy flag note.** The `--explicit-package-bases` flag is required: `server/` contains an `__init__.py` and is the cwd, so without it mypy resolves each file under two module names (`server.apps.backend...` and `apps.backend...`) and aborts with "Source file found twice under different module names" before doing any type checking.
+>
+> **Baseline-noise note.** The repo's mypy config is intentionally lenient (`ignore_missing_imports = true`, no per-module `disallow_untyped_defs`) and the codebase has ~47 pre-existing type errors in files Plan A never touched (e.g. `backend_client.py`, `family_adapter_cache.py`, `deps.py`, `revoke_jti.py`, and the 3 `worker.py` `end_payload["usage"]` assignment errors that predate Plan A). The success criterion for this step is: **zero mypy errors in Plan A owned files** (`finance_coach_snapshot.py`, `ai_finance_coach.py`, `finance_coach_cache.py`). Filter the output to those filenames; everything else is pre-existing baseline noise tracked separately, not a Plan A regression.
 Expected: no errors.
 
 - [ ] **Step 4: Plan A self-review (spec coverage + placeholder scan + type consistency)**
