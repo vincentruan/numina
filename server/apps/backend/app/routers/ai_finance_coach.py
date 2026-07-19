@@ -139,12 +139,12 @@ async def trigger_finance_coach(
     # 8h capability-cache check (before streaming). force=true regenerates.
     if not force:
         cached = latest_by_capability(db, current_user.family_id, "finance_coach")
-        if is_cache_fresh(cached, "finance_coach"):
+        if is_cache_fresh(cached, "finance_coach") and cached is not None:
             return JSONResponse(
                 status_code=200,
                 content={
                     "status": "cached",
-                    "generated_at": cached.generated_at.isoformat() if cached and cached.generated_at else None,
+                    "generated_at": cached.generated_at.isoformat() if cached.generated_at else None,
                     "report": cached.report_json,
                 },
             )

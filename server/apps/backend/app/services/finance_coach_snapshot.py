@@ -98,7 +98,7 @@ def build_family_finance_snapshot(db: Session, family_id: str | int) -> dict[str
             "price": _money(w.expected_price),
             "saved": saved,
             "monthly_saving": monthly,
-            "target_date": str(w.target_date) if getattr(w, "target_date", None) else None,
+            "target_date": str(td) if (td := getattr(w, "target_date", None)) else None,
         })
 
     return {
