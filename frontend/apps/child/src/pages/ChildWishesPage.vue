@@ -514,7 +514,9 @@ onMounted(load)
   margin-bottom: 4px;
 }
 
-/* Redeem button — ochre celebration CTA */
+/* Redeem button — ochre celebration CTA. One-shot entrance pulse when it
+   appears (wish is fully funded → "you can redeem now!"), then stays static
+   so it doesn't bleed attention. No permanent shimmer. */
 .btn-redeem {
   width: 100%;
   background: var(--color-brand-ochre);
@@ -527,8 +529,16 @@ onMounted(load)
   font-weight: 600;
   cursor: pointer;
   height: 52px;
-  animation: goldShimmer 1.5s ease-in-out infinite;
+  animation: redeem-pulse 0.5s ease-out 1;
   transition: transform 0.1s;
+}
+@keyframes redeem-pulse {
+  0%   { transform: scale(0.96); opacity: 0.6; }
+  60%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-redeem { animation: none; }
 }
 .btn-redeem:disabled {
   opacity: 0.4;
