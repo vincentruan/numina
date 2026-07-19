@@ -28,4 +28,9 @@ class AIReport(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
     # Path to markdown report file (relative path under tenant reports directory)
     markdown_file_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Plan A: capability scoping. 'report' (existing, default) | 'finance_coach' |
+    # 'wish_advice' (Plan B W4). server_default='report' keeps existing rows valid
+    # without a data backfill migration. _latest_report / latest_by_capability
+    # filter by (family_id, capability, status).
+    capability: Mapped[str] = mapped_column(String(32), nullable=False, default="report", server_default="report")
     # status: pending | completed | error

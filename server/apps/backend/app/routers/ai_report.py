@@ -8,7 +8,7 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -30,6 +30,7 @@ from apps.backend.app.services.ai_result_parser import (
 )
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
+from apps.backend.app.services.finance_coach_cache import CAPABILITY_TTL
 from packages.core.path_manager import PathManager
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
@@ -45,12 +46,8 @@ class MarkdownResponse(BaseModel):
 
 
 def _latest_report(family_id: str, db: Session) -> AIReport | None:
-    return (
-        db.query(AIReport)
-        .filter(AIReport.family_id == family_id, AIReport.status == "completed")
-        .order_by(AIReport.generated_at.desc())
-        .first()
-    )
+    from apps.backend.app.services.finance_coach_cache import latest_by_capability
+    return latest_by_capability(db, family_id, "report")
 
 
 # U4 step 6: report cache TTL. A trigger within this window returns the cached
@@ -59,7 +56,10 @@ def _latest_report(family_id: str, db: Session) -> AIReport | None:
 # path runs schema validation on write, and the frontend DOMPurify is the
 # render-time mitigation; server-side re-validation on cache hit is tracked
 # separately as defense-in-depth.
-REPORT_CACHE_TTL = timedelta(hours=8)
+# Plan A T7: TTL now lives in the capability-scoped map (CAPABILITY_TTL); keep
+# REPORT_CACHE_TTL as an alias so the existing `age < REPORT_CACHE_TTL` check
+# in trigger_generate_events preserves identical report behavior.
+REPORT_CACHE_TTL = CAPABILITY_TTL["report"]  # keep existing report behavior
 
 
 @router.get("")
