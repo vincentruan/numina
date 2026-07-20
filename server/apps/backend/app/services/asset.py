@@ -84,14 +84,19 @@ def compute_daily_cost(asset: Asset) -> float | None:
     if days <= 0:
         return None
     years = days / 365.0
-    total_cost = asset.purchase_price + (asset.annual_maintenance_cost or 0) * years
+    total_cost = float(asset.purchase_price) + float(asset.annual_maintenance_cost or 0) * years
     return round(total_cost / days, 2)
 
 
 def compute_return_rate(asset: Asset) -> float | None:
     if not asset.purchase_price or asset.purchase_price == 0 or not asset.current_value:
         return None
-    return round((asset.current_value - asset.purchase_price) / asset.purchase_price * 100, 2)
+    return round(
+        (float(asset.current_value) - float(asset.purchase_price))
+        / float(asset.purchase_price)
+        * 100,
+        2,
+    )
 
 
 def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
@@ -185,12 +190,12 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     if req.notes:
         asset.notes = req.notes
 
-    net_recovery = req.sell_price - (req.sell_fee or 0)
+    net_recovery = float(req.sell_price) - float(req.sell_fee or 0)
     days_held = (date.today() - asset.purchase_date).days if asset.purchase_date else 0
 
     years = days_held / 365.0 if days_held > 0 else 0
-    total_maintenance = (asset.annual_maintenance_cost or 0) * years
-    total_cost = (asset.purchase_price or 0) + total_maintenance
+    total_maintenance = float(asset.annual_maintenance_cost or 0) * years
+    total_cost = float(asset.purchase_price or 0) + total_maintenance
     total_profit_loss = net_recovery - total_cost
     actual_daily_cost = round(total_cost / days_held, 2) if days_held > 0 else 0
 

@@ -46,8 +46,10 @@ export interface Asset {
   category?: Category
   name: string
   asset_type: 'physical' | 'financial'
-  purchase_price: number
-  current_value: number
+  // Money fields are str on the wire (money-as-str: Decimal in compute, str on
+  // the wire; JS double loses precision >2^53). Backend migrated Float→Numeric(18,2).
+  purchase_price: string | null
+  current_value: string | null
   currency: string
   purchase_date: string
   status: 'in_use' | 'idle' | 'sold' | 'retired'
@@ -57,16 +59,16 @@ export interface Asset {
   maturity_date?: string
   warranty_expiry_date?: string
   expected_lifespan_days?: number
-  annual_maintenance_cost?: number
+  annual_maintenance_cost?: string | null
   usage_frequency?: 'daily' | 'weekly' | 'monthly' | 'rarely' | 'idle'
   properties?: string
   notes?: string
-  sell_price?: number
+  sell_price?: string | null
   sell_date?: string
-  sell_fee?: number
+  sell_fee?: string | null
   sell_channel?: string
   retire_date?: string
-  target_daily_cost?: number
+  target_daily_cost?: string | null
   image_url?: string
   tags?: Tag[]
   daily_cost?: number
@@ -86,19 +88,19 @@ export interface AssetSellRequest {
 export interface AssetSellResponse {
   asset_id: string
   name: string
-  net_recovery: number
-  total_profit_loss: number
-  actual_daily_cost: number
-  target_daily_cost: number | null
+  net_recovery: string
+  total_profit_loss: string
+  actual_daily_cost: string
+  target_daily_cost: string | null
   days_held: number
-  purchase_price: number | null
-  sell_price: number
+  purchase_price: string | null
+  sell_price: string
 }
 
 export interface AssetValuation {
   id: string
   asset_id: string
-  value: number
+  value: string
   valued_at: string
   notes?: string
 }

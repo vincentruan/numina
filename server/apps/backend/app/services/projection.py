@@ -29,7 +29,9 @@ def calculate_projection(
             dep = a.get("annual_depreciation", 0.0)
             ret = a.get("annual_return", 0.0)
         asset_projections.append({
-            "current_value": a.get("current_value", 0) or 0,
+            # current_value may be Decimal (model) or str (API); coerce to float
+            # so the arithmetic below stays in one numeric type.
+            "current_value": float(a.get("current_value", 0) or 0),
             "asset_type": a["asset_type"],
             "depreciation": dep,
             "annual_return": ret,

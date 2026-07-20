@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Table,
     Text,
@@ -36,8 +38,8 @@ class Asset(Base):
     category_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("categories.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     asset_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'physical' or 'financial'
-    purchase_price: Mapped[float | None] = mapped_column(Float, nullable=True)
-    current_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    current_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
     purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="in_use")  # in_use/idle/sold/retired
@@ -47,11 +49,11 @@ class Asset(Base):
     maturity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     warranty_expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     expected_lifespan_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    annual_maintenance_cost: Mapped[float | None] = mapped_column(Float, nullable=True, default=0)
+    annual_maintenance_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True, default=0)
     usage_frequency: Mapped[str | None] = mapped_column(String(20), nullable=True)  # daily/weekly/monthly/rarely/idle
     properties: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    target_daily_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_daily_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     from_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("wishes.id", ondelete="SET NULL", use_alter=True, name="fk_assets_from_wish_id"), nullable=True)

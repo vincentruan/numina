@@ -20,11 +20,14 @@ def calculate_whatif(
     baseline_annual_gain = 0.0
     baseline_annual_loss = 0.0
     for a in assets:
+        # current_value/annual_maintenance_cost may be Decimal (model) or str
+        # (API); coerce to float so the arithmetic below stays in one type.
+        cv = float(a.get("current_value", 0) or 0)
         if a["asset_type"] == "financial":
-            baseline_annual_gain += a["current_value"] * a.get("annual_return", 0)
+            baseline_annual_gain += cv * a.get("annual_return", 0)
         else:
-            baseline_annual_loss += a["current_value"] * a.get("annual_depreciation", 0.1)
-            baseline_annual_loss += a.get("annual_maintenance_cost", 0) or 0
+            baseline_annual_loss += cv * a.get("annual_depreciation", 0.1)
+            baseline_annual_loss += float(a.get("annual_maintenance_cost", 0) or 0)
 
     # Build scenario adjustments from actions
     scenario_year0_delta = 0.0  # one-time changes at year 0
@@ -36,16 +39,17 @@ def calculate_whatif(
         if atype == "sell":
             asset = asset_map.get(act.get("asset_id"))
             if asset:
-                sell_income = asset["current_value"] * act.get("liquidation_rate", 0.8)
+                cv = float(asset.get("current_value", 0) or 0)
+                sell_income = cv * act.get("liquidation_rate", 0.8)
                 scenario_year0_delta += sell_income
                 if asset["asset_type"] == "physical":
                     scenario_annual_loss_delta -= (
-                        asset["current_value"] * asset.get("annual_depreciation", 0.1)
+                        cv * asset.get("annual_depreciation", 0.1)
                     )
-                    scenario_annual_loss_delta -= asset.get("annual_maintenance_cost", 0) or 0
+                    scenario_annual_loss_delta -= float(asset.get("annual_maintenance_cost", 0) or 0)
                 else:
                     scenario_annual_gain_delta -= (
-                        asset["current_value"] * asset.get("annual_return", 0)
+                        cv * asset.get("annual_return", 0)
                     )
         elif atype == "invest":
             amt = act.get("amount", 0) or 0
@@ -58,9 +62,9 @@ def calculate_whatif(
         elif atype == "stop_expense":
             asset = asset_map.get(act.get("asset_id"))
             saved = act.get("amount") or (
-                asset.get("annual_maintenance_cost", 0) if asset else 0
+                float(asset.get("annual_maintenance_cost", 0) or 0) if asset else 0
             )
-            scenario_annual_loss_delta -= saved or 0
+            scenario_annual_loss_delta -= float(saved or 0)
 
     # Project year by year
     projection = []

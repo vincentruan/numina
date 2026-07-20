@@ -96,7 +96,7 @@ def test_realize_wish(client, auth_headers, sample_wish, category_id):
     assert response.status_code == 201
     asset = response.json()["data"]
     assert asset["name"] == "MacBook Pro"
-    assert asset["purchase_price"] == 14500
+    assert asset["purchase_price"] == "14500.00"
 
     # Wish should now be realized
     wish_response = client.get(f"/api/v1/wishes/{wish_id}", headers=auth_headers)

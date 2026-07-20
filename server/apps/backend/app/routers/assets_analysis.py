@@ -117,8 +117,8 @@ def get_cost_equivalence(
     if held_days <= 0:
         held_days = 1
 
-    annual_maintenance = asset.annual_maintenance_cost or 0.0
-    total_held_cost = asset.purchase_price + annual_maintenance * (held_days / 365.0)
+    annual_maintenance = float(asset.annual_maintenance_cost or 0.0)
+    total_held_cost = float(asset.purchase_price) + annual_maintenance * (held_days / 365.0)
     daily_cost = total_held_cost / held_days
     time_cost_hours = total_held_cost / hourly_wage
     opportunity_cost = total_held_cost * ((1 + yield_rate) ** years) - total_held_cost
@@ -168,7 +168,7 @@ def get_asset_purchasing_power(
         }
 
     return calculate_purchasing_power(
-        amount=asset.purchase_price,
+        amount=float(asset.purchase_price),
         from_year=asset.purchase_date.year,
         to_year=date_type.today().year,
     )

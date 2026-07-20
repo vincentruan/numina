@@ -76,10 +76,10 @@ def test_create_physical_asset(client, auth_headers, category_id):
     assert response.status_code == 201
     data = response.json()["data"]
     assert data["name"] == "宝马X3"
-    assert data["current_value"] == 300000
+    assert data["current_value"] == "300000.00"
     assert data["usage_frequency"] == "daily"
     assert data["expected_lifespan_days"] == 3650
-    assert data["annual_maintenance_cost"] == 15000
+    assert data["annual_maintenance_cost"] == "15000.00"
 
 
 def test_create_financial_asset(client, auth_headers, financial_category_id):
@@ -141,7 +141,7 @@ def test_update_asset(client, auth_headers, sample_asset):
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["name"] == "朝阳区房产（已装修）"
-    assert data["current_value"] == 3800000
+    assert data["current_value"] == "3800000.00"
 
 
 def test_update_asset_value(client, auth_headers, sample_asset):
@@ -151,7 +151,7 @@ def test_update_asset_value(client, auth_headers, sample_asset):
         "current_value": 4000000
     })
     assert response.status_code == 200
-    assert response.json()["data"]["current_value"] == 4000000
+    assert response.json()["data"]["current_value"] == "4000000.00"
 
 
 def test_delete_asset(client, auth_headers, sample_asset):
@@ -374,3 +374,29 @@ def test_batch_archive_cross_family_isolation(client, auth_headers, second_user_
     assert data["success_count"] == 0
     assert data["failed_count"] == 1
     assert len(data["errors"]) == 1
+
+
+def test_asset_response_returns_str_money(client, auth_headers, category_id):
+    """Asset money fields must serialize as 2-decimal str on the wire
+    (money-as-str: Decimal in compute, str on the wire; JS double loses
+    precision >2^53). Regression for the asset Float->Numeric migration."""
+    response = client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "str 金额回归资产",
+        "category_id": category_id,
+        "asset_type": "physical",
+        "purchase_price": 3000000,
+        "current_value": 3500000,
+        "annual_maintenance_cost": 12000,
+        "purchase_date": "2020-01-15",
+        "status": "in_use",
+    })
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # Money fields are str with 2-decimal quantization, not numbers.
+    assert data["purchase_price"] == "3000000.00"
+    assert data["current_value"] == "3500000.00"
+    assert data["annual_maintenance_cost"] == "12000.00"
+    # interest_rate is a percentage, stays float (not money).
+    assert "interest_rate" in data
+    # daily_cost / return_rate are derived floats, not money.
+    assert isinstance(data.get("daily_cost"), (int, float, type(None)))
