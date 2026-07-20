@@ -684,7 +684,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `PATCH /wishes/{wish_id}/ignore-debt-warning` (body `{ignore: bool}`) → `WishResponse` (W5).
   - `WishResponse` now includes `saved_amount`/`target_date`/`monthly_saving`/`savings_count`/`ignore_debt_warning` (all money as str).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/tests/backend/routers/test_wishes_savings.py`:
 
@@ -750,12 +750,12 @@ def test_wish_response_includes_savings_fields(client, auth_headers, owned_wish_
 
 > **Fixture note:** `owned_wish_id` / `owned_wish_id_with_logs` / `savings_log_id` / `other_family_wish_id` / `log_id_in_other_family` — build via the service directly in conftest (call `wish_savings.record_savings` to seed logs). The API prefix `/api/v1` — confirm by grepping an existing router test (`test_wishes.py`). Money is sent/received as str ("100.00") per the serialization convention.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_wishes_savings.py -v`
 Expected: FAIL — 404 (savings routes not registered) / missing fields.
 
-- [ ] **Step 3: Extend the wish schemas**
+- [x] **Step 3: Extend the wish schemas**
 
 In `server/apps/backend/app/schemas/wish.py` (read the file first to see `WishCreate`/`WishUpdate`/`WishResponse` definitions):
 
@@ -779,7 +779,7 @@ In `server/apps/backend/app/schemas/wish.py` (read the file first to see `WishCr
 
 > Import `date`, `Decimal`, `field_validator` as needed. If `WishResponse` doesn't already inherit `SnowflakeBase`, keep whatever it inherits (the money-coercion validator is explicit). Confirm `expected_price` in `WishResponse` is also `str` now (it's NUMERIC after Task 1) — add the same validator.
 
-- [ ] **Step 4: Update wish_service for new fields**
+- [x] **Step 4: Update wish_service for new fields**
 
 In `server/apps/backend/app/services/wish.py`:
 - `create_wish` (line 35): pass through `target_date`/`monthly_saving`/`ignore_debt_warning` from `req` (use `req.model_dump` or explicit field assignment). `saved_amount` defaults to 0 (model default).
@@ -807,7 +807,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
     return wish
 ```
 
-- [ ] **Step 5: Add the savings + ignore-debt-warning routes**
+- [x] **Step 5: Add the savings + ignore-debt-warning routes**
 
 In `server/apps/backend/app/routers/wishes.py`, after the `realize_wish` route (line 57), add:
 
@@ -875,12 +875,12 @@ def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool)
 
 > **savings_count on WishResponse:** the `WishResponse` needs `savings_count`. Compute it in a `@field_validator` or a service helper. Simplest: add a `@computed_field`-like pattern via a `model_validator` that counts — but counting needs the db. Instead, have the router/service attach `savings_count` before returning: in `get_wish`/`list_wishes`, set `wish._savings_count = db.query(func.count(WishSavingsLog.id)).filter(...).scalar()` and expose it on the response. Read how `WishResponse` is currently constructed (does it use `model_validate` from the ORM?) and add `savings_count` as a field populated by a small helper `enrich_wish_response(wish, db)`. If the existing pattern is `response_model=WishResponse` with `from_attributes=True`, add a `savings_count` property on the model OR a pre-response hook. Match the existing convention (grep for any `computed`/`property` on Wish or sibling models).
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_wishes_savings.py -v`
 Expected: all 6 tests PASS.
 
-- [ ] **Step 7: Lint + typecheck + regression**
+- [x] **Step 7: Lint + typecheck + regression**
 
 Run: `cd server && uv run ruff check apps/backend/app/routers/wishes.py apps/backend/app/schemas/wish.py apps/backend/app/services/wish.py tests/backend/routers/test_wishes_savings.py && uv run mypy apps/backend/app/routers/wishes.py apps/backend/app/schemas/wish.py apps/backend/app/services/wish.py`
 Expected: no errors.
@@ -888,7 +888,7 @@ Expected: no errors.
 Run: `cd server && uv run pytest tests/backend/test_wishes.py -v 2>/dev/null || uv run pytest tests/backend/ -k wish -v`
 Expected: existing wish tests still PASS (new fields are optional/additive).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/apps/backend/app/routers/wishes.py server/apps/backend/app/schemas/wish.py server/apps/backend/app/services/wish.py server/tests/backend/routers/test_wishes_savings.py

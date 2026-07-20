@@ -1,13 +1,34 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
+from apps.backend.app.models.wish_savings_log import WishSavingsLog
 from apps.backend.app.schemas.wish import WishCreate, WishRealizeRequest, WishUpdate
 from apps.backend.app.services.finance_coach_cache import invalidate_capability
+
+
+def _attach_savings_count(db: Session, wish: Wish) -> Wish:
+    """Populate wish.savings_count (transient, non-persisted attr) from
+    wish_savings_log.
+
+    WishResponse reads this via from_attributes; without it the field defaults
+    to 0. Called on every read path that returns a WishResponse. Uses setattr
+    because savings_count is not a mapped column — it's a per-response computed
+    value attached at read time.
+    """
+    count = (
+        db.query(func.count(WishSavingsLog.id))
+        .filter(WishSavingsLog.wish_id == wish.id)
+        .scalar()
+    ) or 0
+    setattr(wish, "savings_count", int(count))
+    return wish
 
 
 def list_wishes(db: Session, user: User, status_filter: str | None = None) -> list[Wish]:
@@ -18,7 +39,10 @@ def list_wishes(db: Session, user: User, status_filter: str | None = None) -> li
     )
     if status_filter:
         query = query.filter(Wish.status == status_filter)
-    return query.order_by(Wish.created_at.desc()).all()
+    wishes = query.order_by(Wish.created_at.desc()).all()
+    for w in wishes:
+        _attach_savings_count(db, w)
+    return wishes
 
 
 def get_wish(db: Session, user: User, wish_id: str) -> Wish:
@@ -30,6 +54,7 @@ def get_wish(db: Session, user: User, wish_id: str) -> Wish:
     )
     if not wish:
         raise AppError(ErrorCode.NOT_FOUND)
+    _attach_savings_count(db, wish)
     return wish
 
 
@@ -43,11 +68,15 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         priority=req.priority,
         category_id=req.category_id,
         converts_to_asset=req.converts_to_asset,
+        target_date=req.target_date,
+        monthly_saving=req.monthly_saving or Decimal("0"),
+        ignore_debt_warning=req.ignore_debt_warning or False,
     )
     db.add(wish)
     invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(wish)
+    _attach_savings_count(db, wish)
     return wish
 
 
@@ -62,6 +91,24 @@ def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
     invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(wish)
+    _attach_savings_count(db, wish)
+    return wish
+
+
+def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool) -> Wish:
+    """Toggle the wish's ignore_debt_warning flag (W5). Owner-only.
+
+    Mirrors update_wish's owner check: only the wish's owner may toggle the
+    debt-warning override on their own wish.
+    """
+    wish = get_wish(db, user, wish_id)
+    if wish.user_id != user.id:
+        raise AppError(ErrorCode.FORBIDDEN)
+    wish.ignore_debt_warning = ignore
+    invalidate_capability(db, user.family_id, "finance_coach")
+    db.commit()
+    db.refresh(wish)
+    _attach_savings_count(db, wish)
     return wish
 
 

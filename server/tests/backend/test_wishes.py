@@ -33,7 +33,7 @@ def test_create_wish(client, auth_headers):
     assert response.status_code == 201
     data = response.json()["data"]
     assert data["name"] == "索尼相机"
-    assert data["expected_price"] == 8000
+    assert data["expected_price"] == "8000.00"
     assert data["priority"] == "medium"
     assert data["status"] == "pending"
     assert data["realized_asset_id"] is None
@@ -73,7 +73,7 @@ def test_update_wish(client, auth_headers, sample_wish):
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["name"] == "MacBook Pro M4"
-    assert data["expected_price"] == 18000
+    assert data["expected_price"] == "18000.00"
 
 
 def test_delete_wish(client, auth_headers, sample_wish):
