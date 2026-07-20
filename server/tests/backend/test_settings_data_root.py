@@ -25,7 +25,10 @@ def _make_settings(**overrides):
     with patch.dict(os.environ, cleaned_env, clear=True):
         from packages.core.settings import Settings
 
-        return Settings()
+        # _env_file=None disables .env loading so the repo-root .env (which
+        # sets DATABASE_URL for the dev machine) cannot override the derivation
+        # logic under test — only the env vars above are honored.
+        return Settings(_env_file=None)
 
 
 def _resolve(p: str) -> str:

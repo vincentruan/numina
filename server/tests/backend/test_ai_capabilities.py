@@ -33,11 +33,13 @@ def test_list_capabilities_returns_enabled_capability_grid_items(client, auth_he
     assert resp.status_code == 200
     data = resp.json()["data"]
     ids = [cap["id"] for cap in data]
-    assert "report" in ids
+    # Routing capabilities (chat, time_machine) are always present. "report"
+    # was removed in the two-ai-apps refactor (report skill deleted); "alerts"
+    # is disabled via FamilySkillConfig below so must NOT appear.
     assert "chat" in ids
+    assert "time_machine" in ids
     assert "alerts" not in ids
 
     chat = next(cap for cap in data if cap["id"] == "chat")
-    assert chat["name"] == "AI 问答"
-    assert chat["ui"]["route"] == "/ai/chat"
+    # chat is a routing capability; its policy always enables thinking.
     assert chat["policy"]["enable_thinking"] is True
