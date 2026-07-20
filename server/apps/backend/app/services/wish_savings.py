@@ -61,6 +61,7 @@ def record_savings(
     db.add(log)
     wish.saved_amount = (wish.saved_amount or Decimal("0")) + amount
     invalidate_capability(db, user.family_id, "finance_coach")
+    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
     db.commit()
     db.refresh(log)
     db.refresh(wish)
@@ -123,6 +124,7 @@ def delete_savings(
     db.delete(log)
     wish.saved_amount = (wish.saved_amount or Decimal("0")) - log.amount
     invalidate_capability(db, user.family_id, "finance_coach")
+    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
     db.commit()
 
 

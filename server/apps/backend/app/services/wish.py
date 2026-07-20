@@ -74,6 +74,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
     )
     db.add(wish)
     invalidate_capability(db, user.family_id, "finance_coach")
+    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -89,6 +90,7 @@ def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
     for key, value in update_data.items():
         setattr(wish, key, value)
     invalidate_capability(db, user.family_id, "finance_coach")
+    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -106,6 +108,7 @@ def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool)
         raise AppError(ErrorCode.FORBIDDEN)
     wish.ignore_debt_warning = ignore
     invalidate_capability(db, user.family_id, "finance_coach")
+    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -118,6 +121,7 @@ def delete_wish(db: Session, user: User, wish_id: str) -> None:
         raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
     invalidate_capability(db, user.family_id, "finance_coach")
+    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
 
 
@@ -164,6 +168,7 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
         asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
         invalidate_capability(db, user.family_id, "finance_coach")
+        invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
         db.commit()
         db.refresh(asset)
         return asset

@@ -88,6 +88,7 @@ from apps.backend.app.routers import ai_tasks as ai_tasks_router
 from apps.backend.app.routers import ai_threads as ai_threads_router
 from apps.backend.app.routers import ai_time_machine as ai_time_machine_router
 from apps.backend.app.routers import ai_web_search as ai_web_search_router
+from apps.backend.app.routers import ai_wish_advice as ai_wish_advice_router
 from apps.backend.app.routers import (
     assets,
     auth,
@@ -441,6 +442,7 @@ app.include_router(ai_skills_router.router, prefix="/api/v1")
 app.include_router(ai_agents_router.router, prefix="/api/v1")
 app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
 app.include_router(ai_web_search_router.router, prefix="/api/v1")
+app.include_router(ai_wish_advice_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 # Serve uploaded files — mount only the uploads subtree, not the entire workspace

@@ -303,6 +303,13 @@ export interface Wish {
   converts_to_asset: boolean
   realized_asset_id?: string
   fulfilled_at?: string
+  // W1 savings fields (Plan B T1-T3). Serialized as str from the backend
+  // (SnowflakeBase money-as-str); typed loosely here as the existing fields.
+  saved_amount?: string
+  monthly_saving?: string
+  target_date?: string
+  savings_count?: number
+  ignore_debt_warning?: boolean
   created_at: string
   updated_at: string
 }
@@ -312,6 +319,19 @@ export interface CategoryInfo {
   name: string
   icon: string
   asset_type: string
+}
+
+// W4 wish-priority advice (Plan B T7). Independent of finance_coach's suggestions[].
+export interface WishRedistribution {
+  wish_id: string
+  suggested_amount: string
+  note: string
+}
+export interface WishAdvice {
+  primary_wish_id: string
+  reason: string
+  suggested_monthly: string
+  redistribution: WishRedistribution[]
 }
 
 export interface WishRealizeRequest {

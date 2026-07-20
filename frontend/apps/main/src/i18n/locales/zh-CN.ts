@@ -934,6 +934,18 @@ export default {
   },
   wish: {
     detail: '心愿详情',
+    // W4 (Plan B T7): AI wish-priority advice card.
+    advice: {
+      title: 'AI 储蓄建议',
+      adopt: '采纳',
+      fullAdvice: '看完整建议',
+      adoptTitle: '采纳储蓄重分配',
+      adoptAll: '全部采纳',
+      totalMonthly: '本月总月存 ¥{total}（建议值合计，请自行判断是否超承受力）',
+      primary: '本月建议优先为「{name}」存 ¥{amount}',
+      allUpdated: '储蓄计划已更新',
+      partial: '{ok}/{total} 条已更新',
+    },
     uncategorized: '未分类',
     expectedPrice: '预期价格',
     priority: '优先级',

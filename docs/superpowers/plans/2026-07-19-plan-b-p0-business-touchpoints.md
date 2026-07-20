@@ -1972,7 +1972,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - Frontend card: "AI 建议：本月优先为「X」存 ¥2000" + 理由 + 采纳 (opens redistribution dialog, read-only, 全部采纳/取消) + 看完整建议 (→ `/ai/chat?source=wish_advice`). Card closable, 8h localStorage suppression keyed by `wish_fingerprint_hash + timestamp` (independent of content cache, spec §4.3 design-lens).
   - 采纳 → batch `PATCH /wishes/{id}` per redistribution item; partial-failure: failed rows red + stay open, success rows grey, summary "X/N 条已更新".
 
-- [ ] **Step 1: Write the failing backend test**
+- [x] **Step 1: Write the failing backend test**
 
 Create `server/tests/backend/routers/test_ai_wish_advice.py`:
 
@@ -2009,12 +2009,12 @@ def test_guardrail_drops_negative_suggested_amount(client, auth_headers, db_sess
 
 > **Fixture note:** `family_with_wishes` = a family id (str) with ≥2 pending wishes, ≥1 with monthly_saving>0. Build via the wish service directly. The guardrail test patches `generate_advice` to return None (AI unusable) and asserts the endpoint degrades gracefully (200, no crash).
 
-- [ ] **Step 2: Run backend test to verify it fails**
+- [x] **Step 2: Run backend test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_ai_wish_advice.py -v`
 Expected: FAIL — 404 (route not registered).
 
-- [ ] **Step 3: Create the W4 advice service**
+- [x] **Step 3: Create the W4 advice service**
 
 Create `server/apps/backend/app/services/wish_advice.py`:
 
@@ -2134,7 +2134,7 @@ async def generate_advice(db: Session, user: User) -> tuple[dict | None, str]:
 
 > **Implementation note (load-bearing):** the W4 AI call's exact LLM-construction path must mirror an existing lightweight-LLM call in the repo. The memory notes a U6 "suggest→lightweight LLM single call (`_create_lightweight_llm`+`ainvoke`)" pattern. Read `server/apps/agent/services/` for the suggest feature's lightweight-LLM helper (grep `_create_lightweight_llm` or `ainvoke`), and reuse it for W4 — do NOT hand-roll a new LLM client. If the helper lives in the agent app (not backend), W4's advice generation may need to run as a backend→agent stream_run (like finance_coach) rather than an inline backend LLM call. **Decision:** to keep W4 consistent with finance_coach (D2) and avoid a backend-side LLM client, implement W4 as a SECOND stream_run capability. The simplest path: reuse the `finance_coach` agent machinery with a different `skill_name="wish-advice"` OR route W4 through a dedicated worker branch. Given the spec says W4 is an "independent AI call" but doesn't mandate a new capability, the pragmatic choice is: **W4 calls the same `finance_coach` stream_run endpoint but with a different skill + prompt** — NO, that conflates the two schemas. Instead, implement W4 advice generation as a backend-side lightweight LLM call reusing the `_create_lightweight_llm` helper (locate it in the agent app; if it's not importable from backend, extract it to `server/packages/domain/` or `server/apps/backend/app/services/` as a shared `lightweight_llm.py`). The implementer should: (1) grep for `_create_lightweight_llm` / `ainvoke` to find the existing helper; (2) make it importable from the backend; (3) call it here with the W4 prompt; (4) `validate_advice(parse_report_json(ai_text))`. If extracting the helper is non-trivial, fall back to a dedicated `wish-advice` stream_run capability (mirror Plan A's finance_coach chain: RESERVED_NAMES + system-agent + gateway route + worker branch + SKILL.md) — but that's a heavier lift and should be flagged to the planner. **Pick the lightweight-LLM path first**; only escalate to a new capability if the helper isn't extractable.
 
-- [ ] **Step 4: Create the W4 router**
+- [x] **Step 4: Create the W4 router**
 
 Create `server/apps/backend/app/routers/ai_wish_advice.py`:
 
@@ -2206,7 +2206,7 @@ async def generate_wish_advice(
 
 Register the router in `server/apps/backend/app/main.py` next to `ai_finance_coach`.
 
-- [ ] **Step 5: Add wish_advice invalidation to wish writes**
+- [x] **Step 5: Add wish_advice invalidation to wish writes**
 
 In `server/apps/backend/app/services/wish.py` (Plan A T9 already added `invalidate_capability(db, user.family_id, "finance_coach")` to create/update/delete/realize), add a SECOND call next to each:
 
@@ -2217,12 +2217,12 @@ In `server/apps/backend/app/services/wish.py` (Plan A T9 already added `invalida
 
 Also add it to `wish_savings.record_savings`/`delete_savings` (Task 2) — savings change the wish fingerprint. (Add the call next to the existing `invalidate_capability(db, user.family_id, "finance_coach")` in Task 2's service.)
 
-- [ ] **Step 6: Run backend test to verify it passes**
+- [x] **Step 6: Run backend test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_ai_wish_advice.py -v`
 Expected: tests PASS (the cached-hit test passes; the guardrail test passes via the `generate_advice → None` patch).
 
-- [ ] **Step 7: Frontend — types + API client + card + WishListPage**
+- [x] **Step 7: Frontend — types + API client + card + WishListPage**
 
 In `frontend/apps/main/src/types/index.ts`:
 
@@ -2381,7 +2381,7 @@ In `frontend/apps/main/src/pages/WishListPage.vue`, at the top of the list conte
 
 (Only render when `pending wishes >= 2 && >=1 monthly_saving>0` — guard with a `v-if`, or let the card hide itself via `load()` returning empty. The spec §4.1 trigger condition is best enforced in the card's `load()` via the backend returning `empty`.) Add the import + register.
 
-- [ ] **Step 8: Frontend test + i18n + typecheck**
+- [x] **Step 8: Frontend test + i18n + typecheck**
 
 Create `frontend/apps/main/src/components/wishes/__tests__/WishAdviceCard.spec.ts` (mirror FinanceCoachCard.spec — assert: renders when valid advice; hides when empty/closed; adopt calls batch PATCH; partial failure keeps failed rows). Run: `cd frontend/apps/main && pnpm test:run -- WishAdviceCard`.
 
@@ -2399,7 +2399,7 @@ Add i18n under `wish.advice.*`:
 Run: `cd frontend/apps/main && pnpm typecheck && pnpm lint`
 Expected: no errors.
 
-- [ ] **Step 9: Backend lint/typecheck + commit**
+- [x] **Step 9: Backend lint/typecheck + commit**
 
 Run: `cd server && uv run ruff check apps/backend/app/routers/ai_wish_advice.py apps/backend/app/services/wish_advice.py apps/backend/app/services/wish.py && uv run mypy apps/backend/app/routers/ai_wish_advice.py apps/backend/app/services/wish_advice.py`
 Expected: no errors.

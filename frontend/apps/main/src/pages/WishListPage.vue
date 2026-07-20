@@ -28,6 +28,10 @@
 
     <div class="list-content">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+        <!-- W4 (Plan B T7): AI wish-priority advice card. Hides itself when the
+             backend returns empty (<2 wishes / no monthly_saving / LLM unavailable). -->
+        <WishAdviceCard :wishes="wishes.map((w) => ({ id: w.id, name: w.name, monthly_saving: w.monthly_saving ?? '0' }))" />
+
         <!-- Skeleton for initial loading -->
         <WishListSkeleton v-if="wishStore.loading && wishes.length === 0" />
 
@@ -160,6 +164,7 @@ import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useWishStore } from '@/stores/wish'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
+import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 
 const { t } = useI18n()
