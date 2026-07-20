@@ -98,7 +98,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
   - `wish_savings_log` table: `id BIGINT PK snowflake`, `wish_id BIGINT FK`, `family_id BIGINT`, `user_id BIGINT`, `amount NUMERIC(18,2)`, `log_date DATE`, `note VARCHAR(200) NULL`, `created_at DATETIME`. Indexes `(wish_id, log_date DESC)` + `(family_id, created_at)`.
   - `WishSavingsLog` model for Task 2's service.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/tests/backend/test_wish_savings_model.py`:
 
@@ -152,12 +152,12 @@ def test_wish_savings_log_model(db_session):
 
 > **Fixture note:** confirm `db_session` fixture name in `server/tests/backend/conftest.py`; rename if it's `session`. The family_id/user_id `1` assumes the test DB has those rows — if FK constraints are enforced in the test DB, use real fixture-created family/user ids.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/test_wish_savings_model.py -v`
 Expected: FAIL — `AttributeError` (Wish has no `saved_amount`) / `ImportError` (WishSavingsLog not defined).
 
-- [ ] **Step 3: Create the migration**
+- [x] **Step 3: Create the migration**
 
 Create `server/apps/backend/alembic/versions/c2d3e4f5a6b7_add_wish_savings_fields_and_log.py`:
 
@@ -241,7 +241,7 @@ def downgrade() -> None:
 
 > **SQLite note:** `batch_alter_table` is the repo's SQLite-compatible alter pattern (it recreates the table). PostgreSQL handles `alter_column` natively; batch mode is a no-op there. The `sa.text("log_date DESC")` for the descending index works on both. If the existing migrations in the repo use a different table-create pattern, match it (read `server/apps/backend/alembic/versions/` for a recent `op.create_table` precedent).
 
-- [ ] **Step 4: Update the Wish model**
+- [x] **Step 4: Update the Wish model**
 
 In `server/apps/backend/app/models/wish.py`:
 - Ensure `Numeric`, `Date`, `Boolean` are imported from `sqlalchemy` (add to the existing import line at line 7).
@@ -267,7 +267,7 @@ In `server/apps/backend/app/models/wish.py`:
 
 - Add imports `from decimal import Decimal` and `from datetime import date` at the top (if not already present).
 
-- [ ] **Step 5: Create the WishSavingsLog model**
+- [x] **Step 5: Create the WishSavingsLog model**
 
 Create `server/apps/backend/app/models/wish_savings_log.py`:
 
@@ -303,7 +303,7 @@ class WishSavingsLog(Base):
 
 > **Import check:** confirm `Base`'s import path — read `server/apps/backend/app/models/wish.py`'s `Base` import and mirror it. Confirm `next_id`'s path — mirror the Wish model's import.
 
-- [ ] **Step 6: Run the migration + test**
+- [x] **Step 6: Run the migration + test**
 
 Run: `cd server/apps/backend && uv run alembic upgrade head`
 Expected: revision `c2d3e4f5a6b7` applies; `alembic current` shows `c2d3e4f5a6b7 (head)`.
@@ -311,17 +311,17 @@ Expected: revision `c2d3e4f5a6b7` applies; `alembic current` shows `c2d3e4f5a6b7
 Run: `cd server && uv run pytest tests/backend/test_wish_savings_model.py -v`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 7: Lint + typecheck**
+- [x] **Step 7: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/backend/app/models/wish.py apps/backend/app/models/wish_savings_log.py tests/backend/test_wish_savings_model.py && uv run mypy apps/backend/app/models/wish.py apps/backend/app/models/wish_savings_log.py`
 Expected: no errors.
 
-- [ ] **Step 8: Regression — existing wish tests still pass**
+- [x] **Step 8: Regression — existing wish tests still pass**
 
 Run: `cd server && uv run pytest tests/backend/test_wishes.py tests/backend/services/test_wish_service.py -v 2>/dev/null || uv run pytest tests/backend/ -k wish -v`
 Expected: existing tests PASS (the `expected_price` Float→NUMERIC migration is backward-compatible at the DB level; existing code reading `wish.expected_price` as float still works because Decimal is JSON-serializable; if a test asserts `isinstance(x, float)`, update it to `Decimal`).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add server/apps/backend/alembic/versions/c2d3e4f5a6b7_add_wish_savings_fields_and_log.py server/apps/backend/app/models/wish.py server/apps/backend/app/models/wish_savings_log.py server/tests/backend/test_wish_savings_model.py
