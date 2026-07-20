@@ -6,9 +6,9 @@
       <!-- Value Card -->
       <div class="value-card">
         <div class="value-label">{{ t('liability.detailRemainingPrincipal') }}</div>
-        <MoneyDisplay :amount="liability.remaining_amount" size="large" />
+        <MoneyDisplay :amount="Number(liability.remaining_amount)" size="large" />
         <div class="progress-info">
-          {{ t('liability.detailPaidAmount') }} ¥{{ paidAmount.toLocaleString() }} / {{ t('liability.detailTotalAmount') }} ¥{{ liability.original_amount.toLocaleString() }}
+          {{ t('liability.detailPaidAmount') }} ¥{{ paidAmount.toLocaleString() }} / {{ t('liability.detailTotalAmount') }} ¥{{ Number(liability.original_amount).toLocaleString() }}
         </div>
         <van-progress
           :percentage="paidPercent"
@@ -53,10 +53,10 @@
           </template>
         </van-cell>
         <van-cell :title="t('liability.detailFieldOriginalAmount')">
-          <template #value><MoneyDisplay :amount="liability.original_amount" /></template>
+          <template #value><MoneyDisplay :amount="Number(liability.original_amount)" /></template>
         </van-cell>
         <van-cell v-if="liability.monthly_payment" :title="t('liability.detailFieldMonthlyPayment')">
-          <template #value><MoneyDisplay :amount="liability.monthly_payment" /></template>
+          <template #value><MoneyDisplay :amount="Number(liability.monthly_payment)" /></template>
         </van-cell>
         <van-cell v-if="liability.interest_rate" :title="t('liability.detailFieldAnnualRate')" :value="`${liability.interest_rate}%`" />
       </van-cell-group>
@@ -101,7 +101,7 @@
       :before-close="onPaymentConfirm"
     >
       <div class="payment-dialog">
-        <div class="payment-hint">{{ t('liability.detailPaymentRemainingHint', { amount: liability?.remaining_amount.toLocaleString() }) }}</div>
+        <div class="payment-hint">{{ t('liability.detailPaymentRemainingHint', { amount: Number(liability?.remaining_amount || 0).toLocaleString() }) }}</div>
         <van-field
           v-model="paymentAmount"
           type="number"
@@ -154,12 +154,12 @@ const categoryIcon = computed(() => categoryMap[liability.value?.category || '']
 
 const paidAmount = computed(() => {
   if (!liability.value) return 0
-  return liability.value.original_amount - liability.value.remaining_amount
+  return Number(liability.value.original_amount) - Number(liability.value.remaining_amount)
 })
 
 const paidPercent = computed(() => {
-  if (!liability.value || liability.value.original_amount === 0) return 0
-  return Math.round((paidAmount.value / liability.value.original_amount) * 100)
+  if (!liability.value || Number(liability.value.original_amount) === 0) return 0
+  return Math.round((paidAmount.value / Number(liability.value.original_amount)) * 100)
 })
 
 function goToAsset() {
@@ -175,7 +175,7 @@ async function onPaymentConfirm(action: string) {
       showToast(t('toast.paymentAmountRequired'))
       return false
     }
-    if (amount > (liability.value?.remaining_amount || 0)) {
+    if (amount > Number(liability.value?.remaining_amount || 0)) {
       showToast(t('toast.paymentExceedsBalance'))
       return false
     }

@@ -200,30 +200,31 @@ const filteredLiabilities = computed(() => {
     list = list.filter(l => l.category === filterCategory.value)
   }
   if (sortOrder.value === 'desc') {
-    list = [...list].sort((a, b) => b.remaining_amount - a.remaining_amount)
+    list = [...list].sort((a, b) => Number(b.remaining_amount) - Number(a.remaining_amount))
   } else if (sortOrder.value === 'asc') {
-    list = [...list].sort((a, b) => a.remaining_amount - b.remaining_amount)
+    list = [...list].sort((a, b) => Number(a.remaining_amount) - Number(b.remaining_amount))
   }
   return list
 })
 
 // --- Summary ---
 const totalAmount = computed(() =>
-  liabilityStore.liabilities.reduce((sum, l) => sum + l.remaining_amount, 0)
+  liabilityStore.liabilities.reduce((sum, l) => sum + Number(l.remaining_amount), 0)
 )
 const totalOriginal = computed(() =>
-  liabilityStore.liabilities.reduce((sum, l) => sum + (l.original_amount ?? l.remaining_amount), 0)
+  liabilityStore.liabilities.reduce((sum, l) => sum + Number(l.original_amount ?? l.remaining_amount), 0)
 )
 const repaidPercent = computed(() => {
   if (totalOriginal.value <= 0) return 0
   return Math.round(((totalOriginal.value - totalAmount.value) / totalOriginal.value) * 100)
 })
 
-function formatAmountDisplay(amount: number): string {
-  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + t('common.unitHundredMillion')
-  if (amount >= 10000) return (amount / 10000).toFixed(1) + t('common.unitTenThousand')
-  if (amount >= 1000) return (amount / 1000).toFixed(1) + t('common.unitThousand')
-  return amount.toLocaleString('zh-CN')
+function formatAmountDisplay(amount: number | string): string {
+  const n = Number(amount)
+  if (n >= 100000000) return (n / 100000000).toFixed(2) + t('common.unitHundredMillion')
+  if (n >= 10000) return (n / 10000).toFixed(1) + t('common.unitTenThousand')
+  if (n >= 1000) return (n / 1000).toFixed(1) + t('common.unitThousand')
+  return n.toLocaleString('zh-CN')
 }
 
 // --- Tab / Refresh ---
@@ -274,7 +275,7 @@ function openPayDialog(item: Liability) {
 
 function setPayPercent(pct: number) {
   if (!payTarget.value) return
-  const val = (payTarget.value.remaining_amount * pct) / 100
+  const val = (Number(payTarget.value.remaining_amount) * pct) / 100
   payAmount.value = val.toFixed(2)
 }
 

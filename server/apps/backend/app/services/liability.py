@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -66,10 +68,10 @@ def delete_liability(db: Session, user: User, liability_id: str) -> None:
     db.commit()
 
 
-def record_payment(db: Session, user: User, liability_id: str, amount: float) -> Liability:
+def record_payment(db: Session, user: User, liability_id: str, amount: Decimal) -> Liability:
     from apps.backend.app.models.payment_record import PaymentRecord
     liability = get_liability(db, user, liability_id)
-    liability.remaining_amount = max(0, liability.remaining_amount - amount)
+    liability.remaining_amount = max(Decimal("0"), liability.remaining_amount - amount)
     if liability.remaining_amount == 0:
         liability.is_active = False
     record = PaymentRecord(liability_id=liability_id, amount=amount)
@@ -110,7 +112,7 @@ def list_liabilities_for_family(
             "id": str(l.id),
             "name": l.name,
             "category": l.category,
-            "remaining_amount": float(l.remaining_amount or 0),
+            "remaining_amount": str(l.remaining_amount or Decimal("0")),
         }
         for l in rows
     ]

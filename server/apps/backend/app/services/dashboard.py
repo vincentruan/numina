@@ -76,7 +76,10 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
     for l in liabilities:
         if l.remaining_amount is not None:
             liability_currency = getattr(l, "currency", "CNY") or "CNY"
-            converted = ExchangeRateService.convert(l.remaining_amount, liability_currency, default_currency, db)
+            # l.remaining_amount is Decimal (Numeric); ExchangeRateService.convert
+            # expects float. Coerce here — the aggregate is a stat where float
+            # precision is sufficient.
+            converted = ExchangeRateService.convert(float(l.remaining_amount), liability_currency, default_currency, db)
             total_liabilities_val += converted
 
     asset_count = len(assets)

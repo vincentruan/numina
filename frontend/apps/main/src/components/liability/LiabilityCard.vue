@@ -116,16 +116,18 @@ const categoryIcon = computed(() => categoryMap.value[props.liability.category]?
 const categoryColor = computed(() => categoryMap.value[props.liability.category]?.color || '#64748b')
 
 const repaidPercent = computed(() => {
-  const { original_amount, remaining_amount } = props.liability
-  if (!original_amount) return 0
-  return Math.round(((original_amount - remaining_amount) / original_amount) * 100)
+  const orig = Number(props.liability.original_amount)
+  const remaining = Number(props.liability.remaining_amount)
+  if (!orig) return 0
+  return Math.round(((orig - remaining) / orig) * 100)
 })
 
-function formatAmountDisplay(amount: number): string {
-  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + t('common.unitHundredMillion')
-  if (amount >= 10000) return (amount / 10000).toFixed(1) + t('common.unitTenThousand')
-  if (amount >= 1000) return (amount / 1000).toFixed(1) + t('common.unitThousand')
-  return amount.toLocaleString('zh-CN')
+function formatAmountDisplay(amount: number | string): string {
+  const n = Number(amount)
+  if (n >= 100000000) return (n / 100000000).toFixed(2) + t('common.unitHundredMillion')
+  if (n >= 10000) return (n / 10000).toFixed(1) + t('common.unitTenThousand')
+  if (n >= 1000) return (n / 1000).toFixed(1) + t('common.unitThousand')
+  return n.toLocaleString('zh-CN')
 }
 
 // Long-press detection

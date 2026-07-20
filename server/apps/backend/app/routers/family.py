@@ -123,6 +123,11 @@ def get_aggregate(
         .filter(Asset.family_id == family_id, Asset.is_archived == False)
         .scalar()
     )
+    # Coerce to float: asset values are Float, liability amounts are now
+    # Decimal (Numeric); mixing them raises TypeError. The aggregate is a
+    # dashboard stat where float precision is sufficient.
+    total_assets = float(total_assets or 0)
+    total_liabilities = float(total_liabilities or 0)
     return {
         "total_assets": total_assets,
         "total_liabilities": total_liabilities,

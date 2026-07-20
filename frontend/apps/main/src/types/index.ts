@@ -109,11 +109,13 @@ export interface Liability {
   family_id: string
   category: 'mortgage' | 'car_loan' | 'credit_card' | 'personal_loan' | 'other'
   name: string
-  original_amount: number
-  remaining_amount: number
+  // Money fields are str on the wire (SnowflakeBase money-as-str). Was number
+  // pre-T8b; backend migrated Float→Numeric(18,2)+str serialization.
+  original_amount: string
+  remaining_amount: string
   currency: string
-  monthly_payment: number
-  interest_rate: number
+  monthly_payment: string | null
+  interest_rate: number | null
   start_date: string
   end_date?: string
   institution?: string

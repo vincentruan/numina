@@ -10,8 +10,10 @@ def calculate_whatif(
     inflation_rate: float = 0.03,
 ) -> dict:
     asset_map = {a["id"]: a for a in assets}
+    # monthly_payment may be Decimal (model) or str (API); coerce to float so
+    # the arithmetic below stays in one numeric type.
     annual_liability_cost = sum(
-        (li.get("monthly_payment") or 0) * 12 for li in liabilities
+        (float(li.get("monthly_payment") or 0)) * 12 for li in liabilities
     )
 
     # Build baseline annual delta from all assets

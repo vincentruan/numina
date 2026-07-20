@@ -38,9 +38,11 @@ def calculate_projection(
     # Build liability projections
     liability_projections = []
     for li in liabilities:
+        # remaining_amount/monthly_payment may be Decimal (model) or str (API);
+        # coerce to float so the arithmetic below stays in one numeric type.
         liability_projections.append({
-            "remaining": li.get("remaining_amount", 0) or 0,
-            "monthly_payment": li.get("monthly_payment", 0) or 0,
+            "remaining": float(li.get("remaining_amount", 0) or 0),
+            "monthly_payment": float(li.get("monthly_payment", 0) or 0),
             "end_year": li.get("end_year"),
         })
 

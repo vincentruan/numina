@@ -34,8 +34,9 @@ def test_create_liability(client, auth_headers):
     data = response.json()["data"]
     assert data["name"] == "车贷"
     assert data["category"] == "car_loan"
-    assert data["original_amount"] == 200000
-    assert data["remaining_amount"] == 150000
+    # Money fields are str on the wire (money-as-str convention).
+    assert data["original_amount"] == "200000.00"
+    assert data["remaining_amount"] == "150000.00"
     assert data["is_active"] is True
 
 
@@ -65,7 +66,7 @@ def test_update_liability(client, auth_headers, sample_liability):
         "monthly_payment": 13000
     })
     assert response.status_code == 200
-    assert response.json()["data"]["monthly_payment"] == 13000
+    assert response.json()["data"]["monthly_payment"] == "13000.00"
 
 
 def test_record_payment(client, auth_headers, sample_liability):
@@ -76,7 +77,7 @@ def test_record_payment(client, auth_headers, sample_liability):
     })
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["remaining_amount"] == 1788000  # 1800000 - 12000
+    assert data["remaining_amount"] == "1788000.00"  # 1800000 - 12000
     assert data["is_active"] is True
 
 
@@ -99,7 +100,7 @@ def test_record_payment_full_payoff(client, auth_headers):
     })
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["remaining_amount"] == 0
+    assert data["remaining_amount"] == "0.00"
     assert data["is_active"] is False
 
 
