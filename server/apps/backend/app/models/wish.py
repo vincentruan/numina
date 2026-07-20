@@ -1,13 +1,15 @@
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
+    TIMESTAMP,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
-    Float,
     ForeignKey,
+    Numeric,
     String,
-    TIMESTAMP,
     Text,
     func,
 )
@@ -25,11 +27,20 @@ class Wish(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    expected_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     priority: Mapped[str] = mapped_column(String(20), default="medium")  # low/medium/high
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/realized/cancelled
     category_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("categories.id"), nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
+    # Plan B W1: savings progress fields.
+    # saved_amount is a DERIVED cache of SUM(wish_savings_log.amount); maintained
+    # in-transaction by the savings CRUD (see wish_savings.py). source of truth =
+    # wish_savings_log. NUMERIC(18,2) — serialized as str (2 decimals) in API.
+    saved_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0"), server_default="0")
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    monthly_saving: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0"), server_default="0")
+    # Plan B W5: per-wish opt-out of the high-interest-debt linkage hint.
+    ignore_debt_warning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     converts_to_asset: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
     fulfilled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
