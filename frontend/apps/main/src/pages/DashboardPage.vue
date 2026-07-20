@@ -26,6 +26,9 @@
           />
         </div>
 
+        <!-- D2/A1a: finance_coach proactive suggestions card (Plan B T5) -->
+        <FinanceCoachCard />
+
         <!-- Smart Reminders (includes expiring soon + upcoming payments + idle + AI reminders) -->
         <SmartRemindersCard
           :idle-assets="dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle')"
@@ -292,6 +295,7 @@ import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
+import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 
 const { t } = useI18n()

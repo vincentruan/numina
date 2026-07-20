@@ -1,5 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
-import type { AIReport } from '@/types'
+import type { AIReport, FinanceCoachResponse, FinanceSuggestion } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────
 
@@ -669,3 +669,65 @@ export const aiCreateSkill = (description: string) =>
 
 export const saveRawSkill = (payload: RawSkillSavePayload) =>
   http.post<SkillDefinition>('/ai/skills/custom/raw', payload).then(res => res.data)
+
+// ── finance_coach (D2/A1a dashboard card, Plan B T5) ─────────────────────────
+//
+// The backend /ai/finance-coach/generate endpoint returns either:
+//   - cached JSON 200 (within 8h): { status: "cached", generated_at, report: { suggestions: [...] } }
+//   - a fresh SSE stream whose terminal finance_coach.result frame carries the
+//     same report shape.
+// Auth is cookie-based (withCredentials), like startAIStream — no Bearer header.
+// On 401 we refresh the cookie and retry once. On any other error we reject so
+// the card hides silently (spec §7.2 design-lens).
+export async function getFinanceCoach(force = false): Promise<FinanceCoachResponse> {
+  const doFetch = () =>
+    fetch(`/api/v1/ai/finance-coach/generate?force=${force}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+
+  let res = await doFetch()
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await doFetch()
+  }
+  if (!res.ok) throw new Error(`finance_coach ${res.status}`)
+
+  const ct = res.headers.get('content-type') || ''
+  if (ct.includes('application/json')) {
+    return (await res.json()) as FinanceCoachResponse
+  }
+
+  // Streaming response — consume SSE until the finance_coach.result frame.
+  // Frames look like: event: custom\ndata: {"type":"finance_coach.result","payload":{"suggestions":[...]}}\n\n
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('no stream body')
+  const decoder = new TextDecoder()
+  let buf = ''
+  let suggestions: FinanceSuggestion[] = []
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const frames = buf.split('\n\n')
+    buf = frames.pop() || ''
+    for (const frame of frames) {
+      const dataLine = frame.split('\n').find((l) => l.startsWith('data: '))
+      if (!dataLine) continue
+      try {
+        const data = JSON.parse(dataLine.slice(6))
+        if (data.type === 'finance_coach.result' && data.payload?.suggestions) {
+          suggestions = data.payload.suggestions
+        }
+      } catch {
+        /* ignore malformed frame */
+      }
+    }
+  }
+  return { status: 'streaming', report: { suggestions } }
+}

@@ -1264,7 +1264,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: Plan A's `POST /api/v1/ai/finance-coach/generate?force=false`. The cached response is `{status: "cached", generated_at, report: {suggestions: [{id, severity, title, action, target_type, target_id, cta_label}]}}`. When not cached, the endpoint streams — for D2 (card, not live chat) the frontend should request and read the final `finance_coach.result` event; simplest correct approach: the backend already caches after the first stream, so the card calls `getFinanceCoach()` which hits the endpoint; if it streams, the composable collects the `finance_coach.result` frame and the card renders it. (Confirm the backend's non-cached response shape from Plan A T8 — it returns `StreamingResponse`. The frontend SSE-consumption pattern already exists in `useThreadChat.ts`; reuse the `EventSource`/fetch-stream helper.)
 - Produces: a Dashboard card showing up to 3 suggestions (severity color bar: high=红, medium=橙, low=蓝), each with title + action + a CTA button. Skeleton while loading; silent hide on failure/empty (spec §7.2 design-lens). A 刷新 button (force=true).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `frontend/apps/main/src/components/dashboard/__tests__/FinanceCoachCard.spec.ts`:
 
@@ -1310,12 +1310,12 @@ describe('FinanceCoachCard', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend/apps/main && pnpm test:run -- FinanceCoachCard`
 Expected: FAIL — component doesn't exist.
 
-- [ ] **Step 3: Add the API client + types**
+- [x] **Step 3: Add the API client + types**
 
 In `frontend/apps/main/src/types/index.ts`, add:
 
@@ -1385,7 +1385,7 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
 
 > **Auth header:** confirm how the existing `http` axios instance attaches the JWT (interceptor). If `fetch` doesn't get the token, the 401 will reject and the card hides. Read `frontend/apps/main/src/api/index.ts` to mirror the auth-header injection (e.g. import the token from the auth store and set `Authorization` explicitly). If simpler, switch this client to use the axios `http` instance with `responseType: 'stream'` — but axios browser stream handling is awkward, so `fetch` is preferred; just ensure the JWT is attached.
 
-- [ ] **Step 4: Create the FinanceCoachCard component**
+- [x] **Step 4: Create the FinanceCoachCard component**
 
 Create `frontend/apps/main/src/components/dashboard/FinanceCoachCard.vue`:
 
@@ -1481,7 +1481,7 @@ onMounted(() => load(false))
 </style>
 ```
 
-- [ ] **Step 5: Add i18n keys**
+- [x] **Step 5: Add i18n keys**
 
 In `frontend/apps/main/src/i18n/locales/zh-CN.ts`, under the `dashboard` section (line 67), add a `financeCoach` sub-object:
 
@@ -1493,7 +1493,7 @@ In `frontend/apps/main/src/i18n/locales/zh-CN.ts`, under the `dashboard` section
     },
 ```
 
-- [ ] **Step 6: Insert the card into DashboardPage**
+- [x] **Step 6: Insert the card into DashboardPage**
 
 In `frontend/apps/main/src/pages/DashboardPage.vue`, between the hero-section close `</div>` (line 27) and the SmartRemindersCard comment (line 29), add:
 
@@ -1508,17 +1508,17 @@ And add the import in the `<script setup>`:
 import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
 ```
 
-- [ ] **Step 7: Run the test to verify it passes**
+- [x] **Step 7: Run the test to verify it passes**
 
 Run: `cd frontend/apps/main && pnpm test:run -- FinanceCoachCard`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 8: Typecheck + lint**
+- [x] **Step 8: Typecheck + lint**
 
 Run: `cd frontend/apps/main && pnpm typecheck && pnpm lint -- src/components/dashboard/FinanceCoachCard.vue src/pages/DashboardPage.vue src/api/ai.ts`
 Expected: no errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add frontend/apps/main/src/components/dashboard/FinanceCoachCard.vue frontend/apps/main/src/pages/DashboardPage.vue frontend/apps/main/src/api/ai.ts frontend/apps/main/src/types/index.ts frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/components/dashboard/__tests__/FinanceCoachCard.spec.ts

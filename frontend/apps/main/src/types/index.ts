@@ -393,6 +393,25 @@ export interface AIReport {
   risk_flags?: string[]
 }
 
+// D2/A1a: finance_coach proactive suggestions (Plan B T5). The backend
+// /ai/finance-coach/generate endpoint returns cached JSON or streams a
+// finance_coach.result frame; both carry the same report shape.
+export type SuggestionSeverity = 'high' | 'medium' | 'low'
+export interface FinanceSuggestion {
+  id: string
+  severity: SuggestionSeverity
+  title: string
+  action: string
+  target_type: 'liability' | 'asset' | 'wish'
+  target_id: string
+  cta_label: string
+}
+export interface FinanceCoachResponse {
+  status: 'cached' | 'streaming'
+  generated_at?: string
+  report: { suggestions: FinanceSuggestion[] }
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
