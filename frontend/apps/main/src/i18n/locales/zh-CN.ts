@@ -946,6 +946,14 @@ export default {
       allUpdated: '储蓄计划已更新',
       partial: '{ok}/{total} 条已更新',
     },
+    // W5 (Plan B T8): high-interest-debt ↔ wish linkage hints.
+    debtWarning: {
+      listHint: '你有¥{amount}高息负债(利率{rate}%)，每月利息不低。先还债比存钱买心愿更划算。',
+      viewStrategy: '查看还款建议',
+      detailHint: '检测到高息负债，建议优先还款',
+      ignore: '忽略',
+      formHint: '检测到高息负债，建议优先还款',
+    },
     uncategorized: '未分类',
     expectedPrice: '预期价格',
     priority: '优先级',

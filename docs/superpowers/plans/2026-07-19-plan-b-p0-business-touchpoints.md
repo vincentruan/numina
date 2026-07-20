@@ -2437,7 +2437,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `PUT /family/debt-thresholds` (owner-only) → updates + returns.
   - Frontend `useDebtWarning()`: given liabilities + thresholds, returns the high-interest set (per-category threshold check) + a per-wish trigger predicate (wish has monthly_saving>0 AND any high-interest liability AND NOT wish.ignore_debt_warning).
 
-- [ ] **Step 1: Write the failing backend test**
+- [x] **Step 1: Write the failing backend test**
 
 Create `server/tests/backend/routers/test_family_debt_thresholds.py`:
 
@@ -2478,12 +2478,12 @@ def test_get_visible_to_all_family_members(client, adult_headers):
 
 > **Fixture note:** `owner_headers` vs `adult_headers` — two users in the same family, one with `role=owner`, one adult. Build via the auth fixtures. If the repo's auth setup makes owner-distinguishing fixtures hard, use a single owner user for PUT and assert the 403 by mocking `require_owner` to raise.
 
-- [ ] **Step 2: Run backend test to verify it fails**
+- [x] **Step 2: Run backend test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_family_debt_thresholds.py -v`
 Expected: FAIL — 404 (routes not registered).
 
-- [ ] **Step 3: Add the thresholds routes**
+- [x] **Step 3: Add the thresholds routes**
 
 In `server/apps/backend/app/routers/family.py`, find `update_family_settings` and its owner guard (spec §5.1: `if user.role != 'owner': raise FAMILY_FORBIDDEN`). Add two routes next to it (mirror the settings read/write pattern — confirm where family settings JSON is stored):
 
@@ -2520,12 +2520,12 @@ def put_debt_thresholds(
 
 > **Service check:** confirm `family_service`'s settings read/write helper names (`get_family_settings` / `update_family_settings` or similar). Read `server/apps/backend/app/routers/family.py` + the family service. If settings are stored as a JSON column on `Family`, mirror the existing `update_family_settings` exactly. `DebtThresholdsRequest` is a small Pydantic model: `class DebtThresholdsRequest(BaseModel): thresholds: dict[str, int]`. **Do NOT use `require_owner` from `ai_deps` if family.py has its own owner guard** — match the existing family.py convention to keep auth consistent.
 
-- [ ] **Step 4: Run backend test to verify it passes**
+- [x] **Step 4: Run backend test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_family_debt_thresholds.py -v`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 5: Create the frontend composable**
+- [x] **Step 5: Create the frontend composable**
 
 Create `frontend/apps/main/src/composables/useDebtWarning.ts`:
 
@@ -2581,7 +2581,7 @@ export function useDebtWarning(liabilities: Ref<Liability[]>, wishes: Ref<Wish[]
 
 > **Ref import:** the `Ref` type — import from `vue`. If the page passes plain refs, this works. `http` import — mirror how `api/wishes.ts` imports `http` (`import http from './index'`); adjust the path. The `monthly_interest` formula matches L1 (T4: `remaining × monthly_rate`).
 
-- [ ] **Step 6: W5 hint UI — WishListPage + WishDetailPage + WishFormPage + LiabilityListPage**
+- [x] **Step 6: W5 hint UI — WishListPage + WishDetailPage + WishFormPage + LiabilityListPage**
 
 (a) `WishListPage.vue` — ABOVE the `<WishAdviceCard>` (spec §5.4: 先止血再储蓄), add a W5 hint bar:
 
@@ -2623,7 +2623,7 @@ onMounted(() => {
 })
 ```
 
-- [ ] **Step 7: Add i18n + frontend test + typecheck**
+- [x] **Step 7: Add i18n + frontend test + typecheck**
 
 Add under `wish.debtWarning.*`:
 ```typescript
@@ -2639,7 +2639,7 @@ Create `frontend/apps/main/src/composables/__tests__/useDebtWarning.spec.ts` (as
 Run: `cd frontend/apps/main && pnpm typecheck && pnpm lint`
 Expected: no errors.
 
-- [ ] **Step 8: Backend lint/typecheck + commit**
+- [x] **Step 8: Backend lint/typecheck + commit**
 
 Run: `cd server && uv run ruff check apps/backend/app/routers/family.py && uv run mypy apps/backend/app/routers/family.py`
 Expected: no errors.

@@ -146,8 +146,8 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'LiabilityList' })
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
@@ -159,6 +159,7 @@ import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const liabilityStore = useLiabilityStore()
 
 const refreshing = ref(false)
@@ -345,6 +346,21 @@ async function batchDelete() {
 }
 
 liabilityStore.fetchLiabilities({ is_active: true })
+
+// W5 (Plan B T8): handle the ?focus=liability_strategy deep link from the
+// WishListPage debt-warning bar (spec §5.3: avoid 断链). Scroll to the L1
+// strategy card if present; otherwise scroll to top (the L1 UI ships in T9).
+onMounted(() => {
+  if (route.query.focus !== 'liability_strategy') return
+  nextTick(() => {
+    const el = document.querySelector('.liability-strategy-card')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' })
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  })
+})
 </script>
 
 <style scoped>

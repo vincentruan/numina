@@ -36,6 +36,7 @@ from apps.backend.app.models.cached_file import CachedFile  # noqa: F401
 from apps.backend.app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
 from apps.backend.app.models.device_session import DeviceSession  # noqa: F401
 from apps.backend.app.models.family import Family  # noqa: F401
+from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds  # noqa: F401
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider  # noqa: F401

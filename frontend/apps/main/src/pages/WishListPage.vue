@@ -28,6 +28,24 @@
 
     <div class="list-content">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+        <!-- W5 (Plan B T8): high-interest-debt hint bar (spec §5.4: 先止血再储蓄,
+             rendered ABOVE the W4 advice card). -->
+        <div
+          v-if="debtWarning.hasHighInterestDebt.value && wishes.length"
+          class="debt-warning-bar"
+        >
+          <van-icon name="warning-o" />
+          <span>{{
+            t('wish.debtWarning.listHint', {
+              amount: debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0,
+              rate: debtWarning.highInterestLiabilities.value[0]?.interest_rate ?? 0,
+            })
+          }}</span>
+          <van-button size="mini" plain @click="goToLiabilityStrategy">
+            {{ t('wish.debtWarning.viewStrategy') }}
+          </van-button>
+        </div>
+
         <!-- W4 (Plan B T7): AI wish-priority advice card. Hides itself when the
              backend returns empty (<2 wishes / no monthly_saving / LLM unavailable). -->
         <WishAdviceCard :wishes="wishes.map((w) => ({ id: w.id, name: w.name, monthly_saving: w.monthly_saving ?? '0' }))" />
@@ -157,21 +175,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type { Wish } from '@/types'
 import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useWishStore } from '@/stores/wish'
+import { useLiabilityStore } from '@/stores/liability'
+import { useDebtWarning } from '@/composables/useDebtWarning'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const dashboardStore = useDashboardStore()
 const wishStore = useWishStore()
+const liabilityStore = useLiabilityStore()
 
 const wishes = ref<Wish[]>([])
+
+// W5 (Plan B T8): high-interest-debt ↔ wish linkage. Warn before saving (spec §5.4).
+const debtWarning = useDebtWarning(
+  toRef(liabilityStore, 'liabilities'),
+  wishes,
+)
 const activeTab = ref<'pending' | 'realized' | 'cancelled'>('pending')
 const refreshing = ref(false)
 const sortBy = ref<'priority' | 'price' | 'name'>('priority')
@@ -226,6 +255,14 @@ async function loadWishes() {
   if (!dashboardStore.overview) {
     dashboardStore.fetchOverview().catch(() => {})
   }
+  // W5: load debt thresholds + liabilities so the high-interest hint can render.
+  void debtWarning.loadThresholds()
+  liabilityStore.fetchLiabilities().catch(() => {})
+}
+
+// W5: jump to the liability strategy view (spec §5.4: 先止血再储蓄).
+function goToLiabilityStrategy() {
+  router.push({ path: '/liabilities', query: { focus: 'liability_strategy' } })
 }
 
 async function onRefresh() {
@@ -237,6 +274,22 @@ onMounted(loadWishes)
 </script>
 
 <style scoped>
+/* ── W5 debt-warning bar (Plan B T8) ── */
+.debt-warning-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px;
+  padding: 8px 10px;
+  background: rgba(255, 151, 106, 0.12);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-primary, #323233);
+}
+.debt-warning-bar span {
+  flex: 1;
+}
+
 /* ── Sort bar ── */
 .sort-bar {
   display: flex;

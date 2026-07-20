@@ -25,6 +25,12 @@ export function realizeWish(id: string, data: WishRealizeRequest) {
   return http.post(`/wishes/${id}/realize`, data)
 }
 
+// W5 (Plan B T8): per-wish opt-out of the high-interest-debt linkage hint.
+// T3 added the backend route (PATCH /wishes/{id}/ignore-debt-warning, body {ignore}).
+export function setIgnoreDebtWarning(id: string, ignore: boolean) {
+  return http.patch<Wish>(`/wishes/${id}/ignore-debt-warning`, { ignore })
+}
+
 // W4 wish-priority advice (Plan B T7). The endpoint returns a bare
 // JSONResponse {status, generated_at?, report} (NOT EnvelopeResponse-wrapped),
 // so the http interceptor passes it through unchanged.

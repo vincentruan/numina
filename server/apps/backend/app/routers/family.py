@@ -10,6 +10,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.child_economy_config import ChildEconomyConfig
+from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
@@ -321,6 +322,72 @@ def get_family_settings(
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
     )
+
+
+# W5 (Plan B T8): high-interest-debt thresholds. A liability is "high-interest"
+# when its annual interest_rate >= its category's threshold. Owner-only write
+# (spec §5.1 security-lens: a non-owner must not suppress/unsuppress the whole
+# family's warnings); all family members read.
+DEFAULT_DEBT_THRESHOLDS: dict[str, int] = {
+    "credit_card": 12,
+    "personal_loan": 10,
+    "mortgage": 6,
+    "other": 10,
+}
+
+
+class DebtThresholdsRequest(BaseModel):
+    thresholds: dict[str, int]
+
+
+def _thresholds_dict(cfg: FamilyDebtThresholds) -> dict[str, int]:
+    return {
+        "credit_card": cfg.credit_card,
+        "personal_loan": cfg.personal_loan,
+        "mortgage": cfg.mortgage,
+        "other": cfg.other,
+    }
+
+
+def _get_or_create_debt_thresholds(db: Session, family_id: int) -> FamilyDebtThresholds:
+    cfg = db.query(FamilyDebtThresholds).filter_by(family_id=family_id).first()
+    if cfg is None:
+        cfg = FamilyDebtThresholds(family_id=family_id)
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+    return cfg
+
+
+@router.get("/debt-thresholds")
+def get_debt_thresholds(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """W5: read debt-interest thresholds (visible to all family members)."""
+    cfg = _get_or_create_debt_thresholds(db, user.family_id)
+    return {"thresholds": _thresholds_dict(cfg)}
+
+
+@router.put("/debt-thresholds")
+def put_debt_thresholds(
+    body: DebtThresholdsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """W5: update debt-interest thresholds. Owner-only — a non-owner could
+    suppress/unsuppress the whole family's high-interest warnings."""
+    if user.role != "owner":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+
+    cfg = _get_or_create_debt_thresholds(db, user.family_id)
+    # Merge: only the 4 known categories are writable; unknown keys ignored.
+    for key in DEFAULT_DEBT_THRESHOLDS:
+        if key in body.thresholds:
+            setattr(cfg, key, body.thresholds[key])
+    db.commit()
+    db.refresh(cfg)
+    return {"thresholds": _thresholds_dict(cfg)}
 
 
 @router.get("/children/{child_id}/balance", response_model=ChildBalanceResponse)
