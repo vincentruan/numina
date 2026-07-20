@@ -92,7 +92,7 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
     from apps.backend.app.models.category import Category
     category = db.query(Category).filter(Category.id == category_id).first()
     if category and category.asset_type != "physical":
-        raise AppError(ErrorCode.VALIDATION_ERROR, detail="Category must be physical type for wish realization")
+        raise AppError(ErrorCode.VALIDATION_ERROR, details="Category must be physical type for wish realization")
 
     try:
         # Create asset
