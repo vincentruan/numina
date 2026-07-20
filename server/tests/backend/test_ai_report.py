@@ -1,5 +1,6 @@
 """Tests for AI asset health report endpoints."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from apps.backend.app.models.ai_report import AIReport
@@ -29,62 +30,46 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
-def _make_two_phase_streaming_mock(markdown_path: str = "/tmp/test-report.md"):
-    """Build a mock AgentClient for the two-phase report pipeline.
+def _make_sse_streaming_mock(frames: list[tuple[str, dict]] | None = None) -> MagicMock:
+    """Build a mock AgentClient for the SSE report passthrough.
 
-    proxy_report_events calls _call_agent_skill twice:
-      Phase 1 (report_generate) → capability.end with result.success=True + result.path
-      Phase 2 (report_structured) → capability.end with summary containing STRUCTURED_DATA JSON
+    ``_stream_asset_report_sse`` is a pure passthrough: it ``await``s
+    ``agent_client.stream(...)``, checks ``resp.status_code == 200``, then
+    forwards every line from ``resp.aiter_lines()`` as raw SSE bytes. The mock
+    yields the given ``(event, data)`` pairs as ``event:``/``data:`` SSE lines
+    (blank line separating events) so the route returns ``text/event-stream``.
 
-    The mock's .stream() returns the phase-1 stream on the first call and the
-    phase-2 stream on the second, matching the call sequence.
+    Note: the SSE route does NOT transition the AITask to completed/failed —
+    that lifecycle moved to the agent worker side during the U4 SSE refactor.
+    Backend ``complete_task`` has no report-path caller, so after the stream
+    the task stays ``running``.
     """
-    import json
+    if frames is None:
+        frames = [("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]
 
-    phase1_chunks = [
-        json.dumps({"type": "capability.end", "result": {"success": True, "path": markdown_path}}),
-    ]
-    structured = (
-        "报告解析完成。\n"
-        "<!-- STRUCTURED_DATA "
-        '{"overall_score": 75, "data_completeness_score": 0.8, "narrative": "示例", "sections": {}, '
-        '"indicators": ['
-        '{"key": "liquidity", "label": "流动性", "score": 4, "narrative": "良好"}, '
-        '{"key": "debt", "label": "负债", "score": 3, "narrative": "适中"}, '
-        '{"key": "growth", "label": "增长", "score": 5, "narrative": "强劲"}'
-        "]}"
-        " -->"
-    )
-    phase2_chunks = [
-        json.dumps({"type": "capability.end", "result": {"summary": structured}}),
-    ]
+    lines: list[str] = []
+    for event, data in frames:
+        lines.append(f"event: {event}")
+        lines.append(f"data: {json.dumps(data, ensure_ascii=False)}")
+        lines.append("")
+    lines.append("event: end")
+    lines.append("data: null")
+    lines.append("")
 
-    def _make_resp(chunks):
-        async def _aiter_lines():
-            for chunk in chunks:
-                yield chunk
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.aiter_lines = lambda: (_l for _l in lines)
+    resp.aread = AsyncMock(return_value=b"")
 
-        resp = MagicMock()
-        resp.aiter_lines = _aiter_lines
-        cm = MagicMock()
-        cm.__aenter__ = AsyncMock(return_value=resp)
-        cm.__aexit__ = AsyncMock(return_value=False)
-        return cm
-
-    streams = [_make_resp(phase1_chunks), _make_resp(phase2_chunks)]
-    call_state = {"i": 0}
-
-    def _stream(*a, **k):
-        cm = streams[min(call_state["i"], len(streams) - 1)]
-        call_state["i"] += 1
-        return cm
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
 
     mock_client = MagicMock()
-    mock_client.stream = MagicMock(side_effect=_stream)
+    mock_client.stream = MagicMock(return_value=cm)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_cls = MagicMock(return_value=mock_client)
-    return mock_cls
+    return MagicMock(return_value=mock_client)
 
 
 # ── GET /ai/report ──────────────────────────────────────────────────────────────
@@ -154,25 +139,30 @@ def test_get_report_requires_auth(client):
 # ── POST /ai/report/generate ─────────────────────────────────────────────────────
 
 def test_generate_report_creates_pending_then_completes(client, auth_headers, db):
-    """POST /ai/report/generate/events streams response and creates a completed AITask."""
+    """POST /ai/report/generate/events streams SSE and leaves the task running.
+
+    U4 SSE refactor: the route is a pure passthrough — it creates the AITask
+    (status=running) and forwards the agent's SSE stream, but task completion
+    is now the agent worker's responsibility (backend ``complete_task`` has no
+    report-path caller). So after the stream the task stays ``running``.
+    """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=_make_two_phase_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
     # CRITICAL: Consume entire response body to let generator complete execution
-    # TestClient.post() returns after first chunk, but generator hasn't finished yet
     _ = resp.content  # Force full response consumption
 
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
-    assert task.status == "completed"
+    assert task.status == "running"
 
 
 def test_generate_report_requires_ai_enabled(client, auth_headers, db):
@@ -191,11 +181,11 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate/events requires owner role (embedded in JWT)."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=_make_two_phase_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
 
 def test_generate_report_resumes_running_task(client, auth_headers, db):
@@ -226,16 +216,22 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     db.add(task)
     db.commit()
 
-    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=_make_two_phase_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Should resume (200 + NDJSON stream) instead of 409
+    # Should resume (200 + SSE stream) instead of 409
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
-    """If agent streaming fails, AITask is marked as failed and error event is yielded."""
+    """If agent streaming raises, the route emits an SSE error frame (200) but
+    does NOT transition the AITask — task lifecycle moved to the agent worker
+    in the U4 SSE refactor, so the task stays ``running``.
+
+    The passthrough's ``except`` catches the exception and yields a single
+    ``event: error`` SSE frame so the frontend gets a graceful close.
+    """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
@@ -245,7 +241,9 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
         yield  # make it an async generator
 
     mock_resp = MagicMock()
+    mock_resp.status_code = 200
     mock_resp.aiter_lines = _aiter_raises
+    mock_resp.aread = AsyncMock(return_value=b"")
 
     mock_stream_cm = MagicMock()
     mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -258,20 +256,21 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
 
     mock_cls = MagicMock(return_value=mock_client)
 
-    with patch("apps.backend.app.routers._ai_events_helper.AgentClient", new=mock_cls):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=mock_cls):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Response should still be 200 with error event (helper catches errors)
+    # Response is still 200 SSE (passthrough catches the error and emits an error frame)
     assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
     # CRITICAL: Consume response to let generator's except/finally block execute
     _ = resp.content
 
-    # The task should be marked failed in DB
+    # Task stays running — backend no longer owns report task completion
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
-    assert task.status == "failed"
+    assert task.status == "running"
 
 
 # ── Cross-family isolation ──────────────────────────────────────────────────────
