@@ -4,6 +4,8 @@
 **Severity:** P0 (Critical)
 **Status:** Fixed
 
+> **Update note (2026-07-20):** Layer 4 of the chain below (`orchestrator.stream_dispatch` on `orchestrator.py`) was **deleted** in the two-AI-apps unified-dispatch refactor (U8) — the `Orchestrator` class is gone; `is_plan_mode` / `subagent_enabled` now flow through `worker.run_agent(app)` → the per-app runner → `DeerFlowAdapter.typed_stream_dispatch` → `runnable_config`. Layers 5–7 (`agent_dispatch.py`, `chat_adapter.py`) survived and still carry these parameters. The 7-layer propagation *lesson* (trace a parameter through every layer of a multi-service chain before declaring the contract fixed) is durable; the specific `orchestrator.stream_dispatch` hop is historical. See [`two-ai-apps-unified-dispatch-stream-run.md`](../architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) for the current dispatch path.
+
 ---
 
 ## Problem

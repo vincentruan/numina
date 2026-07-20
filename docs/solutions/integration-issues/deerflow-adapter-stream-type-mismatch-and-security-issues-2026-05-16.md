@@ -29,6 +29,8 @@ tags:
 
 # DeerFlow Adapter: stream_dispatch Type Mismatch and Security Issues in 2.0 Alignment Refactor
 
+> **Update note (2026-07-20):** The 6 raw-text streaming routers (`/alerts/stream`, `/allocation/stream`, `/liability/stream`, `/spending_leak/stream`, `/disposal/stream`, `/time_machine/stream`) and the `orchestrator.stream_dispatch()` method that Fix 1 patches were **deleted as dead code** in the two-AI-apps unified-dispatch refactor (U5/U7/U8) — the trigger-skill routers had been unreachable since commit `a97eb08c`. The `StreamChunk` type itself and `DeerFlowAdapter.stream_dispatch` survive on the adapter class. **Fix 1 is historical** (the patched code no longer exists). **Fixes 2–4 (security: `family_id` validation, `hmac.compare_digest` token comparison, `DEERFLOW_GATEWAY_URL` allowlist) remain current** — `gateway.py` still uses `_SAFE_ID_PATTERN` + `_verify_token`, and `family_id` validation now lives in `server/apps/agent/core/backend_client.py:_validate_family_id`. The security lessons are the durable part of this doc.
+
 ## Problem
 
 The DeerFlow 2.0 adapter alignment refactor (`feat/deerflow2-alignment`) changed `orchestrator.stream_dispatch()` to yield `StreamChunk` dataclass objects instead of plain strings, but did not update the 6 raw-text streaming routers that call `.encode("utf-8")` on the yielded values. The same refactor introduced a new Gateway API proxy (`gateway.py`) with three security issues: unsanitized `family_id` header values reaching filesystem write paths (path traversal), non-constant-time token comparison (timing oracle), and an unvalidated `DEERFLOW_GATEWAY_URL` base URL (SSRF).
@@ -73,7 +75,9 @@ The NDJSON path was updated correctly because `stream_dispatch_events()` explici
 
 ### Fix 1: Restore `str` contract in `orchestrator.stream_dispatch()`
 
-**File:** `server/apps/agent/services/orchestrator.py` (~line 370)
+> **Historical (2026-07):** `orchestrator.py` and its `stream_dispatch()` method were deleted in the unified-dispatch refactor. This fix is retained as a record of the `StreamChunk`-vs-`str` contract issue; the patched code path no longer exists.
+
+**File:** `server/apps/agent/services/orchestrator.py` (~line 370) *(deleted)*
 
 ```python
 # Before (broken — yields StreamChunk object):
@@ -109,6 +113,8 @@ def validate_family_id(family_id: str) -> None:
 ```
 
 Apply at the top of each router handler that accepts `X-Family-Id` (alerts, allocation, chat, disposal, liability, spending_leak, time_machine, import_parse, suggest, report):
+
+> **Update (2026-07):** most of those routers were deleted in the unified-dispatch refactor. The `family_id` validation pattern survived and now lives centrally in `server/apps/agent/core/backend_client.py:_validate_family_id` (called from `BackendClient.__init__` and every backend call). The `validate_family_id` per-router approach below is the historical shape; the centralized validator is the current one.
 
 ```python
 @router.post("/stream")

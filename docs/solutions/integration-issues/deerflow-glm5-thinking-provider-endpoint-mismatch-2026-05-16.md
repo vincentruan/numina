@@ -30,6 +30,8 @@ tags:
 
 # GLM-5 Deep Thinking Not Working — Provider/Endpoint Mismatch in DeerFlow Adapter
 
+> **Update note (2026-07-20):** References below to "the orchestrator converts to phase.thinking" and `stream_dispatch()` / `stream_dispatch_events()` describe the pre-refactor path. The `Orchestrator` class was deleted in the unified-dispatch refactor (U8); the thinking-pipeline (`family_adapter_cache` config generation, `adapter.py` `reasoning_content` extraction, `StreamChunk` dispatch-on-type, `_chunk_to_event_lines`) **survives** on `DeerFlowAdapter` and is reached via `worker.run_agent(app)` → per-app runner → `typed_stream_dispatch`. The provider/endpoint-mismatch root cause and fix are unaffected. See [`two-ai-apps-unified-dispatch-stream-run.md`](../architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md).
+
 ## Problem
 
 GLM-5's deep thinking feature (`deep_think=true`) produced no `phase.thinking` events in the NDJSON stream. The AI agent microservice uses DeerFlow, where `family_adapter_cache.py` generates per-family DeerFlow config YAML and selects a LangChain model class based on the `provider` and `thinking_supported` fields. `adapter.py` wraps DeerFlowClient, extracts `reasoning_content` from stream events, and emits `[THINK]`-prefixed chunks that the orchestrator converts to `phase.thinking` NDJSON events. The entire thinking pipeline was silently bypassed because the model was pointed at the wrong API endpoint format.
