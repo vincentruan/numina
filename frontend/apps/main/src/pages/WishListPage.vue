@@ -37,7 +37,7 @@
           <van-icon name="warning-o" />
           <span>{{
             t('wish.debtWarning.listHint', {
-              amount: debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0,
+              amount: Number(debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0),
               rate: debtWarning.highInterestLiabilities.value[0]?.interest_rate ?? 0,
             })
           }}</span>

@@ -1,9 +1,31 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
+
+
+def _coerce_to_decimal(v: Any) -> Decimal | None:
+    """Accept int/float/str/Decimal and return a Decimal (or None).
+
+    Shared input coercion for money fields on Create/Update/PaymentRequest.
+    """
+    if v is None or isinstance(v, Decimal):
+        return v
+    return Decimal(str(v))
+
+
+def _coerce_money_str(v: Any) -> str | None:
+    """Serialize a money value to a 2-decimal str (or None) for the wire.
+
+    Shared output coercion for money fields on LiabilityResponse — the
+    money-as-str convention (Decimal in compute, str on the wire).
+    """
+    if v is None or isinstance(v, str):
+        return v
+    return str(Decimal(v).quantize(Decimal("0.01")))
 
 
 class LiabilityCreate(BaseModel):
@@ -23,9 +45,7 @@ class LiabilityCreate(BaseModel):
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        if v is None or isinstance(v, Decimal):
-            return v
-        return Decimal(str(v))
+        return _coerce_to_decimal(v)
 
 
 class LiabilityUpdate(BaseModel):
@@ -45,9 +65,7 @@ class LiabilityUpdate(BaseModel):
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        if v is None or isinstance(v, Decimal):
-            return v
-        return Decimal(str(v))
+        return _coerce_to_decimal(v)
 
 
 class PaymentRequest(BaseModel):
@@ -56,9 +74,7 @@ class PaymentRequest(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        if isinstance(v, Decimal):
-            return v
-        return Decimal(str(v))
+        return _coerce_to_decimal(v)
 
 
 class LiabilityResponse(SnowflakeBase):
@@ -85,6 +101,4 @@ class LiabilityResponse(SnowflakeBase):
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        if v is None or isinstance(v, str):
-            return v
-        return str(Decimal(v).quantize(Decimal("0.01")))
+        return _coerce_money_str(v)

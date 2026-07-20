@@ -16,10 +16,13 @@ function makeLiability(overrides: Partial<Liability> = {}): Liability {
     family_id: 'f1',
     category: 'credit_card',
     name: '信用卡',
-    original_amount: 10000,
-    remaining_amount: 8000,
+    // Money fields are str on the wire (Liability type) — use strings so the
+    // test exercises the Number() coercion path in useDebtWarning (regression
+    // guard for the string-arithmetic NaN bug fixed in the review pass).
+    original_amount: '10000',
+    remaining_amount: '8000',
     currency: 'CNY',
-    monthly_payment: 1000,
+    monthly_payment: '1000',
     interest_rate: 18,
     start_date: '2024-01-01',
     is_active: true,
