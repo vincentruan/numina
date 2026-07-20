@@ -63,7 +63,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 - Consumes: existing `RESERVED_NAMES` list.
 - Produces: `RESERVED_NAMES` now includes `"finance-coach"`, blocking owner from creating a custom skill of that name. Downstream: `bootstrap_agents` (Task 3) and the SKILL loader rely on this reservation.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `server/tests/backend/test_ai_skills.py` (create the test function; if a `test_reserved_names` already exists, extend it instead of duplicating):
 
@@ -74,12 +74,12 @@ def test_reserved_names_includes_finance_coach():
     assert "finance-coach" in RESERVED_NAMES
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/test_ai_skills.py::test_reserved_names_includes_finance_coach -v`
 Expected: FAIL with `AssertionError: assert 'finance-coach' in ['chat', 'asset-report', 'import-parse']`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `server/apps/backend/app/routers/ai_skills.py`, change line 55:
 
@@ -95,17 +95,17 @@ And update the comment block above it (lines 48-54) to add a bullet:
 RESERVED_NAMES = ["chat", "asset-report", "import-parse", "finance-coach"]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/test_ai_skills.py::test_reserved_names_includes_finance_coach -v`
 Expected: PASS
 
-- [ ] **Step 5: Lint + typecheck the touched file**
+- [x] **Step 5: Lint + typecheck the touched file**
 
 Run: `cd server && uv run ruff check apps/backend/app/routers/ai_skills.py tests/backend/test_ai_skills.py && uv run mypy apps/backend/app/routers/ai_skills.py`
 Expected: no errors
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/apps/backend/app/routers/ai_skills.py server/tests/backend/test_ai_skills.py
@@ -126,7 +126,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: `down_revision = "f8a4c2e1b9d6"` (current head — import-parse system agent).
 - Produces: `ai_agents` row `id=100000000000008, agent_name='finance-coach'`. Task 3's `bootstrap_agents` upserts the same row (idempotent — `INSERT OR IGNORE` here + `_upsert_builtin_agent` update-on-conflict there).
 
-- [ ] **Step 1: Create the migration file**
+- [x] **Step 1: Create the migration file**
 
 Create `server/apps/backend/alembic/versions/c4d5e6f7a8b9_add_finance_coach_system_agent.py`:
 
@@ -196,22 +196,22 @@ def downgrade() -> None:
 > ```
 > Use the `WHERE NOT EXISTS` form if the target deployment is PostgreSQL. Keep `INSERT OR IGNORE` for SQLite dev. The implementer should pick the form matching their test DB and note it in the commit.
 
-- [ ] **Step 2: Verify the migration runs**
+- [x] **Step 2: Verify the migration runs**
 
 Run: `cd server/apps/backend && uv run alembic upgrade head`
 Expected: the new revision `c4d5e6f7a8b9` applies with no error; `alembic current` shows `c4d5e6f7a8b9 (head)`.
 
-- [ ] **Step 3: Verify the row exists**
+- [x] **Step 3: Verify the row exists**
 
 Run: `cd server && uv run python -c "from apps.backend.app.database import SessionLocal; from apps.backend.app.models.ai_agent import AIAgent; s=SessionLocal(); a=s.query(AIAgent).filter_by(agent_name='finance-coach').first(); print(a.id, a.agent_name, a.memory_enabled, a.skills)"`
 Expected: `100000000000008 finance-coach False ['finance-coach']`
 
-- [ ] **Step 4: Verify downgrade is clean**
+- [x] **Step 4: Verify downgrade is clean**
 
 Run: `cd server/apps/backend && uv run alembic downgrade -1 && uv run alembic upgrade head`
 Expected: both succeed; row removed then re-added.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add server/apps/backend/alembic/versions/c4d5e6f7a8b9_add_finance_coach_system_agent.py
@@ -233,7 +233,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: `_upsert_builtin_agent` helper (line 178) and `bootstrap_agents` (line 209). Existing constants imported from `apps.backend.app.constants.system_ids` (agents.py:5-9): `NUMINA_AGENT_ID` / `ASSET_REPORT_AGENT_ID` / `IMPORT_PARSE_AGENT_ID`. The existing values are `NUMINA_AGENT_ID=100000000000005`, `ASSET_REPORT_AGENT_ID=100000000000006`, `IMPORT_PARSE_AGENT_ID=100000000000007` — so finance-coach takes `100000000000008`.
 - Produces: on every app startup, `bootstrap_agents` upserts the finance-coach row (syncing `soul_md`/`memory_enabled` with code). This is the source of truth — the Task 2 migration only seeds existing DBs. The constant lives in `system_ids.py` (the canonical home for system-agent IDs), imported by both `bootstrap/agents.py` and available to any caller.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `server/tests/backend/bootstrap/test_bootstrap_agents.py` (create file if absent):
 
@@ -266,12 +266,12 @@ def test_bootstrap_finance_coach_is_idempotent(db_session):
 
 > **Note:** `db_session` is the repo's existing test fixture — confirm the fixture name in `server/tests/backend/conftest.py`; if it's `session` not `db_session`, use that name instead. If no `tests/bootstrap/` dir exists, create it with an `__init__.py`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/bootstrap/test_bootstrap_agents.py -v`
 Expected: FAIL with `ImportError: cannot import name 'FINANCE_COACH_AGENT_ID'` (the constant doesn't exist yet in `system_ids.py`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 (a) In `server/apps/backend/app/constants/system_ids.py`, after line 11 (`IMPORT_PARSE_AGENT_ID: int = 100000000000007`), add:
 
@@ -332,17 +332,17 @@ def bootstrap_agents(db: Session) -> None:
     db.commit()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/bootstrap/test_bootstrap_agents.py -v`
 Expected: both tests PASS.
 
-- [ ] **Step 5: Lint + typecheck**
+- [x] **Step 5: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/backend/app/constants/system_ids.py apps/backend/app/bootstrap/agents.py tests/backend/bootstrap/ && uv run mypy apps/backend/app/bootstrap/agents.py`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/apps/backend/app/constants/system_ids.py server/apps/backend/app/bootstrap/agents.py server/tests/backend/bootstrap/
@@ -363,7 +363,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: MCP tools `get_assets` / `get_liabilities` / `get_members` (family-data, base names — `sync_tool_patch.py` `tool_name_prefix=False`).
 - Produces: skill prompt loaded by harness at runtime when `skill_name="finance-coach"`. The worker (Task 6) parses the final ```json block as `suggestions[]`. The `allowed-tools` list gates `filter_tools_by_skill_allowed_tools` (full-name exact match — base names required, not `numina-*` prefixed).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/apps/agent/tests/unit/test_finance_coach_skill.py`:
 
@@ -418,12 +418,12 @@ def test_thinking_disabled():
     assert fm.get("thinking") is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest apps/agent/tests/unit/test_finance_coach_skill.py -v`
 Expected: FAIL — `test_skill_file_exists` fails (file doesn't exist yet).
 
-- [ ] **Step 3: Write minimal implementation — create the SKILL.md**
+- [x] **Step 3: Write minimal implementation — create the SKILL.md**
 
 Create `server/apps/agent/skills/builtin/public/finance-coach/SKILL.md`:
 
@@ -525,12 +525,12 @@ idle_assets / top_daily_cost_assets / wishes）以 JSON 形式注入消息内容
 - **仅 1-2 个显著问题**→ 只出实际条数，不补凑到 3 条。
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd server && uv run pytest apps/agent/tests/unit/test_finance_coach_skill.py -v`
 Expected: all 4 tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add server/apps/agent/skills/builtin/public/finance-coach/SKILL.md server/apps/agent/tests/unit/test_finance_coach_skill.py
@@ -552,7 +552,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: `start_run` (sse_gateway.py:133) with `internal=True`; `_verify_token`, `_validate_path_segment`, `sse_consumer`, `get_stream_bridge`, `get_run_manager` (all in gateway.py). Existing `AssetReportRunRequest` model (gateway.py:224) as the mirror template.
 - Produces: `POST /internal/gateway/runs/finance-coach/{thread_id}` — backend (Plan B D2/A1a, and Task 8's `ai_finance_coach.py`) calls this with `X-Agent-Token`, gets SSE stream. The worker (Task 6) reads `record.metadata["app"] == "finance-coach"` and dispatches to `_run_finance_coach_agent`. R1 rejects direct frontend dispatch (409, like import-parse).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/apps/agent/tests/integration/test_gateway_finance_coach.py` (mirror the structure of `test_gateway_asset_report.py`):
 
@@ -612,12 +612,12 @@ async def test_r1_rejects_unknown_app_still_400(agent_app_client, agent_token):
 
 > **Note:** `agent_app_client` / `agent_token` fixtures come from the existing `test_gateway_asset_report.py` conftest — confirm fixture names by reading `server/apps/agent/tests/integration/conftest.py` and reuse the same names. If `TestClient` (sync) is used instead of async, drop `await` and `@pytest.mark.asyncio`. Match the existing test file's style exactly.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest apps/agent/tests/integration/test_gateway_finance_coach.py -v`
 Expected: FAIL — route doesn't exist (404 on first test); R1 doesn't recognize `finance-coach` (second test likely 400 "未知 app" not 409).
 
-- [ ] **Step 3: Add the gateway route**
+- [x] **Step 3: Add the gateway route**
 
 In `server/apps/agent/app/routers/gateway.py`, after the asset-report route block (after line 294), add:
 
@@ -696,7 +696,7 @@ async def trigger_finance_coach_run(
     )
 ```
 
-- [ ] **Step 4: Add finance-coach to the R1 allowlist**
+- [x] **Step 4: Add finance-coach to the R1 allowlist**
 
 In `server/apps/agent/services/runtime/sse_gateway.py`, update the R1 gate block (lines 183-197). After the `import-parse` 409 block (line 190-195) and before the final 400 line (196), add a `finance-coach` 409 block; then extend the 400 line:
 
@@ -721,22 +721,22 @@ Also update the comment block (lines 165-181) to add a `finance-coach` bullet:
     #     gateway) — those have already passed the backend's auth gate.
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd server && uv run pytest apps/agent/tests/integration/test_gateway_finance_coach.py -v`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 6: Run existing gateway tests for regression**
+- [x] **Step 6: Run existing gateway tests for regression**
 
 Run: `cd server && uv run pytest apps/agent/tests/integration/test_gateway_asset_report.py apps/agent/tests/integration/test_u2_app_dispatch.py -v`
 Expected: all PASS (the R1 allowlist edit must not break asset-report/import-parse/numina dispatch).
 
-- [ ] **Step 7: Lint + typecheck**
+- [x] **Step 7: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/agent/app/routers/gateway.py apps/agent/services/runtime/sse_gateway.py apps/agent/tests/integration/test_gateway_finance_coach.py && uv run mypy apps/agent/app/routers/gateway.py apps/agent/services/runtime/sse_gateway.py`
 Expected: no errors.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/apps/agent/app/routers/gateway.py server/apps/agent/services/runtime/sse_gateway.py server/apps/agent/tests/integration/test_gateway_finance_coach.py
@@ -760,7 +760,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: `BackendClient`, `FamilyContext`, `pii_redactor`, `create_family_adapter`, `set_active_skill`/`reset_active_skill`, `parse_report_json` (all already imported in worker.py), `AuditEntry`/`audit_logger`, `set_family_sandbox_context`. The `app` value `"finance-coach"` is set by the gateway route (Task 5) via `metadata={"app": "finance-coach"}`.
 - Produces: when the backend (Task 8) triggers `/internal/gateway/runs/finance-coach/{thread_id}`, the worker dispatches here. The agent runs a single `typed_stream_dispatch` with `skill_name="finance-coach"` (Task 4 SKILL.md), forwards SSE frames, and emits exactly one `finance_coach.result` custom event with `{"suggestions": [...]}` before the `end` frame. The backend caches this (Task 7/8) and the frontend (Plan B D2) renders the top 3 suggestions.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/apps/agent/tests/unit/test_worker_finance_coach.py`:
 
@@ -803,12 +803,12 @@ def test_synthetic_finance_coach_trigger_constant():
     assert "/finance-coach" in worker._SYNTHETIC_FINANCE_COACH_TRIGGER
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest apps/agent/tests/unit/test_worker_finance_coach.py -v`
 Expected: FAIL — `test_run_finance_coach_agent_exists_with_expected_signature` fails (`_run_finance_coach_agent` not defined) and `test_finance_coach_dispatch_branch_exists` fails (no branch yet).
 
-- [ ] **Step 3: Add the synthetic trigger constant**
+- [x] **Step 3: Add the synthetic trigger constant**
 
 In `server/apps/agent/services/runtime/worker.py`, after line 634 (`_SYNTHETIC_IMPORT_PARSE_TRIGGER = "/import-parse 解析金融文档持仓"`), add:
 
@@ -816,7 +816,7 @@ In `server/apps/agent/services/runtime/worker.py`, after line 634 (`_SYNTHETIC_I
 _SYNTHETIC_FINANCE_COACH_TRIGGER = "/finance-coach 生成家庭财务建议"
 ```
 
-- [ ] **Step 4: Add the dispatch branch**
+- [x] **Step 4: Add the dispatch branch**
 
 In the dispatch function (lines 253-264), after the `import-parse` branch's `return` (line 264) and before the `# Default / "numina"` comment (line 265), add:
 
@@ -841,7 +841,7 @@ Also update the docstring app list (lines 221-224) to add the bullet:
       - ``finance-coach`` → ``_run_finance_coach_agent`` (Plan A single-run advice).
 ```
 
-- [ ] **Step 5: Add the `_run_finance_coach_agent` function**
+- [x] **Step 5: Add the `_run_finance_coach_agent` function**
 
 In `server/apps/agent/services/runtime/worker.py`, after `_run_import_parse_agent` ends (line 906, the `schedule_run_cleanup(...)` line) and before `async def _run_numina_agent(` (line 909), add the function below. It mirrors `_run_import_parse_agent` (lines 657-906) exactly, with these changes: `skill_name="finance-coach"`, `agent_name="finance-coach"`, capability `"finance-coach"`, the snapshot injected from `graph_input` (backend builds it; see Task 8), and a `finance_coach.result` custom event. Use `parse_report_json` (already imported) to extract the JSON from the LLM's final ```json block.
 
@@ -1123,17 +1123,17 @@ def _extract_finance_coach_snapshot(graph_input: dict | None) -> str | None:
     return None
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `cd server && uv run pytest apps/agent/tests/unit/test_worker_finance_coach.py -v`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 7: Lint + typecheck**
+- [x] **Step 7: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/agent/services/runtime/worker.py apps/agent/tests/unit/test_worker_finance_coach.py && uv run mypy apps/agent/services/runtime/worker.py`
 Expected: no errors.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/apps/agent/services/runtime/worker.py server/apps/agent/tests/unit/test_worker_finance_coach.py
@@ -1158,7 +1158,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `ai_reports.capability VARCHAR(32) NOT NULL DEFAULT 'report'` column + index on `(family_id, capability, status)`. Existing rows backfill to `'report'` (via server_default), so existing report queries are unaffected.
   - `finance_coach_cache.py` exposes: `CAPABILITY_TTL: dict[str, timedelta]`, `latest_by_capability(family_id, capability, db) -> AIReport | None`, `upsert_capability_result(family_id, capability, payload: dict, db) -> AIReport`, `invalidate_capability(family_id, capability, db) -> None`. Task 8 (backend trigger) + Plan B entity-change invalidation call these.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/tests/backend/services/test_finance_coach_cache.py`:
 
@@ -1233,12 +1233,12 @@ def test_upsert_capability_result_sets_capability_column(db_session):
 
 > **Fixture note:** confirm the DB session fixture name in `server/tests/backend/conftest.py` — if it's `session` not `db_session`, rename the parameter in every test above. The `family_id` is passed as a `str` here (matching how `ai_report.py` receives `current_user.family_id` as str); `upsert_capability_result` coerces to int internally (see implementation below).
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_cache.py -v`
 Expected: FAIL — `ImportError: cannot import name 'CAPABILITY_TTL'` (service module + column don't exist yet).
 
-- [ ] **Step 3: Create the migration**
+- [x] **Step 3: Create the migration**
 
 Create `server/apps/backend/alembic/versions/b9c7d2e4f6a8_add_capability_to_ai_reports.py`:
 
@@ -1294,7 +1294,7 @@ def downgrade() -> None:
     op.drop_column("ai_reports", "capability")
 ```
 
-- [ ] **Step 4: Add the `capability` column to the model**
+- [x] **Step 4: Add the `capability` column to the model**
 
 In `server/apps/backend/app/models/ai_report.py`, after the `markdown_file_path` column (line ~30), add:
 
@@ -1308,7 +1308,7 @@ In `server/apps/backend/app/models/ai_report.py`, after the `markdown_file_path`
 
 (If `String` is not imported in the model file, add it to the existing `from sqlalchemy import ...` import line.)
 
-- [ ] **Step 5: Create the capability-cache service**
+- [x] **Step 5: Create the capability-cache service**
 
 Create `server/apps/backend/app/services/finance_coach_cache.py`:
 
@@ -1417,22 +1417,22 @@ def invalidate_capability(
 
 > **Import check:** confirm `next_id`'s import path. `ai_report.py:22` has `default=next_id` — read its import line and use the same path. If it's `from packages.core.snowflake import next_id`, use that; if it's a local `from ... import next_id`, mirror it exactly.
 
-- [ ] **Step 6: Run the migration**
+- [x] **Step 6: Run the migration**
 
 Run: `cd server/apps/backend && uv run alembic upgrade head`
 Expected: revision `b9c7d2e4f6a8` applies; `alembic current` shows `b9c7d2e4f6a8 (head)`.
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_cache.py -v`
 Expected: all 5 tests PASS.
 
-- [ ] **Step 8: Verify report regression — existing report cache still works**
+- [x] **Step 8: Verify report regression — existing report cache still works**
 
 Run: `cd server && uv run pytest tests/backend/test_ai_report.py -v 2>/dev/null || uv run pytest tests/backend/routers/ -k report -v`
 Expected: existing report tests still PASS (the column has server_default='report', so existing report rows read back with capability='report'). If a test asserts the exact column set of AIReport, update it to include `capability`.
 
-- [ ] **Step 9: Update `_latest_report` + `REPORT_CACHE_TTL` in ai_report.py to be capability-aware**
+- [x] **Step 9: Update `_latest_report` + `REPORT_CACHE_TTL` in ai_report.py to be capability-aware**
 
 In `server/apps/backend/app/routers/ai_report.py`, update `_latest_report` (line 47) to scope by capability='report' (keeps existing report behavior identical) and read TTL from the new map:
 
@@ -1451,12 +1451,12 @@ REPORT_CACHE_TTL = CAPABILITY_TTL["report"]  # keep existing report behavior
 
 (Keep the `timedelta` import if still used elsewhere in the file; ruff will flag if unused.)
 
-- [ ] **Step 10: Lint + typecheck**
+- [x] **Step 10: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/backend/app/models/ai_report.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/routers/ai_report.py tests/backend/services/test_finance_coach_cache.py && uv run mypy apps/backend/app/models/ai_report.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/routers/ai_report.py`
 Expected: no errors.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add server/apps/backend/alembic/versions/b9c7d2e4f6a8_add_capability_to_ai_reports.py server/apps/backend/app/models/ai_report.py server/apps/backend/app/services/finance_coach_cache.py server/apps/backend/app/routers/ai_report.py server/tests/backend/services/test_finance_coach_cache.py
@@ -1486,7 +1486,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `POST /ai/finance-coach/generate?force=false` → SSE stream (proxied from the agent gateway) OR cached JSON 200. The stream carries the worker's `finance_coach.result` custom event (Task 6); the backend also persists the result to `ai_reports` (capability='finance_coach') after the stream completes, so the next call within 8h returns the cache.
   - `finance_coach_snapshot.py` exposes `build_family_finance_snapshot(db, family_id) -> dict` — the PII-minimized snapshot (id+category, no name) per spec §7.1.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/tests/backend/routers/test_ai_finance_coach.py`:
 
@@ -1541,12 +1541,12 @@ def test_generate_blocked_by_circuit_breaker(client, auth_headers):
 
 > **Fixture note:** confirm `client` + `auth_headers` fixture names in `server/tests/backend/conftest.py` and the API prefix (`/api/v1` per the existing routers — confirm by grepping an existing router test). If the prefix differs, adjust. The `family_id` in the upsert must match the authenticated user's family in the test setup; if the test user's family differs, use that family id.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_ai_finance_coach.py -v`
 Expected: FAIL — 404 (route not registered) / `ImportError` for the router module.
 
-- [ ] **Step 3: Create the snapshot builder**
+- [x] **Step 3: Create the snapshot builder**
 
 Create `server/apps/backend/app/services/finance_coach_snapshot.py`:
 
@@ -1645,7 +1645,7 @@ def build_family_finance_snapshot(db: Session, family_id: str | int) -> dict[str
 
 > **Column check:** `saved_amount` / `monthly_saving` / `target_date` on `Wish` are added by **Plan B W1** (which runs after Plan A). In Plan A's test DB these columns may not exist yet — guard with `getattr(..., None)` (already done above) so the snapshot builder doesn't crash if the columns are absent. `Asset.daily_cost` / `usage_frequency` / `category` — confirm the actual column names by reading `server/apps/backend/app/models/asset.py` and adjust the `getattr` keys. `Liability.category` / `is_active` / `remaining_amount` / `interest_rate` are confirmed (Liability type on the frontend has these; verify the model column names match).
 
-- [ ] **Step 4: Create the trigger endpoint router**
+- [x] **Step 4: Create the trigger endpoint router**
 
 Create `server/apps/backend/app/routers/ai_finance_coach.py`:
 
@@ -1821,7 +1821,7 @@ async def trigger_finance_coach(
 
 > **Auth note:** `require_owner` here gates generation to the family owner — mirror `trigger_generate_events` (ai_report.py:127). If finance_coach should be triggerable by any adult (not just owner), drop `_owner` — but the spec treats finance_coach like report (owner-initiated proactive push), so owner-only is the safe default. Confirm against `require_ai_enabled`/`require_owner` semantics in `apps/backend/app/auth/ai_deps.py` and adjust.
 
-- [ ] **Step 5: Register the router**
+- [x] **Step 5: Register the router**
 
 In `server/apps/backend/app/main.py` (or the router-registration module — find where `ai_report.router` is included and add the new router next to it):
 
@@ -1833,17 +1833,17 @@ app.include_router(ai_finance_coach.router, prefix="/api/v1")
 
 (Confirm the exact registration pattern — grep `include_router(ai_report` in main.py and mirror it.)
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_ai_finance_coach.py -v`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 7: Lint + typecheck**
+- [x] **Step 7: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_snapshot.py tests/backend/routers/test_ai_finance_coach.py && uv run mypy apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_snapshot.py`
 Expected: no errors.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/apps/backend/app/routers/ai_finance_coach.py server/apps/backend/app/services/finance_coach_snapshot.py server/apps/backend/app/main.py server/tests/backend/routers/test_ai_finance_coach.py
@@ -1868,7 +1868,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Scope note (spec §7.2):** keep calls minimal — one `invalidate_capability` call per write endpoint, right before/after the existing `db.commit()`. No logic changes, no new abstractions. Wish savings writes (Plan B W1) will add their own invalidation call in Plan B — here only the existing asset/liability/wish CRUD paths.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/tests/backend/services/test_finance_coach_invalidation.py`:
 
@@ -1927,12 +1927,12 @@ def test_asset_write_invalidates_finance_coach_cache(db_session, asset_owner_use
 
 > **Fixture note:** `wish_owner_user` / `existing_wish` / `wish_create_req` / `wish_update_req` / `liability_*` / `asset_*` fixtures may not exist yet — if so, build minimal inline factories in the test (create a User + Wish directly via the ORM). The key assertion is that `invalidate_capability` is called with the user's `family_id` and `"finance_coach"` after each write. Confirm the actual service function names (`create_asset` / `create_liability` — grep the service modules) and adjust.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_invalidation.py -v`
 Expected: FAIL — `invalidate_capability` not called (the service functions don't call it yet).
 
-- [ ] **Step 3: Add invalidation to wish_service**
+- [x] **Step 3: Add invalidation to wish_service**
 
 In `server/apps/backend/app/services/wish.py`:
 
@@ -1963,7 +1963,7 @@ from apps.backend.app.services.finance_coach_cache import invalidate_capability
 
 > The `invalidate_capability(db, ...)` call deletes the rows but does NOT commit — it relies on the existing commit that already ran. If the service commits again after, that's fine (delete is idempotent). Read each function to confirm the commit is the LAST write before your insertion point; if a commit runs AFTER your invalidation, move the invalidation to after that commit instead. The goal: invalidate is staged before the transaction's final commit so a rollback undoes both.
 
-- [ ] **Step 4: Add invalidation to liability + asset services**
+- [x] **Step 4: Add invalidation to liability + asset services**
 
 Repeat the pattern from Step 3 for every write endpoint in:
 - `server/apps/backend/app/services/liability.py` (or `routers/liabilities.py` if the service is router-inline — confirm where `db.commit()` lives): `create_liability`, `update_liability`, `delete_liability`, `record_payment` (if it exists). Add `invalidate_capability(db, user.family_id, "finance_coach")` before each final commit.
@@ -1976,22 +1976,22 @@ from apps.backend.app.services.finance_coach_cache import invalidate_capability
 
 If asset/liability writes live in the router (not a service module), add the call there right before the router's `db.commit()` / service call, and import `invalidate_capability` in that router.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/services/test_finance_coach_invalidation.py -v`
 Expected: all 5 tests PASS.
 
-- [ ] **Step 6: Run regression on existing asset/liability/wish tests**
+- [x] **Step 6: Run regression on existing asset/liability/wish tests**
 
 Run: `cd server && uv run pytest tests/backend/test_wishes.py tests/backend/test_liabilities.py tests/backend/test_assets.py -v 2>/dev/null || uv run pytest tests/backend/ -k "wish or liabilit or asset" -v`
 Expected: existing tests still PASS (invalidation is a delete that no-ops when no cache row exists; it does not change the write's observable result).
 
-- [ ] **Step 7: Lint + typecheck**
+- [x] **Step 7: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/backend/app/services/wish.py apps/backend/app/services/liability.py apps/backend/app/services/asset.py tests/backend/services/test_finance_coach_invalidation.py && uv run mypy apps/backend/app/services/wish.py apps/backend/app/services/liability.py apps/backend/app/services/asset.py`
 Expected: no errors. (If the service functions live in routers, typecheck those instead.)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/apps/backend/app/services/wish.py server/apps/backend/app/services/liability.py server/apps/backend/app/services/asset.py server/tests/backend/services/test_finance_coach_invalidation.py
@@ -2007,7 +2007,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - No new files. This task verifies the full dispatch chain end-to-end and runs the Plan A self-review checklist.
 
-- [ ] **Step 1: Verify the full dispatch chain is wired**
+- [x] **Step 1: Verify the full dispatch chain is wired**
 
 Trace the chain by grepping each link exists:
 ```bash
@@ -2022,14 +2022,14 @@ echo "7. backend trigger:"; grep -n "ai/finance-coach\|finance_coach" apps/backe
 ```
 Expected: each grep returns at least one match; the system-agent print shows `100000000000008 False ['finance-coach']`.
 
-- [ ] **Step 2: Run the Plan A unit + integration test suite together**
+- [x] **Step 2: Run the Plan A unit + integration test suite together**
 
 Run: `cd server && uv run pytest apps/agent/tests/unit/test_finance_coach_skill.py apps/agent/tests/unit/test_worker_finance_coach.py apps/agent/tests/integration/test_gateway_finance_coach.py tests/backend/test_ai_skills.py tests/backend/bootstrap/test_bootstrap_agents.py tests/backend/services/test_finance_coach_cache.py tests/backend/routers/test_ai_finance_coach.py tests/backend/services/test_finance_coach_invalidation.py -v`
 
 > **Path note.** The repo has `testpaths = ["tests"]` in `pyproject.toml`, and all 107 backend tests live under `server/tests/backend/` with a shared root `conftest.py` (DB/app fixtures). The `server/apps/backend/tests/` root is a leftover from the U4 report refactor containing only 5 files and **no conftest** — it is not on pytest's discovery path. T7/T8/T9 tests were correctly written into `tests/backend/`; earlier drafts of this command used the `apps/backend/tests/...` layout by mistake. The command above uses the real paths.
 Expected: all PASS.
 
-- [ ] **Step 3: Lint + typecheck the full Plan A surface**
+- [x] **Step 3: Lint + typecheck the full Plan A surface**
 
 Run: `cd server && uv run ruff check apps/agent/services/runtime/worker.py apps/agent/app/routers/gateway.py apps/agent/services/runtime/sse_gateway.py apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_cache.py apps/backend/app/services/finance_coach_snapshot.py apps/backend/app/models/ai_report.py apps/backend/app/bootstrap/agents.py && uv run mypy apps/agent/services/runtime/worker.py apps/backend/app/routers/ai_finance_coach.py apps/backend/app/services/finance_coach_cache.py --explicit-package-bases`
 
@@ -2038,7 +2038,7 @@ Run: `cd server && uv run ruff check apps/agent/services/runtime/worker.py apps/
 > **Baseline-noise note.** The repo's mypy config is intentionally lenient (`ignore_missing_imports = true`, no per-module `disallow_untyped_defs`) and the codebase has ~47 pre-existing type errors in files Plan A never touched (e.g. `backend_client.py`, `family_adapter_cache.py`, `deps.py`, `revoke_jti.py`, and the 3 `worker.py` `end_payload["usage"]` assignment errors that predate Plan A). The success criterion for this step is: **zero mypy errors in Plan A owned files** (`finance_coach_snapshot.py`, `ai_finance_coach.py`, `finance_coach_cache.py`). Filter the output to those filenames; everything else is pre-existing baseline noise tracked separately, not a Plan A regression.
 Expected: no errors.
 
-- [ ] **Step 4: Plan A self-review (spec coverage + placeholder scan + type consistency)**
+- [x] **Step 4: Plan A self-review (spec coverage + placeholder scan + type consistency)**
 
 Run this self-review checklist against the spec (`docs/superpowers/specs/2026-07-19-p0-family-finance-core-design.md` §7.1, §7.2, §13 Plan A scope):
 
@@ -2061,7 +2061,7 @@ Run this self-review checklist against the spec (`docs/superpowers/specs/2026-07
 - `finance_coach.result` custom event name — Task 6 emits it, Task 8 `_persist_finance_coach_result` parses it. ✓
 - `FINANCE_COACH_AGENT_ID = 100000000000008` — must live in `server/apps/backend/app/constants/system_ids.py` (Task 3 imports it from there; the existing constants are `NUMINA_AGENT_ID=...005`, `ASSET_REPORT_AGENT_ID=...006`, `IMPORT_PARSE_AGENT_ID=...007`). **Add it there in Task 3**, not in `agents.py`.
 
-- [ ] **Step 5: Commit the final Plan A state (if any test-fix commits are needed)**
+- [x] **Step 5: Commit the final Plan A state (if any test-fix commits are needed)**
 
 If Steps 2-3 surfaced any fix, commit it. Otherwise no commit needed — Plan A is complete.
 
