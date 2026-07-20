@@ -348,7 +348,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `wish_savings.delete_savings(db, user, wish_id, log_id) -> None` — DELETE authz (`log.user_id == caller.id` or family owner) + in-transaction `saved_amount -= log.amount`.
   - `wish_savings.recompute_saved_amount(db, wish_id) -> Decimal` — reconciliation helper: `saved_amount = SUM(log.amount)`. CI asserts `saved_amount == recompute_saved_amount(wish_id)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `server/tests/backend/services/test_wish_savings_service.py`:
 
@@ -428,12 +428,12 @@ def test_record_savings_other_family_wish_404(db_session, wish_owner_user, other
 
 > **Fixture note:** `wish_owner_user` / `owned_wish` / `other_adult_in_family` / `family_owner` / `recorder_log` / `recorder_log_by_other` / `other_family_wish` are test fixtures you build in conftest (or inline). Minimal: create a Family, an owner User, a second adult User, an owned Wish, a Wish in another family. If the repo's conftest has helpers like `make_user`/`make_wish`, use them. The assertions are the contract — adapt fixtures to satisfy them.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/services/test_wish_savings_service.py -v`
 Expected: FAIL — `ImportError: cannot import name 'wish_savings'` (module not created).
 
-- [ ] **Step 3: Create the schema**
+- [x] **Step 3: Create the schema**
 
 Create `server/apps/backend/app/schemas/wish_savings.py`:
 
@@ -494,7 +494,7 @@ class WishSavingsResponse(SnowflakeBase):
 
 > **Note:** `SnowflakeBase` already converts `wish_id`/`family_id`/`user_id` int→str via its `model_serializer`. The `amount`/`saved_amount`/`monthly_saving` `str` fields + `field_validator` handle the Decimal→str coercion explicitly. Confirm `SnowflakeBase` is importable from `apps.backend.app.schemas.base` (it is — `server/apps/backend/app/schemas/base.py:13`).
 
-- [ ] **Step 4: Create the service**
+- [x] **Step 4: Create the service**
 
 Create `server/apps/backend/app/services/wish_savings.py`:
 
@@ -646,17 +646,17 @@ def recompute_saved_amount(db: Session, wish_id: int | str) -> Decimal:
 
 > **`user.role` check:** confirm the User model has a `role` field (it should — `require_owner` in `auth/ai_deps.py` checks `current_user.role`). If the field is named differently (e.g. `is_owner`), adjust. Read `server/apps/backend/app/models/user.py` and `apps/backend/app/auth/ai_deps.py:20` (`require_owner`) to mirror the exact owner-detection expression.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/services/test_wish_savings_service.py -v`
 Expected: all 7 tests PASS.
 
-- [ ] **Step 6: Lint + typecheck**
+- [x] **Step 6: Lint + typecheck**
 
 Run: `cd server && uv run ruff check apps/backend/app/schemas/wish_savings.py apps/backend/app/services/wish_savings.py tests/backend/services/test_wish_savings_service.py && uv run mypy apps/backend/app/schemas/wish_savings.py apps/backend/app/services/wish_savings.py`
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add server/apps/backend/app/schemas/wish_savings.py server/apps/backend/app/services/wish_savings.py server/tests/backend/services/test_wish_savings_service.py
