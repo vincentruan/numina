@@ -57,10 +57,12 @@ def test_wish_create_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.wish.invalidate_capability") as inv:
         wish_service.create_wish(db_session, user, req)
 
-    inv.assert_called_once()
-    args, _ = inv.call_args
-    assert str(args[1]) == str(user.family_id)
-    assert args[2] == "finance_coach"
+    # W4 (Plan B T7): wish writes bust both finance_coach and wish_advice caches.
+    assert inv.call_count == 2
+    caps = {call.args[2] for call in inv.call_args_list}
+    assert caps == {"finance_coach", "wish_advice"}
+    for call in inv.call_args_list:
+        assert str(call.args[1]) == str(user.family_id)
 
 
 def test_wish_update_invalidates_finance_coach_cache(db_session):
@@ -74,10 +76,11 @@ def test_wish_update_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.wish.invalidate_capability") as inv:
         wish_service.update_wish(db_session, user, str(wish.id), req)
 
-    inv.assert_called_once()
-    args, _ = inv.call_args
-    assert str(args[1]) == str(user.family_id)
-    assert args[2] == "finance_coach"
+    assert inv.call_count == 2
+    caps = {call.args[2] for call in inv.call_args_list}
+    assert caps == {"finance_coach", "wish_advice"}
+    for call in inv.call_args_list:
+        assert str(call.args[1]) == str(user.family_id)
 
 
 def test_wish_delete_invalidates_finance_coach_cache(db_session):
@@ -90,10 +93,11 @@ def test_wish_delete_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.wish.invalidate_capability") as inv:
         wish_service.delete_wish(db_session, user, str(wish.id))
 
-    inv.assert_called_once()
-    args, _ = inv.call_args
-    assert str(args[1]) == str(user.family_id)
-    assert args[2] == "finance_coach"
+    assert inv.call_count == 2
+    caps = {call.args[2] for call in inv.call_args_list}
+    assert caps == {"finance_coach", "wish_advice"}
+    for call in inv.call_args_list:
+        assert str(call.args[1]) == str(user.family_id)
 
 
 def test_liability_write_invalidates_finance_coach_cache(db_session):

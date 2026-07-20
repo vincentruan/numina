@@ -2959,7 +2959,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:** No new files. Verifies spec coverage + cross-task type consistency + regression.
 
-- [ ] **Step 1: Spec coverage self-review**
+- [x] **Step 1: Spec coverage self-review**
 
 Check each spec section maps to a task:
 - [x] §2 W1 (migration + API + authz + invariant + delete confirm) → T1, T2, T3, T9 (delete confirm in WishSavingsLogDialog)
@@ -2971,13 +2971,13 @@ Check each spec section maps to a task:
 - [x] §7.3 A1b (4 button locations, /ai/context unified endpoint, family-scope 404, 3s timeout, sanitization, removable context tag) → T6 (backend + AIChatBox) + T9 (buttons on detail pages)
 - [x] §7.1 advice baseline guardrail (schema gate, suggested_amount≥0, wrong output dropped) → T5 (FinanceCoachCard validate), T7 (validate_advice), T9 (client mirror)
 
-- [ ] **Step 2: Placeholder scan**
+- [x] **Step 2: Placeholder scan**
 
 Search both plans for `TODO|TBD|implement later|fill in|similar to Task` — every code step has complete code. Known deferred-with-note items (NOT placeholders — they're documented decisions):
 - W4 LLM-call path (T7 Step 3): documented to reuse `_create_lightweight_llm` or escalate to a dedicated capability — the implementer must resolve this first; if the helper isn't extractable, flag it before proceeding.
 - `savings_count` population on WishResponse (T3 Step 5): documented to match the existing response-construction convention.
 
-- [ ] **Step 3: Type consistency cross-check**
+- [x] **Step 3: Type consistency cross-check**
 
 - `useAffordBar` state kinds (`unset_monthly`/`progress`/`reached`/`need_accelerate`) — consistent between useAffordBar.ts (T9 Step 2) and WishListPage/WishSavingsProgress consumers (T9 Steps 4-5). ✓
 - `invalidate_capability(db, family_id, capability)` — signature identical across Plan A T7 (def) and Plan B T2/T7 callers. ✓
@@ -2987,7 +2987,7 @@ Search both plans for `TODO|TBD|implement later|fill in|similar to Task` — eve
 - A1b `source` values (`liability_detail`/`wish_detail`/`liability_strategy`/`wish_advice`) — identical in `/ai/context` backend (T6 Step 4 `_VALID_SOURCES`) and `useAiContext` (T6 Step 6 `AiSource`) and the 4 button locations (T9 Step 8). ✓
 - `wish_advice` cache capability string — identical in `ai_wish_advice.py` (T7 Step 4), `wish.py` invalidation (T7 Step 5), `wish_savings.py` (T7 Step 5 note). ✓
 
-- [ ] **Step 4: Full backend + frontend regression**
+- [x] **Step 4: Full backend + frontend regression**
 
 Run: `cd server && uv run pytest tests/backend/ packages/domain/tests/ -v 2>&1 | tail -40`
 Expected: all Plan B tests pass; existing wish/liability/asset-report tests unaffected (W1 migration backward-compatible; capability column backfill='report'; simulate is a new route).
@@ -2995,12 +2995,12 @@ Expected: all Plan B tests pass; existing wish/liability/asset-report tests unaf
 Run: `cd frontend/apps/main && pnpm typecheck && pnpm test:run && pnpm -r typecheck 2>/dev/null`
 Expected: no type errors; all tests pass.
 
-- [ ] **Step 5: Lint the full Plan B surface**
+- [x] **Step 5: Lint the full Plan B surface**
 
 Run: `cd server && uv run ruff check apps/backend/app/routers/ai_context.py apps/backend/app/routers/ai_wish_advice.py apps/backend/app/routers/wishes.py apps/backend/app/routers/liabilities.py apps/backend/app/routers/family.py apps/backend/app/services/wish_savings.py apps/backend/app/services/wish_advice.py apps/backend/app/services/ai_context_builder.py packages/domain/liability_calculator.py && uv run mypy apps/backend/app/routers/ai_context.py apps/backend/app/routers/ai_wish_advice.py apps/backend/app/services/wish_savings.py packages/domain/liability_calculator.py`
 Expected: no errors.
 
-- [ ] **Step 6: Final integration smoke (manual checklist, no dev server)**
+- [x] **Step 6: Final integration smoke (manual checklist, no dev server)**
 
 Trace the two end-to-end paths by grepping wiring (not running servers):
 1. **finance_coach path:** DashboardPage → FinanceCoachCard → `POST /ai/finance-coach/generate` (Plan A T8) → gateway route (Plan A T5) → worker `_run_finance_coach_agent` (Plan A T6) → `finance_coach.result` → cached → card renders top-3.

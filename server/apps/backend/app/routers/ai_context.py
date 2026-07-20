@@ -5,11 +5,12 @@ Returns a sanitized context summary to inject as the first user turn when the
 user clicks a passive '问 AI' button. Family-scoped: a cross-family entity id
 returns 404 (no data injection).
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
+from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.services import ai_context_builder as builder
 
@@ -26,16 +27,16 @@ def get_ai_context(
     db: Session = Depends(get_db),
 ):
     if source not in _VALID_SOURCES:
-        raise HTTPException(status_code=400, detail="未知的 source 值")
+        raise AppError(ErrorCode.VALIDATION_ERROR)
 
     if source == "liability_detail":
         summary = builder.build_liability_detail(db, user, id)
         if summary is None:
-            raise HTTPException(status_code=404, detail="负债不存在")
+            raise AppError(ErrorCode.NOT_FOUND)
     elif source == "wish_detail":
         summary = builder.build_wish_detail(db, user, id)
         if summary is None:
-            raise HTTPException(status_code=404, detail="心愿不存在")
+            raise AppError(ErrorCode.NOT_FOUND)
     elif source == "liability_strategy":
         summary = builder.build_liability_strategy(db, user)
     else:  # wish_advice

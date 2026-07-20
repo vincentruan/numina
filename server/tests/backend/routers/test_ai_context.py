@@ -150,6 +150,7 @@ def test_other_family_entity_returns_404(client, auth_headers, other_family_liab
     assert resp.status_code == 404
 
 
-def test_unknown_source_returns_400(client, auth_headers):
+def test_unknown_source_returns_422(client, auth_headers):
     resp = client.get("/api/v1/ai/context?source=bogus&id=1", headers=auth_headers)
-    assert resp.status_code == 400
+    # VALIDATION_ERROR → 422 (repo convention: AppError, not bare HTTPException).
+    assert resp.status_code == 422
