@@ -285,7 +285,7 @@ async function submitPayment() {
     showToast(t('toast.paymentAmountRequired'))
     return
   }
-  if (payTarget.value && amount > payTarget.value.remaining_amount) {
+  if (payTarget.value && amount > Number(payTarget.value.remaining_amount)) {
     showToast(t('toast.paymentExceedsBalance'))
     return
   }

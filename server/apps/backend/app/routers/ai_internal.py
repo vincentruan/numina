@@ -120,9 +120,9 @@ def internal_get_liabilities(
         {
             "id": li.id,
             "category": li.category,
-            "remaining_amount": li.remaining_amount,
-            "original_amount": li.original_amount,
-            "monthly_payment": li.monthly_payment,
+            "remaining_amount": float(li.remaining_amount) if li.remaining_amount is not None else None,
+            "original_amount": float(li.original_amount) if li.original_amount is not None else None,
+            "monthly_payment": float(li.monthly_payment) if li.monthly_payment is not None else None,
             "interest_rate": li.interest_rate,
             "start_date": li.start_date.isoformat() if li.start_date else None,
             "end_date": li.end_date.isoformat() if li.end_date else None,

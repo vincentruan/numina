@@ -54,7 +54,7 @@ export function useDebtWarning(liabilities: Ref<Liability[]>, _wishes: Ref<Wish[
       .map((l) => ({
         ...l,
         monthly_interest:
-          Math.round((l.remaining_amount * (l.interest_rate / 100 / 12) * 100) / 100),
+          Math.round((Number(l.remaining_amount) * (l.interest_rate / 100 / 12) * 100) / 100),
       })),
   )
 

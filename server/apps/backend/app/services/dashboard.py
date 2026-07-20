@@ -1078,7 +1078,7 @@ def get_upcoming_payments(db: Session, user: User, days: int = 7) -> UpcomingPay
             UpcomingPaymentItem(
                 liability_id=liability.id,
                 name=liability.name,
-                amount=liability.monthly_payment,
+                amount=float(liability.monthly_payment) if liability.monthly_payment is not None else None,
                 due_date=next_due.isoformat(),
             )
         )

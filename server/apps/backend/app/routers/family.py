@@ -165,6 +165,10 @@ def get_member_summary(
         .filter(Asset.user_id == member_id, Asset.is_archived == False)
         .scalar()
     )
+    # Coerce to float: asset values are Float, liability amounts are Decimal
+    # (Numeric); mixing them raises TypeError (mirror get_aggregate's fix).
+    total_assets = float(total_assets or 0)
+    total_liabilities = float(total_liabilities or 0)
     return MemberSummary(
         user=UserResponse.model_validate(member),
         total_assets=total_assets,

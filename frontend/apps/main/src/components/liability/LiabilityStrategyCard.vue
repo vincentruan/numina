@@ -20,7 +20,7 @@ const shouldRender = computed(() => activeLiabilities.value.length >= 2)
 // honest ("估算"). Avoids N /liabilities/simulate calls.
 function monthlyInterest(l: Liability): number {
   const rate = (l.interest_rate ?? 0) / 100 / 12
-  return (l.remaining_amount ?? 0) * rate
+  return Number(l.remaining_amount ?? 0) * rate
 }
 
 // 雪崩法 (avalanche): rate desc — pay highest-rate first.
@@ -29,7 +29,7 @@ const avalancheOrder = computed(() =>
 )
 // 雪球法 (snowball): remaining asc — pay smallest balance first.
 const snowballOrder = computed(() =>
-  [...activeLiabilities.value].sort((a, b) => (a.remaining_amount ?? 0) - (b.remaining_amount ?? 0)),
+  [...activeLiabilities.value].sort((a, b) => Number(a.remaining_amount ?? 0) - Number(b.remaining_amount ?? 0)),
 )
 
 // Estimated total interest over the payoff period (sum of per-liability monthly
@@ -38,8 +38,9 @@ const snowballOrder = computed(() =>
 function estimateTotalInterest(order: Liability[]): number {
   return order.reduce((sum, l) => {
     const mi = monthlyInterest(l)
-    const months = l.monthly_payment && l.monthly_payment > mi
-      ? Math.ceil((l.remaining_amount ?? 0) / (l.monthly_payment - mi))
+    const mp = Number(l.monthly_payment ?? 0)
+    const months = mp && mp > mi
+      ? Math.ceil(Number(l.remaining_amount ?? 0) / (mp - mi))
       : 0
     return sum + mi * months
   }, 0)

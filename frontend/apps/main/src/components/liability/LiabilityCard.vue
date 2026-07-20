@@ -41,7 +41,7 @@
         <div class="details-grid">
           <div class="detail-item">
             <span class="detail-label">{{ t('liabilityCard.monthlyPayment') }}</span>
-            <span class="detail-value">{{ formatAmountDisplay(liability.monthly_payment) }}</span>
+            <span class="detail-value">{{ liability.monthly_payment ? formatAmountDisplay(liability.monthly_payment) : '—' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">{{ t('liabilityCard.annualRate') }}</span>

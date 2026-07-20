@@ -159,9 +159,9 @@ def export_all_json(
             {
                 "name": l.name,
                 "category": l.category,
-                "original_amount": l.original_amount,
-                "remaining_amount": l.remaining_amount,
-                "monthly_payment": l.monthly_payment,
+                "original_amount": str(l.original_amount) if l.original_amount is not None else None,
+                "remaining_amount": str(l.remaining_amount) if l.remaining_amount is not None else None,
+                "monthly_payment": str(l.monthly_payment) if l.monthly_payment is not None else None,
                 "interest_rate": l.interest_rate,
                 "start_date": _serialize_date(l.start_date),
                 "end_date": _serialize_date(l.end_date),
