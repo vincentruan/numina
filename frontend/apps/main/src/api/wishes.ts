@@ -1,5 +1,5 @@
 import http from './index'
-import type { Wish, WishAdvice, WishRealizeRequest, WishRedistribution } from '@/types'
+import type { SavingsLog, Wish, WishAdvice, WishRealizeRequest, WishRedistribution } from '@/types'
 
 export function getWishes(status?: string) {
   return http.get<Wish[]>('/wishes', { params: status ? { status } : undefined })
@@ -29,6 +29,19 @@ export function realizeWish(id: string, data: WishRealizeRequest) {
 // T3 added the backend route (PATCH /wishes/{id}/ignore-debt-warning, body {ignore}).
 export function setIgnoreDebtWarning(id: string, ignore: boolean) {
   return http.patch<Wish>(`/wishes/${id}/ignore-debt-warning`, { ignore })
+}
+
+// W1 savings CRUD (Plan B T9 frontend). T3 added the backend routes.
+export function recordSaving(wishId: string, amount: string, logDate?: string, note?: string) {
+  return http.post<SavingsLog>(`/wishes/${wishId}/savings`, { amount, log_date: logDate, note })
+}
+
+export function getSavingsLog(wishId: string, page = 1) {
+  return http.get<SavingsLog[]>(`/wishes/${wishId}/savings`, { params: { page } })
+}
+
+export function deleteSavingsLog(wishId: string, logId: string) {
+  return http.delete(`/wishes/${wishId}/savings/${logId}`)
 }
 
 // W4 wish-priority advice (Plan B T7). The endpoint returns a bare

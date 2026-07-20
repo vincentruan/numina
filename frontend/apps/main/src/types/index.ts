@@ -334,6 +334,28 @@ export interface WishAdvice {
   redistribution: WishRedistribution[]
 }
 
+// W1 savings log (Plan B T9 frontend). T3 added the backend route + schema.
+export interface SavingsLog {
+  id: string
+  wish_id: string
+  amount: string
+  log_date: string
+  note: string | null
+  created_at: string
+}
+
+// L2 /liabilities/simulate result (Plan B T9 frontend). T4 added the endpoint.
+export interface LiabilitySimResult {
+  total_interest: string
+  months: number
+  monthly_payment: string | null
+  warning: string | null
+  baseline_total_interest?: string
+  baseline_months?: number
+  savings_vs_baseline?: string
+  months_saved?: number
+}
+
 export interface WishRealizeRequest {
   purchase_price: number
   purchase_date: string

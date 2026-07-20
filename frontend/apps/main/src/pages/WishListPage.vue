@@ -98,24 +98,16 @@
                   <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
                 </div>
 
-                <!-- Afford bar -->
+                <!-- W2 (Plan B T9): afford bar — single-line compact (spec §3.2). -->
                 <div
-                  v-if="wish.expected_price && dashboardStore.overview"
+                  v-if="wish.expected_price"
                   class="afford-bar"
-                  :class="wish.expected_price <= dashboardStore.overview.net_worth ? 'afford-yes' : 'afford-no'"
+                  :class="affordStateClass(wish)"
                 >
-                  <template v-if="wish.expected_price <= dashboardStore.overview.net_worth">
-                    <svg class="afford-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    {{ t('wish.afford.canAfford') }}
-                  </template>
-                  <template v-else>
-                    <svg class="afford-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M8 3v5M8 11v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    </svg>
-                    {{ t('wish.afford.shortage', { amount: formatPrice(wish.expected_price - dashboardStore.overview.net_worth) }) }}
-                  </template>
+                  <span v-if="affordFor(wish).state.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
+                  <span v-else-if="affordFor(wish).state.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
+                  <span v-else-if="affordFor(wish).state.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordFor(wish).state.months }) }}</span>
+                  <span v-if="affordFor(wish).accelerate" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
                 </div>
               </div>
             </li>
@@ -184,6 +176,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useWishStore } from '@/stores/wish'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
+import { useAffordBar } from '@/composables/useAffordBar'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
@@ -247,6 +240,20 @@ function formatPrice(value: number): string {
     return (value / 10000).toFixed(value % 10000 === 0 ? 0 : 1) + t('common.unitTenThousand')
   }
   return value.toLocaleString()
+}
+
+// W2 (Plan B T9): per-wish afford-bar logic. Cache by wish.id to avoid recompute
+// churn across re-renders (spec §3.2 list single-line compact).
+const affordCache = new Map<string, ReturnType<typeof useAffordBar>>()
+function affordFor(w: Wish) {
+  if (!affordCache.has(w.id)) {
+    affordCache.set(w.id, useAffordBar(() => w, () => dashboardStore.overview?.net_worth ?? 0))
+  }
+  return affordCache.get(w.id)!
+}
+function affordStateClass(w: Wish): string {
+  const kind = affordFor(w).state.value.kind
+  return `afford-${kind}`
 }
 
 async function loadWishes() {
@@ -616,20 +623,23 @@ onMounted(loadWishes)
   align-self: flex-start;
 }
 
-.afford-yes {
+/* W2 afford-bar state colors (Plan B T9). afford-${state.kind} from affordStateClass. */
+.afford-reached {
   background: rgba(7, 193, 96, 0.1);
   color: #07c160;
 }
-
-.afford-no {
-  background: rgba(255, 125, 0, 0.1);
-  color: #ff7d00;
+.afford-progress {
+  background: rgba(25, 137, 250, 0.1);
+  color: #1989fa;
 }
-
-.afford-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
+.afford-unset_monthly,
+.afford-need_accelerate {
+  background: rgba(255, 151, 106, 0.1);
+  color: #ff976a;
+}
+.afford-bar .accelerate {
+  font-weight: 600;
+  margin-left: 2px;
 }
 
 /* FAB */

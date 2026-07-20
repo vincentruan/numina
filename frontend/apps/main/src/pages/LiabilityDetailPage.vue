@@ -20,6 +20,9 @@
         />
       </div>
 
+      <!-- L2 (Plan B T9): interest forecast + simulate dialog. -->
+      <InterestForecast :liability="liability" />
+
       <!-- Payment Countdown -->
       <div class="countdown-wrapper">
         <PaymentCountdown
@@ -76,6 +79,10 @@
         <van-button v-if="liability.is_active" block type="success" @click="showPayment = true">
           {{ t('liability.detailBtnRecordPayment') }}
         </van-button>
+        <!-- A1b (Plan B T6/T9): passive '问 AI 优化还款' button → /ai/chat?source=liability_detail&id= -->
+        <van-button block type="default" plain @click="router.push({ name: 'AIChat', query: { source: 'liability_detail', id: liability.id } })">
+          {{ t('liability.interest.askAi') }}
+        </van-button>
         <van-button block type="primary" plain @click="$router.push(`/liabilities/${liability.id}/edit`)">
           {{ t('liability.detailBtnEdit') }}
         </van-button>
@@ -118,6 +125,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
+import InterestForecast from '@/components/liability/InterestForecast.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()

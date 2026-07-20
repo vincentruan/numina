@@ -39,6 +39,9 @@
       </div>
 
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+        <!-- L1 (Plan B T9): payoff strategy card (only when ≥2 active liabilities). -->
+        <LiabilityStrategyCard :liabilities="liabilityStore.liabilities" />
+
         <!-- Summary Banner -->
         <div v-if="liabilityStore.liabilities.length" class="summary-banner">
           <div class="summary-top">
@@ -156,6 +159,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LiabilityCard from '@/components/liability/LiabilityCard.vue'
 import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
+import LiabilityStrategyCard from '@/components/liability/LiabilityStrategyCard.vue'
 
 const { t } = useI18n()
 const router = useRouter()

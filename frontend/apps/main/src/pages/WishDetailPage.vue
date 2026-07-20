@@ -62,6 +62,17 @@
         <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
 
+      <!-- W1 (Plan B T9): savings progress + record/log dialogs. -->
+      <WishSavingsProgress
+        v-if="wish.status === 'pending'"
+        :wish="wish"
+        :net-worth="0"
+        @record="recordShow = true"
+        @show-log="logShow = true"
+      />
+      <WishSavingsRecordDialog v-model:show="recordShow" :wish-id="wish.id" @saved="onSavingsChanged" />
+      <WishSavingsLogDialog v-model:show="logShow" :wish-id="wish.id" @changed="onSavingsChanged" />
+
       <!-- Detail Info -->
       <van-cell-group inset :title="t('wish.detailInfo')">
         <van-cell :title="t('wish.status')" :value="statusText">
@@ -91,6 +102,10 @@
         <template v-if="wish.status === 'pending'">
           <van-button v-if="wish.converts_to_asset" block type="primary" @click="showRealizeDialog = true">
             {{ t('wish.convertToAsset') }}
+          </van-button>
+          <!-- A1b (Plan B T6/T9): passive '问 AI 规划储蓄' button → /ai/chat?source=wish_detail&id= -->
+          <van-button block type="default" plain @click="router.push({ name: 'AIChat', query: { source: 'wish_detail', id: wish.id } })">
+            {{ t('wish.advice.askPlanSavings') }}
           </van-button>
           <van-button block type="default" plain @click="$router.push(`/wishes/${wish.id}/edit`)">
             {{ t('common.edit') }}
@@ -218,6 +233,9 @@ import { getCategories } from '@/api/categories'
 import type { Category, Wish } from '@/types'
 import { realizeWish, setIgnoreDebtWarning as setIgnoreDebtWarningApi } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
+import WishSavingsProgress from '@/components/wishes/WishSavingsProgress.vue'
+import WishSavingsRecordDialog from '@/components/wishes/WishSavingsRecordDialog.vue'
+import WishSavingsLogDialog from '@/components/wishes/WishSavingsLogDialog.vue'
 import { getIconId } from '@/utils/icon'
 import { usePageLoading } from '@/composables/usePageLoading'
 
@@ -236,6 +254,17 @@ const showRealizeDialog = ref(false)
 const realizing = ref(false)
 const showDatePicker = ref(false)
 const showCategoryPicker = ref(false)
+
+// W1 (Plan B T9): savings record + log dialogs.
+const recordShow = ref(false)
+const logShow = ref(false)
+
+async function onSavingsChanged() {
+  // Refresh the wish so saved_amount + savings_count update after record/delete.
+  if (wish.value) {
+    await wishStore.fetchWish(wish.value.id)
+  }
+}
 const realizeForm = ref({
   purchase_price: '',
   purchase_date: '',

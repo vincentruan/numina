@@ -2681,7 +2681,7 @@ This task consolidates the remaining frontend touchpoints: W2 (afford bar reads 
 - Consumes: W1 endpoints (T3), `/liabilities/simulate` (T4), `/ai/context` (T6, for A1b buttons), `useCurrency`. Wish fields now `saved_amount`/`monthly_saving`/`target_date`/`savings_count` (strings).
 - Produces: the full W1/W2/L1/L2/A1b frontend surface.
 
-- [ ] **Step 1: Extend frontend types + API clients**
+- [x] **Step 1: Extend frontend types + API clients**
 
 In `frontend/apps/main/src/types/index.ts`:
 - Extend `Wish` with `saved_amount: string; monthly_saving: string; target_date: string | null; savings_count: number; ignore_debt_warning: boolean` (and change `expected_price` to `string`).
@@ -2717,7 +2717,7 @@ export function simulateLiability(req: { remaining: string; annual_rate: string;
 }
 ```
 
-- [ ] **Step 2: Create the W2 afford-bar composable (single-source list/detail)**
+- [x] **Step 2: Create the W2 afford-bar composable (single-source list/detail)**
 
 Create `frontend/apps/main/src/composables/useAffordBar.ts`:
 
@@ -2776,7 +2776,7 @@ export function useAffordBar(wish: () => Wish | undefined, netWorth: () => numbe
 }
 ```
 
-- [ ] **Step 3: Write + run the W2 test**
+- [x] **Step 3: Write + run the W2 test**
 
 Create `frontend/apps/main/src/composables/__tests__/useAffordBar.spec.ts`:
 
@@ -2822,7 +2822,7 @@ describe('useAffordBar', () => {
 Run: `cd frontend/apps/main && pnpm test:run -- useAffordBar`
 Expected: all 4 tests PASS.
 
-- [ ] **Step 4: Refactor WishListPage afford bar (W2)**
+- [x] **Step 4: Refactor WishListPage afford bar (W2)**
 
 In `frontend/apps/main/src/pages/WishListPage.vue`, replace the inline afford-bar block (lines 79-97, the `expected_price <= net_worth` comparison) with a single-line affordance using `useAffordBar` per wish (spec §3.2: 列表单行精简 — main status text only; 需加速 prefixed with `!`):
 
@@ -2839,7 +2839,7 @@ In the script, build a per-wish afford helper (cache by wish.id in a Map to avoi
 
 > **Per-wish composable:** `useAffordBar` returns reactive computeds tied to a `() => Wish` getter. For a list, call it once per wish in a small wrapper: `const affordCache = new Map<string, ReturnType<typeof useAffordBar>>(); function affordFor(w: Wish) { if (!affordCache.has(w.id)) affordCache.set(w.id, useAffordBar(() => w, () => dashboardStore.overview?.net_worth ?? 0)); return affordCache.get(w.id)! }`.
 
-- [ ] **Step 5: Create the W1 savings components**
+- [x] **Step 5: Create the W1 savings components**
 
 Create `frontend/apps/main/src/components/wishes/WishSavingsProgress.vue` (progress bar + 记录存入 + 储蓄流水 + ETA):
 
@@ -2911,7 +2911,7 @@ async function onDelete(log: SavingsLog) {
 
 Create `frontend/apps/main/src/components/wishes/WishSavingsRecordDialog.vue` (金额/日期/备注 form → recordSaving → emit 'saved').
 
-- [ ] **Step 6: Wire W1 savings into WishDetailPage + WishFormPage**
+- [x] **Step 6: Wire W1 savings into WishDetailPage + WishFormPage**
 
 `WishDetailPage.vue` — between the hero card (line 63) and the detail `van-cell-group` (line 66), insert `<WishSavingsProgress :wish="wish" @record="recordShow=true" @show-log="logShow=true" />` + the two dialogs. Add the A1b "问 AI 规划储蓄" button in the actions region (line 89-118): `@click="router.push({ name: 'AIChat', query: { source: 'wish_detail', id: wish.id } })"`.
 
@@ -2925,19 +2925,19 @@ Create `frontend/apps/main/src/components/wishes/WishSavingsRecordDialog.vue` (�
 ```
 Add `monthly_saving` + `target_date` to the `form` ref (line 117) + the submit payload (line 144) + edit prefill (line 177). `saved_amount` is NOT in the form (initial 0, spec §2.3).
 
-- [ ] **Step 7: Create L1 LiabilityStrategyCard + L2 InterestForecast + SimulateExtraDialog**
+- [x] **Step 7: Create L1 LiabilityStrategyCard + L2 InterestForecast + SimulateExtraDialog**
 
 Create `frontend/apps/main/src/components/liability/LiabilityStrategyCard.vue` (spec §6.2: only when active liabilities ≥ 2; avalanche = rate desc, snowball = remaining asc; "采纳雪崩法" → localStorage flag + toast, NOT a db write; "问 AI 详细规划" → `/ai/chat?source=liability_strategy`). The two-strategy total-interest comparison calls `/liabilities/simulate` per liability (extra=0) for each strategy's payment order — OR a simpler client-side sum of monthly interest. **Use client-side monthly-interest sum** (`remaining × monthly_rate`) for the comparison to avoid N simulate calls; the "省 ¥Y" = difference of total interest under each payoff order is an approximation — keep the UI honest ("估算"). Match spec §6.2's `[采纳雪崩法]` localStorage + toast contract exactly.
 
 Create `frontend/apps/main/src/components/liability/InterestForecast.vue` (spec §6.3): on the detail page, if `liability.interest_rate > 0`, call `simulateLiability` (extra=0, 500, 1000) to show "预计总利息 ¥X / 剩余 N 月" + the two extra scenarios + a `[模拟其他金额]` button. Hide entirely when `interest_rate` is null/0 (spec §6.1 adversarial). The `SimulateExtraDialog.vue` calls `simulateLiability` with a custom `extra_monthly` and shows `savings_vs_baseline` + `months_saved`; handle the boundary states (spec §6.3 design-lens: 0 = baseline; non-integer rejected; "无法还清" warning; extra ≥ remaining = "立即还清").
 
-- [ ] **Step 8: Wire L1/L2 into the pages + A1b buttons**
+- [x] **Step 8: Wire L1/L2 into the pages + A1b buttons**
 
 `LiabilityListPage.vue` — after `van-pull-refresh` open (line 41), before the summary banner, add `<LiabilityStrategyCard :liabilities="activeLiabilities" />` (guard: `activeLiabilities.length >= 2`). Add the `?focus=liability_strategy` scroll handler (T8 Step 6d already covers it).
 
 `LiabilityDetailPage.vue` — between the value card (line 21) and the countdown (line 24), add `<InterestForecast :liability="liability" />` + the simulate dialog. Add the A1b "问 AI 优化还款" button in the actions: `@click="router.push({ name: 'AIChat', query: { source: 'liability_detail', id: liability.id } })"`.
 
-- [ ] **Step 9: Add i18n + frontend test + typecheck + commit**
+- [x] **Step 9: Add i18n + frontend test + typecheck + commit**
 
 Add i18n keys: `wish.savings.*` (saved/setMonthly/reached/eta/needAccelerate/purchasingPower/covered/notCovered/record/log/deleteTitle/deleteConfirm/deleted), `wish.afford.*` (setMonthly/reached/etaMonths/needAccelerate — extend existing §968), `wish.form.*` (savingsPlanGroup/monthlySavingLabel/monthlySavingPlaceholder/targetDateLabel/targetDatePlaceholder), `liability.strategy.*` (title/avalanche/snowball/adopt/adopted/askAi/saveEstimate), `liability.interest.*` (totalInterest/monthsLeft/extraScenario/simulate/savings/monthsSaved/warning/immediatePayoff).
 
