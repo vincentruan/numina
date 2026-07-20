@@ -7,6 +7,7 @@ from apps.backend.app.constants.system_ids import (
     FINANCE_COACH_AGENT_ID,
     IMPORT_PARSE_AGENT_ID,
     NUMINA_AGENT_ID,
+    WISH_ADVICE_AGENT_ID,
 )
 from apps.backend.app.core.logging_config import get_logger
 
@@ -199,6 +200,28 @@ _FINANCE_COACH_AGENT = {
 }
 
 
+# System agent dedicated to wish-advice (W4 心愿优先储蓄建议, Plan B T7).
+# A 5th stream_run agent (app="wish-advice"). Stateless — each run rebuilds the
+# wishes snapshot from the backend-injected input; DeerMem would pollute advice
+# with stale wish state. soul_md is minimal (the advice contract lives in
+# skills/builtin/public/wish-advice/SKILL.md). Output schema is redistribution[],
+# NOT finance_coach's suggestions[] (spec §7.1 schema-mutually-exclusive).
+_WISH_ADVICE_AGENT = {
+    "id": WISH_ADVICE_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "wish-advice",
+    "display_name": "心愿储蓄顾问",
+    "description": "心愿优先储蓄建议智能体。读取家庭 pending 心愿快照，输出结构化 redistribution JSON（本月优先储蓄重分配建议）。",
+    "icon": "⭐",
+    "color": "#f59e0b",
+    "soul_md": "你是心愿储蓄顾问，在单次响应内完成：读取家庭 pending 心愿快照 → 识别本月最该优先存的心愿 → 输出结构化 redistribution JSON。",
+    "skills": ["wish-advice"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 50,
+}
+
+
 def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     """Insert or update a builtin system agent from its spec dict."""
     from apps.backend.app.models.ai_agent import AIAgent
@@ -236,4 +259,5 @@ def bootstrap_agents(db: Session) -> None:
     _upsert_builtin_agent(db, _ASSET_REPORT_AGENT)
     _upsert_builtin_agent(db, _IMPORT_PARSE_AGENT)
     _upsert_builtin_agent(db, _FINANCE_COACH_AGENT)
+    _upsert_builtin_agent(db, _WISH_ADVICE_AGENT)
     db.commit()

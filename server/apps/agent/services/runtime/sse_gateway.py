@@ -163,9 +163,10 @@ async def start_run(
     run_mgr = get_run_manager(request)
 
     # R1 security gate (P0): the ``app`` field in body.metadata controls which
-    # worker dispatch branch fires (numina / asset-report / import-parse). It
-    # originates from the client, so the server must validate it. allowlist is
-    # intentionally narrow here and widened only as each app's auth is wired:
+    # worker dispatch branch fires (numina / asset-report / import-parse /
+    # finance-coach / wish-advice). It originates from the client, so the server
+    # must validate it. allowlist is intentionally narrow here and widened only
+    # as each app's auth is wired:
     #   - "numina" (default): always allowed (the /ai/chat path).
     #   - "asset-report": REJECTED direct — the report pipeline must be entered
     #     via the backend trigger_generate_events endpoint, which enforces
@@ -181,6 +182,11 @@ async def start_run(
     #   - "finance-coach": REJECTED direct (Plan A) — the advice pipeline must
     #     be entered via the backend /ai/finance-coach/generate endpoint, which
     #     enforces require_ai_enabled + require_adult + per-family concurrency
+    #     gating. SKIPPED for internal callers (backend trigger via X-Agent-Token
+    #     gateway) — those have already passed the backend's auth gate.
+    #   - "wish-advice": REJECTED direct (Plan B T7) — the W4 advice pipeline
+    #     must be entered via the backend /ai/wish-advice/generate endpoint,
+    #     which enforces require_ai_enabled + require_adult + require_owner
     #     gating. SKIPPED for internal callers (backend trigger via X-Agent-Token
     #     gateway) — those have already passed the backend's auth gate.
     #   - any other value: 400.
@@ -204,7 +210,19 @@ async def start_run(
             app=app,
             reason="财务教练建议须经由后端 /ai/finance-coach/generate 端点，请勿直连 /runs/stream",
         )
-    if app != "numina" and app != "asset-report" and app != "import-parse" and app != "finance-coach":
+    if not internal and app == "wish-advice":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="心愿储蓄建议须经由后端 /ai/wish-advice/generate 端点，请勿直连 /runs/stream",
+        )
+    if (
+        app != "numina"
+        and app != "asset-report"
+        and app != "import-parse"
+        and app != "finance-coach"
+        and app != "wish-advice"
+    ):
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
     disconnect = (

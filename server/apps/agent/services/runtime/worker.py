@@ -223,10 +223,11 @@ async def run_agent(
       - ``asset-report``  → ``_run_asset_report_pipeline`` (U4 3-step pipeline).
       - ``import-parse``  → ``_run_import_parse_agent`` (U8 single-run parse).
       - ``finance-coach`` → ``_run_finance_coach_agent`` (Plan A single-run advice).
+      - ``wish-advice``   → ``_run_wish_advice_agent`` (Plan B T7 single-run advice).
 
     The allowlist preventing unknown / asset-report / import-parse / finance-coach
-    values from reaching here is enforced upstream in ``sse_gateway.start_run``
-    (R1 gate).
+    / wish-advice values from reaching here is enforced upstream in
+    ``sse_gateway.start_run`` (R1 gate).
     """
     # Resolved-3 blocker A: set the family_id ContextVar before any sandbox
     # tool (write_file/read_file) can be invoked. Must run in all branches —
@@ -266,6 +267,18 @@ async def run_agent(
             return
         if app == "finance-coach":
             await _run_finance_coach_agent(
+                bridge=bridge,
+                run_manager=run_manager,
+                record=record,
+                family_id=family_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                graph_input=graph_input,
+                config=config,
+            )
+            return
+        if app == "wish-advice":
+            await _run_wish_advice_agent(
                 bridge=bridge,
                 run_manager=run_manager,
                 record=record,
@@ -653,6 +666,13 @@ _SYNTHETIC_IMPORT_PARSE_TRIGGER = "/import-parse 解析金融文档持仓"
 # steers skill loading to finance-coach (not chat). If graph_input carries no
 # user message, this triggers skill load.
 _SYNTHETIC_FINANCE_COACH_TRIGGER = "/finance-coach 生成家庭财务建议"
+
+
+# Synthetic trigger for wish-advice runs (Plan B T7, same rationale as
+# finance-coach): the backend posts the wishes snapshot JSON as the run's user
+# message; the slash prefix steers skill loading to wish-advice (not chat). If
+# graph_input carries no user message, this triggers skill load.
+_SYNTHETIC_WISH_ADVICE_TRIGGER = "/wish-advice 生成心愿储蓄建议"
 
 
 def _extract_import_parse_document(graph_input: dict | None) -> str | None:
@@ -1207,6 +1227,278 @@ def _extract_finance_coach_snapshot(graph_input: dict | None) -> str | None:
         if isinstance(content, str) and content.strip():
             return content
     return None
+
+
+def _extract_wish_advice_input(graph_input: dict | None) -> str | None:
+    """Pull the wishes snapshot JSON the backend injected as the run's user
+    message (mirrors ``_extract_finance_coach_snapshot``).
+
+    The backend (Plan B T7) posts the wishes snapshot as ``messages[-1]``
+    content of the stream_run input. Returns None when no user message is
+    present (caller falls back to the synthetic trigger).
+    """
+    if not graph_input or not isinstance(graph_input, dict):
+        return None
+    msgs = graph_input.get("messages")
+    if not isinstance(msgs, list) or not msgs:
+        return None
+    last = msgs[-1]
+    if isinstance(last, dict) and last.get("role") in ("user", "human"):
+        content = last.get("content", "")
+        if isinstance(content, str) and content.strip():
+            return content
+    return None
+
+
+async def _run_wish_advice_agent(
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    family_id: str,
+    user_id: str | None,
+    thread_id: str,
+    graph_input: dict | None,
+    config: dict[str, Any],
+) -> None:
+    """wish-advice (5th stream_run agent) dispatch branch (Plan B T7).
+
+    Mirrors ``_run_finance_coach_agent`` but with ``skill_name="wish-advice"``
+    and a ``wish_advice.result`` emission whose payload is ``{redistribution[]}``
+    (NOT finance_coach's ``{suggestions[]}`` — spec §7.1 schema-mutually-exclusive).
+    The skill prompt (see ``skills/builtin/public/wish-advice/SKILL.md``) drives
+    the LLM to read the wishes snapshot (injected by the backend as the run's
+    user message) and emit a single ```json block with the redistribution.
+
+    Differences vs finance-coach:
+    - ``skill_name="wish-advice"`` (fixed system flow, Plan B T7).
+    - Output schema = ``{primary_wish_id, reason, suggested_monthly,
+      redistribution[]}`` (W4 advice contract).
+    - wish name IS prompt-required here (the user names wishes and the AI reasons
+      about them by name — unlike finance_coach's id+category PII minimization).
+    - stateless (``memory_enabled=False``) — fresh snapshot each run.
+    """
+    run_id = record.run_id
+    t_start = time.monotonic()
+    success = False
+    error_type: str | None = None
+    completion_status = "error"
+    ai_response_parts: list[str] = []
+    cumulative_usage: dict[str, int] | None = None
+
+    try:
+        # 1. Mark running + publish metadata (DeerFlow pattern)
+        await run_manager.set_status(run_id, RunStatus.running)
+        await bridge.publish(
+            run_id,
+            "metadata",
+            {"run_id": run_id, "thread_id": thread_id},
+        )
+
+        # 2. Fetch per-family AI config (tenant-isolated) — mirrors finance-coach.
+        client = BackendClient(family_id=family_id)
+        ai_config = await client.get_family_ai_config()
+        providers = ai_config.get("providers", [])
+        if not providers:
+            raise RuntimeError("未配置 AI 供应商")
+        selected_provider = next(
+            (p for p in providers if p.get("is_active")), providers[0]
+        )
+
+        # 3. Fetch enabled MCP servers (same MCP-setup as finance-coach).
+        try:
+            mcp_servers = await client.get_enabled_mcp_servers()
+            for srv in mcp_servers:
+                if srv.get("name") == "Numina Backend MCP":
+                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
+                    actual_url = (srv.get("url") or "").rstrip("/")
+                    if not actual_url.startswith(expected_prefix):
+                        srv["url"] = (
+                            expected_prefix
+                            + "/api/v1/internal/mcp/"
+                            + family_id
+                            + "/sse"
+                        )
+                    mcp_headers: dict[str, str] = {
+                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                        "X-Family-Id": family_id,
+                    }
+                    if user_id:
+                        mcp_headers["X-Caller-User-Id"] = user_id
+                    srv["headers"] = mcp_headers
+                    break
+        except Exception as exc:
+            logger.warning(
+                "[_run_wish_advice_agent] get_enabled_mcp_servers failed family=%s err=%s",
+                family_id, type(exc).__name__,
+            )
+            mcp_servers = []
+
+        # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
+        from apps.agent.services.agent_registry import get_agent_registry
+        agent_meta = await get_agent_registry().get("wish-advice", family_id)
+        memory_enabled = bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+
+        adapter = create_family_adapter(
+            family_id,
+            selected_provider,
+            timeout_seconds=120,
+            subagent_enabled=False,
+            plan_mode=False,
+            mcp_servers=mcp_servers,
+            agent_name="wish-advice",
+            memory_enabled=memory_enabled,
+        )
+
+        # 5. User message = backend-injected wishes snapshot (preferred) or
+        # synthetic slash trigger (skill-load fallback).
+        user_message = _extract_wish_advice_input(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
+
+        # 6. PII redaction (Key Invariant #1) — defense-in-depth; the backend
+        # already minimized PII per spec §7.1 (wish name is prompt-required for
+        # the AI to reason about which wish to prioritize, but amounts/ids only).
+        context = FamilyContext(family_id=family_id, free_text=user_message)
+        redacted = pii_redactor.redact(context)
+
+        # 7. Stream via typed_stream_dispatch → publish to bridge. Set the active
+        # skill so sync_tool_patch filters tools to wish-advice's allowed-tools.
+        from apps.agent.services.deerflow_adapter.active_skill_context import (
+            set_active_skill,
+        )
+        _skill_token = set_active_skill("wish-advice")
+        async for sse_type, data in adapter.typed_stream_dispatch(
+            skill_name="wish-advice",
+            context=redacted,
+            thread_id=thread_id,
+            enable_thinking=False,  # single-run advice, keep latency bounded
+        ):
+            if record.abort_event.is_set():
+                break
+
+            if sse_type == "end":
+                if isinstance(data, dict) and data.get("usage"):
+                    raw_usage = data["usage"]
+                    cumulative_usage = {
+                        "input_tokens": raw_usage.get("input_tokens", 0),
+                        "output_tokens": raw_usage.get("output_tokens", 0),
+                        "total_tokens": raw_usage.get("total_tokens", 0),
+                    }
+                break
+            if sse_type == "error":
+                await bridge.publish(run_id, "error", data)
+                break
+
+            # Forward the canonical frame (messages / values / custom).
+            await bridge.publish(run_id, sse_type, data)
+
+            # Mirror finance-coach: collect AI text + synthesize tool_call/
+            # tool_result custom events so the frontend reuses the chat renderer.
+            if sse_type == "messages" and isinstance(data, dict):
+                msg_type = data.get("type")
+                if msg_type == "ai":
+                    content = data.get("content")
+                    if content:
+                        ai_response_parts.append(content)
+                    tool_calls = data.get("tool_calls")
+                    if tool_calls:
+                        for tc in extract_tool_calls(data):
+                            raw_name = tc.get("name", "")
+                            tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                            payload: dict[str, Any] = {
+                                "type": "tool_call",
+                                "tool_call_id": tc.get("id", ""),
+                                "tool_name": raw_name,
+                                "args": tc.get("args", {}),
+                                "display_name": display_name,
+                                "icon": icon,
+                                "tool_type": tool_type,
+                            }
+                            if display_key:
+                                payload["display_key"] = display_key
+                            await bridge.publish(run_id, "custom", payload)
+                elif msg_type == "tool":
+                    tool_call_id = str(data.get("tool_call_id") or "")
+                    tool_name = data.get("name") or ""
+                    content = data.get("content")
+                    if tool_call_id:
+                        await bridge.publish(run_id, "custom", {
+                            "type": "tool_result",
+                            "tool_call_id": tool_call_id,
+                            "tool_name": tool_name,
+                            "content": content,
+                        })
+
+        # 8. Terminal status.
+        if record.abort_event.is_set():
+            await run_manager.set_status(run_id, RunStatus.interrupted)
+            completion_status = "interrupted"
+        else:
+            await run_manager.set_status(run_id, RunStatus.success)
+            completion_status = "complete"
+            success = record.status == RunStatus.success
+
+        # 9. Worker-synthesized wish_advice.result emission (mirrors finance-coach
+        # worker synthesis). Emit exactly one wish_advice.result before the end
+        # frame. parse_report_json extracts the ```json block the LLM produced.
+        if completion_status == "complete":
+            ai_text = "".join(ai_response_parts)
+            parsed = parse_report_json(ai_text)
+            if parsed is not None:
+                # Advice baseline (spec §7.1): the worker emits the raw parsed
+                # advice. Schema-validation gate (suggested_amount >= 0, required
+                # fields) runs in Plan B's W4 UI (WishAdviceCard.validateAdvice)
+                # + backend validate_advice before any enable; a malformed payload
+                # is dropped there, not here (the worker is transport, not policy).
+                await bridge.publish(run_id, "custom", {
+                    "type": "wish_advice.result",
+                    "payload": parsed,
+                })
+
+    except asyncio.CancelledError:
+        error_type = "Cancelled"
+        await run_manager.set_status(run_id, RunStatus.interrupted)
+        raise
+    except Exception as exc:
+        error_type = type(exc).__name__
+        logger.warning("[_run_wish_advice_agent] failed run=%s err=%s", run_id, error_type)
+        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        await bridge.publish(
+            run_id,
+            "error",
+            {"message": str(exc), "name": error_type},
+        )
+
+    finally:
+        # Clear the active-skill ContextVar so it cannot leak into a later run.
+        if "_skill_token" in locals():
+            from apps.agent.services.deerflow_adapter.active_skill_context import (
+                reset_active_skill,
+            )
+            reset_active_skill(_skill_token)
+
+        # 10. Audit log (Key Invariant #3)
+        audit_logger.log_call(
+            AuditEntry(
+                family_id=family_id,
+                audit_id=run_id,
+                user_id=user_id or "",
+                capability="wish-advice",
+                success=success,
+                error_type=error_type,
+                deerflow_attempted=True,
+                duration_ms=int((time.monotonic() - t_start) * 1000),
+            )
+        )
+
+        # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
+        end_payload: dict[str, Any] = {"status": completion_status}
+        if cumulative_usage:
+            end_payload["usage"] = cumulative_usage
+        await bridge.publish(run_id, "end", end_payload)
+
+        await bridge.publish_end(run_id)
+        asyncio.create_task(bridge.cleanup(run_id, delay=60))
+        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
 
 
 async def _run_numina_agent(

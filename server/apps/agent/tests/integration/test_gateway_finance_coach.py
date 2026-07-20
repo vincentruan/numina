@@ -149,3 +149,22 @@ def test_r1_rejects_unknown_app_still_400(client):
         },
     )
     assert resp.status_code == 400
+
+
+def test_r1_rejects_direct_wish_advice_dispatch(client):
+    """Frontend direct dispatch with app=wish-advice is rejected (409) by R1.
+
+    Plan B T7: wish-advice must be entered via the backend
+    /ai/wish-advice/generate endpoint (which enforces require_ai_enabled +
+    require_adult + require_owner). Mirrors the finance-coach R1 gate.
+    """
+    resp = client.post(
+        "/api/threads/t-wish/runs/stream",
+        headers={"X-Family-Id": "family-1"},
+        json={
+            "input": {"messages": [{"role": "user", "content": "hi"}]},
+            "metadata": {"app": "wish-advice"},
+        },
+    )
+    assert resp.status_code == 409
+    assert "wish-advice" in resp.text or "心愿" in resp.text

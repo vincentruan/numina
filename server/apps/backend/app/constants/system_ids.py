@@ -14,3 +14,8 @@ IMPORT_PARSE_AGENT_ID: int = 100000000000007
 # pollute advice with stale snapshots. soul_md is a minimal persona (the real
 # advice contract lives in skills/builtin/public/finance-coach/SKILL.md).
 FINANCE_COACH_AGENT_ID: int = 100000000000008
+# Plan B T7: wish-advice system agent (W4 心愿优先储蓄建议). Stateless stream_run
+# agent — each run builds a fresh wishes snapshot; DeerMem would pollute advice
+# with stale wish state. soul_md is a minimal persona (the real advice contract
+# lives in skills/builtin/public/wish-advice/SKILL.md).
+WISH_ADVICE_AGENT_ID: int = 100000000000009

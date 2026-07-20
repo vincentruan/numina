@@ -366,3 +366,76 @@ async def trigger_finance_coach_run(
             "Content-Location": f"/internal/gateway/runs/finance-coach/{thread_id}/{record.run_id}",
         },
     )
+
+
+class WishAdviceRunRequest(BaseModel):
+    """Request body for internal wish-advice run trigger (backend → agent).
+
+    Plan B T7: the backend /ai/wish-advice/generate endpoint calls this after
+    passing its own require_ai_enabled + require_adult + require_owner. Trust
+    model mirrors ``FinanceCoachRunRequest``: family_id is trusted because the
+    endpoint requires ``X-Agent-Token`` (R1 internal bypass — ``start_run(internal=True)``).
+    """
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/wish-advice/{thread_id}")
+async def trigger_wish_advice_run(
+    thread_id: str,
+    body: WishAdviceRunRequest,
+    request: Request,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> StreamingResponse:
+    """Trigger a wish-advice stream_run from the backend (service-to-service).
+
+    Plan B T7: the backend wish-advice trigger creates a stream_run with
+    ``app="wish-advice"`` via this X-Agent-Token-authenticated endpoint, bypassing
+    R1's frontend 409 gate (internal=True). The worker's ``_run_wish_advice_agent``
+    then drives the single-run advice agent and emits a ``wish_advice.result``
+    custom event with the validated ``redistribution[]`` JSON; this endpoint
+    streams frames back as SSE for the backend to forward to the frontend
+    (W4 WishAdviceCard).
+    """
+    _verify_token(x_agent_token)
+    _validate_path_segment(thread_id, "thread_id")
+
+    # Build a duck-typed body matching start_run's getattr() access pattern.
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "wish-advice"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/wish-advice/{thread_id}/{record.run_id}",
+        },
+    )
