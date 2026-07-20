@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { showFailToast, showSuccessToast, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
@@ -20,6 +20,7 @@ import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
+import { useAiContext } from '@/composables/useAiContext'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -27,10 +28,14 @@ const DEFAULT_MODEL = 'default'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 
 const store = useChatSessionStore()
 const agentStore = useAgentStore()
 const familyStore = useFamilyStore()
+// A1b (Plan B T6): passive '问 AI' buttons send ?source=&id= to /ai/chat;
+// loadContext fetches the entity context to inject as the first user turn.
+const { loadContext, contextLabel, clearContext } = useAiContext()
 
 // Active agent for ChatHeader
 const activeAgent = computed(() => {
@@ -161,6 +166,36 @@ onMounted(async () => {
   // messages, so we must explicitly load history to avoid a blank page.
   const prevActiveId = store.activeThreadId
   store.initializeFromUrl()
+  // A1b (Plan B T6): if a passive button sent ?source=&id=, fetch the entity
+  // context and inject it as the first user turn. This is a DIFFERENT query
+  // param from the pendingMessage 'q' path below; if A1b yields a message we
+  // send it and skip the pendingMessage block (no double-send). Guard the
+  // await on the source param so the no-context path stays synchronous (no
+  // extra microtask that would delay initialLoading=false past one tick).
+  if (route.query.source) {
+    const a1bContext = await loadContext()
+    if (a1bContext) {
+      if (!familyStore.family) {
+        try {
+          await familyStore.fetchFamily()
+        } catch {
+          // fetchFamily failure is non-fatal — handleStartChat surfaces a toast.
+        }
+      }
+      const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = 'pro'
+      const modeConfig = INPUT_MODE_CONFIGS[mode]
+      await handleStartChat({
+        text: a1bContext,
+        model_name: DEFAULT_MODEL,
+        mode,
+        thinking_enabled: modeConfig.thinking_enabled,
+        is_plan_mode: modeConfig.is_plan_mode,
+        subagent_enabled: modeConfig.subagent_enabled,
+        reasoning_effort: modeConfig.reasoning_effort,
+      })
+      return
+    }
+  }
   if (
     store.activeThreadId
     && store.activeThreadId === prevActiveId
@@ -528,6 +563,11 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         :show-retry="true"
         @retry="handleRetry"
       />
+      <!-- A1b (Plan B T6): removable tag showing injected entity context -->
+      <div v-if="contextLabel" class="context-tag">
+        <span>{{ contextLabel }}</span>
+        <van-icon name="cross" @click="clearContext" />
+      </div>
       <!-- InputBox only in chat mode (WelcomePage has its own in welcome mode) -->
       <InputBox
         :status="chat.isLoading.value ? 'streaming' : 'ready'"
@@ -569,5 +609,23 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
 /* Dark mode */
 :global([data-theme='dark']) .ai-chat-box {
   background: var(--bg-primary);
+}
+
+/* A1b (Plan B T6): injected-entity-context removable tag */
+.context-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 12px;
+  padding: 4px 10px;
+  background: var(--color-primary-soft, rgba(99, 102, 241, 0.1));
+  color: var(--color-primary, #6366f1);
+  border-radius: 12px;
+  font-size: 12px;
+  width: fit-content;
+}
+.context-tag .van-icon {
+  cursor: pointer;
+  font-size: 14px;
 }
 </style>

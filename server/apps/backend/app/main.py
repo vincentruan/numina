@@ -77,6 +77,7 @@ from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_ro
 from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
 from apps.backend.app.routers import ai_chat as ai_chat_router
 from apps.backend.app.routers import ai_config as ai_config_router
+from apps.backend.app.routers import ai_context as ai_context_router
 from apps.backend.app.routers import ai_internal as ai_internal_router
 from apps.backend.app.routers import ai_finance_coach as ai_finance_coach_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
@@ -412,6 +413,7 @@ app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_finance_coach_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
+app.include_router(ai_context_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.sessions_router, prefix="/api/v1")
 app.include_router(ai_threads_router.router, prefix="/api/threads")

@@ -161,6 +161,17 @@ export default {
   },
   aiChat: {
     connecting: '正在连接模型',
+    // A1b (Plan B T6): injected entity context for greenfield chat prefill.
+    context: {
+      prefill: '请基于以下{source}上下文为我提供详细建议：',
+      loadFailed: '上下文加载失败，请直接描述',
+      label: {
+        liability_detail: '负债详情',
+        wish_detail: '心愿详情',
+        liability_strategy: '负债还款规划',
+        wish_advice: '心愿储蓄建议',
+      },
+    },
     thinking: '思考中',
     answering: '正在生成正文',
     thinkingSeconds: '{seconds}s',

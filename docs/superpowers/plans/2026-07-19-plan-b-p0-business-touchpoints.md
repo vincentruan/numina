@@ -1548,7 +1548,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `GET /ai/context?source={liability_detail|wish_detail|liability_strategy|wish_advice}&id={id}` → `{source, summary: <sanitized JSON string or text>}`. Family-scoped: `entity.family_id == caller.family_id` else 404. The `summary` is the pre-sanitized context to inject as the first user turn.
   - Frontend `useAiContext()`: reads `route.query.source` + `route.query.id`; fetches `/ai/context` with a 3s timeout; on success returns the prefilled first message; on timeout/404 returns null + toasts. `AIChatBox` uses it to seed the conversation (distinct from `store.pendingMessage`'s `q` param — A1b injects structured context, not a typed question).
 
-- [ ] **Step 1: Write the failing backend test**
+- [x] **Step 1: Write the failing backend test**
 
 Create `server/tests/backend/routers/test_ai_context.py`:
 
@@ -1597,12 +1597,12 @@ def test_unknown_source_returns_400(client, auth_headers):
     assert resp.status_code == 400
 ```
 
-- [ ] **Step 2: Run backend test to verify it fails**
+- [x] **Step 2: Run backend test to verify it fails**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_ai_context.py -v`
 Expected: FAIL — 404 (route not registered).
 
-- [ ] **Step 3: Create the context builder service**
+- [x] **Step 3: Create the context builder service**
 
 Create `server/apps/backend/app/services/ai_context_builder.py`:
 
@@ -1712,7 +1712,7 @@ def build_wish_advice(db: Session, user: User) -> str:
 
 > **Column check:** confirm `Liability`'s exact column names (`remaining_amount`/`interest_rate`/`monthly_payment`/`is_active`/`end_date`/`category`) by reading `server/apps/backend/app/models/liability.py`. Adjust any mismatched names. `Wish.name`/`expected_price`/`saved_amount`/`monthly_saving`/`target_date`/`priority`/`status` are confirmed (Task 1).
 
-- [ ] **Step 4: Create the router**
+- [x] **Step 4: Create the router**
 
 Create `server/apps/backend/app/routers/ai_context.py`:
 
@@ -1769,12 +1769,12 @@ from apps.backend.app.routers import ai_context
 app.include_router(ai_context.router, prefix="/api/v1")
 ```
 
-- [ ] **Step 5: Run backend test to verify it passes**
+- [x] **Step 5: Run backend test to verify it passes**
 
 Run: `cd server && uv run pytest tests/backend/routers/test_ai_context.py -v`
 Expected: all 6 tests PASS.
 
-- [ ] **Step 6: Create the frontend composable**
+- [x] **Step 6: Create the frontend composable**
 
 Create `frontend/apps/main/src/composables/useAiContext.ts`:
 
@@ -1846,7 +1846,7 @@ export async function getAiContext(source: string, id: string, signal?: AbortSig
 }
 ```
 
-- [ ] **Step 7: Wire useAiContext into AIChatBox**
+- [x] **Step 7: Wire useAiContext into AIChatBox**
 
 In `frontend/apps/main/src/components/ai/AIChatBox.vue`, in `onMounted` (lines 149-222), AFTER `store.initializeFromUrl()` (line 163) and BEFORE the existing `if (store.pendingMessage)` block (line 176), add the A1b context injection:
 
@@ -1875,7 +1875,7 @@ Add the removable "已带入：X 上下文" tag above the input box (spec §7.3 
 
 > **Integration note:** read `AIChatBox.vue` lines 149-222 carefully. The existing flow is `initializeFromUrl` → if `pendingMessage` → `handleStartChat`. A1b's `?source=` is a DIFFERENT query param from `?q=`. The cleanest wiring: call `loadContext()` first; if it returns a message, send it via `handleStartChat`; only if it returns null does the existing `pendingMessage` path run. Do NOT double-send. Confirm `handleStartChat`'s signature (lines 297-339: `handleStartChat(payload, source)`). The `source` arg should be the route's `source` (passed through) — read how `source` flows in `chatSession` store. Match the existing convention exactly; if `handleStartChat` isn't the right seam, use `sendMessage` directly (line 311) after `createThread`.
 
-- [ ] **Step 8: Write + run the frontend test**
+- [x] **Step 8: Write + run the frontend test**
 
 Create `frontend/apps/main/src/composables/__tests__/useAiContext.spec.ts`:
 
@@ -1921,7 +1921,7 @@ describe('useAiContext', () => {
 Run: `cd frontend/apps/main && pnpm test:run -- useAiContext`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 9: Add i18n + typecheck + lint + commit**
+- [x] **Step 9: Add i18n + typecheck + lint + commit**
 
 In `frontend/apps/main/src/i18n/locales/zh-CN.ts`, under `aiChat` (line 157), add:
 
