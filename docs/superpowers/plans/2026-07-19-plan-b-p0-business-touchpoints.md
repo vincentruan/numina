@@ -30,6 +30,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 - **Never run dev servers** (`uvicorn`/`pnpm dev`) from agents — verify with `pytest`, `ruff check`, `mypy`, `pnpm typecheck`, `pnpm test:run`.
 - **Surgical changes / no speculative code:** touch only what each task requires. Do not refactor adjacent code.
 - **TDD:** failing test first, minimal implementation, verify pass, commit — every task.
+- **Test paths:** the authoritative backend test root is `server/tests/backend/` (on `pyproject.toml`'s `testpaths = ["tests"]`, has the root `conftest.py`). New tests go there: model tests flat at `tests/backend/test_*_model.py`, service tests at `tests/backend/services/`, router tests at `tests/backend/routers/`. The `server/apps/backend/tests/` root was a leftover removed in Plan A T10 Step 6 — do NOT recreate it. Fixtures available: `db_session` (DB session), `test_family`/`test_user` (real snowflake ids, FK-safe), `client`/`auth_headers` (TestClient + auth). Use real `test_family.id`/`test_user.id` rather than hardcoded `1` where FK constraints matter.
 
 ---
 
@@ -88,7 +89,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 - Create: `server/apps/backend/alembic/versions/c2d3e4f5a6b7_add_wish_savings_fields_and_log.py`
 - Modify: `server/apps/backend/app/models/wish.py` — add 4 columns + change `expected_price` to `Numeric(18,2)`
 - Create: `server/apps/backend/app/models/wish_savings_log.py` — `WishSavingsLog` model
-- Test: `server/apps/backend/tests/models/test_wish_savings_model.py`
+- Test: `server/tests/backend/test_wish_savings_model.py`
 
 **Interfaces:**
 - Consumes: `down_revision = "b9c7d2e4f6a8"` (Plan A T7 head). `Wish` model (`expected_price: Mapped[float | None]` Float at line 28). `SnowflakeBase`/`next_id` for the new table PK.
@@ -99,7 +100,7 @@ Copied verbatim from the spec (`docs/superpowers/specs/2026-07-19-p0-family-fina
 
 - [ ] **Step 1: Write the failing test**
 
-Create `server/apps/backend/tests/models/test_wish_savings_model.py`:
+Create `server/tests/backend/test_wish_savings_model.py`:
 
 ```python
 """Wish savings fields + WishSavingsLog model (Plan B W1)."""
@@ -149,11 +150,11 @@ def test_wish_savings_log_model(db_session):
     assert log.created_at is not None
 ```
 
-> **Fixture note:** confirm `db_session` fixture name in `server/apps/backend/tests/conftest.py`; rename if it's `session`. The family_id/user_id `1` assumes the test DB has those rows — if FK constraints are enforced in the test DB, use real fixture-created family/user ids.
+> **Fixture note:** confirm `db_session` fixture name in `server/tests/backend/conftest.py`; rename if it's `session`. The family_id/user_id `1` assumes the test DB has those rows — if FK constraints are enforced in the test DB, use real fixture-created family/user ids.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/models/test_wish_savings_model.py -v`
+Run: `cd server && uv run pytest tests/backend/test_wish_savings_model.py -v`
 Expected: FAIL — `AttributeError` (Wish has no `saved_amount`) / `ImportError` (WishSavingsLog not defined).
 
 - [ ] **Step 3: Create the migration**
@@ -307,23 +308,23 @@ class WishSavingsLog(Base):
 Run: `cd server/apps/backend && uv run alembic upgrade head`
 Expected: revision `c2d3e4f5a6b7` applies; `alembic current` shows `c2d3e4f5a6b7 (head)`.
 
-Run: `cd server && uv run pytest apps/backend/tests/models/test_wish_savings_model.py -v`
+Run: `cd server && uv run pytest tests/backend/test_wish_savings_model.py -v`
 Expected: all 3 tests PASS.
 
 - [ ] **Step 7: Lint + typecheck**
 
-Run: `cd server && uv run ruff check apps/backend/app/models/wish.py apps/backend/app/models/wish_savings_log.py apps/backend/tests/models/test_wish_savings_model.py && uv run mypy apps/backend/app/models/wish.py apps/backend/app/models/wish_savings_log.py`
+Run: `cd server && uv run ruff check apps/backend/app/models/wish.py apps/backend/app/models/wish_savings_log.py tests/backend/test_wish_savings_model.py && uv run mypy apps/backend/app/models/wish.py apps/backend/app/models/wish_savings_log.py`
 Expected: no errors.
 
 - [ ] **Step 8: Regression — existing wish tests still pass**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_wishes.py apps/backend/tests/services/test_wish_service.py -v 2>/dev/null || uv run pytest apps/backend/tests/ -k wish -v`
+Run: `cd server && uv run pytest tests/backend/test_wishes.py tests/backend/services/test_wish_service.py -v 2>/dev/null || uv run pytest tests/backend/ -k wish -v`
 Expected: existing tests PASS (the `expected_price` Float→NUMERIC migration is backward-compatible at the DB level; existing code reading `wish.expected_price` as float still works because Decimal is JSON-serializable; if a test asserts `isinstance(x, float)`, update it to `Decimal`).
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add server/apps/backend/alembic/versions/c2d3e4f5a6b7_add_wish_savings_fields_and_log.py server/apps/backend/app/models/wish.py server/apps/backend/app/models/wish_savings_log.py server/apps/backend/tests/models/test_wish_savings_model.py
+git add server/apps/backend/alembic/versions/c2d3e4f5a6b7_add_wish_savings_fields_and_log.py server/apps/backend/app/models/wish.py server/apps/backend/app/models/wish_savings_log.py server/tests/backend/test_wish_savings_model.py
 git commit -m "feat(wish): W1 savings fields + wish_savings_log table (Plan B T1)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -336,7 +337,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Create: `server/apps/backend/app/schemas/wish_savings.py`
 - Create: `server/apps/backend/app/services/wish_savings.py`
-- Test: `server/apps/backend/tests/services/test_wish_savings_service.py`
+- Test: `server/tests/backend/services/test_wish_savings_service.py`
 
 **Interfaces:**
 - Consumes: `WishSavingsLog` (Task 1), `wish_service.get_wish` (family-scoped fetch + NOT_FOUND), `AppError`/`ErrorCode` (mirror wish_service), `require_adult` (router, Task 3), `invalidate_capability` (Plan A T9 — savings writes also bust finance_coach cache).
@@ -349,7 +350,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `server/apps/backend/tests/services/test_wish_savings_service.py`:
+Create `server/tests/backend/services/test_wish_savings_service.py`:
 
 ```python
 """W1 savings service: invariant + authz + reconciliation (Plan B T2)."""
@@ -429,7 +430,7 @@ def test_record_savings_other_family_wish_404(db_session, wish_owner_user, other
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/services/test_wish_savings_service.py -v`
+Run: `cd server && uv run pytest tests/backend/services/test_wish_savings_service.py -v`
 Expected: FAIL — `ImportError: cannot import name 'wish_savings'` (module not created).
 
 - [ ] **Step 3: Create the schema**
@@ -647,18 +648,18 @@ def recompute_saved_amount(db: Session, wish_id: int | str) -> Decimal:
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/services/test_wish_savings_service.py -v`
+Run: `cd server && uv run pytest tests/backend/services/test_wish_savings_service.py -v`
 Expected: all 7 tests PASS.
 
 - [ ] **Step 6: Lint + typecheck**
 
-Run: `cd server && uv run ruff check apps/backend/app/schemas/wish_savings.py apps/backend/app/services/wish_savings.py apps/backend/tests/services/test_wish_savings_service.py && uv run mypy apps/backend/app/schemas/wish_savings.py apps/backend/app/services/wish_savings.py`
+Run: `cd server && uv run ruff check apps/backend/app/schemas/wish_savings.py apps/backend/app/services/wish_savings.py tests/backend/services/test_wish_savings_service.py && uv run mypy apps/backend/app/schemas/wish_savings.py apps/backend/app/services/wish_savings.py`
 Expected: no errors.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add server/apps/backend/app/schemas/wish_savings.py server/apps/backend/app/services/wish_savings.py server/apps/backend/tests/services/test_wish_savings_service.py
+git add server/apps/backend/app/schemas/wish_savings.py server/apps/backend/app/services/wish_savings.py server/tests/backend/services/test_wish_savings_service.py
 git commit -m "feat(wish): W1 savings service + invariant + authz (Plan B T2)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -672,7 +673,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `server/apps/backend/app/routers/wishes.py` — add `POST/GET/DELETE /wishes/{wish_id}/savings[/{log_id}]` + `PATCH /wishes/{wish_id}/ignore-debt-warning` (W5)
 - Modify: `server/apps/backend/app/schemas/wish.py` — extend `WishCreate`/`WishUpdate`/`WishResponse` with the new fields
 - Modify: `server/apps/backend/app/services/wish.py` — `create_wish`/`update_wish` pass through `target_date`/`monthly_saving`/`ignore_debt_warning`
-- Test: `server/apps/backend/tests/routers/test_wishes_savings.py`
+- Test: `server/tests/backend/routers/test_wishes_savings.py`
 
 **Interfaces:**
 - Consumes: `require_adult` (deps), `wish_savings` service (Task 2), `wish_service.get_wish` (owner-check reuse), `SavingsLogCreate`/`SavingsLogResponse` (Task 2 schema). Existing wish router pattern (lines 14-57).
@@ -685,7 +686,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `server/apps/backend/tests/routers/test_wishes_savings.py`:
+Create `server/tests/backend/routers/test_wishes_savings.py`:
 
 ```python
 """W1 savings endpoints + ignore-debt-warning (Plan B T3)."""
@@ -751,7 +752,7 @@ def test_wish_response_includes_savings_fields(client, auth_headers, owned_wish_
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_wishes_savings.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_wishes_savings.py -v`
 Expected: FAIL — 404 (savings routes not registered) / missing fields.
 
 - [ ] **Step 3: Extend the wish schemas**
@@ -876,21 +877,21 @@ def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool)
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_wishes_savings.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_wishes_savings.py -v`
 Expected: all 6 tests PASS.
 
 - [ ] **Step 7: Lint + typecheck + regression**
 
-Run: `cd server && uv run ruff check apps/backend/app/routers/wishes.py apps/backend/app/schemas/wish.py apps/backend/app/services/wish.py apps/backend/tests/routers/test_wishes_savings.py && uv run mypy apps/backend/app/routers/wishes.py apps/backend/app/schemas/wish.py apps/backend/app/services/wish.py`
+Run: `cd server && uv run ruff check apps/backend/app/routers/wishes.py apps/backend/app/schemas/wish.py apps/backend/app/services/wish.py tests/backend/routers/test_wishes_savings.py && uv run mypy apps/backend/app/routers/wishes.py apps/backend/app/schemas/wish.py apps/backend/app/services/wish.py`
 Expected: no errors.
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_wishes.py -v 2>/dev/null || uv run pytest apps/backend/tests/ -k wish -v`
+Run: `cd server && uv run pytest tests/backend/test_wishes.py -v 2>/dev/null || uv run pytest tests/backend/ -k wish -v`
 Expected: existing wish tests still PASS (new fields are optional/additive).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add server/apps/backend/app/routers/wishes.py server/apps/backend/app/schemas/wish.py server/apps/backend/app/services/wish.py server/apps/backend/tests/routers/test_wishes_savings.py
+git add server/apps/backend/app/routers/wishes.py server/apps/backend/app/schemas/wish.py server/apps/backend/app/services/wish.py server/tests/backend/routers/test_wishes_savings.py
 git commit -m "feat(wish): W1 savings endpoints + ignore-debt-warning + schema (Plan B T3)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -905,7 +906,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Create: `server/apps/backend/app/schemas/liability_simulate.py` — request/response models
 - Modify: `server/apps/backend/app/routers/liabilities.py` — add `POST /liabilities/simulate`
 - Test: `server/packages/domain/tests/test_liability_calculator.py` (6 cases per spec §6.4)
-- Test: `server/apps/backend/tests/routers/test_liabilities_simulate.py`
+- Test: `server/tests/backend/routers/test_liabilities_simulate.py`
 
 **Interfaces:**
 - Consumes: `Liability` model fields `interest_rate` (Float|None), `remaining_amount` (Float|None — confirm exact name; the frontend type says `remaining_amount`), `monthly_payment` (Float|None), `category`, `is_active`. `require_adult` (router).
@@ -1185,7 +1186,7 @@ def simulate_liability(
 
 - [ ] **Step 6: Write + run the router test**
 
-Create `server/apps/backend/tests/routers/test_liabilities_simulate.py`:
+Create `server/tests/backend/routers/test_liabilities_simulate.py`:
 
 ```python
 """L2 /liabilities/simulate endpoint (Plan B T4)."""
@@ -1228,18 +1229,18 @@ def test_simulate_zero_rate_returns_warning(client, auth_headers):
     assert body["total_interest"] == "0"
 ```
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_liabilities_simulate.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_liabilities_simulate.py -v`
 Expected: all 3 tests PASS.
 
 - [ ] **Step 7: Lint + typecheck**
 
-Run: `cd server && uv run ruff check packages/domain/liability_calculator.py apps/backend/app/schemas/liability_simulate.py apps/backend/app/routers/liabilities.py packages/domain/tests/test_liability_calculator.py apps/backend/tests/routers/test_liabilities_simulate.py && uv run mypy packages/domain/liability_calculator.py apps/backend/app/routers/liabilities.py`
+Run: `cd server && uv run ruff check packages/domain/liability_calculator.py apps/backend/app/schemas/liability_simulate.py apps/backend/app/routers/liabilities.py packages/domain/tests/test_liability_calculator.py tests/backend/routers/test_liabilities_simulate.py && uv run mypy packages/domain/liability_calculator.py apps/backend/app/routers/liabilities.py`
 Expected: no errors.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add server/packages/domain/liability_calculator.py server/apps/backend/app/schemas/liability_simulate.py server/apps/backend/app/routers/liabilities.py server/packages/domain/tests/test_liability_calculator.py server/apps/backend/tests/routers/test_liabilities_simulate.py
+git add server/packages/domain/liability_calculator.py server/apps/backend/app/schemas/liability_simulate.py server/apps/backend/app/routers/liabilities.py server/packages/domain/tests/test_liability_calculator.py server/tests/backend/routers/test_liabilities_simulate.py
 git commit -m "feat(liability): L1/L2 single-source amortization + /simulate (Plan B T4)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1538,7 +1539,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `frontend/apps/main/src/components/ai/AIChatBox.vue` — call `useAiContext` on mount (before/after `store.initializeFromUrl`)
 - Modify: `frontend/apps/main/src/api/ai.ts` — add `getAiContext(source, id)`
 - Modify: `frontend/apps/main/src/i18n/locales/zh-CN.ts` — add `aiChat.context.*`
-- Test: `server/apps/backend/tests/routers/test_ai_context.py`
+- Test: `server/tests/backend/routers/test_ai_context.py`
 - Test: `frontend/apps/main/src/composables/__tests__/useAiContext.spec.ts`
 
 **Interfaces:**
@@ -1549,7 +1550,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing backend test**
 
-Create `server/apps/backend/tests/routers/test_ai_context.py`:
+Create `server/tests/backend/routers/test_ai_context.py`:
 
 ```python
 """A1b /ai/context endpoint: per-source summary + family-scope 404 (Plan B T6)."""
@@ -1598,7 +1599,7 @@ def test_unknown_source_returns_400(client, auth_headers):
 
 - [ ] **Step 2: Run backend test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_context.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_ai_context.py -v`
 Expected: FAIL — 404 (route not registered).
 
 - [ ] **Step 3: Create the context builder service**
@@ -1770,7 +1771,7 @@ app.include_router(ai_context.router, prefix="/api/v1")
 
 - [ ] **Step 5: Run backend test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_context.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_ai_context.py -v`
 Expected: all 6 tests PASS.
 
 - [ ] **Step 6: Create the frontend composable**
@@ -1941,7 +1942,7 @@ Run: `cd frontend/apps/main && pnpm typecheck && pnpm lint -- src/composables/us
 Expected: no errors.
 
 ```bash
-git add server/apps/backend/app/routers/ai_context.py server/apps/backend/app/services/ai_context_builder.py server/apps/backend/app/main.py server/apps/backend/tests/routers/test_ai_context.py frontend/apps/main/src/composables/useAiContext.ts frontend/apps/main/src/components/ai/AIChatBox.vue frontend/apps/main/src/api/ai.ts frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/composables/__tests__/useAiContext.spec.ts
+git add server/apps/backend/app/routers/ai_context.py server/apps/backend/app/services/ai_context_builder.py server/apps/backend/app/main.py server/tests/backend/routers/test_ai_context.py frontend/apps/main/src/composables/useAiContext.ts frontend/apps/main/src/components/ai/AIChatBox.vue frontend/apps/main/src/api/ai.ts frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/composables/__tests__/useAiContext.spec.ts
 git commit -m "feat(ai): A1b /ai/context endpoint + greenfield chat context injection (Plan B T6)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1961,7 +1962,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `frontend/apps/main/src/api/wishes.ts` — add `getWishAdvice`/`adoptWishAdvice` (batch PATCH monthly_saving)
 - Modify: `frontend/apps/main/src/types/index.ts` — add `WishAdvice`/`WishRedistribution` types
 - Modify: `frontend/apps/main/src/i18n/locales/zh-CN.ts` — add `wish.advice.*`
-- Test: `server/apps/backend/tests/routers/test_ai_wish_advice.py`
+- Test: `server/tests/backend/routers/test_ai_wish_advice.py`
 - Test: `frontend/apps/main/src/components/wishes/__tests__/WishAdviceCard.spec.ts`
 
 **Interfaces:**
@@ -1973,7 +1974,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing backend test**
 
-Create `server/apps/backend/tests/routers/test_ai_wish_advice.py`:
+Create `server/tests/backend/routers/test_ai_wish_advice.py`:
 
 ```python
 """W4 wish-advice: cache hit / fingerprint invalidation / guardrail (Plan B T7)."""
@@ -2010,7 +2011,7 @@ def test_guardrail_drops_negative_suggested_amount(client, auth_headers, db_sess
 
 - [ ] **Step 2: Run backend test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_wish_advice.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_ai_wish_advice.py -v`
 Expected: FAIL — 404 (route not registered).
 
 - [ ] **Step 3: Create the W4 advice service**
@@ -2218,7 +2219,7 @@ Also add it to `wish_savings.record_savings`/`delete_savings` (Task 2) — savin
 
 - [ ] **Step 6: Run backend test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_ai_wish_advice.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_ai_wish_advice.py -v`
 Expected: tests PASS (the cached-hit test passes; the guardrail test passes via the `generate_advice → None` patch).
 
 - [ ] **Step 7: Frontend — types + API client + card + WishListPage**
@@ -2404,7 +2405,7 @@ Run: `cd server && uv run ruff check apps/backend/app/routers/ai_wish_advice.py 
 Expected: no errors.
 
 ```bash
-git add server/apps/backend/app/routers/ai_wish_advice.py server/apps/backend/app/services/wish_advice.py server/apps/backend/app/main.py server/apps/backend/app/services/wish.py server/apps/backend/tests/routers/test_ai_wish_advice.py frontend/apps/main/src/components/wishes/WishAdviceCard.vue frontend/apps/main/src/pages/WishListPage.vue frontend/apps/main/src/api/wishes.ts frontend/apps/main/src/types/index.ts frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/components/wishes/__tests__/WishAdviceCard.spec.ts
+git add server/apps/backend/app/routers/ai_wish_advice.py server/apps/backend/app/services/wish_advice.py server/apps/backend/app/main.py server/apps/backend/app/services/wish.py server/tests/backend/routers/test_ai_wish_advice.py frontend/apps/main/src/components/wishes/WishAdviceCard.vue frontend/apps/main/src/pages/WishListPage.vue frontend/apps/main/src/api/wishes.ts frontend/apps/main/src/types/index.ts frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/components/wishes/__tests__/WishAdviceCard.spec.ts
 git commit -m "feat(wish): W4 priority advice card + independent wish_advice cache (Plan B T7)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -2426,7 +2427,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `frontend/apps/main/src/pages/LiabilityListPage.vue` — handle `?focus=liability_strategy` query (scroll + expand L1 card, or plain scroll if L1 not shown)
 - Modify: `frontend/apps/main/src/api/wishes.ts` — (setIgnoreDebtWarning already in T3) + thresholds API
 - Modify: `frontend/apps/main/src/i18n/locales/zh-CN.ts` — `wish.debtWarning.*`
-- Test: `server/apps/backend/tests/routers/test_family_debt_thresholds.py`
+- Test: `server/tests/backend/routers/test_family_debt_thresholds.py`
 - Test: `frontend/apps/main/src/composables/__tests__/useDebtWarning.spec.ts`
 
 **Interfaces:**
@@ -2438,7 +2439,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing backend test**
 
-Create `server/apps/backend/tests/routers/test_family_debt_thresholds.py`:
+Create `server/tests/backend/routers/test_family_debt_thresholds.py`:
 
 ```python
 """W5 debt-threshold config: owner-only PUT + default values (Plan B T8)."""
@@ -2479,7 +2480,7 @@ def test_get_visible_to_all_family_members(client, adult_headers):
 
 - [ ] **Step 2: Run backend test to verify it fails**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_family_debt_thresholds.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_family_debt_thresholds.py -v`
 Expected: FAIL — 404 (routes not registered).
 
 - [ ] **Step 3: Add the thresholds routes**
@@ -2521,7 +2522,7 @@ def put_debt_thresholds(
 
 - [ ] **Step 4: Run backend test to verify it passes**
 
-Run: `cd server && uv run pytest apps/backend/tests/routers/test_family_debt_thresholds.py -v`
+Run: `cd server && uv run pytest tests/backend/routers/test_family_debt_thresholds.py -v`
 Expected: all 3 tests PASS.
 
 - [ ] **Step 5: Create the frontend composable**
@@ -2644,7 +2645,7 @@ Run: `cd server && uv run ruff check apps/backend/app/routers/family.py && uv ru
 Expected: no errors.
 
 ```bash
-git add server/apps/backend/app/routers/family.py server/apps/backend/tests/routers/test_family_debt_thresholds.py frontend/apps/main/src/composables/useDebtWarning.ts frontend/apps/main/src/pages/WishListPage.vue frontend/apps/main/src/pages/WishDetailPage.vue frontend/apps/main/src/pages/WishFormPage.vue frontend/apps/main/src/pages/LiabilityListPage.vue frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/composables/__tests__/useDebtWarning.spec.ts
+git add server/apps/backend/app/routers/family.py server/tests/backend/routers/test_family_debt_thresholds.py frontend/apps/main/src/composables/useDebtWarning.ts frontend/apps/main/src/pages/WishListPage.vue frontend/apps/main/src/pages/WishDetailPage.vue frontend/apps/main/src/pages/WishFormPage.vue frontend/apps/main/src/pages/LiabilityListPage.vue frontend/apps/main/src/i18n/locales/zh-CN.ts frontend/apps/main/src/composables/__tests__/useDebtWarning.spec.ts
 git commit -m "feat(wish): W5 high-interest debt ↔ wish linkage (Plan B T8)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -2988,7 +2989,7 @@ Search both plans for `TODO|TBD|implement later|fill in|similar to Task` — eve
 
 - [ ] **Step 4: Full backend + frontend regression**
 
-Run: `cd server && uv run pytest apps/backend/tests/ packages/domain/tests/ -v 2>&1 | tail -40`
+Run: `cd server && uv run pytest tests/backend/ packages/domain/tests/ -v 2>&1 | tail -40`
 Expected: all Plan B tests pass; existing wish/liability/asset-report tests unaffected (W1 migration backward-compatible; capability column backfill='report'; simulate is a new route).
 
 Run: `cd frontend/apps/main && pnpm typecheck && pnpm test:run && pnpm -r typecheck 2>/dev/null`
