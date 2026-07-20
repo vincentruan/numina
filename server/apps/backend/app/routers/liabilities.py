@@ -10,6 +10,7 @@ from apps.backend.app.schemas.liability import (
     LiabilityCreate,
     LiabilityResponse,
     LiabilityUpdate,
+    PaymentRecordResponse,
     PaymentRequest,
 )
 from apps.backend.app.schemas.liability_simulate import (
@@ -39,7 +40,7 @@ def create_liability(
     user: User = Depends(require_adult),
 ):
     liability = liability_service.create_liability(db, user, req)
-    record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", liability.original_amount)
+    record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", float(liability.original_amount) if liability.original_amount is not None else None)
     return liability
 
 
@@ -124,11 +125,11 @@ def record_payment(
     user: User = Depends(require_adult),
 ):
     liability = liability_service.record_payment(db, user, liability_id, req.amount)
-    record_activity(db, user, "payment", "liability", liability_id, f"还款「{liability.name}」", req.amount)
+    record_activity(db, user, "payment", "liability", liability_id, f"还款「{liability.name}」", float(req.amount))
     return liability
 
 
-@router.get("/{liability_id}/payments")
+@router.get("/{liability_id}/payments", response_model=list[PaymentRecordResponse])
 def get_payments(
     liability_id: int,
     db: Session = Depends(get_db),

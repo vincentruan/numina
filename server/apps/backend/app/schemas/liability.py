@@ -77,6 +77,20 @@ class PaymentRequest(BaseModel):
         return _coerce_to_decimal(v)
 
 
+class PaymentRecordResponse(SnowflakeBase):
+    id: int
+    liability_id: int
+    # Money field serialized as str (2 decimals) per the money-as-str convention.
+    amount: str
+    paid_at: datetime
+    notes: str | None = None
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_money_str(v)
+
+
 class LiabilityResponse(SnowflakeBase):
     id: int
     user_id: int

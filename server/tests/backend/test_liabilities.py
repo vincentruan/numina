@@ -81,6 +81,21 @@ def test_record_payment(client, auth_headers, sample_liability):
     assert data["is_active"] is True
 
 
+def test_get_payments_returns_str_amount(client, auth_headers, sample_liability):
+    """GET /liabilities/{id}/payments returns money as str (money-as-str).
+    Regression for #9: PaymentRecord.amount migrated Float->Numeric(18,2);
+    the response must serialize Decimal as str without crashing."""
+    lid = sample_liability["id"]
+    client.put(f"/api/v1/liabilities/{lid}/payment", headers=auth_headers, json={"amount": 12000})
+
+    resp = client.get(f"/api/v1/liabilities/{lid}/payments", headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()["data"]
+    assert len(rows) >= 1
+    assert rows[0]["amount"] == "12000.00"  # str, 2 decimals
+    assert rows[0]["liability_id"] == lid
+
+
 def test_record_payment_full_payoff(client, auth_headers):
     """Test that paying off fully marks liability as inactive"""
     # Create a small liability

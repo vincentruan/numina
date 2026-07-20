@@ -367,7 +367,7 @@ export interface WishRealizeRequest {
 export interface PaymentRecord {
   id: string
   liability_id: string
-  amount: number
+  amount: string
   paid_at: string
   notes?: string
 }
