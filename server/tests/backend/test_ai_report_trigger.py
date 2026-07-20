@@ -6,6 +6,10 @@ Verifies ``POST /api/v1/ai/report/generate/events``:
   ``AgentClient`` (X-Agent-Token injected automatically) and streams the SSE
   response through unchanged.
 - Returns ``text/event-stream`` (replaces the legacy NDJSON proxy_report_events).
+
+Ported from the former apps/backend/tests/test_ai_report_trigger.py. These cover
+the SSE passthrough + 8h cache path, which the companion
+``tests/backend/test_ai_report.py`` (NDJSON two-phase mock) does not exercise.
 """
 
 from __future__ import annotations

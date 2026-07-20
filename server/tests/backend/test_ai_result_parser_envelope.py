@@ -1,4 +1,11 @@
-"""Unit tests for ai_result_parser table detection and envelope unwrapping."""
+"""Unit tests for ai_result_parser envelope unwrapping + markdown-table detection.
+
+Ported from the former apps/backend/tests/unit/test_ai_result_parser.py (U4 era).
+These cover ``_unwrap_agent_envelope`` and ``_contains_markdown_table``, which the
+companion ``tests/backend/test_ai_result_parser.py`` does not exercise (it covers
+``_extract_structured_block`` / ``_extract_bare_json`` / ``parse_capability_result``
+/ the LLM-fallback path).
+"""
 
 from apps.backend.app.services.ai_result_parser import (
     _contains_markdown_table,

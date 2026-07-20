@@ -4,6 +4,8 @@ Regression guard: when the user manually renames a session, the auto-generated
 title (produced by DeerFlow's TitleMiddleware) must be preserved in
 ``original_title`` on the first rename, and never overwritten on subsequent
 renames.
+
+Ported from the former apps/backend/tests/unit/test_ai_internal_session_title.py.
 """
 
 from types import SimpleNamespace

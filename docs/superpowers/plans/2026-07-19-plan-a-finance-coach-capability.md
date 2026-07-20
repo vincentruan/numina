@@ -2065,7 +2065,7 @@ Run this self-review checklist against the spec (`docs/superpowers/specs/2026-07
 
 If Steps 2-3 surfaced any fix, commit it. Otherwise no commit needed — Plan A is complete.
 
-- [ ] **Step 6: Housekeeping — reconcile the duplicate `apps/backend/tests/` leftovers**
+- [x] **Step 6: Housekeeping — reconcile the duplicate `apps/backend/tests/` leftovers**
 
 While verifying T10 Step 2 it was discovered that the repo has a stray second backend test root. The authoritative root is `server/tests/backend/` (on `pyproject.toml`'s `testpaths`, has the root `conftest.py`, 107 test files). The legacy `server/apps/backend/tests/` root holds only **5 files, has no conftest, and is NOT on pytest's discovery path** — so anything that lives there is silently never collected by a bare `uv run pytest`.
 
@@ -2088,7 +2088,9 @@ The other 2 files in `apps/backend/tests/` have no canonical counterpart and nee
 4. For the 2 files with no counterpart: decide whether to move (into `tests/backend/` with any needed fixture alignment) or delete outright. `test_ai_report_trigger.py` likely overlaps with `tests/backend/test_ai_report.py` — check before moving.
 5. Once `apps/backend/tests/` is empty (or only `__pycache__`), remove the directory.
 
-**Verification:** `find server/apps/backend/tests -name 'test_*.py'` returns nothing; `cd server && uv run pytest tests/backend/test_ai_result_parser.py tests/backend/test_ai_result_writer.py tests/backend/test_ai_skills.py tests/backend/test_ai_report.py -v` passes (covers the ported + canonical tests).
+**Verification:** `find server/apps/backend/tests -name 'test_*.py'` returns nothing; `cd server && uv run pytest tests/backend/test_ai_result_parser.py tests/backend/test_ai_result_parser_envelope.py tests/backend/test_ai_result_writer.py tests/backend/test_ai_skills.py tests/backend/test_ai_report_trigger.py tests/backend/test_ai_internal_session_title.py -v` passes (covers the ported + canonical tests — 42 passed).
+
+> **Follow-up (out of Step 6 scope).** While verifying, `tests/backend/test_ai_report.py` was found to have 4 pre-existing failures (NOT caused by Step 6 — verified by running it on the pre-Step-6 tree): its 4 `test_generate_report_*` cases patch `_ai_events_helper.AgentClient` and assert `application/x-ndjson`, but the U4 SSE refactor moved `AgentClient` to `ai_report.py` directly and switched the route to `text/event-stream`. The correctly-patching SSE coverage now lives in the ported `tests/backend/test_ai_report_trigger.py`. Aligning `test_ai_report.py` (drop the stale NDJSON cases or rewrite them against the SSE path) is a separate cleanup — tracked here so it isn't lost.
 
 This is a long-standing test-debt cleanup surfaced by the T10 path review — it is **not** part of the finance_coach capability itself, but doing it now prevents the next person from being misled by the silent second test root. Commit it separately from any T10 test fix, with message like `chore(tests): remove stray apps/backend/tests/ root — consolidate into tests/backend/`.
 
