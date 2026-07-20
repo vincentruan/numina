@@ -915,7 +915,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `AmortizationResult(total_interest: Decimal, months: int, monthly_payment: Decimal | None, warning: str | None, schedule: list[dict] | None)` — `warning` set when 最低还款不覆盖利息 or 超 1200 月.
   - `POST /liabilities/simulate` body `{remaining, annual_rate, monthly_payment?, extra_monthly?}` → `{total_interest, months, monthly_payment, warning, savings_vs_baseline?, months_saved?}`. When `extra_monthly > 0`, the response also returns the baseline (extra=0) comparison so the frontend shows "省 ¥Y, 提前 N 月".
 
-- [ ] **Step 1: Write the failing test — the 6 amortization cases**
+- [x] **Step 1: Write the failing test — the 6 amortization cases**
 
 Create `server/packages/domain/tests/test_liability_calculator.py` (spec §6.4: 等额本息正常 / 提前还款省息 / 最低还款覆盖利息 / 最低还款不覆盖利息(报警) / 无利率 / extra≥剩余本金(立即还清)):
 
@@ -992,12 +992,12 @@ def test_extra_ge_remaining_pays_off_immediately():
 
 > **Note on case 4:** the spec says "最低还款不覆盖利息(报警)". The `min_payment = max(remaining*5%, 100)` formula usually covers interest for typical rates. To deterministically trigger the non-cover warning, the test uses an extreme rate (60%) where monthly interest equals the 5% minimum — at that boundary 还本≈0 and the util warns. If your implementation's threshold differs, adjust the test inputs to reliably hit `还本 <= 0` while keeping the assertion `r.warning is not None`. The contract is: when the minimum payment fails to reduce principal, the result carries a warning.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd server && uv run pytest packages/domain/tests/test_liability_calculator.py -v`
 Expected: FAIL — `ImportError: cannot import name 'calc_amortization'`.
 
-- [ ] **Step 3: Create the amortization util**
+- [x] **Step 3: Create the amortization util**
 
 Create `server/packages/domain/liability_calculator.py`:
 
@@ -1102,12 +1102,12 @@ def calc_amortization(
 
 > **Decimal precision:** all intermediate money math uses `Decimal` (not float) to avoid drift; quantize to cents each iteration. The `0.005` balance tolerance handles rounding residue. The `extra_monthly` is added to the effective payment in BOTH modes (spec §6.1: "月供变 monthly_payment + extra"). Confirm the test-case-4 expectation aligns with this implementation; if the boundary logic differs, the test's extreme inputs still force `principal <= 0` → warning.
 
-- [ ] **Step 4: Run the util test to verify it passes**
+- [x] **Step 4: Run the util test to verify it passes**
 
 Run: `cd server && uv run pytest packages/domain/tests/test_liability_calculator.py -v`
 Expected: all 6 tests PASS.
 
-- [ ] **Step 5: Create the simulate schema + route**
+- [x] **Step 5: Create the simulate schema + route**
 
 Create `server/apps/backend/app/schemas/liability_simulate.py`:
 
@@ -1184,7 +1184,7 @@ def simulate_liability(
 
 > **Route guard:** `simulate` must not be shadowed by a `/{liability_id}` path param. FastAPI matches static routes before param routes IF declared first — so declare `POST /simulate` BEFORE `POST /{liability_id}` (or wherever a param route sits). Read the existing liabilities router to place it correctly. If there's no conflicting param route, placement is flexible.
 
-- [ ] **Step 6: Write + run the router test**
+- [x] **Step 6: Write + run the router test**
 
 Create `server/tests/backend/routers/test_liabilities_simulate.py`:
 
@@ -1232,12 +1232,12 @@ def test_simulate_zero_rate_returns_warning(client, auth_headers):
 Run: `cd server && uv run pytest tests/backend/routers/test_liabilities_simulate.py -v`
 Expected: all 3 tests PASS.
 
-- [ ] **Step 7: Lint + typecheck**
+- [x] **Step 7: Lint + typecheck**
 
 Run: `cd server && uv run ruff check packages/domain/liability_calculator.py apps/backend/app/schemas/liability_simulate.py apps/backend/app/routers/liabilities.py packages/domain/tests/test_liability_calculator.py tests/backend/routers/test_liabilities_simulate.py && uv run mypy packages/domain/liability_calculator.py apps/backend/app/routers/liabilities.py`
 Expected: no errors.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/packages/domain/liability_calculator.py server/apps/backend/app/schemas/liability_simulate.py server/apps/backend/app/routers/liabilities.py server/packages/domain/tests/test_liability_calculator.py server/tests/backend/routers/test_liabilities_simulate.py

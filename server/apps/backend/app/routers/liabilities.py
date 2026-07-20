@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -10,8 +12,13 @@ from apps.backend.app.schemas.liability import (
     LiabilityUpdate,
     PaymentRequest,
 )
+from apps.backend.app.schemas.liability_simulate import (
+    SimulateRequest,
+    SimulateResponse,
+)
 from apps.backend.app.services import liability as liability_service
 from apps.backend.app.services.activity import record_activity
+from packages.domain.liability_calculator import calc_amortization
 
 router = APIRouter(prefix="/liabilities", tags=["liabilities"])
 
@@ -34,6 +41,49 @@ def create_liability(
     liability = liability_service.create_liability(db, user, req)
     record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", liability.original_amount)
     return liability
+
+
+@router.post("/simulate", response_model=SimulateResponse)
+def simulate_liability(
+    req: SimulateRequest,
+    user: User = Depends(require_adult),
+):
+    """L2: forecast total interest + months, with optional extra-payment comparison.
+
+    Pure compute (no db write). When extra_monthly > 0, also computes the
+    baseline (extra=0) so the frontend shows '省 ¥Y, 提前 N 月'.
+    """
+    extra = req.extra_monthly or Decimal("0")
+    result = calc_amortization(req.remaining, req.annual_rate, req.monthly_payment, extra)
+    if result is None:
+        # No usable rate — return a response the frontend treats as 'no interest region'.
+        return SimulateResponse(
+            total_interest="0.00",
+            months=0,
+            monthly_payment=None,
+            warning="无利率，无法计算利息预测",
+        )
+    resp = SimulateResponse(
+        total_interest=str(result.total_interest.quantize(Decimal("0.01"))),
+        months=result.months,
+        monthly_payment=(
+            str(result.monthly_payment.quantize(Decimal("0.01")))
+            if result.monthly_payment is not None
+            else None
+        ),
+        warning=result.warning,
+    )
+    if extra > 0:
+        base = calc_amortization(req.remaining, req.annual_rate, req.monthly_payment, Decimal("0"))
+        if base is not None:
+            # Pre-quantize to str so the str-typed fields don't carry raw Decimal
+            # (avoids Pydantic serialization warnings on assignment).
+            resp.baseline_total_interest = str(base.total_interest.quantize(Decimal("0.01")))
+            resp.baseline_months = base.months
+            savings = base.total_interest - result.total_interest
+            resp.savings_vs_baseline = str(savings.quantize(Decimal("0.01")))
+            resp.months_saved = base.months - result.months
+    return resp
 
 
 @router.get("/{liability_id}", response_model=LiabilityResponse)
