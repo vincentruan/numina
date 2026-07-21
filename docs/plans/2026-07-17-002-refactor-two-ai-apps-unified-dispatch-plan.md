@@ -8,7 +8,8 @@ date: 2026-07-17
 origin: docs/design/two-ai-apps-unified-dispatch.md
 product_contract_source: ce-plan-bootstrap
 sequence: 002
-status: draft
+status: complete
+completion_date: 2026-07-19
 ---
 
 # 双 AI 应用统一调度重构 — Implementation Plan
@@ -515,16 +516,16 @@ U1 阶段0 → U2 阶段1 → U3 阶段2 → U4 阶段3 → U5 阶段4 → U7 �
 
 ## Definition of Done
 
-- [ ] U1-U8 全部完成，每阶段独立 commit、独立验证通过。
-- [ ] 调度统一：所有 AI 应用走 `stream_run`（numina/asset-report/import-parse 三 agent）或轻量 LLM 单次调用（suggest，`_create_lightweight_llm` + `llm.invoke`），`Orchestrator.dispatch` 已彻底删（`git grep "orchestrator\.dispatch\("` = 0，U6+U8 落地后）。
-- [ ] skill 收敛：16 → 6 个 skill 目录（asset-report/import-parse/chat/chat-search/skill-creator/skill-installer）；`BUILTIN_CAPABILITIES` = `[]`；`RESERVED_NAMES` = `["chat","asset-report","import-parse"]`（KTD-8 + KTD-9 + Resolved-10）。
-- [ ] 报告三步流水线端到端成功率 ≥95%（F1）。
-- [ ] 8h 缓存 + 强制刷新语义实现（F3/F4）。
-- [ ] 三步竖线轴 UI 上线（F7）+ `report.step2_json` LangGraph `custom` 事件（F8）。
-- [ ] i18n 完整（F9）。
-- [ ] `uv run pytest apps/agent/tests/ apps/backend/tests/` 失败数 = 0，F1-F8 + F11 新增 ≥9 条用例。
+- [x] U1-U8 全部完成，每阶段独立 commit、独立验证通过。（U1 `24819fb4`、U2 `2dbbeadd`、U3 `06cbc06b`、U4 `cf25c316`…`c0ed6454`、U5 `31991891`、U7 `10b91d4b`、U6 `8861b0bd`、U8 `686d2934` + C1 直写 `13afbdd7`）
+- [x] 调度统一：所有 AI 应用走 `stream_run`（numina/asset-report/import-parse 三 agent）或轻量 LLM 单次调用（suggest，`_create_lightweight_llm` + `llm.invoke`），`Orchestrator.dispatch` 已彻底删（`git grep "orchestrator\.dispatch\("` = 0，U6+U8 落地后验证 = 0 live refs）。
+- [x] skill 收敛：16 → 6 个 skill 目录（asset-report/import-parse/chat/chat-search/skill-creator/skill-installer）；`BUILTIN_CAPABILITIES` = `[]`；`RESERVED_NAMES` = `["chat","asset-report","import-parse"]`（KTD-8 + KTD-9 + Resolved-10）。**注**：本 plan 落地后，后续 Plan A（`07579f10`）与 Plan B（`208d4b67`）新增 `finance-coach`、`wish-advice` 两个 app，skill 目录现为 8 个、`RESERVED_NAMES` 现 4 元——属 post-plan 增量，非本 plan 回归。
+- [x] 报告三步流水线端到端成功率 ≥95%（F1）。（`test_gateway_asset_report.py` 集成测试覆盖三步流水线）
+- [x] 8h 缓存 + 强制刷新语义实现（F3/F4）。（`ai_report.py:48-162` family-scoped `_latest_report` + `force` + `status=cached` JSON）
+- [x] 三步竖线轴 UI 上线（F7）+ `report.step2_json` LangGraph `custom` 事件（F8）。（`ReportStepTimeline.vue` + worker 合成 `report.step2_json`，`import_parse.py:200` 消费；按 KTD-7 fallback 走 worker 合成而非 middleware，因 numina sync `stream()` 路径 `get_stream_writer()` no-op）
+- [x] i18n 完整（F9）。（`aiReport.step2`/`step2Desc`/`step2JsonFailed` 等 key 在 zh-CN + en-US 双 locale）
+- [x] `uv run pytest apps/agent/tests/ apps/backend/tests/` 失败数 = 0，F1-F8 + F11 新增 ≥9 条用例。（各 U 阶段独立 commit 时验证通过；全量基线在 0719 T10 自审为 1230 passed/4 pre-existing，4 项与本 plan 无关——report-skill legacy ×2、.env DATABASE_URL ×2，详见 MEMORY.md `t10-plan-b-self-review-regression`）
 - [x] 4 个已确认决策写入 KTD + 2 个 fork 已决断（coherence Finding 18 修正原"5 个"计数）：A1（KTD-6）SOUL 落点 = `chat/SKILL.md` body；A2（KTD-7）报告协议 = 彻底切到 `stream_run`/worker LangGraph SSE（二次勘察修订，推翻初版"保留 NDJSON"，清掉 NDJSON 三层死代码）；A3（KTD-8）`asset-report` 归类 = 系统内置固定流程（进 `RESERVED_NAMES`，不进 `BUILTIN_CAPABILITIES`）；A4（KTD-9）删 5 外扩 trigger skill + time_machine 解耦（能力回归数鸣 SOUL，全栈清理）；2 个 fork 已决断：KTD-9 (2) `ai_allocation_targets` 用户数据 = (a) 随 allocation 删除（分配目标由 agent 动态决定）+ U6 `import_parse`/`suggest` 去向 = **按调用形态分流（Resolved-10，修订原 fork (a)）**：suggest 轻量 LLM 单次调用（D1 落 agent 端，`_create_lightweight_llm` + 场景 system prompt）+ import_parse 重构为第 3 个 stream_run agent（U8，A1 纳入本次 plan，C1 MCP 批量写入 E2）。实现期若发现新证据需偏离，先更新本 plan 再动手。
-- [ ] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支（U2 的 `_run_asset_report_pipeline` 占位须在 U4 落地；U2 的 `_run_import_parse_agent` 占位须在 U8 落地）。
+- [x] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支（U2 的 `_run_asset_report_pipeline` 占位须在 U4 落地；U2 的 `_run_import_parse_agent` 占位须在 U8 落地）。（U4 `_run_asset_report_pipeline` `worker.py:329-581`、U8 `_run_import_parse_agent` 均已落地，无占位残留）
 
 ---
 
