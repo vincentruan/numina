@@ -19,6 +19,8 @@ import SuggestionChips from '@/components/ai/SuggestionChips.vue'
 import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
+import TodoListBar from '@/components/ai-chat/TodoListBar.vue'
+import { useThreadTodos } from '@/composables/ai-chat/useThreadTodos'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 import { useAiContext } from '@/composables/useAiContext'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
@@ -52,6 +54,10 @@ const {
   select: selectArtifact,
   deselect: deselectArtifact,
 } = useArtifacts()
+
+// U7 (D5 TodoList): derive read-only todo display state from the live todos ref
+// owned by useThreadChat. Rendered above InputBox when the agent has todos.
+const { todos: todoItems, hasTodos } = useThreadTodos(chat.todos)
 
 /**
  * Realtime token usage computed from SSE values events.
@@ -577,6 +583,10 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         <van-icon name="cross" @click="clearContext" />
       </div>
       <!-- InputBox only in chat mode (WelcomePage has its own in welcome mode) -->
+      <!-- U7 (D5 TodoList): read-only todo list above InputBox when the agent
+           has written todos via write_todos (plan_mode). Co-located with the
+           (future U5) GoalStatusBar position. -->
+      <TodoListBar v-if="hasTodos" :todos="todoItems" />
       <InputBox
         :status="chat.isLoading.value ? 'streaming' : 'ready'"
         :is-welcome-mode="false"

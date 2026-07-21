@@ -219,6 +219,11 @@ export default {
     compactSuccess: 'Chat history compacted',
     compactSkipped: 'Not enough history to compact',
     compactFailed: 'Failed to compact chat history',
+    // U7 (D5 TodoList) — read-only mobile todo list
+    todosLabel: 'To-dos',
+    todoStatusPending: 'Pending',
+    todoStatusInProgress: 'In progress',
+    todoStatusCompleted: 'Completed',
     inputPolish: 'Polish input',
     inputPolishing: 'Polishing input…',
     inputPolishNoChanges: 'This input is already clear.',

@@ -28,6 +28,7 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
+from apps.agent.services.deerflow_adapter.todo_middleware import get_todo_middleware
 from apps.agent.services.goal_evaluator import (
     GoalEvaluationError,
     evaluate_goal_completion,
@@ -2082,6 +2083,14 @@ async def _run_numina_agent(
         call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
 
         # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
+        # U7 (D5 TodoList): when plan_mode is on, inject the TodoMiddleware
+        # singleton so the agent gets the `write_todos` tool + context-loss /
+        # premature-exit hooks (sync hooks — R2; singleton — R3, keeps the LRU
+        # cache key's id() stable so the agent is not rebuilt every call).
+        # plan_mode is already part of the LRU cache key (family_adapter_cache.py
+        # cache_key), so plan_mode=True (with middleware) and False (without) get
+        # distinct DeerFlowClient instances.
+        todo_middlewares = [get_todo_middleware()] if call_plan_mode else None
         adapter = create_family_adapter(
             family_id,
             selected_provider,
@@ -2089,6 +2098,7 @@ async def _run_numina_agent(
             subagent_enabled=call_subagent_enabled,
             plan_mode=call_plan_mode,
             mcp_servers=mcp_servers,
+            middlewares=todo_middlewares,
         )
 
         # 5. Extract user message for context

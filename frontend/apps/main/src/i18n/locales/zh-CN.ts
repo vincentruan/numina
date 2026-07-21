@@ -298,6 +298,11 @@ export default {
     compactSuccess: '已压缩对话历史',
     compactSkipped: '对话历史较少，无需压缩',
     compactFailed: '压缩对话历史失败',
+    // U7 (D5 TodoList) — read-only mobile todo list
+    todosLabel: '待办清单',
+    todoStatusPending: '待开始',
+    todoStatusInProgress: '进行中',
+    todoStatusCompleted: '已完成',
     inputPolish: '优化输入',
     inputPolishing: '正在优化输入…',
     inputPolishNoChanges: '输入已经很清晰，无需优化',

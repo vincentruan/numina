@@ -82,6 +82,9 @@ interface ValuesData {
   title?: string
   messages?: SerializedMessage[]
   artifacts?: Array<Record<string, unknown>>
+  // U7 (D5 TodoList): todos channel from TodoMiddleware's write_todos tool.
+  // Items are {content, status} (no id) — keyed by index+content in the UI.
+  todos?: Array<{ content: string; status: string }>
 }
 
 /**
@@ -388,6 +391,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   const tokenUsage = ref<TokenUsage | null>(null)
   const planningSteps = ref<PlanningStep[]>([])
   const suggestions = ref<string[]>([])
+  // U7 (D5 TodoList): todos written by the agent via write_todos. Single source
+  // of truth; useThreadTodos derives hasTodos/todos from this. Cleared on
+  // thread switch / history reload; hydrated from values events (stream + load).
+  const todos = ref<Array<{ content: string; status: string }>>([])
   /**
    * Track interrupt IDs that have been answered by the user in this session.
    * Used by MessageGroup to transition HumanInputCard from 'pending' to
@@ -1020,6 +1027,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             if (data.messages) {
               mergeValuesMessages(data.messages)
             }
+            // U7 (D5 TodoList): todos channel — replace wholesale (merge_todos
+            // reducer semantics: new non-None wins over existing).
+            if (data.todos !== undefined) {
+              todos.value = Array.isArray(data.todos) ? data.todos : []
+            }
           } else if (chunk.event === 'custom' && chunk.data) {
             const customData = chunk.data as {
               type?: string
@@ -1405,19 +1417,26 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     planningSteps.value = []
     suggestions.value = []
     runId.value = null
+    // U7 (D5 TodoList): reset todos on thread switch; re-hydrated from
+    // state.values.todos below (if present in the checkpoint).
+    todos.value = []
     currentThreadId = threadId
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const client = getClient()
         const state = await client.threads.getState(threadId)
-        const values = state.values as { messages?: SerializedMessage[] } | undefined
+        const values = state.values as { messages?: SerializedMessage[]; todos?: Array<{ content: string; status: string }> } | undefined
         if (values?.messages) {
           // Replace messages entirely for history load
           messages.value = values.messages.map(serializedToChatMessage)
           // Hydrate per-user feedback state (点赞/点踩) from backend so the
           // thumbs-up/down highlight persists across reloads.
           await hydrateFeedback(threadId)
+        }
+        // U7 (D5 TodoList): hydrate todos from checkpoint channel_values.
+        if (Array.isArray(values?.todos)) {
+          todos.value = values!.todos!
         }
         isLoading.value = false
         return
@@ -1554,6 +1573,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     runId.value = null
     error.value = null
     isLoading.value = false
+    // U7 (D5 TodoList): clear todos on full clear (new chat / thread switch).
+    todos.value = []
     // U6: drain the transient bridge + summarized ids on full clear (new chat /
     // thread switch) so rescued turns never leak across chat views.
     transientBridge.value = []
@@ -1692,6 +1713,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               } else if (event === 'values' && data) {
                 const valData = data as ValuesData
                 if (valData.messages) mergeValuesMessages(valData.messages)
+                // U7 (D5 TodoList): todos channel on the resume path too.
+                if (valData.todos !== undefined) {
+                  todos.value = Array.isArray(valData.todos) ? valData.todos : []
+                }
               } else if (event === 'custom' && data) {
                 const customData = data as {
                   type?: string
@@ -1872,6 +1897,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   return {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
+    todos,
     sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
     submitFeedback, handleCompact,
   }
