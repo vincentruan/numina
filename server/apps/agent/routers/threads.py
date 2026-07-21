@@ -15,11 +15,17 @@ from pathlib import Path
 from typing import Any, Literal
 
 from deerflow.utils.time import coerce_iso, now_iso
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from langgraph.checkpoint.base import empty_checkpoint, uuid6
 from pydantic import BaseModel, Field, field_validator
 
 from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
+from apps.agent.services.compact_service import (
+    ContextCompactionDisabled,
+    ContextCompactionFailed,
+    compact_thread,
+    result_to_dict,
+)
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _get_shared_checkpointer,
 )
@@ -31,6 +37,7 @@ from apps.agent.services.goal_store import (
     read_thread_goal,
     write_thread_goal,
 )
+from apps.agent.services.runtime.lifespan import get_run_manager
 from apps.agent.services.session_store import AiSessionRepository
 
 
@@ -124,6 +131,28 @@ class ThreadGoalRequest(BaseModel):
 class ThreadGoalResponse(BaseModel):
     """Response model for a thread goal (DeerFlow threads.py:332-335)."""
     goal: dict[str, Any] | None = Field(default=None, description="当前目标状态，无目标时为 null")
+
+class ThreadCompactRequest(BaseModel):
+    """Request body for manual context compaction (DeerFlow threads.py:320)."""
+
+    agent_name: str | None = Field(
+        default=None, description="Optional agent name for the summarization LLM context"
+    )
+
+
+class ThreadCompactResponse(BaseModel):
+    """Response for ``POST /{thread_id}/compact`` (DeerFlow threads.py:332-335)."""
+
+    compacted: bool = Field(description="Whether compaction actually occurred")
+    reason: str | None = Field(
+        default=None,
+        description="Skip reason when not compacted (e.g. not_enough_messages)",
+    )
+    removed_count: int = Field(default=0, description="Messages summarized and removed")
+    preserved_count: int = Field(default=0, description="Messages kept in the visible tail")
+    summary_updated: bool = Field(default=False, description="Whether summary_text was updated")
+    checkpoint_id: str | None = Field(default=None, description="New checkpoint ID after compaction")
+    total_tokens: int = Field(default=0, description="Token count of the produced summary")
 
 class HistoryEntry(BaseModel):
     checkpoint_id: str
@@ -1184,3 +1213,56 @@ async def branch_thread(
         branched_from_message_id=body.message_id,
         workspace_clone_mode=workspace_clone_mode,
     )
+
+
+# ---------------------------------------------------------------------------
+# Compact endpoint (U6 — D2 DeerFlow threads.py:896-926)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{thread_id}/compact", response_model=ThreadCompactResponse)
+async def compact_thread_endpoint(
+    thread_id: str,
+    body: ThreadCompactRequest,
+    request: Request,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> ThreadCompactResponse:
+    """Manually summarize old thread context while preserving the visible tail.
+
+    Compacts the thread via DeerFlow's canonical ``compact_thread_context``
+    (KTD-5), which handles ``RemoveMessage(ALL)`` + preserved tail +
+    ``channel_versions`` bump + ``summary_text``. Owner/adult only (KTD-8);
+    409 if a run is in flight; 404 if the thread is missing or belongs to
+    another family (ownership check, not the single-layer auth check).
+    """
+    if verified.role not in _OWNER_ADULT_ROLES:
+        raise HTTPException(status_code=403, detail="仅家长可压缩对话历史")
+    checkpointer = get_checkpointer()
+    repo = AiSessionRepository(x_family_id)
+    await _verify_goal_thread_ownership(checkpointer, repo, thread_id, verified)
+
+    run_manager = get_run_manager(request)
+    try:
+        if await run_manager.has_inflight(thread_id):
+            raise HTTPException(
+                status_code=409, detail="对话正在运行，请在运行结束后再压缩"
+            )
+        result = await compact_thread(
+            checkpointer,
+            thread_id,
+            user_id=verified.user_id,
+            agent_name=body.agent_name,
+        )
+    except ContextCompactionDisabled:
+        raise HTTPException(status_code=409, detail="上下文压缩已禁用") from None
+    except ContextCompactionFailed:
+        raise HTTPException(status_code=503, detail="压缩对话历史失败") from None
+    except LookupError:
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found") from None
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to compact thread %s", thread_id)
+        raise HTTPException(status_code=503, detail="压缩对话历史失败") from None
+    return ThreadCompactResponse(**result_to_dict(result))
