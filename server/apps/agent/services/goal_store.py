@@ -18,11 +18,18 @@ from __future__ import annotations
 from typing import Any, cast
 
 from deerflow.runtime.goal import (
+    CONTINUABLE_GOAL_BLOCKERS,
     DEFAULT_MAX_GOAL_CONTINUATIONS,
     DEFAULT_MAX_NO_PROGRESS_CONTINUATIONS,
     GoalWriteConflict,
+    attach_goal_evaluation,
+    compute_no_progress_count,
     goal_thread_lock,
+    latest_visible_assistant_signature,
+    make_goal_continuation_message,
     read_thread_goal,
+    should_continue_goal,
+    visible_conversation_signature,
     write_thread_goal,
 )
 from deerflow.runtime.goal import (
@@ -30,12 +37,19 @@ from deerflow.runtime.goal import (
 )
 
 __all__ = [
+    "CONTINUABLE_GOAL_BLOCKERS",
     "DEFAULT_MAX_GOAL_CONTINUATIONS",
     "DEFAULT_MAX_NO_PROGRESS_CONTINUATIONS",
     "GoalWriteConflict",
+    "attach_goal_evaluation",
     "build_goal_state",
+    "compute_no_progress_count",
     "goal_thread_lock",
+    "latest_visible_assistant_signature",
+    "make_goal_continuation_message",
     "read_thread_goal",
+    "should_continue_goal",
+    "visible_conversation_signature",
     "write_thread_goal",
 ]
 
