@@ -10,13 +10,13 @@
 
 ## Goal Capsule
 
-**一句话**：把资产/负债/心愿从三个独立顶级 TabBar 入口合并为 `/finance` 一个入口，首屏财务概览卡（净资产 + 月还 + 心愿进度）+ 三 sub-tab 下钻，TabBar 从 6 降到 5。
+**一句话**：把资产/负债/心愿统一为 `/finance` 一个入口，首屏财务概览卡（净资产 + 月还 + 心愿进度 + 跨模块决策链提示）+ 三 sub-tab 下钻；owner TabBar 从 6 降到 5（assets 首次获得 tab 入口，此前仅 dashboard 可达）。
 
-**为什么**：当前六个模块是六个独立工具而非一条财务决策链（spec §1）。N1 是 P1 里改动最大的单项，也是后续 D3（净资产卡下钻）的前置依赖。
+**为什么**：当前六个模块是六个独立工具而非一条财务决策链（spec §1）。N1 通过统一入口 + 概览首屏收敛实体管理，并在概览卡补一条 W5 式跨模块联动提示（高息负债延迟心愿），让 hub 不止是三个孤立数字，而是触及"决策链"语义。完整决策链流转（花销控制/财富增值阶段）仍靠 D3/AI 教练等后续 P1 项。N1 是 P1 里改动最大的单项，也是 D3 前置依赖。
 
 **完成标准**：
-- `/finance` 路由 + `FinanceHubPage.vue` 上线，首屏概览卡 + 资产/负债/心愿三 tab。
-- TabBar 移除 `wishes`、`liabilities` 两个独立项，新增单 `finance` 项；`dashboard / finance / ai / baby(owner) / settings` = 5（owner）/ 4（非 owner）。
+- `/finance` 路由 + `FinanceHubPage.vue` 上线，首屏概览卡（净资产 + 月还 + 心愿进度 + W5 联动提示）+ 资产/负债/心愿三 tab。
+- TabBar 统一入口：owner `dashboard / finance / ai / baby / settings` = 5（移除 wishes/liabilities，加 finance；assets 首获 tab 入口）；**非 owner 非对称**（KTD-4）保留 `wishes` 直达 tab = 5 项（减 liabilities 加 finance，保留 wishes）。
 - 原有 `/assets`、`/liabilities`、`/wishes` 顶级路由**全部保留可达**（deep-link + 已有 cachedTabs 不破坏）。
 - finance tab active 态覆盖三组路由（访问 `/assets`、`/liabilities`、`/wishes` 及其子路由时 TabBar finance 高亮）。
 - i18n：新增 `nav.finance` key（zh-CN + en-US）。
@@ -82,10 +82,14 @@ P1 N1。新建财务 hub 页作为资产/负债/心愿的统一入口，TabBar �
 
 **刷新契约（review P2，KeepAlive 返回不陈旧）**：hub 是主落地页，`onMounted` 因 KeepAlive 不在返回时重触发。须二选一：(a) `onActivated` 重 fetch（KeepAlive 返回时刷新），或 (b) 加 Vant `PullRefresh`（三 list 页已用该模式）手动刷新。原 Assumptions「不要求实时性」不足以覆盖主落地页的陈旧风险。
 
-#### KTD-4：TabBar 入口顺序与 baby 条件项
-**决策**：合并后 TabBar 顺序 `dashboard / finance / ai / baby(owner) / settings`。`baby` 仍保持 `v-if="isOwner"` 条件项。非 owner 用户为 4 项。
+#### KTD-4：TabBar 入口顺序与非对称 owner/非 owner（review #3 修正）
+**决策**：
+- **owner**：`dashboard / finance / ai / baby / settings` = 5 项（移除 wishes/liabilities，加 finance；assets 首获 tab 入口）。
+- **非 owner（adult）**：`dashboard / finance / ai / settings` = 4 项？——**修正为非对称保留 `wishes`**：`dashboard / wishes / finance / ai / settings` = 5 项（减 liabilities 加 finance，**保留 wishes 直达**）。`baby` 仅 owner 可见（`v-if="isOwner"`）。
 
-**理由**：owner 与非 owner 的入口数差异保持现状，只减少 owner 的心愿/负债两个独立项。
+**理由（review #3）**：child app 独立、不走 main app 的 /finance，故 main app 的"非 owner"实际是 adult。adult 最常见任务是心愿管理（查看/管理自己的心愿），把 wishes 塌进 hub 会让其从 1 tap 变 3-4 tap（finance→sub-tab→查看全部→list）。非对称 tab bar 用现有 `v-if="isOwner"` 机制：owner 用合并 hub 管全局，adult 保留 wishes 直达 + finance 入口管理资产/负债。captive 产品里切换成本 > 广度。
+
+**实现**：`AppTabBar.vue` 的 `wishes` tab 改 `v-if="!isOwner"`（仅非 owner 显），`liabilities` tab 移除（所有人走 finance），`finance` tab 始终显，`baby` 保持 `v-if="isOwner"`。`activeTab` 映射不变（KTD-2 路径前缀覆盖三组）。
 
 #### KTD-5：合并后 DashboardPage 的内嵌资产列表如何处置（⚠️ 实现期确认）
 **背景**：recon 发现 DashboardPage 的资产列表（`DashboardPage.vue:108-137`，走 `dashboardStore.fetchAssetsPage` 分页 + `filteredByCategoryAssets` + `RecycleScroller`）与 `/assets`（`AssetListPage.vue`，走 `assetStore.fetchAssets` 全量 + 类型 tab + 搜索/批量删除）是**两套独立的数据源和渲染**，本就并存。N1 合并的是**导航入口**，不直接碰这两套。但合并后 dashboard 和 `/finance?tab=assets` 会出现资产信息重复铺陈，需决策 dashboard 内嵌资产列表的去留。
@@ -137,7 +141,8 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
 - 心愿进度：聚合 `wishStore.wishes` 的 `saved_amount`/`expected_price`（W1 已加字段），**按 KTD-3 聚合格式**：组合进度条 `sum(saved)/sum(expected)` + 「N 个心愿」副标题（`useAffordBar` per-wish 不复用）。
 - **数据强转与过滤（review P2）**：`Number(x) ?? 0` 强转 string money 字段；月还 computed 过滤 `is_active === true`。
 - **加载/空/错态（review P1）**：三 store 仅暴露 `loading` 无 `error` 标志，`MoneyDisplay` 只渲染数值无加载/空态。每卡片须明确：(1) 加载骨架屏（复用 `DashboardSkeleton` 模式或每指标占位）；(2) 空状态（如无资产/负债/心愿时「尚未记录」+ CTA 跳 `/assets/new` 等）；(3) 错误状态——store 无 error 标志则卡片级捕获 fetch 拒绝渲染带重试的占位符，**不静默显示 0**（否则用户误以为净资产 ¥0）。
-- **验证**：四项数字（净资产/总负债/月还/心愿进度）与 dashboard / 对应 list 页一致；`MoneyDisplay` 币种正确；**三 store 分别模拟 fetch 失败时概览卡降级为 error 占位符而非 0**（FinanceHubPage.spec.ts 的「空数据态」扩展为「部分失败态」）。
+- **W5 跨模块决策链提示（review #1，让 hub 触及 spec §1 决策链目标）**：概览卡除四项数字外，补一条联动提示——复用 `useDebtWarning` composable（W5 已实现，`useDebtWarning.ts` 暴露 `highInterestLiabilities` 含 `monthly_interest` + `shouldWarnForWish`）。逻辑：若 `hasHighInterestDebt` 且存在未 `ignore_debt_warning` 且 `monthly_saving>0` 的心愿，显示「高息负债每月利息 ¥X，相当于延迟心愿 Y 约 N 个月」（N = X / wish.monthly_saving，取最临近 `target_date` 的心愿作 Y）。数据全现成（FamilyDebtThresholds + wish monthly_saving/target_date），无后端改动。这让概览卡从"三个孤立数字"变成"三个数字 + 一个跨模块洞察"，触及决策链语义。无高息负债或无符合条件心愿时该提示隐藏（不占位）。
+- **验证**：四项数字（净资产/总负债/月还/心愿进度）与 dashboard / 对应 list 页一致；`MoneyDisplay` 币种正确；**三 store 分别模拟 fetch 失败时概览卡降级为 error 占位符而非 0**（FinanceHubPage.spec.ts 的「空数据态」扩展为「部分失败态」）；**W5 联动提示在有高息负债+符合心愿时显示，N 计算正确，无符合条件时隐藏**。
 
 ### U3 — 阶段2：资产/负债/心愿三 sub-tab
 - `FinanceHubPage.vue` 加 `<van-tabs>` 三 tab：资产 / 负债 / 心愿。
@@ -148,14 +153,15 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
 
 ### U4 — 阶段3：TabBar 合并 + active 映射 + cachedTabs
 - `AppTabBar.vue`：
-  - 移除 `wishes`、`liabilities` 两个 `<van-tabbar-item>`。
-  - 新增 `<van-tabbar-item name="finance" icon="...">`（icon 选 Vant 图标，如 `balance-o` 或 `chart-trending-o`，避开与 dashboard 重复）。
+  - 移除 `liabilities` `<van-tabbar-item>`（所有人走 finance）。
+  - `wishes` `<van-tabbar-item>` 改 `v-if="!isOwner"`（非对称，KTD-4：非 owner 保留 wishes 直达，owner 走 finance）。
+  - 新增 `<van-tabbar-item name="finance" icon="...">`（icon 选 Vant 图标，如 `balance-o` 或 `chart-trending-o`，避开与 dashboard 重复；始终显示）。
   - `activeTab` computed：用**路径前缀匹配**（KTD-2）`route.path.startsWith('/assets') || startsWith('/liabilities') || startsWith('/wishes')` → `finance`，覆盖三组全部子路由含 params。`?focus=liability_strategy` 等 query 不影响匹配。
-  - `tabToRoute` 加 `finance: '/finance'`，移除 `wishes`/`liabilities`。
+  - `tabToRoute` 加 `finance: '/finance'`，移除 `liabilities`（`wishes` 保留供非 owner）。
 - `MainLayout.vue:28-36` `cachedTabs`：加 `'FinanceHub'`（配合 U1 的 `defineOptions name`）。
 - **验证**：
-  - TabBar 5 项（owner）/ 4 项（非 owner）。
-  - **active 映射覆盖深层子路由（review P2）**：finance tab 在 `/assets`、`/assets/:id`、`/assets/:id/edit`、`/assets/:id/sell`、`/liabilities/:id`、`/wishes/:id` 等全部高亮——加测试用例断言。
+  - **非对称 TabBar（review #3）**：owner 5 项（dashboard/finance/ai/baby/settings，无 wishes/liabilities）；非 owner 5 项（dashboard/wishes/finance/ai/settings，无 liabilities/baby）。
+  - **active 映射覆盖深层子路由（review P2）**：finance tab 在 `/assets`、`/assets/:id`、`/assets/:id/edit`、`/assets/:id/sell`、`/liabilities/:id`、`/wishes/:id` 等全部高亮——加测试用例断言（注意：非 owner 访问 `/wishes/:id` 时 finance 高亮而非 wishes，因 active 映射按路径而非 tab 存在性；可接受，或实现期决定非 owner 下 /wishes 路径高亮 wishes tab）。
   - **`?focus=liability_strategy` deep-link（review P2）**：`/liabilities?focus=liability_strategy` 时 finance tab 高亮 + LiabilityListPage 滚动定位正常。
   - **`/assets` 高亮行为变更（review P2）**：当前 `/assets*` fallthrough 到 dashboard 高亮，本 U4 后改高亮 finance——验证此变更符合预期。
   - 从 `/assets` 返回 `/finance` 恢复 sub-tab 选中态（KeepAlive，见 U3 澄清）。
@@ -191,12 +197,12 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
 - 若新增 `FinanceHubPage.spec.ts`：覆盖概览卡渲染 + 三 tab 跳转 + 空数据态。
 
 ### grep 门槛
-- 合并后 `AppTabBar.vue` 中 `<van-tabbar-item name="wishes">` 与 `name="liabilities"` 应**消失**。
+- 合并后 `AppTabBar.vue` 中 `<van-tabbar-item name="liabilities">` 应**消失**；`name="wishes"` 保留但改 `v-if="!isOwner"`（非对称，KTD-4）。
 - `nav.wishes` / `nav.liabilities` i18n key 可保留（其他地方可能用），不强制删。
 
 ### 手动端到端
-- owner 账号：6→5 入口；finance tab 全链路。
-- 非 owner 账号：5→4 入口；finance tab 可用。
+- owner 账号：6→5 入口（移除 wishes/liabilities 加 finance，assets 首获 tab）；finance tab 全链路；W5 联动提示在有高息负债+符合心愿时显示。
+- 非 owner（adult）账号：非对称 5 项（保留 wishes 直达，减 liabilities 加 finance）；wishes tab 1 tap 到达 list；finance tab 可达资产/负债。
 - deep-link `/assets`、`/liabilities`、`/wishes` 仍 200。
 
 ---
@@ -204,8 +210,8 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
 ## Definition of Done
 
 - [ ] U1-U6 全部完成，每阶段独立 commit、独立验证通过。
-- [ ] `/finance` 路由 + `FinanceHubPage.vue` 上线，首屏概览卡（净资产+月还+心愿进度）+ 三 sub-tab。
-- [ ] TabBar 6→5（owner），移除 wishes/liabilities 独立项，新增 finance 项。
+- [ ] `/finance` 路由 + `FinanceHubPage.vue` 上线，首屏概览卡（净资产+月还+心愿进度+W5 联动提示）+ 三 sub-tab。
+- [ ] TabBar 统一入口：owner 5 项（移除 wishes/liabilities 加 finance，assets 首获 tab）；非 owner 非对称 5 项（保留 wishes 直达，减 liabilities 加 finance）。
 - [ ] `/assets`、`/liabilities`、`/wishes` 顶级路由保留可达（deep-link 不破坏，含 `/liabilities?focus=liability_strategy`）。
 - [ ] finance tab active 态覆盖三组路由及子路径。
 - [ ] dashboard 内嵌资产列表按 KTD-5 方案 A 瘦身（或实现期确认回退方案 B），不与 `/finance?tab=assets` 重复铺陈。
@@ -221,11 +227,11 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
 - **finance 页是否展示 FinanceCoachCard**：recon 深化点 2 已澄清——`FinanceCoachCard`（AI suggestions top 3）与概览卡（净资产+月还+心愿进度）是**两个不同组件**，概览卡是 U2 新建。FinanceCoachCard 可选地在 hub 页再放一份，但**默认不在本 plan 做**（U6 方案 A 后 dashboard 已保留 FinanceCoachCard，hub 再放会重复）；若需 hub 也展示 AI 教练建议，作为 P1 增强另起。
 - **三 sub-tab 是否内嵌 list 预览**：U3 当前设计为"摘要 + 查看全部跳转"。若要内嵌完整 list（`<AssetListPage>` 等组件直接渲染），需评估组件耦合（list 页依赖路由 params / store 当前项）。**默认跳转模式，内嵌留作 P2 增强**。
 
-### From 2026-07-21 ce-doc-review（需产品判断，未自动应用）
+### From 2026-07-21 ce-doc-review（已处理，2026-07-21 用户确认方向）
 
-- **[P1] Hub 合并导航 ≠ spec 的「财务决策链」目标（premise 根）**：spec §1 核心 gap 是「六个独立工具而非一条财务决策链」，决策链 6 阶段含「花销控制(节流)」「财富增值(开源)」，但本 plan hub 只合并资产/负债/心愿三组 + 概览卡，那两阶段完全缺席；KTD-1 又把 sub-tab 定为跳转按钮。结果是所有 DoD 可 pass 而决策链 gap 原封不动。adversarial + product-lens 独立指出（anchor 100）。**需产品判断**：N1 定位是「入口收敛 + 概览首屏」（决策链靠 D3/AI 教练等后续项），还是应在本 plan 内补一个跨模块决策链元素（如概览卡加 W5 式「高息负债 X 延迟心愿 Y N 个月」联动提示）？若是前者，在 Goal Capsule 显式声明避免「hub 落地 = 决策链建成」的暗示。
-- **[P2] 「6→5」实际净减 1，与「改动最大单项」投入产出不匹配**：recon 认 TabBar 本无 assets 入口，6→5 = 删 wishes+liabilities(2) + 加 finance(1) = 净减 1，且 assets 首获 tab 入口。DoD 反复用「6→5」当 headline 收益掩盖真实是「重组」非「减少」。adversarial + product-lens（anchor 100）。**随 premise 根一起 defer**：若 N1 定位调整为「概览首屏为主」，收益措辞改为「统一三组为单 /finance 入口（owner 6→5，assets 首获 tab）」，明确价值是概览首屏非入口数。
-- **[P2] 非 owner 工作流成本未评估**：KTD-4 称非 owner 5→4，但非 owner（adult/child）是常见用户，三个一 tap 目的地塌进需多 tap 的 hub（finance→sub-tab→查看全部→list）。plan 只论证 owner 体验（避免冗余），未评估非 owner 成本——对非 owner「冗余」本不是问题。product-lens（anchor 75）。**需 UX 判断**：非 owner 最常见任务（可能心愿管理）是否仍 ≤2 tap 到达 list？或非对称 tab bar（非 owner 保留主任务 tab，v-if 已支持）？
+- **[P1] Hub 合并导航 ≠ spec 的「财务决策链」目标（premise 根）** — **已处理（选 B：补 W5 联动提示）**：U2 概览卡补一条 `useDebtWarning` 联动提示（高息负债每月利息 ¥X 相当于延迟心愿 Y N 个月），让 hub 触及决策链语义；Goal Capsule 显式声明完整决策链流转仍靠 D3/AI 教练等后续 P1 项。
+- **[P2] 「6→5」实际净减 1，与「改动最大单项」投入产出不匹配** — **已处理（跟随 #1 改措辞）**：Goal/DoD 措辞从「TabBar 6→5」改为「统一三组为单 /finance 入口（owner 5 项，assets 首获 tab）」，价值定位为概览首屏+入口收敛非入口数减少。
+- **[P2] 非 owner 工作流成本未评估** — **已处理（选 B：非对称 tab bar）**：KTD-4 改为非对称——非 owner（adult）保留 wishes 直达 tab（最常见任务 1 tap），owner 用合并 hub；child app 独立不走 main app /finance。
 
 ---
 
