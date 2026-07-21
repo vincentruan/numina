@@ -307,11 +307,6 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
-          path: 'stats',
-          name: 'DataStats',
-          component: () => import('@/pages/DataStatsPage.vue')
-        },
-        {
           path: 'baby/calendar/day',
           name: 'BabyDayDetail',
           component: () => import('@/pages/BabyDayDetailPage.vue')
