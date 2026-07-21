@@ -282,6 +282,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'Family' })
 import { ref, computed, onMounted } from 'vue'
 import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'

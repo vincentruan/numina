@@ -33,6 +33,7 @@ const cachedTabs = ref<string[]>([
   'FinanceHub',
   'AIHub',
   'Baby',
+  'Family',
   'Settings',
 ])
 
