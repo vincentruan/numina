@@ -37,6 +37,9 @@
           @select-status="onStatusSelect"
         />
 
+        <!-- D1: Pending approvals (owner-only; component self-gates on non-empty list) -->
+        <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
+
         <!-- Sticky Filter Bar: Status + Category -->
         <div ref="filterBarRef" class="filter-bar-sticky">
           <!-- Placeholder: maintains layout space when content is fixed -->
@@ -296,6 +299,7 @@ import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
+import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 
 const { t } = useI18n()
