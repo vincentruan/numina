@@ -25,6 +25,7 @@ import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
 import { getWebSearchStatus } from '@/api/webSearch'
+import { polishInputDraft } from '@/api/ai-chat'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -98,6 +99,71 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const cameraInputRef = ref<HTMLInputElement | null>(null)
+
+// ── Input polish (D3 DeerFlow sync) ──
+// Stateless single-LLM-call draft rewrite. Abortable + staleness-guarded so a
+// thread switch or rapid re-click cannot land a stale rewrite. Undo restores
+// the original draft while the textarea still shows the rewritten text.
+const polishingInput = ref(false)
+const inputPolishUndo = ref<{ originalText: string; rewrittenText: string } | null>(null)
+let polishAbort: AbortController | null = null
+
+const inputPolishUndoAvailable = computed(
+  () => !polishingInput.value
+    && inputPolishUndo.value !== null
+    && internalValue.value === inputPolishUndo.value.rewrittenText,
+)
+
+const canPolishInput = computed(
+  () => !polishingInput.value
+    && props.status !== 'streaming'
+    && props.status !== 'submitted'
+    && internalValue.value.trim().length > 0
+    && !internalValue.value.trim().startsWith('/'),
+)
+
+async function onPolishInput() {
+  const originalText = internalValue.value
+  if (!originalText.trim() || polishingInput.value) return
+  if (polishAbort) polishAbort.abort()
+  polishAbort = new AbortController()
+  polishingInput.value = true
+  try {
+    const result = await polishInputDraft(originalText, polishAbort.signal)
+    // Staleness guard: textarea changed mid-flight → discard.
+    if (internalValue.value !== originalText) return
+    if (!result.changed) {
+      showToast(t('aiChat.inputPolishNoChanges'))
+      return
+    }
+    internalValue.value = result.rewritten_text
+    inputPolishUndo.value = { originalText, rewrittenText: result.rewritten_text }
+    await nextTick()
+    inputRef.value?.focus()
+  } catch (err) {
+    // AbortError is expected on cancel/thread-switch — not a user-facing failure.
+    if (err instanceof DOMException && err.name === 'AbortError') return
+    showToast(t('aiChat.inputPolishFailed'))
+  } finally {
+    polishingInput.value = false
+    polishAbort = null
+  }
+}
+
+function onUndoPolishInput() {
+  if (!inputPolishUndoAvailable.value || !inputPolishUndo.value) return
+  internalValue.value = inputPolishUndo.value.originalText
+  inputPolishUndo.value = null
+  nextTick(() => inputRef.value?.focus())
+}
+
+function abortInputPolish() {
+  if (polishAbort) {
+    polishAbort.abort()
+    polishAbort = null
+  }
+  polishingInput.value = false
+}
 
 // Track whether web search state was explicitly set (by the user toggling it,
 // or by the parent passing a definite webSearch prop e.g. inherited from the
@@ -459,6 +525,7 @@ onUnmounted(() => {
   window.visualViewport?.removeEventListener('resize', onScrollOrResize)
   window.matchMedia?.('(pointer: fine)').removeEventListener('change', syncDesktop)
   window.removeEventListener('ai-chat:quote', onQuoteEvent)
+  abortInputPolish()
 })
 </script>
 
@@ -625,6 +692,35 @@ onUnmounted(() => {
                 <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
               </svg>
               <span v-if="webSearchEnabled" class="control-indicator" aria-hidden="true"></span>
+            </button>
+
+            <!-- [4] Input polish (D3 DeerFlow sync) — rewrite draft via LLM -->
+            <button
+              v-if="inputPolishUndoAvailable"
+              class="control-btn control-btn--polish-undo"
+              :aria-label="t('aiChat.inputPolishUndo')"
+              :title="t('aiChat.inputPolishUndo')"
+              @click="onUndoPolishInput"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 7v6h6"/>
+                <path d="M3 13a9 9 0 1 0 3-7.7L3 8"/>
+              </svg>
+            </button>
+            <button
+              v-else
+              class="control-btn control-btn--polish"
+              :class="{ 'control-btn--polishing': polishingInput }"
+              :disabled="!canPolishInput"
+              :aria-label="t('aiChat.inputPolish')"
+              :title="t('aiChat.inputPolish')"
+              @click="onPolishInput"
+            >
+              <svg v-if="!polishingInput" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3l1.9 5.8L20 10.7l-5.1 1.9L12 18l-1.9-5.4L5 10.7l6.1-1.9z"/>
+                <path d="M19 3v4M21 5h-4"/>
+              </svg>
+              <span v-else class="polish-spinner" aria-hidden="true"></span>
             </button>
 
             <!-- [5] Plus button -->
@@ -982,6 +1078,45 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+/* Input polish (D3) */
+.control-btn--polish:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.control-btn--polish:not(:disabled):hover {
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.control-btn--polishing {
+  background: rgba(99, 102, 241, 0.16);
+  cursor: progress;
+}
+
+.control-btn--polish-undo {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--ai-btn-color);
+}
+
+.control-btn--polish-undo:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.polish-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: polish-spin 0.7s linear infinite;
+}
+
+@keyframes polish-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .control-indicator {

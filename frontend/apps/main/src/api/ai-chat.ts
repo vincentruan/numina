@@ -203,6 +203,29 @@ export async function getTokenUsage(threadId: string): Promise<TokenUsageData> {
 }
 
 // ---------------------------------------------------------------------------
+// Input polish (D3 DeerFlow sync) — frontend-direct, cookie auth + X-Family-Id.
+// Stateless single LLM call; no thread run, no persistence. Mirrors
+// runs_stream.py's verify_family_token path. Backend: routers/input_polish.py.
+// ---------------------------------------------------------------------------
+
+export interface InputPolishResult {
+  rewritten_text: string
+  changed: boolean
+}
+
+export async function polishInputDraft(text: string, signal?: AbortSignal): Promise<InputPolishResult> {
+  const res = await fetch(`${getAgentApiBase()}/api/input-polish`, {
+    method: 'POST',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({ text }),
+    signal,
+  })
+  if (!res.ok) throw new Error(`Input polish failed: ${res.status}`)
+  return res.json()
+}
+
+// ---------------------------------------------------------------------------
 // Branch API (DeerFlow threads/api.ts:71-97)
 // ---------------------------------------------------------------------------
 

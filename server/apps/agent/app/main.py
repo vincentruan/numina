@@ -220,6 +220,7 @@ from apps.agent.app.routers import cache as cache_router  # noqa: E402
 from apps.agent.app.routers import gateway as gateway_router  # noqa: E402
 from apps.agent.routers import capabilities as capabilities_router  # noqa: E402
 from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
+from apps.agent.routers import input_polish as input_polish_router  # noqa: E402
 from apps.agent.routers import model_test as model_test_router  # noqa: E402
 from apps.agent.routers import resume as resume_router  # noqa: E402
 from apps.agent.routers import runs_stream as runs_stream_router  # noqa: E402
@@ -231,6 +232,7 @@ app.include_router(cache_router.router)
 app.include_router(gateway_router.router)
 app.include_router(import_parse_router.router)
 app.include_router(capabilities_router.router)
+app.include_router(input_polish_router.router)
 app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)

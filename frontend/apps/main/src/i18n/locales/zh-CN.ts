@@ -293,6 +293,12 @@ export default {
     filterTimeMachine: '财务时光机',
     slashPaletteHint: '选择功能，按 Esc 关闭',
     slashPaletteEmpty: '暂无可用功能',
+    inputPolish: '优化输入',
+    inputPolishing: '正在优化输入…',
+    inputPolishNoChanges: '输入已经很清晰，无需优化',
+    inputPolishFailed: '优化输入失败',
+    inputPolishUndo: '撤销优化',
+    inputPolishCancel: '取消优化',
     reasoning: {
       thinking: '思考中',
       thought: '已思考',
@@ -848,7 +854,7 @@ export default {
       adopt: '采纳雪崩法',
       adopted: '已采纳雪崩法',
       askAi: '问 AI 详细规划',
-      saveEstimate: '雪崩法比雪球法预计省 ¥{amount}（估算）',
+      saveEstimate: '雪崩法比雪球法预计省 {amount}（估算）',
     },
     // L2 (Plan B T9): interest forecast + simulate dialog.
     interest: {
@@ -857,7 +863,7 @@ export default {
       monthsLeft: '剩余月数',
       monthsUnit: '月',
       extraScenario: '每月多还 ¥{amount}',
-      savings: '省 ¥{amount}',
+      savings: '省 {amount}',
       monthsSaved: '提前 {n} 月还清',
       warning: '注意',
       simulate: '模拟其他金额',
@@ -1044,12 +1050,12 @@ export default {
     },
     // W1 savings UI (Plan B T9).
     savings: {
-      saved: '已存 ¥{saved} / ¥{price}（{pct}%）',
+      saved: '已存 {saved} / {price}（{pct}%）',
       setMonthly: '未设定月存，设置后可预测达成时间',
       reached: '已达成目标 ✓',
       eta: '预计 {n} 个月后达成',
       needAccelerate: '需加速至月存 ¥{amount} 才能按时达成',
-      purchasingPower: '当前净资产 ¥{net}，{covered}',
+      purchasingPower: '当前净资产 {net}，{covered}',
       covered: '可负担',
       notCovered: '暂不足',
       record: '记录存入',
@@ -1067,7 +1073,7 @@ export default {
       recordBtn: '确认记录',
       recorded: '已记录存入',
       deleteTitle: '删除储蓄记录',
-      deleteConfirm: '删除后储蓄进度将回退 ¥{amount}，确认删除？',
+      deleteConfirm: '删除后储蓄进度将回退 {amount}，确认删除？',
       deleted: '已删除',
     },
     emptyState: {

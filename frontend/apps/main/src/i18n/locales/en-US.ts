@@ -214,6 +214,12 @@ export default {
     filterTimeMachine: 'Time Machine',
     slashPaletteHint: 'Select a feature, press Esc to close',
     slashPaletteEmpty: 'No features available',
+    inputPolish: 'Polish input',
+    inputPolishing: 'Polishing input…',
+    inputPolishNoChanges: 'This input is already clear.',
+    inputPolishFailed: 'Input polish failed',
+    inputPolishUndo: 'Undo polish',
+    inputPolishCancel: 'Cancel polish',
     // Voice input
     voiceTooltip: 'Tap to start voice input',
     voiceTooltipFirst: 'Voice input requires microphone permission',
