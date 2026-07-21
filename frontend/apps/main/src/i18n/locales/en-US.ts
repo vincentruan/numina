@@ -55,6 +55,8 @@ export default {
     assetCount: '{count} items',
     dailyCost: 'Daily',
     monthChange: 'vs Last Month',
+    netWorthDrilldown: 'View assets',
+    totalLiabilitiesDrilldown: 'View liabilities',
     allocation: 'Allocation',
     trend: 'Net Worth Trend',
     topAssets: 'Top Assets',

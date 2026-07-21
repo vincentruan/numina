@@ -92,6 +92,8 @@ export default {
     assetCount: '共 {count} 件',
     dailyCost: '日均',
     monthChange: 'vs 上月',
+    netWorthDrilldown: '查看资产详情',
+    totalLiabilitiesDrilldown: '查看负债详情',
     allocation: '资产分配',
     trend: '净值趋势',
     topAssets: '高价值资产',

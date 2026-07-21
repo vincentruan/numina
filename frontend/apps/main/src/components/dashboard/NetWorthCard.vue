@@ -26,19 +26,21 @@
       </div>
     </div>
     <div class="ov-detail">
-      <div class="ov-detail-item">
+      <router-link :to="{ path: '/finance', query: { tab: 'assets' } }" class="ov-detail-item ov-detail-item--link" :aria-label="t('dashboard.netWorthDrilldown')">
         <div class="ov-detail-label">{{ t('dashboard.netWorth') }}</div>
         <div class="ov-detail-value">
           <MoneyDisplay :amount="netWorth" />
         </div>
-      </div>
+        <span class="ov-detail-chevron" aria-hidden="true">›</span>
+      </router-link>
       <div class="ov-detail-divider" />
-      <div class="ov-detail-item">
+      <router-link :to="{ path: '/finance', query: { tab: 'liabilities' } }" class="ov-detail-item ov-detail-item--link" :aria-label="t('dashboard.totalLiabilitiesDrilldown')">
         <div class="ov-detail-label">{{ t('dashboard.totalLiabilities') }}</div>
         <div class="ov-detail-value">
           <MoneyDisplay :amount="totalLiabilities" />
         </div>
-      </div>
+        <span class="ov-detail-chevron" aria-hidden="true">›</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -360,6 +362,30 @@ const changeText = computed(() => {
 .ov-detail-item {
   flex: 1;
   text-align: center;
+}
+
+/* Drill-down affordance: router-link wraps each item, clickable to /finance */
+.ov-detail-item--link {
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.ov-detail-item--link:active {
+  transform: scale(0.97);
+}
+
+.ov-detail-chevron {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .ov-detail-label {
