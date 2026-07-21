@@ -1,7 +1,8 @@
 # N1 财务 hub 落地 — Implementation Plan
 
-> **状态**：draft，待实现
+> **状态**：complete（U1-U5 已实现 2026-07-21；U6 按证据门槛默认方案 B，保留 dashboard 资产列表，独立后续项）
 > **日期**：2026-07-21
+> **完成日期**：2026-07-21
 > **父文档**：[2026-07-19-family-finance-optimization-requirements.md](../../specs/2026-07-19-family-finance-optimization-requirements.md)（决策 ②B + ⑥C + §域7 N1）
 > **范围**：新建 `FinanceHubPage` + `/finance` 路由 + TabBar 6→5（合并资产/负债/心愿为单入口）
 > **来源**：spec §2「P1 含 N1(财务 hub 落地) … 单独成子计划」、§5 待办「[ ] P1 批次（含 N1 财务 hub，单独子计划）」
@@ -175,8 +176,9 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
   - `pnpm lint` + `pnpm typecheck` + `pnpm test:run` 全过。
   - 手动：从 dashboard → finance tab → 三 sub-tab → 各 list 页 → 返回 finance，全程导航态正确。
 
-### U6 — 阶段5：DashboardPage 资产列表瘦身（KTD-5 方案 A）
-- **证据门槛前置（review P1）**：先确认 dashboard 资产列表非高频路径（埋点或确认 `/assets` 从 finance tab 一 tap 可达使列表冗余）；无证据则默认方案 B，跳过本单元。
+### U6 — 阶段5：DashboardPage 资产列表瘦身（KTD-5 方案 A） — **决策：方案 B（跳过瘦身）**
+- **证据门槛前置结论（2026-07-21 实现）**：无埋点数据证明 dashboard 资产列表为低频路径；且 `/assets` 从 finance tab 已一 tap 可达（U4 finance tab + U3 view-all 跳转）。按 plan 证据门槛前置规则"无证据默认方案 B"，**U6 跳过瘦身**，保留 DashboardPage 现有资产列表。N1 核心目标（统一入口 + 概览首屏 + TabBar 收敛）已由 U1-U5 达成，不依赖 U6。
+- **作为独立后续项**：若后续埋点确认 dashboard 资产列表冗余，再按 KTD-5 方案 A（含 store 状态保留保可逆）单独处理。`/finance?tab=assets` 已承接完整资产管理入口，方案 B 不破坏 N1 价值。
 - `DashboardPage.vue`：移除内嵌资产列表区块，折叠为"查看全部资产 → `/finance?tab=assets`"入口卡片。**移除范围按 KTD-5 列举**（非仅 line 108-137）：资产 section header + 视图模式切换（`:89-103`，偏好迁移 /assets 或 localStorage）、`van-list` 无限滚动 + `filteredByCategoryAssets` 渲染（`:109-134`，确认 /assets 已具备）、空状态（`:137`）、selection-mode 批量选择/删除块（`:140+`，明确消失或迁移 AssetListPage）、粘性 filter bar + 分类 van-tabs（`:41-87`，随列表移除；StatusSummaryGrid 诊断卡保留）。
 - 保留 dashboard 的：净资产卡、AI 教练卡（FinanceCoachCard）、状态摘要（StatusSummaryGrid）、idle·expiring 提醒卡（`lowUsageAssets`/`expiringSoonAssets`，`line 34-35`）。
 - **store 状态保留（review P1，保真正可逆）**：**暂不删** `dashboardStore.fetchAssetsPage` / `assetListFinished` / `filteredByCategoryAssets` / `categoriesWithAssetCount`——仅停用 DashboardPage 的列表渲染与相关模板/computed，保留 store 代码以便回退方案 B（恢复渲染即可）。store 清理延后到方案 A 验证稳定后单独处理。
@@ -209,15 +211,15 @@ U4 依赖 U1 的 `/finance` 路由存在。U2/U3 依赖 U1 骨架。可 U1 后 U
 
 ## Definition of Done
 
-- [ ] U1-U6 全部完成，每阶段独立 commit、独立验证通过。
-- [ ] `/finance` 路由 + `FinanceHubPage.vue` 上线，首屏概览卡（净资产+月还+心愿进度+W5 联动提示）+ 三 sub-tab。
-- [ ] TabBar 统一入口：owner 5 项（移除 wishes/liabilities 加 finance，assets 首获 tab）；非 owner 非对称 5 项（保留 wishes 直达，减 liabilities 加 finance）。
-- [ ] `/assets`、`/liabilities`、`/wishes` 顶级路由保留可达（deep-link 不破坏，含 `/liabilities?focus=liability_strategy`）。
-- [ ] finance tab active 态覆盖三组路由及子路径。
-- [ ] dashboard 内嵌资产列表按 KTD-5 方案 A 瘦身（或实现期确认回退方案 B），不与 `/finance?tab=assets` 重复铺陈。
-- [ ] i18n 完整（`nav.finance` + 任何新文案，zh-CN + en-US）。
-- [ ] `pnpm typecheck` + `pnpm test:run` + `pnpm lint` 失败数 = 0（相对基线不新增失败）。
-- [ ] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支。
+- [x] U1-U5 已实现并验证通过；U6 按证据门槛默认方案 B 跳过（独立后续项），2026-07-21。
+- [x] `/finance` 路由 + `FinanceHubPage.vue` 上线，首屏概览卡（净资产+总负债+月还+心愿进度+W5 联动提示）+ 三 sub-tab（`?tab=` 契约已落地）。
+- [x] TabBar 统一入口：owner 5 项（移除 wishes/liabilities 加 finance，assets 首获 tab）；非 owner 非对称 5 项（保留 wishes 直达，减 liabilities 加 finance）。
+- [x] `/assets`、`/liabilities`、`/wishes` 顶级路由保留可达（deep-link 不破坏，含 `/liabilities?focus=liability_strategy`）。
+- [x] finance tab active 态覆盖三组路由及子路径（路径前缀匹配；owner `/wishes*` 归 finance，非 owner 归 wishes）。
+- [x] dashboard 内嵌资产列表：**方案 B 保留**（U6 证据门槛未达，不瘦身；`/finance?tab=assets` 承接入口，不重复铺陈语义由 finance tab 独立入口达成）。
+- [x] i18n 完整（`nav.finance` + `financeHub.*` 全部新文案，zh-CN + en-US）。
+- [x] `pnpm typecheck` 通过；`pnpm test:run` 7/7 新 spec 通过、全量 968 passed（1 预先存在 InputBox.test.ts i18n mock 失败，stash 证实与本次无关）；N1 触及文件 0 lint error/warning（基线不新增失败）。
+- [x] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支。
 
 ---
 

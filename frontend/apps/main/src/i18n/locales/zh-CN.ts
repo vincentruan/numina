@@ -63,7 +63,26 @@ export default {
     stats: '统计',
     baby: '宝贝',
     family: '家庭',
+    finance: '财务',
     settings: '设置'
+  },
+  financeHub: {
+    aria: {
+      pageTitle: '财务中心'
+    },
+    netWorth: '净资产',
+    totalLiabilities: '总负债',
+    monthlyPayment: '月还总额',
+    estimate: '估算',
+    wishProgress: '心愿进度',
+    wishCount: '{count} 个心愿',
+    viewAll: '查看全部',
+    assetSummary: '{count} 项资产 · 总额 {total}',
+    liabilitySummary: '{count} 项负债 · 月还 {monthly}',
+    wishSummary: '{count} 个心愿 · {active} 个进行中',
+    debtWishHint: '高息负债每月利息 {interest}，相当于延迟心愿「{wish}」约 {months} 个月',
+    loadFailed: '加载财务概览失败',
+    retry: '重试'
   },
   dashboard: {
     title: '总览',

@@ -131,6 +131,14 @@ const router = createRouter({
           component: () => import('@/pages/WishDetailPage.vue')
         },
         {
+          // N1 finance hub: unified entry for assets/liabilities/wishes.
+          // Sub-tab ?tab= contract honored by FinanceHubPage onMounted.
+          path: 'finance',
+          name: 'FinanceHub',
+          component: () => import('@/pages/FinanceHubPage.vue'),
+          meta: { hasSkeleton: true }
+        },
+        {
           path: 'blind-box/draws',
           name: 'BlindBoxDraws',
           component: () => import('@/pages/BlindBoxDrawsPage.vue')

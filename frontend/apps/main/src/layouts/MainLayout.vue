@@ -30,6 +30,7 @@ const cachedTabs = ref<string[]>([
   'AssetList',
   'WishList',
   'LiabilityList',
+  'FinanceHub',
   'AIHub',
   'Baby',
   'Settings',

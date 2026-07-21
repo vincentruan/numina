@@ -26,7 +26,26 @@ export default {
     stats: 'Stats',
     baby: 'Kids',
     family: 'Family',
+    finance: 'Finance',
     settings: 'Settings'
+  },
+  financeHub: {
+    aria: {
+      pageTitle: 'Finance Hub'
+    },
+    netWorth: 'Net Worth',
+    totalLiabilities: 'Total Liabilities',
+    monthlyPayment: 'Monthly Payment',
+    estimate: 'Est.',
+    wishProgress: 'Wish Progress',
+    wishCount: '{count} wishes',
+    viewAll: 'View All',
+    assetSummary: '{count} assets · Total {total}',
+    liabilitySummary: '{count} liabilities · Monthly {monthly}',
+    wishSummary: '{count} wishes · {active} active',
+    debtWishHint: 'High-interest debt costs {interest}/month, delaying wish "{wish}" by ~{months} months',
+    loadFailed: 'Failed to load finance overview',
+    retry: 'Retry'
   },
   dashboard: {
     title: 'Dashboard',
