@@ -1,8 +1,13 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showFailToast, showSuccessToast } from 'vant'
+import { showFailToast, showSuccessToast, showToast } from 'vant'
 import { nanoid } from 'nanoid'
-import { getClient, createThread, deleteThread } from '@/api/ai-chat'
+import {
+  getClient,
+  createThread,
+  deleteThread,
+  compactThread,
+} from '@/api/ai-chat'
 import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
@@ -134,6 +139,194 @@ function unwrapSkillPrompt(content: string): string {
   return ''
 }
 
+// ---------------------------------------------------------------------------
+// U6 transient bridge — ported from DeerFlow hooks.ts:441-545,1277-1322.
+//
+// When the backend summarizes context (RemoveMessage(ALL) + summary_text +
+// preserved tail), a subsequent `values` event carries a SHORTER messages
+// list. Until canonical history (loadHistory / next values) confirms the
+// summarized state, the UI would otherwise still show the soon-to-be-dropped
+// turns — or flicker if we naively replaced `messages`. The transient bridge
+// rescues those turns so `visibleMessages` keeps the full conversation until
+// canonical history catches up, then prunes confirmed entries.
+// ---------------------------------------------------------------------------
+
+/**
+ * Stable identity for a chat message, mirroring DeerFlow `messageIdentity`.
+ * Tool messages key off `tool_call_id` (one result per call); everything else
+ * keys off `id`. Returns undefined for identity-less messages so callers can
+ * skip them (overlaying those would risk permanent duplicates).
+ */
+function messageIdentity(message: ChatMessage): string | undefined {
+  if (typeof message.tool_call_id === 'string' && message.tool_call_id.length > 0) {
+    return `tool:${message.tool_call_id}`
+  }
+  if (typeof message.id === 'string' && message.id.length > 0) {
+    return `message:${message.id}`
+  }
+  return undefined
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+/**
+ * Whether a message should be hidden from the UI (control / summary messages).
+ * Mirrors DeerFlow `isHiddenFromUIMessage`. numina marks hidden continuation
+ * messages via `additional_kwargs.hide_from_ui` (U4 goal-continuation) and
+ * names summary control messages `summary`.
+ */
+function isHiddenFromUiMessage(message: ChatMessage): boolean {
+  if (message.additional_kwargs?.hide_from_ui === true) return true
+  if (typeof message.name === 'string' && message.name === 'summary') return true
+  return false
+}
+
+/**
+ * Derive the live turns that context summarization is about to drop and that
+ * therefore need a short-lived visual bridge until canonical history catches
+ * up. Ported from DeerFlow `computeSummarizationTransientMessages`.
+ *
+ * Summarization emits RemoveMessage(ALL) + a hidden summary + the retained
+ * tail. Everything in the current live thread before the first retained
+ * visible message is being removed; we keep those (minus ids already
+ * summarized in a prior pass) so the UI can still show the full conversation.
+ */
+function computeSummarizationTransientMessages(
+  currentMessages: ChatMessage[],
+  summarizationMessages: ChatMessage[],
+  summarizedIds: ReadonlySet<string>,
+): ChatMessage[] {
+  const firstRetainedVisibleIdentity = summarizationMessages
+    .filter(m => !isHiddenFromUiMessage(m))
+    .map(messageIdentity)
+    .find(isNonEmptyString)
+
+  const moved: ChatMessage[] = []
+  for (const message of currentMessages) {
+    if (
+      firstRetainedVisibleIdentity
+      && messageIdentity(message) === firstRetainedVisibleIdentity
+    ) {
+      break
+    }
+    if (!summarizedIds.has(message.id)) {
+      moved.push(message)
+    }
+  }
+  return moved
+}
+
+/**
+ * Overlay messages rescued from context summarization on top of the (possibly
+ * stale) visible history so the merged view never drops them. Ported from
+ * DeerFlow `resolveTransientHistoryBridge`. Canonical history copies always
+ * win; identity-less rescued turns are skipped (no stable anchor → dedupe risk).
+ */
+function resolveTransientHistoryBridge(
+  visibleHistory: ChatMessage[],
+  transientMessages: ChatMessage[],
+  bridgeOrder: readonly string[] = transientMessages
+    .map(messageIdentity)
+    .filter(isNonEmptyString),
+): ChatMessage[] {
+  if (transientMessages.length === 0) {
+    return visibleHistory
+  }
+  const presentIdentities = new Set(
+    visibleHistory.map(messageIdentity).filter(isNonEmptyString),
+  )
+  const missing = transientMessages.filter(m => {
+    const identity = messageIdentity(m)
+    return identity !== undefined && !presentIdentities.has(identity)
+  })
+  if (missing.length === 0) {
+    return visibleHistory
+  }
+
+  const missingByIdentity = new Map<string, ChatMessage>()
+  for (const m of missing) {
+    const identity = messageIdentity(m)
+    if (identity) missingByIdentity.set(identity, m)
+  }
+
+  const beforeAnchor = new Map<string, ChatMessage[]>()
+  const emittedMissingIdentities = new Set<string>()
+  let pending: ChatMessage[] = []
+  let lastAnchorIdentity: string | undefined
+  let hasCanonicalAnchor = false
+
+  for (const identity of bridgeOrder) {
+    if (presentIdentities.has(identity)) {
+      if (pending.length > 0 && hasCanonicalAnchor) {
+        beforeAnchor.set(identity, [
+          ...(beforeAnchor.get(identity) ?? []),
+          ...pending,
+        ])
+      }
+      pending = []
+      hasCanonicalAnchor = true
+      lastAnchorIdentity = identity
+      continue
+    }
+    const message = missingByIdentity.get(identity)
+    if (message && !emittedMissingIdentities.has(identity)) {
+      pending.push(message)
+      emittedMissingIdentities.add(identity)
+    }
+  }
+
+  // No bridge identity overlaps canonical history — the rescued live turns
+  // belong after the currently-loaded (older) history.
+  if (!lastAnchorIdentity) {
+    return [...visibleHistory, ...missing]
+  }
+
+  // Trailing candidates with no anchor keep their capture order at the tail.
+  for (const m of missing) {
+    const identity = messageIdentity(m)
+    if (identity && !emittedMissingIdentities.has(identity)) {
+      pending.push(m)
+      emittedMissingIdentities.add(identity)
+    }
+  }
+
+  const resolved: ChatMessage[] = []
+  for (const message of visibleHistory) {
+    const identity = messageIdentity(message)
+    if (identity) {
+      resolved.push(...(beforeAnchor.get(identity) ?? []))
+    }
+    resolved.push(message)
+    if (identity === lastAnchorIdentity) {
+      resolved.push(...pending)
+    }
+  }
+  return resolved
+}
+
+/**
+ * Drop bridge entries once canonical history confirms their stable identities.
+ * Ported from DeerFlow `pruneConfirmedTransientMessages`. Identity-less
+ * entries are retained (cannot be matched → cannot be safely drained here).
+ */
+function pruneConfirmedTransientMessages(
+  transientMessages: ChatMessage[],
+  visibleHistory: ChatMessage[],
+): ChatMessage[] {
+  if (transientMessages.length === 0) {
+    return transientMessages
+  }
+  const confirmedIdentities = new Set(
+    visibleHistory.map(messageIdentity).filter(isNonEmptyString),
+  )
+  return transientMessages.filter(m => {
+    const identity = messageIdentity(m)
+    return !identity || !confirmedIdentities.has(identity)
+  })
+}
+
 /** Convert DeerFlow tool_calls to ToolCallSummary[] */
 function toToolCallSummaries(
   toolCalls: Array<{ id?: string; name: string; args: string | object }>,
@@ -203,6 +396,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    */
   const answeredInterruptIds = ref<Set<string>>(new Set())
   const runId = ref<string | null>(null)
+  /**
+   * U6 transient bridge buffer. Holds live turns that a summarization `values`
+   * event is about to drop, so `visibleMessages` can keep showing the full
+   * conversation until canonical history (loadHistory / next values) confirms
+   * the summarized state. Never persisted; drained on history reload / clear.
+   */
+  const transientBridge = ref<ChatMessage[]>([])
+  /**
+   * Ids of messages already captured by a prior summarization pass. Prevents
+   * re-capturing the same turn if summarization emits multiple values events.
+   * Mirrors DeerFlow `summarizedRef`.
+   */
+  const summarizedIds = ref<Set<string>>(new Set())
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
   let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -218,6 +424,33 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   /** Expose isStreaming as alias for isLoading */
   const isStreaming = computed(() => isLoading.value)
+
+  /**
+   * U6: messages with the transient bridge overlaid. The UI binds to this so
+   * soon-to-be-dropped turns (rescued during summarization) stay visible until
+   * canonical history confirms the summarized state — no flicker. Non-display
+   * logic (feedback, suggestions, retry) keeps reading `messages`.
+   */
+  const visibleMessages = computed(() =>
+    resolveTransientHistoryBridge(messages.value, transientBridge.value),
+  )
+
+  /**
+   * U6: release bridge entries once canonical history (messages) confirms their
+   * identities. Mirrors DeerFlow hooks.ts:1313-1322 `useEffect([visibleHistory])`.
+   * When the bridge drains to empty, also clear the summarized-id set so a later
+   * run can capture fresh summarizations cleanly.
+   */
+  watch(messages, (live) => {
+    if (transientBridge.value.length === 0) return
+    const next = pruneConfirmedTransientMessages(transientBridge.value, live)
+    if (next.length !== transientBridge.value.length) {
+      transientBridge.value = next
+    }
+    if (transientBridge.value.length === 0) {
+      summarizedIds.value = new Set()
+    }
+  })
 
   function addOptimisticUserMessage(text: string): ChatMessage {
     const msg: ChatMessage = {
@@ -352,6 +585,40 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   function mergeValuesMessages(raw: SerializedMessage[]): void {
     if (!raw || raw.length === 0) return
     const mapped = raw.map(serializedToChatMessage)
+
+    // U6 transient bridge: detect a summarization values event. Summarization
+    // emits RemoveMessage(ALL) + preserved tail, so the incoming list is
+    // SHORTER than the current live messages but still contains the last
+    // visible live identity (the tail). When that happens, the live turns
+    // before the retained tail are about to be dropped — rescue them into the
+    // bridge so visibleMessages keeps the full conversation until canonical
+    // history confirms the summarized state (no flicker). Ported from DeerFlow
+    // hooks.ts:1093-1118 (onUpdateEvent summarization detection).
+    if (messages.value.length > 0 && mapped.length < messages.value.length) {
+      const transientMessages = computeSummarizationTransientMessages(
+        messages.value,
+        mapped,
+        summarizedIds.value,
+      )
+      if (transientMessages.length > 0) {
+        // Mark the captured ids as summarized so a follow-up values event in
+        // the same run doesn't re-capture them.
+        summarizedIds.value = new Set([
+          ...summarizedIds.value,
+          ...transientMessages.map(m => m.id),
+        ])
+        // Merge without duplicating identities already in the bridge.
+        const existingBridgeIds = new Set(transientBridge.value.map(messageIdentity))
+        const fresh = transientMessages.filter(m => {
+          const identity = messageIdentity(m)
+          return !identity || !existingBridgeIds.has(identity)
+        })
+        if (fresh.length > 0) {
+          transientBridge.value = [...transientBridge.value, ...fresh]
+        }
+      }
+    }
+
     const existingIds = new Set(messages.value.map(m => m.id))
     // During active streaming, skip human messages from values events because
     // sendMessage already created an optimistic human message with the user's
@@ -1127,6 +1394,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // Cancel any ongoing stream before loading new history
     cancelStream()
 
+    // U6: history reload is authoritative — drain the transient bridge so
+    // summarized-away turns (which will never reappear in canonical history)
+    // don't linger. Also clears summarizedIds so a fresh run can recapture.
+    transientBridge.value = []
+    summarizedIds.value = new Set()
+
     isLoading.value = true
     error.value = null
     planningSteps.value = []
@@ -1240,6 +1513,37 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
+  /**
+   * U6: handle the `/compact` slash command. Calls POST /api/threads/{id}/compact
+   * to summarize old history (RemoveMessage(ALL) + summary_text + preserved
+   * tail). On success reloads history so the canonical summarized state lands
+   * (the transient bridge covers any mid-flight flicker during the prior run).
+   * Skips with compactSkipped when there is no active thread (welcome mode) or
+   * the backend reports the thread was not compacted (reason present, e.g.
+   * not_enough_messages / empty thread).
+   */
+  async function handleCompact(threadId: string | null): Promise<void> {
+    if (!threadId) {
+      showToast(t('aiChat.compactSkipped'))
+      return
+    }
+    try {
+      const result = await compactThread(threadId)
+      if (!result.compacted) {
+        // reason present (not_enough_messages, empty thread, etc.) → skip.
+        showToast(t('aiChat.compactSkipped'))
+        return
+      }
+      showSuccessToast(t('aiChat.compactSuccess'))
+      // Reload canonical history so the summarized state (preserved tail +
+      // summary_text) replaces the live messages. loadHistory drains the
+      // transient bridge as the authoritative reset.
+      await loadHistory(threadId)
+    } catch {
+      showFailToast(t('aiChat.compactFailed'))
+    }
+  }
+
   function clearMessages() {
     cancelStream()
     messages.value = []
@@ -1250,6 +1554,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     runId.value = null
     error.value = null
     isLoading.value = false
+    // U6: drain the transient bridge + summarized ids on full clear (new chat /
+    // thread switch) so rescued turns never leak across chat views.
+    transientBridge.value = []
+    summarizedIds.value = new Set()
   }
 
   /**
@@ -1562,9 +1870,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   return {
-    messages, isLoading, isStreaming, error, tokenUsage,
+    messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
     sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
-    submitFeedback,
+    submitFeedback, handleCompact,
   }
 }

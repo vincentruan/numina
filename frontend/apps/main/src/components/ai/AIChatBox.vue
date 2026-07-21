@@ -375,6 +375,14 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
 
 async function handleSendMessage(payload: SubmitPayload) {
   if (!store.activeThreadId) return
+  // U6: intercept the /compact slash command. U1's slash palette resolves
+  // /compact via onSubmit('/compact') (apply returns handled=true), so the
+  // text arrives here verbatim — do NOT send it to the agent as a user
+  // message; instead trigger the compact flow on the current thread.
+  if (payload.text.trim() === '/compact') {
+    await chat.handleCompact(store.activeThreadId)
+    return
+  }
   await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
     thinking_enabled: payload.thinking_enabled,
     is_plan_mode: payload.is_plan_mode,
@@ -535,7 +543,7 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
       </template>
       <template v-else>
         <MessageList
-          :messages="chat.messages.value"
+          :messages="chat.visibleMessages.value"
           :is-streaming="chat.isLoading.value"
           :thread-id="store.activeThreadId || undefined"
           :can-branch="canBranch"

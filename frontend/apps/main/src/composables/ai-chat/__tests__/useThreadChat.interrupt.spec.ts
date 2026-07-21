@@ -17,6 +17,7 @@ vi.mock('@/api/ai-chat', () => ({
   getClient: vi.fn(),
   createThread: vi.fn(),
   deleteThread: vi.fn(),
+  compactThread: vi.fn(),
 }))
 
 // Mock the sessions API module (used by feedback hydration/submit)

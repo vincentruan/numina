@@ -11,6 +11,7 @@ import { useChatSessionStore } from '../../src/stores/chatSession'
 vi.mock('@/composables/ai-chat/useThreadChat', () => ({
   useThreadChat: () => ({
     messages: { value: [] },
+    visibleMessages: { value: [] },
     isLoading: { value: false },
     isStreaming: { value: false },
     error: { value: null },
@@ -26,6 +27,7 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     retry: vi.fn(),
     clearMessages: vi.fn(),
     resumeInterrupt: vi.fn(),
+    handleCompact: vi.fn(),
   }),
 }))
 
