@@ -243,7 +243,7 @@ const activeLiabilitiesForPayment = computed(() =>
 )
 const totalMonthlyPayment = computed(() =>
   activeLiabilitiesForPayment.value.reduce(
-    (sum, l) => sum + (Number(l.monthly_payment) ?? monthlyInterest(l)),
+    (sum, l) => sum + (l.monthly_payment != null ? Number(l.monthly_payment) : monthlyInterest(l)),
     0,
   ),
 )
