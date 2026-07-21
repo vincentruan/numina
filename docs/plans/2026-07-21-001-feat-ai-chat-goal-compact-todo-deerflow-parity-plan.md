@@ -5,7 +5,8 @@ product_contract_source: ce-plan-bootstrap
 execution: code
 title: "AI 对话 /goal + /compact + TodoList 对齐 DeerFlow - Plan"
 date: 2026-07-21
-status: draft
+status: complete
+completion_date: 2026-07-21
 origin: ce-plan (solo invocation, grounded in DeerFlow reference + numina codebase audit)
 ---
 
