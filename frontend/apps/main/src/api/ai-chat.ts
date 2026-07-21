@@ -203,6 +203,44 @@ export async function getTokenUsage(threadId: string): Promise<TokenUsageData> {
 }
 
 // ---------------------------------------------------------------------------
+// Compact (D2 DeerFlow sync) — POST /api/threads/{id}/compact.
+// Summarizes old history (RemoveMessage(ALL) + summary_text + preserved tail)
+// via the backend's canonical compact_thread_context wrapper. Cookie auth +
+// X-Family-Id, mirroring polishInputDraft / branchThreadFromTurn. Backend:
+// routers/threads.py compact_thread_endpoint + services/compact_service.py.
+// ---------------------------------------------------------------------------
+
+export interface ThreadCompactResult {
+  compacted: boolean
+  reason: string | null
+  removed_count: number
+  preserved_count: number
+  summary_updated: boolean
+  checkpoint_id: string | null
+  total_tokens: number
+}
+
+export async function compactThread(threadId: string): Promise<ThreadCompactResult> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/compact`, {
+    method: 'POST',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) {
+    let detail = `Failed to compact thread (${res.status})`
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+    } catch {
+      // ignore parse failure, use fallback detail
+    }
+    throw new Error(detail)
+  }
+  return res.json() as Promise<ThreadCompactResult>
+}
+
+// ---------------------------------------------------------------------------
 // Input polish (D3 DeerFlow sync) — frontend-direct, cookie auth + X-Family-Id.
 // Stateless single LLM call; no thread run, no persistence. Mirrors
 // runs_stream.py's verify_family_token path. Backend: routers/input_polish.py.
