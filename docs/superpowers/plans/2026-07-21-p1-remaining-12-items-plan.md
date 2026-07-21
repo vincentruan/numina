@@ -1,7 +1,8 @@
 # P1 批次（除 N1）— Implementation Plan
 
-> **状态**：draft，待实现
+> **状态**：complete（14 项全部实现并验证，2026-07-22）
 > **日期**：2026-07-21
+> **完成日期**：2026-07-22
 > **父文档**：[2026-07-19-family-finance-optimization-requirements.md](../specs/2026-07-19-family-finance-optimization-requirements.md)（§3 需求总表 P1 项）
 > **范围**：P1 批 15 项中除 N1（单独成计划，见 [2026-07-21-p1-n1-finance-hub-plan.md](./2026-07-21-p1-n1-finance-hub-plan.md)）外的 14 项
 > **来源**：spec §2「P1 批（13 项）」+ §5 待办「[ ] P1 批次」
@@ -181,17 +182,17 @@
 
 ## Definition of Done
 
-- [ ] 14 项全部完成，每项独立 commit、独立验证通过。
-- [ ] 删除类（D5/D6/A2/A3 legacy）：grep 门槛 = 0（A3 删前 grep 确认 `health_report.py` 无新调用，KTD-6 回退）。
-- [ ] D4 后端提取 delta 独立变量 + 前端 type 同步；环比显示百分比 + 绝对金额（符号/零值/格式依 KTD-2）。
-- [ ] D3 下钻可用 + a11y（router-link/键盘）+ 映射（净资产→assets/总负债→liabilities，N1 后 `/finance?tab=`）。
-- [ ] D3 在 N1 之后实现（KTD-1 prerequisite）。
-- [ ] L4 交互模型：快捷按钮仅填充不自动提交（KTD-4）。
-- [ ] L5 前置：`start_date` 语义验证通过（KTD-5），否则升级为计算修正。
-- [ ] i18n 完整（所有新文案 zh-CN + en-US，无硬编码中文）。
-- [ ] `pnpm typecheck` + `pnpm test:run` + `pnpm lint` 不新增失败。
-- [ ] `uv run pytest apps/backend/tests/`（D4 scope）不新增失败。
-- [ ] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支。
+- [x] 14 项全部完成，每项独立 commit、独立验证通过（15 commits：D1/D5/D6/A2/F3/F7/L3×2/B4/D7/L4/L5/A3/D4/D3，L3 含 1 fix commit）。
+- [x] 删除类（D5/D6/A2/A3 legacy）：grep 门槛 = 0（A3 删前 grep 确认 `health_report.py` 无新调用，scheduler.py:49/97 已注释；KTD-6 回退未触发）。
+- [x] D4 后端提取 delta 独立变量（`mom_change_amount`）+ 前端 type 同步；环比显示百分比 + 绝对金额（`↑ 3.2% +¥1,200` / `↓ 1.1% -¥500`，零值/None 只显百分比，格式依 KTD-2，双符号安全）。
+- [x] D3 下钻可用 + a11y（router-link 自动键盘可达 + aria-label）+ 映射（净资产→`/finance?tab=assets`/总负债→`/finance?tab=liabilities`，N1 `/finance` 路由 + `?tab=` 契约已在位）。
+- [x] D3 在 N1 之后实现（KTD-1 prerequisite，D3 commit `18a083a3` 在 N1 `baa007e4` 之后）。
+- [x] L4 交互模型：快捷按钮仅填充 `paymentAmount` 不自动提交，由 `before-close="onPaymentConfirm"` 处理提交（KTD-4）。
+- [x] L5 前置：`start_date` 语义验证——语义模糊（表单标签"开始日期"未明示放款日 vs 首还款日），**不走纯 trivial 重命名**（避免固化错误假设）。采用 trivial 变体：重命名 prop `startDate`→`nextPaymentDate` + i18n 标签澄清为"首个还款日"（`startDate`/`selectStartDate`/`detailFieldStartDate` 三 key 双 locale），`getNextPaymentDate` 逻辑不变（行为保持），不加后端字段。语义风险记入 Deferred。
+- [x] i18n 完整（所有新文案 zh-CN + en-US，无硬编码中文）：L3 月还 banner + 估算标注、B4 日历提示、L5 首个还款日文案、D3 下钻 aria-label 等。
+- [x] `pnpm typecheck` 通过（0 错误）；`pnpm test:run` 968 passed + 1 预存 `InputBox.test.ts` i18n mock 失败（N1 基线，P1 未触及 InputBox，git log 证实无关）；`pnpm lint` touched files 0 error。
+- [x] `uv run pytest tests/backend/test_dashboard.py`（D4 scope）37 passed，0 新增失败。
+- [x] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支。
 
 ---
 
@@ -199,6 +200,7 @@
 
 - **D3 与 N1 协调**：D3 须在 N1 之后实现（KTD-1 已统一 prerequisite），下钻 `/finance?tab=assets|liabilities`，`?tab=` 契约由 N1 KTD-1/U3 落地。若需 D3 不被 N1 阻塞，显式接受 re-point 作为 deferred cost。
 - **L5 持久化 `next_payment_date`**：KTD-5 走 trivial 命名路径（前提 `start_date` 语义验证通过）；若后续要支持非等额本息的自定义还款日，需后端字段（P3 级）。
+- **L5 语义风险（2026-07-22 实现期发现）**：`getNextPaymentDate` 从 `start_date` 的 day-of-month 推导下次还款日，假设 `start_date.day == 合同还款日`。但表单标签 `liability.startDate`="开始日期" 语义模糊（可能填放款日，如 3/5 放款每月 15 日还 → 会错误用 5 号当还款日）。L5 采用 trivial 变体（重命名 prop + i18n 澄清为"首个还款日"），未改 `getNextPaymentDate` 逻辑（行为保持，不固化错误计算）。若用户实际填放款日，倒计时仍会偏移——根因修复需后端 `next_payment_date` 持久化字段（P3 级，见上条）。
 - **B4 真实聚合日历**：KTD-7 走提示路径（前提 spec §3 B4 原文确认是 OR）；真实家庭聚合需后端 `getFamilyChildCalendar` 改动（P2 级）。"全部" tab 名是否 P1 改留待实现期评估。
 - **A3 后端 `health_report.py` 处置**：已验证非活跃（KTD-6）；是否一并删除后端 legacy 代码留待 A3 实现期决定（本 plan 只删前端分支）。
 - **F7 stale data**：KeepAlive 后返回 `/family` 不重新 fetch，可能显示旧数据。若需新鲜数据，加 `onActivated` re-fetch（超出 P1 最小范围，默认不做）。
