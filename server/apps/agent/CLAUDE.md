@@ -41,46 +41,13 @@ These apply across the whole server monorepo. An agent loading only this file mu
 3. **Auth return codes** — the agent uses `X-Agent-Token` (shared secret), not JWT auth endpoints. If auth-style endpoints are ever added, they return `200` not `201`.
 4. **Import direction** — this service must never import from `apps/backend` or `apps/scheduler_worker` directly. All backend data access goes through `core/backend_client.py` (HTTP). Use `packages/` for shared logic.
 
-## DeerFlow Framework Guardrails
+## DeerFlow Execution
 
-DeerFlow 2.0 is batteries-included: it already provides runtime, tools, skills, memory, sandbox, planning, and subagent coordination. **Do NOT reimplement these.**
+DeerFlow is the mandatory multi-step execution path — all dispatch goes through `DeerFlowAdapter` (`services/deerflow_adapter/`). Do not build a parallel runtime, tool registry, skill loader, memory manager, or workflow engine; extend the adapter instead. Lightweight single-call LLM paths (`suggest`, `input_polish`, title generation) use `core/llm.py` directly and intentionally bypass DeerFlow.
 
-### Prohibited Abstractions
+DeerFlow credentials are **not** env-based — `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` are unused. Each family's decrypted `api_key` + `ai_provider` come from the backend's `/api/v1/internal/ai/config` endpoint (Fernet-decrypted with `AI_ENCRYPTION_KEY`). Per-family `DeerFlowClient` instances are LRU-cached (max 100) in `family_adapter_cache.py`, each with a temp `config.yaml` + `extensions_config.json` generated from `deerflow_config/base/config.yaml`. Cache is invalidated via `POST /internal/cache/invalidate/{family_id}`.
 
-| Forbidden Class/File | Why | Use Instead |
-|---------------------|-----|-------------|
-| `AgentRuntime` | DeerFlow already provides execution harness | `DeerFlowClient` through adapter |
-| `ToolRegistry` | DeerFlow manages MCP tools natively | Configure in `deerflow_config/*.yaml` |
-| `SkillLoader` | DeerFlow loads `skills/*.md` automatically | Skill files + `SkillLoader` in adapter only |
-| `MemoryManager` | DeerFlow has checkpointer/thread memory | `checkpointer` config in client |
-| `Orchestrator` | DeerFlow orchestrates agent + tools + memory | `subagent_enabled=True` if needed |
-| `WorkflowEngine` | DeerFlow has graph-based workflows | `plan_mode=True` for multi-step |
-| `SubAgentCoordinator` | DeerFlow supports nested subagents | `subagent_enabled` + skill triggers |
-| `MCPRuntime` | DeerFlow runs MCP servers internally | MCP config in deerflow_config |
-
-### Design Constraints
-
-- **No langchain-native reimplementation.** If DeerFlow provides a capability (long-task orchestration, tool calling, memory, planning), use it via adapter — never rebuild equivalent logic with `langchain` primitives.
-- **Reuse DeerFlow interaction patterns.** Streaming, progress reporting, and multi-step planning UX must follow DeerFlow's canonical patterns. Do not invent new interaction protocols.
-
-### Prohibited Dependencies
-
-Never add these unless explicitly asked to migrate frameworks:
-- LangGraph, CrewAI, AutoGen, Agno, LlamaIndex AgentWorkflow, OpenAI Agents SDK
-
-### Pre-Change Checklist
-
-Before any agent design or code change:
-
-1. **Context7 lookup required.** Resolve `deerflow` via context7 (`resolve-library-id` → `query-docs`) and read the latest API. Never assume DeerFlow lacks a capability — verify first.
-2. Does `DeerFlowClient` config already support this? (`model_name`, `thinking_enabled`, `plan_mode`, `subagent_enabled`, `available_skills`, `checkpointer`)
-3. Does existing DeerFlow skill/tool/memory/MCP cover this?
-4. If no: extend `deerflow_adapter/adapter.py` minimally — never build parallel harness.
-5. If yes: call adapter from business code, don't wrap it again.
-
-### Adapter Location
-
-All DeerFlow integration lives in one package (`services/deerflow_adapter/`):
+### Adapter package layout
 
 ```
 services/deerflow_adapter/
@@ -95,11 +62,11 @@ services/deerflow_adapter/
 └── exceptions.py
 ```
 
-Business code (routers, worker) calls adapter methods — never instantiates `DeerFlowClient` directly. The per-family adapter is obtained via `family_adapter_cache.get_family_adapter(...)` (cached) or `DeerFlowAdapter.create_family_adapter(...)`.
+Business code (routers, worker) calls adapter methods — never instantiates `DeerFlowClient` directly. Obtain the per-family adapter via `family_adapter_cache.get_family_adapter(...)` (cached) or `DeerFlowAdapter.create_family_adapter(...)`.
 
 ## Runtime & Dispatch (the v2 `stream_run` path)
 
-The central dispatch lives in `services/runtime/`, NOT in an `Orchestrator` class (deleted in U8). Flow:
+Central dispatch lives in `services/runtime/`. Flow:
 
 ```
 routers/runs_stream.py:stream_run
@@ -118,10 +85,10 @@ The dispatch app is carried in `body.metadata["app"]` (defaults to `"numina"`). 
 | App | Runner | Skill | Purpose |
 |-----|--------|-------|---------|
 | `numina` (default) | `_run_numina_agent` | `chat` / `chat-search` | `/ai/chat` live conversation |
-| `asset-report` | `_run_asset_report_pipeline` | `asset-report` | U4 3-step report pipeline |
-| `import-parse` | `_run_import_parse_agent` | `import-parse` | U8 single-run PDF/statement parse |
-| `finance-coach` | `_run_finance_coach_agent` | `finance-coach` | Plan A single-run advice |
-| `wish-advice` | `_run_wish_advice_agent` | `wish-advice` | Plan B T7 single-run advice |
+| `asset-report` | `_run_asset_report_pipeline` | `asset-report` | 3-step report pipeline |
+| `import-parse` | `_run_import_parse_agent` | `import-parse` | PDF/statement parse (single run) |
+| `finance-coach` | `_run_finance_coach_agent` | `finance-coach` | finance advice (single run) |
+| `wish-advice` | `_run_wish_advice_agent` | `wish-advice` | wish savings advice (single run) |
 
 Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trigger message, runs `adapter.typed_stream_dispatch`, forwards frames, synthesizes `tool_call`/`tool_result` custom events, and emits one result custom event (`report.step2_json` / `import-parse.result` / `finance_coach.result` / `wish_advice.result`) before the `end` frame.
 
@@ -133,7 +100,7 @@ Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trig
 
 ### Sandbox
 
-`worker.run_agent` calls `set_family_sandbox_context(family_id, caller_user_id=user_id)` before dispatch and `reset_family_sandbox_context()` in `finally` (P0 fix). This sets a coroutine-scoped `sandbox_family_id` ContextVar read by `NuminaLocalSandboxProvider` (`services/runtime/sandbox_provider.py`) so `write_file`/`read_file`/`str_replace` resolve to `{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/workspace/`. The ContextVar is propagated into the DeerFlow ThreadPoolExecutor via `adapter._run_in_executor_with_context` (`contextvars.copy_context()`).
+`worker.run_agent` calls `set_family_sandbox_context(family_id, caller_user_id=user_id)` before dispatch and `reset_family_sandbox_context()` in `finally`. This sets a coroutine-scoped `sandbox_family_id` ContextVar read by `NuminaLocalSandboxProvider` (`services/runtime/sandbox_provider.py`) so `write_file`/`read_file`/`str_replace` resolve to `{DEER_FLOW_HOME}/users/{family_id}/threads/{thread_id}/user-data/workspace/`. The ContextVar is propagated into the DeerFlow ThreadPoolExecutor via `adapter._run_in_executor_with_context` (`contextvars.copy_context()`).
 
 ### Tool filtering
 
@@ -146,7 +113,7 @@ agent/
 ├── app/
 │   ├── config.py              # AgentSettings (pydantic-settings) — see §Key Environment Variables
 │   ├── main.py                # FastAPI app + lifespan + httpx/MCP patches; router registration
-│   ├── scheduler.py           # APScheduler (configured; stream_run-trigger jobs commented out pending USE_DEERFLOW)
+│   ├── scheduler.py           # APScheduler (configured; stream_run-trigger jobs commented out)
 │   ├── auth/
 │   │   └── jwt_verify.py      # VerifiedFamily + verify_family_token (JWT cookie auth for external routers)
 │   └── routers/               # Internal/token-auth routers (NO __init__.py)
@@ -169,7 +136,7 @@ agent/
 ├── schemas/
 │   ├── capability.py | context.py | model_test.py | policy.py | response.py
 ├── services/
-│   ├── runtime/               # v2 dispatch runtime (the real orchestrator layer)
+│   ├── runtime/               # v2 dispatch runtime
 │   │   ├── worker.py          # run_agent + 5 per-app runners (_run_numina/_asset_report/_import_parse/_finance_coach/_wish_advice)
 │   │   ├── sse_gateway.py     # start_run (R1 allowlist) + sse_consumer + format_sse (LangGraph Platform SSE)
 │   │   ├── run_extras.py      # generate_suggestions + sync_title_from_checkpoint
@@ -183,7 +150,7 @@ agent/
 │   ├── agent_registry.py      # AgentRegistry — per-agent attribute cache (memory_enabled)
 │   ├── asset_suggest.py       # lightweight LLM single-call (suggest_asset_fields)
 │   ├── input_polish.py        # lightweight LLM single-call (polish_draft)
-│   ├── orchestrator.py        # Orchestrator class DELETED (U8); retains _select_model/_fire_and_forget/_select_provider_with_retry helpers
+│   ├── orchestrator.py        # provider-selection / retry / fire-and-forget helpers (no dispatch class)
 │   ├── fallback_engine.py     # STUB — module docstring only, no logic (import compat)
 │   ├── pii_redactor.py        # PII scrubbing (must run before any LLM/dispatch call)
 │   ├── policy_guard.py        # Request policy enforcement
@@ -251,15 +218,7 @@ agent/
 
 **Non-`AgentSettings` env vars read directly:** `DEER_FLOW_CONFIG_PATH` (set in `main.py` from `deerflow_config/base/config.yaml` if unset; overridden per-family in `family_adapter_cache`), `DEERFLOW_DB_URL` (read via `os.environ` in `main.py` lifespan for a postgres checkpointer override), `DEERFLOW_ENV` (read via `os.getenv` in `adapter._make_adapter` for the legacy global singleton only).
 
-**Note:** `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are **not used directly by the agent.** LLM credentials come from the backend's per-family AI config endpoint (`/api/v1/internal/ai/config`), which returns a decrypted `api_key` and `ai_provider`. `AI_ENCRYPTION_KEY` is the Fernet key the backend uses to decrypt stored keys before returning them.
-
 ## Patterns
-
-### DeerFlow as Mandatory Execution Path
-
-DeerFlow is the only multi-step execution path. There is no fallback to direct LLM calls for dispatch. If DeerFlow fails, the per-app runner in `runtime/worker.py` returns a structured error response to the caller — the user sees an error and should retry. Lightweight single-call LLM paths (`suggest`, `input_polish`, title generation) intentionally bypass DeerFlow and use `core/llm.py` directly — this is by design, not a violation.
-
-Per-family `DeerFlowClient` instances are cached in an LRU cache (max 100 families) in `services/deerflow_adapter/family_adapter_cache.py`. Each family gets a temp `config.yaml` + `extensions_config.json` generated from `deerflow_config/base/config.yaml` with their `api_key`/`model_id`/provider substituted. A shared `AsyncSqliteSaver` checkpointer is passed to every client (initialized in lifespan). Cache is invalidated via `POST /internal/cache/invalidate/{family_id}` (→ `invalidate_family_adapter_cache`).
 
 ### Streaming Protocols
 
@@ -269,7 +228,7 @@ The legacy NDJSON gateway path (`agent_dispatch.py:stream_agent_dispatch`) still
 
 ### Skill Schema (`skills/builtin/public/<name>/SKILL.md`)
 
-Skills live in `skills/builtin/public/<name>/SKILL.md` — the DeerFlow-native `LocalSkillStorage` scanner requires the `public/` category subdir and a per-skill directory (allowing bundled assets). The old flat `skills/*.md` layout is gone (U1-U8 deleted `alerts`/`allocation`/`disposal`/`liability`/`report`/`spending_leak`/`time_machine` trigger skills).
+Skills live in `skills/builtin/public/<name>/SKILL.md` — the DeerFlow-native `LocalSkillStorage` scanner requires the `public/` category subdir and a per-skill directory (allowing bundled assets).
 
 Each `SKILL.md` uses the DeerFlow-native frontmatter schema (prompts live in the body, loaded by the DeerFlow harness — not by `SkillLoader`):
 
@@ -327,15 +286,15 @@ All endpoints require `X-Agent-Token` header matching `AGENT_INTERNAL_TOKEN`. No
 
 ## Gotchas
 
-- **`orchestrator.py` is not an orchestrator anymore** — the `Orchestrator` class and `dispatch` method were deleted in U8. The file now holds only provider-selection / retry / fire-and-forget helpers (`_select_model`, `_select_provider_with_retry`, `_is_transient_error`, `_should_route_to_half_open`, `_fire_and_forget`), imported by the legacy `agent_dispatch.py`. Do not add dispatch logic here — multi-app dispatch lives in `runtime/worker.py`.
+- **`orchestrator.py` is not an orchestrator** — the file holds only provider-selection / retry / fire-and-forget helpers (`_select_model`, `_select_provider_with_retry`, `_is_transient_error`, `_should_route_to_half_open`, `_fire_and_forget`), imported by the legacy `agent_dispatch.py`. Multi-app dispatch lives in `runtime/worker.py`, not here.
 - **`agent_dispatch.py` is the legacy NDJSON path** — `stream_agent_dispatch` still works but is not the v2 `stream_run` path. Do not build new capabilities against it.
 - **`fallback_engine.py` is a stub** — module docstring only, no logic; kept for import compatibility. Do not add dispatch code to it.
 - **DeerFlow init failure is non-fatal** — checkpointer init in `main.py` lifespan is wrapped in `try/except`. If the persistence engine fails to init, the app starts but DeerFlow dispatches fail at run time and return error responses.
 - **`_CHECKPOINTER_LOCK` serialises non-streaming DeerFlow calls** — at most 1 concurrent non-streaming DeerFlow dispatch at a time. Streaming (`stream_run`) calls do not hold this lock.
 - **Temp config dirs accumulate in `/tmp`** — `family_adapter_cache.py` creates a `tempfile.mkdtemp()` per family. Evicted entries clean up, but a crash leaves orphaned dirs.
 - **Session journal and session store can diverge** — `session_journal` writes JSONL to local disk; session metadata goes to backend DB via fire-and-forget HTTP. A backend failure leaves the local log without a corresponding DB record.
-- **Scheduler has zero active jobs** — `scheduler.py` is configured and starts cleanly but the `stream_run`-trigger jobs are commented out (pending `USE_DEERFLOW`).
-- **`wish-advice` is in the agent allowlist but not backend `RESERVED_NAMES`** — latent inconsistency (see §R1 allowlist). A custom skill named `wish-advice` could be created on the backend today.
+- **Scheduler has zero active jobs** — `scheduler.py` is configured and starts cleanly but all job registrations are commented out.
+- **`wish-advice` is in the agent allowlist but not backend `RESERVED_NAMES`** — the agent worker accepts `wish-advice` as an app, but `RESERVED_NAMES` (`apps/backend/app/routers/ai_skills.py`) is `["chat","asset-report","import-parse","finance-coach"]` only. A custom skill named `wish-advice` can currently be created on the backend.
 - **Importing from `apps/backend` directly** — Symptom: `ImportError`/`ModuleNotFoundError` on `apps.backend.*`, or tests pass locally but fail in CI because the backend package is not installed in the agent's virtualenv. Cause: violates the import direction rule — the agent must not import from `apps/backend` or `apps/scheduler_worker` directly. Fix: use `core/backend_client.py` for all backend data access (HTTP).
 
 ## Links
