@@ -69,7 +69,7 @@ function close() {
       <ul v-else class="log-list">
         <li v-for="log in logs" :key="log.id" class="log-item">
           <div class="log-main">
-            <span class="log-amount">¥{{ format(Number(log.amount)) }}</span>
+            <span class="log-amount">{{ format(Number(log.amount)) }}</span>
             <span class="log-date">{{ log.log_date }}</span>
           </div>
           <div v-if="log.note" class="log-note">{{ log.note }}</div>

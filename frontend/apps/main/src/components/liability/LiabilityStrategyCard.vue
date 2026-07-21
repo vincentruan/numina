@@ -73,12 +73,12 @@ function askAi() {
       <div class="strat-method">
         <div class="strat-method-name">{{ t('liability.strategy.avalanche') }}</div>
         <div class="strat-method-desc">{{ t('liability.strategy.avalancheDesc') }}</div>
-        <div class="strat-interest">≈ ¥{{ format(avalancheInterest) }}</div>
+        <div class="strat-interest">≈ {{ format(avalancheInterest) }}</div>
       </div>
       <div class="strat-method">
         <div class="strat-method-name">{{ t('liability.strategy.snowball') }}</div>
         <div class="strat-method-desc">{{ t('liability.strategy.snowballDesc') }}</div>
-        <div class="strat-interest">≈ ¥{{ format(snowballInterest) }}</div>
+        <div class="strat-interest">≈ {{ format(snowballInterest) }}</div>
       </div>
     </div>
     <div v-if="savedByAvalanche > 0" class="strat-save">

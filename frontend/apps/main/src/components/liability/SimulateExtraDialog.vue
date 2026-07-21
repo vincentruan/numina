@@ -79,7 +79,7 @@ function close() {
       <div v-if="result" class="sim-result">
         <div class="sim-row">
           <span>{{ t('liability.interest.totalInterest') }}</span>
-          <span>¥{{ format(Number(result.total_interest)) }}</span>
+          <span>{{ format(Number(result.total_interest)) }}</span>
         </div>
         <div class="sim-row">
           <span>{{ t('liability.interest.monthsLeft') }}</span>
@@ -87,8 +87,8 @@ function close() {
         </div>
         <template v-if="result.savings_vs_baseline && props.baseline">
           <div class="sim-row sim-highlight">
-            <span>{{ t('liability.interest.savings', { amount: '' }).replace(/¥?\s*$/, '') }}</span>
-            <span>¥{{ format(Number(result.savings_vs_baseline)) }}</span>
+            <span>{{ t('liability.interest.savings', { amount: '' }).trim() }}</span>
+            <span>{{ format(Number(result.savings_vs_baseline)) }}</span>
           </div>
           <div v-if="result.months_saved" class="sim-row">
             <span>{{ t('liability.interest.monthsSaved', { n: result.months_saved }) }}</span>

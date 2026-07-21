@@ -59,7 +59,7 @@ watch(
     <template v-else-if="baseline">
       <div class="if-row">
         <span class="if-label">{{ t('liability.interest.totalInterest') }}</span>
-        <span class="if-value">¥{{ format(Number(baseline.total_interest)) }}</span>
+        <span class="if-value">{{ format(Number(baseline.total_interest)) }}</span>
       </div>
       <div class="if-row">
         <span class="if-label">{{ t('liability.interest.monthsLeft') }}</span>
