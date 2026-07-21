@@ -26,7 +26,7 @@
       <!-- Payment Countdown -->
       <div class="countdown-wrapper">
         <PaymentCountdown
-          :start-date="liability.start_date ?? null"
+          :next-payment-date="liability.start_date ?? null"
           :end-date="liability.end_date ?? null"
           :is-active="liability.is_active"
         />
