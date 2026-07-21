@@ -150,9 +150,10 @@ Numina 当前定位是"家庭资产可视化仪表盘"，用户诉求是"家庭�
 ## 5. 待办
 
 - [x] 需求清单成文（本文档）
-- [ ] P0 八项逐条设计确认（下一步）
-- [ ] P0 spec 落地 → writing-plans 出实现计划
-- [ ] P1 批次（含 N1 财务 hub，单独子计划）
+- [x] P0 八项逐条设计确认 → [p0-family-finance-core-design.md](./2026-07-19-p0-family-finance-core-design.md)
+- [x] P0 spec 落地 → writing-plans 出实现计划 → 已实现（[Plan A](../plans/2026-07-19-plan-a-finance-coach-capability.md) + [Plan B](../plans/2026-07-19-plan-b-p0-business-touchpoints.md)，8/8 项完成）
+- [x] P1 批次 plan 落地（含 N1 财务 hub，单独子计划）→ [N1 子计划](../plans/2026-07-21-p1-n1-finance-hub-plan.md) + [其余 12 项](../plans/2026-07-21-p1-remaining-12-items-plan.md)（status: draft，待实现）
+- [ ] P1 批次实现 + 验证
 - [ ] P2 批次
 
 ---
