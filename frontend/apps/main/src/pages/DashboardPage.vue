@@ -137,7 +137,8 @@
             </van-list>
           </template>
 
-          <van-empty v-else :description="t('dashboard.emptyState.noAssets')" image-size="60" />
+          <!-- D7: gate empty-state on assetListLoading to avoid flashing "无资产" during pagination -->
+          <van-empty v-else-if="!dashboardStore.assetListLoading" :description="t('dashboard.emptyState.noAssets')" image-size="60" />
         </div>
 
         <!-- Selection Mode -->
