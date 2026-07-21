@@ -1,515 +1,739 @@
 ---
 name: numina-sim-test
 description: >
-  Full simulation test pipeline for the Numina project. Use this skill whenever
-  the user wants to run UI tests, simulate user flows, audit the interface,
-  capture screenshots, check visual quality, or fix UI/UX issues found during
-  testing. Covers both adult frontend and child frontend (儿童视角).
+  Use when the user wants to run UI simulation tests, audit the interface,
+  capture screenshots, or verify deployed UI flows for the Numina project.
   Triggers on: "run sim test", "ui audit", "截图测试", "仿真测试",
-  "ui检查", "界面审查", "run numina tests", "check the UI", "take screenshots",
-  "test the app visually", "儿童测试", "child frontend test",
-  or any request to verify the deployed Docker app looks correct.
+  "ui检查", "界面审查", "check the UI", "test the app visually",
+  "儿童测试", "child frontend test", "test AI chat/report/PDF import",
+  or any request to verify the deployed Docker app's three feature areas
+  (child app, financial management, AI capabilities).
 ---
 
 # Numina Simulation Test Pipeline
 
-End-to-end pipeline: Docker health → seed data → API tests → Chrome screenshots → UI/UX audit → graded fix plan → fix execution.
+End-to-end pipeline driven by the **browser-skill** CLI (`bsk`), which drives
+the user's real Chromium browser through an isolated Agent Window:
+`bsk doctor` (verify) → service health → precondition gate → bsk-driven UI
+flows → screenshot capture → test report (success summary + failure details).
 
-Covers two SPAs:
-- **Adult frontend** (`http://localhost/`) — family asset management
-- **Child frontend** (`http://localhost/child/`) — child role experience
+> **Scope:** this skill does ONLY browser-based UI simulation. It does NOT
+> seed the database or run API acceptance tests — those are out of scope. The
+> environment must already contain the test accounts below (see
+> "Prerequisites").
+
+Covers six feature areas (detailed cases split by area under
+[`test-cases/`](./test-cases/), shared conventions in
+[`test-cases/_common.md`](./test-cases/_common.md)):
+1. **Child app** (`$CHILD_BASE`) — 儿童页面优化
+2. **Main app financial management** (`$BASE`) — 财务管理能力优化
+3. **AI capabilities** — PDF识别 / AI资产报告 / 数鸣智能体 / AI对话
+4. **Main app navigation coverage** (`$BASE`) — 每个页签 + 子页面 + 币种切换校验 ([`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md))
+5. **Child app navigation coverage** (`$CHILD_BASE`) — 每个页签 + 子页面 ([`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation.md))
+6. **AI chat DeerFlow-fidelity parity** — 输入/输出/系统集成 + 设计出入 ([`test-cases/area6-ai-chat-parity.md`](./test-cases/area6-ai-chat-parity.md))
+
+> Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
+> **currency-switch bug class** (amounts not re-converted by rate after switching
+> `default_currency`) — confirmed by source audit, see
+> [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md) "Currency-switch
+> bug class". Area 6 tests numina's AI chat against DeerFlow's interaction contract
+> and flags **design divergences** (D1 `/goal`, D2 `/compact`, D3 input-polish,
+> D4 user-selectable reasoning_effort, D5 TodoList bar).
+
+> `$BASE` / `$CHILD_BASE` / `$API_BASE` are set per deployment mode — see
+> "Deployment Mode" below. Routes (`/login`, `/child/`, `/ai/chat`, …) are the
+> same in every mode; only the host:port differs.
+
+## Deployment Mode (declare before running)
+
+This pipeline supports **two deployment targets**. At the start of the run,
+ask the user which mode (default: `docker` if services answer on :80, else
+`dev`). All subsequent phases use the mode-specific `BASE` / `CHILD_BASE` /
+`API_BASE` values instead of a hard-coded URL.
+
+### Mode `docker` (nginx proxy, single entry)
+
+All services behind `docker-compose` + nginx on port 80.
+
+| Var | Value |
+|-----|-------|
+| `BASE` | `http://localhost/` (adult SPA) |
+| `CHILD_BASE` | `http://localhost/child/` (child SPA, nginx strips prefix) |
+| `API_BASE` | `http://localhost/api/v1` (nginx → backend:8000) |
+| Health check | `docker ps` + `curl http://localhost/` |
+| Rebuild after code change | `docker-compose build frontend && docker-compose up -d frontend` (or `frontend-child`) |
+
+### Mode `dev` (local vite + uvicorn, separate ports)
+
+Local dev servers started manually (NOT by this skill — see CLAUDE.md "Never
+run dev servers from automated agents"). The user must already have running:
+`pnpm dev` (main:5173, child:5174) + `uv run uvicorn` (backend:8000, agent:8001,
+worker:8002). Vite proxies `/api` → backend:8000 and `/api/threads` → agent:8001,
+so the SPA still calls `/api/...` relatively.
+
+| Var | Value |
+|-----|-------|
+| `BASE` | `http://localhost:5173/` (adult SPA, vite) |
+| `CHILD_BASE` | `http://localhost:5174/child/` (child SPA, vite `base: '/child/'`) |
+| `API_BASE` | `http://localhost:8000/api/v1` (backend direct; or `http://localhost:5173/api/v1` via vite proxy) |
+| Health check | `curl` against :5173, :5174/child/, :8000 (no `docker ps`) |
+| Rebuild after code change | none — vite HMR auto-reloads; verify via `pnpm typecheck` only |
+
+> **Child path stays `/child/` in both modes** (vite `base: '/child/'`), so
+> `test-cases/` routes are unchanged — only the host:port differs.
+
+> **Cookie sharing caveat (dev):** adult (:5173) and child (:5174) are
+> different origins, so the adult session cookie does NOT carry over to the
+> child port by default. In dev mode, log into the child SPA directly at
+> `http://localhost:5174/child/` (the child login/PIN flow re-establishes
+> the session for that origin), or have the user set a shared cookie. This
+> differs from docker mode where nginx serves both under one origin.
+
+### Setting the vars for the run
+
+After the user picks a mode, export the three vars once and reference
+`$BASE` / `$CHILD_BASE` / `$API_BASE` in every Phase below:
+
+```bash
+# docker
+export BASE=http://localhost/ CHILD_BASE=http://localhost/child/ API_BASE=http://localhost/api/v1
+
+# dev
+export BASE=http://localhost:5173/ CHILD_BASE=http://localhost:5174/child/ API_BASE=http://localhost:8000/api/v1
+```
+
+---
 
 ## Project Context
 
-- **Base URL**: `http://localhost/` (nginx proxy)
-- **API**: `http://localhost/api/v1`
+- **Base URLs**: see "Deployment Mode" above — `$BASE`, `$CHILD_BASE`, `$API_BASE`
 - **Adult demo account**: `demouser` / `DemoPass123`
 - **Child accounts** (under demouser family):
-  - 小宝: username `xiaobao`, PIN `🐰🥕🌈⭐`
-  - 大宝: username `dabao`, PIN `🐰🥕🌈⭐`
+  - Display_names are **discovered at gate time** (Phase 1.5) via
+    `/family/members` where `role=="child"` — not hard-coded.
+  - Docker seed default: 小宝 (`xiaobao`), 大宝 (`dabao`), PIN `🐰🥕🌈⭐`.
+  - Dev/other deployments may differ (e.g. `demochild`, 小明). See
+    [`test-cases/_common.md`](./test-cases/_common.md) for the convention.
 - **Regression test accounts**:
   - `test_rich` / `TestRich123!` — full data (assets + liabilities + wishes + children)
-  - `test_child`: username `testchild`, PIN `🐱🐶🐸🦊` (under test_rich family)
+  - `test_child`: `testchild`, PIN `🐱🐶🐸🦊` (under test_rich family)
 - **Frontend**: Vue 3 + TypeScript + Vant 4 + ECharts, mobile-first (375×812)
 - **UI language**: 简体中文
-- **Test scripts**: `tests/data/seed-data.sh`, `tests/e2e/acceptance.sh`
-- **Audit report output**: `dogfood-output/report.md`
-- **Issues report output**: `dogfood-output/issues-report.md`
+- **Output paths** (gitignored — local only):
+  - Screenshots: `dogfood-output/<name>.png`
+  - Report: `tests/audit-reports/ui-audit-YYYY-MM-DD.md` (one file per day; gitignored — local only. Historical reports already tracked under this path remain tracked; new daily reports are not committed)
 
-### Monorepo Structure (feat/child-frontend-module-split branch onwards)
+### Prerequisites (NOT handled by this skill)
+
+This skill only drives the browser. The following must already be true before
+Phase 0:
+1. Services are running in the chosen deployment mode (docker or dev).
+2. The test accounts above exist in the database with the listed credentials
+   and have the expected data (assets/liabilities/wishes/children). If login
+   fails or pages render empty, the database has not been prepared — ask the
+   user to seed it out-of-band (e.g. via `tests/data/seed-data.sh` run
+   separately); do **not** run seed-data from this skill.
+
+### Monorepo Structure
 
 ```
 frontend/
   apps/
-    main/        ← adult frontend source (was: frontend/)
-    child/       ← child frontend source (was: frontend-child/)
+    main/        ← adult frontend source
+    child/       ← child frontend source
   packages/
-    auth/        ← shared auth package (was: packages/auth/)
+    auth/        ← shared auth package
 ```
 
-> **Important**: Always edit files under `frontend/apps/child/` for child frontend changes.
-> The old `frontend-child/` path no longer exists.
+> Always edit `frontend/apps/child/` for child frontend, `frontend/apps/main/`
+> for adult frontend. Old `frontend-child/` path no longer exists.
 
 ---
 
-## Phase 1 — Docker Health Check
+## Phase 0 — browser-skill Verification (MANDATORY first step)
 
-Check that all Docker services are running before doing anything else.
+Before any UI testing, verify `bsk` is installed and the extension is connected.
 
 ```bash
-# Adult frontend
-curl -sf http://localhost/ -o /dev/null && echo "adult: UP" || echo "adult: DOWN"
-# Child frontend
-curl -sf http://localhost/child/ -o /dev/null && echo "child: UP" || echo "child: DOWN"
-# Backend API
-curl -sf http://localhost/api/health -o /dev/null && echo "api: UP" || echo "api: DOWN"
-# Container status
+bsk doctor
+```
+
+If `bsk doctor` reports problems:
+- `bsk` not on PATH → install browser-skill CLI
+- Extension not connected / popup not green → ask the user to open Chromium,
+  load the browser-skill extension, confirm the popup shows green
+- Version skew (exit 5) → upgrade/reinstall matching CLI + extension versions
+
+**Do not proceed to later phases until `bsk doctor` is clean.** Every UI phase
+depends on a working `bsk` session.
+
+### bsk session lifecycle (every UI phase)
+
+```
+bsk session start                       # capture 4-letter session id
+… bsk <cmd> --session <id> …            # always pass --session
+bsk session stop <id>                   # REQUIRED when done (even on error)
+```
+
+Run `bsk session stop --all` as emergency cleanup if a session leaks. Default
+session idle timeout is 5 minutes — do NOT rely on it; always stop explicitly.
+
+### Core interaction loop (bsk)
+
+```
+bsk navigate <url> --session <id>        # go to a route
+bsk snapshot --session <id>              # aria tree with @e1, @e2, … refs
+bsk click @e3 --session <id>             # or bsk fill / bsk select / bsk press
+bsk snapshot --session <id>              # re-snapshot after navigation / DOM change
+bsk screenshot --session <id> --out dogfood-output/<name>.png
+```
+
+**Refs invalidate after navigation** — always re-snapshot before clicking,
+filling, or selecting on a new page. Prefer `@eN` refs from the latest snapshot
+over raw CSS selectors.
+
+Observation priority: `bsk snapshot` first (default). Only escalate to
+`bsk get-html` (hidden DOM/markup) or `bsk screenshot` (visual layout) when the
+snapshot is insufficient.
+
+Full command reference: see the `browser-skill` skill, or `bsk <cmd> --help`.
+
+---
+
+## Phase 1 — Service Health Check
+
+```bash
+# Common (both modes): probe the three entry points
+curl -sf "$BASE" -o /dev/null && echo "adult: UP" || echo "adult: DOWN"
+curl -sf "$CHILD_BASE" -o /dev/null && echo "child: UP" || echo "child: DOWN"
+curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api: UP" || echo "api: DOWN"
+```
+
+### docker mode — also check containers
+
+```bash
 docker ps --format "{{.Names}}\t{{.Status}}" | grep numina
 ```
 
 If any service is DOWN, tell the user:
-> Services are not running. Please start them with:
-> ```bash
-> docker-compose up -d
-> ```
-> Then re-run this skill once the services are up.
-
-Stop here if services are down — the remaining phases all depend on a live app.
+- **docker**: `Services are not running. Start them with 'docker-compose up -d', then re-run this skill.`
+- **dev**: `Dev servers not running. Start: 'pnpm dev' in frontend/apps/main (and /child) + 'uv run uvicorn apps.backend.app.main:app --port 8000' (+ agent :8001, worker :8002) from server/. The user must run these — agents must not start dev servers.`
 
 **Child frontend specific checks:**
-- Verify `numina-frontend-child` container is running (not just `numina-frontend`)
-- Verify nginx routes `/child/` correctly — assets should load from `/child/assets/`, not `/assets/`
-- If child assets return 404, check `nginx.conf`: `proxy_pass http://frontend-child/` (no `/child/` suffix)
-
-If UP, confirm: "✓ Adult frontend UP, ✓ Child frontend UP, ✓ API UP."
+- **docker**: verify `numina-frontend-child` container running; nginx routes `/child/` → assets from `/child/assets/`. If 404, check `nginx.conf` `proxy_pass http://frontend-child/` (no `/child/` suffix).
+- **dev**: child served by vite at `:5174` with `base: '/child/'`; assets from `/child/assets/`. No nginx.
 
 ---
 
-## Phase 2 — Seed Test Data
+## Phase 1.5 — Precondition Gate (MANDATORY before UI phases)
 
-Run the seed script to ensure all test accounts exist and data is populated.
+Verify the `demouser` family exists **with enough data** to satisfy the
+assertions in `test-cases/`. This skill does NOT seed data — it only checks
+that the prerequisite data is present, and **blocks** the run if it isn't.
+Running UI cases against a missing/incomplete family would produce misleading
+test reports (assertions failing on absent data, not on real bugs).
+
+> **Why a gate, not a seed:** the login endpoint deliberately returns the same
+> `AUTH_INVALID_CREDENTIALS` for "user not found" and "wrong password"
+> (anti-enumeration). So we cannot probe existence with a wrong password — we
+> must log in with the known `demouser`/`DemoPass123` credentials. Captcha is
+> skipped in non-production environments (docker/dev), so a plain curl works.
+
+Run all checks via curl (no bsk session yet). Stop at the first failure.
+
+> **Envelope:** every API response is wrapped as `{"code":"OK","message":"","data":<payload>}`.
+> All `jq` paths below extract from `.data`.
 
 ```bash
-./tests/data/seed-data.sh
+API="${API_BASE}"            # e.g. http://localhost/api/v1  or  http://localhost:8000/api/v1
+
+# --- 1) Login with known demouser credentials ---
+LOGIN=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demouser","password":"DemoPass123"}')
+CODE=$(echo "$LOGIN" | tail -1)
+BODY=$(echo "$LOGIN" | sed '$d')
+
+if [ "$CODE" != "200" ]; then
+  echo "GATE FAIL: demouser login returned HTTP $CODE (body: $BODY)"
+  echo "→ demouser account does not exist or credentials differ."
+  exit 1
+fi
+
+TOKEN=$(echo "$BODY" | jq -r '.data.access_token')
+[ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "GATE FAIL: no access_token in login response (body: $BODY)"; exit 1; }
+AUTH="Authorization: Bearer $TOKEN"
+
+# --- 2) /auth/me — account belongs to a family, role is adult owner ---
+ME=$(curl -s -H "$AUTH" "$API/auth/me")
+ME_USER=$(echo "$ME" | jq -r '.data.username')
+ME_ROLE=$(echo "$ME" | jq -r '.data.role')
+ME_FAM=$(echo "$ME" | jq -r '.data.family_id')
+if [ "$ME_USER" != "demouser" ] || [ -z "$ME_FAM" ] || [ "$ME_FAM" = "null" ]; then
+  echo "GATE FAIL: /auth/me not a valid demouser adult (username=$ME_USER, family_id=$ME_FAM)"
+  exit 1
+fi
+[ "$ME_ROLE" = "owner" ] || [ "$ME_ROLE" = "adult" ] || { echo "GATE FAIL: demouser role=$ME_ROLE (expected owner/adult)"; exit 1; }
+
+# --- 3) /family/members — at least 1 child present (names discovered, not hard-coded) ---
+# The docker seed creates 小宝 + 大宝 under demouser, but dev/other deployments
+# may have different child display_names (e.g. demochild, 小明). The gate must
+# NOT hard-code specific names — it asserts "≥1 child exists" and records the
+# actual display_names found, so downstream cases (and the report) use the real
+# names. See test-cases/_common.md "Child account names" for the convention.
+MEMBERS=$(curl -s -H "$AUTH" "$API/family/members")
+# Children have role=="child" and username may be null; display_name is the label.
+CHILD_NAMES=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .display_name] | join(",")')
+CHILD_COUNT=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child")] | length')
+if [ "$CHILD_COUNT" -lt 1 ] 2>/dev/null || [ -z "$CHILD_NAMES" ]; then
+  echo "GATE FAIL: demouser family has no child members (child_count=$CHILD_COUNT)"
+  exit 1
+fi
+echo "  (discovered child display_names: $CHILD_NAMES)"
+
+# --- 4) /dashboard/overview — demouser has real asset data (>0) ---
+OV=$(curl -s -H "$AUTH" "$API/dashboard/overview")
+ASSET_COUNT=$(echo "$OV" | jq -r '.data.asset_count')
+TOTAL_LIAB=$(echo "$OV" | jq -r '.data.total_liabilities')
+[ "$ASSET_COUNT" -gt 0 ] 2>/dev/null || { echo "GATE FAIL: demouser has no assets (asset_count=$ASSET_COUNT)"; exit 1; }
+echo "$TOTAL_LIAB" | awk '{if ($1+0 <= 0) exit 1}' || echo "  (note: demouser has no liabilities — liability cases C2.5/C2.6 may show empty states)"
+
+# Export CHILD_NAMES for downstream phases/report (single source of truth).
+echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
+echo "GATE OK: demouser family present with $CHILD_COUNT child(ren) [$CHILD_NAMES] and $ASSET_COUNT assets."
 ```
 
-This creates (idempotently):
+### Gate failure → block
 
-**Fixed regression accounts:**
-- `test_empty` / `TestEmpty123!` — empty family
-- `test_asset` / `TestAsset123!` — 5 assets (in_use/idle/retired/USD/sold)
-- `test_rich` / `TestRich123!` — 31 assets + 28 liabilities + 29 wishes + children
-  - Child: `testchild` (display_name: `test_child`), PIN `🐱🐶🐸🦊`
-- `test_rich_member` / `TestMember123!` — member role in test_rich family
+If any check fails, **do not proceed to Phase 2**. Tell the user:
 
-**Demo account:**
-- `demouser` / `DemoPass123` — full simulation data
-  - 19 physical assets + 11 financial assets + 7 liabilities + 9 wishes
-  - Children: 小宝 (`xiaobao`, PIN `🐰🥕🌈⭐`) + 大宝 (`dabao`, PIN `🐰🥕🌈⭐`)
-  - Blind box gifts, chore templates, child wishes (5 status variants)
+> Precondition check failed: `<specific failure>`.
+> The `demouser` family is missing or its data is incomplete — this skill does
+> not seed data. Prepare the database out-of-band, then re-run:
+>   `./tests/data/seed-data.sh`   (docker: inside the `numina-backend` container; dev: local `uv run`)
+> Verify `demouser`/`DemoPass123` exists with at least 1 child member and
+> assets before retrying. Child display_names are discovered at gate time
+> (not hard-coded) — see `test-cases/_common.md`.
 
-If the script fails, check that `jq` is installed (`brew install jq`) and that the API is reachable.
+> **Liabilities are soft.** `demouser`'s seed profile includes liabilities, but
+> if only liabilities are missing (assets + children present), the gate still
+> passes and liability cases (C2.5/C2.6) will simply show empty states — note
+> this in the report rather than blocking.
 
 ---
 
-## Phase 3 — API Acceptance Tests
+## Phase 2 — Login + Session Setup (bsk)
 
-Run the API test suite and capture results.
+Establish the authenticated adult session that all subsequent UI phases share.
 
 ```bash
-./tests/e2e/acceptance.sh
+SID=$(bsk session start --json | jq -r .session_id)   # capture session id
+bsk navigate "${BASE}login" --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+# fill username + password via @eN refs from the snapshot
+bsk fill @eN --value demouser --session "$SID"
+bsk fill @eM --value DemoPass123 --session "$SID"
+bsk snapshot --session "$SID"      # re-snapshot to get submit button ref
+bsk click @eK --session "$SID"
+bsk wait-ms 2s
+bsk snapshot --session "$SID"      # confirm landed on dashboard
 ```
 
-Parse the output for pass/fail counts. If any tests fail:
-- List the failing test names
-- Note them in the audit report under a "API Issues" section
-- Continue to Phase 4 regardless (UI audit is independent)
+Assertions:
+- [ ] After submit, URL is `$BASE` (Dashboard)
+- [ ] No `401` blocking the initial load (cookie auth set)
+- [ ] Keep `$SID` for all Area 2 + Area 3 cases
 
-Report summary: "✓ X/Y API tests passed."
+> **Do not `bsk session stop` yet** — reuse this session for Areas 2 & 3.
+> Stop it only at the end of Phase 5.
 
----
+> **Login failure = unmet prerequisite.** If `demouser` login fails or the
+> dashboard renders empty, the database has not been prepared. Do not seed
+> from here — tell the user to prepare the DB out-of-band and re-run.
 
-## Phase 4 — Adult Frontend Screenshot Capture
+### Phase 2 fallback — cookie + localStorage injection (password-manager conflict)
 
-Use Chrome DevTools MCP to capture screenshots of the adult frontend at 375×812 mobile viewport.
-
-Navigate to `http://localhost/` and capture:
-- Dashboard (总览) — verify asset totals, net worth, trend chart
-- Family page (/family) — verify member list, children cards with balances
-- Wishes page — verify wish list with priorities
-- Liabilities page — verify liability list
-- Settings page
-
-For each page:
-1. `navigate_page` to the route
-2. `wait_for` key content to appear
-3. `take_screenshot` and save to `dogfood-output/`
-4. `list_console_messages` — confirm zero errors
-
-**Key assertions for adult frontend:**
-- Auth refresh (401 → 200) is expected on first load — not a bug
-- Family page should show 小宝 and 大宝 with coin balances
-- Tab bar shows: 总览 / 心愿 / AI / 负债 / 宝贝 / 设置
-
----
-
-## Phase 5 — Child Frontend Health Check
-
-Before testing child flows, verify the child SPA loads correctly.
+If `bsk fill` on the password field activates a password-manager browser
+extension that hijacks the Agent Window tab (observed: tab redirects to
+`chrome-extension://…` and the session crashes), do **not** retry `bsk fill`
+and do **not** use `bsk request-help` (its overlay blocks the session RPC and
+cannot be polled concurrently). Instead, bypass the password field entirely
+by establishing the session from page context via `fetch`:
 
 ```bash
-# Verify child assets load (not 404)
-curl -sf http://localhost/child/ -o /dev/null && echo "child SPA: UP"
-# Check nginx strips /child/ prefix correctly
-curl -I http://localhost/child/ | grep -i "content-type"
+# 1) Navigate to the app root first so fetch targets the right origin and
+#    the relative /api/v1 path resolves. wait-until domcontentloaded gives a
+#    window before the async route guard resolves (do not use networkidle here
+#    — the guard redirects to /login before the cookie is set).
+bsk navigate "${BASE}" --session "$SID" --wait-until domcontentloaded
+
+# 2) POST /auth/login from page context. credentials:'include' so the browser
+#    stores the server's Set-Cookie httpOnly access_token automatically.
+#    The token is NEVER read or held by JS — the browser network layer owns it.
+ADULT_BODY='{"username":"demouser","password":"DemoPass123"}'
+bsk evaluate --session "$SID" "(async () => {
+  const r = await fetch('/api/v1/auth/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: '$ADULT_BODY',
+  });
+  return String(r.status);
+})()"
+
+# 3) The adult route guard reads localStorage 'numina_user' (NOT the cookie),
+#    so populate it from /auth/me. setUser() stores only non-sensitive fields.
+bsk evaluate --session "$SID" "(async () => {
+  const r = await fetch('/api/v1/auth/me', {credentials: 'include'});
+  const u = (await r.json()).data;
+  localStorage.setItem('numina_user', JSON.stringify({
+    id: String(u.id), username: u.username, display_name: u.display_name,
+    avatar_color: u.avatar_color, role: u.role, theme: u.theme,
+    language: u.language, default_currency: u.default_currency,
+  }));
+  return u.username;
+})()"
+
+# 4) Reload so the route guard re-reads localStorage and admits the session.
+bsk navigate "${BASE}" --session "$SID" --wait-until domcontentloaded
+bsk snapshot --session "$SID"     # confirm landed on Dashboard, not /login
 ```
 
-**Known issue to check (nginx proxy_pass):**
-The `nginx.conf` must have:
-```nginx
-location /child/ {
-    proxy_pass http://frontend-child/;   # ← correct: strips /child/ prefix
-}
-```
-NOT:
-```nginx
-    proxy_pass http://frontend-child/child/;  # ← wrong: doubles the prefix
-```
+**Why this is clean (not a red-line violation):**
+- `fetch('/auth/login')` from page context is the standard auth flow — the
+  httpOnly cookie is set by the server's `Set-Cookie` response header, not by
+  JS writing the token. `bsk evaluate` here drives the app's own login
+  endpoint, not a credential surface.
+- No token is read out of storage or logged. The red line "no token theft"
+  targets reading `localStorage`/cookies/auth headers on sensitive sites to
+  exfiltrate credentials — this injects a session, it does not extract one.
+- Prefer the `bsk fill` form-login path in Phase 2 by default; use this
+  fallback **only** when the password-manager extension blocks form login.
 
-If child assets return 404, this is the root cause.
+**Dev-mode child app (separate origin :5174):** the adult cookie does NOT
+carry to the child port. Establish the child session with the two-step emoji
+PIN flow from the child origin's page context (step1 → temp_token, step2 →
+`set_child_auth_cookies`), then populate `localStorage` so the child SPA
+guard's fast-path (`cachedUser?.role === 'child'`) admits without a fetch.
+See `test-cases/_common.md` "Child session injection (dev mode — password-manager
+fallback)" for the full step1/step2 fetch chain and the domcontentloaded-race
+trick.
 
 ---
 
-## Phase 6 — Child Frontend: ChildSelectPage
+## Phase 3 — Area 2: Main App Financial Management (bsk flows)
 
-Navigate to `http://localhost/child/` as an authenticated adult (demouser session must be active).
+Run the **Area 2** cases from [`test-cases/area2-finance.md`](./test-cases/area2-finance.md) using the
+session from Phase 2:
 
-```
-navigate_page → http://localhost/child/
-wait_for → ["选择孩子", "小宝", "大宝"]
-take_snapshot
-```
+- C2.1 Dashboard — totals, net worth, trend chart
+- C2.2 Wish list — savings progress + advice card + debt hint bar
+- C2.3 Wish detail — savings log/record dialogs + afford bar + A1b button
+- C2.4 Wish savings record dialog — amount input + submit
+- C2.5 Liability list — strategy card + interest forecast + payment countdown
+- C2.6 Liability detail — simulate extra payment dialog
+- C2.7 Liability create/edit form
+- C2.8 Asset list + detail + sell flow
 
-**Assertions:**
-- [ ] Page title: "选择孩子"
-- [ ] 2 child cards visible: 小宝 (red avatar) + 大宝 (teal avatar)
-- [ ] Avatar shows first character of display_name (小 / 大), NOT `?`
-- [ ] Username shows `@xiaobao` / `@dabao`, NOT `@` alone
-- [ ] No console errors
+For each case:
+1. `bsk navigate <route> --session "$SID" --wait-until networkidle`
+2. `bsk snapshot --session "$SID"` → capture refs + assert text present
+3. Interact (`bsk click` / `bsk fill`) → re-snapshot → assert outcome
+4. `bsk screenshot --session "$SID" --out dogfood-output/<case>.png` for the report
+5. `bsk evaluate` console-error check (see test-cases/_common.md "Console error capture")
 
-**Known bug to check — API response unwrapping:**
-`GET /api/v1/family/children` returns `{"code":"OK","data":[...]}`.
-`listChildren()` in `frontend/apps/child/src/api/children.ts` must return `res.data.data` (the array), not `res.data` (the envelope object).
-
-If avatars show `?` and names are empty, this is the root cause — `v-for` is iterating over object keys (`code`, `message`, `data`) instead of the children array.
-
-**Fix location:** `frontend/apps/child/src/api/children.ts`
-```ts
-// Wrong
-return res.data
-// Correct
-return res.data?.data ?? res.data
-```
+Record any failure with: case id, route, expected vs actual, screenshot path.
 
 ---
 
-## Phase 7 — Child Frontend: Authentication Flow (PIN)
+## Phase 4 — Area 3: AI Capabilities (bsk flows)
 
-Click a child card to navigate to ChildAuthPage.
+Continue with the **same session** (`$SID`). AI must be enabled for the family
+first — if `aiStore.aiEnabled` is false, configure a provider at
+`/settings/ai/provider/new` (or skip AI cases and note in report).
 
-```
-click → child card (小宝)
-wait_for → ["使用图形密码", "🐱", "🐶"]
-take_snapshot
-```
+Run the **Area 3** cases from [`test-cases/area3-ai.md`](./test-cases/area3-ai.md):
 
-**Assertions:**
-- [ ] Child avatar and name displayed at top
-- [ ] 4 PIN slot indicators visible (empty circles)
-- [ ] 12 emoji buttons in 4×3 grid
-- [ ] 删除 and 清除 buttons visible
-- [ ] No console errors
+- C3.1 AI Hub — report card + 小鸣 (NuminaAgentCard) + agents + chat input
+- C3.2 AI chat — send message + stream response (assert no blank/duplicate/error-stuck)
+- C3.3 AI chat — agent consult (数鸣 / custom agent → `/ai/chat?agentId=`)
+- C3.4 AI asset report — 3-step timeline generation (cached + fresh + failure fallback)
+- C3.5 PDF import — upload → parse → preview → confirm (see file-upload note)
+- C3.6 AI time machine
+- C3.7 AI settings — provider config
 
-**Test PIN input — 小宝 (PIN: 🐰🥕🌈⭐):**
-```
-click → 🐱 button
-click → 🌟 button
-click → 🎈 button
-click → 🐶 button
-```
+**Streaming cases (C3.2, C3.4):** AI generation is slow. Use `bsk wait-ms`
+between snapshots (e.g. `bsk wait-ms 5s`), or poll the snapshot until the
+expected terminal text appears. Do not assume one snapshot suffices.
 
-Expected: auto-submits on 4th emoji, navigates to `/child/` (home) on success.
-
-**Test wrong PIN:**
-```
-click → 🐱 🐱 🐱 🐱 (wrong sequence)
-```
-Expected: shake animation, PIN cleared, error message shown.
-
-**Test null display_name guard:**
-If child has `null` display_name, avatar should show `?` (not crash).
-Check: `(displayName ?? '?').charAt(0)` in `ChildAuthPage.vue`.
+**PDF upload (C3.5):** `bsk click` on `<van-uploader>` does not open the OS
+file picker. See test-cases/_common.md "File upload note" — either `bsk evaluate` to
+set `input.files` via DataTransfer, or call the backend parse endpoint with
+`curl` and load the preview page with the returned token.
 
 ---
 
-## Phase 8 — Child Frontend: Home Page (ChildHomePage)
+## Phase 5 — Area 1: Child App (bsk flows)
 
-After successful PIN login as 小宝:
+**docker mode:** the child SPA shares the adult session's cookie (same origin
+via nginx). Reuse `$SID`.
 
+**dev mode:** adult (:5173) and child (:5174) are different origins — the
+adult cookie does NOT carry over. Start a fresh session and navigate to
+`$CHILD_BASE` first; the child PIN/select flow re-establishes auth for that
+origin.
+
+```bash
+# docker: reuse $SID from Phase 2
+# dev: start a new session for the child origin
+if [ -z "${DEV_CHILD_SID:-}" ]; then
+  SID_CHILD="$SID"          # docker: same session
+else
+  SID_CHILD="$DEV_CHILD_SID"
+fi
+bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
+bsk snapshot --session "$SID_CHILD"    # ChildSelectPage: 选择孩子 + discovered child name cards (see SIM_CHILD_NAMES from gate)
 ```
-wait_for → ["/child/home", "星星币", "小宝"]
-take_snapshot
+
+Run the **Area 1** cases from [`test-cases/area1-child.md`](./test-cases/area1-child.md):
+
+- C1.1 Child home — hero, balance, today's chores, wish preview
+- C1.2 Child ledger — transaction list + sibling gift popup
+- C1.3 Child PIN auth — correct PIN (auto-submit) + wrong PIN (shake)
+- C1.4 Child wishes — list + status variants
+- C1.5 Child wish create — form submission + validation
+- C1.6 Child tasks — chore list + completion → 待审批
+- C1.7 Child treasures/blind-box (note: `/child/blind-box` → redirect `/treasures`)
+- C1.8 Child asset detail — no adult-only field leak
+- C1.9 Child settings — child-role-scoped only
+
+**PIN input (C1.3):** snapshot the 4×3 emoji grid, then click the 4 correct
+emoji `@eN` refs **in order**. Refs may shift after each click — re-snapshot
+between clicks if a click causes DOM change. Wrong PIN → assert shake animation
++ cleared slots + error message.
+
+### End the bsk session(s)
+
+```bash
+bsk session stop "$SID"
+# dev mode also: bsk session stop "$SID_CHILD"   (if a separate child session was started)
 ```
 
-**Assertions:**
-- [ ] Child name and avatar displayed
-- [ ] Coin balance shown (小宝 should have 50+ coins from seed data)
-- [ ] Bottom tab bar: 首页 / 任务 / 心愿 / 宝箱 (or similar)
-- [ ] No console errors
-- [ ] No network 4xx errors (except expected 401 on auth refresh)
+Run this in a `finally`-style path so the Agent Window closes even if a case
+errored mid-flow.
 
 ---
 
-## Phase 9 — Child Frontend: Tasks/Chores Page (ChildTasksPage)
+## Phase 5.5 — Navigation coverage + AI chat parity suites
 
-```
-navigate_page → /child/tasks  (or click tasks tab)
-wait_for → ["家务", "今日"]
-take_snapshot
-```
+After the feature areas (Phase 3/4/5), run the navigation-coverage and parity
+suites. These reuse the same sessions (`$SID` adult; `$SID_CHILD` child).
 
-**Assertions:**
-- [ ] Today's chore list visible
-- [ ] Chore cards show emoji, name, coin reward
-- [ ] Completed chores show different state from available
-- [ ] "待审批" badge visible if chore completed but not yet approved
+### Area 4 — Main app navigation coverage (`$SID`)
 
-**Seed data context:**
-- test_rich family has chore template "测试家务" (🧹, 10 coins, daily)
-- demouser family has: 整理房间 (🧹, 5 coins), 洗碗 (🍽️, 8 coins), 打扫卫生间 (🚿, 15 coins weekly)
+Run [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md):
 
----
+- **C4.0** Currency switch — the bug-class smoke test (switch `default_currency`, compare displayed amounts across pages; dashboard aggregates convert server-side, per-record pages do NOT — the confirmed bug)
+- **C4.1–C4.2** Dashboard tab + analytics sub-page
+- **C4.3–C4.5** Wishes tab + form + detail
+- **C4.6** AI hub + every AI sub-route renders
+- **C4.7–C4.8** Liabilities tab + form
+- **C4.9** Baby tab (owner-only) + chore-approvals + templates + blind-box
+- **C4.10–C4.11** Settings tab + ALL sub-pages render + currency switch round-trip
+- **C4.12–C4.13** activeTab correctness + back-navigation/route-guard integrity
+- **C4.14–C4.16** Edit-mode form coverage (asset edit, liability edit, baby chore create — the 3 edit/new routes absent from C4.1–C4.13; all navigate via `router.back()`)
 
-## Phase 10 — Child Frontend: Wishes Page (ChildWishesPage)
+> **Currency-switch prerequisite:** at least one asset/liability with
+> `currency ≠ CNY`. If all records are CNY, the bug is masked — note in report.
 
-```
-navigate_page → /child/wishes
-wait_for → ["心愿"]
-take_snapshot
-```
+### Area 5 — Child app navigation coverage (`$SID_CHILD`)
 
-**Assertions:**
-- [ ] Wish list renders with emoji, name, status badge
-- [ ] Status variants visible: pending_review / active / rejected / redemption_requested / realized
-- [ ] Coin cost shown for approved wishes
-- [ ] "申请兑换" button visible for active wishes with sufficient balance
+Run [`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation.md):
 
-**Seed data context (demouser children):**
-- 小宝: 积木玩具 (pending_review), 昂贵玩具 (rejected), 小背包 (realized)
-- 大宝: 新耳机 (active, cost=80), 漫画书 (redemption_requested, cost=30)
+- **C5.1–C5.6** All 5 child tabs (home/wishes/tasks/treasures/ledger) render + core ops
+- **C5.7–C5.9** Sub-pages: asset detail / day detail / settings (no adult-only leak)
+- **C5.10** activeTab correctness + route guard
 
----
+> **No currency layer in child app** — coin-based (integer). The currency bug
+> class does NOT apply here.
 
-## Phase 11 — Child Frontend: Blind Box Page (ChildBlindBoxPage)
+### Area 6 — AI chat DeerFlow-fidelity parity (`$SID`)
 
-```
-navigate_page → /child/blind-box
-wait_for → ["盲盒", "抽奖"]
-take_snapshot
-```
+Run [`test-cases/area6-ai-chat-parity.md`](./test-cases/area6-ai-chat-parity.md).
+AI must be enabled + provider configured.
 
-**Assertions:**
-- [ ] Blind box UI renders
-- [ ] Available bonus draws shown (小宝 has 2 bonus draws from seed data)
-- [ ] Gift pool preview visible
-- [ ] Draw history visible if any past draws exist
+- **C6.1–C6.8** Input fidelity (mode presets, model selector, attachments, voice, slash-skill, polish-D3-divergence, submit states, suggestion chips)
+- **C6.9–C6.17** Output: conversation (groups, markdown, ChainOfThought, HumanInputCard, SubtaskCard, backfill, token-usage, artifacts)
+- **C6.18** Output: 3-step AI report (separate surface)
+- **C6.19–C6.22** History + threading (infinite scroll, title sync, orphan threads, branch, regenerate)
+- **C6.23–C6.27** System integration (cookie-auth + X-Family-Id/X-User-Id, family race, execution-mode flags, error/retry/resume, popup Teleport + copy fallback)
+
+> **Design divergences (跟设计出入) to flag, not fail:** D1 `/goal`, D2 `/compact`,
+> D3 input-polish button, D4 user-selectable `reasoning_effort`, D5 TodoList bar,
+> D6 Scheduled Tasks (功能级缺口, 独立提案), D7 Thread Channel Source (DeerFlow 特有, 设计不引入).
+> See the parity matrix at the bottom of the case file. Record absent features as
+> divergences citing grep evidence; do not mark them as regressions.
 
 ---
 
-## Phase 12 — Child Frontend: Known Issues Checklist
+## Phase 6 — Generate Test Report
 
-After completing all child frontend phases, verify these known issues are resolved or still present:
+After all Area cases (Phase 3/4/5) are run, produce a single test report.
+Read the screenshots you captured (Read tool supports images) to confirm each
+case's outcome, then write the report.
 
-| Check | Expected | Status |
-|-------|----------|--------|
-| nginx proxy_pass strips `/child/` prefix | Assets load at `/child/assets/`, not 404 | |
-| `listChildren()` unwraps `res.data.data` | Child names render correctly, not `?` | |
-| `display_name ?? '?'` guard in ChildSelectPage | No crash on null display_name | |
-| `displayName ?? '?'` guard in ChildAuthPage | No crash on null displayName query param | |
-| `getChildFamilyId()` returns null for adult sessions | Falls back to `listChildren()` correctly | |
-| Child SPA has no cross-imports from adult frontend | ESLint boundary check passes | |
+> **Report scope:** success summary + failure details only. Do NOT include
+> P0–P3 severity grading, effort estimates, fix plans, or UI/UX visual-audit
+> dimensions (color/spacing/contrast). This skill records test results —
+> fixing is out of scope and handled separately if the user requests it.
 
----
+### Output path
 
-## Phase 13 — UI/UX Audit
+```bash
+TODAY=$(date +%Y-%m-%d)
+REPORT="tests/audit-reports/ui-audit-${TODAY}.md"
+# Screenshots already saved during Phase 3/4/5 at:
+#   dogfood-output/<case>.png
+```
 
-Read each screenshot from `tests/screenshot/screenshots/` using the Read tool (it supports image files). Audit every screenshot against these dimensions:
+### Report structure
 
-### Audit Dimensions
-
-**Visual Hierarchy**
-- Is the most important information visually prominent?
-- Are headings, subheadings, and body text clearly differentiated?
-- Does the eye flow naturally through the page?
-
-**Color Consistency**
-- Are brand colors (blue gradient primary, white cards) used consistently?
-- Are status colors (green=positive, red=negative/debt) semantically correct?
-- Is contrast sufficient for readability (WCAG AA minimum)?
-
-**Typography**
-- Is font size appropriate for mobile (minimum 14px body, 16px+ for inputs)?
-- Are Chinese characters rendering cleanly?
-- Is line height comfortable for reading?
-
-**Icon Usage**
-- Are emoji icons (🏠🚗📱) used consistently vs SVG icons?
-- Do icons have sufficient tap target size (44×44px minimum)?
-- Are icons semantically meaningful?
-
-**Spacing & Layout**
-- Is padding/margin consistent across cards and list items?
-- Are touch targets large enough (44px minimum)?
-- Is content clipped or overflowing on 375px width?
-
-**Mobile Layout**
-- Does the bottom tab bar have the right number of items (≤5 recommended)?
-- Is the safe area (notch/home indicator) respected?
-- Are forms usable with a mobile keyboard visible?
-
-**Empty States**
-- Do empty states have helpful illustrations or guidance?
-- Is the call-to-action clear?
-
-**Loading States**
-- Are skeleton loaders or spinners shown during data fetch?
-- Is there feedback for async operations?
-
-**Vant 4 Component Usage**
-- Are Vant components used correctly (van-cell, van-card, van-button, etc.)?
-- Are form fields using `:model-value` (not `:value`) binding?
-- Are action sheets and dialogs used appropriately?
-
-For each issue found, record:
-- **Page**: which screenshot / route
-- **Component**: specific element or component
-- **Issue**: what's wrong
-- **Severity**: P0 / P1 / P2 / P3 (see below)
-- **Fix**: concrete suggestion
-
----
-
-## Phase 14 — Issue Triage & Graded Fix Plan
-
-### Severity Levels
-
-| Level | Meaning | Examples |
-|-------|---------|---------|
-| **P0** | Critical / broken | Page doesn't render, data missing, auth broken, layout completely broken |
-| **P1** | Major UX problem | Key info hard to find, poor contrast, broken form, confusing navigation |
-| **P2** | Minor polish | Inconsistent spacing, slightly off colors, minor alignment issues |
-| **P3** | Nice-to-have | Illustrations for empty states, micro-animations, icon upgrades |
-
-### Write the Audit Report
-
-Save to `docs/ui-audit-YYYY-MM-DD.md` (use today's date). Use this structure:
+The "测试环境" section consolidates the outcomes of Phase 0 (bsk doctor),
+Phase 1 (service health), and Phase 1.5 (precondition gate) so the report is
+self-contained — a reader can reconstruct the run conditions without re-reading
+the skill log.
 
 ```markdown
-# Numina UI Audit — YYYY-MM-DD
+# Numina 仿真测试报告 — {YYYY-MM-DD}
 
-## Summary
-- Screenshots captured: N
-- API tests: X/Y passed
-- Issues found: N total (P0: X, P1: X, P2: X, P3: X)
+## 测试环境 (合并自 Phase 0 / 1 / 1.5)
+- 部署模式: docker | dev
+- Base URL: {BASE}  /  Child URL: {CHILD_BASE}  /  API: {API_BASE}
+- bsk doctor (Phase 0): ✓ clean
+- 服务健康 (Phase 1): adult UP / child UP / api UP  (docker 模式附 docker ps 摘要)
+- 前置门禁 (Phase 1.5): ✓ 通过 — demouser (owner, family_id={id}) / children {discovered_names} / {N} assets / 负债 {amount}
+- 测试时间: {YYYY-MM-DD}
+- 截图目录: dogfood-output/
 
-## P0 — Critical Issues
-### [Issue Title]
-- **Page**: route/screenshot name
-- **Component**: specific element
-- **Issue**: description
-- **Fix**: concrete suggestion
-- **Effort**: S / M / L
+## 成功摘要
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.20, Area3: C3.1–C3.20, Area4: C4.0–C4.13, Area5: C5.1–C5.10, Area6: C6.1–C6.27)
+- 通过: X
+- 失败: Y
+- 跳过: Z (注明原因, 如 AI 未启用、数据不足)
+- 通过用例清单: C1.1, C1.2, C2.1, C2.3, …  (仅列举 case id, 不展开)
 
-## P1 — Major UX Issues
-[same structure]
+## 失败详情
 
-## P2 — Minor Polish
-[same structure]
+### C2.3 — 心愿详情页 (savings log/record dialogs)
+- **路由**: {BASE}wishes/{id}
+- **截图**: dogfood-output/c2.3-wish-detail.png
+- **预期表现**: 点击"记录储蓄"按钮弹出 WishSavingsRecordDialog, 含金额输入框
+- **当前错误表现**: 点击后无反应, 控制台报 `Cannot read property 'open' of undefined`
+- **初步判断**: WishSavingsRecordDialog 组件未挂载或 ref 未绑定; 需检查 WishDetailPage 模板中 dialog 的 v-model:show 绑定
 
-## P3 — Nice-to-Have
-[same structure]
+### C3.4 — AI 资产报告生成
+- **路由**: {BASE}ai/report
+- **截图**: dogfood-output/c3.4-ai-report.png
+- **预期表现**: 3 步时间轴逐步 pending→running→done, 最终显示评分+摘要
+- **当前错误表现**: step1 卡在 running 超过 60s, 无后续推进
+- **初步判断**: 后端 stream 未返回终结帧, 或 worker agent 调用 LLM 超时; 建议查 agent 日志确认是否触达 LLM
 
-## API Issues (if any)
-[list failing tests]
+### {C-x.x} — {case 标题}
+- … (同结构)
+
+## 跳过用例 (如有)
+- C3.x — 原因: AI 未启用 (family aiEnabled=false), 建议在 /settings/ai 配置 provider 后补测
 ```
 
-After writing the file, tell the user the path and summarize the issue counts by severity.
+### Writing rules
 
----
+- **测试环境段必须填实**（合并前文）：bsk doctor 结果、三服务健康、gate 的 demouser/family_id/资产数/孩子名都从 Phase 0/1/1.5 的实际输出抄入，不要留 `{id}`/`{N}` 占位符。这保证报告可独立追溯。
+- **成功用例只进摘要清单**(case id 罗列), 不展开详情 —— 避免报告冗长。
+- **每个失败用例必须有三段**: 预期表现 / 当前错误表现 / 初步判断。缺少任一段视为记录不完整。
+- **初步判断**是基于截图 + 控制台错误 + 路由行为的推断, 不要求定位到根因; 写明"建议查 X"即可, 不展开修复方案。
+- **截图路径**用相对仓库根的路径, 便于用户点击查看。
+- 失败用例按 Area 顺序 (Area1 → Area2 → Area3) 再按 case id 排列。
 
-## Phase 15 — Fix Execution
+### After writing
 
-After presenting the audit report, ask the user:
+Tell the user the report path and the pass/fail/skip counts:
+> 报告已生成: `tests/audit-reports/ui-audit-{date}.md`
+> 通过 X / 失败 Y / 跳过 Z (共 N)
 
-> "Found X P0 and Y P1 issues. Would you like me to fix them now, starting with the highest severity? I'll re-screenshot after each fix to verify."
-
-If the user says yes, work through P0 then P1 issues in order:
-
-1. **Read the affected component** — use Read to understand the current code before changing anything
-2. **Implement the fix** — edit only the specific file/component, minimal change
-3. **Re-screenshot** — run `cd tests/screenshot && node capture.js` (or a targeted subset if possible) to verify the fix visually
-4. **Read the new screenshot** — confirm the issue is resolved
-5. **Move to next issue**
-
-After all P0+P1 fixes:
-- Run `npm run build` from `frontend/` to verify no TypeScript errors
-- Update the audit report with fix status (mark each fixed issue as ✅)
-- Summarize what was fixed and what remains (P2/P3 for future sprints)
-
-### Fix Guidelines
-
-- **Adult frontend**: edit files in `frontend/apps/main/src/`
-- **Child frontend**: edit files in `frontend/apps/child/src/` — NOT `frontend-child/` (old path, removed)
-- **Shared auth**: edit files in `frontend/packages/auth/src/`
-- Follow project conventions: `<script setup lang="ts">`, no `as any`, Chinese UI text
-- Vant 4: use `:model-value` not `:value` on `van-field`
-- Minimal changes — fix what's asked, don't refactor surrounding code
-- After fixing child frontend, rebuild container: `docker-compose build frontend-child && docker-compose up -d frontend-child`
+This is the end of the skill. Do not proceed to fix issues unless the user
+explicitly asks in a follow-up — this skill only records results.
 
 ---
 
 ## Quick Reference
 
 ```bash
-# Health check (adult + child + API)
-curl -sf http://localhost/ -o /dev/null && echo "adult UP"
-curl -sf http://localhost/child/ -o /dev/null && echo "child UP"
-curl -sf http://localhost/api/health -o /dev/null && echo "api UP"
+# === Pick deployment mode first (see "Deployment Mode" section) ===
+# docker: export BASE=http://localhost/ CHILD_BASE=http://localhost/child/ API_BASE=http://localhost/api/v1
+# dev:    export BASE=http://localhost:5173/ CHILD_BASE=http://localhost:5174/child/ API_BASE=http://localhost:8000/api/v1
 
-# Seed all test data
-./tests/data/seed-data.sh
+# Phase 0 — verify bsk
+bsk doctor
 
-# API acceptance tests
-./tests/e2e/acceptance.sh
+# Phase 1 — service health (both modes)
+curl -sf "$BASE" -o /dev/null && echo "adult UP"
+curl -sf "$CHILD_BASE" -o /dev/null && echo "child UP"
+curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
+# docker only: docker ps --format "{{.Names}}\t{{.Status}}" | grep numina
 
-# Rebuild child frontend after code changes
-docker-compose build frontend-child && docker-compose up -d frontend-child
+# bsk session lifecycle
+SID=$(bsk session start --json | jq -r .session_id)
+bsk navigate "${BASE}<route>" --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+bsk click @eN --session "$SID"
+bsk fill @eN --value <text> --session "$SID"
+bsk screenshot --session "$SID" --out dogfood-output/<name>.png
+bsk session stop "$SID"
 
-# Child test accounts (from seed-data.sh)
-# demouser family:  小宝 (xiaobao / 🐰🥕🌈⭐)  大宝 (dabao / 🐰🥕🌈⭐)
+# Rebuild after code changes
+# docker: docker-compose build frontend && docker-compose up -d frontend   (or frontend-child)
+# dev:    no rebuild (vite HMR); verify via cd frontend/apps/main && pnpm typecheck
+
+# Test accounts (must pre-exist in DB — this skill does NOT seed them)
+# demouser family: child display_names DISCOVERED at gate time (Phase 1.5)
+#   docker seed default: 小宝 / 大宝  (PIN per test-cases/_common.md)
+#   dev/other deployments may differ (e.g. demochild, 小明) — gate reads actual names
 # test_rich family: test_child (testchild / 🐱🐶🐸🦊)
 ```
 
-### Child Frontend Test Flow (Chrome DevTools MCP)
+## Test Case Index
 
-```
-1. Ensure demouser is logged in at http://localhost/
-2. navigate_page → http://localhost/child/
-3. wait_for → ["选择孩子", "小宝", "大宝"]   ← Phase 6
-4. click → 小宝 card
-5. wait_for → ["使用图形密码"]               ← Phase 7
-6. click → 🐱, 🌟, 🎈, 🐶 (PIN input)
-7. wait_for → ["/child/home", "星星币"]      ← Phase 8
-8. navigate tabs → tasks, wishes, blind-box  ← Phases 9-11
-9. list_console_messages → assert zero errors
-```
+| Area | Cases | File |
+|------|-------|------|
+| 1 — Child app (儿童页面) | C1.1–C1.17 | [`test-cases/area1-child.md`](./test-cases/area1-child.md) |
+| 2 — Financial management (财务管理) | C2.1–C2.20 | [`test-cases/area2-finance.md`](./test-cases/area2-finance.md) |
+| 3 — AI (PDF/报告/数鸣/对话) | C3.1–C3.20 | [`test-cases/area3-ai.md`](./test-cases/area3-ai.md) |
+| 4 — Main app nav coverage (页签+币种切换) | C4.0–C4.16 | [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md) |
+| 5 — Child app nav coverage (页签+子页面) | C5.1–C5.10 | [`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation.md) |
+| 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | C6.1–C6.27 (D1–D7) | [`test-cases/area6-ai-chat-parity.md`](./test-cases/area6-ai-chat-parity.md) |
+
+## bsk Red Lines (from browser-skill)
+
+1. **No token theft** — never `bsk evaluate` on sensitive sites to read `localStorage`/cookies/auth headers.
+2. **No long borrow** — don't leave a user's personal tab in the Agent Window across unrelated tasks.
+3. **No skip stop** — always `bsk session stop <id>`; never assume idle timeout cleans up.
+4. **No observe escalation before snapshot** — `bsk snapshot` first; `get-html`/`screenshot` only when snapshot insufficient.
+5. **`evaluate` is risky** — use only when snapshot + click/fill/select cannot suffice; never on credential surfaces.
+
+## Common Mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Skipping `bsk doctor` → session fails mid-test | Always run Phase 0 first; do not proceed until clean |
+| Skipping Phase 1.5 gate → UI assertions fail on absent data, misread as bugs | Always run the precondition gate; if it blocks, seed the DB out-of-band before retrying |
+| Forgetting `--session <id>` → "unknown session" error | Every command after `session start` needs `--session` |
+| Using stale `@eN` refs after navigation → click misses | Re-`snapshot` on every new page / after DOM-changing click |
+| Assuming `bsk click` opens file picker for `<input type=file>` | It doesn't — see test-cases/_common.md "File upload note" |
+| Relying on 5-min idle timeout to clean up | Always `bsk session stop <id>` explicitly |
+| Treating 401 auth-refresh as a bug | Expected on first load — filter from console errors |
+| Treating child `/child/blind-box` 404 as a bug | It redirects to `/treasures` (route alias) — that's correct |
+| Password-manager extension hijacks the tab on `bsk fill` of the password field | Do not retry `bsk fill` or use `bsk request-help` (overlay blocks the RPC). Use the Phase 2 cookie+localStorage injection fallback — no password field is focused, so the extension never activates |
+| `bsk wait-ms 2s` / `1500` rejected with a duration parse error | `wait-ms` accepts a narrow set of duration forms; if a value is rejected, drop the wait and use `--wait-until` on the next `navigate`, or poll `bsk snapshot` until the expected text appears |
+| `bsk navigate` RPC times out at 30s but the page actually loaded | Navigation often completes before the RPC returns. Do not retry blindly — verify with `bsk evaluate --session <id> "location.href"`; if correct, proceed to `snapshot` |
+| Screenshots are desktop-width (e.g. 3385×1233), not mobile 375×812 | `bsk` has no `setViewport` command; the Agent Window is desktop-sized. Note the viewport in the report; mobile-specific layout (Tab bar density, horizontal scroll) is not validated by this skill |
+| `bsk click @eN` registers the click but doesn't navigate (desktop-width coordinate offset hits a child element) | Prefer navigating directly to the target route via an id from the API (`/api/v1/wishes` → `/wishes/:id`) instead of clicking a list item in a wide viewport |

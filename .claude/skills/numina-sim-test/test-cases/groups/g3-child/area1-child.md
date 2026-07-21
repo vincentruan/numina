@@ -48,6 +48,7 @@ Assertions:
 - [ ] Empty state (EmptyState component) shows when no transactions
 - [ ] Click 赠送 button → van-popup bottom sheet opens with sibling list
 - [ ] Selecting a sibling + confirming does NOT error (gift flow)
+- [ ] `[console]` zero errors
 
 ### C1.3 Child PIN auth (ChildAuthPage) — correct + wrong PIN
 
@@ -62,6 +63,7 @@ Assertions (correct PIN for 小宝 = 🐰🥕🌈⭐):
 - [ ] 删除 and 清除 buttons visible
 - [ ] Click the 4 correct emojis in order → auto-submits → navigates to `/child/` (home)
 - [ ] Wrong PIN (e.g. 🐱🐱🐱🐱) → shake animation + PIN cleared + error message
+- [ ] `[console]` zero errors
 
 **Emoji click order note:** snapshot the grid, then click each emoji's `@eN` ref
 in sequence. Do NOT assume a fixed layout — re-snapshot if a click causes any
@@ -81,6 +83,7 @@ Assertions:
       - 大宝: 新耳机 (active, cost=80), 漫画书 (redemption_requested, cost=30)
 - [ ] Coin cost shown for approved/active wishes
 - [ ] 申请兑换 button visible for active wishes with sufficient balance
+- [ ] `[console]` zero errors
 
 ### C1.5 Child wish create (ChildWishCreatePage) — form submission
 
@@ -98,6 +101,7 @@ Assertions:
 - [ ] Submit creates wish in pending_review status
 - [ ] On success, navigates back to `/child/wishes` and new wish appears in list
 - [ ] Empty name submission → validation error, no API call
+- [ ] `[console]` zero errors
 
 ### C1.6 Child tasks (ChildTasksPage) — chore list + completion
 
@@ -112,6 +116,7 @@ Assertions:
 - [ ] Available chore → tap → marks complete → shows 待审批 state
 - [ ] Completed-but-unapproved chores show pending_approval badge (clock icon)
 - [ ] Approved chores show success icon; rejected show warning icon
+- [ ] `[console]` zero errors
 
 ### C1.7 Child treasures/blind-box (ChildTreasuresPage)
 
@@ -126,11 +131,14 @@ Assertions:
 - [ ] Gift pool preview visible
 - [ ] Draw history visible if any past draws
 - [ ] `/child/blind-box` redirects to `/child/treasures` (route alias)
+- [ ] `[console]` zero errors
 
 ### C1.8 Child asset detail (ChildAssetDetailPage)
 
 ```
+# Navigate directly to a child asset detail (use a real asset id from the API)
 # From child home, click a wish preview or asset link → /child/assets/:id
+bsk navigate ${CHILD_BASE}assets/<id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -138,6 +146,7 @@ Assertions:
 - [ ] Asset detail renders (name, emoji, value as seen by child role)
 - [ ] No adult-only fields leak (e.g. purchase_price edit, sell button)
 - [ ] Back navigation returns to previous page
+- [ ] `[console]` zero errors
 
 ### C1.9 Child settings (ChildSettingsPage)
 
@@ -150,6 +159,7 @@ Assertions:
 - [ ] Settings page renders for child role
 - [ ] Logout option present and functional
 - [ ] No adult-only settings (AI config, family management) visible
+- [ ] `[console]` zero errors
 
 ---
 
@@ -187,6 +197,7 @@ Assertions:
 - [ ] Chores with `streak_count > 1` render a streak flame animation (CandleFlame / streak flame) on the card
 - [ ] Chores with no streak (streak_count ≤ 1) do NOT render the flame
 - [ ] Flame does not overlap the chore name or reward text (no layout regression)
+- [ ] `[console]` zero errors
 
 ### C1.12 Reduced-motion fallback
 
@@ -273,6 +284,7 @@ Assertions:
 - [ ] Under reduced-motion, the peek shows the after-state immediately as a STATIC overlay (no 1.5s ghost animation)
 - [ ] Overlay auto-dismisses after a 3-second timeout OR on pointerup (whichever first)
 - [ ] Educational content (deltas) is still shown — feature not disabled, just de-animated
+- [ ] `[console]` zero errors
 
 ---
 

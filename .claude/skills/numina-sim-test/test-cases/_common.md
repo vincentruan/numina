@@ -1,9 +1,12 @@
 # Numina Simulation Test Cases — Shared Conventions
 
-Shared conventions used by all three area case files:
+Shared conventions used by all six area case files:
 - [`area1-child.md`](./area1-child.md) — Child app (儿童页面优化)
 - [`area2-finance.md`](./area2-finance.md) — Main app financial management (财务管理能力优化)
 - [`area3-ai.md`](./area3-ai.md) — AI capabilities (PDF/AI报告/数鸣/对话)
+- [`area4-navigation.md`](./area4-navigation.md) — Main app nav coverage (页签+子页面+币种切换)
+- [`area5-child-navigation.md`](./area5-child-navigation.md) — Child app nav coverage (页签+子页面)
+- [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) — AI chat DeerFlow-fidelity parity (输入/输出/集成+设计出入 D1–D7)
 
 ## Case conventions
 

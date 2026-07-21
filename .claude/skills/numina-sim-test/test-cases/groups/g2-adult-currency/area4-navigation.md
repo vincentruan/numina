@@ -340,3 +340,85 @@ Assertions:
 - [ ] After re-establishing session (Phase 2 fallback), the deep-link lands on `/assets` (not `/login`)
 - [ ] Browser back from a sub-page returns to the parent tab (no SPA history corruption)
 - [ ] `[console]` zero errors
+
+---
+
+## Edit-mode form coverage (the 3 edit routes absent from C4.1–C4.13)
+
+> **Why this section exists:** a 2026-07-21 navigation audit found three edit
+> routes with **zero case coverage** (direct or indirect): `assets/:id/edit`,
+> `liabilities/:id/edit`, `baby/chores/new`. These reuse the create-form
+> components (AssetFormPage / LiabilityFormPage) gated by `route.params.id`,
+> except `baby/chores/new` which is a standalone create page. All three
+> navigate via `router.back()` on success (NOT push to detail) — a fact that
+> would break any test asserting "navigates to /assets/:id".
+
+### C4.14 Asset edit form (`/assets/:id/edit`) — edit-mode load + all fields + currency
+
+```
+# Pick an existing asset id from the API first (so the <id> is real)
+ASSET_ID=$(curl -s -H "$AUTH" "${API_BASE}/assets" | jq -r '.data[0].id')
+bsk navigate ${BASE}assets/${ASSET_ID}/edit --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Grounding: `AssetFormPage.vue` (`isEdit = !!route.params.id`, onMounted
+`fetchAsset(id)` + `fetchCategories()`); form component `AssetForm.vue`.
+
+Assertions:
+- [ ] Edit mode detected via `route.params.id` → existing asset values loaded into all fields (name, category, purchase_price, current_value, purchase_date)
+- [ ] `status` field renders ONLY in edit mode (`v-if="isEdit"`, `AssetForm.vue:132-148`) — 4-option picker in_use/idle/sold/retired (verify NOT present on `/assets/new`)
+- [ ] Per-asset-type conditional fields: physical → usage_frequency/expected_lifespan_days(显示为年)/location/annual_maintenance_cost; financial → institution/interest_rate/maturity_date; warranty_expiry_date (physical only)
+- [ ] `CurrencyButton v-model="form.currency"` bound in purchase_price left-icon (`AssetForm.vue:86`); `currencySymbol` computed shows ¥/$/€/£/¥/HK$ by `form.currency`
+- [ ] "同购入价" `syncPurchasePrice` button in current_value right-icon (`AssetForm.vue:102-109`) copies purchase_price → current_value
+- [ ] Required validation (Chinese messages via i18n `assetForm.*Required`): name, category_id, purchase_price, current_value, purchase_date
+- [ ] Empty required field submit → validation error, no API call
+- [ ] Valid submit → PUT `/assets/{id}` → success toast `toast.updateSuccess` → **`router.back()`** (NOT push to detail — assert history-back lands on the prior page, not `/assets/:id`)
+- [ ] **Currency-switch input-side note**: `currencySymbol` only swaps the symbol prefix on amount fields, does NOT multiply by rate (same class as the Area 4 `MoneyDisplay` display bug, but this is the input side where raw amounts are entered — switching currency here changes the symbol on the input, not the stored value's magnitude). Record as input-side observation, not a new bug.
+- [ ] `[console]` zero errors
+
+### C4.15 Liability edit form (`/liabilities/:id/edit`) — edit-mode load + all fields
+
+```
+LIAB_ID=$(curl -s -H "$AUTH" "${API_BASE}/liabilities" | jq -r '.data[0].id')
+bsk navigate ${BASE}liabilities/${LIAB_ID}/edit --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Grounding: `LiabilityFormPage.vue` (`isEdit`, onMounted `fetchLiability(id)`);
+form component `LiabilityForm.vue`.
+
+Assertions:
+- [ ] Edit mode loads existing liability values: name, category, original_amount, remaining_amount, monthly_payment, interest_rate, start_date/end_date, institution, notes
+- [ ] `category` is a hardcoded 5-option popup (mortgage/car_loan/credit_card/personal_loan/other) — NOT store-driven (differs from AssetForm's store-driven categories)
+- [ ] `interest_rate` is **required** on liability (non-required on asset-financial)
+- [ ] `CurrencyButton v-model="form.currency"` in original_amount left-icon (`LiabilityForm.vue:47`); remaining_amount + monthly_payment show `currencySymbol` prefix (symbol-only, no rate — same input-side note as C4.14)
+- [ ] **No edit-only fields** (no status, no image upload, no tags) — liability form is identical in create/edit except pre-filled values
+- [ ] Required validation (Chinese i18n `liability.*Required`): name, category, original_amount, remaining_amount, monthly_payment, interest_rate
+- [ ] Valid submit → PUT `/liabilities/{id}` → `toast.updateSuccess` → **`router.back()`** (NOT push)
+- [ ] `[console]` zero errors
+
+### C4.16 Baby chore create (`/baby/chores/new`) — form + coin_reward validation
+
+```
+# owner-only route; demouser is owner (gate confirms)
+bsk navigate ${BASE}baby/chores/new --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Grounding: `BabyChoreCreatePage.vue` (standalone page, no separate form
+component, inline `van-form`). API: POST `/family/chore-templates`
+(`api/chores.ts:36`). **No edit mode** (edit is a separate route
+`baby/chore-templates/:id/edit` → `BabyChoreTemplateEditPage.vue`).
+
+Assertions:
+- [ ] `van-nav-bar` with `left-arrow @click-left="$router.back()"` (NOT the PageHeader used by asset/liability forms)
+- [ ] Form fields: name (required), emoji (optional), `rewardStr` (required, type=digit, right-icon ⭐), frequency radio (daily/weekly, default daily), assignment_type radio (assigned/pool, default assigned)
+- [ ] `assignees` checkbox-group renders ONLY when `assignment_type==='assigned'`; checkboxes populated from `familyStore.members.filter(m.role==='child')` (the gate-discovered child names)
+- [ ] **No currency field** — coin_reward is the child star-coin system (⭐), unrelated to the Area 4 currency-switch bug class
+- [ ] Required validation: van-field `required` rule on name + rewardStr (non-empty); **plus manual `coin_reward > 0` check** (`parseInt(rewardStr)` — `"0"` → 0 falsy → blocked; non-numeric → NaN → blocked; toast `baby.choreForm.rewardRequired`)
+- [ ] Empty name submit → validation error, no API call
+- [ ] rewardStr="0" or non-numeric → toast, no API call (the manual `>0` guard)
+- [ ] Valid submit → POST `/family/chore-templates` → `baby.choreForm.success` toast → **`router.back()`** (NOT push)
+- [ ] `submitting` ref drives van-button `:loading` during the request
+- [ ] `[console]` zero errors

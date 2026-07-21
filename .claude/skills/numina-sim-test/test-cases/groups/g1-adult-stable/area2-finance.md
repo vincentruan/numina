@@ -43,11 +43,13 @@ Assertions:
 - [ ] WishAdviceCard (W4) renders AI advice for wishes (if AI enabled + advice generated)
 - [ ] Debt warning hint bar appears ABOVE the W4 card when a wish's category exceeds family debt thresholds (W5 linkage)
 - [ ] Tap a wish → navigates to WishDetail
+- [ ] `[console]` zero errors
 
 ### C2.3 Wish detail (WishDetailPage) — savings log + record + afford bar
 
 ```
-# Navigate to a wish with savings, e.g. /wishes/:id
+# Navigate to a wish with savings (use a real wish id from the API)
+bsk navigate ${BASE}wishes/<id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -58,10 +60,12 @@ Assertions:
 - [ ] Afford bar (useAffordBar composable, 4 states) renders: can-afford / cannot / loading / error
 - [ ] "忽略" button (W5 debt warning) calls T3 backend route, hides the hint
 - [ ] A1b buttons (wish_detail → /ai/chat) present when AI enabled
+- [ ] `[console]` zero errors
 
 ### C2.4 Wish savings record dialog — amount input + submit
 
 ```
+bsk navigate ${BASE}wishes/<id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>   # get dialog refs after opening
 bsk fill @eN --value 100 --session <id>
 bsk click @eM --session <id>   # confirm button
@@ -72,6 +76,7 @@ Assertions:
 - [ ] Submit POSTs to savings endpoint, returns 201
 - [ ] Progress bar updates after successful record
 - [ ] Invalid amount (negative / non-numeric) → validation error
+- [ ] `[console]` zero errors
 
 ### C2.5 Liability list (LiabilityListPage) — strategy card + interest forecast
 
@@ -87,11 +92,12 @@ Assertions:
 - [ ] PaymentCountdown shows days until next payment
 - [ ] `?focus=liability_strategy` query param scrolls to / highlights strategy card
 - [ ] Tap liability → navigates to LiabilityDetail
+- [ ] `[console]` zero errors
 
 ### C2.6 Liability detail (LiabilityDetailPage) — simulate extra payment
 
 ```
-# /liabilities/:id
+bsk navigate ${BASE}liabilities/<id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 # open SimulateExtraDialog
 ```
@@ -102,6 +108,7 @@ Assertions:
 - [ ] min-payment non-cover boundary: rate=60% edge case handled (no crash)
 - [ ] Result shows revised payoff timeline + interest saved
 - [ ] A1b button (liability_detail → /ai/chat) present when AI enabled
+- [ ] `[console]` zero errors
 
 ### C2.7 Liability create/edit form (LiabilityFormPage)
 
@@ -115,6 +122,7 @@ Assertions:
 - [ ] Vant van-field uses `:model-value` binding (not `:value`)
 - [ ] Submit POSTs, returns 201, navigates to detail
 - [ ] Required field validation (Chinese error messages)
+- [ ] `[console]` zero errors
 
 ### C2.8 Asset list + detail + sell flow
 
@@ -129,6 +137,7 @@ Assertions:
 - [ ] Tap asset → AssetDetailPage
 - [ ] From detail → 出售 button → AssetSellPage
 - [ ] Sell form: sell_price + sell_fee → net_recovery shown → submit returns 201
+- [ ] `[console]` zero errors
 
 ---
 
@@ -233,7 +242,7 @@ Assertions (verify across multiple wishes if available):
 ### C2.14 Wish savings log — entry list + add entry updates progress
 
 ```
-# On a wish detail, open the savings log
+bsk navigate ${BASE}wishes/<id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk click @eN --session <id>     # "储蓄日志" button → WishSavingsLogDialog
 bsk snapshot --session <id>

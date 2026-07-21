@@ -36,6 +36,7 @@ Assertions:
 - [ ] 我的智能体 section (collapsible) lists enabled custom agents
 - [ ] 分析应用 section lists Time Machine → `/ai/time-machine`
 - [ ] Chat input box (InputBox component) at bottom with mode selector (flash/thinking/pro/ultra)
+- [ ] `[console]` zero errors
 
 ### C3.2 AI chat (AIChatPage) — send message + stream response
 
@@ -62,6 +63,7 @@ Assertions:
 
 ```
 # From AIHubPage, click 小鸣 (NuminaAgentCard) or a custom AgentCard
+bsk navigate ${BASE}ai --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk click @eN --session <id>   # consult button
 # → navigates to /ai/chat?agentId=<id>
@@ -73,6 +75,7 @@ Assertions:
 - [ ] Chat page loads with the selected agent context
 - [ ] Sending a message routes through that agent's system_ids + bootstrap
 - [ ] If agent has a cached session, `thread_id` is passed in query
+- [ ] `[console]` zero errors
 
 ### C3.4 AI asset report (AIReportPage) — 3-step generation
 
@@ -96,6 +99,7 @@ Assertions:
 - [ ] On failure: failed-placeholder shows error + retry button
 - [ ] Elastic fallback: if step1 markdown landed but step2/3 failed, "查看 Markdown" button available
 - [ ] Cached report: subsequent visits show cached badge, no re-generation
+- [ ] `[console]` zero errors
 
 ### C3.5 PDF import / parse (ImportReportPage) — upload → preview → confirm
 
@@ -121,6 +125,7 @@ Assertions:
 - [ ] Warning text shown for ambiguous items
 - [ ] Oversized file (>10MB) → "文件过大" toast
 - [ ] Confirm button → POSTs batch → returns to asset list with updated/created assets
+- [ ] `[console]` zero errors
 
 ### C3.6 AI time machine (AITimeMachinePage)
 
@@ -133,6 +138,7 @@ Assertions:
 - [ ] Time machine UI renders
 - [ ] Date/period selector present
 - [ ] Projection renders without error
+- [ ] `[console]` zero errors
 
 ### C3.7 AI settings — provider config (AIConfigPage)
 
@@ -146,6 +152,7 @@ Assertions:
 - [ ] "添加供应商" → `/settings/ai/provider/new`
 - [ ] MCP / web-search / skills / agents management entries present
 - [ ] AI enabled toggle reflects family AI state
+- [ ] `[console]` zero errors
 
 ---
 

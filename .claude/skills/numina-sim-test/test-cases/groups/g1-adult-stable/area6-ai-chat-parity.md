@@ -4,29 +4,36 @@ Shared conventions in [`_common.md`](./_common.md).
 
 > **Why this area exists:** the user's explicit ask — "main app的ai功能是非常关键的测试功能点,需要细化,chat整体的交互细节需要复刻deerflow... 需要细化输入、输出(对话、报告、系统集成),是不是有跟设计出入?" This area tests the numina AI chat against DeerFlow's interaction contract (reference repo `/Users/vincentruan/geek_space/github/deer-flow-reference`), flags **design divergences** (跟设计出入), and adds fine-grained input/output/system-integration cases.
 >
-> **Grounded comparison basis:** numina already mirrors DeerFlow on most contract points (LangGraph SDK `useStream`/`client.runs.stream` with `streamMode:['messages-tuple','values','custom']`, 6 message group types via `useMessageGroups`, ChainOfThought single renderer, 4-preset token-usage system, SubtaskCard, HumanInputCard, cookie-auth + `X-Family-Id`/`X-User-Id`, `/goal`??, slash-skill autocomplete, SuggestionChips). The cases below verify each parity point and flag the confirmed divergences.
+> **Grounded comparison basis:** numina already mirrors DeerFlow on most contract points (LangGraph SDK `useStream`/`client.runs.stream` with `streamMode:['messages-tuple','values','custom']`, 6 message group types via `useMessageGroups`, ChainOfThought single renderer, 4-preset token-usage system, SubtaskCard, HumanInputCard, cookie-auth + `X-Family-Id`/`X-User-Id`, slash-skill autocomplete, SuggestionChips). The cases below verify each parity point and flag the confirmed divergences (D1–D7, see the table below).
 
 Auth: adult session as `demouser` via cookie+localStorage injection (SKILL.md "Phase 2 fallback"). AI must be enabled + a provider configured. All cases on `${BASE}ai/chat` unless noted.
 
 ## Confirmed design divergences (跟设计出入) — test + flag these
 
 > These were verified against source on branch `feat/two-ai-apps-unified-dispatch`.
-> Each is a **gap vs DeerFlow** to either implement (out of scope here — this
-> skill only records) or document as an intentional divergence.
+> Disposition set by the user 2026-07-21:
+> **D1/D2/D3 = 实现遗漏, 同步 DeerFlow 实现; D4 = 设计如此 (按模式自动选择); D5 = 待按手机端设计适配后引入.**
+> **D6/D7 added 2026-07-21** via DeerFlow `core/scheduled-tasks/` + `core/threads/utils.ts` audit:
+> D6 = 功能级缺口 (独立提案, 非 chat parity bug); D7 = DeerFlow 特有 (numina 无 IM 桥接, 设计如此不引入).
 
-| # | DeerFlow has | Numina status (grounded) | Evidence |
-|---|--------------|--------------------------|----------|
-| D1 | `/goal <condition>` slash command (PUTs goal + submits condition as next task → run starts; `/goal` status + `/goal clear` do NOT start a run) + `GoalStatus` bar above composer | **ABSENT** — grep of `InputBox.vue` + `composables/ai-chat/` for `/goal`/`goalCommand`/`GoalStatus` returns nothing | `grep "/goal\|goalCommand\|GoalStatus" src/components/ai-chat/InputBox.vue src/composables/ai-chat/` → exit 1 (no matches) |
-| D2 | `/compact` slash command (POSTs to compact endpoint; skipped on new/empty threads) | **ABSENT** — same grep, no `/compact`/`compactCommand` | same grep, exit 1 |
-| D3 | Input-polish button (sparkles) — rewrites draft via backend, spinner + undo | **ABSENT in chat composer** — `polish` appears only in `utils/agent.ts` (unrelated), not in `InputBox.vue` | `grep "polish\|Polish" src/components/ai-chat/InputBox.vue` → exit 1 |
-| D4 | User-selectable `reasoning_effort` selector (`minimal|low|medium|high`, desktop only, when `supports_reasoning_effort` AND mode≠flash) | **ABSENT as user control** — `reasoning_effort` is auto-set per mode (`INPUT_MODE_CONFIGS[mode].reasoning_effort`), not user-selectable | `InputBox.vue:140,155,199,278` — always derived from mode config, no selector UI |
-| D5 | `TodoList` bar above composer driven by `write_todos` tool (plan mode pro/ultra) | **Partial** — `write_todos`/`TodoList` referenced in `useThreadChat.ts` + `MessageGroup.vue` but no standalone composer-above TodoList bar confirmed | grep hits in `useThreadChat.ts`, `MessageGroup.vue`; no dedicated `TodoList` composer bar component found |
+| # | DeerFlow has | Numina status (grounded) | Disposition | Evidence |
+|---|--------------|--------------------------|-------------|----------|
+| D1 | `/goal <condition>` slash command (PUTs goal + submits condition as next task → run starts; `/goal` status + `/goal clear` do NOT start a run) + `GoalStatus` bar above composer | **待实现** — grep of `InputBox.vue` + `composables/ai-chat/` for `/goal`/`goalCommand`/`GoalStatus` returns nothing | **同步实现 (pending)** — needs DB `goal` column + alembic + backend middleware + frontend slash-parse (absent in live `InputBox.vue`) + GoalStatus bar + SOUL prompt section | `grep "/goal\|goalCommand\|GoalStatus" src/components/ai-chat/InputBox.vue src/composables/ai-chat/` → exit 1 |
+| D2 | `/compact` slash command (POSTs to compact endpoint; skipped on new/empty threads) | **待实现** — same grep, no `/compact`/`compactCommand` | **同步实现 (pending)** — greenfield; no summarization exists (`summary` param always None, `last_message_summary` is 200-char truncation). Needs backend compact endpoint + LLM summarize + frontend wiring | same grep, exit 1 |
+| D3 | Input-polish button (sparkles) — rewrites draft via backend, spinner + undo | **✅ 已实现 2026-07-21** — `POST /api/input-polish` (agent router, `verify_family_token` cookie auth) + `services/input_polish.py` (reuses `_create_lightweight_llm`) + `InputBox.vue` polish button/undo/abort + `polishInputDraft` API client + 6 i18n keys | **DONE** | `server/apps/agent/routers/input_polish.py`, `server/apps/agent/services/input_polish.py`, `frontend/.../InputBox.vue` (`onPolishInput`/`onUndoPolishInput`/`abortInputPolish`), `api/ai-chat.ts:polishInputDraft` |
+| D4 | User-selectable `reasoning_effort` selector (`minimal|low|medium|high`, desktop only) | **设计如此, 不改** — `reasoning_effort` is auto-set per mode (`INPUT_MODE_CONFIGS[mode].reasoning_effort`), not user-selectable | **BY DESIGN** — user confirmed 2026-07-21: 根据模式自动选择 is intentional | `InputBox.vue:206,221,265,344` (`reasoning_effort`); `INPUT_MODE_CONFIGS` at `:216,221,265`; `getResolvedMode` at `:271,283`; `supports_thinking` at `:210,283` |
+| D5 | `TodoList` bar above composer driven by `write_todos` tool (plan mode pro/ultra) | **待实现(plan 已就绪,含移动端适配设计 + 实现)** — `write_todos`/`TodoList` referenced in `useThreadChat.ts` + `MessageGroup.vue` but no standalone composer-above bar; DeerFlow renders `<TodoList>` at chat page (`chats/[thread_id]/page.tsx`) | **适配 + 实现 (plan ready)** — 见 `docs/plans/2026-07-21-001-...-plan.md` U7。用户确认 A2:本计划含移动端 Vant 4 适配设计 + 实现(TodoListBar 组件 + useThreadTodos + TodoMiddleware plan_mode gate + todos channel)。sync hook + 单例注入(规避风险 1+2) | grep hits in `useThreadChat.ts`, `MessageGroup.vue`; no dedicated `TodoList` composer bar component (DeerFlow `frontend/src/components/workspace/todo-list.tsx` exists, numina has none) |
+| D6 | Scheduled Tasks — full user-level AI task scheduling subsystem: create task with prompt + cron/once schedule, recipes (trending/news/issues/weekly), pause/resume/trigger, run history | **无用户级实现** — numina `server/apps/agent/app/scheduler.py` is APScheduler infra (all `add_job` calls commented out); `server/apps/scheduler_worker/scheduler.py` runs 7 system-preset jobs (exchange_rate/reminder_daily/snapshot_daily etc.), NOT user-created tasks. Zero grep hits for `scheduled_task\|ScheduledTask\|schedule_spec\|context_mode` in frontend + server business code | **独立提案 / 非 chat parity bug** — DeerFlow's scheduled-tasks is a complete standalone product subsystem (frontend page + 10 gateway routes + model + migration + 6 test files). numina's self-hosted family-asset positioning needs product evaluation before adopting (e.g. "weekly auto family-finance report"). High cost: model+migration+gateway router+worker bridge to `stream_run`+frontend page+cron input+i18n. Track as feature proposal, NOT as chat parity regression | DeerFlow `frontend/src/core/scheduled-tasks/{types,api,recipes,hooks,cron}.ts` + `app/workspace/scheduled-tasks/page.tsx` + `components/workspace/{thread-scheduled-tasks-link,scheduled-task-schedule-input}.tsx` + `backend/app/gateway/routers/scheduled_tasks.py`; numina `server/apps/agent/app/scheduler.py:91` (APScheduler placeholder), `server/apps/scheduler_worker/scheduler.py` (7 system jobs) |
+| D7 | Thread Channel Source — `ChannelThreadSource` (`{type:"im_channel",provider,label}`) identifying which IM channel (Telegram/Slack/Discord/Feishu/DingTalk/WeChat/WeCom) a thread originated from; icon+badge in chat list + thread detail | **无对应实现** — zero grep hits for `channel_source\|ChannelThreadSource\|im_channel` in numina. `telegram` hits are unrelated (notification push via `NotificationConfigPage` + `notification/sender.py`, NOT bidirectional IM bridge). numina `createThread(source)` (`api/ai-chat.ts:103`) `source` param is a free-text page-route origin string (e.g. `wish_detail`/`liability_detail`), NOT an IM provider | **设计如此, 不引入** — channel-source is the display derivative of DeerFlow's IM-bridge subsystem (`backend/app/channels/` + 7 provider connectors). numina is self-hosted with web/child-app-only chat entries; no IM bridge design, so channel-source has no metadata source to display. Migrating the UI alone is meaningless. Note: do NOT confuse numina's existing `createThread(source)` page-route origin with channel_source — different concepts | DeerFlow `frontend/src/core/threads/utils.ts:5,76` (`ChannelThreadSource` + `channelSourceOfThread`) + `components/workspace/{thread-channel-source.tsx, channels/channel-provider-icon.tsx}` + `backend/app/channels/`; numina `api/ai-chat.ts:103` (`createThread(source)` = route origin) |
 
-> **Reporting divergences:** when a D1–D5 case fails because the feature is
-> absent, record it as a **divergence** (跟设计出入), not a regression — the
-> report's 初步判断 should state "DeerFlow 有此交互, numina 当前未实现
-> (D#)", citing the grep evidence. Do NOT mark absent features as bugs unless
-> the numina design doc explicitly promised them.
+> **Reporting divergences:** D3 is now an implemented feature — test it as a
+> normal parity case (C6.6). D4 is by-design — do NOT flag as a divergence; the
+> test asserts the auto-per-mode behavior. D1/D2/D5 are **pending** (待实现 /
+> 待适配) — if exercised before implementation, record as "待实现 D# (pending
+> sync)", not a regression. D6 is a **feature-level gap** (independent proposal,
+> not a chat parity regression) — do NOT test as a bug; record as "独立提案 D6".
+> D7 is **by-design not adopted** (numina has no IM bridge) — do NOT test; record
+> as "设计如此 D7". Do NOT mark pending/by-design items as bugs.
 
 ---
 
@@ -42,9 +49,9 @@ bsk snapshot --session <id>
 ```
 
 Assertions (parity with DeerFlow four-mode selector):
-- [ ] Four presets available: `flash | thinking | pro | ultra` (thinking hidden/aliased when `selectedModel.supports_thinking === false` — `InputBox.vue:144`)
-- [ ] Each mode sets `reasoning_effort`: ultra→high, pro→medium, thinking→low, flash→minimal (verify via `INPUT_MODE_CONFIGS` — `InputBox.vue:199`)
-- [ ] Selecting `thinking`/`pro`/`ultra` on a non-`supports_thinking` model auto-downgrades (`getResolvedMode`, `InputBox.vue:217`)
+- [ ] Four presets available: `flash | thinking | pro | ultra` (thinking hidden/aliased when `selectedModel.supports_thinking === false` — `InputBox.vue:210`)
+- [ ] Each mode sets `reasoning_effort`: ultra→high, pro→medium, thinking→low, flash→minimal (verify via `INPUT_MODE_CONFIGS` — `InputBox.vue:216,221,265,344`)
+- [ ] Selecting `thinking`/`pro`/`ultra` on a non-`supports_thinking` model auto-downgrades (`getResolvedMode`, `InputBox.vue:271,283`)
 - [ ] `subagent_enabled` gated to `ultra` mode ( DeerFlow parity: `subagent_enabled = mode === "ultra"`)
 - [ ] Selected mode persists across navigation/reload (`getLastSelectedMode`)
 - [ ] `[console]` zero errors
@@ -52,8 +59,9 @@ Assertions (parity with DeerFlow four-mode selector):
 ### C6.2 Model selector — search + capability tags
 
 ```
-bsk snapshot --session <id>     # open model popup
-bsk click @eN --session <id>     # model selector entry
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>     # capture the model selector entry ref
+bsk click @eN --session <id>     # model selector entry → open popup
 bsk snapshot --session <id>
 ```
 
@@ -66,6 +74,7 @@ Assertions:
 ### C6.3 Attachments — upload-limit validation (parity ✓)
 
 ```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
 # Open the attachment affordance in InputBox
 bsk snapshot --session <id>
 bsk click @eN --session <id>     # paperclip / attach
@@ -79,6 +88,7 @@ Assertions (DeerFlow parity: client-side upload-limit validation with localized 
 ### C6.4 Voice input — SpeechRecognition (parity ✓)
 
 ```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
 bsk evaluate --session <id> --expr "'webkitSpeechRecognition' in window || 'SpeechRecognition' in window ? 'supported' : 'unsupported'"
 # if supported, click the voice toggle
 bsk snapshot --session <id>
@@ -104,18 +114,38 @@ bsk snapshot --session <id>
 
 Assertions (DeerFlow parity: ArrowUp/Down nav, Enter/Tab apply, Esc dismiss):
 - [ ] Leading `/` triggers slash-skill autocomplete popup
-- [ ] Builtins (e.g. `/goal`, `/compact` per DeerFlow) — **D1/D2 DIVERGENCE: expect these ABSENT in numina**; record as divergence, not failure
+- [ ] Builtins (e.g. `/goal`, `/compact` per DeerFlow) — **D1/D2 待实现 (pending sync)**: not yet ported to numina's live `InputBox.vue` (which has no slash-parse infra). Record as 待实现 D#, not a failure
 - [ ] ArrowUp/Down navigates, Enter/Tab applies, Esc dismisses
 - [ ] `[console]` zero errors
 
-### C6.6 Input polish button (D3 — DIVERGENCE, expect absent)
+### C6.6 Input polish button (D3 — ✅ implemented 2026-07-21)
 
 ```
-bsk snapshot --session <id>     # on the composer
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# type a rough draft
+bsk fill @eN --value 帮我看看资产 --session <id>
+bsk snapshot --session <id>     # polish button enabled (sparkles)
+bsk click @eM --session <id>     # polish button
+bsk wait-ms 4s                  # single LLM call
+bsk snapshot --session <id>     # rewritten text in textarea + undo button
+bsk screenshot --session <id> --out dogfood-output/c6.6-input-polish.png
+# click undo
+bsk snapshot --session <id>
+bsk click @eU --session <id>     # undo button
+bsk snapshot --session <id>     # original draft restored
 ```
 
-Assertions:
-- [ ] **D3 DIVERGENCE:** no sparkles/polish button in the composer (DeerFlow rewrites draft via backend). Record as 跟设计出入, not a bug. If a polish button IS present, that's a parity gain — note it.
+Assertions (D3 implemented — `POST /api/input-polish`, `services/input_polish.py` reuses `_create_lightweight_llm`):
+- [ ] Polish button (sparkles icon) renders in the composer toolbar, between web-search and plus
+- [ ] Button **disabled** when input empty, when input starts with `/` (don't polish slash commands), or while streaming/submitted
+- [ ] Clicking polish: spinner shows on the button while the LLM call is in flight
+- [ ] On success with `changed=true`: textarea replaced with rewritten text; button swaps to an **undo** icon
+- [ ] Undo restores the original draft; undo button disappears once the user edits the rewritten text
+- [ ] On `changed=false` (already clear): toast `aiChat.inputPolishNoChanges`, textarea unchanged, no undo
+- [ ] No-LLM fallback: if no provider configured, returns original unchanged (no error toast)
+- [ ] Staleness: editing the textarea mid-polish discards the result (no stale overwrite)
+- [ ] Abort on unmount/thread-switch: in-flight polish is cancelled (no late overwrite)
 - [ ] `[console]` zero errors
 
 ### C6.7 Submit button mode-awareness + blocked states (parity ✓)
@@ -467,8 +497,17 @@ Assertions (the submit-loses-input-family-race fix):
 
 ### C6.25 Execution-mode flags in config.configurable (parity ✓)
 
+> **Prerequisite:** reuses the C6.23 fetch monkey-patch (captured `window.__capturedHeaders`).
+> Run C6.23 first to install the patch, then send one message per mode here —
+> each `runs.stream` call's `config.configurable` is captured for inspection.
+
 ```
-# Send in each mode and capture config.configurable (extend C6.23 fetch patch)
+# Assumes C6.23 fetch patch is already installed on the session.
+# For each mode in {flash, thinking, pro, ultra}: open mode selector, pick mode,
+# send a short message, then read the captured config.
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+# (per mode) bsk click @eN  # mode selector → pick mode; fill + send; wait-ms 3s
+bsk evaluate --session <id> --expr "JSON.stringify(window.__capturedHeaders)"
 ```
 
 Assertions (DeerFlow parity — runtime context):
@@ -482,9 +521,19 @@ Assertions (DeerFlow parity — runtime context):
 
 ### C6.26 Error + retry + resume (parity ✓)
 
+> **Prerequisite:** this case requires a **triggered stream error**, which cannot
+> be produced by navigation alone. Two options: (a) use an invalid/misconfigured
+> model so the LLM call 500s mid-stream; (b) disable network in DevTools
+> mid-stream. Mark `Blocked (needs human verify)` if neither is available
+> headlessly, then continue.
+
 ```
-# Trigger a stream error (e.g. disconnect network mid-stream via DevTools, or use an invalid model)
-# Then resume
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+# Option (a): configure an invalid model via /settings/ai, send a message → stream error
+# Option (b): send a message, then DevTools → Offline mid-stream
+bsk snapshot --session <id>     # assert error UI + finalizeAllInProgress
+# Then resume (network back / valid model):
+bsk evaluate --session <id> --expr "(async()=>{ const r=await fetch('/api/threads/'+threadId+'/runs/resume',{method:'POST',credentials:'include'}); return String(r.status)})()"
 ```
 
 Assertions:
@@ -508,7 +557,7 @@ bsk click @eM --session <id>     # copy button
 ```
 
 Assertions:
-- [ ] Agent popup uses `Teleport to body` (escapes `backdrop-filter` stacking context — the agent-popup-teleport fix, `InputBox.vue:680`)
+- [ ] Agent popup uses `Teleport to body` (escapes `backdrop-filter` stacking context — the agent-popup-teleport fix, `InputBox.vue:610` and `:776` for the agent-info popup)
 - [ ] Copy button works on non-secure HTTP context (LAN-IP) via `execCommand` fallback (the copy-button-non-secure-context fix, `tableUtils.ts:123`)
 - [ ] `[console]` zero errors
 
@@ -523,10 +572,10 @@ Assertions:
 | Attachments + upload-limit validation | ✓ | C6.3 | verify toast strings |
 | Voice input (SpeechRecognition) | ✓ | C6.4 | feature-detect fallback |
 | Slash-skill autocomplete | ✓ | C6.5 | builtins differ (D1/D2) |
-| Input-polish button | ✗ D3 | C6.6 | **divergence** |
-| `/goal` + GoalStatus bar | ✗ D1 | C6.5 | **divergence** |
-| `/compact` | ✗ D2 | C6.5 | **divergence** |
-| User-selectable reasoning_effort | ✗ D4 | C6.1 | **divergence** (auto only) |
+| Input-polish button | ✅ D3 (done) | C6.6 | implemented 2026-07-21 |
+| `/goal` + GoalStatus bar | ⊘ D1 (待实现) | C6.5 | 待同步 DeerFlow (pending) |
+| `/compact` | ⊘ D2 (待实现) | C6.5 | 待同步 DeerFlow (pending) |
+| User-selectable reasoning_effort | ◐ D4 (by design) | C6.1 | 设计如此 — auto per mode, intentional |
 | Submit blocked states | ✓ | C6.7 | |
 | Suggestion chips | ✓ | C6.8 | |
 | 6 message group types | ✓ | C6.10 | |
@@ -547,4 +596,6 @@ Assertions:
 | Execution-mode flags | ✓ | C6.25 | |
 | Error/retry/resume | ✓ | C6.26 | |
 | Agent popup Teleport + copy fallback | ✓ | C6.27 | |
-| TodoList bar above composer | ◐ D5 | — | partial; no standalone bar confirmed |
+| TodoList bar above composer | ⊘ D5 (plan ready, 含实现) | C6.5(待补) | 待同步 DeerFlow — plan 已就绪(含移动端适配 + 实现,U7),待 ce-work 实现 |
+| Scheduled Tasks subsystem | ⊘ D6 (独立提案) | — (feature proposal) | 功能级缺口, 非 chat parity bug; 待产品评估后独立提案 (DeerFlow 完整子系统) |
+| Thread Channel Source | ⊘ D7 (设计不引入) | — (by design) | DeerFlow 特有 IM-bridge 衍生; numina 无 IM 桥接, 不引入 |
