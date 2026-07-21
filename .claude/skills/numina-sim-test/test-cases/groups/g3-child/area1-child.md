@@ -1,6 +1,6 @@
 # Area 1 — Child app (儿童页面优化)
 
-Shared conventions in [`_common.md`](./_common.md).
+Shared conventions in [`_common.md`](../../_common.md).
 
 Routes live under `${CHILD_BASE}` (child SPA; `/child/` base in both modes).
 Auth: cookie is shared with the adult session in **docker** mode — establish

@@ -1,6 +1,6 @@
 # Area 3 — AI capabilities (PDF识别 / AI资产报告 / 数鸣智能体 / AI对话)
 
-Shared conventions in [`_common.md`](./_common.md).
+Shared conventions in [`_common.md`](../../_common.md).
 
 Covers the `two-ai-apps-unified-dispatch` refactor: three `stream_run` AI
 apps (数鸣 numina / asset-report / import-parse) + chat/chat-search auto-select.
@@ -110,7 +110,7 @@ bsk snapshot --session <id>
 
 **File upload** (bsk cannot trigger `<input type=file>` directly via click; use
 `bsk fill` on the hidden input, or `bsk evaluate` to set files — see
-[`_common.md`](./_common.md) "File upload note"):
+[`_common.md`](../../_common.md) "File upload note"):
 ```
 # Locate the hidden file input via get-html or evaluate, then set its files
 bsk evaluate --session <id> --expr "<set input.files via DataTransfer>"

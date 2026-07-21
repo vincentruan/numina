@@ -1,6 +1,6 @@
 # Area 4 — Main app navigation coverage (every tab + sub-pages + data validation)
 
-Shared conventions in [`_common.md`](./_common.md).
+Shared conventions in [`_common.md`](../../_common.md).
 
 > **Why this area exists:** Areas 1–3 test *features*; this area tests
 > *navigation completeness* — that **every bottom-nav tab and its sub-pages
@@ -168,7 +168,7 @@ Covered in C2.3; here verify the **full action set** by status:
 
 ## Tab 3 — AI (`/ai`) + sub-pages
 
-Navigation coverage only — interaction detail is in [`area3-ai.md`](./area3-ai.md). Here verify each AI sub-route renders + active-tab correctness.
+Navigation coverage only — interaction detail is in [`area3-ai.md`](../g1-adult-stable/area3-ai.md). Here verify each AI sub-route renders + active-tab correctness.
 
 ### C4.6 AI hub + every AI sub-route renders
 
@@ -255,7 +255,7 @@ Assertions:
 
 > Settings is the largest sub-tree. This case is a **render smoke test** for every
 > settings sub-route (each must render without console errors). Interaction depth
-> for AI settings is in [`area3-ai.md`](./area3-ai.md) (C3.7).
+> for AI settings is in [`area3-ai.md`](../g1-adult-stable/area3-ai.md) (C3.7).
 
 ### C4.10 Settings tab — landing + every sub-route renders
 

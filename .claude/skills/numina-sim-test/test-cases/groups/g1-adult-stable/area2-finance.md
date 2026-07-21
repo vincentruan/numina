@@ -1,6 +1,6 @@
 # Area 2 — Main app financial management (财务管理能力优化)
 
-Shared conventions in [`_common.md`](./_common.md).
+Shared conventions in [`_common.md`](../../_common.md).
 
 Auth: establish the adult session as `demouser` / `DemoPass123` first. The
 default `bsk fill` form-login (SKILL.md Phase 2) can trigger a password-manager

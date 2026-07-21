@@ -28,17 +28,55 @@ Covers six feature areas (detailed cases split by area under
 1. **Child app** (`$CHILD_BASE`) — 儿童页面优化
 2. **Main app financial management** (`$BASE`) — 财务管理能力优化
 3. **AI capabilities** — PDF识别 / AI资产报告 / 数鸣智能体 / AI对话
-4. **Main app navigation coverage** (`$BASE`) — 每个页签 + 子页面 + 币种切换校验 ([`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md))
-5. **Child app navigation coverage** (`$CHILD_BASE`) — 每个页签 + 子页面 ([`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation.md))
-6. **AI chat DeerFlow-fidelity parity** — 输入/输出/系统集成 + 设计出入 ([`test-cases/area6-ai-chat-parity.md`](./test-cases/area6-ai-chat-parity.md))
+4. **Main app navigation coverage** (`$BASE`) — 每个页签 + 子页面 + 币种切换校验 ([`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md))
+5. **Child app navigation coverage** (`$CHILD_BASE`) — 每个页签 + 子页面 ([`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md))
+6. **AI chat DeerFlow-fidelity parity** — 输入/输出/系统集成 + 设计出入 ([`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
 > `default_currency`) — confirmed by source audit, see
-> [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md) "Currency-switch
+> [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md) "Currency-switch
 > bug class". Area 6 tests numina's AI chat against DeerFlow's interaction contract
 > and flags **design divergences** (D1 `/goal`, D2 `/compact`, D3 input-polish,
-> D4 user-selectable reasoning_effort, D5 TodoList bar).
+> D4 user-selectable reasoning_effort, D5 TodoList bar, D6 Scheduled Tasks,
+> D7 Thread Channel Source).
+
+## Parallel Run Structure (3-4 agents, dev mode)
+
+The six area files are organized into **4 groups by state-isolation boundary**
+under [`test-cases/groups/`](./test-cases/groups/) so 2-3 agents can run them in
+parallel without racing on shared browser state. See
+[`test-cases/groups/README.md`](./test-cases/groups/README.md) for the full
+schedule + verified bsk concurrency evidence.
+
+> **bsk concurrency (verified 2026-07-21):** `bsk session start` supports
+> **concurrent sessions** (2 sessions co-exist in `bsk session list`). BUT all
+> sessions share **one browser profile** — `cookie`/`localStorage` are shared
+> **per origin** (a value written by session A is readable by session B on the
+> same origin). So parallel agents must operate **different origins** (adult
+> :5173 vs child :5174 in dev) OR non-overlapping global state. The groups are
+> cut along those boundaries.
+
+| Group | Dir | Areas | Session | State domain | Parallel with |
+|-------|-----|-------|---------|--------------|---------------|
+| **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
+| **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
+
+**Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
+cover all 111 cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
+
+> **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
+> → G3 is NOT parallel-safe with G1/G2 (shared storage). In docker, run G3
+> serially. The parallel benefit is **dev-mode-only** (child :5174 is a separate
+> origin).
+
+> **Agent rules:** (1) each agent reuses the G0 session id for its group — do
+> NOT `bsk session start` a new one, do NOT `bsk session stop` a shared session;
+> (2) prefix failures in the report with the group (`G1-C2.3`, `G3-C1.10`);
+> (3) never split a single group across two agents — they share that group's
+> session and would race.
 
 > `$BASE` / `$CHILD_BASE` / `$API_BASE` are set per deployment mode — see
 > "Deployment Mode" below. Routes (`/login`, `/child/`, `/ai/chat`, …) are the
@@ -423,7 +461,7 @@ trick.
 
 ## Phase 3 — Area 2: Main App Financial Management (bsk flows)
 
-Run the **Area 2** cases from [`test-cases/area2-finance.md`](./test-cases/area2-finance.md) using the
+Run the **Area 2** cases from [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) using the
 session from Phase 2:
 
 - C2.1 Dashboard — totals, net worth, trend chart
@@ -452,7 +490,7 @@ Continue with the **same session** (`$SID`). AI must be enabled for the family
 first — if `aiStore.aiEnabled` is false, configure a provider at
 `/settings/ai/provider/new` (or skip AI cases and note in report).
 
-Run the **Area 3** cases from [`test-cases/area3-ai.md`](./test-cases/area3-ai.md):
+Run the **Area 3** cases from [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md):
 
 - C3.1 AI Hub — report card + 小鸣 (NuminaAgentCard) + agents + chat input
 - C3.2 AI chat — send message + stream response (assert no blank/duplicate/error-stuck)
@@ -495,7 +533,7 @@ bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
 bsk snapshot --session "$SID_CHILD"    # ChildSelectPage: 选择孩子 + discovered child name cards (see SIM_CHILD_NAMES from gate)
 ```
 
-Run the **Area 1** cases from [`test-cases/area1-child.md`](./test-cases/area1-child.md):
+Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./test-cases/groups/g3-child/area1-child.md):
 
 - C1.1 Child home — hero, balance, today's chores, wish preview
 - C1.2 Child ledger — transaction list + sibling gift popup
@@ -531,7 +569,7 @@ suites. These reuse the same sessions (`$SID` adult; `$SID_CHILD` child).
 
 ### Area 4 — Main app navigation coverage (`$SID`)
 
-Run [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md):
+Run [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md):
 
 - **C4.0** Currency switch — the bug-class smoke test (switch `default_currency`, compare displayed amounts across pages; dashboard aggregates convert server-side, per-record pages do NOT — the confirmed bug)
 - **C4.1–C4.2** Dashboard tab + analytics sub-page
@@ -548,7 +586,7 @@ Run [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md):
 
 ### Area 5 — Child app navigation coverage (`$SID_CHILD`)
 
-Run [`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation.md):
+Run [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md):
 
 - **C5.1–C5.6** All 5 child tabs (home/wishes/tasks/treasures/ledger) render + core ops
 - **C5.7–C5.9** Sub-pages: asset detail / day detail / settings (no adult-only leak)
@@ -559,7 +597,7 @@ Run [`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation
 
 ### Area 6 — AI chat DeerFlow-fidelity parity (`$SID`)
 
-Run [`test-cases/area6-ai-chat-parity.md`](./test-cases/area6-ai-chat-parity.md).
+Run [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md).
 AI must be enabled + provider configured.
 
 - **C6.1–C6.8** Input fidelity (mode presets, model selector, attachments, voice, slash-skill, polish-D3-divergence, submit states, suggestion chips)
@@ -703,14 +741,14 @@ bsk session stop "$SID"
 
 ## Test Case Index
 
-| Area | Cases | File |
-|------|-------|------|
-| 1 — Child app (儿童页面) | C1.1–C1.17 | [`test-cases/area1-child.md`](./test-cases/area1-child.md) |
-| 2 — Financial management (财务管理) | C2.1–C2.20 | [`test-cases/area2-finance.md`](./test-cases/area2-finance.md) |
-| 3 — AI (PDF/报告/数鸣/对话) | C3.1–C3.20 | [`test-cases/area3-ai.md`](./test-cases/area3-ai.md) |
-| 4 — Main app nav coverage (页签+币种切换) | C4.0–C4.16 | [`test-cases/area4-navigation.md`](./test-cases/area4-navigation.md) |
-| 5 — Child app nav coverage (页签+子页面) | C5.1–C5.10 | [`test-cases/area5-child-navigation.md`](./test-cases/area5-child-navigation.md) |
-| 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | C6.1–C6.27 (D1–D7) | [`test-cases/area6-ai-chat-parity.md`](./test-cases/area6-ai-chat-parity.md) |
+| Area | Group | Cases | File |
+|------|-------|-------|------|
+| 1 — Child app (儿童页面) | G3 | C1.1–C1.17 | [`test-cases/groups/g3-child/area1-child.md`](./test-cases/groups/g3-child/area1-child.md) |
+| 2 — Financial management (财务管理) | G1 | C2.1–C2.20 | [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) |
+| 3 — AI (PDF/报告/数鸣/对话) | G1 | C3.1–C3.20 | [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md) |
+| 4 — Main app nav coverage (页签+币种切换) | G2 | C4.0–C4.16 | [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md) |
+| 5 — Child app nav coverage (页签+子页面) | G3 | C5.1–C5.10 | [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md) |
+| 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | G1 | C6.1–C6.27 (D1–D7) | [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md) |
 
 ## bsk Red Lines (from browser-skill)
 

@@ -1,6 +1,6 @@
 # Area 6 — AI chat DeerFlow-fidelity parity (输入/输出/系统集成 + 设计出入)
 
-Shared conventions in [`_common.md`](./_common.md).
+Shared conventions in [`_common.md`](../../_common.md).
 
 > **Why this area exists:** the user's explicit ask — "main app的ai功能是非常关键的测试功能点,需要细化,chat整体的交互细节需要复刻deerflow... 需要细化输入、输出(对话、报告、系统集成),是不是有跟设计出入?" This area tests the numina AI chat against DeerFlow's interaction contract (reference repo `/Users/vincentruan/geek_space/github/deer-flow-reference`), flags **design divergences** (跟设计出入), and adds fine-grained input/output/system-integration cases.
 >

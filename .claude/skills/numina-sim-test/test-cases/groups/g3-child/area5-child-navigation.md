@@ -1,6 +1,6 @@
 # Area 5 — Child app navigation coverage (every tab + sub-pages)
 
-Shared conventions in [`_common.md`](./_common.md).
+Shared conventions in [`_common.md`](../../_common.md).
 
 > **Why this area exists:** Area 1 tests child *features*; this area tests
 > **navigation completeness** for the child app — that **every bottom-nav tab
