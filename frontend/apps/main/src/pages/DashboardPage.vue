@@ -23,6 +23,7 @@
             :total-daily-cost="overview?.total_daily_cost || 0"
             :asset-count="overview?.asset_count || 0"
             :month-over-month-change="overview?.month_over_month_change"
+            :month-over-month-change-amount="overview?.month_over_month_change_amount"
           />
         </div>
 

@@ -58,6 +58,7 @@ const props = defineProps<{
   totalDailyCost: number
   assetCount: number
   monthOverMonthChange?: number | null
+  monthOverMonthChangeAmount?: number | null
 }>()
 
 const currency = useCurrency()
@@ -70,7 +71,13 @@ const changeClass = computed(() => {
 const changeText = computed(() => {
   const pct = props.monthOverMonthChange || 0
   const arrow = pct >= 0 ? '↑' : '↓'
-  return `${arrow} ${Math.abs(pct).toFixed(1)}%`
+  let text = `${arrow} ${Math.abs(pct).toFixed(1)}%`
+  const amt = props.monthOverMonthChangeAmount
+  if (amt != null && amt !== 0) {
+    const sign = amt > 0 ? '+' : '-'
+    text += ` ${sign}${currency.format(Math.abs(amt))}`
+  }
+  return text
 })
 </script>
 

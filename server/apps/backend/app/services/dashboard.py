@@ -114,10 +114,12 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         .first()
     )
     mom_change = None
+    mom_change_amount = None
     current_net = total_assets_val - total_liabilities_val
     if last_snapshot and last_snapshot.net_worth != 0:
         # Snapshot net_worth is stored in CNY, convert to default_currency for comparison
         snapshot_net = ExchangeRateService.convert(last_snapshot.net_worth, "CNY", default_currency, db)
+        mom_change_amount = round(current_net - snapshot_net, 2)
         mom_change = round((current_net - snapshot_net) / abs(snapshot_net) * 100, 2)
 
     return OverviewResponse(
@@ -126,6 +128,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         net_worth=round(current_net, 2),
         asset_count=asset_count,
         month_over_month_change=mom_change,
+        month_over_month_change_amount=mom_change_amount,
         total_daily_cost=total_daily_cost,
     )
 

@@ -139,6 +139,7 @@ export interface DashboardOverview {
   net_worth: number
   asset_count: number
   month_over_month_change: number | null
+  month_over_month_change_amount: number | null
   total_daily_cost: number
 }
 

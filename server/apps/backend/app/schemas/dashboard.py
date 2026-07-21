@@ -9,6 +9,7 @@ class OverviewResponse(BaseModel):
     net_worth: float
     asset_count: int
     month_over_month_change: float | None = None
+    month_over_month_change_amount: float | None = None
     total_daily_cost: float = 0
 
 

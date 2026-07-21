@@ -62,6 +62,7 @@ def test_dashboard_overview(client, auth_headers, setup_test_data):
     assert "total_liabilities" in data
     assert "net_worth" in data
     assert "asset_count" in data
+    assert "month_over_month_change_amount" in data
 
     # total_assets = 3500000 + 225000 + 3000 = 3728000
     assert data["total_assets"] == 3728000
