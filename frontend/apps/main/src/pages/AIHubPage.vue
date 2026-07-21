@@ -300,8 +300,6 @@ const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
 const webSearch = ref<boolean | undefined>(undefined)
 const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const photoInputRef = ref<HTMLInputElement | null>(null)
 
 // Enabled custom agents for the grid
 const enabledCustomAgents = computed(() =>
@@ -374,32 +372,6 @@ function selectAgent(agent: Agent) {
   showAgentPicker.value = false
 }
 
-function triggerFileUpload() {
-  fileInputRef.value?.click()
-}
-
-function triggerPhotoUpload() {
-  photoInputRef.value?.click()
-}
-
-function handleFileSelect(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.fileSelected', { name: file.name }))
-    // TODO: implement file upload to chat
-  }
-  ;(e.target as HTMLInputElement).value = ''
-}
-
-function handlePhotoSelect(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.photoSelected'))
-    // TODO: implement photo upload to chat
-  }
-  ;(e.target as HTMLInputElement).value = ''
-}
-
 function submitChat() {
   const q = chatInput.value.trim()
   if (!q || !selectedAgent.value) return
@@ -430,12 +402,6 @@ function submitChat() {
 function submitChatFromInput(payload: SubmitPayload) {
   chatInput.value = payload.text
   submitChat()
-}
-
-function onInputAction(type: 'file' | 'image' | 'camera') {
-  if (type === 'camera') triggerPhotoUpload()
-  else if (type === 'file') triggerFileUpload()
-  else if (type === 'image') triggerPhotoUpload()
 }
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
