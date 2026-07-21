@@ -293,6 +293,8 @@ export default {
     filterTimeMachine: '财务时光机',
     slashPaletteHint: '选择功能，按 Esc 关闭',
     slashPaletteEmpty: '暂无可用功能',
+    slashGoalDesc: '设定本轮对话目标，AI 会自动续跑直到达成',
+    slashCompactDesc: '压缩当前对话历史，保留摘要与最近消息',
     inputPolish: '优化输入',
     inputPolishing: '正在优化输入…',
     inputPolishNoChanges: '输入已经很清晰，无需优化',

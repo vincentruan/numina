@@ -214,6 +214,8 @@ export default {
     filterTimeMachine: 'Time Machine',
     slashPaletteHint: 'Select a feature, press Esc to close',
     slashPaletteEmpty: 'No features available',
+    slashGoalDesc: 'Set a goal for this conversation; AI keeps going until it is met',
+    slashCompactDesc: 'Compact current chat history, keeping the summary and recent messages',
     inputPolish: 'Polish input',
     inputPolishing: 'Polishing input…',
     inputPolishNoChanges: 'This input is already clear.',

@@ -20,10 +20,13 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
 import VoiceInputButton from './VoiceInputButton.vue'
+import SlashPalette from './SlashPalette.vue'
 import IIcon from '@/components/IIcon.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
+import { useSlashCommands } from '@/composables/ai-chat/useSlashCommands'
+import type { SlashCommand } from '@/composables/ai-chat/useSlashCommands'
 import { getWebSearchStatus } from '@/api/webSearch'
 import { polishInputDraft } from '@/api/ai-chat'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
@@ -237,8 +240,21 @@ function onToggleAgentInfo() {
   showAgentInfo.value = !showAgentInfo.value
 }
 
+// ── Slash command palette (U1 — D1/D2 shared entry) ──
+// Local static registry (/goal + /compact); NOT useCapabilityStore (those are
+// routable features from /ai/capabilities, not chat commands — plan risk #4).
+// Plumbed from the deprecated components/common/AIChatInput.vue
+// onInput/onKeydown/selectCapability logic.
+const { filteredCommands, query: slashQuery } = useSlashCommands()
+const slashPaletteOpen = ref(false)
+const slashSelectedIndex = ref(0)
+const slashCommands = computed(() => filteredCommands.value)
+
 // ── Watchers ──
-watch(internalValue, (val) => emit('update:modelValue', val))
+watch(internalValue, (val) => {
+  emit('update:modelValue', val)
+  syncSlashState(val)
+})
 watch(() => props.modelValue, (val) => {
   if (val !== undefined && val !== internalValue.value) {
     internalValue.value = val
@@ -296,10 +312,57 @@ function syncDesktop() {
   isDesktop.value = window.matchMedia?.('(pointer: fine)').matches ?? false
 }
 
+// Slash palette: open whenever the textarea starts with `/`; close otherwise.
+function syncSlashState(val: string) {
+  const shouldOpen = val.startsWith('/')
+  slashQuery.value = val
+  if (shouldOpen) {
+    if (!slashPaletteOpen.value) {
+      slashSelectedIndex.value = 0
+      panelOpen.value = false
+    }
+  }
+  slashPaletteOpen.value = shouldOpen
+}
+
+function closeSlashPalette() {
+  slashPaletteOpen.value = false
+  slashQuery.value = ''
+}
+
+function selectSlashCommand(command?: SlashCommand) {
+  if (!command) return
+  const currentValue = internalValue.value.trim()
+  const handled = command.apply({
+    value: currentValue,
+    setValue: (next: string) => {
+      internalValue.value = next
+    },
+  })
+  closeSlashPalette()
+  nextTick(() => inputRef.value?.focus())
+  // When the apply callback reports "fully handled" (e.g. /compact triggers
+  // its own flow), proceed to submit so U5/U6 can wire the real flows on top
+  // of a normal submit. Otherwise (e.g. /goal fills the prefix) leave the
+  // textarea focused for the user to finish typing.
+  if (handled) {
+    onSubmit()
+  }
+}
+
 function onKeydownEnter(e: KeyboardEvent) {
   if (!isDesktop.value) return
   if (e.shiftKey) {
     // Let the textarea insert a newline (default behavior)
+    return
+  }
+  // When the slash palette is open, Enter selects instead of submitting.
+  if (slashPaletteOpen.value) {
+    e.preventDefault()
+    const cmds = slashCommands.value
+    if (cmds.length > 0) {
+      selectSlashCommand(cmds[slashSelectedIndex.value])
+    }
     return
   }
   e.preventDefault()
@@ -333,6 +396,31 @@ function onSubmit() {
   })
   internalValue.value = ''
   expanded.value = false
+  closeSlashPalette()
+}
+
+// Slash palette keyboard navigation (ArrowUp/Down/Tab/Esc). Enter is handled
+// by onKeydownEnter above. Only active while the palette is open.
+function onKeydownNav(e: KeyboardEvent) {
+  if (!slashPaletteOpen.value) return
+  const cmds = slashCommands.value
+  if (e.key === 'ArrowDown') {
+    if (cmds.length === 0) return
+    e.preventDefault()
+    slashSelectedIndex.value = (slashSelectedIndex.value + 1) % cmds.length
+  } else if (e.key === 'ArrowUp') {
+    if (cmds.length === 0) return
+    e.preventDefault()
+    slashSelectedIndex.value = (slashSelectedIndex.value - 1 + cmds.length) % cmds.length
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    closeSlashPalette()
+  } else if (e.key === 'Tab') {
+    if (cmds[slashSelectedIndex.value]) {
+      e.preventDefault()
+      selectSlashCommand(cmds[slashSelectedIndex.value])
+    }
+  }
 }
 
 function onModeSelect(mode: InputMode) {
@@ -485,6 +573,11 @@ function togglePanel() {
 // Click outside handler (for plus panel)
 function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement
+  // Close slash palette on any outside click (palette items use
+  // @mousedown.prevent so they handle their own selection before this fires).
+  if (slashPaletteOpen.value && !target.closest('.slash-palette') && !target.closest('.chat-textarea')) {
+    closeSlashPalette()
+  }
   if (!panelOpen.value) return
   // Don't close if clicking the trigger button or the panel itself
   if (panelTriggerRef.value?.contains(target)) return
@@ -571,14 +664,25 @@ onUnmounted(() => {
 
         <!-- Textarea container -->
         <div class="textarea-container">
+          <!-- Slash command palette (U1) -->
+          <SlashPalette
+            :open="slashPaletteOpen"
+            :commands="slashCommands"
+            :selected-index="slashSelectedIndex"
+            @select="selectSlashCommand"
+          />
           <textarea
             ref="inputRef"
             v-model="internalValue"
             class="chat-textarea"
             :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
             :disabled="disabled || status === 'submitted'"
+            aria-haspopup="menu"
+            :aria-expanded="slashPaletteOpen"
+            aria-controls="slash-palette-list"
             rows="4"
             @keydown.enter="onKeydownEnter"
+            @keydown="onKeydownNav"
             @focus="focused = true"
             @blur="focused = false"
           />
