@@ -298,6 +298,15 @@ export default {
     compactSuccess: '已压缩对话历史',
     compactSkipped: '对话历史较少，无需压缩',
     compactFailed: '压缩对话历史失败',
+    // U5 (D1 /goal) — GoalStatusBar + /goal command toasts
+    goalLabel: '目标',
+    goalContinuing: '续跑中 {count}/{max}',
+    goalContinuationTooltip: 'AI 已自动续跑 {count} 次（上限 {max} 次），正在向目标推进',
+    goalSet: '已设定目标',
+    goalCleared: '已清除目标',
+    goalNone: '当前没有目标',
+    goalActive: '当前目标：{goal}',
+    goalFailed: '目标操作失败',
     // U7 (D5 TodoList) — read-only mobile todo list
     todosLabel: '待办清单',
     todoStatusPending: '待开始',

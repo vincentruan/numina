@@ -219,6 +219,15 @@ export default {
     compactSuccess: 'Chat history compacted',
     compactSkipped: 'Not enough history to compact',
     compactFailed: 'Failed to compact chat history',
+    // U5 (D1 /goal) — GoalStatusBar + /goal command toasts
+    goalLabel: 'Goal',
+    goalContinuing: 'Continuing {count}/{max}',
+    goalContinuationTooltip: 'AI has auto-continued {count} time(s) (max {max}); still working toward the goal',
+    goalSet: 'Goal set',
+    goalCleared: 'Goal cleared',
+    goalNone: 'No active goal',
+    goalActive: 'Active goal: {goal}',
+    goalFailed: 'Goal operation failed',
     // U7 (D5 TodoList) — read-only mobile todo list
     todosLabel: 'To-dos',
     todoStatusPending: 'Pending',

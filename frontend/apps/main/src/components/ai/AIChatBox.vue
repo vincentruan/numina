@@ -20,7 +20,10 @@ import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
 import TodoListBar from '@/components/ai-chat/TodoListBar.vue'
+import GoalStatusBar from '@/components/ai-chat/GoalStatusBar.vue'
 import { useThreadTodos } from '@/composables/ai-chat/useThreadTodos'
+import { useActiveGoal } from '@/composables/ai-chat/useActiveGoal'
+import { parseGoalCommand } from '@/composables/ai-chat/useThreadChat'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 import { useAiContext } from '@/composables/useAiContext'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
@@ -58,6 +61,16 @@ const {
 // U7 (D5 TodoList): derive read-only todo display state from the live todos ref
 // owned by useThreadChat. Rendered above InputBox when the agent has todos.
 const { todos: todoItems, hasTodos } = useThreadTodos(chat.todos)
+
+// U5 (D1 /goal): reconcile the optimistic /goal-command override with the
+// server goal (streamed from checkpoint channel_values["goal"] via useThreadChat
+// .serverGoal). GoalStatusBar renders above InputBox (co-located with
+// TodoListBar) when hasGoal is true. setLocalGoal applies the optimistic
+// override immediately on a successful /goal set so the bar shows before the
+// run starts; the override yields to server state once a values chunk carries
+// the goal field (use-active-goal.ts:40-44).
+const activeThreadIdRef = computed(() => store.activeThreadId ?? null)
+const { activeGoal, hasGoal, setLocalGoal } = useActiveGoal(activeThreadIdRef, chat.serverGoal)
 
 /**
  * Realtime token usage computed from SSE values events.
@@ -381,6 +394,30 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
 
 async function handleSendMessage(payload: SubmitPayload) {
   if (!store.activeThreadId) return
+  // U5 (D1 /goal): intercept the /goal slash command. U1's slash palette fills
+  // `/goal ` for palette selection (apply returns handled=false), so a typed
+  // `/goal <condition>` arrives here verbatim on submit — parse it and route to
+  // the three-state branch (set / status / clear). Only `set` starts a run, and
+  // only when the PUT succeeded (input-box.tsx:947-963): the objective is then
+  // submitted as the next user task. Status/clear never start a run.
+  const goalCommand = parseGoalCommand(payload.text)
+  if (goalCommand) {
+    const saved = await chat.handleGoalCommand(
+      store.activeThreadId,
+      goalCommand,
+      (goal) => setLocalGoal(goal ?? null),
+    )
+    if (saved && goalCommand.kind === 'set') {
+      await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
+        thinking_enabled: payload.thinking_enabled,
+        is_plan_mode: payload.is_plan_mode,
+        subagent_enabled: payload.subagent_enabled,
+        reasoning_effort: payload.reasoning_effort,
+        websearch_enabled: payload.websearch_enabled,
+      })
+    }
+    return
+  }
   // U6: intercept the /compact slash command. U1's slash palette resolves
   // /compact via onSubmit('/compact') (apply returns handled=true), so the
   // text arrives here verbatim — do NOT send it to the agent as a user
@@ -585,8 +622,13 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
       <!-- InputBox only in chat mode (WelcomePage has its own in welcome mode) -->
       <!-- U7 (D5 TodoList): read-only todo list above InputBox when the agent
            has written todos via write_todos (plan_mode). Co-located with the
-           (future U5) GoalStatusBar position. -->
+           U5 GoalStatusBar position. -->
       <TodoListBar v-if="hasTodos" :todos="todoItems" />
+      <!-- U5 (D1 /goal): active-goal status bar above InputBox. Renders the
+           optimistic override (immediate, on /goal set) reconciled with the
+           server goal streamed from the checkpoint. The continuation chip
+           `续跑中 N/8` shows only when continuation_count > 0 (U4 auto-run). -->
+      <GoalStatusBar v-if="hasGoal && activeGoal" :goal="activeGoal" />
       <InputBox
         :status="chat.isLoading.value ? 'streaming' : 'ready'"
         :is-welcome-mode="false"

@@ -7,7 +7,11 @@ import {
   createThread,
   deleteThread,
   compactThread,
+  getThreadGoal,
+  setThreadGoal,
+  clearThreadGoal,
 } from '@/api/ai-chat'
+import type { GoalState } from '@/api/ai-chat'
 import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
@@ -85,6 +89,49 @@ interface ValuesData {
   // U7 (D5 TodoList): todos channel from TodoMiddleware's write_todos tool.
   // Items are {content, status} (no id) — keyed by index+content in the UI.
   todos?: Array<{ content: string; status: string }>
+  // U5 (D1 /goal): goal channel from the checkpoint's channel_values["goal"].
+  // `undefined` when a values chunk omits the goal field (do NOT treat as
+  // clear — see useActiveGoal); `null` when the server explicitly reports no
+  // goal; a GoalState otherwise. U4's auto-continuation loop bumps
+  // continuation_count / updated_at here.
+  goal?: GoalState | null
+}
+
+// ---------------------------------------------------------------------------
+// U5 (D1 /goal) — parseGoalCommand, ported from DeerFlow
+// input-box-helpers.ts:171-186. Module-level pure function so it can be unit
+// tested in isolation. Three-state branch: set / status / clear.
+// ---------------------------------------------------------------------------
+
+export type GoalCommand =
+  | { kind: 'status' }
+  | { kind: 'clear' }
+  | { kind: 'set'; objective: string }
+
+/**
+ * Parse a `/goal ...` slash command into a three-state branch. Returns `null`
+ * when the input is not a `/goal` command. Ported from DeerFlow
+ * `parseGoalCommand` (input-box-helpers.ts:171-186).
+ *
+ * - `/goal` (no args) → `{ kind: 'status' }` (GET + toast)
+ * - `/goal clear` | `/goal reset` | `/goal off` → `{ kind: 'clear' }` (DELETE)
+ * - `/goal <condition>` → `{ kind: 'set', objective }` (PUT + submit)
+ */
+export function parseGoalCommand(value: string): GoalCommand | null {
+  const trimmed = value.trim()
+  const match = /^\/goal(?:\s+|$)/i.exec(trimmed)
+  if (!match) {
+    return null
+  }
+
+  const args = trimmed.slice(match[0].length).trim()
+  if (!args) {
+    return { kind: 'status' }
+  }
+  if (['clear', 'reset', 'off'].includes(args.toLowerCase())) {
+    return { kind: 'clear' }
+  }
+  return { kind: 'set', objective: args }
 }
 
 /**
@@ -395,6 +442,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // of truth; useThreadTodos derives hasTodos/todos from this. Cleared on
   // thread switch / history reload; hydrated from values events (stream + load).
   const todos = ref<Array<{ content: string; status: string }>>([])
+  // U5 (D1 /goal): server goal streamed from the checkpoint's
+  // channel_values["goal"] (U4 writes continuation_count/updated_at here).
+  // `undefined` = no values chunk has carried the goal field yet (useActiveGoal
+  // must NOT treat this as a clear); `null` = server explicitly reports no goal;
+  // a GoalState otherwise. Cleared on thread switch / history reload and
+  // re-hydrated from state.values.goal (loadHistory) + values events (stream).
+  const serverGoal = ref<GoalState | null | undefined>(undefined)
   /**
    * Track interrupt IDs that have been answered by the user in this session.
    * Used by MessageGroup to transition HumanInputCard from 'pending' to
@@ -1032,6 +1086,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             if (data.todos !== undefined) {
               todos.value = Array.isArray(data.todos) ? data.todos : []
             }
+            // U5 (D1 /goal): goal channel. Only overwrite when the values chunk
+            // explicitly carries the goal field (undefined → omit, NOT clear).
+            // The backend U4 writes continuation_count/updated_at bumps here;
+            // useActiveGoal reconciles the optimistic override against this.
+            if (data.goal !== undefined) {
+              serverGoal.value = data.goal
+            }
           } else if (chunk.event === 'custom' && chunk.data) {
             const customData = chunk.data as {
               type?: string
@@ -1420,13 +1481,17 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // U7 (D5 TodoList): reset todos on thread switch; re-hydrated from
     // state.values.todos below (if present in the checkpoint).
     todos.value = []
+    // U5 (D1 /goal): reset to `undefined` (not `null`) on thread switch so
+    // useActiveGoal's optimistic override from the previous thread is dropped
+    // (threadChanged) and the new thread's server goal hydrates cleanly below.
+    serverGoal.value = undefined
     currentThreadId = threadId
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const client = getClient()
         const state = await client.threads.getState(threadId)
-        const values = state.values as { messages?: SerializedMessage[]; todos?: Array<{ content: string; status: string }> } | undefined
+        const values = state.values as { messages?: SerializedMessage[]; todos?: Array<{ content: string; status: string }>; goal?: GoalState | null } | undefined
         if (values?.messages) {
           // Replace messages entirely for history load
           messages.value = values.messages.map(serializedToChatMessage)
@@ -1437,6 +1502,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // U7 (D5 TodoList): hydrate todos from checkpoint channel_values.
         if (Array.isArray(values?.todos)) {
           todos.value = values!.todos!
+        }
+        // U5 (D1 /goal): hydrate server goal from checkpoint channel_values.
+        // The backend persists goal as channel_values["goal"] (U2); a missing
+        // key (older checkpoints) hydrates as `null` (explicitly no goal) only
+        // when the key is present, else stays `undefined` (omit, not clear).
+        if (values && Object.prototype.hasOwnProperty.call(values, 'goal')) {
+          serverGoal.value = values.goal ?? null
         }
         isLoading.value = false
         return
@@ -1563,6 +1635,60 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
+  /**
+   * U5 (D1 /goal): handle a parsed `/goal` command (set / status / clear).
+   * Ported from DeerFlow input-box.tsx:667-770 (handleGoalCommand). Returns
+   * `true` only on success; the caller starts a run ONLY when
+   * `command.kind === 'set'` and this returned `true` (input-box.tsx:953-961).
+   *
+   * - `set`: PUT /goal + onGoalChange(goal) so useActiveGoal can apply the
+   *   optimistic override immediately. (The run is started by the caller via
+   *   submitThreadMessage with the objective as text.)
+   * - `status`: GET /goal + toast goalActive (objective) or goalNone (none).
+   *   onGoalChange(goal) syncs server state. Never starts a run.
+   * - `clear`: DELETE /goal + goalCleared toast + onGoalChange(null). Never
+   *   starts a run.
+   *
+   * Welcome-mode (no active thread) is guarded by the caller — this function
+   * requires a real threadId because goal lives in the checkpoint.
+   */
+  async function handleGoalCommand(
+    threadId: string,
+    command: GoalCommand,
+    onGoalChange?: (goal: GoalState | null) => void,
+  ): Promise<boolean> {
+    try {
+      if (command.kind === 'status') {
+        const res = await getThreadGoal(threadId)
+        const goal = res.goal ?? null
+        onGoalChange?.(goal)
+        const objective = goal?.objective
+        showToast(
+          objective !== undefined
+            ? t('aiChat.goalActive').replace('{goal}', objective)
+            : t('aiChat.goalNone'),
+        )
+        return true
+      }
+      if (command.kind === 'clear') {
+        await clearThreadGoal(threadId)
+        onGoalChange?.(null)
+        showSuccessToast(t('aiChat.goalCleared'))
+        return true
+      }
+      // set
+      const res = await setThreadGoal(threadId, { objective: command.objective })
+      const goal = res.goal ?? null
+      onGoalChange?.(goal)
+      showSuccessToast(t('aiChat.goalSet'))
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('aiChat.goalFailed')
+      showFailToast(message)
+      return false
+    }
+  }
+
   function clearMessages() {
     cancelStream()
     messages.value = []
@@ -1575,6 +1701,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     isLoading.value = false
     // U7 (D5 TodoList): clear todos on full clear (new chat / thread switch).
     todos.value = []
+    // U5 (D1 /goal): reset to `undefined` (omit, not clear) on full clear so
+    // useActiveGoal drops any optimistic override and the new chat has no goal.
+    serverGoal.value = undefined
     // U6: drain the transient bridge + summarized ids on full clear (new chat /
     // thread switch) so rescued turns never leak across chat views.
     transientBridge.value = []
@@ -1716,6 +1845,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                 // U7 (D5 TodoList): todos channel on the resume path too.
                 if (valData.todos !== undefined) {
                   todos.value = Array.isArray(valData.todos) ? valData.todos : []
+                }
+                // U5 (D1 /goal): goal channel on the resume path too.
+                if (valData.goal !== undefined) {
+                  serverGoal.value = valData.goal
                 }
               } else if (event === 'custom' && data) {
                 const customData = data as {
@@ -1897,8 +2030,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   return {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
-    todos,
+    todos, serverGoal,
     sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
-    submitFeedback, handleCompact,
+    submitFeedback, handleCompact, handleGoalCommand,
   }
 }

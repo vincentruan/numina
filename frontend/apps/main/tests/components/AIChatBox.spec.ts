@@ -21,6 +21,8 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     answeredInterruptIds: { value: new Set() },
     interruptErrorId: { value: null },
     runId: { value: null },
+    todos: { value: [] },
+    serverGoal: { value: undefined },
     sendMessage: vi.fn(),
     cancelStream: vi.fn(),
     loadHistory: vi.fn(),
@@ -28,7 +30,11 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     clearMessages: vi.fn(),
     resumeInterrupt: vi.fn(),
     handleCompact: vi.fn(),
+    handleGoalCommand: vi.fn(),
   }),
+  // parseGoalCommand is a pure module-level export used by AIChatBox to detect
+  // /goal commands before they reach the agent.
+  parseGoalCommand: vi.fn(() => null),
 }))
 
 vi.mock('@/composables/ai-chat/useArtifacts', () => ({

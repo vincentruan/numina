@@ -264,6 +264,109 @@ export async function polishInputDraft(text: string, signal?: AbortSignal): Prom
 }
 
 // ---------------------------------------------------------------------------
+// Goal (D1 DeerFlow sync) — GET/PUT/DELETE /api/threads/{id}/goal.
+// GoalState is persisted in the LangGraph checkpoint's channel_values["goal"]
+// (U2 backend); these thin wrappers mirror DeerFlow threads.py:832-880. Cookie
+// auth + X-Family-Id, same fetch pattern as polishInputDraft / compactThread.
+// Backend: routers/threads.py get/set/clear_thread_goal + services/goal_store.py
+// (delegates to deerflow.runtime.goal read_thread_goal / write_thread_goal).
+// ---------------------------------------------------------------------------
+
+/**
+ * DeerFlow-aligned goal state shape. Mirrors
+ * `backend/packages/harness/deerflow/agents/goal_state.py:22-31` — the backend
+ * `build_goal_state` delegates to DeerFlow's canonical builder, so every field
+ * here is produced server-side and round-trips through channel_values["goal"].
+ */
+export interface GoalState {
+  objective: string
+  status: 'active'
+  created_at: string
+  updated_at: string
+  continuation_count: number
+  max_continuations: number
+  no_progress_count: number
+  max_no_progress_continuations: number
+  last_evaluation?: {
+    satisfied: boolean
+    blocker:
+      | 'none'
+      | 'missing_evidence'
+      | 'needs_user_input'
+      | 'run_failed'
+      | 'external_wait'
+      | 'goal_not_met_yet'
+    reason: string
+    evidence_summary?: string
+    run_id?: string
+    evaluated_at?: string
+    progress_key?: string
+    stand_down_reason?: string
+  }
+}
+
+/** Request body for PUT /api/threads/{id}/goal (DeerFlow threads.py:320-329). */
+export interface SetThreadGoalInput {
+  objective: string
+  /** Optional override; the backend clamps to [0, 8] (R1b). */
+  max_continuations?: number
+}
+
+/** Response from GET/PUT/DELETE /api/threads/{id}/goal (DeerFlow threads.py:332-335). */
+export interface ThreadGoalResponse {
+  goal: GoalState | null
+}
+
+async function readGoalError(res: Response): Promise<string> {
+  let detail = `Failed goal request (${res.status})`
+  try {
+    const body = await res.json()
+    if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+  } catch {
+    // ignore parse failure, use fallback detail
+  }
+  return detail
+}
+
+export async function getThreadGoal(threadId: string): Promise<ThreadGoalResponse> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/goal`, {
+    method: 'GET',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await readGoalError(res))
+  return res.json() as Promise<ThreadGoalResponse>
+}
+
+export async function setThreadGoal(
+  threadId: string,
+  input: SetThreadGoalInput,
+): Promise<ThreadGoalResponse> {
+  const body: Record<string, unknown> = { objective: input.objective }
+  if (input.max_continuations !== undefined) {
+    body.max_continuations = input.max_continuations
+  }
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/goal`, {
+    method: 'PUT',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(await readGoalError(res))
+  return res.json() as Promise<ThreadGoalResponse>
+}
+
+export async function clearThreadGoal(threadId: string): Promise<ThreadGoalResponse> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/goal`, {
+    method: 'DELETE',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await readGoalError(res))
+  return res.json() as Promise<ThreadGoalResponse>
+}
+
+// ---------------------------------------------------------------------------
 // Branch API (DeerFlow threads/api.ts:71-97)
 // ---------------------------------------------------------------------------
 
