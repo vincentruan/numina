@@ -23,6 +23,14 @@ from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _get_shared_checkpointer,
 )
+from apps.agent.services.goal_store import (
+    DEFAULT_MAX_GOAL_CONTINUATIONS,
+    GoalWriteConflict,
+    build_goal_state,
+    goal_thread_lock,
+    read_thread_goal,
+    write_thread_goal,
+)
 from apps.agent.services.session_store import AiSessionRepository
 
 
@@ -102,6 +110,20 @@ class ThreadStateUpdateRequest(BaseModel):
     checkpoint_id: str | None = Field(default=None, description="Checkpoint to branch from")
     checkpoint: dict[str, Any] | None = Field(default=None, description="Full checkpoint object")
     as_node: str | None = Field(default=None, description="Node identity for the update")
+
+class ThreadGoalRequest(BaseModel):
+    """Request body for setting a thread-scoped goal (DeerFlow threads.py:320-329)."""
+    objective: str = Field(..., min_length=1, max_length=4000, description="目标完成条件")
+    max_continuations: int = Field(
+        default=DEFAULT_MAX_GOAL_CONTINUATIONS,
+        ge=0,
+        le=DEFAULT_MAX_GOAL_CONTINUATIONS,
+        description="最大自动延续轮数",
+    )
+
+class ThreadGoalResponse(BaseModel):
+    """Response model for a thread goal (DeerFlow threads.py:332-335)."""
+    goal: dict[str, Any] | None = Field(default=None, description="当前目标状态，无目标时为 null")
 
 class HistoryEntry(BaseModel):
     checkpoint_id: str
@@ -784,6 +806,116 @@ async def update_thread_state(
         checkpoint_id=new_checkpoint_id,
         created_at=coerce_iso(metadata.get("created_at", "")),
     )
+
+# ---------------------------------------------------------------------------
+# Goal endpoints (DeerFlow threads.py:832-880)
+# ---------------------------------------------------------------------------
+
+_OWNER_ADULT_ROLES = frozenset({"owner", "adult"})
+
+
+async def _verify_goal_thread_ownership(
+    checkpointer,
+    repo: AiSessionRepository,
+    thread_id: str,
+    verified: VerifiedFamily,
+) -> None:
+    """Second-layer family-ownership check on the checkpoint (KTD-8).
+
+    ``verify_family_token`` only matches the JWT ``fid`` to the ``X-Family-Id``
+    header — it does NOT prove the thread belongs to that family. Read the
+    checkpoint metadata.family_id (falling back to the session row) and raise
+    404 on mismatch, mirroring ``get_thread_state`` / ``update_thread_state``.
+    """
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    checkpoint_tuple = await checkpointer.aget_tuple(config)
+    if checkpoint_tuple is None:
+        record = await repo.get_session(thread_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        record_family_id = record.get("family_id")
+        if not record_family_id or str(record_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        return
+    metadata = getattr(checkpoint_tuple, "metadata", {}) or {}
+    ckpt_family_id = metadata.get("family_id")
+    if not ckpt_family_id:
+        record = await repo.get_session(thread_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        record_family_id = record.get("family_id")
+        if not record_family_id or str(record_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+    elif str(ckpt_family_id) != str(verified.family_id):
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
+
+@router.get("/{thread_id}/goal", response_model=ThreadGoalResponse)
+async def get_thread_goal(
+    thread_id: str,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> ThreadGoalResponse:
+    """Return the active Claude-style goal for a thread, if any."""
+    checkpointer = get_checkpointer()
+    repo = AiSessionRepository(x_family_id)
+    await _verify_goal_thread_ownership(checkpointer, repo, thread_id, verified)
+    try:
+        goal = await read_thread_goal(checkpointer, thread_id)
+    except Exception:
+        logger.exception("Failed to read goal for thread %s", thread_id)
+        raise HTTPException(status_code=500, detail="读取线程目标失败") from None
+    return ThreadGoalResponse(goal=goal)
+
+
+@router.put("/{thread_id}/goal", response_model=ThreadGoalResponse)
+async def set_thread_goal(
+    thread_id: str,
+    body: ThreadGoalRequest,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> ThreadGoalResponse:
+    """Set or replace the active goal for a thread (owner/adult only, KTD-8)."""
+    if verified.role not in _OWNER_ADULT_ROLES:
+        raise HTTPException(status_code=403, detail="仅家长可设置目标")
+    checkpointer = get_checkpointer()
+    repo = AiSessionRepository(x_family_id)
+    await _verify_goal_thread_ownership(checkpointer, repo, thread_id, verified)
+    goal = build_goal_state(body.objective, max_continuations=body.max_continuations)
+    try:
+        async with goal_thread_lock(thread_id):
+            await write_thread_goal(
+                checkpointer, thread_id, goal, as_node="goal", create_if_missing=True
+            )
+    except GoalWriteConflict:
+        raise HTTPException(status_code=409, detail="目标已被并发修改，请重试") from None
+    except Exception:
+        logger.exception("Failed to set goal for thread %s", thread_id)
+        raise HTTPException(status_code=500, detail="设置线程目标失败") from None
+    return ThreadGoalResponse(goal=goal)
+
+
+@router.delete("/{thread_id}/goal", response_model=ThreadGoalResponse)
+async def clear_thread_goal(
+    thread_id: str,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> ThreadGoalResponse:
+    """Clear the active goal for a thread (owner/adult only, KTD-8)."""
+    if verified.role not in _OWNER_ADULT_ROLES:
+        raise HTTPException(status_code=403, detail="仅家长可清除目标")
+    checkpointer = get_checkpointer()
+    repo = AiSessionRepository(x_family_id)
+    await _verify_goal_thread_ownership(checkpointer, repo, thread_id, verified)
+    try:
+        async with goal_thread_lock(thread_id):
+            await write_thread_goal(checkpointer, thread_id, None, as_node="goal")
+    except GoalWriteConflict:
+        raise HTTPException(status_code=409, detail="目标已被并发修改，请重试") from None
+    except Exception:
+        logger.exception("Failed to clear goal for thread %s", thread_id)
+        raise HTTPException(status_code=500, detail="清除线程目标失败") from None
+    return ThreadGoalResponse(goal=None)
 
 @router.post("/{thread_id}/history", response_model=list[HistoryEntry])
 async def get_thread_history(
