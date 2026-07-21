@@ -5,7 +5,8 @@ product_contract_source: ce-brainstorm
 execution: code
 title: "AI 对话分支功能对齐 DeerFlow - Plan"
 date: 2026-07-17
-status: draft
+status: complete
+completion_date: 2026-07-18
 origin: docs/plans/2026-07-17-001-feature-ai-chat-branch-deerflow-parity-plan.md
 ---
 
