@@ -111,6 +111,15 @@
         >
           <template #button>{{ t('liability.detailPaymentUnit') }}</template>
         </van-field>
+        <!-- L4: quick-fill buttons (25%/50%/100%). Fill-only — user must still click confirm. -->
+        <div class="pay-quick-btns">
+          <button
+            v-for="pct in [25, 50, 100]"
+            :key="pct"
+            class="quick-pct-btn"
+            @click="setPayPercent(pct)"
+          >{{ pct === 100 ? t('liability.payFull') : pct + '%' }}</button>
+        </div>
       </div>
     </van-dialog>
   </div>
@@ -192,6 +201,13 @@ async function onPaymentConfirm(action: string) {
   return true
 }
 
+// L4: quick-fill the payment amount by percentage of remaining principal.
+// Fill-only — does NOT auto-submit; user must click confirm (before-close flow).
+function setPayPercent(pct: number) {
+  const val = (Number(liability.value?.remaining_amount || 0) * pct) / 100
+  paymentAmount.value = val.toFixed(2)
+}
+
 async function onDelete() {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: liability.value?.name }) })
@@ -267,5 +283,38 @@ onMounted(async () => {
 }
 .countdown-wrapper {
   padding: 8px 16px 0;
+}
+
+/* L4: quick-fill payment buttons (mirrors LiabilityListPage) */
+.pay-quick-btns {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-pct-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid #059669;
+  background: transparent;
+  color: #059669;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.quick-pct-btn:active {
+  background: #059669;
+  color: #fff;
+}
+
+[data-theme='dark'] .quick-pct-btn {
+  border-color: var(--color-lavender, #bdbbff);
+  color: var(--color-lavender, #bdbbff);
+}
+
+[data-theme='dark'] .quick-pct-btn:active {
+  background: var(--color-lavender, #bdbbff);
+  color: #010120;
 }
 </style>
