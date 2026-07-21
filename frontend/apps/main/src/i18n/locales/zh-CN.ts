@@ -1251,6 +1251,7 @@ export default {
     noChildren: '暂无孩子成员',
     addChildren: '添加孩子',
     tabAll: '全部',
+    calendarShowing: '当前展示：{name}',
     tabDiary: '宝贝日记',
     tabWishes: '心愿',
     tabChores: '任务',

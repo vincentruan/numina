@@ -78,6 +78,7 @@
                 :fetch-month="fetchCalendarMonth"
                 day-route="/baby/calendar/day"
                 :extra-query="{ child_id: calendarChildId }"
+                :display-hint="calendarDisplayHint"
                 variant="parent"
                 :show-completion-rate="true"
               />
@@ -851,6 +852,14 @@ const calendarChildId = computed<string | null>(() => {
   // 全部视图时取第一个孩子
   const first = childMembers.value[0]
   return first ? String(first.id) : null
+})
+
+// B4: in 全部 mode the calendar silently shows the first child; surface
+// that via a hint. null in per-child mode (no hint needed).
+const calendarDisplayHint = computed<string | null>(() => {
+  if (selectedChildId.value) return null
+  const first = childMembers.value[0]
+  return first?.display_name ?? null
 })
 
 function fetchCalendarMonth(year: number, month: number) {

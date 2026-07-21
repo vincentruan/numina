@@ -6,6 +6,10 @@
       <span class="cal-title">{{ t('calendar.monthTitle', { year, month }) }}</span>
       <button class="nav-btn" @click="nextMonth">›</button>
     </div>
+    <!-- B4: hint showing which child is displayed in 全部 mode -->
+    <div v-if="props.displayHint" class="cal-display-hint">
+      {{ t('baby.calendarShowing', { name: props.displayHint }) }}
+    </div>
 
     <!-- Weekday labels -->
     <div class="cal-weekdays">
@@ -90,6 +94,8 @@ const props = defineProps<{
   variant?: 'child' | 'parent'
   /** 父母视角传 true，显示完成率 */
   showCompletionRate?: boolean
+  /** B4: 全部模式下提示当前展示哪个孩子；per-child 模式传 null 不显示 */
+  displayHint?: string | null
 }>()
 
 function dotLabel(count: number): string {
@@ -277,6 +283,15 @@ onMounted(loadMonth)
   font-size: 15px;
   font-weight: 600;
   color: var(--cal-title-color);
+}
+.cal-display-hint {
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--cal-title-color);
+  background: var(--cal-nav-bg);
+  border-radius: 8px;
+  opacity: 0.85;
 }
 .nav-btn {
   width: 44px;

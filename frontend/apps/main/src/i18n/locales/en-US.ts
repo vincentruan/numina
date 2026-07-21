@@ -771,6 +771,7 @@ export default {
     noChildren: 'No children yet',
     addChildren: 'Add Child',
     tabAll: 'All',
+    calendarShowing: 'Currently showing: {name}',
     tabDiary: 'Diary',
     tabWishes: 'Wishes',
     tabChores: 'Chores',
