@@ -625,6 +625,8 @@ export default {
     summaryTotal: 'Total Remaining',
     summarySettled: 'Total Settled',
     summaryProgress: 'Total Progress',
+    monthlyPaymentTotal: 'Monthly Payment Total',
+    monthlyPaymentEstimated: 'est.',
     payDialogTitle: 'Payment · {name}',
     payConfirmBtn: 'Confirm Payment',
     payRemainingHint: 'Remaining: {amount}',

@@ -65,6 +65,16 @@
           </template>
         </div>
 
+        <!-- L3: Monthly payment total banner (active tab only; hide-if-zero) -->
+        <div
+          v-if="activeTab === 'active' && totalMonthlyPayment > 0"
+          class="monthly-payment-banner"
+        >
+          <span class="mp-label">{{ t('liability.monthlyPaymentTotal') }}</span>
+          <span class="mp-amount">{{ formatCurrencyAmount(totalMonthlyPayment) }}</span>
+          <span v-if="hasEstimatedItems" class="mp-estimated">{{ t('liability.monthlyPaymentEstimated') }}</span>
+        </div>
+
         <div v-if="filteredLiabilities.length" class="liability-list">
           <LiabilityCard
             v-for="item in filteredLiabilities"
@@ -153,6 +163,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { useCurrency } from '@/composables/useCurrency'
 import { useLiabilityStore } from '@/stores/liability'
 import type { Liability } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -162,6 +173,7 @@ import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.
 import LiabilityStrategyCard from '@/components/liability/LiabilityStrategyCard.vue'
 
 const { t } = useI18n()
+const { format: formatCurrencyAmount } = useCurrency()
 const router = useRouter()
 const route = useRoute()
 const liabilityStore = useLiabilityStore()
@@ -218,6 +230,28 @@ const repaidPercent = computed(() => {
   if (totalOriginal.value <= 0) return 0
   return Math.round(((totalOriginal.value - totalAmount.value) / totalOriginal.value) * 100)
 })
+
+// --- L3: Monthly payment total banner ---
+// Interest-only estimate for liabilities without an explicit monthly_payment.
+function monthlyInterest(l: Liability): number {
+  const rate = (l.interest_rate ?? 0) / 100 / 12
+  return Number(l.remaining_amount ?? 0) * rate
+}
+// Active liabilities only — inactive items would inflate the total.
+const activeLiabilitiesForPayment = computed(() =>
+  liabilityStore.liabilities.filter(l => l.is_active === true),
+)
+const totalMonthlyPayment = computed(() =>
+  activeLiabilitiesForPayment.value.reduce(
+    (sum, l) => sum + (Number(l.monthly_payment) ?? monthlyInterest(l)),
+    0,
+  ),
+)
+// When any active liability has a null monthly_payment, the total is an
+// estimate (interest-only fallback) — annotate it honestly.
+const hasEstimatedItems = computed(() =>
+  activeLiabilitiesForPayment.value.some(l => l.monthly_payment == null),
+)
 
 function formatAmountDisplay(amount: number | string): string {
   const n = Number(amount)
@@ -465,6 +499,38 @@ onMounted(() => {
   border-radius: 16px;
   padding: 20px;
   color: #fff;
+}
+
+.monthly-payment-banner {
+  margin: 8px 12px 4px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monthly-payment-banner .mp-label {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.monthly-payment-banner .mp-amount {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+.monthly-payment-banner .mp-estimated {
+  font-size: 11px;
+  color: var(--color-warning, #d97706);
+  border: 1px solid var(--color-warning, #d97706);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.4;
 }
 
 .summary-top {

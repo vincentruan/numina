@@ -939,6 +939,8 @@ export default {
     summaryTotal: '待还总额',
     summarySettled: '已结清总额',
     summaryProgress: '总还款进度',
+    monthlyPaymentTotal: '月供合计',
+    monthlyPaymentEstimated: '估算',
     payDialogTitle: '还款 · {name}',
     payConfirmBtn: '确认还款',
     payRemainingHint: '剩余本金：{amount}',
