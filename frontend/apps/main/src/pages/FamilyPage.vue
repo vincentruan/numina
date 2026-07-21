@@ -123,14 +123,14 @@
                 </div>
                 <div class="stat">
                   <span class="stat-label">{{ t('family.childPendingChores') }}</span>
-                  <span class="stat-value" :class="{ 'has-pending': totalPendingChores > 0 }">
-                    {{ totalPendingChores }}
+                  <span class="stat-value" :class="{ 'has-pending': (childPendingChores[child.id] ?? 0) > 0 }">
+                    {{ pendingStatsLoaded ? (childPendingChores[child.id] ?? 0) : '—' }}
                   </span>
                 </div>
                 <div class="stat">
                   <span class="stat-label">{{ t('family.childPendingWishes') }}</span>
-                  <span class="stat-value" :class="{ 'has-pending': totalPendingWishes > 0 }">
-                    {{ totalPendingWishes }}
+                  <span class="stat-value" :class="{ 'has-pending': (childPendingWishes[child.id] ?? 0) > 0 }">
+                    {{ pendingStatsLoaded ? (childPendingWishes[child.id] ?? 0) : '—' }}
                   </span>
                 </div>
               </div>
@@ -305,8 +305,11 @@ const refreshing = ref(false)
 const childBalances = ref<Record<string, number>>({})
 const childChoreStats = ref<Record<string, ChoreStats>>({})
 const childWishCounts = ref<Record<string, number>>({})
-const totalPendingChores = ref(0)
-const totalPendingWishes = ref(0)
+const childPendingChores = ref<Record<string, number>>({})
+const childPendingWishes = ref<Record<string, number>>({})
+// False until the pending-chore/pending-wish fetches have run; used to
+// show a `—` placeholder instead of a misleading 0 during load.
+const pendingStatsLoaded = ref(false)
 
 const AVATAR_COLORS = ['#4F46E5', '#7C3AED', '#DB2777', '#D97706', '#059669', '#0284C7']
 
@@ -404,27 +407,35 @@ async function loadChildDashboard() {
     childChoreStats.value = res.data
   } catch { /* non-critical */ }
 
-  // Load total pending chore approvals (family-wide)
+  // Load pending chore approvals — compute per-child counts
   try {
     const choreApprovals = await getPendingApprovals()
-    totalPendingChores.value = choreApprovals.length
+    const choreCounts: Record<string, number> = {}
+    for (const item of choreApprovals) {
+      if (!item.child_user_id) continue
+      choreCounts[item.child_user_id] = (choreCounts[item.child_user_id] ?? 0) + 1
+    }
+    childPendingChores.value = choreCounts
   } catch { /* non-critical */ }
 
-  // Load wishes — compute per-child active wish counts and total pending
+  // Load wishes — compute per-child active wish counts and pending wish counts
   try {
     const wishes = await listParentChildWishes()
-    totalPendingWishes.value = wishes.filter(
-      w => w.status === 'pending_review' || w.status === 'redemption_requested',
-    ).length
-    // Per-child: count active wishes (pending_review + active + redemption_requested)
-    const counts: Record<string, number> = {}
+    const activeCounts: Record<string, number> = {}
+    const pendingCounts: Record<string, number> = {}
     for (const w of wishes) {
       if (['pending_review', 'active', 'redemption_requested'].includes(w.status)) {
-        counts[w.child_user_id] = (counts[w.child_user_id] ?? 0) + 1
+        activeCounts[w.child_user_id] = (activeCounts[w.child_user_id] ?? 0) + 1
+      }
+      if (w.status === 'pending_review' || w.status === 'redemption_requested') {
+        pendingCounts[w.child_user_id] = (pendingCounts[w.child_user_id] ?? 0) + 1
       }
     }
-    childWishCounts.value = counts
+    childWishCounts.value = activeCounts
+    childPendingWishes.value = pendingCounts
   } catch { /* non-critical */ }
+
+  pendingStatsLoaded.value = true
 }
 
 async function onPromoteToAdmin(member: { id: string; display_name: string }) {
