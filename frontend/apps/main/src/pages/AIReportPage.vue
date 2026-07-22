@@ -78,7 +78,7 @@
         <p class="overall-summary" v-html="renderedSummary" />
         <div class="report-meta">
           <span>{{ t('aiReport.generatedAt', { time: formatDate(reportGeneratedAt) }) }}</span>
-          <span v-if="hasMarkdownPreview" class="markdown-link" @click="loadMarkdownPreview">
+          <span v-if="hasMarkdownPreview" class="markdown-link" role="button" tabindex="0" @click="loadMarkdownPreview" @keydown.enter="loadMarkdownPreview" @keydown.space.prevent="loadMarkdownPreview">
             <van-icon name="description" /> {{ t('aiReport.viewMarkdown') }}
           </span>
           <span v-if="currentReport.data_completeness_score != null">

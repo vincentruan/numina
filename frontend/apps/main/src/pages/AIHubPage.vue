@@ -127,7 +127,7 @@
 
       <!-- 我的智能体 Section -->
       <div class="agent-section">
-        <div class="agent-section__header" @click="toggleMyAgents">
+        <div class="agent-section__header" role="button" tabindex="0" @click="toggleMyAgents" @keydown.enter="toggleMyAgents" @keydown.space.prevent="toggleMyAgents">
           <span class="agent-section__title">{{ t('aiHub.myAgents') }}</span>
           <span class="agent-section__count">{{ t('aiHub.myAgentsCount', { count: enabledCustomAgents.length }) }}</span>
           <van-icon :name="myAgentsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
@@ -160,7 +160,7 @@
               @edit="handleAgentEdit"
             />
             <!-- Create agent card -->
-            <div v-if="isOwner" class="agent-card agent-card--create" @click="router.push({ name: 'AgentCreate' })">
+            <div v-if="isOwner" class="agent-card agent-card--create" role="button" tabindex="0" @click="router.push({ name: 'AgentCreate' })" @keydown.enter="router.push({ name: 'AgentCreate' })" @keydown.space.prevent="router.push({ name: 'AgentCreate' })">
               <div class="agent-card__icon">＋</div>
               <div class="agent-card__body">
                 <div class="agent-card__name">{{ t('agents.createAgent') }}</div>
@@ -172,7 +172,7 @@
 
       <!-- 分析应用 Section -->
       <div class="agent-section">
-        <div class="agent-section__header" @click="toggleAnalysisApps">
+        <div class="agent-section__header" role="button" tabindex="0" @click="toggleAnalysisApps" @keydown.enter="toggleAnalysisApps" @keydown.space.prevent="toggleAnalysisApps">
           <span class="agent-section__title">{{ t('aiHub.analysisApps') }}</span>
           <span class="agent-section__count">{{ t('aiHub.analysisAppsCount', { count: analysisApps.length }) }}</span>
           <van-icon :name="analysisAppsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />

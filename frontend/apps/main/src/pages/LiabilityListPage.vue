@@ -2,7 +2,7 @@
   <div class="liability-list-page">
     <PageHeader :title="t('liability.pageTitle')" :show-back="false">
       <template v-if="selectMode" #right>
-        <span class="select-cancel" @click="exitSelectMode">{{ t('liability.cancelSelect') }}</span>
+        <span class="select-cancel" role="button" tabindex="0" @click="exitSelectMode" @keydown.enter="exitSelectMode" @keydown.space.prevent="exitSelectMode">{{ t('liability.cancelSelect') }}</span>
       </template>
     </PageHeader>
 
@@ -120,7 +120,7 @@
       </Transition>
 
       <!-- FAB (hidden in select mode) -->
-      <div v-if="!selectMode" class="fab" @click="$router.push('/liabilities/new')">
+      <div v-if="!selectMode" class="fab" role="button" tabindex="0" @click="$router.push('/liabilities/new')" @keydown.enter="$router.push('/liabilities/new')" @keydown.space.prevent="$router.push('/liabilities/new')">
         <van-icon name="plus" size="22" />
       </div>
 

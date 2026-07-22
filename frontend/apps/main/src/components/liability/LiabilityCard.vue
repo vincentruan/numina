@@ -3,7 +3,11 @@
     <div
       class="liability-card"
       :class="{ 'is-selected': selected, 'select-mode': selectMode }"
+      role="button"
+      tabindex="0"
       @click="handleClick"
+      @keydown.enter="handleClick"
+      @keydown.space.prevent="handleClick"
       @touchstart="onTouchStart"
       @touchend="onTouchEnd"
       @touchmove="onTouchMove"

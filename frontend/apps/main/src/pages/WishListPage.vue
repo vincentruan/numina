@@ -160,7 +160,7 @@
       </van-pull-refresh>
     </div>
 
-    <div class="fab" :aria-label="t('wish.aria.addWish')" @click="$router.push('/wishes/new')">
+    <div class="fab" :aria-label="t('wish.aria.addWish')" role="button" tabindex="0" @click="$router.push('/wishes/new')" @keydown.enter="$router.push('/wishes/new')" @keydown.space.prevent="$router.push('/wishes/new')">
       <van-icon name="plus" size="22" />
     </div>
   </div>

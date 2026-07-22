@@ -368,7 +368,7 @@
             </div>
 
             <!-- FAB: create new chore -->
-            <div class="fab" :aria-label="t('baby.addChore')" @click="$router.push('/baby/chores/new')">
+            <div class="fab" :aria-label="t('baby.addChore')" role="button" tabindex="0" @click="$router.push('/baby/chores/new')" @keydown.enter="$router.push('/baby/chores/new')" @keydown.space.prevent="$router.push('/baby/chores/new')">
               <IIcon icon="mdi:plus" size="22" />
             </div>
           </van-tab>

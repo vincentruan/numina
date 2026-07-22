@@ -299,7 +299,7 @@ function closeSwipe(sessionId: string) {
           @touchmove="handleTouchMove($event, session.thread_id)"
           @touchend="handleTouchEnd($event, session.thread_id)"
         >
-          <div class="session-content" @click="selectThread(session.thread_id)">
+          <div class="session-content" role="button" tabindex="0" @click="selectThread(session.thread_id)" @keydown.enter="selectThread(session.thread_id)" @keydown.space.prevent="selectThread(session.thread_id)">
             <div class="session-info">
               <template v-if="renamingId === session.thread_id">
                 <van-field
