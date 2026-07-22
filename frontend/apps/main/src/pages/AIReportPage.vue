@@ -423,11 +423,11 @@ onUnmounted(() => {
 .score-ring-fill.score-excellent { stroke: #2e7d32; }
 .score-ring-fill.score-good      { stroke: var(--color-primary); }
 .score-ring-fill.score-fair      { stroke: #f57f17; }
-.score-ring-fill.score-poor      { stroke: #4caf50; }
+.score-ring-fill.score-poor      { stroke: #dc2626; }
 [data-theme='dark'] .score-ring-fill.score-excellent { stroke: #81c784; }
 [data-theme='dark'] .score-ring-fill.score-good      { stroke: var(--color-coral); }
 [data-theme='dark'] .score-ring-fill.score-fair      { stroke: #ffd54f; }
-[data-theme='dark'] .score-ring-fill.score-poor      { stroke: #81c784; }
+[data-theme='dark'] .score-ring-fill.score-poor      { stroke: #f87171; }
 .score-inner {
   position: absolute;
   top: 50%;
@@ -446,11 +446,11 @@ onUnmounted(() => {
 .score-number.score-excellent { color: #2e7d32; }
 .score-number.score-good      { color: var(--color-primary); }
 .score-number.score-fair      { color: #f57f17; }
-.score-number.score-poor      { color: #4caf50; }
+.score-number.score-poor      { color: #dc2626; }
 [data-theme='dark'] .score-number.score-excellent { color: #81c784; }
 [data-theme='dark'] .score-number.score-good      { color: var(--color-coral); }
 [data-theme='dark'] .score-number.score-fair      { color: #ffd54f; }
-[data-theme='dark'] .score-number.score-poor      { color: #81c784; }
+[data-theme='dark'] .score-number.score-poor      { color: #f87171; }
 .score-unit {
   font-size: 12px;
   color: var(--text-secondary);
