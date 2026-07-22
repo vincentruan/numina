@@ -36,7 +36,7 @@
           <div class="hero-value-item">
             <div class="hero-value-label">{{ t('wish.expectedPrice') }}</div>
             <div class="hero-value-num">
-              <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
+              <span v-if="wish.expected_price">{{ currency.format(wish.expected_price) }}</span>
               <span v-else class="hero-value-unset">{{ t('wish.unset') }}</span>
             </div>
           </div>
@@ -82,7 +82,7 @@
         </van-cell>
         <van-cell :title="t('wish.expectedPrice')">
           <template #value>
-            <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
+            <span v-if="wish.expected_price">{{ currency.format(wish.expected_price) }}</span>
             <span v-else class="unset">{{ t('wish.unset') }}</span>
           </template>
         </van-cell>
@@ -238,6 +238,7 @@ import WishSavingsRecordDialog from '@/components/wishes/WishSavingsRecordDialog
 import WishSavingsLogDialog from '@/components/wishes/WishSavingsLogDialog.vue'
 import { getIconId } from '@/utils/icon'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t, locale } = useI18n()
 
@@ -248,6 +249,7 @@ const liabilityStore = useLiabilityStore()
 const deleting = ref(false)
 const acting = ref(false)
 const { increment, decrement } = usePageLoading()
+const currency = useCurrency()
 
 // Realize dialog
 const showRealizeDialog = ref(false)

@@ -44,7 +44,7 @@
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
             <div class="hero-value-label">{{ t('asset.dailyCostLabel') }}</div>
-            <div class="hero-daily-cost">¥{{ asset.daily_cost.toFixed(2) }}</div>
+            <div class="hero-daily-cost">{{ currency.format(asset.daily_cost) }}</div>
           </div>
         </div>
         <div v-if="asset.status !== 'sold'" class="hero-change" :class="returnClass">
@@ -105,12 +105,12 @@
         <van-cell v-if="asset.usage_frequency" :title="t('assetDetail.fieldUsageFrequency')" :value="usageText" />
         <van-cell v-if="asset.daily_cost" :title="t('assetDetail.fieldDailyCost')">
           <template #value>
-            <span class="daily-cost">¥{{ asset.daily_cost.toFixed(2) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="daily-cost">{{ currency.format(asset.daily_cost) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
         <van-cell v-if="asset.target_daily_cost" :title="t('assetDetail.fieldTargetDailyCost')">
           <template #value>
-            <span class="target-cost">¥{{ asset.target_daily_cost.toFixed(2) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="target-cost">{{ currency.format(Number(asset.target_daily_cost)) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
       </van-cell-group>
@@ -225,6 +225,7 @@ import BuyVsRentCalculator from '@/components/asset/BuyVsRentCalculator.vue'
 import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getIconId } from '@/utils/icon'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
@@ -236,6 +237,7 @@ const acting = ref(false)
 const valuations = ref<AssetValuation[]>([])
 const imageError = ref(false)
 const { increment, decrement } = usePageLoading()
+const currency = useCurrency()
 
 const asset = computed(() => assetStore.currentAsset)
 

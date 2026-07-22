@@ -2,7 +2,7 @@
   <div class="daily-cost-chart">
     <div class="chart-header">
       <span class="chart-title">日均成本趋势</span>
-      <span class="chart-current">当前 ¥{{ currentDailyCost.toFixed(2) }}/天</span>
+      <span class="chart-current">当前 {{ currency.format(currentDailyCost) }}/天</span>
     </div>
     <div v-if="hasData" class="chart-wrapper">
       <v-chart class="chart" :option="chartOption" autoresize />
@@ -20,10 +20,12 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
+import { useCurrency } from '@/composables/useCurrency'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, MarkLineComponent])
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const props = defineProps<{
   purchasePrice: number

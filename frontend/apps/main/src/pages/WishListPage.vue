@@ -83,7 +83,7 @@
                   <span class="wish-name">{{ wish.name }}</span>
                   <div class="wish-right">
                     <span v-if="wish.expected_price" class="wish-price">
-                      ¥{{ formatPrice(wish.expected_price) }}
+                      {{ currency.format(wish.expected_price) }}
                     </span>
                     <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
                     <van-icon name="arrow" size="12" class="card-arrow" />
@@ -177,12 +177,14 @@ import { useWishStore } from '@/stores/wish'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { useAffordBar } from '@/composables/useAffordBar'
+import { useCurrency } from '@/composables/useCurrency'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const currency = useCurrency()
 const dashboardStore = useDashboardStore()
 const wishStore = useWishStore()
 const liabilityStore = useLiabilityStore()
@@ -233,13 +235,6 @@ function toggleSort(value: typeof sortBy.value) {
     sortBy.value = value
     sortDir.value = 'desc'
   }
-}
-
-function formatPrice(value: number): string {
-  if (value >= 10000) {
-    return (value / 10000).toFixed(value % 10000 === 0 ? 0 : 1) + t('common.unitTenThousand')
-  }
-  return value.toLocaleString()
 }
 
 // W2 (Plan B T9): per-wish afford-bar logic. Cache by wish.id to avoid recompute

@@ -46,13 +46,13 @@
       <van-cell-group v-if="sellPrice > 0" inset :title="t('assetSell.sectionPreview')">
         <van-cell :title="t('assetSell.netRecovery')">
           <template #value>
-            <span class="highlight">¥{{ netRecovery.toLocaleString() }}</span>
+            <span class="highlight">{{ currency.format(netRecovery) }}</span>
           </template>
         </van-cell>
         <van-cell :title="t('assetSell.profitLoss')">
           <template #value>
             <span :class="profitLoss >= 0 ? 'positive' : 'negative'">
-              {{ profitLoss >= 0 ? '+' : '' }}¥{{ profitLoss.toLocaleString() }}
+              {{ profitLoss >= 0 ? '+' : '-' }}{{ currency.format(Math.abs(profitLoss)) }}
             </span>
           </template>
         </van-cell>
@@ -77,21 +77,21 @@
       <div v-if="sellResult" class="result-dialog">
         <div class="result-row">
           <span>{{ t('assetSell.resultNetRecovery') }}</span>
-          <span class="highlight">¥{{ sellResult.net_recovery.toLocaleString() }}</span>
+          <span class="highlight">{{ currency.format(Number(sellResult.net_recovery)) }}</span>
         </div>
         <div class="result-row">
           <span>{{ t('assetSell.resultProfitLoss') }}</span>
-          <span :class="sellResult.total_profit_loss >= 0 ? 'positive' : 'negative'">
-            {{ sellResult.total_profit_loss >= 0 ? '+' : '' }}¥{{ sellResult.total_profit_loss.toLocaleString() }}
+          <span :class="Number(sellResult.total_profit_loss) >= 0 ? 'positive' : 'negative'">
+            {{ Number(sellResult.total_profit_loss) >= 0 ? '+' : '-' }}{{ currency.format(Math.abs(Number(sellResult.total_profit_loss))) }}
           </span>
         </div>
         <div class="result-row">
           <span>{{ t('assetSell.resultDailyCost') }}</span>
-          <span>¥{{ sellResult.actual_daily_cost }}{{ t('assetSell.perDay') }}</span>
+          <span>{{ currency.format(Number(sellResult.actual_daily_cost)) }}{{ t('assetSell.perDay') }}</span>
         </div>
         <div v-if="sellResult.target_daily_cost" class="result-row">
           <span>{{ t('assetSell.resultTargetDailyCost') }}</span>
-          <span>¥{{ sellResult.target_daily_cost }}{{ t('assetSell.perDay') }}</span>
+          <span>{{ currency.format(Number(sellResult.target_daily_cost)) }}{{ t('assetSell.perDay') }}</span>
         </div>
         <div class="result-row">
           <span>{{ t('assetSell.resultDaysHeld') }}</span>
@@ -112,8 +112,10 @@ import { useDashboardStore } from '@/stores/dashboard'
 import type { AssetSellResponse } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const route = useRoute()
 const router = useRouter()

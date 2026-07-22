@@ -8,7 +8,7 @@
         <div class="value-label">{{ t('liability.detailRemainingPrincipal') }}</div>
         <MoneyDisplay :amount="Number(liability.remaining_amount)" size="large" />
         <div class="progress-info">
-          {{ t('liability.detailPaidAmount') }} ¥{{ paidAmount.toLocaleString() }} / {{ t('liability.detailTotalAmount') }} ¥{{ Number(liability.original_amount).toLocaleString() }}
+          {{ t('liability.detailPaidAmount') }} {{ currency.format(paidAmount) }} / {{ t('liability.detailTotalAmount') }} {{ currency.format(Number(liability.original_amount)) }}
         </div>
         <van-progress
           :percentage="paidPercent"
@@ -136,8 +136,10 @@ import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
 import InterestForecast from '@/components/liability/InterestForecast.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const route = useRoute()
 const router = useRouter()

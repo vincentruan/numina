@@ -64,7 +64,7 @@
                   <div class="expiring-meta">{{ item.due_date }} · {{ t('liability.title') }}</div>
                 </div>
                 <div class="expiring-right">
-                  <div class="payment-amount">¥{{ (item.amount ?? 0).toLocaleString() }}</div>
+                  <div class="payment-amount">{{ currency.format(item.amount ?? 0) }}</div>
                   <div class="expiring-remaining" :class="getPaymentUrgencyClass(item.due_date)">
                     {{ formatPaymentDays(item.due_date) }}
                   </div>
@@ -138,6 +138,7 @@ import IIcon from '@/components/IIcon.vue'
 import { useRemindersStore } from '@/stores/reminders'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem, UpcomingPaymentItem } from '@/api/dashboard'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   idleAssets?: LowUsageItem[]
@@ -151,6 +152,7 @@ defineEmits<{
 
 const { t } = useI18n()
 const router = useRouter()
+const currency = useCurrency()
 const store = useRemindersStore()
 const expanded = ref<string[]>([])
 const loaded = ref(false)
