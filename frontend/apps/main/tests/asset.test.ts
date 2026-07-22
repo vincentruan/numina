@@ -331,6 +331,117 @@ describe('useAssetStore - optimistic update', () => {
     // currentAsset should reflect the update
     expect(store.currentAsset?.name).toBe('更新名称')
   })
+
+  it('money fields: numeric payload coerced to string on the optimistic asset', async () => {
+    const store = useAssetStore()
+    const existingAsset: Asset = {
+      id: 'asset-m1',
+      name: '原名称',
+      category_id: 'cat-1',
+      asset_type: 'physical',
+      purchase_price: '1000',
+      current_value: '1000',
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
+      user_id: 'user-1',
+      family_id: 'family-1',
+      created_at: '2026-04-18T00:00:00Z',
+      updated_at: '2026-04-18T00:00:00Z',
+    }
+    store.assets = [existingAsset]
+
+    // Hold the API response so we can inspect the optimistic (pre-reconcile) object
+    let resolveApi: (value: { data: Asset }) => void
+    const apiPromise = new Promise<{ data: Asset }>((resolve) => {
+      resolveApi = resolve
+    })
+    vi.mocked(assetApi.updateAsset).mockReturnValue(apiPromise as any)
+
+    // Request payload carries money as numbers (money-as-number on the request)
+    const updatePromise = store.updateAsset('asset-m1', { purchase_price: 5000, current_value: 6000 })
+
+    // Optimistic asset must store money as STRINGS (money-as-str on the wire shape)
+    expect(store.assets[0].purchase_price).toBe('5000')
+    expect(store.assets[0].current_value).toBe('6000')
+    expect(typeof store.assets[0].purchase_price).toBe('string')
+
+    resolveApi!({ data: { ...existingAsset, purchase_price: '5000', current_value: '6000' } })
+    await updatePromise
+  })
+
+  it('tag_ids: stripped from the optimistic asset (request-only field)', async () => {
+    const store = useAssetStore()
+    const existingAsset: Asset = {
+      id: 'asset-m2',
+      name: '原名称',
+      category_id: 'cat-1',
+      asset_type: 'physical',
+      purchase_price: '1000',
+      current_value: '1000',
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
+      user_id: 'user-1',
+      family_id: 'family-1',
+      created_at: '2026-04-18T00:00:00Z',
+      updated_at: '2026-04-18T00:00:00Z',
+    }
+    store.assets = [existingAsset]
+
+    let resolveApi: (value: { data: Asset }) => void
+    const apiPromise = new Promise<{ data: Asset }>((resolve) => {
+      resolveApi = resolve
+    })
+    vi.mocked(assetApi.updateAsset).mockReturnValue(apiPromise as any)
+
+    const updatePromise = store.updateAsset('asset-m2', { name: 'x', tag_ids: ['t1', 't2'] })
+
+    // tag_ids is a request-only field and must NOT leak onto the Asset wire shape
+    expect('tag_ids' in store.assets[0]).toBe(false)
+    expect((store.assets[0] as Record<string, unknown>).tag_ids).toBeUndefined()
+
+    resolveApi!({ data: { ...existingAsset, name: 'x' } })
+    await updatePromise
+  })
+
+  it('omitted money fields: preserved from existing asset, not clobbered to undefined', async () => {
+    const store = useAssetStore()
+    const existingAsset: Asset = {
+      id: 'asset-m3',
+      name: '原名称',
+      category_id: 'cat-1',
+      asset_type: 'physical',
+      purchase_price: '1000',
+      current_value: '1000',
+      sell_price: '800',
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
+      user_id: 'user-1',
+      family_id: 'family-1',
+      created_at: '2026-04-18T00:00:00Z',
+      updated_at: '2026-04-18T00:00:00Z',
+    }
+    store.assets = [existingAsset]
+
+    let resolveApi: (value: { data: Asset }) => void
+    const apiPromise = new Promise<{ data: Asset }>((resolve) => {
+      resolveApi = resolve
+    })
+    vi.mocked(assetApi.updateAsset).mockReturnValue(apiPromise as any)
+
+    // Only update sell_price; purchase_price/current_value are omitted (undefined)
+    const updatePromise = store.updateAsset('asset-m3', { sell_price: 950 })
+
+    // Omitted money fields keep their existing values; only the sent field changes
+    expect(store.assets[0].purchase_price).toBe('1000')
+    expect(store.assets[0].current_value).toBe('1000')
+    expect(store.assets[0].sell_price).toBe('950')
+
+    resolveApi!({ data: { ...existingAsset, sell_price: '950' } })
+    await updatePromise
+  })
 })
 
 describe('useAssetStore - optimistic delete', () => {
