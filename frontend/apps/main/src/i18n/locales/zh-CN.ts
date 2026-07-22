@@ -880,6 +880,14 @@ export default {
     perDay: '/天',
     sectionWishOrigin: '来源心愿',
     fromWish: '查看原始心愿',
+    intervalReturn: '区间收益率',
+    interval1M: '近1月',
+    interval3M: '近3月',
+    interval6M: '近6月',
+    interval1Y: '近1年',
+    intervalReturnDetail: '自 {date}（{start}）至今（{end}）收益率 {rate}',
+    intervalNoData: '该区间暂无历史估值数据',
+    intervalSelectHint: '点击选择区间',
   },
   liability: {
     title: '负债',
@@ -979,6 +987,10 @@ export default {
     institutionPlaceholder: '请输入金融机构(可选)',
     notes: '备注',
     notesPlaceholder: '请输入备注(可选)',
+    // L7 (KTD-3): collateral asset picker in LiabilityForm.
+    linkedAssetPicker: '关联资产（抵押物）',
+    linkedAssetPickerPlaceholder: '选择抵押物(可选)',
+    noLinkedAsset: '无',
     saveChanges: '保存修改',
     // Detail page
     detailRemainingPrincipal: '剩余本金',
@@ -997,6 +1009,11 @@ export default {
     detailFieldEndDate: '预计还清',
     detailFieldLinkedAsset: '关联资产',
     detailLinkedAssetHint: '查看关联资产',
+    // L7 (KTD-2): collateral coverage comparison card.
+    collateralCurrentValue: '抵押物现值',
+    collateralRemainingLoan: '剩余贷款',
+    collateralCoverage: '覆盖率',
+    collateralCoverageHint: '抵押物现价 / 剩余贷款',
     detailSectionNotes: '备注',
     detailBtnRecordPayment: '记录还款',
     detailBtnEdit: '编辑',
@@ -1320,6 +1337,8 @@ export default {
       submit: '创建',
       success: '任务创建成功',
       failed: '创建失败，请重试',
+      realRewardEnabled: '该家务给教育奖励',
+      realRewardEnabledHint: '家庭开关关闭时此项无效',
     },
     blindBoxGifts: '礼物池',
     blindBoxDraws: '待兑现',
@@ -1579,6 +1598,11 @@ export default {
     coinRatesPageTitle: '星币汇率设置',
     copperToSilverRate: '铜币兑换银币',
     silverToGoldRate: '银币兑换金币',
+    educationRewardSection: '教育奖励金',
+    educationRewardEnabled: '开启教育奖励',
+    educationRewardRate: '星币兑换汇率',
+    educationRewardRateUnit: '1 星币 = {rate} 元',
+    educationRewardHint: '开启后，家长审批家务通过时，将按汇率把星币换算成元记入活动流水"教育奖励金"，仅记录不扣款。',
   },
   changePassword: {
     title: '账户密码',
@@ -1915,6 +1939,7 @@ export default {
     familyTitleUpdated: '家庭名称已修改',
     ownerOnlyWarning: '只有家庭创建者可以修改名称',
     coinRateInvalid: '请输入 1-10 的整数',
+    educationRewardRateInvalid: '请输入大于等于 0 的整数',
     confirmForceLogout: '确定要强制退出 {name} 的所有设备吗？',
     // Settings
     themeChanged: '主题色已更改',
@@ -2658,6 +2683,14 @@ export default {
     markdownPreview: '完整报告',
     downloadReport: '下载报告',
     viewMarkdown: '查看完整报告',
+    exportImage: '导出图片',
+    exportingImage: '正在生成图片...',
+    exportImageSuccess: '图片已导出',
+    exportImageFail: '图片导出失败，请重试',
+    exportPdf: '导出 PDF',
+    exportingPdf: '正在生成 PDF...',
+    exportPdfSuccess: 'PDF 已导出',
+    exportPdfFail: '导出 PDF 失败，请重试',
   },
   calendar: {
     legendChore: '打卡',
@@ -2887,6 +2920,7 @@ export default {
     // S5 资产保值率
     retentionRate: {
       title: '资产保值率',
+      physicalTitle: '实物保值率',
       physicalOnly: '仅实物资产',
       totalBought: '总买入',
       sold: '卖出',
@@ -2896,6 +2930,15 @@ export default {
       serviceDays: '已服役 {days} 天',
       bought: '买入',
       current: '当前',
+    },
+    // D8 金融年化收益率
+    investmentReturns: {
+      title: '金融年化收益率',
+      financialOnly: '仅金融资产',
+      annualizedRate: '平均年化收益率',
+      assetCount: '金融资产数',
+      description: '按持有天数年化的期间收益率',
+      insufficientDays: '持有天数不足',
     },
     // 通用
     common: {

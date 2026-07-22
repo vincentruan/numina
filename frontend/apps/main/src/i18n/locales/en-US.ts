@@ -571,6 +571,14 @@ export default {
     perDay: '/day',
     sectionWishOrigin: 'Wish Origin',
     fromWish: 'View Original Wish',
+    intervalReturn: 'Interval Return',
+    interval1M: '1M',
+    interval3M: '3M',
+    interval6M: '6M',
+    interval1Y: '1Y',
+    intervalReturnDetail: 'From {date} ({start}) to now ({end}) return {rate}',
+    intervalNoData: 'No valuation data in this period',
+    intervalSelectHint: 'Select an interval',
   },
   liability: {
     title: 'Liabilities',
@@ -615,6 +623,10 @@ export default {
     institutionPlaceholder: 'Enter institution (optional)',
     notes: 'Notes',
     notesPlaceholder: 'Enter notes (optional)',
+    // L7 (KTD-3): collateral asset picker in LiabilityForm.
+    linkedAssetPicker: 'Linked Asset (Collateral)',
+    linkedAssetPickerPlaceholder: 'Select collateral (optional)',
+    noLinkedAsset: 'None',
     saveChanges: 'Save Changes',
     // List page
     pageTitle: 'Liabilities',
@@ -659,6 +671,11 @@ export default {
     detailFieldEndDate: 'Expected End',
     detailFieldLinkedAsset: 'Linked Asset',
     detailLinkedAssetHint: 'View linked asset',
+    // L7 (KTD-2): collateral coverage comparison card.
+    collateralCurrentValue: 'Collateral Value',
+    collateralRemainingLoan: 'Remaining Loan',
+    collateralCoverage: 'Coverage',
+    collateralCoverageHint: 'Collateral value / remaining loan',
     detailSectionNotes: 'Notes',
     detailBtnRecordPayment: 'Record Payment',
     detailBtnEdit: 'Edit',
@@ -831,6 +848,8 @@ export default {
       submit: 'Create',
       success: 'Task created',
       failed: 'Creation failed, please try again',
+      realRewardEnabled: 'This chore gives education reward',
+      realRewardEnabledHint: 'No effect when family switch is off',
     },
     grantBtn: 'Give⭐',
     grantSelectChild: 'Select a child to give stars',
@@ -1068,6 +1087,11 @@ export default {
     coinRatesPageTitle: 'Coin Exchange Rates',
     copperToSilverRate: 'Copper to Silver Rate',
     silverToGoldRate: 'Silver to Gold Rate',
+    educationRewardSection: 'Education Reward',
+    educationRewardEnabled: 'Enable Education Reward',
+    educationRewardRate: 'Coin to Yuan Rate',
+    educationRewardRateUnit: '1 star coin = {rate} yuan',
+    educationRewardHint: 'When enabled, approving a chore converts the earned star coins into yuan at this rate and records an "Education Reward" entry in the activity feed. This is record-only, no deduction.',
   },
   changePassword: {
     title: 'Account Password',
@@ -1392,6 +1416,7 @@ export default {
     familyTitleUpdated: 'Family name updated',
     ownerOnlyWarning: 'Only the family owner can change the name',
     coinRateInvalid: 'Please enter an integer between 1 and 10',
+    educationRewardRateInvalid: 'Please enter an integer greater than or equal to 0',
     confirmForceLogout: 'Force logout all devices for {name}?',
     // Settings
     themeChanged: 'Theme color updated',
@@ -2078,6 +2103,14 @@ export default {
     markdownPreview: 'Full report',
     downloadReport: 'Download report',
     viewMarkdown: 'View full report',
+    exportImage: 'Export Image',
+    exportingImage: 'Generating image...',
+    exportImageSuccess: 'Image exported',
+    exportImageFail: 'Image export failed, please retry',
+    exportPdf: 'Export PDF',
+    exportingPdf: 'Generating PDF...',
+    exportPdfSuccess: 'PDF exported',
+    exportPdfFail: 'Failed to export PDF, please retry',
   },
   pendingApprovals: {
     title: 'Pending Tasks',
@@ -2267,6 +2300,7 @@ export default {
     // S5 Asset Retention Rate
     retentionRate: {
       title: 'Retention Rate',
+      physicalTitle: 'Physical Retention',
       physicalOnly: 'Physical Assets Only',
       totalBought: 'Total Bought',
       sold: 'Sold',
@@ -2276,6 +2310,15 @@ export default {
       serviceDays: 'In service {days} days',
       bought: 'Bought',
       current: 'Current',
+    },
+    // D8 Financial Annualized Return
+    investmentReturns: {
+      title: 'Annualized Return',
+      financialOnly: 'Financial Assets Only',
+      annualizedRate: 'Avg Annualized Rate',
+      assetCount: 'Financial Assets',
+      description: 'Holding-period return annualized by holding days',
+      insufficientDays: 'Insufficient holding days',
     },
     // Common
     common: {

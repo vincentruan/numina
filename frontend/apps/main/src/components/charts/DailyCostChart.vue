@@ -110,7 +110,7 @@ const chartOption = computed(() => {
   if (props.targetDailyCost) {
     markLines.push({
       yAxis: props.targetDailyCost,
-      label: { formatter: `目标 ¥${props.targetDailyCost}`, position: 'end', fontSize: 10 },
+      label: { formatter: () => `目标 ${currency.format(props.targetDailyCost)}`, position: 'end', fontSize: 10 },
       lineStyle: { color: '#07c160', type: 'dashed' }
     })
   }
@@ -120,7 +120,7 @@ const chartOption = computed(() => {
       trigger: 'axis',
       formatter: (params: CallbackDataParams[]) => {
         const p = params[0] as CallbackDataParams & { axisValue: string }
-        return `${p.axisValue}<br/>日均 ¥${Number(p.value).toFixed(2)}`
+        return `${p.axisValue}<br/>日均 ${currency.format(Number(p.value))}`
       }
     },
     grid: {
@@ -140,7 +140,7 @@ const chartOption = computed(() => {
       type: 'value',
       axisLabel: {
         fontSize: 10,
-        formatter: (val: number) => `¥${val}`
+        formatter: (val: number) => currency.format(val)
       },
       splitLine: { lineStyle: { type: 'dashed' } }
     },

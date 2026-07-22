@@ -8,7 +8,7 @@
       @update:model-value="onAmountChange"
     >
       <template #button>
-        <div class="currency-button" @click="showPicker = true">
+        <div class="currency-button" role="button" tabindex="0" @click="showPicker = true" @keydown.enter="showPicker = true" @keydown.space.prevent="showPicker = true">
           <span class="currency-flag">{{ currencyFlag }}</span>
           <span class="currency-symbol">{{ currencySymbol }}</span>
           <van-icon name="arrow-down" size="12" />

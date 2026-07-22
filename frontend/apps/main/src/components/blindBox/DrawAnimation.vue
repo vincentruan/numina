@@ -1,6 +1,6 @@
 <template>
   <div class="draw-animation" :class="{ animating }" role="status" :aria-live="animating ? 'polite' : 'off'">
-    <div class="box-container" @click="!animating && $emit('draw')">
+    <div class="box-container" role="button" tabindex="0" :aria-label="t('blindBoxDraw.tapHint')" @click="!animating && $emit('draw')" @keydown.enter="!animating && $emit('draw')" @keydown.space.prevent="!animating && $emit('draw')">
       <div class="box" :class="{ shake: animating, open: revealed }">
         <span class="box-emoji" aria-hidden="true">{{ revealed ? (gift?.gift_emoji ?? '🎁') : '📦' }}</span>
       </div>

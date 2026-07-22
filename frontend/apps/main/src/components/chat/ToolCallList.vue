@@ -103,7 +103,7 @@ function formatTime(ms?: number): string {
       :class="`tool-card--${step.status ?? 'running'}`"
     >
       <!-- Header: icon, name, status -->
-      <div class="tool-header" @click="toggleExpanded(step.id)">
+      <div class="tool-header" role="button" tabindex="0" :aria-expanded="expandedSteps.has(step.id)" @click="toggleExpanded(step.id)" @keydown.enter="toggleExpanded(step.id)">
         <!-- Tool icon -->
         <span class="tool-icon" :style="{ color: getToolDisplay(step).color }">
           {{ getToolDisplay(step).icon }}

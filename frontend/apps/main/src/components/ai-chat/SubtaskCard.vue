@@ -105,7 +105,7 @@ const showShineBorder = computed(
     <ShineBorder v-if="showShineBorder" :colors="['#A07CFE', '#FE8FB5', '#FFBE7B']" />
 
     <!-- 卡片头部 -->
-    <div class="subtask-header" @click="collapsed = !collapsed">
+    <div class="subtask-header" role="button" tabindex="0" :aria-expanded="!collapsed" @click="collapsed = !collapsed" @keydown.enter="collapsed = !collapsed">
       <!-- 任务图标 -->
       <IIcon icon="clipboard-list" class="task-icon" />
 

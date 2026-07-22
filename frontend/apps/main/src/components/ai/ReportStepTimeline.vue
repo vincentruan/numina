@@ -22,7 +22,7 @@
       <!-- Step 1: markdown 落盘 -->
       <van-step :status="toVanStepStatus(step1Status)">
         <template #title>
-          <div class="step-title-row" @click="toggleStep(1)">
+          <div class="step-title-row" role="button" tabindex="0" :aria-expanded="expandedStep === 1" @click="toggleStep(1)" @keydown.enter="toggleStep(1)">
             <span>{{ t('aiReport.step1') }}</span>
             <van-icon :name="expandedStep === 1 ? 'arrow-up' : 'arrow-down'" class="step-toggle" />
           </div>
@@ -51,7 +51,7 @@
       <!-- Step 2: JSON 输出 -->
       <van-step :status="toVanStepStatus(step2Status)">
         <template #title>
-          <div class="step-title-row" @click="toggleStep(2)">
+          <div class="step-title-row" role="button" tabindex="0" :aria-expanded="expandedStep === 2" @click="toggleStep(2)" @keydown.enter="toggleStep(2)">
             <span>{{ t('aiReport.step2') }}</span>
             <van-icon :name="expandedStep === 2 ? 'arrow-up' : 'arrow-down'" class="step-toggle" />
           </div>

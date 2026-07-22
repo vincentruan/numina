@@ -22,10 +22,12 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import type { TrendPoint } from '@/types'
+import { useCurrency } from '@/composables/useCurrency'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 const { t } = useI18n()
+const { format } = useCurrency()
 
 const props = defineProps<{
   data: TrendPoint[]
@@ -47,7 +49,7 @@ const chartOption = computed(() => ({
     formatter: (params: CallbackDataParams[]) => {
       let html = `${(params[0] as CallbackDataParams & { axisValue: string }).axisValue}<br/>`
       params.forEach((p: CallbackDataParams) => {
-        html += `${p.marker} ${p.seriesName}: ¥${Number(p.value).toLocaleString()}<br/>`
+        html += `${p.marker} ${p.seriesName}: ${format(Number(p.value))}<br/>`
       })
       return html
     }

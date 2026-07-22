@@ -50,7 +50,7 @@ const emit = defineEmits<{
         @consult="emit('consult', $event)"
         @edit="emit('edit', $event)"
       />
-      <div v-if="showCreate" class="agent-card agent-card--create" @click="emit('create')">
+      <div v-if="showCreate" class="agent-card agent-card--create" role="button" tabindex="0" :aria-label="t('agents.createAgent')" @click="emit('create')" @keydown.enter="emit('create')" @keydown.space.prevent="emit('create')">
         <div class="agent-card__icon">＋</div>
         <div class="agent-card__body">
           <div class="agent-card__name">{{ t('agents.createAgent') }}</div>

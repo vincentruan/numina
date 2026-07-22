@@ -1,7 +1,7 @@
 <template>
   <div class="ai-process-block" :class="{ 'is-collapsed': !isExpanded }">
     <!-- Header -->
-    <div class="process-header" @click="toggleExpand">
+    <div class="process-header" role="button" tabindex="0" :aria-expanded="isExpanded" @click="toggleExpand" @keydown.enter="toggleExpand">
       <div class="process-icon" :class="statusClass">
         <AiLogo :state="logoState" />
       </div>

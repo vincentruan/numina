@@ -1,7 +1,7 @@
 <template>
   <div v-if="filteredApprovals.length > 0" class="pending-approvals-section">
     <!-- Header -->
-    <div class="approval-header" @click="collapsed = !collapsed">
+    <div class="approval-header" role="button" tabindex="0" :aria-expanded="!collapsed" @click="collapsed = !collapsed" @keydown.enter="collapsed = !collapsed">
       <span class="header-label">{{ t('pendingApprovals.title') }}</span>
       <span class="header-count">{{ filteredApprovals.length }}</span>
       <van-icon :name="collapsed ? 'arrow-down' : 'arrow-up'" size="14" class="collapse-icon" />

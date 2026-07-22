@@ -107,8 +107,8 @@
           <span class="title-icon">📉</span>{{ t('insights.dailyCostRank.title') }}
         </div>
         <div class="rank-sort-group">
-          <div :class="['rank-sort-btn', { active: costRankOrder === 'highest' }]" @click="costRankOrder = 'highest'">{{ t('insights.dailyCostRank.highest') }}</div>
-          <div :class="['rank-sort-btn', { active: costRankOrder === 'lowest' }]" @click="costRankOrder = 'lowest'">{{ t('insights.dailyCostRank.lowest') }}</div>
+          <div :class="['rank-sort-btn', { active: costRankOrder === 'highest' }]" role="button" tabindex="0" @click="costRankOrder = 'highest'" @keydown.enter="costRankOrder = 'highest'" @keydown.space.prevent="costRankOrder = 'highest'">{{ t('insights.dailyCostRank.highest') }}</div>
+          <div :class="['rank-sort-btn', { active: costRankOrder === 'lowest' }]" role="button" tabindex="0" @click="costRankOrder = 'lowest'" @keydown.enter="costRankOrder = 'lowest'" @keydown.space.prevent="costRankOrder = 'lowest'">{{ t('insights.dailyCostRank.lowest') }}</div>
         </div>
       </div>
       <div class="rank-list">
@@ -132,14 +132,14 @@
           </div>
         </div>
       </div>
-      <div class="view-all-row" @click="showAllCostRank = true">{{ t('insights.dailyCostRank.viewAll') }} <span class="view-all-arrow">›</span></div>
+      <div class="view-all-row" role="button" tabindex="0" @click="showAllCostRank = true" @keydown.enter="showAllCostRank = true" @keydown.space.prevent="showAllCostRank = true">{{ t('insights.dailyCostRank.viewAll') }} <span class="view-all-arrow">›</span></div>
     </div>
 
     <!-- S1 查看全部弹出层 -->
     <van-popup v-model:show="showAllCostRank" position="bottom" round safe-area-inset-bottom>
       <div class="popup-header">
         <span class="popup-title">{{ t('insights.dailyCostRank.title') }}</span>
-        <div class="popup-close" @click="showAllCostRank = false">✕</div>
+        <div class="popup-close" role="button" tabindex="0" :aria-label="t('common.close')" @click="showAllCostRank = false" @keydown.enter="showAllCostRank = false" @keydown.space.prevent="showAllCostRank = false">✕</div>
       </div>
       <div class="popup-rank-list">
         <div v-for="(item, idx) in allCostRankItems" :key="idx" class="rank-item">
@@ -214,8 +214,8 @@
           <span class="title-icon">📊</span>{{ t('insights.typeDistribution.title') }}
         </div>
         <div class="toggle-group">
-          <div :class="['toggle-btn', { active: distMode === 'value' }]" @click="distMode = 'value'">{{ t('insights.typeDistribution.byValue') }}</div>
-          <div :class="['toggle-btn', { active: distMode === 'count' }]" @click="distMode = 'count'">{{ t('insights.typeDistribution.byCount') }}</div>
+          <div :class="['toggle-btn', { active: distMode === 'value' }]" role="button" tabindex="0" @click="distMode = 'value'" @keydown.enter="distMode = 'value'" @keydown.space.prevent="distMode = 'value'">{{ t('insights.typeDistribution.byValue') }}</div>
+          <div :class="['toggle-btn', { active: distMode === 'count' }]" role="button" tabindex="0" @click="distMode = 'count'" @keydown.enter="distMode = 'count'" @keydown.space.prevent="distMode = 'count'">{{ t('insights.typeDistribution.byCount') }}</div>
         </div>
       </div>
       <div class="dist-summary">
@@ -274,11 +274,11 @@
       </div>
     </div>
 
-    <!-- S5 资产保值率 -->
+    <!-- S5 实物保值率 -->
     <div v-if="retentionRate" class="section-card">
       <div class="section-header">
         <div class="section-title">
-          <span class="title-icon">📈</span>{{ t('insights.retentionRate.title') }}
+          <span class="title-icon">📈</span>{{ t('insights.retentionRate.physicalTitle') }}
         </div>
         <div class="physical-only-badge">{{ t('insights.retentionRate.physicalOnly') }}</div>
       </div>
@@ -364,6 +364,36 @@
           <div class="pres-right">
             <div class="pres-rate-val" :class="item.rateClass">{{ item.rate.toFixed(1) }}%</div>
             <div class="pres-profit" :class="item.profitClass">{{ format(item.profit) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D8 金融年化收益率 -->
+    <div v-if="investmentReturns" class="section-card">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="title-icon">💰</span>{{ t('insights.investmentReturns.title') }}
+        </div>
+        <div class="physical-only-badge">{{ t('insights.investmentReturns.financialOnly') }}</div>
+      </div>
+      <div class="pres-summary">
+        <div class="pres-row">
+          <div class="pres-stat">
+            <div class="pres-label">{{ t('insights.investmentReturns.annualizedRate') }}</div>
+            <div v-if="investmentReturns.annualized_rate !== null" class="pres-val purple" :class="(investmentReturns.annualized_rate ?? 0) >= 0 ? 'green' : 'red'">
+              {{ (investmentReturns.annualized_rate ?? 0) >= 0 ? '+' : '' }}{{ investmentReturns.annualized_rate?.toFixed(2) }}%
+            </div>
+            <div v-else class="pres-val insufficient">{{ t('insights.investmentReturns.insufficientDays') }}</div>
+          </div>
+          <div class="pres-stat">
+            <div class="pres-label">{{ t('insights.investmentReturns.assetCount') }}</div>
+            <div class="pres-val purple">{{ investmentReturns.asset_count }}</div>
+          </div>
+        </div>
+        <div class="pres-row pres-row-2">
+          <div class="pres-profit-big">
+            <span class="ppb-label">{{ t('insights.investmentReturns.description') }}</span>
           </div>
         </div>
       </div>
@@ -477,6 +507,8 @@ const durationBuckets = computed(() => {
 })
 
 const retentionRate = computed(() => insightsData.value?.retention_rate)
+
+const investmentReturns = computed(() => insightsData.value?.investment_returns)
 
 const retentionItems = computed(() => {
   if (!insightsData.value?.retention_rate?.top_items) return []
@@ -1422,6 +1454,7 @@ onMounted(async () => {
 .pres-val.purple { color: var(--van-primary-color); }
 .pres-val.red { color: var(--color-trend-up); }
 .pres-val.green { color: var(--color-trend-down); }
+.pres-val.insufficient { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
 
 [data-theme='dark'] .pres-val.purple { color: var(--color-lavender); }
 

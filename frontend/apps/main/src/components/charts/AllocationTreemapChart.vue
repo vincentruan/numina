@@ -13,8 +13,11 @@ import { TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import type { AllocationItem } from '@/types'
+import { useCurrency } from '@/composables/useCurrency'
 
 use([CanvasRenderer, TreemapChart, TooltipComponent])
+
+const { format } = useCurrency()
 
 const props = defineProps<{
   data: AllocationItem[]
@@ -107,9 +110,9 @@ const chartOption = computed(() => {
       formatter: (params: CallbackDataParams) => {
         const item = props.data.find(d => d.category_name === params.name)
         if (item) {
-          return `${params.name}: ¥${Number(params.value).toLocaleString()} (${item.percentage.toFixed(1)}%)`
+          return `${params.name}: ${format(Number(params.value))} (${item.percentage.toFixed(1)}%)`
         }
-        return `${params.name}: ¥${Number(params.value).toLocaleString()}`
+        return `${params.name}: ${format(Number(params.value))}`
       },
     },
     series: [
