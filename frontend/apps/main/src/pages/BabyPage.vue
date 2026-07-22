@@ -94,7 +94,11 @@
                   v-for="wish in pendingReviewWishes"
                   :key="wish.id"
                   class="wish-card"
+                  role="button"
+                  tabindex="0"
                   @click="openWishDetail(wish)"
+                  @keydown.enter="openWishDetail(wish)"
+                  @keydown.space.prevent="openWishDetail(wish)"
                 >
                   <div class="wish-card-top">
                     <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
@@ -140,7 +144,11 @@
                   v-for="wish in activeWishes"
                   :key="wish.id"
                   class="wish-card"
+                  role="button"
+                  tabindex="0"
                   @click="openWishDetail(wish)"
+                  @keydown.enter="openWishDetail(wish)"
+                  @keydown.space.prevent="openWishDetail(wish)"
                 >
                   <div class="wish-card-top">
                     <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
@@ -178,7 +186,11 @@
                   v-for="wish in fulfilledWishes"
                   :key="wish.id"
                   class="wish-card wish-card--fulfilled"
+                  role="button"
+                  tabindex="0"
                   @click="openWishDetail(wish)"
+                  @keydown.enter="openWishDetail(wish)"
+                  @keydown.space.prevent="openWishDetail(wish)"
                 >
                   <div class="wish-card-top">
                     <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
