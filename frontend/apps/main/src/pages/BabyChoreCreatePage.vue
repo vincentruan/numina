@@ -63,6 +63,21 @@
             </van-checkbox-group>
           </template>
         </van-field>
+        <van-field
+          :label="t('baby.choreForm.realRewardEnabled')"
+          name="real_reward_enabled"
+        >
+          <template #input>
+            <div class="reward-switch">
+              <van-switch
+                v-model="form.real_reward_enabled"
+                :disabled="!familySwitchOn"
+                :aria-label="t('baby.choreForm.realRewardEnabled')"
+              />
+              <span class="reward-hint">{{ t('baby.choreForm.realRewardEnabledHint') }}</span>
+            </div>
+          </template>
+        </van-field>
       </van-cell-group>
 
       <div style="margin: 16px">
@@ -75,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -88,16 +103,27 @@ const familyStore = useFamilyStore()
 
 const childMembers = computed(() => familyStore.members.filter(m => m.role === 'child'))
 
+// B1 per-template granularity: the per-template switch is meaningless when the
+// family-level education_reward_enabled switch is OFF — disable + hint in that case.
+const familySwitchOn = computed(() => familyStore.educationRewardEnabled)
+
 const form = ref({
   name: '',
   emoji: '',
   frequency: 'daily' as 'daily' | 'weekly',
   assignment_type: 'assigned' as 'assigned' | 'pool',
   assignee_ids: [] as string[],
+  real_reward_enabled: true,
 })
 
 const rewardStr = ref('')
 const submitting = ref(false)
+
+onMounted(() => {
+  // Ensure family switch state is loaded (also loaded at app init, but guard for
+  // navigation that bypasses it / race on first paint).
+  familyStore.loadCoinConfig()
+})
 
 async function onSubmit() {
   const coinReward = parseInt(rewardStr.value, 10)
@@ -114,6 +140,7 @@ async function onSubmit() {
       frequency: form.value.frequency,
       assignment_type: form.value.assignment_type,
       assignee_ids: form.value.assignment_type === 'assigned' ? form.value.assignee_ids : [],
+      real_reward_enabled: form.value.real_reward_enabled,
     })
     showSuccessToast(t('baby.choreForm.success'))
     router.back()
@@ -129,5 +156,16 @@ async function onSubmit() {
 .chore-create-page {
   background: var(--bg-secondary);
   min-height: 100vh;
+}
+
+.reward-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reward-hint {
+  font-size: 12px;
+  color: var(--van-text-color-3, rgba(0, 0, 0, 0.4));
 }
 </style>

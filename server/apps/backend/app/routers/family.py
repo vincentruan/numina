@@ -292,6 +292,10 @@ def update_family_settings(
         config.coin_copper_to_silver = body.coin_copper_to_silver
     if body.coin_silver_to_gold is not None:
         config.coin_silver_to_gold = body.coin_silver_to_gold
+    if body.education_reward_enabled is not None:
+        config.education_reward_enabled = body.education_reward_enabled
+    if body.coin_to_yuan_rate is not None:
+        config.coin_to_yuan_rate = body.coin_to_yuan_rate
     db.commit()
     db.refresh(config)
 
@@ -305,6 +309,8 @@ def update_family_settings(
         ai_enabled=ai_enabled,
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
+        education_reward_enabled=config.education_reward_enabled,
+        coin_to_yuan_rate=config.coin_to_yuan_rate,
     )
 
 
@@ -330,6 +336,8 @@ def get_family_settings(
         ai_enabled=ai_enabled,
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
+        education_reward_enabled=config.education_reward_enabled,
+        coin_to_yuan_rate=config.coin_to_yuan_rate,
     )
 
 
@@ -599,6 +607,10 @@ def update_economy_config(
         cfg.coin_copper_to_silver = body.coin_copper_to_silver
     if body.coin_silver_to_gold is not None:
         cfg.coin_silver_to_gold = body.coin_silver_to_gold
+    if body.education_reward_enabled is not None:
+        cfg.education_reward_enabled = body.education_reward_enabled
+    if body.coin_to_yuan_rate is not None:
+        cfg.coin_to_yuan_rate = body.coin_to_yuan_rate
     db.commit()
     db.refresh(cfg)
     return ChildEconomyConfigResponse.model_validate(cfg)

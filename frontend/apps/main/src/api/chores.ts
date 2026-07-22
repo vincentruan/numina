@@ -9,6 +9,7 @@ export interface ChoreTemplate {
   frequency: 'daily' | 'weekly'
   assignment_type: 'assigned' | 'pool'
   is_active: boolean
+  real_reward_enabled: boolean
   assignees: { id: string; display_name: string }[]
 }
 
@@ -19,6 +20,7 @@ export interface ChoreTemplateCreate {
   frequency: 'daily' | 'weekly'
   assignment_type: 'assigned' | 'pool'
   assignee_ids: string[]
+  real_reward_enabled?: boolean
 }
 
 export interface ChoreTemplateUpdate {
@@ -26,6 +28,7 @@ export interface ChoreTemplateUpdate {
   emoji?: string
   coin_reward?: number
   assignee_ids?: string[]
+  real_reward_enabled?: boolean
 }
 
 export async function listChoreTemplates(): Promise<ChoreTemplate[]> {
