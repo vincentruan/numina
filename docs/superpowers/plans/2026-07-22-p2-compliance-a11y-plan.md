@@ -1,7 +1,8 @@
 # P2 批次 — Implementation Plan
 
-> **状态**：draft，待实现
+> **状态**：complete（17 项全部实现并验证，2026-07-22；A5/S2 已满足跳过）
 > **日期**：2026-07-22
+> **完成日期**：2026-07-22
 > **父文档**：[2026-07-19-family-finance-optimization-requirements.md](../specs/2026-07-19-family-finance-optimization-requirements.md)（§2 P2 批 + §3 需求总表 P2 项 + §5 待办「[ ] P2 批次」）
 > **范围**：P2 批 17 项——i18n 合规、a11y 整改、币种统一、emoji 清理、语义修正、设置增强
 > **来源**：spec §2「P2 批（10 项）— i18n 合规与可访问性」（实际总表数 17 项，spec "10 项" 为概数）
@@ -136,22 +137,25 @@
 
 ## Definition of Done
 
-- [ ] 17 项全部完成，每项独立 commit、独立验证通过。
-- [ ] grep 门槛全部 = 0（A5/N3 模板/S3/F6）。
-- [ ] S1 后端 User.theme_color + API + 前端同步；多设备主题色一致。
-- [ ] i18n 完整（所有新文案 zh-CN + en-US，无硬编码中文）。
-- [ ] `pnpm typecheck` + `pnpm test:run` + `pnpm lint` 不新增失败。
-- [ ] `uv run pytest`（S1 scope）不新增失败。
-- [ ] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支。
+- [x] 17 项全部完成（15 项实现 + A5/S2 已满足跳过），13 commits：A4/A7/B3/F6/S3 + W6+L6+N3(合并)/B2/F2/D9 + D10/B5/N2 + S1。
+- [x] grep 门槛全部 = 0：A5 `SECTION_LABELS`=0（A3 副产品）、N3/L6/W6 模板 `¥{{`=0（合法符号表除外）、S3 `🌓☀️🌙`=0、F6 `👥👧`=0、B2 `🔥高⭐中💤低`=0、A4 score-poor `#4caf50/#81c784`=0、F2 `navigator.clipboard`=0。
+- [x] S1 后端 User.theme_color（String(20) nullable）+ alembic `6c8a42d83b59`（down_revision `d4e5f6a7b8c9`）+ `PUT /me/settings` 更新 + hex validator + 前端 onMounted 服务端优先 / selectThemeColor 同步；多设备主题色一致（KTD-5）。
+- [x] i18n 完整：A7 `nav.ai`、B2 `baby.wishPriorityHighShort/Medium/LowShort`（zh 高/中/低，en High/Med/Low）双 locale；后端 theme_color 错误中文。
+- [x] `pnpm typecheck` 0 错误；`pnpm test:run` 968 passed + 1 预存 `InputBox.test.ts` i18n 失败（基线一致）；`pnpm lint` touched files 0 error（预存 warning 非本次引入）。
+- [x] `uv run pytest tests/backend/test_user_settings.py + test_dashboard.py` 40 passed（3 S1 + 37 D4），0 新增失败。
+- [x] 无 fake completion：无 `test.skip`/`.only`、无 TODO 占位、无未实现分支。
 
 ---
 
 ## Deferred / Open Questions
 
-- **N2 范围**：33 处 div+@click 全改爆炸性，聚焦高频可交互卡片；低频装饰性（collapse header 等）标 Deferred。
-- **S2 权限语义**：非一刀切 `:is-link="isOwner"`，逐 cell 判断（language/currency 非 owner 可改）。
-- **W6 心愿 emoji 兜底**：若 emoji 是产品设计的视觉占位，改 SVG icon 需选合适 icon set。
-- **B2 ⭐ 货币符号**：star_coin 的 ⭐ 是货币单位非装饰 emoji，保留。
+- **N2 范围**：33 处 div+@click 全改爆炸性，聚焦高频可交互卡片；低频装饰性（collapse header 等）标 Deferred。实际 N2 修复了 10 处 plan 枚举站点 + LiabilityCard + 2 fab，共 ~13 处；repo-wide 仍剩 ~22 处（@click.self 背景关闭、@click.stop 容器、InsightsTab/ToolCallList 等未枚举组件），均非核心交互或已有 Vant 组件兜底，留后续。
+- **S2 权限语义**：已验证——SettingsPage 唯一 owner-only 编辑 cell（family-title）已有 `:is-link="isOwner"`；其余 cell 是导航型 `to` 或个人偏好（theme/language/currency 非 owner 可改），不应加 owner gate。S2 已满足，跳过。
+- **W6 心愿 emoji 兜底**：心愿页无 emoji 兜底（W6 实际只修了硬编码 ¥）；若后续加心愿图标 fallback，用 Vant icon。
+- **B2 ⭐ 货币符号**：star_coin 的 ⭐ 是货币单位非装饰 emoji，保留。streak 🔥 非 priority label，B2 范围外，保留。
+- **A5 已无对象**：SECTION_LABELS 在 A3（P1）清理 narrative 分支时一并删除，A5 无需改动。
+- **N3 Echarts formatter ¥**：`¥${...}` 模板字符串（DailyCostChart/AssetDetailPage 图表 tooltip/label）是 JS 字符串非模板 `¥{{}}`，W6/N3 范围外，留后续（图表内部格式化，应另走 useCurrency）。
+- **S1 migration 预存 bug**：`aa10837ae378_add_device_sessions_table.py:41` `op.drop_index('ix_cached_files_family_id', ...)` 在全新 SQLite DB 上失败（索引不存在），阻塞整条 migration 链达到 S1 的 `6c8a42d83b59`。S1 migration 文件本身正确（dev DB 已 stamp + 测试用 `Base.metadata.create_all()` 不受影响）；该 drop-index bug 是 S1 范围外的预存问题，值得后续单独修复（guard `if inspector.has_index` 或移除冗余 drop）。
 
 ---
 
