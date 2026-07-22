@@ -155,7 +155,8 @@
 - **B2 ⭐ 货币符号**：star_coin 的 ⭐ 是货币单位非装饰 emoji，保留。streak 🔥 非 priority label，B2 范围外，保留。
 - **A5 已无对象**：SECTION_LABELS 在 A3（P1）清理 narrative 分支时一并删除，A5 无需改动。
 - **N3 Echarts formatter ¥**：`¥${...}` 模板字符串（DailyCostChart/AssetDetailPage 图表 tooltip/label）是 JS 字符串非模板 `¥{{}}`，W6/N3 范围外，留后续（图表内部格式化，应另走 useCurrency）。
-- **S1 migration 预存 bug**：`aa10837ae378_add_device_sessions_table.py:41` `op.drop_index('ix_cached_files_family_id', ...)` 在全新 SQLite DB 上失败（索引不存在），阻塞整条 migration 链达到 S1 的 `6c8a42d83b59`。S1 migration 文件本身正确（dev DB 已 stamp + 测试用 `Base.metadata.create_all()` 不受影响）；该 drop-index bug 是 S1 范围外的预存问题，值得后续单独修复（guard `if inspector.has_index` 或移除冗余 drop）。
+- **S1 migration 预存 bug（已修复 2 处，2026-07-22 commit `3a2f92a5`）**：fresh-DB base→head `alembic upgrade head` 在全新 SQLite 上失败。根因系统性：多个 migration（2026-04 UUID→Snowflake 转换期）假定 legacy schema 状态，但 fresh DB 从 `initial_snowflake_schema` 起已是 Snowflake + 无 legacy 表。已修复 S1 路径上的 2 个：(1) `aa10837ae378` — guard 51 处 drop_index/drop_table（has_table）+ short-circuit 50+ alter_column（已是 BIGINT 时跳过，SQLite 不支持 ALTER COLUMN TYPE）；(2) `c5724f07ecb4` — guard drop_column（has_column）。验证：`alembic upgrade c5724f07ecb4` 在 fresh SQLite 成功；backend tests 40 passed。
+- **fresh-DB base→head 系统性债务（未修，P3/tech-debt）**：修完上述 2 处后，fresh-DB 继续在后续 migration 失败（如 `g8057i30hfe7` "no such table: ai_provider_configs"）。同一 idempotency 类问题遍布 ~30/72 个 migration（drop/alter 假定 legacy 状态）。测试不受影响（用 `Base.metadata.create_all()`）；dev/prod DB 已 stamp+migrate。完整修复需逐个 migration 审计 idempotency，独立后续项。
 
 ---
 
