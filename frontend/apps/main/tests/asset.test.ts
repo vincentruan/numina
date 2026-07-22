@@ -442,6 +442,45 @@ describe('useAssetStore - optimistic update', () => {
     resolveApi!({ data: { ...existingAsset, sell_price: '950' } })
     await updatePromise
   })
+
+  it('explicit-null money field: cleared to null on the optimistic asset (toStr(null) -> null)', async () => {
+    const store = useAssetStore()
+    const existingAsset: Asset = {
+      id: 'asset-m4',
+      name: '原名称',
+      category_id: 'cat-1',
+      asset_type: 'physical',
+      purchase_price: '1000',
+      current_value: '1000',
+      sell_price: '800',
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
+      user_id: 'user-1',
+      family_id: 'family-1',
+      created_at: '2026-04-18T00:00:00Z',
+      updated_at: '2026-04-18T00:00:00Z',
+    }
+    store.assets = [existingAsset]
+
+    let resolveApi: (value: { data: Asset }) => void
+    const apiPromise = new Promise<{ data: Asset }>((resolve) => {
+      resolveApi = resolve
+    })
+    vi.mocked(assetApi.updateAsset).mockReturnValue(apiPromise as any)
+
+    // Send an explicit null to clear sell_price (AssetRequestPayload allows number | null)
+    const updatePromise = store.updateAsset('asset-m4', { sell_price: null })
+
+    // The optimistic asset must store null — NOT the string 'null', NOT the old '800'.
+    // This pins the toStr(v != null ? String(v) : null) guard: a regression that dropped
+    // the null guard would coerce null -> 'null' (a bogus string money value).
+    expect(store.assets[0].sell_price).toBeNull()
+    expect(typeof store.assets[0].sell_price).not.toBe('string')
+
+    resolveApi!({ data: { ...existingAsset, sell_price: null } })
+    await updatePromise
+  })
 })
 
 describe('useAssetStore - optimistic delete', () => {
