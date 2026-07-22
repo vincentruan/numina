@@ -681,7 +681,7 @@ function truncateDesc(desc: string, max = 50): string {
 }
 
 function priorityShortLabel(p: string): string {
-  const map: Record<string, string> = { high: '🔥高', medium: '⭐中', low: '💤低' }
+  const map: Record<string, string> = { high: t('baby.wishPriorityHighShort'), medium: t('baby.wishPriorityMediumShort'), low: t('baby.wishPriorityLowShort') }
   return map[p] ?? p
 }
 

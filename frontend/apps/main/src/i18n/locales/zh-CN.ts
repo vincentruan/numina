@@ -1368,6 +1368,9 @@ export default {
     wishPriorityHigh: '高优先级',
     wishPriorityMedium: '中优先级',
     wishPriorityLow: '低优先级',
+    wishPriorityHighShort: '高',
+    wishPriorityMediumShort: '中',
+    wishPriorityLowShort: '低',
     wishRejectionReasonLabel: '拒绝原因',
     dayDetail: {
       pageTitle: '当日明细',
