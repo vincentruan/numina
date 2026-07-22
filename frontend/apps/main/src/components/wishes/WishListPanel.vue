@@ -104,7 +104,7 @@
                 <span v-if="affordFor(wish).state.value.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
                 <span v-else-if="affordFor(wish).state.value.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
                 <span v-else-if="affordFor(wish).state.value.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
-                <span v-if="affordFor(wish).accelerate" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
+                <span v-if="affordAccelerate(wish)" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
               </div>
             </div>
           </li>
@@ -250,6 +250,11 @@ function affordStateClass(w: Wish): string {
 function affordMonths(w: Wish): number {
   const s = affordFor(w).state.value
   return s.kind === 'progress' ? s.months : 0
+}
+// Accelerate nudge payload ({requiredMonthly, daysLeft}) or null. Unwraps the ComputedRef —
+// binding v-if to the bare `affordFor(w).accelerate` ref object is always truthy.
+function affordAccelerate(w: Wish) {
+  return affordFor(w).accelerate.value
 }
 
 async function loadWishes() {

@@ -172,6 +172,10 @@ describe('WishListPanel', () => {
     expect(bar.classes()).toContain('afford-progress')
     // i18n mock returns the key; the progress branch renders the etaMonths key.
     expect(bar.text()).toContain('wish.afford.etaMonths')
+    // The mock's accelerate is computed(() => false): the accelerate span must NOT render.
+    // Pre-fix, v-if bound the bare ComputedRef object (always truthy), so the span rendered
+    // even when accelerate.value was falsy — this assertion pins the .value unwrap.
+    expect(bar.find('.accelerate').exists()).toBe(false)
   })
 
   it('sorts by priority (high→low desc default), then toggles direction', async () => {
