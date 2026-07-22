@@ -51,6 +51,7 @@
 
     <!-- Report content (show when report exists and not generating) -->
     <template v-else-if="currentReport && !isGenerating">
+      <div ref="reportContentRef">
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">
@@ -84,6 +85,28 @@
           <span v-if="currentReport.data_completeness_score != null">
             {{ t('aiReport.dataCompleteness', { score: currentReport.data_completeness_score.toFixed(0) }) }}
           </span>
+        </div>
+        <div class="report-actions">
+          <van-button
+            size="small"
+            plain
+            type="primary"
+            :loading="isExportingImage"
+            @click="onExportImage"
+          >
+            <van-icon name="photo-o" />
+            {{ t('aiReport.exportImage') }}
+          </van-button>
+          <van-button
+            size="small"
+            plain
+            type="primary"
+            :loading="isExportingPdf"
+            @click="onExportPdf"
+          >
+            <van-icon name="description" />
+            {{ t('aiReport.exportPdf') }}
+          </van-button>
         </div>
       </div>
 
@@ -139,6 +162,7 @@
           {{ t('aiTask.regenBtn') }}
         </van-button>
       </div>
+      </div>
     </template>
 
     <!-- Markdown preview popup -->
@@ -153,7 +177,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showToast, showFailToast, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -161,6 +185,7 @@ import { useAIStore } from '@/stores/ai'
 import { getAIReport, getAIReportMarkdown } from '@/api/ai'
 import type { AIReport, AIReportIndicator } from '@/types'
 import { useReportStream } from '@/composables/useReportStream'
+import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportStepTimeline from '@/components/ai/ReportStepTimeline.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -177,6 +202,11 @@ const aiStore = useAIStore()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
+
+// Report content root for image export
+const reportContentRef = ref<HTMLElement | null>(null)
+const isExportingImage = ref(false)
+const isExportingPdf = ref(false)
 
 // Markdown preview state
 const markdownVisible = ref(false)
@@ -355,6 +385,46 @@ async function onGenerate(force = false) {
   }
 }
 
+async function onExportImage() {
+  if (!reportContentRef.value) {
+    showFailToast(t('aiReport.exportImageFail'))
+    return
+  }
+  isExportingImage.value = true
+  showLoadingToast({ message: t('aiReport.exportingImage'), forbidClick: true, duration: 0 })
+  try {
+    const blob = await generateReportImage(reportContentRef.value)
+    closeToast()
+    downloadImage(blob, reportImageFilename())
+    showToast(t('aiReport.exportImageSuccess'))
+  } catch {
+    closeToast()
+    showFailToast(t('aiReport.exportImageFail'))
+  } finally {
+    isExportingImage.value = false
+  }
+}
+
+async function onExportPdf() {
+  if (!reportContentRef.value) {
+    showFailToast(t('aiReport.exportPdfFail'))
+    return
+  }
+  isExportingPdf.value = true
+  showLoadingToast({ message: t('aiReport.exportingPdf'), forbidClick: true, duration: 0 })
+  try {
+    const blob = await generateReportPdf(reportContentRef.value)
+    closeToast()
+    downloadBlob(blob, reportPdfFilename())
+    showToast(t('aiReport.exportPdfSuccess'))
+  } catch {
+    closeToast()
+    showFailToast(t('aiReport.exportPdfFail'))
+  } finally {
+    isExportingPdf.value = false
+  }
+}
+
 onMounted(async () => {
   await aiStore.fetchConfig()
   await loadExistingReport()
@@ -486,6 +556,12 @@ onUnmounted(() => {
   justify-content: space-between;
   font-size: 12px;
   color: var(--text-secondary);
+}
+.report-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
 }
 .cards-section {
   padding: 0 16px;
