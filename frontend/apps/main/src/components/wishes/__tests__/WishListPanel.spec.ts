@@ -159,6 +159,21 @@ describe('WishListPanel', () => {
     expect(vm.filteredWishes.map((w) => w.name)).toEqual(['Cancelled'])
   })
 
+  it('renders the afford-bar state text via .state.value.kind (ComputedRef unwrap)', async () => {
+    // Regression for the .state.kind -> .state.value.kind fix: pre-fix, .kind on a
+    // ComputedRef was undefined, so no v-if/v-else-if branch matched and the afford-bar
+    // rendered empty. The useAffordBar mock returns kind 'progress' with months 3.
+    wishesRef.value = [makeWish({ id: 'w-afford', name: 'Afford', status: 'pending', expected_price: '1000' })]
+    const wrapper = mount(WishListPanel, { global: { stubs } })
+    await flushPromises()
+
+    const bar = wrapper.find('.afford-bar')
+    expect(bar.exists()).toBe(true)
+    expect(bar.classes()).toContain('afford-progress')
+    // i18n mock returns the key; the progress branch renders the etaMonths key.
+    expect(bar.text()).toContain('wish.afford.etaMonths')
+  })
+
   it('sorts by priority (high→low desc default), then toggles direction', async () => {
     wishesRef.value = [
       makeWish({ id: 'low', name: 'Low', status: 'pending', priority: 'low' }),
