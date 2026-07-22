@@ -66,8 +66,28 @@
         <van-cell v-if="liability.institution" :title="t('liability.detailFieldInstitution')" :value="liability.institution" />
         <van-cell v-if="liability.start_date" :title="t('liability.detailFieldStartDate')" :value="liability.start_date" />
         <van-cell v-if="liability.end_date" :title="t('liability.detailFieldEndDate')" :value="liability.end_date" />
-        <van-cell v-if="liability.linked_asset_id" :title="t('liability.detailFieldLinkedAsset')" :value="t('liability.detailLinkedAssetHint')" is-link @click="goToAsset" />
+        <van-cell v-if="liability.linked_asset_id" :title="t('liability.detailFieldLinkedAsset')" :value="liability.linked_asset?.name || t('liability.detailLinkedAssetHint')" is-link @click="goToAsset" />
       </van-cell-group>
+
+      <!-- L7 (KTD-2): collateral coverage comparison — only when linked asset value is known. -->
+      <div v-if="liability.linked_asset && liability.linked_asset.current_value" class="collateral-card">
+        <div class="collateral-row">
+          <div class="collateral-col">
+            <div class="collateral-label">{{ t('liability.collateralCurrentValue') }}</div>
+            <div class="collateral-value">{{ currency.format(Number(liability.linked_asset.current_value)) }}</div>
+          </div>
+          <div class="collateral-vs">vs</div>
+          <div class="collateral-col">
+            <div class="collateral-label">{{ t('liability.collateralRemainingLoan') }}</div>
+            <div class="collateral-value">{{ currency.format(Number(liability.remaining_amount)) }}</div>
+          </div>
+        </div>
+        <div class="collateral-coverage">
+          <span class="coverage-label">{{ t('liability.collateralCoverage') }}</span>
+          <span class="coverage-pct" :class="coverageClass">{{ coveragePercent }}%</span>
+        </div>
+        <div class="collateral-hint">{{ t('liability.collateralCoverageHint') }}</div>
+      </div>
 
       <!-- Notes -->
       <van-cell-group v-if="liability.notes" inset :title="t('liability.detailSectionNotes')">
@@ -171,6 +191,23 @@ const paidAmount = computed(() => {
 const paidPercent = computed(() => {
   if (!liability.value || Number(liability.value.original_amount) === 0) return 0
   return Math.round((paidAmount.value / Number(liability.value.original_amount)) * 100)
+})
+
+// L7 (KTD-2): collateral coverage = current_value / remaining_amount × 100.
+// Guarded — only rendered when linked_asset.current_value is present (template v-if).
+const coveragePercent = computed(() => {
+  const la = liability.value?.linked_asset
+  if (!la?.current_value) return 0
+  const remaining = Number(liability.value?.remaining_amount || 0)
+  const value = Number(la.current_value)
+  if (remaining === 0) return 0
+  return Math.round((value / remaining) * 100)
+})
+
+const coverageClass = computed(() => {
+  if (coveragePercent.value >= 100) return 'coverage-safe'
+  if (coveragePercent.value >= 50) return 'coverage-warn'
+  return 'coverage-risk'
 })
 
 function goToAsset() {
@@ -318,5 +355,69 @@ onMounted(async () => {
 [data-theme='dark'] .quick-pct-btn:active {
   background: var(--color-lavender, #bdbbff);
   color: #010120;
+}
+
+/* L7 (KTD-2): collateral coverage comparison card. */
+.collateral-card {
+  margin: 8px 16px 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--van-background-2, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.collateral-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.collateral-col {
+  flex: 1;
+  text-align: center;
+}
+.collateral-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+.collateral-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.collateral-vs {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 0 4px;
+}
+.collateral-coverage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+.coverage-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.coverage-pct {
+  font-size: 16px;
+  font-weight: 700;
+}
+.coverage-safe {
+  color: #07c160;
+}
+.coverage-warn {
+  color: #ff976a;
+}
+.coverage-risk {
+  color: #ee0a24;
+}
+.collateral-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
 }
 </style>

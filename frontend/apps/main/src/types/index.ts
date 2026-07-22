@@ -123,6 +123,9 @@ export interface Liability {
   end_date?: string
   institution?: string
   linked_asset_id?: string
+  // L7 (KTD-2): populated only on the detail endpoint — {name, current_value(str)}.
+  // Absent on list/create/update responses.
+  linked_asset?: { name: string; current_value: string | null }
   notes?: string
   is_active: boolean
 }
