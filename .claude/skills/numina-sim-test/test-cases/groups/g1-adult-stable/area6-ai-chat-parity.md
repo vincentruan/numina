@@ -18,22 +18,23 @@ Auth: adult session as `demouser` via cookie+localStorage injection (SKILL.md "P
 
 | # | DeerFlow has | Numina status (grounded) | Disposition | Evidence |
 |---|--------------|--------------------------|-------------|----------|
-| D1 | `/goal <condition>` slash command (PUTs goal + submits condition as next task → run starts; `/goal` status + `/goal clear` do NOT start a run) + `GoalStatus` bar above composer | **待实现** — grep of `InputBox.vue` + `composables/ai-chat/` for `/goal`/`goalCommand`/`GoalStatus` returns nothing | **同步实现 (pending)** — needs DB `goal` column + alembic + backend middleware + frontend slash-parse (absent in live `InputBox.vue`) + GoalStatus bar + SOUL prompt section | `grep "/goal\|goalCommand\|GoalStatus" src/components/ai-chat/InputBox.vue src/composables/ai-chat/` → exit 1 |
-| D2 | `/compact` slash command (POSTs to compact endpoint; skipped on new/empty threads) | **待实现** — same grep, no `/compact`/`compactCommand` | **同步实现 (pending)** — greenfield; no summarization exists (`summary` param always None, `last_message_summary` is 200-char truncation). Needs backend compact endpoint + LLM summarize + frontend wiring | same grep, exit 1 |
+| D1 | `/goal <condition>` slash command (PUTs goal + submits condition as next task → run starts; `/goal` status + `/goal clear` do NOT start a run) + `GoalStatus` bar above composer | **✅ 已实现 2026-07-21** — slash infra (U1) + `GET/PUT/DELETE /api/threads/{id}/goal` (U2, threads.py:882/900/927, checkpoint `channel_values["goal"]` no DB migration) + worker 续跑循环 (U4, `_stream_once` loop + 独立非思考评估器 LLM + `continuation_count/max` 8 + `no_progress_count/max` 2 双熔断 + per-thread lock) + `GoalStatusBar.vue` + `useActiveGoal.ts` optimistic-UI 对账 (U5) | **DONE** | `server/apps/agent/routers/threads.py:882,900,927` (goal endpoints), `server/apps/agent/services/goal_store.py` (R1b clamp 8), `server/apps/agent/services/goal_evaluator.py`, `server/apps/agent/services/runtime/worker.py:2148` (`_stream_once`), `:1664` (`_prepare_goal_continuation_input`), `frontend/apps/main/src/components/ai-chat/GoalStatusBar.vue`, `composables/ai-chat/useActiveGoal.ts`, `api/ai-chat.ts:331,341,359` (`getThreadGoal`/`setThreadGoal`/`clearThreadGoal`), `tests/unit/test_goal_endpoints.py` + `test_goal_continuation.py` (48 passed) |
+| D2 | `/compact` slash command (POSTs to compact endpoint; skipped on new/empty threads) | **✅ 已实现 2026-07-21** — `POST /api/threads/{id}/compact` (U6, threads.py:1224) directly imports DeerFlow canonical `compact_thread_context` (KTD-5, no hand-written message partitioning — handles `RemoveMessage(ALL)` + preserved tail + `channel_versions` bump + `summary_text`); transient bridge (`ref<Message[]>` + `watch(visibleHistory)` prune, ported from DeerFlow hooks.ts) prevents UI flicker; owner/adult role gate (KTD-8) | **DONE** | `server/apps/agent/routers/threads.py:1224` (`compact_thread_endpoint`), `server/apps/agent/services/compact_service.py` (thin wrapper around `compact_thread_context`), `frontend/apps/main/src/api/ai-chat.ts:223` (`compactThread`), `composables/ai-chat/useThreadChat.ts:193` (transient bridge), `tests/unit/test_compact_endpoint.py` (passed) |
 | D3 | Input-polish button (sparkles) — rewrites draft via backend, spinner + undo | **✅ 已实现 2026-07-21** — `POST /api/input-polish` (agent router, `verify_family_token` cookie auth) + `services/input_polish.py` (reuses `_create_lightweight_llm`) + `InputBox.vue` polish button/undo/abort + `polishInputDraft` API client + 6 i18n keys | **DONE** | `server/apps/agent/routers/input_polish.py`, `server/apps/agent/services/input_polish.py`, `frontend/.../InputBox.vue` (`onPolishInput`/`onUndoPolishInput`/`abortInputPolish`), `api/ai-chat.ts:polishInputDraft` |
 | D4 | User-selectable `reasoning_effort` selector (`minimal|low|medium|high`, desktop only) | **设计如此, 不改** — `reasoning_effort` is auto-set per mode (`INPUT_MODE_CONFIGS[mode].reasoning_effort`), not user-selectable | **BY DESIGN** — user confirmed 2026-07-21: 根据模式自动选择 is intentional | `InputBox.vue:206,221,265,344` (`reasoning_effort`); `INPUT_MODE_CONFIGS` at `:216,221,265`; `getResolvedMode` at `:271,283`; `supports_thinking` at `:210,283` |
-| D5 | `TodoList` bar above composer driven by `write_todos` tool (plan mode pro/ultra) | **待实现(plan 已就绪,含移动端适配设计 + 实现)** — `write_todos`/`TodoList` referenced in `useThreadChat.ts` + `MessageGroup.vue` but no standalone composer-above bar; DeerFlow renders `<TodoList>` at chat page (`chats/[thread_id]/page.tsx`) | **适配 + 实现 (plan ready)** — 见 `docs/plans/2026-07-21-001-...-plan.md` U7。用户确认 A2:本计划含移动端 Vant 4 适配设计 + 实现(TodoListBar 组件 + useThreadTodos + TodoMiddleware plan_mode gate + todos channel)。sync hook + 单例注入(规避风险 1+2) | grep hits in `useThreadChat.ts`, `MessageGroup.vue`; no dedicated `TodoList` composer bar component (DeerFlow `frontend/src/components/workspace/todo-list.tsx` exists, numina has none) |
+| D5 | `TodoList` bar above composer driven by `write_todos` tool (plan mode pro/ultra) | **✅ 已实现 2026-07-21** — 移动端 Vant 4 适配设计 + 实现 (U7): `TodoListBar.vue` (`van-collapse` + 只读 `van-checkbox` + `van-tag` 状态, 默认折叠, ≥44px 触控区) + `useThreadTodos.ts` (从 `thread.values.todos` 派生) + langchain `TodoListMiddleware` 挂载 (worker.py:2086 `plan_mode=True` 时注入, sync `before_model`/`after_model` 规避风险 1, 模块级单例规避风险 2) + `todos` channel + `merge_todos` reducer | **DONE** | `docs/design/ai-chat-todolist-mobile-adaptation.md` (设计规格), `frontend/apps/main/src/components/ai-chat/TodoListBar.vue`, `composables/ai-chat/useThreadTodos.ts`, `server/apps/agent/services/deerflow_adapter/todo_middleware.py`, `services/runtime/worker.py:2086` (plan_mode gate injection) |
 | D6 | Scheduled Tasks — full user-level AI task scheduling subsystem: create task with prompt + cron/once schedule, recipes (trending/news/issues/weekly), pause/resume/trigger, run history | **无用户级实现** — numina `server/apps/agent/app/scheduler.py` is APScheduler infra (all `add_job` calls commented out); `server/apps/scheduler_worker/scheduler.py` runs 7 system-preset jobs (exchange_rate/reminder_daily/snapshot_daily etc.), NOT user-created tasks. Zero grep hits for `scheduled_task\|ScheduledTask\|schedule_spec\|context_mode` in frontend + server business code | **独立提案 / 非 chat parity bug** — DeerFlow's scheduled-tasks is a complete standalone product subsystem (frontend page + 10 gateway routes + model + migration + 6 test files). numina's self-hosted family-asset positioning needs product evaluation before adopting (e.g. "weekly auto family-finance report"). High cost: model+migration+gateway router+worker bridge to `stream_run`+frontend page+cron input+i18n. Track as feature proposal, NOT as chat parity regression | DeerFlow `frontend/src/core/scheduled-tasks/{types,api,recipes,hooks,cron}.ts` + `app/workspace/scheduled-tasks/page.tsx` + `components/workspace/{thread-scheduled-tasks-link,scheduled-task-schedule-input}.tsx` + `backend/app/gateway/routers/scheduled_tasks.py`; numina `server/apps/agent/app/scheduler.py:91` (APScheduler placeholder), `server/apps/scheduler_worker/scheduler.py` (7 system jobs) |
 | D7 | Thread Channel Source — `ChannelThreadSource` (`{type:"im_channel",provider,label}`) identifying which IM channel (Telegram/Slack/Discord/Feishu/DingTalk/WeChat/WeCom) a thread originated from; icon+badge in chat list + thread detail | **无对应实现** — zero grep hits for `channel_source\|ChannelThreadSource\|im_channel` in numina. `telegram` hits are unrelated (notification push via `NotificationConfigPage` + `notification/sender.py`, NOT bidirectional IM bridge). numina `createThread(source)` (`api/ai-chat.ts:103`) `source` param is a free-text page-route origin string (e.g. `wish_detail`/`liability_detail`), NOT an IM provider | **设计如此, 不引入** — channel-source is the display derivative of DeerFlow's IM-bridge subsystem (`backend/app/channels/` + 7 provider connectors). numina is self-hosted with web/child-app-only chat entries; no IM bridge design, so channel-source has no metadata source to display. Migrating the UI alone is meaningless. Note: do NOT confuse numina's existing `createThread(source)` page-route origin with channel_source — different concepts | DeerFlow `frontend/src/core/threads/utils.ts:5,76` (`ChannelThreadSource` + `channelSourceOfThread`) + `components/workspace/{thread-channel-source.tsx, channels/channel-provider-icon.tsx}` + `backend/app/channels/`; numina `api/ai-chat.ts:103` (`createThread(source)` = route origin) |
 
 > **Reporting divergences:** D3 is now an implemented feature — test it as a
 > normal parity case (C6.6). D4 is by-design — do NOT flag as a divergence; the
-> test asserts the auto-per-mode behavior. D1/D2/D5 are **pending** (待实现 /
-> 待适配) — if exercised before implementation, record as "待实现 D# (pending
-> sync)", not a regression. D6 is a **feature-level gap** (independent proposal,
-> not a chat parity regression) — do NOT test as a bug; record as "独立提案 D6".
-> D7 is **by-design not adopted** (numina has no IM bridge) — do NOT test; record
-> as "设计如此 D7". Do NOT mark pending/by-design items as bugs.
+> test asserts the auto-per-mode behavior. D1/D2/D5 are **✅ implemented
+> 2026-07-21** (see `docs/plans/2026-07-21-001-...-plan.md` U1-U7; U3 GoalMiddleware
+> removed per KTD-9 to align with DeerFlow) — test as normal parity cases. D6 is
+> a **feature-level gap** (independent proposal, not a chat parity regression) —
+> do NOT test as a bug; record as "独立提案 D6". D7 is **by-design not adopted**
+> (numina has no IM bridge) — do NOT test; record as "设计如此 D7". Do NOT mark
+> pending/by-design items as bugs.
 
 ---
 
@@ -114,7 +115,7 @@ bsk snapshot --session <id>
 
 Assertions (DeerFlow parity: ArrowUp/Down nav, Enter/Tab apply, Esc dismiss):
 - [ ] Leading `/` triggers slash-skill autocomplete popup
-- [ ] Builtins (e.g. `/goal`, `/compact` per DeerFlow) — **D1/D2 待实现 (pending sync)**: not yet ported to numina's live `InputBox.vue` (which has no slash-parse infra). Record as 待实现 D#, not a failure
+- [ ] Builtins (e.g. `/goal`, `/compact` per DeerFlow) — **D1/D2 ✅ 已实现 2026-07-21**: slash infra (U1 `SlashPalette.vue` + `useSlashCommands.ts`) wired into live `InputBox.vue`; `/goal <condition>` → PUT + submit-as-run, `/goal` → status toast, `/goal clear` → DELETE, `/compact` → POST compact endpoint. Test as normal builtin slash commands
 - [ ] ArrowUp/Down navigates, Enter/Tab applies, Esc dismisses
 - [ ] `[console]` zero errors
 
@@ -571,10 +572,10 @@ Assertions:
 | Model selector + capability tags | ✓ | C6.2 | |
 | Attachments + upload-limit validation | ✓ | C6.3 | verify toast strings |
 | Voice input (SpeechRecognition) | ✓ | C6.4 | feature-detect fallback |
-| Slash-skill autocomplete | ✓ | C6.5 | builtins differ (D1/D2) |
+| Slash-skill autocomplete | ✓ | C6.5 | builtins `/goal`+`/compact` now ported (D1/D2 ✅) |
 | Input-polish button | ✅ D3 (done) | C6.6 | implemented 2026-07-21 |
-| `/goal` + GoalStatus bar | ⊘ D1 (待实现) | C6.5 | 待同步 DeerFlow (pending) |
-| `/compact` | ⊘ D2 (待实现) | C6.5 | 待同步 DeerFlow (pending) |
+| `/goal` + GoalStatus bar | ✅ D1 (done) | C6.5 | implemented 2026-07-21 — goal endpoints + worker 续跑循环 + GoalStatusBar |
+| `/compact` | ✅ D2 (done) | C6.5 | implemented 2026-07-21 — compact endpoint + transient bridge |
 | User-selectable reasoning_effort | ◐ D4 (by design) | C6.1 | 设计如此 — auto per mode, intentional |
 | Submit blocked states | ✓ | C6.7 | |
 | Suggestion chips | ✓ | C6.8 | |
@@ -596,6 +597,6 @@ Assertions:
 | Execution-mode flags | ✓ | C6.25 | |
 | Error/retry/resume | ✓ | C6.26 | |
 | Agent popup Teleport + copy fallback | ✓ | C6.27 | |
-| TodoList bar above composer | ⊘ D5 (plan ready, 含实现) | C6.5(待补) | 待同步 DeerFlow — plan 已就绪(含移动端适配 + 实现,U7),待 ce-work 实现 |
+| TodoList bar above composer | ✅ D5 (done) | C6.5 | implemented 2026-07-21 — TodoListBar + useThreadTodos + TodoMiddleware (plan_mode gate) |
 | Scheduled Tasks subsystem | ⊘ D6 (独立提案) | — (feature proposal) | 功能级缺口, 非 chat parity bug; 待产品评估后独立提案 (DeerFlow 完整子系统) |
 | Thread Channel Source | ⊘ D7 (设计不引入) | — (by design) | DeerFlow 特有 IM-bridge 衍生; numina 无 IM 桥接, 不引入 |
