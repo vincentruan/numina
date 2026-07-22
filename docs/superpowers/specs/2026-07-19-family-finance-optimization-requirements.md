@@ -49,7 +49,7 @@ Numina 当前定位是"家庭资产可视化仪表盘"，用户诉求是"家庭�
 | W2 | P0 | Afford bar 逻辑重构 | 从"净资产够买"改为"按月存节奏预计 N 月达成"=`(price-saved)/monthly_saving` |
 | W4 | P0 | 心愿优先级 AI 建议 | 多心愿时给"本月建议优先为 X 存 ¥Y"，基于优先级+距 target_date 天数+月存 |
 | W5 | P0 | 高息负债与心愿联动提示 | 高息负债未清前，提示"建议优先还债(利率 18%)而非低优先级心愿" |
-| W6b | P3 | 心愿→资产转化回链 | realized 且 converts_to_asset 时显示"已转化为资产"并回链 |
+| W6b | P3 | 心愿→资产转化回链 | realized 且 converts_to_asset 时显示"已转化为资产"并回链（✅ 已实现，详见 [P3 plan](../plans/2026-07-22-p3-deferred-items-plan.md)） |
 | W6 | P2 | 去 emoji 兜底 + 硬编码 ¥ | SVG icon + useCurrency |
 
 ### 域 2：负债模块（Liabilities）— 还款策略化
@@ -156,6 +156,8 @@ Numina 当前定位是"家庭资产可视化仪表盘"，用户诉求是"家庭�
 - [x] P1 批次实现 + 验证（N1 + 14 项，2026-07-22 全部完成）
 - [x] P2 批次 plan 落地 → [P2 计划](../plans/2026-07-22-p2-compliance-a11y-plan.md)（status: complete）
 - [x] P2 批次实现 + 验证（17 项，2026-07-22 全部完成；A5/S2 已满足跳过）
+- [x] P3 批次 plan 落地 → [P3 计划](../plans/2026-07-22-p3-deferred-items-plan.md) + [B1 子计划](../plans/2026-07-22-b1-education-linkage-plan.md)（status: complete）
+- [x] P3 批次实现 + 验证（W6b 已实现标注 / L7 / D8 / A6 / B1，2026-07-22 全部完成；spec §11 P3 全 5 项 resolve）
 
 ---
 

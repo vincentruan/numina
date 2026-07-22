@@ -431,7 +431,7 @@ finance_coach capability ──┬─→ D2/A1a (主动卡片)
 
 - P1：N1 财务 hub(②B+⑥C)、D1/D3/D4/D5/D6/D7、L4/L5/L3、A2/A3、B4、F3/F7
 - P2：W6、L6、D9/D10、A4/A5/A7、B2/B3/B5、S1/S2/S3/F2/F6、N2/N3
-- P3：W6b、L7、D8、A6、B1
+- P3：W6b（✅ 已实现，侦察确认 2026-07-22）、L7、D8、A6、B1（推迟，需产品决策）
 
 ---
 
