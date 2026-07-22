@@ -102,6 +102,21 @@ P0 →（基线绿）→ P1 → P2 → P3 → P4 全量回归。每步：写测�
 
 **环境事实（subagent 核实）：** `config_crypto` 读 `STORAGE_ENCRYPTION_KEY`（非 AI_ENCRYPTION_KEY），SECRET_KEY 派生兜底；`decrypt_config` 永不 raise（bad input → None）；`RevokedToken.id` 是普通 Integer 无 next_id default（其他模型均 BigInteger+next_id）。
 
+### P4 前端回归（全绿）
+
+- **测试**：`pnpm -r test:run` — main 1047 / child 104 / math 25 / auth 8 = **1184 passed, 0 failed**。
+- **typecheck**：main 0 errors / child 0 errors / math clean。**packages/auth 预存 gap**：TS2688 `Cannot find type definition file for 'vite/client'`（vite 非其直接依赖，环境 gap，非本任务引入，遵循 surgical 未动）。
+
+## 最终验收（全部达成）
+
+1. ✅ `cd server && uv run pytest tests` 全绿 — **1965 passed, 8 skipped, 0 failed/error**（含新 packages/scheduler/domain 测试）。
+2. ✅ `cd frontend && pnpm -r test:run` 全绿 — 1184 passed。
+3. ✅ typecheck 除预存 packages/auth 环境 gap 外全绿。
+4. ✅ 孤立 domain 测试（test_liability_calculator）已纳入收集（1752→1759）。
+5. ✅ 所有新增测试均通过；4 个 subagent 均报 0 真 bug，无需修源码。
+
+**提交：** d6dd3c95（P0 孤立测试迁移）→ fdd3b658（packages conftest）→ e64da89a（P1/P2 ~245 tests）。
+
 ### 验收标准
 1. `cd server && uv run pytest` 全绿（含新 packages/scheduler/domain 测试），无 error。
 2. `cd frontend && pnpm -r test:run` 全绿。
