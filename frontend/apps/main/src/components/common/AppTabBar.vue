@@ -8,6 +8,7 @@
       <template #icon="{ active: isActive }">
         <AIBrainIcon :active="isActive" />
       </template>
+      {{ t('nav.ai') }}
     </van-tabbar-item>
     <van-tabbar-item v-if="isOwner" name="baby" icon="friends-o">{{ t('nav.baby') }}</van-tabbar-item>
     <van-tabbar-item name="settings" icon="setting-o">{{ t('nav.settings') }}</van-tabbar-item>

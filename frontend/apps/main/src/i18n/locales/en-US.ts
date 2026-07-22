@@ -27,6 +27,7 @@ export default {
     baby: 'Kids',
     family: 'Family',
     finance: 'Finance',
+    ai: 'AI',
     settings: 'Settings'
   },
   financeHub: {

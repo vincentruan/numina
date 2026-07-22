@@ -64,6 +64,7 @@ export default {
     baby: '宝贝',
     family: '家庭',
     finance: '财务',
+    ai: 'AI',
     settings: '设置'
   },
   financeHub: {
