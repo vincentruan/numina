@@ -88,7 +88,6 @@
                 :title="item.name"
                 :label="item.category_name"
                 icon="box-o"
-                is-link
                 @click="$emit('select-status', 'idle')"
               />
             </template>
