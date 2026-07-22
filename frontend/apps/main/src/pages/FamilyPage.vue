@@ -294,6 +294,7 @@ import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
 
 const { t } = useI18n()
 
@@ -382,14 +383,15 @@ const resetPwdForm = ref({ password: '', confirm: '' })
 const resetPwdSubmitting = ref(false)
 
 
-function copyInviteCode() {
+async function copyInviteCode() {
   const code = familyStore.family?.invite_code
   if (code) {
-    navigator.clipboard.writeText(code).then(() => {
+    const ok = await copyToClipboard(code)
+    if (ok) {
       showSuccessToast(t('family.inviteCodeCopied'))
-    }).catch(() => {
+    } else {
       showToast(t('toast.newInviteCode', { code }))
-    })
+    }
   }
 }
 
