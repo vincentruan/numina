@@ -579,6 +579,89 @@ def test_dashboard_home_assets_paginated_invalid_status(client, auth_headers):
     assert response.status_code == 400
 
 
+def test_dashboard_home_assets_paginated_search(client, auth_headers, setup_test_data):
+    """Search filter narrows paginated home assets by name (case-insensitive substring)"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?search=基金", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "基金"
+
+
+def test_dashboard_home_assets_paginated_search_no_match(client, auth_headers, setup_test_data):
+    """Search with no matching name returns empty page"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?search=不存在的资产", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["total"] == 0
+    assert data["items"] == []
+
+
+def test_dashboard_home_assets_paginated_asset_type(client, auth_headers, setup_test_data):
+    """asset_type filter returns only assets of that type"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?asset_type=financial", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["total"] == 1
+    assert all(item["asset_type"] == "financial" for item in data["items"])
+    assert data["items"][0]["name"] == "基金"
+
+
+def test_dashboard_home_assets_paginated_sort_by_value(client, auth_headers, setup_test_data):
+    """sort_by=current_value orders assets by value; sort_order controls direction"""
+    # current_value serializes as a string (Numeric), so compare numerically via float()
+    desc = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=current_value&sort_order=desc",
+        headers=auth_headers,
+    )
+    assert desc.status_code == 200
+    desc_values = [float(item["current_value"]) for item in desc.json()["data"]["items"]]
+    assert desc_values == sorted(desc_values, reverse=True)
+
+    asc = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=current_value&sort_order=asc",
+        headers=auth_headers,
+    )
+    assert asc.status_code == 200
+    asc_values = [float(item["current_value"]) for item in asc.json()["data"]["items"]]
+    assert asc_values == sorted(asc_values)
+
+
+def test_dashboard_home_assets_paginated_sort_by_name(client, auth_headers, setup_test_data):
+    """sort_by=name is accepted and returns a stable ordered page"""
+    response = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=name&sort_order=asc",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    # All 3 in_use assets returned regardless of sort column validity
+    assert data["total"] == 3
+
+
+def test_dashboard_home_assets_paginated_invalid_sort_by_falls_back(client, auth_headers, setup_test_data):
+    """An unrecognized sort_by column falls back to default ordering (no 500, no injection)"""
+    response = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=;DROP TABLE assets;--",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 3
+
+
+def test_dashboard_home_assets_paginated_invalid_asset_type_ignored(client, auth_headers, setup_test_data):
+    """An unrecognized asset_type is ignored (returns all types) rather than erroring"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?asset_type=bogus", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 3
+
+
 def test_dashboard_expiring_soon(client, auth_headers, setup_test_data):
     """Expiring soon returns assets approaching end of lifespan"""
     response = client.get("/api/v1/dashboard/expiring-soon", headers=auth_headers)

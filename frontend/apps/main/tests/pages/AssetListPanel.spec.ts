@@ -3,8 +3,12 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
-import DashboardPage from '../../src/pages/DashboardPage.vue'
+import AssetListPanel from '../../src/components/asset/AssetListPanel.vue'
 import { useDashboardStore } from '../../src/stores/dashboard'
+
+// Shape of the mocked dashboard store used by these tests. Loosely typed on
+// purpose — the panel only touches a subset of the real store.
+type DashboardStoreMock = ReturnType<typeof defaultStore>
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -32,6 +36,10 @@ vi.mock('../../src/api/assets', () => ({
   batchArchiveAssets: vi.fn(),
   batchUpdateStatus: vi.fn(),
   batchExportAssets: vi.fn(),
+}))
+
+vi.mock('../../src/api/auth', () => ({
+  updateSettings: vi.fn(),
 }))
 
 const defaultStore = () => ({
@@ -69,6 +77,7 @@ const defaultStore = () => ({
   fetchTrend: vi.fn(() => Promise.resolve()),
   loadNextAssetsPage: vi.fn(() => Promise.resolve()),
   resetAssetPagination: vi.fn(),
+  applyAssetFilters: vi.fn(() => Promise.resolve()),
   lowUsageAssets: [],
   expiringSoonAssets: [],
 })
@@ -83,15 +92,7 @@ vi.mock('../../src/stores/auth', () => ({
   })),
 }))
 
-vi.mock('../../src/stores/chore', () => ({
-  useChoreStore: vi.fn(() => ({
-    fetchPendingApprovals: vi.fn(),
-  })),
-}))
-
 const stubs = {
-  NetWorthCard: { template: '<div class="net-worth-card"></div>' },
-  SmartRemindersCard: { template: '<div class="smart-reminders"></div>' },
   StatusSummaryGrid: {
     name: 'StatusSummaryGrid',
     props: ['summary', 'activeStatus'],
@@ -110,22 +111,25 @@ const stubs = {
   VanButton: { template: '<button></button>' },
   VanIcon: { props: ['name', 'size'], template: '<i></i>' },
   VanActionSheet: { template: '<div></div>' },
-  DashboardSkeleton: { template: '<div></div>' },
-  TrendLineChart: { template: '<div></div>' },
-  AllocationPieChart: { template: '<div></div>' },
+  VanSearch: { props: ['modelValue'], template: '<input />' },
+  VanDropdownMenu: { template: '<div><slot></slot></div>' },
+  VanDropdownItem: { props: ['modelValue', 'options'], template: '<div></div>' },
   AssetCard: { template: '<div></div>' },
   AssetListItem: { template: '<div></div>' },
+  SvgIcon: { props: ['name'], template: '<span></span>' },
 }
 
-describe('DashboardPage filter bar behavior', () => {
+describe('AssetListPanel filter bar behavior', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    vi.mocked(useDashboardStore).mockImplementation(() => defaultStore() as any)
+    vi.mocked(useDashboardStore).mockImplementation(
+      () => defaultStore() as unknown as ReturnType<typeof useDashboardStore>,
+    )
   })
 
   describe('filter bar sticky positioning', () => {
     it('renders filter bar container with sticky CSS class', async () => {
-      const wrapper = mount(DashboardPage, { global: { stubs } })
+      const wrapper = mount(AssetListPanel, { global: { stubs } })
       await nextTick()
 
       const filterBar = wrapper.find('.filter-bar-sticky')
@@ -133,7 +137,7 @@ describe('DashboardPage filter bar behavior', () => {
     })
 
     it('filter bar contains StatusSummaryGrid and category nav container', async () => {
-      const wrapper = mount(DashboardPage, { global: { stubs } })
+      const wrapper = mount(AssetListPanel, { global: { stubs } })
       await nextTick()
 
       const filterBar = wrapper.find('.filter-bar-sticky')
@@ -145,9 +149,9 @@ describe('DashboardPage filter bar behavior', () => {
       vi.mocked(useDashboardStore).mockReturnValueOnce({
         ...defaultStore(),
         categoryCounts: [],
-      } as any)
+      } as unknown as ReturnType<typeof useDashboardStore>)
 
-      const wrapper = mount(DashboardPage, { global: { stubs } })
+      const wrapper = mount(AssetListPanel, { global: { stubs } })
       await nextTick()
 
       expect(wrapper.find('.category-nav-container').exists()).toBe(false)
@@ -156,10 +160,12 @@ describe('DashboardPage filter bar behavior', () => {
 
   describe('filter interactions', () => {
     it('status select triggers fetchAssetsPage and fetchCategoryCounts', async () => {
-      const store = defaultStore()
-      vi.mocked(useDashboardStore).mockReturnValueOnce(store as any)
+      const store: DashboardStoreMock = defaultStore()
+      vi.mocked(useDashboardStore).mockReturnValueOnce(
+        store as unknown as ReturnType<typeof useDashboardStore>,
+      )
 
-      const wrapper = mount(DashboardPage, { global: { stubs } })
+      const wrapper = mount(AssetListPanel, { global: { stubs } })
       await nextTick()
 
       // Emit select event from StatusSummaryGrid stub

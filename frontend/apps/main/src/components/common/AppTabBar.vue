@@ -1,8 +1,6 @@
 <template>
   <van-tabbar :model-value="activeTab" class="app-tabbar" :z-index="1000" @change="onTabChange">
     <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
-    <!-- Non-asymmetric (KTD-4): non-owner keeps direct wishes tab; owner goes through finance hub -->
-    <van-tabbar-item v-if="!isOwner" name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
     <van-tabbar-item name="finance" icon="balance-o">{{ t('nav.finance') }}</van-tabbar-item>
     <van-tabbar-item name="ai" :aria-label="t('settings.aiAssistant')">
       <template #icon="{ active: isActive }">
@@ -38,17 +36,15 @@ const activeTab = computed(() => {
   if (path.startsWith('/blind-box/')) return 'baby'
   if (path === '/chore-approvals') return 'baby'
   // KTD-2: finance hub covers assets/liabilities/wishes groups (path-prefix match,
-  // covers all sub-routes incl. params). Owner has no wishes tab → /wishes* also maps
-  // to finance. Non-owner keeps a direct wishes tab → /wishes* highlights wishes.
+  // covers all sub-routes incl. params). All three list paths now live under finance.
   if (path.startsWith('/assets') || path.startsWith('/liabilities')) return 'finance'
   if (path.startsWith('/finance')) return 'finance'
-  if (path.startsWith('/wishes')) return isOwner.value ? 'finance' : 'wishes'
+  if (path.startsWith('/wishes')) return 'finance'
   return 'dashboard'
 })
 
 const tabToRoute: Record<string, string> = {
   dashboard: '/',
-  wishes: '/wishes',
   finance: '/finance',
   baby: '/baby',
   settings: '/settings',

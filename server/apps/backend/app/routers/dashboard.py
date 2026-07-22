@@ -134,17 +134,23 @@ def get_home_assets_paginated(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category_id: str | None = Query(None),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("desc"),
+    asset_type: str | None = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """分页获取指定状态的资产列表"""
+    """分页获取指定状态的资产列表（支持搜索/排序/类型筛选）"""
     valid_statuses = ["in_use", "idle", "sold", "retired"]
     if status not in valid_statuses:
         raise AppError(
             ErrorCode.DASHBOARD_INVALID_STATUS,
             details=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
-    return dashboard_service.get_home_assets_page(db, user, status, page, page_size, category_id)
+    return dashboard_service.get_home_assets_page(
+        db, user, status, page, page_size, category_id, search, sort_by, sort_order, asset_type
+    )
 
 
 @router.get("/new-assets", response_model=NewAssetsResponse)

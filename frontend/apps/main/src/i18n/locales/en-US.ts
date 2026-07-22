@@ -53,6 +53,10 @@ export default {
     loadFailed: 'Failed to load finance overview',
     retry: 'Retry'
   },
+  focusTop3: {
+    noLiabilities: 'No active liabilities',
+    noWishes: 'No wishes with a target date',
+  },
   dashboard: {
     title: 'Dashboard',
     totalAssets: 'Total Assets',
@@ -63,6 +67,11 @@ export default {
     monthChange: 'vs Last Month',
     netWorthDrilldown: 'View assets',
     totalLiabilitiesDrilldown: 'View liabilities',
+    emptyState: {
+      startRecording: 'Start recording your first asset',
+      addAssetBtn: 'Add Asset',
+      noAssets: 'No assets yet',
+    },
     allocation: 'Allocation',
     trend: 'Net Worth Trend',
     topAssets: 'Top Assets',

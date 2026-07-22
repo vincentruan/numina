@@ -46,6 +46,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const activeAssetStatus = ref<string>('in_use')
   // Current active category filter (null = all categories)
   const activeAssetCategoryId = ref<string | null>(null)
+  // Feature-parity filters (ported from AssetListPage): search/sort/asset_type
+  const assetSearch = ref<string>('')
+  const assetSortBy = ref<string>('current_value')
+  const assetSortOrder = ref<'asc' | 'desc'>('desc')
+  const activeAssetType = ref<'physical' | 'financial' | null>(null)
   // Category counts for nav (full counts from backend, not page-limited)
   const categoryCounts = ref<Array<{ id: string; name: string; icon: string; color: string; count: number }>>([])
 
@@ -179,7 +184,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
 
     try {
-      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize, activeAssetCategoryId.value)
+      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize, activeAssetCategoryId.value, {
+        search: assetSearch.value || undefined,
+        sortBy: assetSortBy.value || undefined,
+        sortOrder: assetSortOrder.value,
+        assetType: activeAssetType.value || undefined,
+      })
       const data = res.data
 
       // Store page data in cache
@@ -307,6 +317,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   /**
+   * Apply feature-parity filters (search/sort/asset_type) and refetch from page 1.
+   * The page cache is keyed by status only, so any filter change invalidates it —
+   * reset pagination for the active status before refetching.
+   */
+  async function applyAssetFilters(filters: {
+    search?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    assetType?: 'physical' | 'financial' | null
+  }): Promise<void> {
+    if (filters.search !== undefined) assetSearch.value = filters.search
+    if (filters.sortBy !== undefined) assetSortBy.value = filters.sortBy
+    if (filters.sortOrder !== undefined) assetSortOrder.value = filters.sortOrder
+    if (filters.assetType !== undefined) activeAssetType.value = filters.assetType
+    const status = activeAssetStatus.value
+    resetAssetPagination(status)
+    await fetchAssetsPage(status, 1, assetPageSize, activeAssetCategoryId.value || undefined)
+  }
+
+  /**
    * Legacy function - kept for backward compatibility
    * Now uses server-side pagination
    */
@@ -339,11 +369,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     educationRewardSummary,
     displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
     assetPagesCache, assetPageInfo, activeAssetStatus, activeAssetCategoryId, categoryCounts,
+    assetSearch, assetSortBy, assetSortOrder, activeAssetType,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchNewAssets, fetchHomeAssets, fetchAll,
     fetchEducationRewardSummary,
-    fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets,
+    fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets, applyAssetFilters,
     fetchCategoryCounts, invalidateDashboard,
   }
 })

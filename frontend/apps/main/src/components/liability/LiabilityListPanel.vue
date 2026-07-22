@@ -1,17 +1,11 @@
 <template>
-  <div class="liability-list-page">
-    <PageHeader :title="t('liability.pageTitle')" :show-back="false">
-      <template v-if="selectMode" #right>
-        <span class="select-cancel" role="button" tabindex="0" @click="exitSelectMode" @keydown.enter="exitSelectMode" @keydown.space.prevent="exitSelectMode">{{ t('liability.cancelSelect') }}</span>
-      </template>
-    </PageHeader>
-
+  <div class="liability-list-panel">
     <!-- Skeleton for initial loading -->
     <LiabilityListSkeleton v-if="liabilityStore.loading && liabilityStore.liabilities.length === 0" />
 
     <!-- Actual Content -->
     <template v-else>
-      <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
+      <van-tabs v-model:active="activeTab" @change="onTabChange">
         <van-tab :title="t('liability.tabActive')" name="active" />
         <van-tab :title="t('liability.tabInactive')" name="inactive" />
       </van-tabs>
@@ -38,63 +32,66 @@
         </button>
       </div>
 
-      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-        <!-- L1 (Plan B T9): payoff strategy card (only when ≥2 active liabilities). -->
-        <LiabilityStrategyCard :liabilities="liabilityStore.liabilities" />
+      <!-- Select-mode cancel (page-level PageHeader is gone in the panel) -->
+      <div v-if="selectMode" class="panel-select-bar">
+        <span class="select-cancel" role="button" tabindex="0" @click="exitSelectMode" @keydown.enter="exitSelectMode" @keydown.space.prevent="exitSelectMode">{{ t('liability.cancelSelect') }}</span>
+      </div>
 
-        <!-- Summary Banner -->
-        <div v-if="liabilityStore.liabilities.length" class="summary-banner">
-          <div class="summary-top">
-            <div class="summary-main">
-              <div class="summary-label">{{ activeTab === 'active' ? t('liability.summaryTotal') : t('liability.summarySettled') }}</div>
-              <div class="summary-amount">{{ formatAmountDisplay(totalAmount) }}</div>
-            </div>
-            <div class="summary-count">
-              <span class="count-num">{{ filteredLiabilities.length }}</span>
-              <span class="count-unit">{{ t('liability.countUnit') }}</span>
-            </div>
+      <!-- L1 (Plan B T9): payoff strategy card (only when ≥2 active liabilities). -->
+      <LiabilityStrategyCard :liabilities="liabilityStore.liabilities" />
+
+      <!-- Summary Banner -->
+      <div v-if="liabilityStore.liabilities.length" class="summary-banner">
+        <div class="summary-top">
+          <div class="summary-main">
+            <div class="summary-label">{{ activeTab === 'active' ? t('liability.summaryTotal') : t('liability.summarySettled') }}</div>
+            <div class="summary-amount">{{ formatAmountDisplay(totalAmount) }}</div>
           </div>
-          <template v-if="activeTab === 'active' && totalOriginal > 0">
-            <div class="summary-progress-bar">
-              <div class="summary-progress-fill" :style="{ width: repaidPercent + '%' }" />
-            </div>
-            <div class="summary-progress-text">
-              <span>{{ t('liability.summaryProgress') }}</span>
-              <span class="summary-percent">{{ repaidPercent }}%</span>
-            </div>
-          </template>
+          <div class="summary-count">
+            <span class="count-num">{{ filteredLiabilities.length }}</span>
+            <span class="count-unit">{{ t('liability.countUnit') }}</span>
+          </div>
         </div>
+        <template v-if="activeTab === 'active' && totalOriginal > 0">
+          <div class="summary-progress-bar">
+            <div class="summary-progress-fill" :style="{ width: repaidPercent + '%' }" />
+          </div>
+          <div class="summary-progress-text">
+            <span>{{ t('liability.summaryProgress') }}</span>
+            <span class="summary-percent">{{ repaidPercent }}%</span>
+          </div>
+        </template>
+      </div>
 
-        <!-- L3: Monthly payment total banner (active tab only; hide-if-zero) -->
-        <div
-          v-if="activeTab === 'active' && totalMonthlyPayment > 0"
-          class="monthly-payment-banner"
-        >
-          <span class="mp-label">{{ t('liability.monthlyPaymentTotal') }}</span>
-          <span class="mp-amount">{{ formatCurrencyAmount(totalMonthlyPayment) }}</span>
-          <span v-if="hasEstimatedItems" class="mp-estimated">{{ t('liability.monthlyPaymentEstimated') }}</span>
-        </div>
+      <!-- L3: Monthly payment total banner (active tab only; hide-if-zero) -->
+      <div
+        v-if="activeTab === 'active' && totalMonthlyPayment > 0"
+        class="monthly-payment-banner"
+      >
+        <span class="mp-label">{{ t('liability.monthlyPaymentTotal') }}</span>
+        <span class="mp-amount">{{ formatCurrencyAmount(totalMonthlyPayment) }}</span>
+        <span v-if="hasEstimatedItems" class="mp-estimated">{{ t('liability.monthlyPaymentEstimated') }}</span>
+      </div>
 
-        <div v-if="filteredLiabilities.length" class="liability-list">
-          <LiabilityCard
-            v-for="item in filteredLiabilities"
-            :key="item.id"
-            :liability="item"
-            :select-mode="selectMode"
-            :selected="selectedIds.has(item.id)"
-            @click="onCardClick(item)"
-            @longpress="onLongPress(item)"
-            @pay="openPayDialog"
-            @edit="goEdit"
-            @delete="confirmDelete"
-          />
-        </div>
-        <EmptyState v-else :description="activeTab === 'active' ? t('liability.noLiabilityDesc') : t('liability.noSettledLiability')">
-          <van-button v-if="activeTab === 'active'" size="small" type="primary" @click="$router.push('/liabilities/new')">
-            {{ t('liability.addLiability') }}
-          </van-button>
-        </EmptyState>
-      </van-pull-refresh>
+      <div v-if="filteredLiabilities.length" class="liability-list">
+        <LiabilityCard
+          v-for="item in filteredLiabilities"
+          :key="item.id"
+          :liability="item"
+          :select-mode="selectMode"
+          :selected="selectedIds.has(item.id)"
+          @click="onCardClick(item)"
+          @longpress="onLongPress(item)"
+          @pay="openPayDialog"
+          @edit="goEdit"
+          @delete="confirmDelete"
+        />
+      </div>
+      <EmptyState v-else :description="activeTab === 'active' ? t('liability.noLiabilityDesc') : t('liability.noSettledLiability')">
+        <van-button v-if="activeTab === 'active'" size="small" type="primary" @click="$router.push('/liabilities/new')">
+          {{ t('liability.addLiability') }}
+        </van-button>
+      </EmptyState>
 
       <!-- Batch action bar -->
       <Transition name="slide-up">
@@ -158,15 +155,13 @@
 </template>
 
 <script setup lang="ts">
-defineOptions({ name: 'LiabilityList' })
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { useLiabilityStore } from '@/stores/liability'
 import type { Liability } from '@/types'
-import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LiabilityCard from '@/components/liability/LiabilityCard.vue'
 import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
@@ -178,7 +173,6 @@ const router = useRouter()
 const route = useRoute()
 const liabilityStore = useLiabilityStore()
 
-const refreshing = ref(false)
 const activeTab = ref('active')
 
 // --- Filter / Sort ---
@@ -261,17 +255,12 @@ function formatAmountDisplay(amount: number | string): string {
   return n.toLocaleString('zh-CN')
 }
 
-// --- Tab / Refresh ---
+// --- Tab ---
 function onTabChange() {
   exitSelectMode()
   filterCategory.value = ''
   sortOrder.value = 'default'
   liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
-}
-
-async function onRefresh() {
-  await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
-  refreshing.value = false
 }
 
 // --- Card actions ---
@@ -386,9 +375,9 @@ async function batchDelete() {
 
 liabilityStore.fetchLiabilities({ is_active: true })
 
-// W5 (Plan B T8): handle the ?focus=liability_strategy deep link from the
-// WishListPage debt-warning bar (spec §5.3: avoid 断链). Scroll to the L1
-// strategy card if present; otherwise scroll to top (the L1 UI ships in T9).
+// W5 (Plan B T8): handle the ?focus=liability_strategy deep link (spec §5.3: avoid
+// 断链). Migrated from LiabilityListPage — FinanceHubPage now hosts this panel under
+// /finance?tab=liabilities&focus=liability_strategy. Scroll to the L1 strategy card.
 onMounted(() => {
   if (route.query.focus !== 'liability_strategy') return
   nextTick(() => {
@@ -400,17 +389,33 @@ onMounted(() => {
     }
   })
 })
+
+defineExpose({
+  activeTab,
+  filterCategory,
+  sortOrder,
+  filteredLiabilities,
+  totalAmount,
+  totalMonthlyPayment,
+  hasEstimatedItems,
+  selectMode,
+  selectedIds,
+  onTabChange,
+  toggleSort,
+  onLongPress,
+  toggleSelect,
+  selectAll,
+  exitSelectMode,
+})
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Crimson+Pro:wght@600&display=swap');
-
-.liability-list-page {
-  min-height: 100vh;
-  padding-bottom: 80px;
+/* Select-mode cancel bar (replaces the page-level PageHeader cancel slot) */
+.panel-select-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px;
 }
-
-/* Select mode cancel button */
 .select-cancel {
   font-size: 14px;
   color: var(--van-primary-color);

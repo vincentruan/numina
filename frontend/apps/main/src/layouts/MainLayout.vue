@@ -27,9 +27,6 @@ const { isOnline } = useNetwork()
 
 const cachedTabs = ref<string[]>([
   'Dashboard',
-  'AssetList',
-  'WishList',
-  'LiabilityList',
   'FinanceHub',
   'AIHub',
   'Baby',

@@ -170,10 +170,24 @@ export function getHomeAssetsPaginated(
   status: string,
   page: number = 1,
   pageSize: number = 20,
-  categoryId?: string | null
+  categoryId?: string | null,
+  options?: {
+    search?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    assetType?: 'physical' | 'financial'
+  }
 ) {
   return http.get<HomeAssetsPageResponse>(`/dashboard/home-assets/${status}`, {
-    params: { page, page_size: pageSize, ...(categoryId ? { category_id: categoryId } : {}) }
+    params: {
+      page,
+      page_size: pageSize,
+      ...(categoryId ? { category_id: categoryId } : {}),
+      ...(options?.search ? { search: options.search } : {}),
+      ...(options?.sortBy ? { sort_by: options.sortBy } : {}),
+      ...(options?.sortOrder ? { sort_order: options.sortOrder } : {}),
+      ...(options?.assetType ? { asset_type: options.assetType } : {})
+    }
   })
 }
 

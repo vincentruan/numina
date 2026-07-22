@@ -1,8 +1,6 @@
 <template>
-  <div class="wish-list-page">
-    <van-nav-bar :title="t('wish.nav.title')" />
-
-    <van-tabs v-model:active="activeTab" sticky>
+  <div class="wish-list-panel">
+    <van-tabs v-model:active="activeTab">
       <van-tab :title="t('wish.tabs.pending')" name="pending" />
       <van-tab :title="t('wish.tabs.realized')" name="realized" />
       <van-tab :title="t('wish.tabs.cancelled')" name="cancelled" />
@@ -27,137 +25,135 @@
     </div>
 
     <div class="list-content">
-      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-        <!-- W5 (Plan B T8): high-interest-debt hint bar (spec §5.4: 先止血再储蓄,
-             rendered ABOVE the W4 advice card). -->
-        <div
-          v-if="debtWarning.hasHighInterestDebt.value && wishes.length"
-          class="debt-warning-bar"
-        >
-          <van-icon name="warning-o" />
-          <span>{{
-            t('wish.debtWarning.listHint', {
-              amount: Number(debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0),
-              rate: debtWarning.highInterestLiabilities.value[0]?.interest_rate ?? 0,
-            })
-          }}</span>
-          <van-button size="mini" plain @click="goToLiabilityStrategy">
-            {{ t('wish.debtWarning.viewStrategy') }}
-          </van-button>
-        </div>
+      <!-- W5 (Plan B T8): high-interest-debt hint bar (spec §5.4: 先止血再储蓄,
+           rendered ABOVE the W4 advice card). -->
+      <div
+        v-if="debtWarning.hasHighInterestDebt.value && wishes.length"
+        class="debt-warning-bar"
+      >
+        <van-icon name="warning-o" />
+        <span>{{
+          t('wish.debtWarning.listHint', {
+            amount: Number(debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0),
+            rate: debtWarning.highInterestLiabilities.value[0]?.interest_rate ?? 0,
+          })
+        }}</span>
+        <van-button size="mini" plain @click="goToLiabilityStrategy">
+          {{ t('wish.debtWarning.viewStrategy') }}
+        </van-button>
+      </div>
 
-        <!-- W4 (Plan B T7): AI wish-priority advice card. Hides itself when the
-             backend returns empty (<2 wishes / no monthly_saving / LLM unavailable). -->
-        <WishAdviceCard :wishes="wishes.map((w) => ({ id: w.id, name: w.name, monthly_saving: w.monthly_saving ?? '0' }))" />
+      <!-- W4 (Plan B T7): AI wish-priority advice card. Hides itself when the
+           backend returns empty (<2 wishes / no monthly_saving / LLM unavailable). -->
+      <WishAdviceCard :wishes="wishes.map((w) => ({ id: w.id, name: w.name, monthly_saving: w.monthly_saving ?? '0' }))" />
 
-        <!-- Skeleton for initial loading -->
-        <WishListSkeleton v-if="wishStore.loading && wishes.length === 0" />
+      <!-- Skeleton for initial loading -->
+      <WishListSkeleton v-if="wishStore.loading && wishes.length === 0" />
 
-        <!-- Actual Content -->
-        <template v-else-if="sortedWishes.length">
-          <ul class="wish-list" :aria-label="t('wish.aria.listLabel')">
-            <li
-              v-for="wish in sortedWishes"
-              :key="wish.id"
-              class="wish-item"
-              :class="`priority-${wish.priority}`"
-              tabindex="0"
-              :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? t('wish.aria.priceFormat', { price: wish.expected_price.toLocaleString() }) : '' })"
-              @click="$router.push(`/wishes/${wish.id}`)"
-              @keydown.enter="$router.push(`/wishes/${wish.id}`)"
-            >
-              <!-- Priority stripe -->
-              <div class="priority-stripe" aria-hidden="true" />
+      <!-- Actual Content -->
+      <template v-else-if="sortedWishes.length">
+        <ul class="wish-list" :aria-label="t('wish.aria.listLabel')">
+          <li
+            v-for="wish in sortedWishes"
+            :key="wish.id"
+            class="wish-item"
+            :class="`priority-${wish.priority}`"
+            tabindex="0"
+            :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? t('wish.aria.priceFormat', { price: wish.expected_price.toLocaleString() }) : '' })"
+            @click="$router.push(`/wishes/${wish.id}`)"
+            @keydown.enter="$router.push(`/wishes/${wish.id}`)"
+          >
+            <!-- Priority stripe -->
+            <div class="priority-stripe" aria-hidden="true" />
 
-              <!-- Icon anchor -->
-              <div class="wish-icon" aria-hidden="true">
-                <template v-if="wish.category">
-                  <SvgIcon :name="getIconId(wish.category.icon)" class="icon-svg" />
-                </template>
-                <span v-else class="wish-emoji">✨</span>
-              </div>
+            <!-- Icon anchor -->
+            <div class="wish-icon" aria-hidden="true">
+              <template v-if="wish.category">
+                <SvgIcon :name="getIconId(wish.category.icon)" class="icon-svg" />
+              </template>
+              <span v-else class="wish-emoji">✨</span>
+            </div>
 
-              <!-- Main content -->
-              <div class="wish-body">
-                <div class="wish-top">
-                  <span class="wish-name">{{ wish.name }}</span>
-                  <div class="wish-right">
-                    <span v-if="wish.expected_price" class="wish-price">
-                      {{ currency.format(wish.expected_price) }}
-                    </span>
-                    <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
-                    <van-icon name="arrow" size="12" class="card-arrow" />
-                  </div>
-                </div>
-
-                <div class="wish-bottom">
-                  <span class="priority-badge" :class="wish.priority">
-                    {{ t('wish.priorityText.' + wish.priority) }}{{ t('wish.prioritySuffix') }}
+            <!-- Main content -->
+            <div class="wish-body">
+              <div class="wish-top">
+                <span class="wish-name">{{ wish.name }}</span>
+                <div class="wish-right">
+                  <span v-if="wish.expected_price" class="wish-price">
+                    {{ currency.format(wish.expected_price) }}
                   </span>
-                  <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
-                  <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
-                </div>
-
-                <!-- W2 (Plan B T9): afford bar — single-line compact (spec §3.2). -->
-                <div
-                  v-if="wish.expected_price"
-                  class="afford-bar"
-                  :class="affordStateClass(wish)"
-                >
-                  <span v-if="affordFor(wish).state.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
-                  <span v-else-if="affordFor(wish).state.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
-                  <span v-else-if="affordFor(wish).state.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordFor(wish).state.months }) }}</span>
-                  <span v-if="affordFor(wish).accelerate" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
+                  <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
+                  <van-icon name="arrow" size="12" class="card-arrow" />
                 </div>
               </div>
-            </li>
-          </ul>
+
+              <div class="wish-bottom">
+                <span class="priority-badge" :class="wish.priority">
+                  {{ t('wish.priorityText.' + wish.priority) }}{{ t('wish.prioritySuffix') }}
+                </span>
+                <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
+                <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
+              </div>
+
+              <!-- W2 (Plan B T9): afford bar — single-line compact (spec §3.2). -->
+              <div
+                v-if="wish.expected_price"
+                class="afford-bar"
+                :class="affordStateClass(wish)"
+              >
+                <span v-if="affordFor(wish).state.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
+                <span v-else-if="affordFor(wish).state.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
+                <span v-else-if="affordFor(wish).state.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordFor(wish).state.months }) }}</span>
+                <span v-if="affordFor(wish).accelerate" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </template>
+      <!-- Empty states -->
+      <div v-else class="empty-state">
+        <!-- Pending: guide to add first wish -->
+        <template v-if="activeTab === 'pending'">
+          <div class="empty-illustration empty-pending" aria-hidden="true">
+            <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="40" cy="40" r="36" fill="var(--van-primary-color)" fill-opacity="0.08"/>
+              <path d="M40 22c-1.1 0-2 .9-2 2v14H24c-1.1 0-2 .9-2 2s.9 2 2 2h14v14c0 1.1.9 2 2 2s2-.9 2-2V42h14c1.1 0 2-.9 2-2s-.9-2-2-2H42V24c0-1.1-.9-2-2-2z" fill="var(--van-primary-color)"/>
+            </svg>
+          </div>
+          <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noWishesTitle')" :duration="3" /></p>
+          <p class="empty-desc">{{ t('wish.emptyState.noWishesDesc') }}</p>
+          <button class="empty-action-btn" @click="$router.push('/wishes/new')">
+            <svg viewBox="0 0 16 16" fill="none" width="14" height="14" aria-hidden="true">
+              <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            {{ t('wish.emptyState.addFirstBtn') }}
+          </button>
         </template>
-        <!-- Empty states -->
-        <div v-else class="empty-state">
-          <!-- Pending: guide to add first wish -->
-          <template v-if="activeTab === 'pending'">
-            <div class="empty-illustration empty-pending" aria-hidden="true">
-              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="40" cy="40" r="36" fill="var(--van-primary-color)" fill-opacity="0.08"/>
-                <path d="M40 22c-1.1 0-2 .9-2 2v14H24c-1.1 0-2 .9-2 2s.9 2 2 2h14v14c0 1.1.9 2 2 2s2-.9 2-2V42h14c1.1 0 2-.9 2-2s-.9-2-2-2H42V24c0-1.1-.9-2-2-2z" fill="var(--van-primary-color)"/>
-              </svg>
-            </div>
-            <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noWishesTitle')" :duration="3" /></p>
-            <p class="empty-desc">{{ t('wish.emptyState.noWishesDesc') }}</p>
-            <button class="empty-action-btn" @click="$router.push('/wishes/new')">
-              <svg viewBox="0 0 16 16" fill="none" width="14" height="14" aria-hidden="true">
-                <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              {{ t('wish.emptyState.addFirstBtn') }}
-            </button>
-          </template>
 
-          <!-- Realized: encouraging -->
-          <template v-else-if="activeTab === 'realized'">
-            <div class="empty-illustration empty-realized" aria-hidden="true">
-              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="40" cy="40" r="36" fill="#07c160" fill-opacity="0.08"/>
-                <path d="M40 20l4.9 9.9 10.9 1.6-7.9 7.7 1.9 10.9L40 45.4l-9.8 5.1 1.9-10.9-7.9-7.7 10.9-1.6L40 20z" fill="#07c160" fill-opacity="0.25" stroke="#07c160" stroke-width="1.5" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noRealizedTitle')" :duration="3" /></p>
-            <p class="empty-desc">{{ t('wish.emptyState.noRealizedDesc') }}</p>
-          </template>
+        <!-- Realized: encouraging -->
+        <template v-else-if="activeTab === 'realized'">
+          <div class="empty-illustration empty-realized" aria-hidden="true">
+            <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="40" cy="40" r="36" fill="#07c160" fill-opacity="0.08"/>
+              <path d="M40 20l4.9 9.9 10.9 1.6-7.9 7.7 1.9 10.9L40 45.4l-9.8 5.1 1.9-10.9-7.9-7.7 10.9-1.6L40 20z" fill="#07c160" fill-opacity="0.25" stroke="#07c160" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noRealizedTitle')" :duration="3" /></p>
+          <p class="empty-desc">{{ t('wish.emptyState.noRealizedDesc') }}</p>
+        </template>
 
-          <!-- Cancelled: neutral -->
-          <template v-else>
-            <div class="empty-illustration empty-cancelled" aria-hidden="true">
-              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="40" cy="40" r="36" fill="#999" fill-opacity="0.08"/>
-                <path d="M28 28l24 24M52 28L28 52" stroke="#999" stroke-width="3" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noCancelledTitle')" :duration="3" /></p>
-            <p class="empty-desc">{{ t('wish.emptyState.noCancelledDesc') }}</p>
-          </template>
-        </div>
-      </van-pull-refresh>
+        <!-- Cancelled: neutral -->
+        <template v-else>
+          <div class="empty-illustration empty-cancelled" aria-hidden="true">
+            <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="40" cy="40" r="36" fill="#999" fill-opacity="0.08"/>
+              <path d="M28 28l24 24M52 28L28 52" stroke="#999" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <p class="empty-title"><ShimmerText :text="t('wish.emptyState.noCancelledTitle')" :duration="3" /></p>
+          <p class="empty-desc">{{ t('wish.emptyState.noCancelledDesc') }}</p>
+        </template>
+      </div>
     </div>
 
     <div class="fab" :aria-label="t('wish.aria.addWish')" role="button" tabindex="0" @click="$router.push('/wishes/new')" @keydown.enter="$router.push('/wishes/new')" @keydown.space.prevent="$router.push('/wishes/new')">
@@ -181,6 +177,7 @@ import { useCurrency } from '@/composables/useCurrency'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -197,7 +194,6 @@ const debtWarning = useDebtWarning(
   wishes,
 )
 const activeTab = ref<'pending' | 'realized' | 'cancelled'>('pending')
-const refreshing = ref(false)
 const sortBy = ref<'priority' | 'price' | 'name'>('priority')
 const sortDir = ref<'asc' | 'desc'>('desc')
 
@@ -262,17 +258,23 @@ async function loadWishes() {
   liabilityStore.fetchLiabilities().catch(() => {})
 }
 
-// W5: jump to the liability strategy view (spec §5.4: 先止血再储蓄).
+// W5: jump to the liability strategy view (spec §5.4: 先止血再储蓄). The liability
+// list now lives under the finance tab — deep-link to the L1 strategy card there.
 function goToLiabilityStrategy() {
-  router.push({ path: '/liabilities', query: { focus: 'liability_strategy' } })
-}
-
-async function onRefresh() {
-  await loadWishes()
-  refreshing.value = false
+  router.push({ path: '/finance', query: { tab: 'liabilities', focus: 'liability_strategy' } })
 }
 
 onMounted(loadWishes)
+
+defineExpose({
+  activeTab,
+  sortBy,
+  sortDir,
+  filteredWishes,
+  sortedWishes,
+  toggleSort,
+  goToLiabilityStrategy,
+})
 </script>
 
 <style scoped>
@@ -568,7 +570,6 @@ onMounted(loadWishes)
 @media (prefers-reduced-motion: reduce) {
   .empty-title :deep(.shimmer-text) {
     animation: none;
-    background: none;
     -webkit-text-fill-color: initial;
   }
 }

@@ -63,10 +63,9 @@ const router = createRouter({
           component: () => import('@/pages/AssetAnalyticsPage.vue')
         },
         {
+          // U6: standalone asset list removed — redirect to the finance hub assets tab.
           path: 'assets',
-          name: 'AssetList',
-          component: () => import('@/pages/AssetListPage.vue'),
-          meta: { hasSkeleton: true }
+          redirect: { path: '/finance', query: { tab: 'assets' } }
         },
         {
           path: 'assets/new',
@@ -89,10 +88,10 @@ const router = createRouter({
           component: () => import('@/pages/AssetSellPage.vue')
         },
         {
+          // U6: standalone liability list removed — redirect to the finance hub liabilities
+          // tab. Preserve the W5 `focus` deep-link param (e.g. focus=liability_strategy).
           path: 'liabilities',
-          name: 'LiabilityList',
-          component: () => import('@/pages/LiabilityListPage.vue'),
-          meta: { hasSkeleton: true }
+          redirect: (to) => ({ path: '/finance', query: { ...to.query, tab: 'liabilities' } })
         },
         {
           path: 'liabilities/new',
@@ -110,10 +109,9 @@ const router = createRouter({
           component: () => import('@/pages/LiabilityDetailPage.vue')
         },
         {
+          // U6: standalone wish list removed — redirect to the finance hub wishes tab.
           path: 'wishes',
-          name: 'WishList',
-          component: () => import('@/pages/WishListPage.vue'),
-          meta: { hasSkeleton: true }
+          redirect: { path: '/finance', query: { tab: 'wishes' } }
         },
         {
           path: 'wishes/new',

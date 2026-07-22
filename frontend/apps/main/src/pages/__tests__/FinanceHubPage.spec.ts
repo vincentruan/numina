@@ -94,6 +94,21 @@ vi.mock('@/composables/useDebtWarning', () => ({
 
 import FinanceHubPage from '../FinanceHubPage.vue'
 
+const stubs = [
+  'van-pull-refresh',
+  'van-tabs',
+  'van-tab',
+  'van-button',
+  'van-icon',
+  'van-empty',
+  'DashboardSkeleton',
+  'MoneyDisplay',
+  // Stub the embedded panels so their store/pagination/composable internals don't run here.
+  'AssetListPanel',
+  'LiabilityListPanel',
+  'WishListPanel',
+]
+
 function resetState() {
   overviewRef.value = null
   liabilitiesRef.value = []
@@ -115,41 +130,28 @@ describe('FinanceHubPage', () => {
     resetState()
   })
 
-  it('renders overview metrics (net worth / liabilities / monthly payment / wish progress)', async () => {
+  it('does NOT render the removed top stat card (net worth / liabilities / monthly / wish progress)', async () => {
     overviewRef.value = { net_worth: 100000, total_liabilities: 30000, total_assets: 130000, asset_count: 5 }
-    liabilitiesRef.value = [
-      { id: '1', is_active: true, monthly_payment: '2000', remaining_amount: '10000', interest_rate: 5 },
-    ]
-    wishesRef.value = [
-      { id: 'w1', expected_price: 10000, saved_amount: '2500', status: 'active' },
-    ]
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
-    // Four overview rows present.
-    const labels = wrapper.findAll('.ov-label').map((n) => n.text())
-    expect(labels.some((l) => l.includes('financeHub.netWorth'))).toBe(true)
-    expect(labels.some((l) => l.includes('financeHub.totalLiabilities'))).toBe(true)
-    expect(labels.some((l) => l.includes('financeHub.monthlyPayment'))).toBe(true)
-    expect(labels.some((l) => l.includes('financeHub.wishProgress'))).toBe(true)
+    // The overview card and its sub-stat rows were removed in U4 (moved to OverviewStatCard).
+    expect(wrapper.find('.finance-overview-card').exists()).toBe(false)
+    expect(wrapper.find('.ov-label').exists()).toBe(false
+    )
   })
 
-  it('shows estimate tag when an active liability lacks monthly_payment', async () => {
-    overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
-    liabilitiesRef.value = [
-      { id: '1', is_active: true, monthly_payment: null, remaining_amount: '12000', interest_rate: 18 },
-    ]
-    wishesRef.value = []
+  it('assets tab renders the embedded AssetListPanel and no view-all button', async () => {
+    overviewRef.value = { net_worth: 0, total_liabilities: 0, total_assets: 0, asset_count: 0 }
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
-    expect(wrapper.find('.ov-estimate-tag').exists()).toBe(true)
+    // AssetListPanel is stubbed; assert the stub is present in the assets tab.
+    expect(wrapper.findComponent({ name: 'AssetListPanel' }).exists() || wrapper.find('.asset-list-panel').exists() || wrapper.html().includes('asset-list-panel')).toBe(true)
+    // The old assets view-all button is gone.
+    expect(wrapper.find('[data-test="view-all-assets"]').exists()).toBe(false)
   })
 
   it('hides debt-wish hint when no high-interest debt', async () => {
@@ -157,9 +159,7 @@ describe('FinanceHubPage', () => {
     liabilitiesRef.value = []
     wishesRef.value = [{ id: 'w1', name: '心愿A', monthly_saving: '500', target_date: '2026-12-01' }]
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
     expect(wrapper.find('.debt-wish-hint').exists()).toBe(false)
@@ -175,9 +175,7 @@ describe('FinanceHubPage', () => {
       { id: 'w1', name: '心愿A', monthly_saving: '60', target_date: '2026-12-01', ignore_debt_warning: false },
     ]
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
     const hint = wrapper.find('.debt-wish-hint')
@@ -185,29 +183,27 @@ describe('FinanceHubPage', () => {
     expect(hint.text()).toContain('financeHub.debtWishHint')
   })
 
-  it('navigates to /assets when view-all clicked (sub-tab contract)', async () => {
+  it('liabilities and wishes tabs render the embedded panels (no view-all bars)', async () => {
     overviewRef.value = { net_worth: 0, total_liabilities: 0, total_assets: 0, asset_count: 0 }
     liabilitiesRef.value = []
     wishesRef.value = []
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
-    const assetBtn = wrapper.find('[data-test="view-all-assets"]')
-    expect(assetBtn.exists()).toBe(true)
-    await assetBtn.trigger('click')
-    expect(pushMock).toHaveBeenCalledWith('/assets')
+    // Panels are stubbed; assert the stubs are present in their tabs.
+    expect(wrapper.findComponent({ name: 'LiabilityListPanel' }).exists() || wrapper.html().includes('liability-list-panel')).toBe(true)
+    expect(wrapper.findComponent({ name: 'WishListPanel' }).exists() || wrapper.html().includes('wish-list-panel')).toBe(true)
+    // The old sub-tab view-all buttons are gone.
+    expect(wrapper.find('[data-test="view-all-liabilities"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="view-all-wishes"]').exists()).toBe(false)
   })
 
   it('honors ?tab=liabilities query to preselect sub-tab', async () => {
     overviewRef.value = { net_worth: 0, total_liabilities: 0, total_assets: 0, asset_count: 0 }
     routeQuery.value = { tab: 'liabilities' }
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
     // activeTab is reflected on the root element's data-active-tab attribute.
@@ -218,9 +214,7 @@ describe('FinanceHubPage', () => {
     fetchAllMock.mockRejectedValueOnce(new Error('network'))
     overviewRef.value = null
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
     expect(wrapper.find('.hub-error').exists()).toBe(true)
@@ -230,21 +224,15 @@ describe('FinanceHubPage', () => {
     overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
     educationRewardSummaryRef.value = { total: 50, month_total: 20, count: 2 }
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
     const card = wrapper.find('.education-reward-card')
     expect(card.exists()).toBe(true)
-    // Title + total/month labels (i18n keys; MoneyDisplay stubbed so amounts not asserted as text).
     expect(card.text()).toContain('financeHub.educationReward')
     expect(card.text()).toContain('financeHub.educationRewardTotal')
     expect(card.text()).toContain('financeHub.educationRewardMonth')
-    // Count cell renders the count i18n key (mock t() returns the key; the real
-    // locale value "{count} 笔" is interpolated at runtime, not in this mock).
     expect(wrapper.find('.er-cell-count').text()).toContain('financeHub.educationRewardCount')
-    // Non-empty state → no empty placeholder.
     expect(wrapper.find('.er-empty').exists()).toBe(false)
   })
 
@@ -252,12 +240,9 @@ describe('FinanceHubPage', () => {
     overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
     educationRewardSummaryRef.value = { total: 0, month_total: 0, count: 0 }
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
-    // Card still rendered (placeholder, no layout jump) but shows empty text.
     const card = wrapper.find('.education-reward-card')
     expect(card.exists()).toBe(true)
     expect(wrapper.find('.er-empty').exists()).toBe(true)
@@ -269,9 +254,7 @@ describe('FinanceHubPage', () => {
     overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
     educationRewardSummaryRef.value = null
 
-    const wrapper = mount(FinanceHubPage, {
-      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
-    })
+    const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
     expect(wrapper.find('.er-empty').exists()).toBe(true)

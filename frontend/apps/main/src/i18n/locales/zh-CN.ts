@@ -90,6 +90,10 @@ export default {
     loadFailed: '加载财务概览失败',
     retry: '重试'
   },
+  focusTop3: {
+    noLiabilities: '暂无活跃负债',
+    noWishes: '暂无设定目标日期的心愿',
+  },
   dashboard: {
     title: '总览',
     totalAssets: '总资产',

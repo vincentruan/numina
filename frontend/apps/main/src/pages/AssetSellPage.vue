@@ -185,10 +185,12 @@ async function onSubmit() {
 
 function onResultClose(action: string) {
   if (action === 'confirm') {
-    router.push('/assets')
+    router.push({ path: '/finance', query: { tab: 'assets' } })
   }
   return true
 }
+
+defineExpose({ onResultClose })
 
 onMounted(async () => {
   increment()
