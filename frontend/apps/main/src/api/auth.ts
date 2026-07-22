@@ -35,6 +35,7 @@ interface UpdateSettingsRequest {
   language?: string
   default_currency?: string
   view_mode?: string
+  theme_color?: string
 }
 
 export function updateSettings(data: UpdateSettingsRequest) {

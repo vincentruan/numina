@@ -113,6 +113,7 @@ class UserResponse(SnowflakeBase):
     theme: str = "light"
     language: str = "zh-CN"
     default_currency: str = "CNY"
+    theme_color: str | None = None
     view_mode: str = "card"
     second_factor_enabled: bool = False
     second_factor_type: str | None = None
@@ -144,6 +145,14 @@ class UpdateSettingsRequest(BaseModel):
     language: str | None = None
     default_currency: str | None = None
     view_mode: str | None = None
+    theme_color: str | None = None
+
+    @field_validator("theme_color")
+    @classmethod
+    def check_theme_color(cls, v: str | None) -> str | None:
+        if v is not None and not _HEX_COLOR_RE.match(v):
+            raise ValueError("theme_color必须是有效的十六进制颜色（如 #007aff）")
+        return v
 
 
 class ChangePasswordRequest(BaseModel):

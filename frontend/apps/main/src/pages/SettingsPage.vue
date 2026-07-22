@@ -272,9 +272,11 @@ onMounted(async () => {
   } finally {
     decrement()
   }
-  // Initialize theme color from localStorage (sync, no need in try block)
-  const savedColor = localStorage.getItem('theme-primary')
+  // Initialize theme color: prefer server-persisted value, fall back to localStorage
+  const savedColor = authStore.user?.theme_color || localStorage.getItem('theme-primary')
   if (savedColor) {
+    currentThemeColor.value = savedColor
+    localStorage.setItem('theme-primary', savedColor)  // sync localStorage with server
     document.documentElement.style.setProperty('--theme-primary', savedColor)
     document.documentElement.style.setProperty('--van-primary-color', savedColor)
   }
@@ -402,13 +404,21 @@ async function onTitleConfirm() {
 }
 
 
-function selectThemeColor(color: string) {
+async function selectThemeColor(color: string) {
   currentThemeColor.value = color
   localStorage.setItem('theme-primary', color)
   document.documentElement.style.setProperty('--theme-primary', color)
   document.documentElement.style.setProperty('--van-primary-color', color)
   showThemeColorPicker.value = false
   showSuccessToast(t('toast.themeChanged'))
+  // Persist to server (fire-and-forget; localStorage already covers offline)
+  try {
+    await updateSettings({ theme_color: color })
+    // Update local authStore user so subsequent renders use the server value
+    if (authStore.user) authStore.user.theme_color = color
+  } catch {
+    // Non-critical: localStorage fallback preserves the choice locally
+  }
 }
 
 async function onLogout() {

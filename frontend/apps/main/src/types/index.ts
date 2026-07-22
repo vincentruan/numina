@@ -9,6 +9,7 @@ export interface User {
   theme: string
   language: string
   default_currency: string
+  theme_color: string | null
   view_mode: string
   created_at: string
   second_factor_enabled?: boolean
