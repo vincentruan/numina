@@ -10,7 +10,6 @@ Adds:
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = 'i0279k52jgf9'
@@ -42,15 +41,15 @@ def upgrade() -> None:
         sa.Column('is_enabled', sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column('custom_prompt', sa.Text(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint('family_id', 'capability', name='uq_family_skill'),
     )
     op.create_index('ix_family_skill_configs_family_id', 'family_skill_configs', ['family_id'])
-    op.create_unique_constraint(
-        'uq_family_skill', 'family_skill_configs', ['family_id', 'capability']
-    )
+    # Note: uq_family_skill constraint is declared inline above. SQLite does not
+    # support ALTER TABLE ADD CONSTRAINT, so a standalone op.create_unique_constraint
+    # would raise NotImplementedError on fresh DBs.
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_family_skill', 'family_skill_configs', type_='unique')
     op.drop_index('ix_family_skill_configs_family_id', table_name='family_skill_configs')
     op.drop_table('family_skill_configs')
 
