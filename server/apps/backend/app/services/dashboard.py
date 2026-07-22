@@ -529,8 +529,12 @@ def get_home_assets_page(
     page: int = 1,
     page_size: int = 20,
     category_id: str | None = None,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "desc",
+    asset_type: str | None = None,
 ) -> dict:
-    """分页获取指定状态的资产列表"""
+    """分页获取指定状态的资产列表（支持搜索/排序/类型筛选）"""
     import math
 
     from apps.backend.app.schemas.asset import AssetResponse
@@ -548,12 +552,26 @@ def get_home_assets_page(
             filters.append(Asset.category_id == int(category_id))
         except ValueError:
             pass  # invalid category_id format — ignore filter, return all
+    if asset_type in ("physical", "financial"):
+        filters.append(Asset.asset_type == asset_type)
+    if search:
+        filters.append(Asset.name.ilike(f"%{search}%"))
+
+    # Sorting: whitelist columns to avoid arbitrary-column injection; default updated_at desc
+    sort_columns = {
+        "current_value": Asset.current_value,
+        "purchase_date": Asset.purchase_date,
+        "name": Asset.name,
+        "updated_at": Asset.updated_at,
+    }
+    sort_col = sort_columns.get(sort_by or "", Asset.updated_at)
+    order = sort_col.asc() if sort_order == "asc" else sort_col.desc()
 
     query = (
         db.query(Asset)
         .options(joinedload(Asset.category), joinedload(Asset.tags))
         .filter(*filters)
-        .order_by(Asset.updated_at.desc())
+        .order_by(order)
     )
 
     total = query.count()
