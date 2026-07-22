@@ -75,7 +75,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm run typecheck
+        run: pnpm run typecheck && pnpm run typecheck:test
 
   # ──────────────────────────────────────────────────────────────────────────
   # Job 3: Frontend Vitest tests (parallel with backend)
