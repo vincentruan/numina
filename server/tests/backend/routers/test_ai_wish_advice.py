@@ -143,3 +143,64 @@ def test_validate_advice_accepts_valid():
     }
     assert validate_advice(good) is not None
 
+
+
+# ---------------------------------------------------------------------------
+# Regression: _extract_wish_advice_result must consume the async SSE stream.
+# The original bug iterated httpx's async `aiter_text()` with a sync `for`,
+# raising TypeError that was swallowed → the endpoint always returned empty.
+# These tests drive a fake async-iterable resp through the real function.
+# ---------------------------------------------------------------------------
+
+class _FakeStreamResp:
+    """Mimics the slice of httpx.Response used by _extract_wish_advice_result."""
+
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def aiter_text(self):
+        for c in self._chunks:
+            yield c
+
+
+def _sse_frame(payload_type: str, payload: dict) -> str:
+    import json as _json
+
+    return f"event: custom\ndata: {_json.dumps({'type': payload_type, 'payload': payload})}\n\n"
+
+
+@pytest.mark.asyncio
+async def test_extract_wish_advice_result_reads_async_stream():
+    from apps.backend.app.services.wish_advice import _extract_wish_advice_result
+
+    payload = {
+        "primary_wish_id": "1",
+        "reason": "距目标近",
+        "suggested_monthly": 2000,
+        "redistribution": [{"wish_id": "1", "suggested_amount": 2000, "note": "本月优先"}],
+    }
+    resp = _FakeStreamResp([_sse_frame("wish_advice.result", payload)])
+    result = await _extract_wish_advice_result(resp)
+    assert result == payload
+
+
+@pytest.mark.asyncio
+async def test_extract_wish_advice_result_handles_split_frames():
+    from apps.backend.app.services.wish_advice import _extract_wish_advice_result
+
+    payload = {"primary_wish_id": "2", "reason": "r", "suggested_monthly": 100, "redistribution": []}
+    frame = _sse_frame("wish_advice.result", payload)
+    # Split the SSE frame across two chunks to prove reassembly works.
+    mid = len(frame) // 2
+    resp = _FakeStreamResp([frame[:mid], frame[mid:]])
+    result = await _extract_wish_advice_result(resp)
+    assert result == payload
+
+
+@pytest.mark.asyncio
+async def test_extract_wish_advice_result_returns_none_without_result_frame():
+    from apps.backend.app.services.wish_advice import _extract_wish_advice_result
+
+    resp = _FakeStreamResp([_sse_frame("some.other.event", {"x": 1}), "noise\n\n"])
+    result = await _extract_wish_advice_result(resp)
+    assert result is None

@@ -146,7 +146,10 @@ async def parse_import(
     # returns [] → read_file/str_replace fall back to DeerFlow's default-user
     # sandbox (.deer-flow/users/default/...), breaking family-scoped isolation.
     # Mirror worker.py:245's set_family_sandbox_context(family_id) call.
-    from apps.agent.services.runtime.sandbox_provider import set_family_sandbox_context
+    from apps.agent.services.runtime.sandbox_provider import (
+        reset_family_sandbox_context,
+        set_family_sandbox_context,
+    )
 
     set_family_sandbox_context(family_id, caller_user_id=user_id)
 
@@ -190,6 +193,13 @@ async def parse_import(
     except Exception as exc:
         logger.warning("[parse_import] agent run failed family=%s err=%s", family_id, type(exc).__name__)
         return dict(_EMPTY_RESULT)
+    finally:
+        # Mirror worker.run_agent (worker.py:369-370): this endpoint sets the
+        # family sandbox ContextVar directly (bypassing run_agent), so it must
+        # also reset it on every exit path. The ContextVars are coroutine-scoped
+        # and would leak family_id/caller into a reused coroutine (shared worker
+        # task / executor thread), resolving sandbox paths to the wrong tenant.
+        reset_family_sandbox_context()
 
     # Harvest the import-parse.result custom event (worker emits at most one).
     for event, data in bridge.published:

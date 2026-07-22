@@ -149,14 +149,14 @@ async def generate_advice(db: Session, user: User) -> tuple[dict | None, str]:
                     resp.status_code, body[:200],
                 )
                 return None, fp
-            advice = _extract_wish_advice_result(resp)
+            advice = await _extract_wish_advice_result(resp)
         return validate_advice(advice), fp
     except Exception as exc:
         logger.warning("[wish-advice] generate failed err=%s", type(exc).__name__)
         return None, fp
 
 
-def _extract_wish_advice_result(resp: Any) -> dict | None:
+async def _extract_wish_advice_result(resp: Any) -> dict | None:
     """Consume the agent SSE stream and pull out the wish_advice.result payload.
 
     Mirrors ``ai_finance_coach._persist_finance_coach_result``'s frame parsing:
@@ -167,7 +167,7 @@ def _extract_wish_advice_result(resp: Any) -> dict | None:
     """
     text = ""
     try:
-        for chunk in resp.aiter_text():
+        async for chunk in resp.aiter_text():
             text += chunk
     except Exception as exc:
         logger.warning("[wish-advice] stream read failed err=%s", type(exc).__name__)

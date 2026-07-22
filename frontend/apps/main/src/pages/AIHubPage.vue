@@ -252,7 +252,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
@@ -551,6 +551,17 @@ onMounted(async () => {
   await agentStore.loadAgents()
   await loadReport()
   initialLoading.value = false
+})
+
+// This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
+// navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
+// Abort the report SSE stream + stop the cookie-refresh interval on deactivate
+// (and on full unmount) so they don't leak while the cached page sits in memory.
+onDeactivated(() => {
+  stream.abort()
+})
+onUnmounted(() => {
+  stream.abort()
 })
 
 // Expose refs and functions for testing purposes
