@@ -16,7 +16,7 @@
 
         <!-- Adult Members -->
         <div class="section">
-          <p class="section-heading">👥 {{ t('family.memberManagement') }}</p>
+          <h2 class="section-heading"><van-icon name="friends-o" /> {{ t('family.memberManagement') }}</h2>
           <div class="member-cards">
             <div v-for="member in adultMembers" :key="member.id" class="child-mgmt-card" :class="{ 'member-disabled': member.is_active === false }">
               <div class="child-mgmt-header">
@@ -93,7 +93,7 @@
 
         <!-- Children management dashboard (owner only) -->
         <div v-if="isOwner && childMembers.length > 0" class="section">
-          <p class="section-heading">👧 {{ t('family.childManagement') }}</p>
+          <h2 class="section-heading"><van-icon name="manager-o" /> {{ t('family.childManagement') }}</h2>
           <div class="child-cards">
             <div v-for="child in childMembers" :key="child.id" class="child-mgmt-card">
               <div class="child-mgmt-header">
