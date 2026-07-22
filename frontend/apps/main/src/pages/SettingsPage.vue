@@ -333,9 +333,9 @@ const themeColorOptions = computed(() => [
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 
 const themeOptions = [
-  { text: '🌓 ' + t('settings.themeSystem'), value: 'system' },
-  { text: '☀️ ' + t('settings.themeLight'), value: 'light' },
-  { text: '🌙 ' + t('settings.themeDark'), value: 'dark' },
+  { text: t('settings.themeSystem'), value: 'system' },
+  { text: t('settings.themeLight'), value: 'light' },
+  { text: t('settings.themeDark'), value: 'dark' },
 ]
 
 const languageOptions = [
@@ -345,9 +345,9 @@ const languageOptions = [
 
 const themeLabel = computed(() => {
   const theme = authStore.user?.theme
-  if (theme === 'dark') return '🌙 ' + t('settings.themeDark')
-  if (theme === 'system') return '🌓 ' + t('settings.themeSystem')
-  return '☀️ ' + t('settings.themeLight')
+  if (theme === 'dark') return t('settings.themeDark')
+  if (theme === 'system') return t('settings.themeSystem')
+  return t('settings.themeLight')
 })
 
 const languageLabel = computed(() => {
