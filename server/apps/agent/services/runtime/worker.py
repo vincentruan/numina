@@ -212,6 +212,52 @@ def _copy_asset_report_markdown(
         return None
 
 
+async def _resolve_numina_mcp_servers(
+    client: BackendClient,
+    family_id: str,
+    user_id: str | None,
+    label: str,
+) -> list[dict[str, Any]]:
+    """Fetch enabled MCP servers and rewrite the Numina Backend MCP entry.
+
+    Shared MCP-setup for every pipeline: locate the "Numina Backend MCP" server,
+    point its URL at the family-scoped SSE endpoint (when not already prefixed),
+    and attach the auth headers the backend MCP SSE handshake requires
+    (``X-Caller-User-Id`` is mandatory; without it the SSE endpoint 403s). Only
+    the Numina Backend MCP entry gets headers, not all servers. Returns ``[]``
+    when the fetch fails so the caller degrades to zero MCP tools.
+    ``label`` is the calling pipeline's log tag (e.g. ``[_run_numina_agent]``).
+    """
+    try:
+        mcp_servers = await client.get_enabled_mcp_servers()
+        for srv in mcp_servers:
+            if srv.get("name") == "Numina Backend MCP":
+                expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
+                actual_url = (srv.get("url") or "").rstrip("/")
+                if not actual_url.startswith(expected_prefix):
+                    srv["url"] = (
+                        expected_prefix
+                        + "/api/v1/internal/mcp/"
+                        + family_id
+                        + "/sse"
+                    )
+                mcp_headers: dict[str, str] = {
+                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "X-Family-Id": family_id,
+                }
+                if user_id:
+                    mcp_headers["X-Caller-User-Id"] = user_id
+                srv["headers"] = mcp_headers
+                break
+        return mcp_servers
+    except Exception as exc:
+        logger.warning(
+            "%s get_enabled_mcp_servers failed family=%s err=%s",
+            label, family_id, type(exc).__name__,
+        )
+        return []
+
+
 async def run_agent(
     *,
     bridge: StreamBridge,
@@ -399,33 +445,9 @@ async def _run_asset_report_pipeline(
         )
 
         # 3. Fetch enabled MCP servers (same MCP-setup as _run_numina_agent).
-        try:
-            mcp_servers = await client.get_enabled_mcp_servers()
-            for srv in mcp_servers:
-                if srv.get("name") == "Numina Backend MCP":
-                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                    actual_url = (srv.get("url") or "").rstrip("/")
-                    if not actual_url.startswith(expected_prefix):
-                        srv["url"] = (
-                            expected_prefix
-                            + "/api/v1/internal/mcp/"
-                            + family_id
-                            + "/sse"
-                        )
-                    mcp_headers: dict[str, str] = {
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Family-Id": family_id,
-                    }
-                    if user_id:
-                        mcp_headers["X-Caller-User-Id"] = user_id
-                    srv["headers"] = mcp_headers
-                    break
-        except Exception as exc:
-            logger.warning(
-                "[_run_asset_report_pipeline] get_enabled_mcp_servers failed family=%s err=%s",
-                family_id, type(exc).__name__,
-            )
-            mcp_servers = []
+        mcp_servers = await _resolve_numina_mcp_servers(
+            client, family_id, user_id, "[_run_asset_report_pipeline]"
+        )
 
         # 4. Build adapter. plan_mode=False (fixed 3-step flow, no TodoList).
         # Read the agent's memory_enabled flag from the AgentRegistry (single
@@ -771,33 +793,9 @@ async def _run_import_parse_agent(
         )
 
         # 3. Fetch enabled MCP servers (same MCP-setup as asset-report).
-        try:
-            mcp_servers = await client.get_enabled_mcp_servers()
-            for srv in mcp_servers:
-                if srv.get("name") == "Numina Backend MCP":
-                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                    actual_url = (srv.get("url") or "").rstrip("/")
-                    if not actual_url.startswith(expected_prefix):
-                        srv["url"] = (
-                            expected_prefix
-                            + "/api/v1/internal/mcp/"
-                            + family_id
-                            + "/sse"
-                        )
-                    mcp_headers: dict[str, str] = {
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Family-Id": family_id,
-                    }
-                    if user_id:
-                        mcp_headers["X-Caller-User-Id"] = user_id
-                    srv["headers"] = mcp_headers
-                    break
-        except Exception as exc:
-            logger.warning(
-                "[_run_import_parse_agent] get_enabled_mcp_servers failed family=%s err=%s",
-                family_id, type(exc).__name__,
-            )
-            mcp_servers = []
+        mcp_servers = await _resolve_numina_mcp_servers(
+            client, family_id, user_id, "[_run_import_parse_agent]"
+        )
 
         # 4. Build adapter. plan_mode=False (fixed parse flow, no TodoList).
         # import-parse is stateless (memory_enabled=False) — each run parses the
@@ -1025,33 +1023,9 @@ async def _run_finance_coach_agent(
         )
 
         # 3. Fetch enabled MCP servers (same MCP-setup as import-parse).
-        try:
-            mcp_servers = await client.get_enabled_mcp_servers()
-            for srv in mcp_servers:
-                if srv.get("name") == "Numina Backend MCP":
-                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                    actual_url = (srv.get("url") or "").rstrip("/")
-                    if not actual_url.startswith(expected_prefix):
-                        srv["url"] = (
-                            expected_prefix
-                            + "/api/v1/internal/mcp/"
-                            + family_id
-                            + "/sse"
-                        )
-                    mcp_headers: dict[str, str] = {
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Family-Id": family_id,
-                    }
-                    if user_id:
-                        mcp_headers["X-Caller-User-Id"] = user_id
-                    srv["headers"] = mcp_headers
-                    break
-        except Exception as exc:
-            logger.warning(
-                "[_run_finance_coach_agent] get_enabled_mcp_servers failed family=%s err=%s",
-                family_id, type(exc).__name__,
-            )
-            mcp_servers = []
+        mcp_servers = await _resolve_numina_mcp_servers(
+            client, family_id, user_id, "[_run_finance_coach_agent]"
+        )
 
         # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
         from apps.agent.services.agent_registry import get_agent_registry
@@ -1323,33 +1297,9 @@ async def _run_wish_advice_agent(
         )
 
         # 3. Fetch enabled MCP servers (same MCP-setup as finance-coach).
-        try:
-            mcp_servers = await client.get_enabled_mcp_servers()
-            for srv in mcp_servers:
-                if srv.get("name") == "Numina Backend MCP":
-                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                    actual_url = (srv.get("url") or "").rstrip("/")
-                    if not actual_url.startswith(expected_prefix):
-                        srv["url"] = (
-                            expected_prefix
-                            + "/api/v1/internal/mcp/"
-                            + family_id
-                            + "/sse"
-                        )
-                    mcp_headers: dict[str, str] = {
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Family-Id": family_id,
-                    }
-                    if user_id:
-                        mcp_headers["X-Caller-User-Id"] = user_id
-                    srv["headers"] = mcp_headers
-                    break
-        except Exception as exc:
-            logger.warning(
-                "[_run_wish_advice_agent] get_enabled_mcp_servers failed family=%s err=%s",
-                family_id, type(exc).__name__,
-            )
-            mcp_servers = []
+        mcp_servers = await _resolve_numina_mcp_servers(
+            client, family_id, user_id, "[_run_wish_advice_agent]"
+        )
 
         # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
         from apps.agent.services.agent_registry import get_agent_registry
@@ -2029,36 +1979,9 @@ async def _run_numina_agent(
         # loads zero MCP tools - the agent then falls back to the empty context
         # fields injected by _build_prompt and reports "all records empty".
         # Mirrors the same logic in agent_dispatch.stream_agent_dispatch.
-        try:
-            mcp_servers = await client.get_enabled_mcp_servers()
-            for srv in mcp_servers:
-                if srv.get("name") == "Numina Backend MCP":
-                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                    actual_url = (srv.get("url") or "").rstrip("/")
-                    if not actual_url.startswith(expected_prefix):
-                        srv["url"] = (
-                            expected_prefix
-                            + "/api/v1/internal/mcp/"
-                            + family_id
-                            + "/sse"
-                        )
-                    # Auth headers required by the backend MCP SSE handshake
-                    # (X-Caller-User-Id is mandatory; without it the SSE endpoint 403s).
-                    # Only attach headers to the Numina Backend MCP entry, not to all servers.
-                    mcp_headers: dict[str, str] = {
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Family-Id": family_id,
-                    }
-                    if user_id:
-                        mcp_headers["X-Caller-User-Id"] = user_id
-                    srv["headers"] = mcp_headers
-                    break
-        except Exception as exc:
-            logger.warning(
-                "[_run_numina_agent] get_enabled_mcp_servers failed family=%s err=%s",
-                family_id, type(exc).__name__,
-            )
-            mcp_servers = []
+        mcp_servers = await _resolve_numina_mcp_servers(
+            client, family_id, user_id, "[_run_numina_agent]"
+        )
 
         # 4a. Extract per-call execution-mode overrides from the RunnableConfig.
         # The frontend sends these in config.configurable (see reference

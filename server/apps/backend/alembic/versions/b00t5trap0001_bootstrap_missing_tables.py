@@ -156,6 +156,13 @@ def upgrade() -> None:
             sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()'))
         )
 
+    if not bind.dialect.has_table(bind, 'chore_template_assignees'):
+        op.create_table('chore_template_assignees',
+            sa.Column('template_id', sa.BigInteger(), sa.ForeignKey('chore_templates.id'), nullable=False),
+            sa.Column('child_user_id', sa.BigInteger(), sa.ForeignKey('users.id'), nullable=False),
+            sa.PrimaryKeyConstraint('template_id', 'child_user_id')
+        )
+
     if not bind.dialect.has_table(bind, 'chore_instances'):
         op.create_table('chore_instances',
             sa.Column('id', sa.BigInteger(), nullable=False, primary_key=True),
