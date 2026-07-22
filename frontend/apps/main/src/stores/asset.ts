@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Asset, AssetFilter, AssetRequestPayload, AssetSellRequest, AssetSellResponse } from '@/types'
+import type { Asset, AssetFilter, AssetMoneyField, AssetRequestPayload, AssetSellRequest, AssetSellResponse } from '@/types'
+import { ASSET_MONEY_FIELDS } from '@/types'
 import * as assetApi from '@/api/assets'
 import { useDashboardStore } from '@/stores/dashboard'
 import { nanoid } from 'nanoid'
@@ -206,29 +207,27 @@ export const useAssetStore = defineStore('asset', () => {
 
     // 4. Build updated asset (optimistic). `data` is a request payload: its money
     // fields are numbers and it carries tag_ids, neither of which belongs on the
-    // Asset wire shape (money-as-str). Pull those out, spread the rest, then re-add
-    // money coerced back to str.
-    const {
-      tag_ids: _tagIds,
-      purchase_price,
-      current_value,
-      annual_maintenance_cost,
-      sell_price,
-      sell_fee,
-      target_daily_cost,
-      ...scalarData
-    } = data
+    // Asset wire shape (money-as-str). Spread only the scalar (non-money, non-tag)
+    // fields, then set each money field from ASSET_MONEY_FIELDS: present (≠ undefined)
+    // → coerce back to str; omitted → keep the existing asset's value.
+    const { tag_ids: _tagIds, ...rest } = data
+    // Strip the number-typed money keys so the spread is Asset-shaped; the loop below
+    // is the sole writer of money fields. The cast is a truthful narrowing: after the
+    // deletes, only scalar (non-money) fields remain.
+    const scalarData = { ...rest }
+    for (const k of ASSET_MONEY_FIELDS) {
+      delete scalarData[k]
+    }
+    const scalar = scalarData as Omit<Partial<Asset>, AssetMoneyField>
     const toStr = (v: number | null | undefined): string | null => (v != null ? String(v) : null)
     const updatedAsset: Asset = {
       ...assets.value[idx],
-      ...scalarData,
-      ...(purchase_price !== undefined ? { purchase_price: toStr(purchase_price) } : {}),
-      ...(current_value !== undefined ? { current_value: toStr(current_value) } : {}),
-      ...(annual_maintenance_cost !== undefined ? { annual_maintenance_cost: toStr(annual_maintenance_cost) } : {}),
-      ...(sell_price !== undefined ? { sell_price: toStr(sell_price) } : {}),
-      ...(sell_fee !== undefined ? { sell_fee: toStr(sell_fee) } : {}),
-      ...(target_daily_cost !== undefined ? { target_daily_cost: toStr(target_daily_cost) } : {}),
+      ...scalar,
       updated_at: new Date().toISOString(),
+    }
+    for (const k of ASSET_MONEY_FIELDS) {
+      const v = data[k]
+      updatedAsset[k] = v !== undefined ? toStr(v) : (assets.value[idx][k] ?? null)
     }
 
     // 5. Apply optimistic update

@@ -130,12 +130,26 @@ export interface Liability {
   is_active: boolean
 }
 
+// The Asset money fields, single source of truth. Money is `string` on the response
+// (money-as-str) but `number` on the request (backend coerces). Both AssetRequestPayload
+// (below) and the asset store's optimistic update derive from this list, so adding or
+// renaming a money field is a one-line change here instead of editing three places.
+export const ASSET_MONEY_FIELDS = [
+  'purchase_price',
+  'current_value',
+  'annual_maintenance_cost',
+  'sell_price',
+  'sell_fee',
+  'target_daily_cost',
+] as const
+export type AssetMoneyField = (typeof ASSET_MONEY_FIELDS)[number]
+
 // Request payloads for create/update. The response types above carry money as
 // `string` (money-as-str on the wire OUT), but the backend's create/update schemas
 // declare these fields `float`/`Decimal` and Pydantic coerces numeric input — so the
 // forms send numbers. These payload types make that direction honest instead of
 // reusing the response shape (which mistypes the money fields as string).
-export type AssetRequestPayload = Omit<Partial<Asset>, 'purchase_price' | 'current_value' | 'annual_maintenance_cost' | 'sell_price' | 'sell_fee' | 'target_daily_cost'> & {
+export type AssetRequestPayload = Omit<Partial<Asset>, AssetMoneyField> & {
   purchase_price?: number | null
   current_value?: number | null
   annual_maintenance_cost?: number | null
