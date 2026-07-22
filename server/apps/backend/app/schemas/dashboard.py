@@ -231,6 +231,13 @@ class RetentionRateResponse(BaseModel):
     top_items: list[RetentionItem]
 
 
+class InvestmentReturnSummary(BaseModel):
+    """D8 金融资产年化收益率摘要"""
+    annualized_rate: float | None  # None = 持有天数不足或无有效资产
+    asset_count: int  # 有有效年化收益率的金融资产数
+    description: str  # 简短说明（后端中性文案，前端以 i18n 为准）
+
+
 class InsightsResponse(BaseModel):
     """洞悉 Tab 完整响应"""
     smart_discovery: SmartDiscoveryResponse
@@ -239,6 +246,7 @@ class InsightsResponse(BaseModel):
     type_distribution: TypeDistributionResponse
     duration_distribution: DurationDistributionResponse
     retention_rate: RetentionRateResponse
+    investment_returns: InvestmentReturnSummary | None = None
 
 
 # ═══════════════════════════════════════

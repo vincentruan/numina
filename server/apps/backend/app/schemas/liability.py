@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -91,6 +91,25 @@ class PaymentRecordResponse(SnowflakeBase):
         return _coerce_money_str(v)
 
 
+class LinkedAssetSummary(BaseModel):
+    """Summary of a liability's collateral asset (L7).
+
+    Populated only on the detail endpoint (KTD-2) so the frontend can render a
+    "current value vs remaining loan (coverage %)" comparison without a second
+    round-trip. current_value is str on the wire (money-as-str convention).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    current_value: str | None = None
+
+    @field_validator("current_value", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_money_str(v)
+
+
 class LiabilityResponse(SnowflakeBase):
     id: int
     user_id: int
@@ -116,3 +135,14 @@ class LiabilityResponse(SnowflakeBase):
     @classmethod
     def _coerce_money(cls, v):
         return _coerce_money_str(v)
+
+
+class LiabilityDetailResponse(LiabilityResponse):
+    """Detail-only response (L7, KTD-2).
+
+    Adds the linked_asset summary so the frontend can render a collateral
+    coverage comparison. Kept off the list response to avoid an N+1 per row —
+    only the detail endpoint resolves the relationship.
+    """
+
+    linked_asset: LinkedAssetSummary | None = None

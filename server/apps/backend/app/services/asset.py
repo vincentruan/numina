@@ -99,6 +99,27 @@ def compute_return_rate(asset: Asset) -> float | None:
     )
 
 
+def compute_annualized_return(asset: Asset) -> float | None:
+    """D8 金融资产年化收益率（期间收益率年化）。
+
+    rate = (current - purchase) / purchase × (365 / holding_days) × 100
+    holding_days = (today - purchase_date).days
+    purchase_date 缺失或 holding_days <= 0 → None
+    """
+    if not asset.purchase_price or asset.purchase_price == 0 or not asset.current_value:
+        return None
+    if not asset.purchase_date:
+        return None
+    holding_days = (date.today() - asset.purchase_date).days
+    if holding_days <= 0:
+        return None
+    total_ratio = (float(asset.current_value) - float(asset.purchase_price)) / float(
+        asset.purchase_price
+    )
+    annualized = total_ratio * (365 / holding_days) * 100
+    return round(annualized, 2)
+
+
 def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
     asset = Asset(
         user_id=user.id,

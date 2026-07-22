@@ -8,6 +8,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.liability import (
     LiabilityCreate,
+    LiabilityDetailResponse,
     LiabilityResponse,
     LiabilityUpdate,
     PaymentRecordResponse,
@@ -87,13 +88,19 @@ def simulate_liability(
     return resp
 
 
-@router.get("/{liability_id}", response_model=LiabilityResponse)
+@router.get("/{liability_id}", response_model=LiabilityDetailResponse)
 def get_liability(
     liability_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    return liability_service.get_liability(db, user, liability_id)
+    """L7 (KTD-2): detail endpoint enriches the linked_asset relationship into a
+    {name, current_value} summary so the frontend can render a collateral
+    coverage comparison without a second round-trip. Only detail — list is not
+    enriched (the list LiabilityResponse has no linked_asset field, avoiding N+1).
+    """
+    liability = liability_service.get_liability(db, user, liability_id)
+    return LiabilityDetailResponse.model_validate(liability)
 
 
 @router.put("/{liability_id}", response_model=LiabilityResponse)

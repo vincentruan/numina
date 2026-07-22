@@ -20,6 +20,7 @@ from apps.backend.app.schemas.dashboard import (
     GoalProgressSummary,
     InsightsResponse,
     InvestmentReturnItem,
+    InvestmentReturnSummary,
     LongestHeldStat,
     LowUsageItem,
     NewAssetItem,
@@ -37,7 +38,10 @@ from apps.backend.app.schemas.dashboard import (
     UpcomingPaymentItem,
     UpcomingPaymentsResponse,
 )
-from apps.backend.app.services.asset import compute_daily_cost, compute_return_rate
+from apps.backend.app.services.asset import (
+    compute_annualized_return,
+    compute_daily_cost,
+)
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 
 
@@ -349,7 +353,7 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
 
     items = []
     for a in assets:
-        rr = compute_return_rate(a)
+        rr = compute_annualized_return(a)
         if rr is not None:
             asset_currency = a.currency or "CNY"
             purchase_price_converted = ExchangeRateService.convert(
@@ -1022,6 +1026,23 @@ def get_retention_rate(db: Session, user: User) -> RetentionRateResponse:
 
 def get_insights(db: Session, user: User) -> InsightsResponse:
     """获取洞悉 Tab 完整数据"""
+    investment_items = get_investment_returns(db, user)
+    if investment_items:
+        avg_annualized = round(
+            sum(i.return_rate for i in investment_items) / len(investment_items), 2
+        )
+        investment_summary = InvestmentReturnSummary(
+            annualized_rate=avg_annualized,
+            asset_count=len(investment_items),
+            description="金融资产年化收益率（按持有天数年化）",
+        )
+    else:
+        investment_summary = InvestmentReturnSummary(
+            annualized_rate=None,
+            asset_count=0,
+            description="暂无有效持有天数的金融资产",
+        )
+
     return InsightsResponse(
         smart_discovery=get_smart_discovery(db, user),
         daily_cost_ranking=get_daily_cost_ranking(db, user, limit=5),
@@ -1029,6 +1050,7 @@ def get_insights(db: Session, user: User) -> InsightsResponse:
         type_distribution=get_type_distribution(db, user),
         duration_distribution=get_duration_distribution(db, user),
         retention_rate=get_retention_rate(db, user),
+        investment_returns=investment_summary,
     )
 
 

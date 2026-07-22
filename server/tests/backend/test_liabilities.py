@@ -2,6 +2,16 @@ import pytest
 
 
 @pytest.fixture
+def category_id(client, auth_headers):
+    """Get a physical category ID for creating assets (L7 collateral)."""
+    response = client.get("/api/v1/categories", headers=auth_headers)
+    assert response.status_code == 200
+    physical = [c for c in response.json()["data"] if c["asset_type"] == "physical"]
+    assert len(physical) > 0
+    return physical[0]["id"]
+
+
+@pytest.fixture
 def sample_liability(client, auth_headers):
     """Create a sample liability"""
     response = client.post("/api/v1/liabilities", headers=auth_headers, json={
@@ -135,3 +145,64 @@ def test_cross_family_liability_isolation(client, auth_headers, second_user_head
     lid = sample_liability["id"]
     response = client.get(f"/api/v1/liabilities/{lid}", headers=second_user_headers)
     assert response.status_code == 404
+
+
+def test_linked_asset_detail_enrichment(client, auth_headers, category_id):
+    """L7 (KTD-2): GET /liabilities/{id} returns a linked_asset summary
+    {name, current_value(str)} when a collateral asset is linked; the list
+    endpoint must NOT carry the nested summary (no N+1 enrichment)."""
+    # Create a collateral asset.
+    asset = client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "抵押房产",
+        "category_id": category_id,
+        "asset_type": "physical",
+        "purchase_price": 3000000,
+        "current_value": 3500000,
+        "purchase_date": "2020-01-15",
+        "status": "in_use",
+    }).json()["data"]
+
+    # Create a liability linked to that asset.
+    create = client.post("/api/v1/liabilities", headers=auth_headers, json={
+        "name": "房贷",
+        "category": "mortgage",
+        "original_amount": 2000000,
+        "remaining_amount": 1500000,
+        "monthly_payment": 12000,
+        "interest_rate": 4.2,
+        "linked_asset_id": asset["id"],
+    })
+    assert create.status_code == 201
+    lid = create.json()["data"]["id"]
+
+    # Detail endpoint enriches linked_asset summary (money as str).
+    detail = client.get(f"/api/v1/liabilities/{lid}", headers=auth_headers)
+    assert detail.status_code == 200
+    data = detail.json()["data"]
+    assert data["linked_asset_id"] == asset["id"]
+    assert data["linked_asset"] == {"name": "抵押房产", "current_value": "3500000.00"}
+
+    # List endpoint does NOT enrich (no linked_asset key on rows).
+    lst = client.get("/api/v1/liabilities", headers=auth_headers)
+    assert lst.status_code == 200
+    rows = lst.json()["data"]
+    row = next(r for r in rows if r["id"] == lid)
+    assert "linked_asset" not in row
+    assert row["linked_asset_id"] == asset["id"]
+
+    # Unlink via update; detail summary becomes None.
+    upd = client.put(f"/api/v1/liabilities/{lid}", headers=auth_headers, json={"linked_asset_id": None})
+    assert upd.status_code == 200
+    assert upd.json()["data"]["linked_asset_id"] is None
+    detail2 = client.get(f"/api/v1/liabilities/{lid}", headers=auth_headers)
+    assert detail2.json()["data"]["linked_asset"] is None
+
+
+def test_linked_asset_detail_none_when_unlinked(client, auth_headers, sample_liability):
+    """L7: a liability with no linked_asset returns linked_asset=None on detail."""
+    lid = sample_liability["id"]
+    detail = client.get(f"/api/v1/liabilities/{lid}", headers=auth_headers)
+    assert detail.status_code == 200
+    data = detail.json()["data"]
+    assert data["linked_asset_id"] is None
+    assert data["linked_asset"] is None

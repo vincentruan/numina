@@ -29,6 +29,7 @@ def setup_test_data(client, auth_headers):
         "asset_type": "financial",
         "purchase_price": 200000,
         "current_value": 225000,
+        "purchase_date": "2023-01-01",
         "institution": "天天基金"
     })
 
@@ -146,19 +147,24 @@ def test_dashboard_low_usage_assets(client, auth_headers, setup_test_data):
 
 
 def test_dashboard_investment_returns(client, auth_headers, setup_test_data):
-    """Test investment returns endpoint"""
+    """Test investment returns endpoint (D8 annualized return rate)"""
+    from datetime import date
+
     response = client.get("/api/v1/dashboard/investment-returns", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()["data"]
 
-    # Should only have financial assets
+    # Should only have financial assets with a valid annualized rate
     assert len(data) == 1
     assert data[0]["name"] == "基金"
     assert "return_rate" in data[0]
     assert "profit" in data[0]
-    # return_rate = (225000 - 200000) / 200000 * 100 = 12.5
-    assert abs(data[0]["return_rate"] - 12.5) < 0.1
+    # profit is currency-converted total (CNY here) = 225000 - 200000
     assert data[0]["profit"] == 25000
+    # D8: return_rate is now annualized: (25000/200000) * (365/holding_days) * 100
+    holding_days = (date.today() - date(2023, 1, 1)).days
+    expected = (25000 / 200000) * (365 / holding_days) * 100
+    assert abs(data[0]["return_rate"] - round(expected, 2)) < 0.1
 
 
 def test_dashboard_new_assets_default_period(client, auth_headers, setup_test_data):
@@ -671,3 +677,100 @@ def test_dashboard_daily_cost_ranking_limit_bounds(client, auth_headers):
     # limit=101 should fail
     response = client.get("/api/v1/dashboard/daily-cost-ranking?limit=101", headers=auth_headers)
     assert response.status_code == 422
+
+
+def test_compute_annualized_return_holding_days():
+    """D8 KTD-4: compute_annualized_return annualizes by holding days."""
+    from datetime import date, timedelta
+
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.services.asset import compute_annualized_return
+
+    # Exactly 365 days holding → annualized == total ratio (12.5%)
+    asset = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today() - timedelta(days=365),
+    )
+    assert compute_annualized_return(asset) == 12.5
+
+    # 730 days holding (2x years) → annualized == total ratio / 2 (6.25%)
+    asset_long = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today() - timedelta(days=730),
+    )
+    assert compute_annualized_return(asset_long) == 6.25
+
+
+def test_compute_annualized_return_none_cases():
+    """D8 KTD-4: returns None when purchase_date missing, holding_days<=0, or no price."""
+    from datetime import date, timedelta
+
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.services.asset import compute_annualized_return
+
+    # Missing purchase_date → None
+    a_no_date = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=None,
+    )
+    assert compute_annualized_return(a_no_date) is None
+
+    # holding_days == 0 (purchased today) → None
+    a_today = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today(),
+    )
+    assert compute_annualized_return(a_today) is None
+
+    # holding_days < 0 (future date) → None
+    a_future = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today() + timedelta(days=10),
+    )
+    assert compute_annualized_return(a_future) is None
+
+    # No purchase_price → None
+    a_no_price = Asset(
+        asset_type="financial",
+        purchase_price=None,
+        current_value=225000.0,
+        purchase_date=date.today() - timedelta(days=365),
+    )
+    assert compute_annualized_return(a_no_price) is None
+
+
+def test_insights_investment_returns_field(client, auth_headers, setup_test_data):
+    """D8 KTD-5: insights response includes investment_returns summary."""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert "investment_returns" in data
+    inv = data["investment_returns"]
+    assert inv is not None
+    assert "annualized_rate" in inv
+    assert "asset_count" in inv
+    assert "description" in inv
+    # Fixture has 1 financial asset (基金) with a valid purchase_date → count 1, rate present
+    assert inv["asset_count"] == 1
+    assert inv["annualized_rate"] is not None
+
+
+def test_insights_investment_returns_empty(client, auth_headers):
+    """D8 KTD-5: no financial assets → asset_count 0 and annualized_rate None."""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    inv = response.json()["data"]["investment_returns"]
+    assert inv is not None
+    assert inv["asset_count"] == 0
+    assert inv["annualized_rate"] is None
