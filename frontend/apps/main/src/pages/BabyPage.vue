@@ -652,7 +652,7 @@ const activeWishes = computed(() =>
 )
 
 const fulfilledWishes = computed(() =>
-  sortWishes(filteredWishes.value.filter(w => ['fulfilled', 'realized', 'rejected'].includes(w.status))),
+  sortWishes(filteredWishes.value.filter(w => ['fulfilled', 'realized'].includes(w.status))),
 )
 
 // Wish review state
