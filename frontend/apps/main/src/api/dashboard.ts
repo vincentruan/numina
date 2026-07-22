@@ -96,6 +96,12 @@ export interface RetentionRateResponse {
   top_items: RetentionItem[]
 }
 
+export interface InvestmentReturnSummary {
+  annualized_rate: number | null
+  asset_count: number
+  description: string
+}
+
 export interface InsightsResponse {
   smart_discovery: SmartDiscoveryResponse
   daily_cost_ranking: DailyCostItem[]
@@ -103,6 +109,7 @@ export interface InsightsResponse {
   type_distribution: TypeDistributionResponse
   duration_distribution: DurationDistributionResponse
   retention_rate: RetentionRateResponse
+  investment_returns: InvestmentReturnSummary | null
 }
 
 export function getOverview() {

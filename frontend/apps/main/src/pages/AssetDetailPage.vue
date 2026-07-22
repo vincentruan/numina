@@ -159,12 +159,38 @@
         <van-cell :title="asset.notes" />
       </van-cell-group>
 
+      <!-- Interval Return -->
+      <van-cell-group v-if="valuations.length" inset :title="t('assetDetail.intervalReturn')">
+        <div class="interval-return">
+          <div class="interval-buttons">
+            <van-button
+              v-for="opt in intervalOptions"
+              :key="opt.key"
+              size="small"
+              :type="selectedInterval === opt.key ? 'primary' : 'default'"
+              @click="selectedInterval = opt.key"
+            >
+              {{ t(opt.labelKey) }}
+            </van-button>
+          </div>
+          <div v-if="selectedInterval === null" class="interval-hint">
+            {{ t('assetDetail.intervalSelectHint') }}
+          </div>
+          <div v-else-if="intervalReturn === null" class="interval-hint">
+            {{ t('assetDetail.intervalNoData') }}
+          </div>
+          <div v-else class="interval-detail">
+            {{ intervalReturnText }}
+          </div>
+        </div>
+      </van-cell-group>
+
       <!-- Valuation History -->
       <van-cell-group v-if="valuations.length" inset :title="t('assetDetail.sectionValuationHistory')">
         <van-cell
           v-for="v in valuations"
           :key="v.id"
-          :title="`¥${v.value.toLocaleString()}`"
+          :title="currency.format(Number(v.value))"
           :value="v.valued_at.slice(0, 10)"
         />
       </van-cell-group>
@@ -312,7 +338,61 @@ const returnText = computed(() => {
   if (!asset.value?.purchase_price || !asset.value?.current_value) return ''
   const diff = asset.value.current_value - asset.value.purchase_price
   const sign = diff >= 0 ? '+' : ''
-  return `${sign}¥${diff.toLocaleString()} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
+  return `${sign}${currency.format(diff)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
+})
+
+// D8: interval return rate (preset intervals vs current_value).
+const INTERVAL_DAYS: Record<string, number> = {
+  '1M': 30,
+  '3M': 90,
+  '6M': 180,
+  '1Y': 365,
+}
+const intervalOptions = [
+  { key: '1M', labelKey: 'assetDetail.interval1M' },
+  { key: '3M', labelKey: 'assetDetail.interval3M' },
+  { key: '6M', labelKey: 'assetDetail.interval6M' },
+  { key: '1Y', labelKey: 'assetDetail.interval1Y' },
+]
+const selectedInterval = ref<string | null>(null)
+
+interface IntervalReturn {
+  startDate: string
+  startValue: number
+  endValue: number
+  rate: number
+}
+
+const intervalReturn = computed<IntervalReturn | null>(() => {
+  const key = selectedInterval.value
+  if (key === null || !asset.value) return null
+  const days = INTERVAL_DAYS[key]
+  const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000)
+  // valuations are newest-first; first point at/before cutoff is the closest from below.
+  const start = valuations.value.find((v) => new Date(v.valued_at) <= cutoff)
+  if (!start) return null
+  const startValue = Number(start.value)
+  if (startValue === 0) return null
+  const endValue = Number(asset.value.current_value)
+  const rate = ((endValue - startValue) / startValue) * 100
+  return {
+    startDate: start.valued_at.slice(0, 10),
+    startValue,
+    endValue,
+    rate: Math.round(rate * 100) / 100,
+  }
+})
+
+const intervalReturnText = computed(() => {
+  const r = intervalReturn.value
+  if (!r) return ''
+  const sign = r.rate >= 0 ? '+' : '-'
+  return t('assetDetail.intervalReturnDetail', {
+    date: r.startDate,
+    start: currency.format(r.startValue),
+    end: currency.format(r.endValue),
+    rate: `${sign}${Math.abs(r.rate).toFixed(2)}%`,
+  })
 })
 
 async function onRetire() {
@@ -683,6 +763,35 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.interval-return {
+  padding: 12px 16px;
+}
+
+.interval-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interval-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-tertiary, rgba(0, 0, 0, 0.45));
+}
+[data-theme='dark'] .interval-hint {
+  color: var(--text-tertiary);
+}
+
+.interval-detail {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary, rgba(0, 0, 0, 0.85));
+}
+[data-theme='dark'] .interval-detail {
+  color: var(--text-primary);
 }
 
 .actions {
