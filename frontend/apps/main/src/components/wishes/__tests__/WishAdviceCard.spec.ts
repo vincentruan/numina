@@ -40,6 +40,14 @@ vi.mock('@/stores/wish', () => ({
   useWishStore: () => ({ fetchWishes: fetchWishesMock }),
 }))
 
+// useCurrency → useAuthStore needs an active Pinia; stub to a plain formatter
+// so the component's confirmation-dialog strings work without a Pinia plugin.
+vi.mock('@/composables/useCurrency', () => ({
+  useCurrency: () => ({
+    format: (n: number) => `¥${n}`,
+  }),
+}))
+
 import * as wishApi from '@/api/wishes'
 import type { AxiosResponse } from 'axios'
 import type { WishAdvice } from '@/types'

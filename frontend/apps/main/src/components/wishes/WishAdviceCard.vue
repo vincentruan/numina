@@ -5,11 +5,13 @@ import { showSuccessToast, showFailToast, showDialog } from 'vant'
 import { getWishAdvice, adoptWishAdvice } from '@/api/wishes'
 import { useWishStore } from '@/stores/wish'
 import { useI18n } from 'vue-i18n'
+import { useCurrency } from '@/composables/useCurrency'
 import type { WishAdvice } from '@/types'
 
 const props = defineProps<{ wishes: { id: string; name: string; monthly_saving: string | number }[] }>()
 const router = useRouter()
 const { t } = useI18n()
+const currency = useCurrency()
 const wishStore = useWishStore()
 
 const advice = ref<WishAdvice | null>(null)
@@ -80,7 +82,7 @@ async function onAdopt(): Promise<void> {
         advice.value.redistribution
           .map((r) => {
             const w = props.wishes.find((x) => x.id === r.wish_id)
-            return `${w?.name ?? r.wish_id}: ¥${w?.monthly_saving ?? '0'} → ¥${r.suggested_amount}（${r.note}）`
+            return `${w?.name ?? r.wish_id}: ${currency.format(Number(w?.monthly_saving ?? 0))} → ${currency.format(Number(r.suggested_amount))}（${r.note}）`
           })
           .join('\n') +
         `\n\n${t('wish.advice.totalMonthly', { total: advice.value.redistribution.reduce((s, r) => s + Number(r.suggested_amount), 0) })}`,
