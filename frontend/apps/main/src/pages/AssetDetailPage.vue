@@ -37,9 +37,9 @@
           <div class="hero-value-item">
             <div class="hero-value-label">{{ t('asset.purchasePrice') }}</div>
             <MoneyDisplay
-              :amount="asset.purchase_price"
+              :amount="asset.purchase_price || 0"
               :source-currency="asset.currency"
-              :original-value="asset.purchase_price"
+              :original-value="asset.purchase_price || 0"
             />
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
@@ -51,7 +51,7 @@
           {{ returnText }}
         </div>
         <div v-if="asset.status === 'sold'" class="sell-summary">
-          {{ t('assetDetail.netRecovery', { amount: (asset.sell_price! - (asset.sell_fee || 0)).toLocaleString() }) }}
+          {{ t('assetDetail.netRecovery', { amount: (Number(asset.sell_price!) - Number(asset.sell_fee || 0)).toLocaleString() }) }}
           <span v-if="asset.sell_date"> · {{ asset.sell_date }}</span>
         </div>
       </div>
@@ -59,9 +59,9 @@
       <!-- Daily Cost Chart -->
       <DailyCostChart
         v-if="asset.purchase_price && asset.purchase_date"
-        :purchase-price="asset.purchase_price"
+        :purchase-price="Number(asset.purchase_price)"
         :purchase-date="asset.purchase_date"
-        :target-daily-cost="asset.target_daily_cost"
+        :target-daily-cost="asset.target_daily_cost != null ? Number(asset.target_daily_cost) : null"
       />
 
       <!-- Basic Info -->
@@ -76,9 +76,9 @@
         <van-cell :title="t('assetDetail.fieldPurchasePrice')">
           <template #value>
             <MoneyDisplay
-              :amount="asset.purchase_price"
+              :amount="asset.purchase_price || 0"
               :source-currency="asset.currency"
-              :original-value="asset.purchase_price"
+              :original-value="asset.purchase_price || 0"
             />
           </template>
         </van-cell>
@@ -100,7 +100,7 @@
         <van-cell v-if="asset.location" :title="t('assetDetail.fieldLocation')" :value="asset.location" />
         <van-cell v-if="asset.expected_lifespan_days" :title="t('assetDetail.fieldExpectedLifespan')" :value="t('assetDetail.lifespanDays', { days: asset.expected_lifespan_days })" />
         <van-cell v-if="asset.annual_maintenance_cost" :title="t('assetDetail.fieldAnnualMaintenance')">
-          <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost" /></template>
+          <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost || 0" /></template>
         </van-cell>
         <van-cell v-if="asset.usage_frequency" :title="t('assetDetail.fieldUsageFrequency')" :value="usageText" />
         <van-cell v-if="asset.daily_cost" :title="t('assetDetail.fieldDailyCost')">
@@ -135,7 +135,7 @@
           <template #value><MoneyDisplay :amount="asset.sell_price || 0" /></template>
         </van-cell>
         <van-cell v-if="asset.sell_fee" :title="t('assetDetail.fieldSellFee')">
-          <template #value><MoneyDisplay :amount="asset.sell_fee" /></template>
+          <template #value><MoneyDisplay :amount="asset.sell_fee || 0" /></template>
         </van-cell>
         <van-cell v-if="asset.sell_channel" :title="t('assetDetail.fieldSellChannel')" :value="asset.sell_channel" />
         <van-cell v-if="asset.sell_date" :title="t('assetDetail.fieldSellDate')" :value="asset.sell_date" />
@@ -196,7 +196,7 @@
       </van-cell-group>
 
       <!-- Buy vs Rent Calculator -->
-      <BuyVsRentCalculator :initial-price="asset.purchase_price ?? undefined" />
+      <BuyVsRentCalculator :initial-price="asset.purchase_price != null ? Number(asset.purchase_price) : undefined" />
 
       <!-- Cost Equivalence -->
       <CostEquivalenceCard :asset-id="asset.id" />
@@ -336,7 +336,7 @@ const returnClass = computed(() => {
 
 const returnText = computed(() => {
   if (!asset.value?.purchase_price || !asset.value?.current_value) return ''
-  const diff = asset.value.current_value - asset.value.purchase_price
+  const diff = Number(asset.value.current_value) - Number(asset.value.purchase_price)
   const sign = diff >= 0 ? '+' : ''
   return `${sign}${currency.format(diff)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
 })

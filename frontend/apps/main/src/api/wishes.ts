@@ -1,5 +1,5 @@
 import http from './index'
-import type { SavingsLog, Wish, WishAdvice, WishRealizeRequest, WishRedistribution } from '@/types'
+import type { SavingsLog, Wish, WishAdvice, WishRealizeRequest, WishRedistribution, WishRequestPayload } from '@/types'
 
 export function getWishes(status?: string) {
   return http.get<Wish[]>('/wishes', { params: status ? { status } : undefined })
@@ -9,11 +9,11 @@ export function getWish(id: string) {
   return http.get<Wish>(`/wishes/${id}`)
 }
 
-export function createWish(data: Partial<Wish>) {
+export function createWish(data: WishRequestPayload) {
   return http.post<Wish>('/wishes', data)
 }
 
-export function updateWish(id: string, data: Partial<Wish>) {
+export function updateWish(id: string, data: WishRequestPayload) {
   return http.put<Wish>(`/wishes/${id}`, data)
 }
 

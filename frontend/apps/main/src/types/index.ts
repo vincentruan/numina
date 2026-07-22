@@ -130,6 +130,30 @@ export interface Liability {
   is_active: boolean
 }
 
+// Request payloads for create/update. The response types above carry money as
+// `string` (money-as-str on the wire OUT), but the backend's create/update schemas
+// declare these fields `float`/`Decimal` and Pydantic coerces numeric input — so the
+// forms send numbers. These payload types make that direction honest instead of
+// reusing the response shape (which mistypes the money fields as string).
+export type AssetRequestPayload = Omit<Partial<Asset>, 'purchase_price' | 'current_value' | 'annual_maintenance_cost' | 'sell_price' | 'sell_fee' | 'target_daily_cost'> & {
+  purchase_price?: number | null
+  current_value?: number | null
+  annual_maintenance_cost?: number | null
+  sell_price?: number | null
+  sell_fee?: number | null
+  target_daily_cost?: number | null
+  tag_ids?: string[]
+}
+
+export type LiabilityRequestPayload = Omit<Partial<Liability>, 'original_amount' | 'remaining_amount' | 'monthly_payment' | 'linked_asset_id'> & {
+  original_amount?: number
+  remaining_amount?: number
+  monthly_payment?: number | null
+  // null = explicitly unlink (backend update uses exclude_unset, so null clears the
+  // link while omitting the key preserves it). Distinct from undefined.
+  linked_asset_id?: string | null
+}
+
 export interface Tag {
   id: string
   family_id: string
@@ -334,6 +358,14 @@ export interface CategoryInfo {
   name: string
   icon: string
   asset_type: string
+}
+
+// Wish create/update payload. The form sends expected_price/monthly_saving as numbers
+// (parseFloat of the text input); the redistribution path sends monthly_saving as a
+// numeric string. Backend declares these Decimal and coerces either, so accept both.
+export type WishRequestPayload = Omit<Partial<Wish>, 'expected_price' | 'monthly_saving'> & {
+  expected_price?: number
+  monthly_saving?: number | string
 }
 
 // W4 wish-priority advice (Plan B T7). Independent of finance_coach's suggestions[].

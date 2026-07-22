@@ -18,7 +18,7 @@ import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useCategoryStore } from '@/stores/category'
-import type { Asset } from '@/types'
+import type { AssetRequestPayload } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AssetForm from '@/components/asset/AssetForm.vue'
 
@@ -33,7 +33,7 @@ const submitting = ref(false)
 const isEdit = computed(() => !!route.params.id)
 const initialData = computed(() => isEdit.value ? assetStore.currentAsset || undefined : undefined)
 
-async function onSubmit(data: Partial<Asset>) {
+async function onSubmit(data: AssetRequestPayload) {
   submitting.value = true
   try {
     if (isEdit.value) {

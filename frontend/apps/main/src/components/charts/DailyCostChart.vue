@@ -108,9 +108,10 @@ const chartOption = computed(() => {
 
   const markLines: { yAxis: number; label: object; lineStyle: object }[] = []
   if (props.targetDailyCost) {
+    const target = props.targetDailyCost
     markLines.push({
-      yAxis: props.targetDailyCost,
-      label: { formatter: () => `目标 ${currency.format(props.targetDailyCost)}`, position: 'end', fontSize: 10 },
+      yAxis: target,
+      label: { formatter: () => `目标 ${currency.format(target)}`, position: 'end', fontSize: 10 },
       lineStyle: { color: '#07c160', type: 'dashed' }
     })
   }

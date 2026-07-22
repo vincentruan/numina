@@ -101,9 +101,9 @@
                 class="afford-bar"
                 :class="affordStateClass(wish)"
               >
-                <span v-if="affordFor(wish).state.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
-                <span v-else-if="affordFor(wish).state.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
-                <span v-else-if="affordFor(wish).state.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordFor(wish).state.months }) }}</span>
+                <span v-if="affordFor(wish).state.value.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
+                <span v-else-if="affordFor(wish).state.value.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
+                <span v-else-if="affordFor(wish).state.value.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
                 <span v-if="affordFor(wish).accelerate" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
               </div>
             </div>
@@ -245,6 +245,11 @@ function affordFor(w: Wish) {
 function affordStateClass(w: Wish): string {
   const kind = affordFor(w).state.value.kind
   return `afford-${kind}`
+}
+// Months-to-goal for the 'progress' state; 0 otherwise (template can't narrow the union).
+function affordMonths(w: Wish): number {
+  const s = affordFor(w).state.value
+  return s.kind === 'progress' ? s.months : 0
 }
 
 async function loadWishes() {

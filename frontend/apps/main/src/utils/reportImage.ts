@@ -45,9 +45,10 @@ const INLINE_PROPS: readonly string[] = [
 function inlineComputedStyles(originalRoot: HTMLElement, cloneRoot: HTMLElement): void {
   const originals: HTMLElement[] = [originalRoot]
   const clones: HTMLElement[] = [cloneRoot]
-  let o: HTMLElement | undefined
-  let c: HTMLElement | undefined
-  while (((o = originals.shift()), (c = clones.shift()), o !== undefined && c !== undefined)) {
+  for (;;) {
+    const o = originals.shift()
+    const c = clones.shift()
+    if (o === undefined || c === undefined) break
     const computed = window.getComputedStyle(o)
     for (const prop of INLINE_PROPS) {
       const value = computed.getPropertyValue(prop)

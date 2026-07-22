@@ -139,7 +139,7 @@ const sellPrice = computed(() => parseFloat(form.value.sell_price) || 0)
 const sellFee = computed(() => parseFloat(form.value.sell_fee) || 0)
 const netRecovery = computed(() => Math.round((sellPrice.value - sellFee.value) * 100) / 100)
 const profitLoss = computed(() => {
-  const cost = asset.value?.purchase_price || 0
+  const cost = Number(asset.value?.purchase_price) || 0
   return Math.round((netRecovery.value - cost) * 100) / 100
 })
 const daysHeld = computed(() => {

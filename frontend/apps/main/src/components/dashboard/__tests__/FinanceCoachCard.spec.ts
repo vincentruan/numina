@@ -38,7 +38,7 @@ const mockSuggestion = (
   severity,
   title: `建议${id}`,
   action: '行动',
-  target_type: 'liability',
+  target_type: 'liability' as const,
   target_id: '1',
   cta_label: '查看',
 })

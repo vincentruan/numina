@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Liability } from '@/types'
+import type { Liability, LiabilityRequestPayload } from '@/types'
 import * as liabilityApi from '@/api/liabilities'
 import { useDashboardStore } from '@/stores/dashboard'
 
@@ -29,14 +29,14 @@ export const useLiabilityStore = defineStore('liability', () => {
     }
   }
 
-  async function createLiability(data: Partial<Liability>) {
+  async function createLiability(data: LiabilityRequestPayload) {
     const res = await liabilityApi.createLiability(data)
     liabilities.value.unshift(res.data)
     useDashboardStore().invalidateDashboard()
     return res.data
   }
 
-  async function updateLiability(id: string, data: Partial<Liability>) {
+  async function updateLiability(id: string, data: LiabilityRequestPayload) {
     const res = await liabilityApi.updateLiability(id, data)
     const idx = liabilities.value.findIndex(l => l.id === id)
     if (idx !== -1) liabilities.value[idx] = res.data

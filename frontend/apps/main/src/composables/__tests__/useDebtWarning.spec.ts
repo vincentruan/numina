@@ -56,8 +56,8 @@ describe('useDebtWarning', () => {
   it('flags high-interest liabilities by their category threshold', async () => {
     // credit_card threshold default = 12; 18% is high, 8% is not.
     const liabilities = ref<Liability[]>([
-      makeLiability({ id: '1', interest_rate: 18, remaining_amount: 12000 }),
-      makeLiability({ id: '2', interest_rate: 8, remaining_amount: 5000 }),
+      makeLiability({ id: '1', interest_rate: 18, remaining_amount: '12000' }),
+      makeLiability({ id: '2', interest_rate: 8, remaining_amount: '5000' }),
     ])
     const wishes = ref<Wish[]>([])
     const { highInterestLiabilities } = useDebtWarning(liabilities, wishes)
@@ -70,8 +70,8 @@ describe('useDebtWarning', () => {
 
   it('respects per-category thresholds (mortgage 6% default)', async () => {
     const liabilities = ref<Liability[]>([
-      makeLiability({ id: '1', category: 'mortgage', interest_rate: 5, remaining_amount: 500000 }),
-      makeLiability({ id: '2', category: 'mortgage', interest_rate: 7, remaining_amount: 500000 }),
+      makeLiability({ id: '1', category: 'mortgage', interest_rate: 5, remaining_amount: '500000' }),
+      makeLiability({ id: '2', category: 'mortgage', interest_rate: 7, remaining_amount: '500000' }),
     ])
     const wishes = ref<Wish[]>([])
     const { highInterestLiabilities } = useDebtWarning(liabilities, wishes)

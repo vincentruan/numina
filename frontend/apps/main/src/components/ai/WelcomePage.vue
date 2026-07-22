@@ -7,7 +7,7 @@ import type { SubmitPayload } from '@/types/ai-chat/input-mode'
 defineProps<{
   modelValue?: string
   agentId?: string
-  agents?: Array<{ id: string; display_name: string; agent_name?: string; icon?: string; color?: string | null; description?: string }>
+  agents?: Array<{ id: string; display_name: string; agent_name?: string; icon?: string; color?: string | null; description?: string | null }>
   agentIcon?: string
   agentLabel?: string
   /** When true, agent icon shows info popup instead of triggering selection */

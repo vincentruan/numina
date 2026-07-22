@@ -39,7 +39,7 @@ interface AgentOption {
   agent_name?: string
   icon?: string
   color?: string | null
-  description?: string
+  description?: string | null
 }
 
 interface Attachment {

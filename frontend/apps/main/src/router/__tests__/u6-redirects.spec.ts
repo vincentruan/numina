@@ -31,7 +31,7 @@ type RedirectTarget = { path?: string; query?: Record<string, unknown> }
 
 function resolveRedirect(record: RouteRecordRaw, to: { path: string; query: Record<string, unknown> }): RedirectTarget {
   const r = record.redirect
-  if (typeof r === 'function') return r(to) as RedirectTarget
+  if (typeof r === 'function') return (r as (to: unknown) => RedirectTarget)(to)
   return (r ?? {}) as RedirectTarget
 }
 

@@ -120,8 +120,9 @@ describe('useThreadChat — interrupt SSE event handling', () => {
       interrupt_id: 'intr-456',
     })
     // options and context should be undefined when not provided
-    expect(msg.additional_kwargs?.interruptData.options).toBeUndefined()
-    expect(msg.additional_kwargs?.interruptData.context).toBeUndefined()
+    const interruptData = msg.additional_kwargs?.interruptData as Record<string, unknown>
+    expect(interruptData.options).toBeUndefined()
+    expect(interruptData.context).toBeUndefined()
   })
 
   it('generates interrupt_id when not provided by backend', async () => {

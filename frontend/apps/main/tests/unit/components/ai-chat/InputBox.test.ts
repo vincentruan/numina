@@ -13,7 +13,7 @@ const { mocks, INPUT_MODE_CONFIGS, makeMockResources } = vi.hoisted(() => {
     ultra: { mode: 'ultra', thinking_enabled: true, is_plan_mode: true, subagent_enabled: true, reasoning_effort: 'high', icon: 'lucide:rocket', label: 'Ultra', description: 'Subagent' },
   }
 
-  function makeMockResources(overrides = {}) {
+  function makeMockResources(overrides: Record<string, any> = {}) {
     return {
       models: vueRef(overrides.models ?? []),
       tenantConfig: vueRef(overrides.tenantConfig ?? { subagent_enabled: false, websearch_enabled: false }),
@@ -157,7 +157,7 @@ describe('InputBox', () => {
       await vm.onModeSelect('thinking')
       const contextChanges = localWrapper.emitted('contextChange')
       expect(contextChanges).toBeTruthy()
-      expect(contextChanges?.[0][0].reasoning_effort).toBe('low')
+      expect((contextChanges?.[0][0] as { reasoning_effort?: string }).reasoning_effort).toBe('low')
     })
   })
 
@@ -320,7 +320,7 @@ describe('InputBox', () => {
 
     it('detects numina agent by agent_name', async () => {
       const agents = [
-        { id: '1', display_name: 'Numina', agent_name: 'numina', icon: null },
+        { id: '1', display_name: 'Numina', agent_name: 'numina', icon: undefined },
       ]
       const localWrapper = mount(InputBox, {
         props: { status: 'ready', agentId: '1', agents },

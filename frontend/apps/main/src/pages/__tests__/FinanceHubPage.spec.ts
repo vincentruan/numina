@@ -78,9 +78,9 @@ vi.mock('@/composables/useDebtWarning', () => ({
   useDebtWarning: (liabs: { value: unknown[] }, _wishes: { value: unknown[] }) => {
     const highInterest = {
       get value() {
-        return (liabs.value || [])
-          .filter((l: Record<string, unknown>) => l.is_active && (l.interest_rate as number ?? 0) >= 12)
-          .map((l: Record<string, unknown>) => ({
+        return ((liabs.value || []) as Record<string, unknown>[])
+          .filter((l) => l.is_active && (l.interest_rate as number ?? 0) >= 12)
+          .map((l) => ({
             ...l,
             monthly_interest: Math.round(
               (Number(l.remaining_amount) * ((l.interest_rate as number) / 100 / 12)) * 100,

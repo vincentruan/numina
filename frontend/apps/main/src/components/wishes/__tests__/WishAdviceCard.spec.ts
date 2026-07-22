@@ -50,7 +50,7 @@ vi.mock('@/composables/useCurrency', () => ({
 
 import * as wishApi from '@/api/wishes'
 import type { AxiosResponse } from 'axios'
-import type { WishAdvice } from '@/types'
+import type { WishAdvice, Wish } from '@/types'
 
 const mockAdvice: WishAdvice = {
   primary_wish_id: '1',
@@ -117,7 +117,7 @@ describe('WishAdviceCard', () => {
   it('adopts by calling adoptWishAdvice (batch PATCH) per redistribution item', async () => {
     const adoptSpy = vi
       .spyOn(wishApi, 'adoptWishAdvice')
-      .mockResolvedValue([{ status: 'fulfilled', value: {} }])
+      .mockResolvedValue([{ status: 'fulfilled', value: {} as AxiosResponse<Wish> }])
     vi.spyOn(wishApi, 'getWishAdvice').mockResolvedValue(adviceResp('cached', mockAdvice))
     const wrapper = mountCard()
     await flushPromises()

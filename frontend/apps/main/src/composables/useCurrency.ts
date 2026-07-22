@@ -7,7 +7,8 @@ export function useCurrency() {
 
   const currency = computed(() => authStore.user?.default_currency || 'CNY')
 
-  const format = (amount: number) => formatCurrency(amount, currency.value)
+  // Money is str on the wire (money-as-str); formatCurrency coerces. Accept both.
+  const format = (amount: number | string) => formatCurrency(amount, currency.value)
 
   return {
     format,

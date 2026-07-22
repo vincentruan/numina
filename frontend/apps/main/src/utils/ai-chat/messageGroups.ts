@@ -289,6 +289,7 @@ export function extractPresentFilesFromGroup(group: AssistantPresentFilesGroup):
         return args.filepaths.map((fp: string) => ({
           path: fp,
           id: fp,
+          title: fp,
           kind: 'report' as const,
         }))
       }

@@ -119,7 +119,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         ">
           <div style="font-size: 18px; color: #666; margin-bottom: 8px;">购入价格</div>
           <div style="font-size: 28px; font-weight: bold; color: #1a1a1a;">
-            ${formatCurrency(asset.purchase_price)}
+            ${formatCurrency(asset.purchase_price || 0)}
           </div>
         </div>
 
@@ -130,7 +130,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         ">
           <div style="font-size: 18px; color: #666; margin-bottom: 8px;">当前价值</div>
           <div style="font-size: 28px; font-weight: bold; color: #1a1a1a;">
-            ${formatCurrency(asset.current_value)}
+            ${formatCurrency(asset.current_value || 0)}
           </div>
         </div>
 
@@ -215,7 +215,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
  */
 export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
   // 计算汇总数据
-  const totalValue = assets.reduce((sum, asset) => sum + asset.current_value, 0)
+  const totalValue = assets.reduce((sum, asset) => sum + (Number(asset.current_value) || 0), 0)
   const totalDailyCost = assets.reduce((sum, asset) => sum + (asset.daily_cost || 0), 0)
 
   // 按分类统计

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse } from '@/types'
+import type { Asset, AssetFilter, AssetRequestPayload, AssetSellRequest, AssetSellResponse } from '@/types'
 import * as assetApi from '@/api/assets'
 import { useDashboardStore } from '@/stores/dashboard'
 import { nanoid } from 'nanoid'
@@ -60,7 +60,7 @@ export const useAssetStore = defineStore('asset', () => {
     }
   }
 
-  function createAsset(data: Partial<Asset>): Promise<Asset> {
+  function createAsset(data: AssetRequestPayload): Promise<Asset> {
     // 1. Generate dedup key from input data (for create operations)
     // Use serialized form data as key to dedupe rapid double-clicks
     const dedupKey = `create:${JSON.stringify({
@@ -87,8 +87,8 @@ export const useAssetStore = defineStore('asset', () => {
       name: data.name || '',
       category_id: data.category_id || '',
       asset_type: data.asset_type || 'physical',
-      purchase_price: data.purchase_price || 0,
-      current_value: data.current_value || 0,
+      purchase_price: data.purchase_price != null ? String(data.purchase_price) : '0',
+      current_value: data.current_value != null ? String(data.current_value) : '0',
       currency: data.currency || 'CNY',
       purchase_date: data.purchase_date || '',
       status: 'in_use',
@@ -97,11 +97,11 @@ export const useAssetStore = defineStore('asset', () => {
       interest_rate: data.interest_rate,
       maturity_date: data.maturity_date,
       expected_lifespan_days: data.expected_lifespan_days,
-      annual_maintenance_cost: data.annual_maintenance_cost,
+      annual_maintenance_cost: data.annual_maintenance_cost != null ? String(data.annual_maintenance_cost) : undefined,
       usage_frequency: data.usage_frequency,
       properties: data.properties,
       notes: data.notes,
-      target_daily_cost: data.target_daily_cost,
+      target_daily_cost: data.target_daily_cost != null ? String(data.target_daily_cost) : undefined,
       image_url: data.image_url,
       tags: data.tags || [],
       // Placeholder fields (server-only)
@@ -186,7 +186,7 @@ export const useAssetStore = defineStore('asset', () => {
     return operationPromise
   }
 
-  function updateAsset(id: string, data: Partial<Asset>): Promise<Asset> {
+  function updateAsset(id: string, data: AssetRequestPayload): Promise<Asset> {
     // 1. Check for existing pending operation (dedup)
     const dedupKey = `update:${id}`
     const existingOp = _pendingUpdateOperations.get(dedupKey)
@@ -204,10 +204,30 @@ export const useAssetStore = defineStore('asset', () => {
     // 3. Snapshot original asset (deep copy for rollback)
     const originalAsset = JSON.parse(JSON.stringify(assets.value[idx])) as Asset
 
-    // 4. Build updated asset (optimistic)
+    // 4. Build updated asset (optimistic). `data` is a request payload: its money
+    // fields are numbers and it carries tag_ids, neither of which belongs on the
+    // Asset wire shape (money-as-str). Pull those out, spread the rest, then re-add
+    // money coerced back to str.
+    const {
+      tag_ids: _tagIds,
+      purchase_price,
+      current_value,
+      annual_maintenance_cost,
+      sell_price,
+      sell_fee,
+      target_daily_cost,
+      ...scalarData
+    } = data
+    const toStr = (v: number | null | undefined): string | null => (v != null ? String(v) : null)
     const updatedAsset: Asset = {
       ...assets.value[idx],
-      ...data,
+      ...scalarData,
+      ...(purchase_price !== undefined ? { purchase_price: toStr(purchase_price) } : {}),
+      ...(current_value !== undefined ? { current_value: toStr(current_value) } : {}),
+      ...(annual_maintenance_cost !== undefined ? { annual_maintenance_cost: toStr(annual_maintenance_cost) } : {}),
+      ...(sell_price !== undefined ? { sell_price: toStr(sell_price) } : {}),
+      ...(sell_fee !== undefined ? { sell_fee: toStr(sell_fee) } : {}),
+      ...(target_daily_cost !== undefined ? { target_daily_cost: toStr(target_daily_cost) } : {}),
       updated_at: new Date().toISOString(),
     }
 

@@ -165,7 +165,7 @@ const daysUsed = computed(() => {
   return diff > 0 ? diff : 0
 })
 
-function formatPrice(price: number | null | undefined): string {
+function formatPrice(price: number | string | null | undefined): string {
   if (price == null) return '-'
   return currency.format(price)
 }

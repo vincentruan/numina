@@ -147,7 +147,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Asset, Liability } from '@/types'
+import type { Asset, Liability, LiabilityRequestPayload } from '@/types'
 import { getLiabilityField } from '@/types'
 import { getAssets } from '@/api/assets'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
@@ -165,7 +165,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  submit: [data: Partial<Liability>]
+  submit: [data: LiabilityRequestPayload]
 }>()
 
 interface FormState {
@@ -309,7 +309,7 @@ function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
 }
 
 function onSubmit() {
-  const data: Partial<Liability> = {
+  const data: LiabilityRequestPayload = {
     name: form.value.name,
     category: form.value.category,
     original_amount: Number(form.value.original_amount),

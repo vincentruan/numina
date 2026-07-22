@@ -16,7 +16,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
-import type { Liability } from '@/types'
+import type { LiabilityRequestPayload } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import LiabilityForm from '@/components/liability/LiabilityForm.vue'
 
@@ -30,7 +30,7 @@ const submitting = ref(false)
 const isEdit = computed(() => !!route.params.id)
 const initialData = computed(() => isEdit.value ? liabilityStore.currentLiability || undefined : undefined)
 
-async function onSubmit(data: Partial<Liability>) {
+async function onSubmit(data: LiabilityRequestPayload) {
   submitting.value = true
   try {
     if (isEdit.value) {

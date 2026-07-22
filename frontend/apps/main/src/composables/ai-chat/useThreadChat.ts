@@ -161,7 +161,7 @@ function parseArgs(args: string | object): Record<string, unknown> {
   if (typeof args === 'string') {
     try { return JSON.parse(args) } catch { return { _raw: args } }
   }
-  return args
+  return args as Record<string, unknown>
 }
 
 /**
@@ -1215,7 +1215,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               || customData.type === 'task_cancelled'
             ) {
               // DeerFlow task_tool emits these events for subagent progress
-              handleTaskEvent(customData)
+              handleTaskEvent({ ...customData, type: customData.type })
             }
           } else if (chunk.event === 'end') {
             streamEnded = true
@@ -1572,7 +1572,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     try {
       const res = await submitMessageFeedback(threadId, messageId, value)
       // Reconcile with authoritative server value (backend may have toggled to 0).
-      const serverFeedback = res.data?.feedback ?? optimistic
+      // Backend contract: feedback is only ever 1 (点赞) / -1 (点踩) / 0 (取消).
+      const serverFeedback = (res.data?.feedback as 1 | -1 | 0 | undefined) ?? optimistic
       if (serverFeedback !== optimistic && messages.value[idx]?.id === messageId) {
         messages.value = [
           ...messages.value.slice(0, idx),
@@ -1917,7 +1918,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                   || customData.type === 'task_timed_out'
                   || customData.type === 'task_cancelled'
                 ) {
-                  handleTaskEvent(customData)
+                  handleTaskEvent({ ...customData, type: customData.type })
                 }
               } else if (event === 'end') {
                 streamEnded = true

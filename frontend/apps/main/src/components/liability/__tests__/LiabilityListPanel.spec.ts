@@ -135,9 +135,9 @@ describe('LiabilityListPanel', () => {
 
   it('filters by category and sorts by remaining_amount desc/asc', async () => {
     liabilitiesRef.value = [
-      makeLiability({ id: 'a', name: 'Mortgage', category: 'mortgage', remaining_amount: 5000 }),
-      makeLiability({ id: 'b', name: 'CardLow', category: 'credit_card', remaining_amount: 100 }),
-      makeLiability({ id: 'c', name: 'CardHigh', category: 'credit_card', remaining_amount: 900 }),
+      makeLiability({ id: 'a', name: 'Mortgage', category: 'mortgage', remaining_amount: '5000' }),
+      makeLiability({ id: 'b', name: 'CardLow', category: 'credit_card', remaining_amount: '100' }),
+      makeLiability({ id: 'c', name: 'CardHigh', category: 'credit_card', remaining_amount: '900' }),
     ]
     const wrapper = mount(LiabilityListPanel, { global: { stubs } })
     await flushPromises()
@@ -166,11 +166,11 @@ describe('LiabilityListPanel', () => {
 
   it('computes monthly payment total with interest-only estimate tag for null monthly_payment (L3)', async () => {
     liabilitiesRef.value = [
-      makeLiability({ id: 'a', monthly_payment: 500, remaining_amount: 10000, interest_rate: 12, is_active: true }),
+      makeLiability({ id: 'a', monthly_payment: '500', remaining_amount: '10000', interest_rate: 12, is_active: true }),
       // Null monthly_payment → estimate = remaining × rate/12 = 12000 × 0.01 = 120.
-      makeLiability({ id: 'b', monthly_payment: null, remaining_amount: 12000, interest_rate: 12, is_active: true }),
+      makeLiability({ id: 'b', monthly_payment: null, remaining_amount: '12000', interest_rate: 12, is_active: true }),
       // Inactive items must not count.
-      makeLiability({ id: 'c', monthly_payment: 9999, remaining_amount: 1, interest_rate: 99, is_active: false }),
+      makeLiability({ id: 'c', monthly_payment: '9999', remaining_amount: '1', interest_rate: 99, is_active: false }),
     ]
     const wrapper = mount(LiabilityListPanel, { global: { stubs } })
     await flushPromises()

@@ -1,5 +1,5 @@
 import http from './index'
-import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse, AssetValuation } from '@/types'
+import type { Asset, AssetFilter, AssetRequestPayload, AssetSellRequest, AssetSellResponse, AssetValuation } from '@/types'
 
 // Batch operation types
 interface BatchOperationResponse {
@@ -21,11 +21,11 @@ export function getAsset(id: string) {
   return http.get<Asset>(`/assets/${id}`)
 }
 
-export function createAsset(data: Partial<Asset>) {
+export function createAsset(data: AssetRequestPayload) {
   return http.post<Asset>('/assets', data)
 }
 
-export function updateAsset(id: string, data: Partial<Asset>) {
+export function updateAsset(id: string, data: AssetRequestPayload) {
   return http.put<Asset>(`/assets/${id}`, data)
 }
 

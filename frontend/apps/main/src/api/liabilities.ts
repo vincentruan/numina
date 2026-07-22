@@ -1,5 +1,5 @@
 import http from './index'
-import type { Liability, LiabilitySimResult, PaymentRecord } from '@/types'
+import type { Liability, LiabilityRequestPayload, LiabilitySimResult, PaymentRecord } from '@/types'
 
 export function getLiabilities(params?: { is_active?: boolean }) {
   return http.get<Liability[]>('/liabilities', { params })
@@ -9,11 +9,11 @@ export function getLiability(id: string) {
   return http.get<Liability>(`/liabilities/${id}`)
 }
 
-export function createLiability(data: Partial<Liability>) {
+export function createLiability(data: LiabilityRequestPayload) {
   return http.post<Liability>('/liabilities', data)
 }
 
-export function updateLiability(id: string, data: Partial<Liability>) {
+export function updateLiability(id: string, data: LiabilityRequestPayload) {
   return http.put<Liability>(`/liabilities/${id}`, data)
 }
 

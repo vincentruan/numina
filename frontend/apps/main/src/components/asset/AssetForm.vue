@@ -251,7 +251,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UploaderAfterRead } from 'vant'
-import type { Asset, Category, Tag } from '@/types'
+import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
@@ -279,7 +279,7 @@ const props = withDefaults(defineProps<{
 const aiStore = useAIStore()
 
 const emit = defineEmits<{
-  submit: [data: Partial<Asset>]
+  submit: [data: AssetRequestPayload]
 }>()
 
 interface FormState {
@@ -570,7 +570,7 @@ function onDelete() {
 
 function onSubmit() {
   // Build base payload with common fields
-  const data: Partial<Asset> & { tag_ids?: string[] } = {
+  const data: AssetRequestPayload = {
     name: form.value.name,
     asset_type: form.value.asset_type,
     category_id: form.value.category_id || undefined,

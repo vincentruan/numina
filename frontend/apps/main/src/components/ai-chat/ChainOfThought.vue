@@ -271,7 +271,7 @@ function getName(step: { type: string; name?: string; displayName?: string; disp
   // 1. 已知工具优先用动作模板（含参数，如 "在网络上搜索: XXX" / "读取: path"）
   const shortName = extractShortToolName(rawName)
   const normalized = rawName.replace(/^(mcp|skill|builtin):\/\//, '')
-  const hasActionTemplate = TOOL_ACTION_KEY_MAP[normalized] || (shortName !== normalized && TOOL_ACTION_KEY_MAP[shortName])
+  const hasActionTemplate = Boolean(TOOL_ACTION_KEY_MAP[normalized] || (shortName !== normalized && TOOL_ACTION_KEY_MAP[shortName]))
   if (hasActionTemplate) {
     const { key, params } = explainToolCallKey(rawName, step.args)
     return params ? t(key, params) : t(key)
@@ -316,7 +316,7 @@ interface SearchResultItem {
 /**
  * Parse web_search result into clickable links
  */
-function getSearchResults(step: { name?: string; result?: string }): SearchResultItem[] | null {
+function getSearchResults(step: { name?: string; result?: string; args?: Record<string, unknown> }): SearchResultItem[] | null {
   const name = extractShortToolName(step.name || '')
   if (name !== 'web_search' && name !== 'image_search' && name !== 'web_fetch') return null
 

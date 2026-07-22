@@ -26,7 +26,7 @@ const todoListBarSource = readFileSync(
 // the global.components stub config (see vitest config). Mount with stubs to
 // avoid importing the full Vant library.
 
-function makeTodos(overrides: Partial<TodoItem>[] = []): TodoItem[] {
+function makeTodos(overrides: TodoItem[] = []): TodoItem[] {
   return [
     { content: '分析资产', status: 'completed' },
     { content: '查询负债', status: 'in_progress' },
@@ -88,11 +88,11 @@ describe('TodoListBar', () => {
     expect(wrapper.find('.todo-list-bar__chevron-icon').classes()).toContain('todo-list-bar__chevron-icon--open')
     expect(wrapper.find('.todo-list-bar__header').attributes('aria-expanded')).toBe('true')
     // body is now visible (v-show removed display:none)
-    expect(wrapper.find('.todo-list-bar__body').element.style.display).not.toBe('none')
+    expect((wrapper.find('.todo-list-bar__body').element as HTMLElement).style.display).not.toBe('none')
     await wrapper.find('.todo-list-bar__header').trigger('click')
     expect(wrapper.find('.todo-list-bar__chevron-icon').classes()).not.toContain('todo-list-bar__chevron-icon--open')
     // body hidden via v-show → display:none
-    expect(wrapper.find('.todo-list-bar__body').element.style.display).toBe('none')
+    expect((wrapper.find('.todo-list-bar__body').element as HTMLElement).style.display).toBe('none')
   })
 
   it('marks completed items with the done content class', () => {

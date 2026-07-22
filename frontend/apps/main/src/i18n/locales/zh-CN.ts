@@ -386,9 +386,6 @@ export default {
     subtaskComplete: '任务完成',
     // ChainOfThought thinking label
     thinkingLabel: '思考',
-    // Tool history collapse
-    moreSteps: '查看其他 {count} 个步骤',
-    lessSteps: '收起步骤',
     // DeerFlow execution mode keys
     modeFlashLabel: '闪电',
     modeFlashDesc: '快速响应，无深度思考',
