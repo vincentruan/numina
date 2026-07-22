@@ -222,6 +222,12 @@ export interface StatesSummaryResponse {
   total_value: number
 }
 
+export interface EducationRewardSummary {
+  total: number
+  month_total: number
+  count: number
+}
+
 export interface NewAssetItem {
   id: string
   name: string

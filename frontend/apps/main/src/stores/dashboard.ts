@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import i18n from '@/i18n'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
@@ -27,6 +27,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const recentActivities = ref<ActivityItem[]>([])
   const statesSummary = ref<StatesSummaryResponse | null>(null)
   const newAssets = ref<NewAssetsResponse | null>(null)
+  const educationRewardSummary = ref<EducationRewardSummary | null>(null)
   const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
 
@@ -98,6 +99,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
     investmentReturns.value = res.data
   }
 
+  async function fetchEducationRewardSummary() {
+    try {
+      const res = await dashboardApi.getEducationRewardSummary()
+      educationRewardSummary.value = res.data
+    } catch {
+      // non-critical
+    }
+  }
+
   async function fetchRecentActivities() {
     try {
       const res = await dashboardApi.getRecentActivities()
@@ -145,6 +155,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchLowUsageAssets(),
         fetchExpiringSoonAssets(),
         fetchHomeAssets(),
+        fetchEducationRewardSummary(),
       ]).catch(() => {
         // Phase 2 failures are non-critical; individual fetch functions
         // do not throw by default, so this is a safety net only
@@ -317,6 +328,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     recentActivities.value = []
     statesSummary.value = null
     newAssets.value = null
+    educationRewardSummary.value = null
     homeAssets.value = {}
     resetAssetPagination()
   }
@@ -324,11 +336,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, newAssets, homeAssets, loading,
+    educationRewardSummary,
     displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
     assetPagesCache, assetPageInfo, activeAssetStatus, activeAssetCategoryId, categoryCounts,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchNewAssets, fetchHomeAssets, fetchAll,
+    fetchEducationRewardSummary,
     fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets,
     fetchCategoryCounts, invalidateDashboard,
   }

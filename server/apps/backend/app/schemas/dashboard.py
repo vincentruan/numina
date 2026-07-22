@@ -86,6 +86,17 @@ class InvestmentReturnItem(SnowflakeBase):
     original_current_value: float = 0.0
 
 
+class EducationRewardSummaryResponse(SnowflakeBase):
+    """B1 教育奖励支出专项统计（方案 B：只聚合展示，不动资产/净资产/收益率）。
+
+    amount 在 B1 教育联动写入时已是元值（family 默认币种），直接求和，无货币换算（KTD-1）。
+    """
+
+    total: float  # 累计总额（全时段）
+    month_total: float  # 本月总额
+    count: int  # 笔数（全时段）
+
+
 class ExpiringSoonItem(SnowflakeBase):
     """Asset approaching end of expected lifespan."""
     id: int

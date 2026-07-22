@@ -82,6 +82,11 @@ export default {
     liabilitySummary: '{count} 项负债 · 月还 {monthly}',
     wishSummary: '{count} 个心愿 · {active} 个进行中',
     debtWishHint: '高息负债每月利息 {interest}，相当于延迟心愿「{wish}」约 {months} 个月',
+    educationReward: '教育奖励支出',
+    educationRewardTotal: '累计',
+    educationRewardMonth: '本月',
+    educationRewardCount: '{count} 笔',
+    educationRewardEmpty: '暂无教育奖励支出',
     loadFailed: '加载财务概览失败',
     retry: '重试'
   },

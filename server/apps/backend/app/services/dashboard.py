@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.snapshot import AssetSnapshot
@@ -14,6 +15,7 @@ from apps.backend.app.schemas.dashboard import (
     DailyCostStat,
     DurationBucket,
     DurationDistributionResponse,
+    EducationRewardSummaryResponse,
     ExpiringSoonItem,
     GoalProgressItem,
     GoalProgressResponse,
@@ -382,6 +384,48 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
 
     items.sort(key=lambda x: x.return_rate, reverse=True)
     return items
+
+
+def get_education_reward_summary(db: Session, user: User) -> EducationRewardSummaryResponse:
+    """B1 教育奖励支出专项统计（方案 B）。
+
+    聚合当前 family 的 `type='education_reward'` Activity：
+    - total / count：全时段 sum(amount) / count
+    - month_total：本月 sum(amount)（created_at >= 本月 1 号，KTD-3）
+
+    不做货币换算（KTD-1：amount 写入时已是元值）。无记录返回 0，不报错（KTD-2）。
+    """
+    family_id = user.family_id
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
+
+    total_row = (
+        db.query(
+            func.coalesce(func.sum(Activity.amount), 0).label("total"),
+            func.count(Activity.id).label("cnt"),
+        )
+        .filter(
+            Activity.family_id == family_id,
+            Activity.type == "education_reward",
+        )
+        .one()
+    )
+
+    month_total = (
+        db.query(func.coalesce(func.sum(Activity.amount), 0).label("month_total"))
+        .filter(
+            Activity.family_id == family_id,
+            Activity.type == "education_reward",
+            Activity.created_at >= month_start,
+        )
+        .scalar()
+    )
+
+    return EducationRewardSummaryResponse(
+        total=float(total_row.total or 0),
+        month_total=float(month_total or 0),
+        count=int(total_row.cnt or 0),
+    )
 
 
 def get_states_summary(db: Session, user: User) -> dict:

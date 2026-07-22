@@ -45,6 +45,11 @@ export default {
     liabilitySummary: '{count} liabilities · Monthly {monthly}',
     wishSummary: '{count} wishes · {active} active',
     debtWishHint: 'High-interest debt costs {interest}/month, delaying wish "{wish}" by ~{months} months',
+    educationReward: 'Education Rewards',
+    educationRewardTotal: 'Total',
+    educationRewardMonth: 'This month',
+    educationRewardCount: '{count}',
+    educationRewardEmpty: 'No education rewards yet',
     loadFailed: 'Failed to load finance overview',
     retry: 'Retry'
   },

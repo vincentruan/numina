@@ -10,6 +10,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.dashboard import (
     AllocationResponse,
     DailyCostItem,
+    EducationRewardSummaryResponse,
     ExpiringSoonItem,
     InsightsResponse,
     InvestmentReturnItem,
@@ -82,6 +83,15 @@ def get_investment_returns(
     user: User = Depends(require_adult),
 ):
     return dashboard_service.get_investment_returns(db, user)
+
+
+@router.get("/education-reward-summary", response_model=EducationRewardSummaryResponse)
+def get_education_reward_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """B1 教育奖励支出专项统计（累计 + 本月 + 笔数）。"""
+    return dashboard_service.get_education_reward_summary(db, user)
 
 
 @router.get("/states-summary")

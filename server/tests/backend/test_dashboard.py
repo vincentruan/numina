@@ -774,3 +774,119 @@ def test_insights_investment_returns_empty(client, auth_headers):
     assert inv is not None
     assert inv["asset_count"] == 0
     assert inv["annualized_rate"] is None
+
+
+# ---------------------------------------------------------------------------
+# B1 教育奖励支出专项统计（方案 B）：GET /dashboard/education-reward-summary
+# ---------------------------------------------------------------------------
+
+
+def _current_user(db):
+    """Return the User registered by the auth_headers fixture (username 'testuser')."""
+    from apps.backend.app.models.user import User
+
+    return db.query(User).filter(User.username == "testuser").one()
+
+
+def _add_education_reward(db, *, family_id, user_id, amount, created_at=None, type="education_reward"):
+    """Insert an Activity row directly (mirrors B1 education-linkage write shape)."""
+    from apps.backend.app.models.activity import Activity
+    from apps.backend.app.utils.snowflake import next_id
+
+    activity = Activity(
+        id=next_id(),
+        family_id=family_id,
+        user_id=user_id,
+        type=type,
+        entity_type="chore",
+        entity_id=next_id(),
+        title="教育奖励金",
+        amount=amount,
+    )
+    if created_at is not None:
+        activity.created_at = created_at
+    db.add(activity)
+    db.commit()
+    return activity
+
+
+def test_education_reward_summary_empty(client, db, auth_headers):
+    """无 education_reward 记录 → 全 0，不报错（KTD-2）。"""
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data == {"total": 0, "month_total": 0, "count": 0}
+
+
+def test_education_reward_summary_total_month_count(client, db, auth_headers):
+    """2 笔 education_reward（1 本月 + 1 上月）→ total=两笔和、month_total=本月笔、count=2。"""
+    from datetime import date, datetime
+
+    user = _current_user(db)
+    today = date.today()
+
+    # 本月一笔（默认 created_at = now）
+    _add_education_reward(db, family_id=user.family_id, user_id=user.id, amount=20.0)
+    # 上月一笔（显式 created_at = 上月 1 号，避免跨月边界）
+    if today.month == 1:
+        last_month = datetime(today.year - 1, 12, 1)
+    else:
+        last_month = datetime(today.year, today.month - 1, 1)
+    _add_education_reward(
+        db, family_id=user.family_id, user_id=user.id, amount=30.0, created_at=last_month
+    )
+
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 50.0
+    assert data["month_total"] == 20.0
+    assert data["count"] == 2
+
+
+def test_education_reward_summary_ignores_other_types(client, db, auth_headers):
+    """其他 type 的 Activity 不计入统计。"""
+    user = _current_user(db)
+    _add_education_reward(db, family_id=user.family_id, user_id=user.id, amount=20.0)
+    _add_education_reward(
+        db, family_id=user.family_id, user_id=user.id, amount=999.0, type="create"
+    )
+
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 20.0
+    assert data["month_total"] == 20.0
+    assert data["count"] == 1
+
+
+def test_education_reward_summary_family_isolation(client, db, auth_headers):
+    """他 family 的 education_reward 不计入当前 family 的统计。"""
+    from apps.backend.app.models.family import Family
+    from apps.backend.app.models.user import User
+    from apps.backend.app.utils.snowflake import next_id
+
+    user = _current_user(db)
+    _add_education_reward(db, family_id=user.family_id, user_id=user.id, amount=20.0)
+
+    # 另一个 family + user，写一笔 education_reward
+    other_family = Family(id=next_id(), name="Other Family", created_by=next_id())
+    db.add(other_family)
+    db.commit()
+    other_user = User(
+        id=next_id(),
+        username="other_family_user",
+        display_name="Other User",
+        password_hash="test_hash",
+        family_id=other_family.id,
+    )
+    db.add(other_user)
+    db.commit()
+    _add_education_reward(db, family_id=other_family.id, user_id=other_user.id, amount=888.0)
+
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 20.0
+    assert data["month_total"] == 20.0
+    assert data["count"] == 1

@@ -44,6 +44,7 @@ const overviewRef = ref<null | { net_worth: number; total_liabilities: number; t
 const liabilitiesRef = ref<Array<Record<string, unknown>>>([])
 const wishesRef = ref<Array<Record<string, unknown>>>([])
 const loadingRef = ref(false)
+const educationRewardSummaryRef = ref<null | { total: number; month_total: number; count: number }>(null)
 
 // Use getters so `store.liabilities` returns the unwrapped array (mimicking
 // Pinia's automatic ref unwrapping when accessed off a store instance).
@@ -51,7 +52,9 @@ vi.mock('@/stores/dashboard', () => ({
   useDashboardStore: () => ({
     get overview() { return overviewRef.value },
     get loading() { return loadingRef.value },
+    get educationRewardSummary() { return educationRewardSummaryRef.value },
     fetchAll: fetchAllMock,
+    fetchEducationRewardSummary: vi.fn(),
     invalidateDashboard: vi.fn(),
   }),
 }))
@@ -96,6 +99,7 @@ function resetState() {
   liabilitiesRef.value = []
   wishesRef.value = []
   loadingRef.value = false
+  educationRewardSummaryRef.value = null
   routeQuery.value = {}
   pushMock.mockReset()
   fetchAllMock.mockReset()
@@ -220,5 +224,56 @@ describe('FinanceHubPage', () => {
     await flushPromises()
 
     expect(wrapper.find('.hub-error').exists()).toBe(true)
+  })
+
+  it('renders education reward card with total/month/count when data present', async () => {
+    overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
+    educationRewardSummaryRef.value = { total: 50, month_total: 20, count: 2 }
+
+    const wrapper = mount(FinanceHubPage, {
+      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
+    })
+    await flushPromises()
+
+    const card = wrapper.find('.education-reward-card')
+    expect(card.exists()).toBe(true)
+    // Title + total/month labels (i18n keys; MoneyDisplay stubbed so amounts not asserted as text).
+    expect(card.text()).toContain('financeHub.educationReward')
+    expect(card.text()).toContain('financeHub.educationRewardTotal')
+    expect(card.text()).toContain('financeHub.educationRewardMonth')
+    // Count cell renders the count i18n key (mock t() returns the key; the real
+    // locale value "{count} 笔" is interpolated at runtime, not in this mock).
+    expect(wrapper.find('.er-cell-count').text()).toContain('financeHub.educationRewardCount')
+    // Non-empty state → no empty placeholder.
+    expect(wrapper.find('.er-empty').exists()).toBe(false)
+  })
+
+  it('shows education reward empty text when count is 0', async () => {
+    overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
+    educationRewardSummaryRef.value = { total: 0, month_total: 0, count: 0 }
+
+    const wrapper = mount(FinanceHubPage, {
+      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
+    })
+    await flushPromises()
+
+    // Card still rendered (placeholder, no layout jump) but shows empty text.
+    const card = wrapper.find('.education-reward-card')
+    expect(card.exists()).toBe(true)
+    expect(wrapper.find('.er-empty').exists()).toBe(true)
+    expect(wrapper.find('.er-empty').text()).toContain('financeHub.educationRewardEmpty')
+    expect(wrapper.find('.er-row').exists()).toBe(false)
+  })
+
+  it('shows education reward empty text when summary not yet loaded (null)', async () => {
+    overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
+    educationRewardSummaryRef.value = null
+
+    const wrapper = mount(FinanceHubPage, {
+      global: { stubs: ['van-pull-refresh', 'van-tabs', 'van-tab', 'van-button', 'van-icon', 'van-empty', 'DashboardSkeleton', 'MoneyDisplay'] },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.er-empty').exists()).toBe(true)
   })
 })
