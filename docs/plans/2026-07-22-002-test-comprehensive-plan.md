@@ -77,6 +77,31 @@
 ### 执行顺序
 P0 →（基线绿）→ P1 → P2 → P3 → P4 全量回归。每步：写测试 → 跑到绿 → 修复暴露的真 bug（单独 commit）→ 进入下一步。
 
+## 执行进度（2026-07-22）
+
+- **P0-2 基线**：`server/tests` 全绿 — **1744 passed, 8 skipped, 0 failed/error**（271s）。8 skipped 为预存条件跳过。
+- **P0-1 孤立测试**：`packages/domain/tests/test_liability_calculator.py`（7 tests）原不在 testpaths（collect=0）。已 `git mv` 至 `tests/packages/domain/`，收集 1752→1759。commit d6dd3c95。
+- **packages 共享 conftest**：`tests/packages/conftest.py` — 内存 SQLite + SAVEPOINT 隔离 + `patch_session_local` helper。关键发现：`packages.db.session.Base` 与 backend 共享，须 import `apps.backend.app.models` 让 `Family.categories→"Category"` 等字符串关系可解析。commit fdd3b658。
+- **P1/P2**：已派 4 个并行 subagent 编写测试（security+snowflake / domain / storage+db / scheduler 7 jobs）。
+- **P3 补盲分析**：backend 资金路径（asset/liability/dashboard/savings）覆盖良好（test_liabilities/test_liabilities_simulate/test_dashboard/test_wish_savings_model 等）。基线全绿 → 无 fail 需修。`valuation` 为 model（无独立 service/router），经 test_assets 间接覆盖。"NO TEST REF" 的 11 个服务（ai_context_builder/child_wishes/coin_transactions 等）多为 AI/儿童经济服务，经 router/集成测试间接覆盖，非资金关键路径。**结论：P3 无新增 fail 需补，资金路径已覆盖。**
+
+### P1/P2 subagent 结果（4 并行，全部 0 真 bug）
+
+| 区域 | 文件 | 测试数 | 真 bug |
+|------|------|--------|--------|
+| security + snowflake | test_revoke_jti / test_agent_jwt / test_snowflake | — | 0 |
+| domain | test_exchange_rate/audit/device/snapshot/notification_service | 38 | 0（1 死分支记录，见下） |
+| storage + db | test_local/base/factory/config_crypto + snowflake_serialization/model_constraints | 103 | 0 |
+| scheduler 7 jobs | test_jobs_behavior（27 new + 10 预存 timing） | 37 | 0 |
+
+**合计新增 ~245 tests，全部 pass。**
+
+**文档化发现（非缺陷，未改源码，遵循 surgical 原则）：**
+1. `audit_log_purge_job`（jobs/__init__.py:153）是 7 个 job 中唯一无 try/except 的 — 异常会传播给 APScheduler（其余 6 个 swallow+log）。APScheduler 有 job 级错误处理，非 bug；如需统一 catch-and-log 可后续处理。
+2. `delete_old_revoked_sessions`（domain/device/service.py）的 `or_(last_seen_at.is_(None))` 是**死分支** — `last_seen_at` 列 NOT NULL + server_default，永远匹配不到行。测试已固定实际（正确）行为。属预存死代码，不在本测试任务范围内删除。
+
+**环境事实（subagent 核实）：** `config_crypto` 读 `STORAGE_ENCRYPTION_KEY`（非 AI_ENCRYPTION_KEY），SECRET_KEY 派生兜底；`decrypt_config` 永不 raise（bad input → None）；`RevokedToken.id` 是普通 Integer 无 next_id default（其他模型均 BigInteger+next_id）。
+
 ### 验收标准
 1. `cd server && uv run pytest` 全绿（含新 packages/scheduler/domain 测试），无 error。
 2. `cd frontend && pnpm -r test:run` 全绿。
