@@ -99,7 +99,7 @@ function makeWish(overrides: Partial<Wish> = {}): Wish {
     name: '心愿',
     status: 'pending',
     priority: 'medium',
-    expected_price: 1000,
+    expected_price: '1000',
     saved_amount: '0',
     monthly_saving: '100',
     ...overrides,
@@ -186,8 +186,8 @@ describe('WishListPanel', () => {
 
   it('sorts by price', async () => {
     wishesRef.value = [
-      makeWish({ id: 'a', name: 'Cheap', status: 'pending', expected_price: 100 }),
-      makeWish({ id: 'b', name: 'Pricey', status: 'pending', expected_price: 900 }),
+      makeWish({ id: 'a', name: 'Cheap', status: 'pending', expected_price: '100' }),
+      makeWish({ id: 'b', name: 'Pricey', status: 'pending', expected_price: '900' }),
     ]
     const wrapper = mount(WishListPanel, { global: { stubs } })
     await flushPromises()

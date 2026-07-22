@@ -59,7 +59,7 @@
             class="wish-item"
             :class="`priority-${wish.priority}`"
             tabindex="0"
-            :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? t('wish.aria.priceFormat', { price: wish.expected_price.toLocaleString() }) : '' })"
+            :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? t('wish.aria.priceFormat', { price: Number(wish.expected_price).toLocaleString() }) : '' })"
             @click="$router.push(`/wishes/${wish.id}`)"
             @keydown.enter="$router.push(`/wishes/${wish.id}`)"
           >
@@ -217,7 +217,7 @@ const sortedWishes = computed(() => {
       return dir * ((priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2))
     }
     if (sortBy.value === 'price') {
-      return dir * ((a.expected_price ?? 0) - (b.expected_price ?? 0))
+      return dir * ((Number(a.expected_price) || 0) - (Number(b.expected_price) || 0))
     }
     return dir * a.name.localeCompare(b.name)
   })

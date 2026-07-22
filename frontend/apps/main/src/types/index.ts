@@ -333,7 +333,9 @@ export interface Wish {
   user_id: string
   name: string
   description?: string
-  expected_price?: number
+  // Serialized as str from the backend (SnowflakeBase money-as-str), like
+  // saved_amount/monthly_saving below. WishResponse.expected_price is str | None.
+  expected_price?: string
   currency: string
   priority: string
   status: string

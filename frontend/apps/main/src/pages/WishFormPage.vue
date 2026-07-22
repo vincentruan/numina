@@ -217,7 +217,7 @@ onMounted(async () => {
     form.value = {
       name: w.name,
       description: w.description ?? '',
-      expected_price: w.expected_price,
+      expected_price: w.expected_price != null ? Number(w.expected_price) : undefined,
       currency: w.currency || authStore.user?.default_currency || 'CNY',
       priority: w.priority,
       category_id: w.category_id,

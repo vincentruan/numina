@@ -26,7 +26,7 @@ function wish(partial: Partial<Wish>): Wish {
 describe('useAffordBar', () => {
   it('unset_monthly when monthly_saving=0', () => {
     const { state } = useAffordBar(
-      () => wish({ expected_price: 1000, saved_amount: '0', monthly_saving: '0' }),
+      () => wish({ expected_price: '1000', saved_amount: '0', monthly_saving: '0' }),
       () => 0,
     )
     expect(state.value.kind).toBe('unset_monthly')
@@ -34,7 +34,7 @@ describe('useAffordBar', () => {
 
   it('reached when saved >= price', () => {
     const { state } = useAffordBar(
-      () => wish({ expected_price: 1000, saved_amount: '1000', monthly_saving: '100' }),
+      () => wish({ expected_price: '1000', saved_amount: '1000', monthly_saving: '100' }),
       () => 0,
     )
     expect(state.value.kind).toBe('reached')
@@ -42,7 +42,7 @@ describe('useAffordBar', () => {
 
   it('progress computes months', () => {
     const { state } = useAffordBar(
-      () => wish({ expected_price: 1000, saved_amount: '200', monthly_saving: '200' }),
+      () => wish({ expected_price: '1000', saved_amount: '200', monthly_saving: '200' }),
       () => 0,
     )
     expect(state.value.kind).toBe('progress')
@@ -55,7 +55,7 @@ describe('useAffordBar', () => {
     const { accelerate } = useAffordBar(
       () =>
         wish({
-          expected_price: 10000,
+          expected_price: '10000',
           saved_amount: '0',
           monthly_saving: '100',
           target_date: soon.toISOString().slice(0, 10),
@@ -68,7 +68,7 @@ describe('useAffordBar', () => {
 
   it('purchasingPower reflects net worth coverage', () => {
     const { purchasingPower } = useAffordBar(
-      () => wish({ expected_price: 1000, saved_amount: '0', monthly_saving: '0' }),
+      () => wish({ expected_price: '1000', saved_amount: '0', monthly_saving: '0' }),
       () => 1500,
     )
     expect(purchasingPower.value.covered).toBe(true)
@@ -77,14 +77,14 @@ describe('useAffordBar', () => {
 
   it('progressPercent + color tiers', () => {
     const low = useAffordBar(
-      () => wish({ expected_price: 1000, saved_amount: '100', monthly_saving: '100' }),
+      () => wish({ expected_price: '1000', saved_amount: '100', monthly_saving: '100' }),
       () => 0,
     )
     expect(low.progressPercent.value).toBe(10)
     expect(low.progressColor.value).toBe('#ff976a') // <50% → 橙
 
     const high = useAffordBar(
-      () => wish({ expected_price: 1000, saved_amount: '850', monthly_saving: '100' }),
+      () => wish({ expected_price: '1000', saved_amount: '850', monthly_saving: '100' }),
       () => 0,
     )
     expect(high.progressPercent.value).toBe(85)
