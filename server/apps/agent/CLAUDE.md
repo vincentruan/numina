@@ -59,6 +59,7 @@ services/deerflow_adapter/
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
 ├── interrupt_tools.py      # tools used during interrupt/resume flows
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
+├── todo_middleware.py      # TodoMiddleware — plan-mode todo tracking (TodoListMiddleware subclass)
 └── exceptions.py
 ```
 
@@ -106,6 +107,21 @@ Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trig
 
 `sync_tool_patch._patched_get_available_tools` calls `_apply_active_skill_tool_filter`, which reads `active_skill_context.get_active_skill()` (set by the worker via `set_active_skill(skill_name)`) and calls DeerFlow's `filter_tools_by_skill_allowed_tools` to restrict tools to the skill's declared `allowed-tools` (full-name exact match; MCP tools use base names because `MultiServerMCPClient(tool_name_prefix=False)`).
 
+## DeerFlow-parity subsystems
+
+Three thread-scoped subsystems mirror DeerFlow's canonical implementations (all on the `numina` chat path):
+
+| Subsystem | Endpoint(s) | Implementation |
+|-----------|-------------|----------------|
+| **Thread compaction** | `POST /threads/{id}/compact` | `compact_service.py` — thin wrapper over DeerFlow's `compact_thread_context` |
+| **Thread goal** | `GET/PUT/DELETE /threads/{id}/goal` | `goal_store.py` (persistence) + `goal_evaluator.py` (non-thinking LLM judging completion) |
+| **Todo tracking** | (no endpoint — middleware) | `deerflow_adapter/todo_middleware.py` — `TodoListMiddleware` subclass (context-loss reminder + premature-exit prevention) |
+
+**Gotchas:**
+- **Compaction delegates to DeerFlow's canonical `compact_thread_context`** — do not hand-write message partitioning. LangGraph's default `messages` reducer re-accumulates by id, so a naive short-list `aput` does not persist on the next run.
+- **Goal evaluator reuses the family provider via `_create_lightweight_llm`**, not DeerFlow's `create_goal_evaluator_model` — the worker path carries no DeerFlow `AppConfig`. It runs after the user-visible turn completes; fail-closed (returns `missing_evidence` without calling the LLM when there is no visible assistant evidence).
+- **TodoMiddleware is wired only in plan mode** — `worker.py` passes `[get_todo_middleware()] if call_plan_mode else None`. Use the `get_todo_middleware()` module-level singleton (not a fresh instance per call) so the middlewares cache key `tuple(id(m) for m in middlewares)` stays stable.
+
 ## Directory Structure
 
 ```
@@ -122,7 +138,7 @@ agent/
 ├── routers/                   # External routers (JWT cookie auth via verify_family_token unless noted)
 │   ├── runs_stream.py         # POST /api/threads/{id}/runs/stream (stream_run) + /runs/{run_id}/cancel
 │   ├── resume.py              # POST /api/threads/{id}/runs/resume (interrupt resume)
-│   ├── threads.py             # Thread CRUD + checkpointer state/history/token-usage/branches
+│   ├── threads.py             # Thread CRUD + checkpointer state/history/token-usage/branches + goal + compact
 │   ├── capabilities.py        # GET /capabilities (X-Agent-Token)
 │   ├── import_parse.py        # POST /import/parse — sync JSON parse (X-Agent-Token)
 │   ├── input_polish.py        # POST /input-polish — D3 DeerFlow-synced draft polish (cookie auth)
@@ -159,6 +175,9 @@ agent/
 │   ├── session_store.py       # AiSessionRepository (delegates to backend via HTTP)
 │   ├── stream_events.py       # EventStreamBuilder
 │   ├── capability_registry.py # Loads capabilities from builtin/public/<name>/SKILL.md frontmatter
+│   ├── compact_service.py     # Thread compaction — wraps DeerFlow's compact_thread_context
+│   ├── goal_store.py          # Thread-scoped goal persistence (read/write/build state)
+│   ├── goal_evaluator.py      # Non-thinking LLM that judges goal completion
 │   ├── output_mapper.py
 │   ├── import_parse_service.py
 │   ├── model_tester.py
