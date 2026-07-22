@@ -22,7 +22,7 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
-from deerflow.agents.lead_agent.agent import _build_middlewares, make_lead_agent
+from deerflow.agents.lead_agent.agent import build_middlewares, make_lead_agent
 from deerflow.agents.middlewares.title_middleware import TitleMiddleware
 from deerflow.config.app_config import AppConfig
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
@@ -93,12 +93,12 @@ def fake_chat_model() -> FakeListChatModel:
 def test_step2_title_middleware_in_chain(runnable_config: dict[str, Any]) -> None:
     """U1 step 2: TitleMiddleware is in the middleware chain at default enabled.
 
-    Reading ``_build_middlewares`` directly is the smallest possible probe — if
+    Reading ``build_middlewares`` directly is the smallest possible probe — if
     this fails, the harness version diverges from the source we audited and U2
     must register the middleware explicitly.
     """
     app_config_obj = runnable_config["configurable"]["app_config"]
-    middlewares = _build_middlewares(
+    middlewares = build_middlewares(
         runnable_config,
         model_name="main",
         agent_name=None,

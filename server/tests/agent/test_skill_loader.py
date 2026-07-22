@@ -11,9 +11,10 @@ from apps.agent.services.deerflow_adapter.skill_loader import (
 
 def test_load_report_skill():
     loader = SkillLoader()
-    config = loader.load("report")
-    assert config.capability == "report"
-    assert config.thinking is True
+    config = loader.load("asset-report")
+    assert config.capability == "asset-report"
+    # asset-report is a fixed three-step pipeline (KTD-8); thinking is disabled.
+    assert config.thinking is False
     assert config.prompt == ""  # prompts live in skills/custom/*/SKILL.md, loaded by DeerFlow harness
 
 
@@ -27,25 +28,25 @@ def test_load_missing_skill_returns_minimal():
 
 def test_cache_works():
     loader = SkillLoader()
-    config1 = loader.load("report")
-    config2 = loader.load("report")
+    config1 = loader.load("asset-report")
+    config2 = loader.load("asset-report")
     assert config1 is config2  # same object from cache
 
 
 def test_invalidate_clears_cache():
     loader = SkillLoader()
-    loader.load("report")
-    assert "report" in loader._cache
-    loader.invalidate("report")
-    assert "report" not in loader._cache
+    loader.load("asset-report")
+    assert "asset-report" in loader._cache
+    loader.invalidate("asset-report")
+    assert "asset-report" not in loader._cache
 
 
 def test_all_capabilities_loadable():
     """U7: 5 trigger skills deleted; remaining builtin skills + routing caps load."""
     loader = SkillLoader()
-    # report stays until U5; chat is the SOUL; time_machine has no skill dir
-    # (returns minimal config) but is still a routing capability.
-    capabilities = ["report", "chat", "time_machine"]
+    # report was merged into asset-report (U4); chat is the SOUL; time_machine
+    # has no skill dir (returns minimal config) but is still a routing capability.
+    capabilities = ["asset-report", "chat", "time_machine"]
     for cap in capabilities:
         config = loader.load(cap)
         assert config.capability == cap

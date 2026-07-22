@@ -34,6 +34,7 @@ class TestAiSessionRepository:
                 agent_id="agent-1",
                 last_model="claude-3",
                 source="test",
+                parent_thread_id=None,
             )
 
     async def test_upsert_swallows_backend_error(self, repo):

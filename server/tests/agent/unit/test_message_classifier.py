@@ -280,10 +280,12 @@ def test_extract_content_returns_none_when_absent():
 def test_resolve_tool_metadata_known_tool():
     """Known tool name returns correct (type, display_name, icon, i18n_key)."""
     ttype, display, icon, i18n_key = resolve_tool_metadata("get_assets")
-    assert ttype == "asset_query"
-    assert display == "查询资产"
+    # U7: get_assets is now an MCP base-name tool in the data_collect category
+    # (was a built-in asset_query capability tool in the pre-U7 NDJSON era).
+    assert ttype == "data_collect"
+    assert display == "查询资产数据"
     assert icon == "💰"
-    assert i18n_key == "toolName.getAssets"
+    assert i18n_key == "toolName.getAssetsData"
 
 
 def test_resolve_tool_metadata_web_search():
