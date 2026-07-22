@@ -28,6 +28,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Fresh-DB guard: bootstrap creates ai_reports with capability + the family
+    # index already. Skip both when capability column already exists.
+    bind = op.get_bind()
+    cols = {c['name'] for c in bind.dialect.get_columns(bind, 'ai_reports')} if bind.dialect.has_table(bind, 'ai_reports') else set()
+    if 'capability' in cols:
+        return
     op.add_column(
         "ai_reports",
         sa.Column(

@@ -1,6 +1,6 @@
 # Alembic fresh-DB idempotency — 专项修复 Plan
 
-> **状态**：blocked — 调查发现根因超出 idempotency 范畴，需重建缺失 migration 历史（见 §结构性发现）
+> **状态**：complete — 方案 B 重建缺失 migration 历史，fresh-DB `alembic upgrade head` 成功（2026-07-22）。详见 [方案 B](./2026-07-22-alembic-plan-b-rebuild-missing-history.md)
 > **日期**：2026-07-22
 > **父文档**：[P2 计划](./2026-07-22-p2-compliance-a11y-plan.md) Deferred「fresh-DB base→head 系统性债务」
 > **范围**：修复 `alembic upgrade head`（base→head）在全新 SQLite DB 上的系统性失败，使 fresh 部署/CI 从零建 DB 可行

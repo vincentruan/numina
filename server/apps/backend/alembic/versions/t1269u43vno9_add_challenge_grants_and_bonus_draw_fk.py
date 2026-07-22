@@ -10,7 +10,6 @@ Adds:
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = 't1269u43vno9'
@@ -47,16 +46,24 @@ def upgrade() -> None:
         ),
     )
 
-    # Add source_challenge_id to bonus_draws
-    op.add_column(
-        'bonus_draws',
-        sa.Column(
-            'source_challenge_id',
-            sa.BigInteger(),
-            sa.ForeignKey('challenge_grants.id'),
-            nullable=True,
-        ),
-    )
+    # Add source_challenge_id to bonus_draws. SQLite cannot add a column with a
+    # ForeignKey via plain ALTER TABLE — use batch_alter_table (copy-and-move).
+    # Guard for fresh-DB where the column may already exist. The FK is given an
+    # explicit name because batch reflection requires named constraints.
+    bind = op.get_bind()
+    bonus_cols = {c['name'] for c in bind.dialect.get_columns(bind, 'bonus_draws')} if bind.dialect.has_table(bind, 'bonus_draws') else set()
+    if 'source_challenge_id' not in bonus_cols:
+        with op.batch_alter_table('bonus_draws', naming_convention={
+            "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        }) as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    'source_challenge_id',
+                    sa.BigInteger(),
+                    sa.ForeignKey('challenge_grants.id', name='fk_bonus_draws_source_challenge_id_challenge_grants'),
+                    nullable=True,
+                ),
+            )
 
 
 def downgrade() -> None:

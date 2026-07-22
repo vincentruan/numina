@@ -9,19 +9,30 @@ Changes:
 - ai_chat_sessions.jsonl_path: VARCHAR(500) -> VARCHAR(512)
 - ai_chat_sessions: add capability, title, status, last_message_summary, last_model, has_attachments
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision: str = 'aa91d6ea730d'
-down_revision: Union[str, None] = 'k2491m74lih1'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'k2491m74lih1'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # On a fresh DB the bootstrap (b00t5trap0001) creates ai_chat_sessions with
+    # the final schema: BigInteger id (not VARCHAR), no jsonl_path column (dropped
+    # in current model), and capability/title/status columns absent at model level
+    # (removed). This migration's alter_column(id->VARCHAR) + alter_column(jsonl_path)
+    # + add_column(capability etc.) would all conflict or corrupt the id type.
+    # Skip when the legacy jsonl_path column is absent (fresh-DB / already-migrated).
+    bind = op.get_bind()
+    if bind.dialect.has_table(bind, 'ai_chat_sessions'):
+        cols = {c['name'] for c in bind.dialect.get_columns(bind, 'ai_chat_sessions')}
+        if 'jsonl_path' not in cols:
+            return  # final schema already; no legacy jsonl_path to alter
+
     with op.batch_alter_table('ai_chat_sessions', recreate='always') as batch_op:
         batch_op.alter_column('id', type_=sa.String(64), existing_type=sa.String(36), nullable=False)
         batch_op.alter_column('jsonl_path', type_=sa.String(512), existing_type=sa.String(500), nullable=False)

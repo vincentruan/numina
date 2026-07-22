@@ -77,6 +77,12 @@ def upgrade() -> None:
     )
     op.create_index('ix_device_sessions_family', 'device_sessions', ['family_id'], unique=False)
     op.create_index('ix_device_sessions_user_active', 'device_sessions', ['user_id', 'is_revoked', 'expires_at'], unique=False)
+    # On a fresh (already-Snowflake) DB there are no legacy pre-Alembic tables to
+    # drop and no UUID columns to alter — the drops below would delete tables
+    # that the bootstrap (b00t5trap0001) just created from the current models.
+    # Skip the entire legacy-cleanup + UUID→BigInteger block on fresh DBs.
+    if already_snowflake:
+        return
     _drop_index('ix_cached_files_family_id', table_name='cached_files')
     _drop_table('cached_files')
     _drop_index('ix_ai_chat_sessions_family_id', table_name='ai_chat_sessions')
@@ -126,8 +132,7 @@ def upgrade() -> None:
     # columns are already BIGINT, so the block is a no-op and must be skipped —
     # SQLite does not support `ALTER COLUMN ... TYPE`, and even on Postgres the
     # idempotent re-alter is wasteful. Legacy UUID databases still run it.
-    if already_snowflake:
-        return
+    # (Already returned above when already_snowflake — drops also skipped there.)
     op.alter_column('ai_ws_tickets', 'id',
                existing_type=sa.VARCHAR(length=36),
                type_=sa.BigInteger(),

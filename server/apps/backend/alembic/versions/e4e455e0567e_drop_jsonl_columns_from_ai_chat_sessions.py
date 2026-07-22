@@ -34,12 +34,25 @@ def upgrade() -> None:
     # mode below handles table recreation transparently for both SQLite and
     # PostgreSQL. Constraint names are autogen-style on PG; use batch mode
     # to avoid naming fragility.
-    with op.batch_alter_table("ai_chat_sessions", schema=None) as batch_op:
-        batch_op.drop_column("jsonl_path")
-        batch_op.drop_column("cached_file_id")
-        batch_op.drop_column("message_count")
-        batch_op.drop_column("last_preview")
-        batch_op.drop_column("has_attachments")
+    #
+    # Fresh-DB guard: bootstrap creates ai_chat_sessions from the current model
+    # (no jsonl_path/cached_file_id/message_count/last_preview/has_attachments).
+    # Only drop columns that actually exist; if none exist, skip batch entirely
+    # (batch_alter_table with no ops still does a copy-and-move which is wasteful
+    # and can fail on unnamed-constraint reflection).
+    bind = op.get_bind()
+    if not bind.dialect.has_table(bind, "ai_chat_sessions"):
+        return
+    existing = {c["name"] for c in bind.dialect.get_columns(bind, "ai_chat_sessions")}
+    to_drop = [c for c in ("jsonl_path", "cached_file_id", "message_count", "last_preview", "has_attachments") if c in existing]
+    if not to_drop:
+        return
+    with op.batch_alter_table("ai_chat_sessions", schema=None, naming_convention={
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        "uq": "uq_%(table_name)s_%(column_0_name)s",
+    }) as batch_op:
+        for col in to_drop:
+            batch_op.drop_column(col)
 
 
 def downgrade() -> None:
