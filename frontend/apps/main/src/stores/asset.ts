@@ -81,15 +81,34 @@ export const useAssetStore = defineStore('asset', () => {
     // 3. Generate temp ID for the optimistic asset
     const tempId = generateTempId()
 
-    // 4. Build temp asset object with form data + tempId + placeholder fields
+    // 4. Build temp asset object with form data + tempId + placeholder fields.
+    // Money fields are driven from the ASSET_MONEY_FIELDS SSOT (same source the update
+    // path uses) so adding/renaming a money field stays a one-line change in types/.
+    // `data` is a request payload: present money field → coerce to str; omitted required
+    // money field (purchase_price/current_value) → '0' placeholder; omitted optional → undefined.
     // Use undefined instead of null to match Asset type
+    // Required money fields default to '0' on create; the rest stay undefined when omitted
+    // (e.g. sell_price/sell_fee — a new asset is unsold).
+    const REQUIRED_MONEY_ON_CREATE: AssetMoneyField[] = ['purchase_price', 'current_value']
+    const moneyFields = {} as Pick<Asset, AssetMoneyField>
+    for (const k of ASSET_MONEY_FIELDS) {
+      const v = data[k]
+      if (v != null) {
+        moneyFields[k] = String(v)
+      } else if (REQUIRED_MONEY_ON_CREATE.includes(k)) {
+        moneyFields[k] = '0'
+      } else {
+        // Optional money field omitted on create — leave unset (undefined), valid for
+        // the optional Asset money fields (sell_price/sell_fee/target_daily_cost/...).
+        delete moneyFields[k]
+      }
+    }
     const tempAsset: Asset = {
       id: tempId,
       name: data.name || '',
       category_id: data.category_id || '',
       asset_type: data.asset_type || 'physical',
-      purchase_price: data.purchase_price != null ? String(data.purchase_price) : '0',
-      current_value: data.current_value != null ? String(data.current_value) : '0',
+      ...moneyFields,
       currency: data.currency || 'CNY',
       purchase_date: data.purchase_date || '',
       status: 'in_use',
@@ -98,11 +117,9 @@ export const useAssetStore = defineStore('asset', () => {
       interest_rate: data.interest_rate,
       maturity_date: data.maturity_date,
       expected_lifespan_days: data.expected_lifespan_days,
-      annual_maintenance_cost: data.annual_maintenance_cost != null ? String(data.annual_maintenance_cost) : undefined,
       usage_frequency: data.usage_frequency,
       properties: data.properties,
       notes: data.notes,
-      target_daily_cost: data.target_daily_cost != null ? String(data.target_daily_cost) : undefined,
       image_url: data.image_url,
       tags: data.tags || [],
       // Placeholder fields (server-only)

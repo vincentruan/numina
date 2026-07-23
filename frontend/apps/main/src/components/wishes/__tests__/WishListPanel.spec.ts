@@ -31,11 +31,13 @@ vi.mock('@/composables/useCurrency', () => ({
   useCurrency: () => ({ format: (n: number) => `¥${n}` }),
 }))
 
-// useAffordBar → returns a stable state object per wish.
+// useAffordBar → returns a stable state object per wish. `accelerate` is controllable
+// so the truthy/falsy render branches of the `.accelerate` span can both be asserted.
+const accelerateRef = ref<null | { requiredMonthly: number; daysLeft: number }>(null)
 vi.mock('@/composables/useAffordBar', () => ({
   useAffordBar: () => ({
     state: computed(() => ({ kind: 'progress', months: 3 })),
-    accelerate: computed(() => false),
+    accelerate: computed(() => accelerateRef.value),
   }),
 }))
 
@@ -112,6 +114,7 @@ function resetState() {
   liabilitiesRef.value = []
   hasHighInterestDebtRef.value = false
   highInterestLiabilitiesRef.value = []
+  accelerateRef.value = null
   overviewRef.value = { net_worth: 100000 }
   pushMock.mockReset()
   fetchWishesMock.mockReset()
@@ -176,6 +179,22 @@ describe('WishListPanel', () => {
     // Pre-fix, v-if bound the bare ComputedRef object (always truthy), so the span rendered
     // even when accelerate.value was falsy — this assertion pins the .value unwrap.
     expect(bar.find('.accelerate').exists()).toBe(false)
+  })
+
+  it('renders the .accelerate span when affordAccelerate(wish) is truthy (ComputedRef unwrap)', async () => {
+    // Companion to the falsy-branch test above: when accelerate.value carries a real
+    // {requiredMonthly, daysLeft} nudge, the .accelerate span MUST render and carry the
+    // needAccelerate i18n key. Pins the truthy half of the affordAccelerate .value unwrap.
+    accelerateRef.value = { requiredMonthly: 1500, daysLeft: 90 }
+    wishesRef.value = [makeWish({ id: 'w-acc', name: 'Accelerate', status: 'pending', expected_price: '1000' })]
+    const wrapper = mount(WishListPanel, { global: { stubs } })
+    await flushPromises()
+
+    const bar = wrapper.find('.afford-bar')
+    expect(bar.exists()).toBe(true)
+    const span = bar.find('.accelerate')
+    expect(span.exists()).toBe(true)
+    expect(span.text()).toContain('wish.afford.needAccelerate')
   })
 
   it('sorts by priority (high→low desc default), then toggles direction', async () => {
