@@ -842,6 +842,11 @@ export default {
       deleteBtn: 'Delete',
       saveBtn: 'Save',
       addBtn: 'Add',
+      // W1 (Plan B T9): savings plan fields.
+      monthlySavingLabel: 'Monthly savings',
+      monthlySavingPlaceholder: 'Optional, planned monthly deposit',
+      targetDateLabel: 'Target date',
+      targetDatePlaceholder: 'Optional, target achievement date',
     },
     suggestion: {
       title: 'Suggested Stars',
