@@ -53,7 +53,12 @@ onMounted(() => load(false))
 </script>
 
 <template>
-  <van-skeleton v-if="loading" title :row="3" />
+  <div v-if="loading" class="finance-coach-card finance-coach-card--loading">
+    <div class="fc-header">
+      <span class="fc-title">{{ t('dashboard.financeCoach.title') }}</span>
+    </div>
+    <van-skeleton title :row="3" animate />
+  </div>
   <div v-else-if="visible" class="finance-coach-card" data-test="finance-coach-card">
     <div class="fc-header">
       <span class="fc-title">{{ t('dashboard.financeCoach.title') }}</span>
@@ -85,6 +90,9 @@ onMounted(() => load(false))
   border-radius: 12px;
   padding: 12px;
   margin: 8px 12px;
+}
+.finance-coach-card--loading :deep(.van-skeleton) {
+  padding: 0;
 }
 .fc-header {
   display: flex;

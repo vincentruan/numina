@@ -3,14 +3,14 @@
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="reminders">
         <template #title>
-          <span>
+          <span class="reminder-title">
             <span class="bell-icon" :class="{ 'bell-icon--ringing': hasExpiringSoon }">
               <IIcon :icon="hasExpiringSoon ? 'lucide:bell-ring' : 'lucide:bell'" size="18" class="bell-icon__svg" />
               <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--1" />
               <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--2" />
               <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--3" />
             </span>
-            {{ t('alertCards.reminder') }}
+            <span class="reminder-title__text">{{ t('alertCards.reminder') }}</span>
           </span>
           <span v-if="totalCount > 0" class="reminder-summary">
             <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
@@ -247,6 +247,11 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
 </script>
 
 <style scoped>
+.reminder-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .bell-icon {
   display: inline-flex;
   align-items: center;
@@ -254,7 +259,7 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
   position: relative;
   width: 1.4em;
   height: 1.4em;
-  vertical-align: -0.3em;
+  flex-shrink: 0;
 }
 .bell-icon__svg {
   position: relative;
