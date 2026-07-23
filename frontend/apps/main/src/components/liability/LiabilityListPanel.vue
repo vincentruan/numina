@@ -10,6 +10,9 @@
         <van-tab :title="t('liability.tabInactive')" name="inactive" />
       </van-tabs>
 
+      <!-- B1 教育奖励支出统计（归位于负债域：家庭支出流水；点击下钻活动明细） -->
+      <EducationRewardCard />
+
       <!-- Filter / Sort bar -->
       <div class="filter-bar">
         <div class="filter-chips">
@@ -166,6 +169,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LiabilityCard from '@/components/liability/LiabilityCard.vue'
 import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
 import LiabilityStrategyCard from '@/components/liability/LiabilityStrategyCard.vue'
+import EducationRewardCard from '@/components/finance/EducationRewardCard.vue'
 
 const { t } = useI18n()
 const { format: formatCurrencyAmount } = useCurrency()

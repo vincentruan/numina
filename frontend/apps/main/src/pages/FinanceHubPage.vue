@@ -14,33 +14,6 @@
       </div>
 
       <template v-else>
-        <!-- B1 教育奖励支出专项统计（方案 B：只读聚合，不动资产/净资产） -->
-        <div class="education-reward-card">
-          <div class="er-title">{{ t('financeHub.educationReward') }}</div>
-          <div v-if="educationRewardCount === 0" class="er-empty">
-            {{ t('financeHub.educationRewardEmpty') }}
-          </div>
-          <div v-else class="er-row">
-            <div class="er-cell">
-              <div class="er-cell-label">{{ t('financeHub.educationRewardTotal') }}</div>
-              <div class="er-cell-value">
-                <MoneyDisplay :amount="educationRewardSummary?.total ?? 0" />
-              </div>
-            </div>
-            <div class="er-cell">
-              <div class="er-cell-label">{{ t('financeHub.educationRewardMonth') }}</div>
-              <div class="er-cell-value">
-                <MoneyDisplay :amount="educationRewardSummary?.month_total ?? 0" />
-              </div>
-            </div>
-            <div class="er-cell">
-              <div class="er-cell-value er-cell-count">
-                {{ t('financeHub.educationRewardCount', { count: educationRewardCount }) }}
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- W5 cross-module decision-chain hint (useDebtWarning) -->
         <div v-if="debtWishHint" class="debt-wish-hint">
           <van-icon name="warning-o" />
@@ -71,7 +44,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import AssetListPanel from '@/components/asset/AssetListPanel.vue'
 import LiabilityListPanel from '@/components/liability/LiabilityListPanel.vue'
@@ -94,10 +66,6 @@ const currency = useCurrency()
 const overview = computed(() => dashboardStore.overview)
 const liabilities = computed(() => liabilityStore.liabilities)
 const wishes = computed(() => wishStore.wishes)
-
-// B1 教育奖励支出专项统计（方案 B：只读聚合，count===0 显示占位文案避免布局跳动 KTD-4）
-const educationRewardSummary = computed(() => dashboardStore.educationRewardSummary)
-const educationRewardCount = computed(() => educationRewardSummary.value?.count ?? 0)
 
 // Loading: hub critical phase (overview + states). overview null + loading means first paint.
 const hubLoading = computed(() => dashboardStore.loading && !overview.value)
@@ -181,57 +149,6 @@ onMounted(() => {
   min-height: 100vh;
   background-color: var(--bg-secondary);
   padding-bottom: calc(50px + env(safe-area-inset-bottom));
-}
-
-.education-reward-card {
-  margin: 0 12px 12px;
-  padding: 12px 16px;
-  background: var(--bg-primary, #fff);
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-}
-
-.er-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary, #323233);
-  margin-bottom: 8px;
-}
-
-.er-empty {
-  font-size: 12px;
-  color: var(--text-secondary, #969799);
-  padding: 4px 0;
-}
-
-.er-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.er-cell {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.er-cell-label {
-  font-size: 12px;
-  color: var(--text-secondary, #969799);
-}
-
-.er-cell-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary, #323233);
-}
-
-.er-cell-count {
-  display: flex;
-  align-items: flex-end;
-  min-height: 100%;
 }
 
 .debt-wish-hint {

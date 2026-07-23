@@ -50,6 +50,8 @@ export default {
     educationRewardMonth: 'This month',
     educationRewardCount: '{count}',
     educationRewardEmpty: 'No education rewards yet',
+    educationRewardDetailTitle: 'Education Reward Details',
+    educationRewardDetailEmpty: 'No education reward records yet',
     loadFailed: 'Failed to load finance overview',
     retry: 'Retry'
   },

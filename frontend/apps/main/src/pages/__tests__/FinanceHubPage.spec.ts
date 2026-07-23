@@ -220,43 +220,15 @@ describe('FinanceHubPage', () => {
     expect(wrapper.find('.hub-error').exists()).toBe(true)
   })
 
-  it('renders education reward card with total/month/count when data present', async () => {
+  it('does NOT render the education reward card at page top (moved into liabilities tab)', async () => {
     overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
     educationRewardSummaryRef.value = { total: 50, month_total: 20, count: 2 }
 
     const wrapper = mount(FinanceHubPage, { global: { stubs } })
     await flushPromises()
 
-    const card = wrapper.find('.education-reward-card')
-    expect(card.exists()).toBe(true)
-    expect(card.text()).toContain('financeHub.educationReward')
-    expect(card.text()).toContain('financeHub.educationRewardTotal')
-    expect(card.text()).toContain('financeHub.educationRewardMonth')
-    expect(wrapper.find('.er-cell-count').text()).toContain('financeHub.educationRewardCount')
-    expect(wrapper.find('.er-empty').exists()).toBe(false)
-  })
-
-  it('shows education reward empty text when count is 0', async () => {
-    overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
-    educationRewardSummaryRef.value = { total: 0, month_total: 0, count: 0 }
-
-    const wrapper = mount(FinanceHubPage, { global: { stubs } })
-    await flushPromises()
-
-    const card = wrapper.find('.education-reward-card')
-    expect(card.exists()).toBe(true)
-    expect(wrapper.find('.er-empty').exists()).toBe(true)
-    expect(wrapper.find('.er-empty').text()).toContain('financeHub.educationRewardEmpty')
-    expect(wrapper.find('.er-row').exists()).toBe(false)
-  })
-
-  it('shows education reward empty text when summary not yet loaded (null)', async () => {
-    overviewRef.value = { net_worth: 100000, total_liabilities: 0, total_assets: 100000, asset_count: 1 }
-    educationRewardSummaryRef.value = null
-
-    const wrapper = mount(FinanceHubPage, { global: { stubs } })
-    await flushPromises()
-
-    expect(wrapper.find('.er-empty').exists()).toBe(true)
+    // Education reward card was relocated into the liabilities tab (LiabilityListPanel),
+    // so it no longer appears at the FinanceHubPage top level.
+    expect(wrapper.find('.education-reward-card').exists()).toBe(false)
   })
 })

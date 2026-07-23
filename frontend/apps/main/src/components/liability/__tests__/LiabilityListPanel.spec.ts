@@ -49,6 +49,12 @@ vi.mock('@/stores/liability', () => ({
   }),
 }))
 
+// EducationRewardCard (embedded in the panel) reads the dashboard store;
+// stub the store so the panel test stays shallow without an active Pinia.
+vi.mock('@/stores/dashboard', () => ({
+  useDashboardStore: () => ({ educationRewardSummary: null }),
+}))
+
 import LiabilityListPanel from '../LiabilityListPanel.vue'
 
 // Stub children to keep the render shallow and assertable.
