@@ -322,3 +322,41 @@ async def test_child_role_get_goal_allowed():
             "thread-1", "family-1", verified=_verified(role="child")
         )
     assert result.goal is not None
+
+
+async def test_member_role_put_goal_allowed():
+    """Adult members (role='member') CAN set a goal — matches backend require_adult.
+
+    Regression guard: the role gate previously used the never-issued literal
+    'adult' (frozenset {'owner','adult'}), which 403'd every role='member'
+    adult. The backend ``require_adult`` admits {owner, member}; the agent gate
+    must agree. See P1-B in the two-AI-apps review.
+    """
+    written_goal: dict = {}
+
+    async def capture_write(*args, **kwargs):
+        goal = args[2] if len(args) > 2 else kwargs.get("goal")
+        if isinstance(goal, dict):
+            written_goal.update(goal)
+        return {"goal": dict(written_goal)}
+
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+        patch("apps.agent.routers.threads.read_thread_goal", new=AsyncMock(return_value=None)),
+        patch("apps.agent.routers.threads.write_thread_goal", new=AsyncMock(side_effect=capture_write)),
+        patch("apps.agent.routers.threads.goal_thread_lock") as mock_lock,
+    ):
+        mock_lock.return_value.__aenter__ = AsyncMock(return_value=None)
+        mock_lock.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value=None)
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=_make_checkpoint_tuple("ckpt-1"))
+
+        body = ThreadGoalRequest(objective="完成资产报告", max_continuations=5)
+        result = await set_thread_goal("thread-1", body, "family-1", verified=_verified(role="member"))
+
+    assert result.goal is not None
+    assert result.goal["objective"] == "完成资产报告"

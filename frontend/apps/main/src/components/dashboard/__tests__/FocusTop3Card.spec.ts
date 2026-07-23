@@ -29,15 +29,15 @@ vi.mock('@/composables/useCurrency', () => ({
 const fetchLiabilitiesMock = vi.fn(() => Promise.resolve())
 const fetchWishesMock = vi.fn(() => Promise.resolve())
 
-const displayedAssetsRef = ref<Array<Record<string, unknown>>>([])
-const assetListLoadingRef = ref(false)
+const homeAssetsRef = ref<Record<string, Array<Record<string, unknown>>>>({})
+const loadingRef = ref(false)
 const liabilitiesRef = ref<Array<Record<string, unknown>>>([])
 const wishesRef = ref<Array<Record<string, unknown>>>([])
 
 vi.mock('@/stores/dashboard', () => ({
   useDashboardStore: () => ({
-    get displayedAssets() { return displayedAssetsRef.value },
-    get assetListLoading() { return assetListLoadingRef.value },
+    get homeAssets() { return homeAssetsRef.value },
+    get loading() { return loadingRef.value },
   }),
 }))
 vi.mock('@/stores/liability', () => ({
@@ -89,8 +89,8 @@ const stubs = {
 }
 
 function resetState() {
-  displayedAssetsRef.value = []
-  assetListLoadingRef.value = false
+  homeAssetsRef.value = {}
+  loadingRef.value = false
   liabilitiesRef.value = []
   wishesRef.value = []
   fetchLiabilitiesMock.mockReset()
@@ -105,12 +105,14 @@ describe('FocusTop3Card', () => {
   })
 
   it('shows top 3 assets by current value desc (AE5)', async () => {
-    displayedAssetsRef.value = [
-      { id: 'a1', name: 'Low', current_value: '100' },
-      { id: 'a2', name: 'High', current_value: '9000' },
-      { id: 'a3', name: 'Mid', current_value: '500' },
-      { id: 'a4', name: 'Fourth', current_value: '50' },
-    ]
+    homeAssetsRef.value = {
+      in_use: [
+        { id: 'a1', name: 'Low', current_value: '100' },
+        { id: 'a2', name: 'High', current_value: '9000' },
+        { id: 'a3', name: 'Mid', current_value: '500' },
+        { id: 'a4', name: 'Fourth', current_value: '50' },
+      ],
+    }
 
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()
@@ -160,10 +162,12 @@ describe('FocusTop3Card', () => {
   })
 
   it('shows all items when fewer than 3 (no padding/truncation)', async () => {
-    displayedAssetsRef.value = [
-      { id: 'a1', name: 'Only', current_value: '100' },
-      { id: 'a2', name: 'Two', current_value: '50' },
-    ]
+    homeAssetsRef.value = {
+      in_use: [
+        { id: 'a1', name: 'Only', current_value: '100' },
+        { id: 'a2', name: 'Two', current_value: '50' },
+      ],
+    }
 
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()
@@ -172,7 +176,7 @@ describe('FocusTop3Card', () => {
   })
 
   it('shows empty state when a domain has 0 items', async () => {
-    displayedAssetsRef.value = []
+    homeAssetsRef.value = {}
     liabilitiesRef.value = []
     wishesRef.value = []
 
@@ -184,7 +188,7 @@ describe('FocusTop3Card', () => {
   })
 
   it('shows assets skeleton while dashboard asset list is loading', async () => {
-    assetListLoadingRef.value = true
+    loadingRef.value = true
 
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()

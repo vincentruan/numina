@@ -840,7 +840,14 @@ async def update_thread_state(
 # Goal endpoints (DeerFlow threads.py:832-880)
 # ---------------------------------------------------------------------------
 
-_OWNER_ADULT_ROLES = frozenset({"owner", "adult"})
+# Adult family roles allowed to set/clear goals and compact conversation history.
+# The backend ``require_adult`` (apps/backend/app/auth/deps.py) admits
+# ``role in ('owner', 'member')`` — ``User.role`` only ever stores
+# 'owner' / 'member' / 'child' (packages/db/models/user.py), the literal
+# 'adult' is never issued by jwt_utils/auth. Using {'owner','adult'} here
+# silently rejected every role='member' adult with 403; 'member' is the
+# correct peer of 'owner'.
+_OWNER_ADULT_ROLES = frozenset({"owner", "member"})
 
 
 async def _verify_goal_thread_ownership(

@@ -83,20 +83,24 @@ const wishStore = useWishStore()
 const activeTab = ref<'assets' | 'liabilities' | 'wishes'>('assets')
 
 // Per-domain loading / error. Liability/wish stores expose only `loading` (fetch
-// throws on failure), so their error is tracked here. Assets reuse the dashboard
-// store's already-driven pagination fetch (owned by DashboardPage), so the assets
-// tab binds to the store's loading state and has no independent fetch/error.
+// throws on failure), so their error is tracked here. Assets read the dashboard
+// store's `homeAssets` (populated by DashboardPage.fetchAll -> fetchHomeAssets),
+// so the assets tab binds to the store's overall loading state and has no
+// independent fetch/error.
 const liabilityLoading = ref(false)
 const wishLoading = ref(false)
 const liabilityError = ref(false)
 const wishError = ref(false)
-const assetLoading = computed(() => dashboardStore.assetListLoading)
+const assetLoading = computed(() => dashboardStore.loading)
 
 // --- Top 3 selections (R13) ---
-// Assets: by current value desc, from the dashboard's already-loaded displayedAssets
-// (full Asset objects suitable for AssetListItem). DashboardPage fetches page 1 on mount.
+// Assets: by current value desc, from the dashboard's already-loaded homeAssets
+// (full Asset objects suitable for AssetListItem). DashboardPage.fetchAll
+// populates homeAssets (status-keyed); `in_use` is the primary bucket users care
+// about. NOTE: homeAssets is capped at 5 per status by fetchHomeAssets, so "top 3"
+// ranks within that limited set — acceptable for a dashboard glance widget.
 const topAssets = computed(() =>
-  [...(dashboardStore.displayedAssets || [])]
+  [...(dashboardStore.homeAssets?.['in_use'] || [])]
     .sort((a, b) => Number(b.current_value ?? 0) - Number(a.current_value ?? 0))
     .slice(0, 3),
 )
@@ -161,7 +165,7 @@ function retryWishes() {
 
 onMounted(() => {
   // Liability/wish load independently so a single failure degrades only its own tab.
-  // Assets read from the dashboard store's displayedAssets (fetched by DashboardPage).
+  // Assets read from the dashboard store's homeAssets (fetched by DashboardPage.fetchAll).
   loadLiabilities()
   loadWishes()
 })

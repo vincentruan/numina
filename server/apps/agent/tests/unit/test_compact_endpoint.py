@@ -378,6 +378,44 @@ async def test_compact_child_role_returns_403():
     mock_compact.assert_not_awaited()
 
 
+async def test_compact_member_role_proceeds_past_gate():
+    """Adult members (role='member') pass the role gate — matches backend require_adult.
+
+    Regression guard: the gate previously used the never-issued literal 'adult'
+    (frozenset {'owner','adult'}), 403'ing every role='member' adult. The backend
+    ``require_adult`` admits {owner, member}; the agent gate must agree. See P1-B
+    in the two-AI-apps review. This asserts the member role reaches the downstream
+    compaction (does not raise 403).
+    """
+    checkpoint_tuple = _make_checkpoint_tuple(messages=[{"id": "m1"}, {"id": "m2"}])
+    compact_result = ThreadCompactionResult(
+        thread_id="thread-1", compacted=True, checkpoint_id="ckpt-new"
+    )
+    run_manager = _mock_run_manager(inflight=False)
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+        patch("apps.agent.routers.threads.get_run_manager") as mock_get_rm,
+        patch("apps.agent.routers.threads.compact_thread", new=AsyncMock(return_value=compact_result)) as mock_compact,
+    ):
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value=None)
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=checkpoint_tuple)
+        mock_get_rm.return_value = run_manager
+
+        result = await compact_thread_endpoint(
+            "thread-1",
+            ThreadCompactRequest(),
+            _request(),
+            "family-1",
+            verified=_verified(role="member"),
+        )
+
+    assert result.compacted is True
+    mock_compact.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # Integration: result dict mapping (R4 — canonical aput-sticks is inherited
 # via direct import; this verifies the response translation contract).

@@ -24,31 +24,28 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Idempotent insert: skip if the row already exists (e.g. bootstrap ran first).
-    # Note on `INSERT OR IGNORE`: this is SQLite syntax. The repo dev DB is SQLite;
-    # prod is PostgreSQL. PostgreSQL lacks `INSERT OR IGNORE` — but bootstrap_agents()
-    # is the source of truth and runs on every startup, so on Postgres the
-    # row is seeded by bootstrap before any import_parse run. The migration's
-    # `INSERT OR IGNORE` is a SQLite-only convenience for existing dev DBs. If a
-    # Postgres deployment runs `alembic upgrade head` before `bootstrap_agents`, the
-    # migration will error on `INSERT OR IGNORE` syntax — this is acceptable because
-    # the deployment order is `alembic upgrade` then `app startup` (which calls
-    # bootstrap_agents). For a Postgres-compatible seeding in the migration itself,
-    # replace with a `SELECT ... WHERE NOT EXISTS (SELECT 1 FROM ai_agents WHERE
-    # id = 100000000000007)` guard. Use `INSERT OR IGNORE` for SQLite dev.
+    # Uses a portable `INSERT ... SELECT ... WHERE NOT EXISTS` guard so the
+    # statement is valid on BOTH SQLite (dev) and PostgreSQL (prod). The previous
+    # `INSERT OR IGNORE` form was SQLite-only and raised a syntax error when an
+    # operator ran `alembic upgrade head` on PostgreSQL before app startup — and
+    # because this migration sits mid-chain (down_revision e7f3a2c9b4d1), that
+    # single syntax error aborted the entire upgrade. bootstrap_agents() remains
+    # the single source of truth (re-syncs on every startup); this seed is only
+    # needed for existing DBs that haven't run bootstrap yet.
     op.execute(
         """
-        INSERT OR IGNORE INTO ai_agents (
+        INSERT INTO ai_agents (
             id, family_id, agent_name, display_name, description,
             icon, color, soul_md, skills, agent_type, memory_enabled, display_order
         )
-        VALUES (
+        SELECT
             100000000000007, 0, 'import-parse', '导入解析',
             '金融文档持仓解析智能体。读取上传的金融文档文本，提取持仓/资产条目，输出结构化 JSON。',
             '📄', '#3b82f6',
             '你是金融文档持仓解析器，在单次响应内完成：读取文档文本 → 提取持仓/资产条目 → 输出结构化 JSON。',
             '["import-parse"]',
             'system', 0, 30
-        )
+        WHERE NOT EXISTS (SELECT 1 FROM ai_agents WHERE id = 100000000000007)
         """
     )
 

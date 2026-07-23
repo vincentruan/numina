@@ -24,31 +24,28 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Idempotent insert: skip if the row already exists (e.g. bootstrap ran first).
-    # Note on `INSERT OR IGNORE`: this is SQLite syntax. The repo dev DB is SQLite;
-    # prod is PostgreSQL. PostgreSQL lacks `INSERT OR IGNORE` — but bootstrap_agents()
-    # is the source of truth and runs on every startup (Task 3), so on Postgres the
-    # row is seeded by bootstrap before any finance_coach run. The migration's
-    # `INSERT OR IGNORE` is a SQLite-only convenience for existing dev DBs. If a
-    # Postgres deployment runs `alembic upgrade head` before `bootstrap_agents`, the
-    # migration will error on `INSERT OR IGNORE` syntax — this is acceptable because
-    # the deployment order is `alembic upgrade` then `app startup` (which calls
-    # bootstrap_agents). For a Postgres-compatible seeding in the migration itself,
-    # replace with a `SELECT ... WHERE NOT EXISTS (SELECT 1 FROM ai_agents WHERE
-    # id = 100000000000008)` guard. Use `INSERT OR IGNORE` for SQLite dev.
+    # Uses a portable `INSERT ... SELECT ... WHERE NOT EXISTS` guard so the
+    # statement is valid on BOTH SQLite (dev) and PostgreSQL (prod). The previous
+    # `INSERT OR IGNORE` form was SQLite-only and raised a syntax error when an
+    # operator ran `alembic upgrade head` on PostgreSQL before app startup —
+    # moving the Postgres deploy blocker from f8a4c2e1b9d6 to this later migration
+    # if left unfixed. bootstrap_agents() remains the single source of truth
+    # (re-syncs on every startup); this seed is only needed for existing DBs that
+    # haven't run bootstrap yet.
     op.execute(
         """
-        INSERT OR IGNORE INTO ai_agents (
+        INSERT INTO ai_agents (
             id, family_id, agent_name, display_name, description,
             icon, color, soul_md, skills, agent_type, memory_enabled, display_order
         )
-        VALUES (
+        SELECT
             100000000000008, 0, 'finance-coach', '财务教练',
             '家庭财务处方建议智能体。读取家庭财务快照，输出结构化 suggestions JSON（前 3 条优先建议）。',
             '🎯', '#10b981',
             '你是家庭财务教练，在单次响应内完成：读取家庭财务快照 → 识别高息负债/闲置资产/储蓄缺口 → 输出结构化 suggestions JSON。',
             '["finance-coach"]',
             'system', 0, 40
-        )
+        WHERE NOT EXISTS (SELECT 1 FROM ai_agents WHERE id = 100000000000008)
         """
     )
 
