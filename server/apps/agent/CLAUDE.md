@@ -12,9 +12,11 @@ uv run ruff check apps/agent/              # lint
 uv run ruff check apps/agent/ --fix        # lint + auto-fix
 uv run ruff format apps/agent/             # format (only files you touch)
 uv run mypy apps/agent/ --exclude vendor   # type check
-uv run pytest apps/agent/tests/ -v         # run all tests (integration/ + unit/)
-uv run pytest apps/agent/tests/ -v -k "keyword"  # run tests matching keyword
+uv run pytest tests/agent/ -v              # run all agent tests (canonical root; auto-collected by `testpaths=["tests"]`)
+uv run pytest tests/agent/ -v -k "keyword" # run tests matching keyword
 ```
+
+> **Test root:** The canonical agent test root is `tests/agent/` (mirrors `tests/backend/`; auto-collected by bare `pytest` via `testpaths = ["tests"]`). The legacy `apps/agent/tests/` directory still exists with **stale, partially-failing** tests (`test_branch_endpoint.py`, `test_threads_router.py` — 404 on thread lookup) and is **not** collected by default — do not add new tests there. When in doubt, run `uv run pytest tests/ -v` to run the full server suite.
 
 ## Tooling
 
@@ -201,9 +203,10 @@ agent/
 │   ├── prod/config.yaml
 │   └── agents/family-finance-agent/profile.yaml
 ├── prompts/chat/default_system_prompt.md
-├── tests/
+├── tests/                   # ⚠️ legacy dir — see §Quality Commands; canonical root is tests/agent/
 │   ├── integration/           # gateway, runs-cancel, u2-app-dispatch, v2-sse-contract
-│   └── unit/                  # ~16 files (worker_*, adapter_contextvar, sync_tool_patch, resume/threads routers, etc.)
+│   └── unit/                  # worker_*, adapter_contextvar, sync_tool_patch, resume/threads routers, etc.
+│   # Canonical tests live in tests/agent/ (unit/ ~26 files, integration/, golden/) — see top of file.
 └── scripts/                   # vendor-deerflow.sh, patch-deerflow-thread-data.py, patch-langgraph-runtime.py
 ```
 

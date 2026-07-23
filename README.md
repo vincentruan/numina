@@ -5,7 +5,7 @@
 **隐私优先的自托管家庭财务管理平台**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Vue 3](https://img.shields.io/badge/vue-3.x-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 
@@ -24,6 +24,7 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 - 👨‍👩‍👧‍👦 **多用户家庭** - 家庭成员各自记录资产，支持家庭级汇总视图
 - 📊 **数据可视化** - 财务仪表盘、净资产趋势图、资产配置饼图
 - 💰 **智能分析** - 日耗计算、低使用率资产提醒、投资收益排行
+- 🤖 **AI 助理** - 对话式财务助理、财务教练、心愿建议、资产报告生成、PDF 导入解析（DeerFlow/LangChain 多 Provider）
 - ⭐ **儿童激励系统** - 家务赚星星币、心愿兑现、三级货币体系，培养孩子财务意识
 - 🔐 **隐私安全** - 完全自托管，数据不出家门，JWT 认证，bcrypt 密码加密
 - 📱 **移动优先** - 响应式设计，适配手机浏览器访问
@@ -52,7 +53,7 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/yourusername/numina.git
+git clone https://github.com/vincentruan/numina.git
 cd numina
 
 # 2. 启动所有服务
@@ -77,7 +78,7 @@ SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-102
 
 ### 本地开发
 
-各模块的本地开发说明见对应模块的 README：[后端](./server/apps/backend/README.md) · [前端](./frontend/README.md) · [Agent](./server/apps/agent/README.md)
+各模块的本地开发说明见对应模块的 README：[后端](./server/apps/backend/README.md) · [前端](./frontend/apps/main/README.md) · [Agent](./server/apps/agent/README.md)
 
 ## 📊 功能概览
 
@@ -176,7 +177,7 @@ numina/
 | 后端 | [server/apps/backend/README.md](./server/apps/backend/README.md) | FastAPI API 开发、数据库、测试 |
 | Agent | [server/apps/agent/README.md](./server/apps/agent/README.md) | AI 微服务、DeerFlow 集成、技能 |
 | Scheduler Worker | [server/apps/scheduler_worker/README.md](./server/apps/scheduler_worker/README.md) | 定时任务、调度逻辑 |
-| 前端（成人端） | [frontend/README.md](./frontend/README.md) | Vue 3 UI 开发、组件、测试 |
+| 前端（成人端） | [frontend/apps/main/README.md](./frontend/apps/main/README.md) | Vue 3 UI 开发、组件、测试 |
 | 前端（儿童端） | [frontend/apps/child/CLAUDE.md](./frontend/apps/child/CLAUDE.md) | 儿童端专属 UI |
 | E2E 测试 | [tests/README.md](./tests/README.md) | E2E 测试、数据生成、截图 |
 
@@ -209,7 +210,7 @@ numina/
 
 ```bash
 # 1. 克隆代码到 NAS
-git clone https://github.com/yourusername/numina.git
+git clone https://github.com/vincentruan/numina.git
 cd numina
 
 # 2. 启动服务
@@ -223,7 +224,7 @@ docker-compose up -d
 
 ```bash
 # 1. 克隆代码
-git clone https://github.com/yourusername/numina.git
+git clone https://github.com/vincentruan/numina.git
 cd numina
 
 # 2. 配置环境变量
@@ -284,6 +285,17 @@ docker-compose restart backend
 - [x] 购买 vs 租赁对比计算器（盈亏平衡点计算、推荐结论）
 - [x] 消费等价换算（日均成本、时间成本、机会成本三维度）
 
+### ✅ Phase 2.5：AI 助理与家庭财务教练（已完成）
+
+- [x] AI 对话助理（统一 `stream_run` 调度，DeerFlow/LangChain 多 Provider 支持，家庭级技能与沙箱隔离）
+- [x] 财务教练卡片（FinanceCoachCard，结合资产/负债上下文给出个性化建议）
+- [x] 心愿建议卡片（WishAdviceCard，为心愿兑现提供储蓄计划与可行性分析）
+- [x] 资产报告生成（asset-report 技能，三步式报告管线，支持图片/PDF 导出）
+- [x] PDF 资产导入（import-parse 技能，支持文本型与扫描件 PDF，视觉多模态识别）
+- [x] 教育激励联动（家务完成可发放教育奖励，专项支出统计，家长审批门控）
+- [x] 区间收益率（近 1 月/3 月/6 月/1 年预设区间，资产估值历史对比）
+- [x] 债务预警联动（家庭级债务阈值配置与超标提醒）
+
 ### 🔮 Phase 3：资产时光机（未来）
 
 - [ ] 模拟不同消费选择的长远差异（what-if 分析）
@@ -299,8 +311,10 @@ docker-compose restart backend
 
 ### 📤 Phase 5：数据导入导出（未来）
 
+- [x] PDF 资产导入（import-parse，已支持文本型 + 扫描件视觉识别）
+- [x] 资产报告 PDF/图片导出（asset-report，已支持）
 - [ ] CSV/Excel 批量导入
-- [ ] 月度/年度财务报告 PDF 生成
+- [ ] 月度/年度财务报告自动生成
 
 ## 🤝 贡献指南
 
@@ -327,7 +341,7 @@ docker-compose restart backend
 
 如有问题或建议，欢迎通过以下方式联系：
 
-- 提交 Issue: [GitHub Issues](https://github.com/yourusername/numina/issues)
+- 提交 Issue: [GitHub Issues](https://github.com/vincentruan/numina/issues)
 - 邮箱: your.email@example.com
 
 ---

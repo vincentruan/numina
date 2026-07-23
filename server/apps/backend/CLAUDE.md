@@ -83,7 +83,7 @@ Serializing as strings preserves exact values across the API boundary.
 
 ```
 app/
-├── main.py            # FastAPI entry point + router registration (~52 routers)
+├── main.py            # FastAPI entry point + router registration (53 routers)
 ├── config.py          # AppSettings (pydantic-settings)
 ├── database.py        # SessionLocal binding + dependency
 ├── error_handlers.py  # Global exception handlers (HTTPException → JSON envelope)
