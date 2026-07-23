@@ -3,7 +3,11 @@
     <div
       class="liability-card"
       :class="{ 'is-selected': selected, 'select-mode': selectMode }"
+      role="button"
+      tabindex="0"
       @click="handleClick"
+      @keydown.enter="handleClick"
+      @keydown.space.prevent="handleClick"
       @touchstart="onTouchStart"
       @touchend="onTouchEnd"
       @touchmove="onTouchMove"
@@ -41,7 +45,7 @@
         <div class="details-grid">
           <div class="detail-item">
             <span class="detail-label">{{ t('liabilityCard.monthlyPayment') }}</span>
-            <span class="detail-value">{{ formatAmountDisplay(liability.monthly_payment) }}</span>
+            <span class="detail-value">{{ liability.monthly_payment ? formatAmountDisplay(liability.monthly_payment) : '—' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">{{ t('liabilityCard.annualRate') }}</span>
@@ -116,16 +120,18 @@ const categoryIcon = computed(() => categoryMap.value[props.liability.category]?
 const categoryColor = computed(() => categoryMap.value[props.liability.category]?.color || '#64748b')
 
 const repaidPercent = computed(() => {
-  const { original_amount, remaining_amount } = props.liability
-  if (!original_amount) return 0
-  return Math.round(((original_amount - remaining_amount) / original_amount) * 100)
+  const orig = Number(props.liability.original_amount)
+  const remaining = Number(props.liability.remaining_amount)
+  if (!orig) return 0
+  return Math.round(((orig - remaining) / orig) * 100)
 })
 
-function formatAmountDisplay(amount: number): string {
-  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + t('common.unitHundredMillion')
-  if (amount >= 10000) return (amount / 10000).toFixed(1) + t('common.unitTenThousand')
-  if (amount >= 1000) return (amount / 1000).toFixed(1) + t('common.unitThousand')
-  return amount.toLocaleString('zh-CN')
+function formatAmountDisplay(amount: number | string): string {
+  const n = Number(amount)
+  if (n >= 100000000) return (n / 100000000).toFixed(2) + t('common.unitHundredMillion')
+  if (n >= 10000) return (n / 10000).toFixed(1) + t('common.unitTenThousand')
+  if (n >= 1000) return (n / 1000).toFixed(1) + t('common.unitThousand')
+  return n.toLocaleString('zh-CN')
 }
 
 // Long-press detection
@@ -257,6 +263,7 @@ function handleClick() {
 }
 
 .card-icon {
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 12px;
@@ -265,17 +272,52 @@ function handleClick() {
   justify-content: center;
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
 }
 
 [data-theme='dark'] .card-icon {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.card-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  animation: icon-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
 .icon-svg {
+  position: relative;
+  z-index: 1;
   width: 24px;
   height: 24px;
   fill: white;
   color: white;
+}
+
+@keyframes icon-shimmer {
+  0% {
+    transform: translateX(-150%);
+  }
+  60%,
+  100% {
+    transform: translateX(150%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-icon::before {
+    animation: none;
+    display: none;
+  }
 }
 
 .card-header-text {

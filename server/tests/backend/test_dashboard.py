@@ -29,6 +29,7 @@ def setup_test_data(client, auth_headers):
         "asset_type": "financial",
         "purchase_price": 200000,
         "current_value": 225000,
+        "purchase_date": "2023-01-01",
         "institution": "天天基金"
     })
 
@@ -62,6 +63,7 @@ def test_dashboard_overview(client, auth_headers, setup_test_data):
     assert "total_liabilities" in data
     assert "net_worth" in data
     assert "asset_count" in data
+    assert "month_over_month_change_amount" in data
 
     # total_assets = 3500000 + 225000 + 3000 = 3728000
     assert data["total_assets"] == 3728000
@@ -145,19 +147,24 @@ def test_dashboard_low_usage_assets(client, auth_headers, setup_test_data):
 
 
 def test_dashboard_investment_returns(client, auth_headers, setup_test_data):
-    """Test investment returns endpoint"""
+    """Test investment returns endpoint (D8 annualized return rate)"""
+    from datetime import date
+
     response = client.get("/api/v1/dashboard/investment-returns", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()["data"]
 
-    # Should only have financial assets
+    # Should only have financial assets with a valid annualized rate
     assert len(data) == 1
     assert data[0]["name"] == "基金"
     assert "return_rate" in data[0]
     assert "profit" in data[0]
-    # return_rate = (225000 - 200000) / 200000 * 100 = 12.5
-    assert abs(data[0]["return_rate"] - 12.5) < 0.1
+    # profit is currency-converted total (CNY here) = 225000 - 200000
     assert data[0]["profit"] == 25000
+    # D8: return_rate is now annualized: (25000/200000) * (365/holding_days) * 100
+    holding_days = (date.today() - date(2023, 1, 1)).days
+    expected = (25000 / 200000) * (365 / holding_days) * 100
+    assert abs(data[0]["return_rate"] - round(expected, 2)) < 0.1
 
 
 def test_dashboard_new_assets_default_period(client, auth_headers, setup_test_data):
@@ -572,6 +579,89 @@ def test_dashboard_home_assets_paginated_invalid_status(client, auth_headers):
     assert response.status_code == 400
 
 
+def test_dashboard_home_assets_paginated_search(client, auth_headers, setup_test_data):
+    """Search filter narrows paginated home assets by name (case-insensitive substring)"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?search=基金", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "基金"
+
+
+def test_dashboard_home_assets_paginated_search_no_match(client, auth_headers, setup_test_data):
+    """Search with no matching name returns empty page"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?search=不存在的资产", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["total"] == 0
+    assert data["items"] == []
+
+
+def test_dashboard_home_assets_paginated_asset_type(client, auth_headers, setup_test_data):
+    """asset_type filter returns only assets of that type"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?asset_type=financial", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["total"] == 1
+    assert all(item["asset_type"] == "financial" for item in data["items"])
+    assert data["items"][0]["name"] == "基金"
+
+
+def test_dashboard_home_assets_paginated_sort_by_value(client, auth_headers, setup_test_data):
+    """sort_by=current_value orders assets by value; sort_order controls direction"""
+    # current_value serializes as a string (Numeric), so compare numerically via float()
+    desc = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=current_value&sort_order=desc",
+        headers=auth_headers,
+    )
+    assert desc.status_code == 200
+    desc_values = [float(item["current_value"]) for item in desc.json()["data"]["items"]]
+    assert desc_values == sorted(desc_values, reverse=True)
+
+    asc = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=current_value&sort_order=asc",
+        headers=auth_headers,
+    )
+    assert asc.status_code == 200
+    asc_values = [float(item["current_value"]) for item in asc.json()["data"]["items"]]
+    assert asc_values == sorted(asc_values)
+
+
+def test_dashboard_home_assets_paginated_sort_by_name(client, auth_headers, setup_test_data):
+    """sort_by=name is accepted and returns a stable ordered page"""
+    response = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=name&sort_order=asc",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    # All 3 in_use assets returned regardless of sort column validity
+    assert data["total"] == 3
+
+
+def test_dashboard_home_assets_paginated_invalid_sort_by_falls_back(client, auth_headers, setup_test_data):
+    """An unrecognized sort_by column falls back to default ordering (no 500, no injection)"""
+    response = client.get(
+        "/api/v1/dashboard/home-assets/in_use?sort_by=;DROP TABLE assets;--",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 3
+
+
+def test_dashboard_home_assets_paginated_invalid_asset_type_ignored(client, auth_headers, setup_test_data):
+    """An unrecognized asset_type is ignored (returns all types) rather than erroring"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?asset_type=bogus", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 3
+
+
 def test_dashboard_expiring_soon(client, auth_headers, setup_test_data):
     """Expiring soon returns assets approaching end of lifespan"""
     response = client.get("/api/v1/dashboard/expiring-soon", headers=auth_headers)
@@ -670,3 +760,216 @@ def test_dashboard_daily_cost_ranking_limit_bounds(client, auth_headers):
     # limit=101 should fail
     response = client.get("/api/v1/dashboard/daily-cost-ranking?limit=101", headers=auth_headers)
     assert response.status_code == 422
+
+
+def test_compute_annualized_return_holding_days():
+    """D8 KTD-4: compute_annualized_return annualizes by holding days."""
+    from datetime import date, timedelta
+
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.services.asset import compute_annualized_return
+
+    # Exactly 365 days holding → annualized == total ratio (12.5%)
+    asset = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today() - timedelta(days=365),
+    )
+    assert compute_annualized_return(asset) == 12.5
+
+    # 730 days holding (2x years) → annualized == total ratio / 2 (6.25%)
+    asset_long = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today() - timedelta(days=730),
+    )
+    assert compute_annualized_return(asset_long) == 6.25
+
+
+def test_compute_annualized_return_none_cases():
+    """D8 KTD-4: returns None when purchase_date missing, holding_days<=0, or no price."""
+    from datetime import date, timedelta
+
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.services.asset import compute_annualized_return
+
+    # Missing purchase_date → None
+    a_no_date = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=None,
+    )
+    assert compute_annualized_return(a_no_date) is None
+
+    # holding_days == 0 (purchased today) → None
+    a_today = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today(),
+    )
+    assert compute_annualized_return(a_today) is None
+
+    # holding_days < 0 (future date) → None
+    a_future = Asset(
+        asset_type="financial",
+        purchase_price=200000.0,
+        current_value=225000.0,
+        purchase_date=date.today() + timedelta(days=10),
+    )
+    assert compute_annualized_return(a_future) is None
+
+    # No purchase_price → None
+    a_no_price = Asset(
+        asset_type="financial",
+        purchase_price=None,
+        current_value=225000.0,
+        purchase_date=date.today() - timedelta(days=365),
+    )
+    assert compute_annualized_return(a_no_price) is None
+
+
+def test_insights_investment_returns_field(client, auth_headers, setup_test_data):
+    """D8 KTD-5: insights response includes investment_returns summary."""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert "investment_returns" in data
+    inv = data["investment_returns"]
+    assert inv is not None
+    assert "annualized_rate" in inv
+    assert "asset_count" in inv
+    assert "description" in inv
+    # Fixture has 1 financial asset (基金) with a valid purchase_date → count 1, rate present
+    assert inv["asset_count"] == 1
+    assert inv["annualized_rate"] is not None
+
+
+def test_insights_investment_returns_empty(client, auth_headers):
+    """D8 KTD-5: no financial assets → asset_count 0 and annualized_rate None."""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    inv = response.json()["data"]["investment_returns"]
+    assert inv is not None
+    assert inv["asset_count"] == 0
+    assert inv["annualized_rate"] is None
+
+
+# ---------------------------------------------------------------------------
+# B1 教育奖励支出专项统计（方案 B）：GET /dashboard/education-reward-summary
+# ---------------------------------------------------------------------------
+
+
+def _current_user(db):
+    """Return the User registered by the auth_headers fixture (username 'testuser')."""
+    from apps.backend.app.models.user import User
+
+    return db.query(User).filter(User.username == "testuser").one()
+
+
+def _add_education_reward(db, *, family_id, user_id, amount, created_at=None, type="education_reward"):
+    """Insert an Activity row directly (mirrors B1 education-linkage write shape)."""
+    from apps.backend.app.models.activity import Activity
+    from apps.backend.app.utils.snowflake import next_id
+
+    activity = Activity(
+        id=next_id(),
+        family_id=family_id,
+        user_id=user_id,
+        type=type,
+        entity_type="chore",
+        entity_id=next_id(),
+        title="教育奖励金",
+        amount=amount,
+    )
+    if created_at is not None:
+        activity.created_at = created_at
+    db.add(activity)
+    db.commit()
+    return activity
+
+
+def test_education_reward_summary_empty(client, db, auth_headers):
+    """无 education_reward 记录 → 全 0，不报错（KTD-2）。"""
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data == {"total": 0, "month_total": 0, "count": 0}
+
+
+def test_education_reward_summary_total_month_count(client, db, auth_headers):
+    """2 笔 education_reward（1 本月 + 1 上月）→ total=两笔和、month_total=本月笔、count=2。"""
+    from datetime import date, datetime
+
+    user = _current_user(db)
+    today = date.today()
+
+    # 本月一笔（默认 created_at = now）
+    _add_education_reward(db, family_id=user.family_id, user_id=user.id, amount=20.0)
+    # 上月一笔（显式 created_at = 上月 1 号，避免跨月边界）
+    if today.month == 1:
+        last_month = datetime(today.year - 1, 12, 1)
+    else:
+        last_month = datetime(today.year, today.month - 1, 1)
+    _add_education_reward(
+        db, family_id=user.family_id, user_id=user.id, amount=30.0, created_at=last_month
+    )
+
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 50.0
+    assert data["month_total"] == 20.0
+    assert data["count"] == 2
+
+
+def test_education_reward_summary_ignores_other_types(client, db, auth_headers):
+    """其他 type 的 Activity 不计入统计。"""
+    user = _current_user(db)
+    _add_education_reward(db, family_id=user.family_id, user_id=user.id, amount=20.0)
+    _add_education_reward(
+        db, family_id=user.family_id, user_id=user.id, amount=999.0, type="create"
+    )
+
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 20.0
+    assert data["month_total"] == 20.0
+    assert data["count"] == 1
+
+
+def test_education_reward_summary_family_isolation(client, db, auth_headers):
+    """他 family 的 education_reward 不计入当前 family 的统计。"""
+    from apps.backend.app.models.family import Family
+    from apps.backend.app.models.user import User
+    from apps.backend.app.utils.snowflake import next_id
+
+    user = _current_user(db)
+    _add_education_reward(db, family_id=user.family_id, user_id=user.id, amount=20.0)
+
+    # 另一个 family + user，写一笔 education_reward
+    other_family = Family(id=next_id(), name="Other Family", created_by=next_id())
+    db.add(other_family)
+    db.commit()
+    other_user = User(
+        id=next_id(),
+        username="other_family_user",
+        display_name="Other User",
+        password_hash="test_hash",
+        family_id=other_family.id,
+    )
+    db.add(other_user)
+    db.commit()
+    _add_education_reward(db, family_id=other_family.id, user_id=other_user.id, amount=888.0)
+
+    response = client.get("/api/v1/dashboard/education-reward-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 20.0
+    assert data["month_total"] == 20.0
+    assert data["count"] == 1

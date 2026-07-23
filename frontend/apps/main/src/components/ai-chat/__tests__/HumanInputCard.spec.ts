@@ -122,7 +122,7 @@ describe('HumanInputCard', () => {
 
       const emitted = wrapper.emitted('submit')
       expect(emitted).toHaveLength(1)
-      const answer = JSON.parse(emitted![0][0])
+      const answer = JSON.parse(emitted![0][0] as string)
       expect(answer).toEqual(['red', 'green'])
     })
   })

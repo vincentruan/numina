@@ -16,9 +16,14 @@ const CURRENCY_LOCALES: Record<string, string> = {
   HKD: 'zh-HK',
 }
 
-export function formatCurrency(amount: number, currency = 'CNY'): string {
-  const absAmount = Math.abs(amount)
-  const sign = amount < 0 ? '-' : ''
+// Money arrives as a numeric string on the wire (money-as-str: Decimal in compute,
+// str on the wire; JS double loses precision >2^53). Accept both and coerce once here
+// so callers can pass wire values directly. Number() coercion is runtime-benign for
+// numeric strings ("100.00" -> 100).
+export function formatCurrency(amount: number | string, currency = 'CNY'): string {
+  const n = Number(amount) || 0
+  const absAmount = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
   const symbol = CURRENCY_SYMBOLS[currency] || currency
   const locale = CURRENCY_LOCALES[currency] || 'zh-CN'
 

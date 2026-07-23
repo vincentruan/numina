@@ -84,6 +84,7 @@ const fixture: InsightsResponse = {
     total_profit_loss: 0,
     top_items: [],
   },
+  investment_returns: null,
 }
 
 const stubs = {

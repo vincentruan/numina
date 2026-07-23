@@ -27,6 +27,8 @@ tags:
 
 # MCP Chat Adapter Architecture — AI 问答、工程逻辑、Skill 能力分层设计
 
+> **Update note (2026-07-20):** The dispatch model described below (an `Orchestrator` branching `chat` vs skill `stream_dispatch`) was superseded by the two-AI-apps unified-dispatch refactor — the `Orchestrator` class is deleted; all AI apps now dispatch through `worker.run_agent(app)` reading `record.metadata["app"]`, and `chat` is once again a `chat/SKILL.md` skill (the "numina SOUL" merge). See [`two-ai-apps-unified-dispatch-stream-run.md`](./two-ai-apps-unified-dispatch-stream-run.md) for the current dispatch architecture. **The MCP / ChatAdapter engineering patterns in §一 and §二 below remain current and correct** — `ChatAdapter`, `MCPSession`, `mcp_internal.py`, `create_family_adapter`, and the `__slots__` tenant-isolation / per-call DB session / family-adapter-cache-key patterns all survived the refactor. Only the §三 dispatch framing and the "Orchestrator dispatch before/after" Examples are historical.
+
 ## Context
 
 Numina's AI chat originally relied on DeerFlow for all interactions, building a static context dump upfront via `_build_context()` and passing it to the LLM in a single prompt. This created tight coupling: the chat layer had no clean way to inject runtime family data (assets, liabilities, members) without either embedding everything upfront or building fragile workarounds.
@@ -176,7 +178,9 @@ cache_key = (family_id, config_id, subagent_enabled, plan_mode, mcp_hash)
 
 ### 三、Skill 能力 (Skill Capability)
 
-**Chat is a fixed capability, not a DeerFlow skill.** The `chat/SKILL.md` was deleted. DeerFlow skills are intent-routed, dispatched via `stream_dispatch`, and defined by `SKILL.md` files — used for structured tasks (asset analysis, report generation). Chat is a conversational capability with its own adapter:
+> **Historical (pre-unified-dispatch):** The dispatch dichotomy below (an `Orchestrator` branching `chat` via `ChatAdapter.stream()` vs skills via `stream_dispatch()`) was the architecture as of 2026-05. The two-AI-apps unified-dispatch refactor (2026-07) deleted the `Orchestrator` class entirely; all AI apps — including chat — now dispatch through `worker.run_agent(app)` reading `record.metadata["app"]`, and `chat` is a `chat/SKILL.md` skill again (the "numina SOUL" merge, U3). `ChatAdapter` and `DeerFlowAdapter.stream_dispatch` both survive as the per-app runners' delegation targets. See [`two-ai-apps-unified-dispatch-stream-run.md`](./two-ai-apps-unified-dispatch-stream-run.md). The original framing is retained below for historical context.
+
+**Chat is a fixed capability, not a DeerFlow skill.** ~~The `chat/SKILL.md` was deleted.~~ *(As of 2026-07, `chat/SKILL.md` exists again as the "numina SOUL" skill — U3 re-introduced it.)* DeerFlow skills are intent-routed, dispatched via `stream_dispatch`, and defined by `SKILL.md` files — used for structured tasks (asset analysis, report generation). Chat is a conversational capability with its own adapter:
 
 | Dimension | DeerFlow Skill | Fixed Capability (Chat) |
 |-----------|---------------|------------------------|
@@ -221,6 +225,8 @@ Prior session history shows DeerFlow's global config singleton is not thread-saf
 ## Examples
 
 **Orchestrator dispatch — before (chat treated as skill):**
+
+> **Historical:** the `self.stream_dispatch(capability, ...)` calls below lived on the now-deleted `Orchestrator` class. The unified-dispatch refactor replaced this branch with `worker.run_agent(app)`; see [`two-ai-apps-unified-dispatch-stream-run.md`](./two-ai-apps-unified-dispatch-stream-run.md).
 
 ```python
 # All capabilities routed through skill dispatch
@@ -294,6 +300,7 @@ class MCPSession:
 
 ## Related
 
+- **[Two-AI-apps unified dispatch — stream_run + multi-app worker dispatch](./two-ai-apps-unified-dispatch-stream-run.md)** — the current (2026-07) dispatch architecture that supersedes the `Orchestrator`-branching model described here. The MCP/ChatAdapter engineering patterns in this doc survive; only the dispatch framing is historical.
 - [DeerFlow Adapter Stream Type Mismatch and Security Issues](../integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) — stream contract (`AsyncGenerator[str, None]`) and security fixes (path traversal, SSRF) that apply to any adapter layer
 - [DeerFlow Harness Silent Fallback and Concurrency Fixes](../integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) — prior orchestrator/adapter integration history; the ChatAdapter pattern supersedes the singleton-export workaround
 - [Extraction Failure Samples](../test-failures/2026-05-19-extraction-failure-samples.md) — establishes that `SkillConfig.prompt` is dead data and DeerFlow loads SKILL.md independently

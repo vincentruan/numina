@@ -1,5 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
-import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse } from '@/types'
+import type { AIReport, FinanceCoachResponse, FinanceSuggestion } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────
 
@@ -407,36 +407,6 @@ export interface AssetSuggestResult {
 export const suggestAssetFields = (data: AssetSuggestRequest) =>
   http.post<AssetSuggestResult>('/ai/suggest/asset', data)
 
-// Asset alerts
-export const getAssetAlerts = () =>
-  http.get<AssetAlert[]>('/ai/asset-alerts')
-
-
-export const dismissAssetAlert = (id: string) =>
-  http.post(`/ai/asset-alerts/${id}/dismiss`)
-
-// Disposal suggestions
-export const getDisposalSuggestions = () =>
-  http.get<DisposalSuggestion[]>('/ai/disposal-suggestions')
-
-
-export const dismissDisposalSuggestion = (id: string) =>
-  http.post(`/ai/disposal-suggestions/${id}/dismiss`)
-
-// Liability advice
-export const getLiabilityAdvice = () =>
-  http.get<LiabilityAdviceResponse>('/ai/liability-advice')
-
-// Allocation target & drift
-export const getAllocationTarget = () =>
-  http.get<{ has_target: boolean; category_targets?: Record<string, number>; drift_threshold?: number }>('/ai/allocation-target')
-
-export const setAllocationTarget = (data: { category_targets: Record<string, number>; drift_threshold: number }) =>
-  http.put('/ai/allocation-target', data)
-
-export const checkAllocationDrift = () =>
-  http.get<AllocationDriftResponse>('/ai/allocation-target/check')
-
 // P0-#3: Timeout wrapper for streaming fetch (matches backend 120s timeout)
 const STREAM_TIMEOUT_MS = 120000
 function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
@@ -699,3 +669,105 @@ export const aiCreateSkill = (description: string) =>
 
 export const saveRawSkill = (payload: RawSkillSavePayload) =>
   http.post<SkillDefinition>('/ai/skills/custom/raw', payload).then(res => res.data)
+
+// ── finance_coach (D2/A1a dashboard card, Plan B T5) ─────────────────────────
+//
+// The backend /ai/finance-coach/generate endpoint returns either:
+//   - cached JSON 200 (within 8h): { status: "cached", generated_at, report: { suggestions: [...] } }
+//   - a fresh SSE stream whose terminal finance_coach.result frame carries the
+//     same report shape.
+// Auth is cookie-based (withCredentials), like startAIStream — no Bearer header.
+// On 401 we refresh the cookie and retry once. On any other error we reject so
+// the card hides silently (spec §7.2 design-lens).
+export async function getFinanceCoach(force = false): Promise<FinanceCoachResponse> {
+  const doFetch = () =>
+    fetch(`/api/v1/ai/finance-coach/generate?force=${force}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+
+  let res = await doFetch()
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await doFetch()
+  }
+  if (!res.ok) throw new Error(`finance_coach ${res.status}`)
+
+  const ct = res.headers.get('content-type') || ''
+  if (ct.includes('application/json')) {
+    return (await res.json()) as FinanceCoachResponse
+  }
+
+  // Streaming response — consume SSE until the finance_coach.result frame.
+  // Frames look like: event: custom\ndata: {"type":"finance_coach.result","payload":{"suggestions":[...]}}\n\n
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('no stream body')
+  const decoder = new TextDecoder()
+  let buf = ''
+  let suggestions: FinanceSuggestion[] = []
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const frames = buf.split('\n\n')
+    buf = frames.pop() || ''
+    for (const frame of frames) {
+      const dataLine = frame.split('\n').find((l) => l.startsWith('data: '))
+      if (!dataLine) continue
+      try {
+        const data = JSON.parse(dataLine.slice(6))
+        if (data.type === 'finance_coach.result' && data.payload?.suggestions) {
+          suggestions = data.payload.suggestions
+        }
+      } catch {
+        /* ignore malformed frame */
+      }
+    }
+  }
+  return { status: 'streaming', report: { suggestions } }
+}
+
+// ── /ai/context (A1b greenfield chat prefill, Plan B T6) ─────────────────────
+//
+// Fetch the family-scoped entity context to inject as the first user turn.
+// Cookie auth (credentials:'include'), mirroring getFinanceCoach. The backend
+// wraps the response in the EnvelopeResponse ({code:"OK", data:{source,summary}}),
+// so unwrap .data here. signal allows the caller (useAiContext) to abort after 3s.
+export interface AiContextResponse {
+  source: string
+  summary: string
+}
+
+export async function getAiContext(
+  source: string,
+  id: string,
+  signal?: AbortSignal,
+): Promise<AiContextResponse> {
+  let res = await fetch(
+    `/api/v1/ai/context?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`,
+    { method: 'GET', credentials: 'include', signal },
+  )
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await fetch(
+      `/api/v1/ai/context?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`,
+      { method: 'GET', credentials: 'include', signal },
+    )
+  }
+  if (!res.ok) throw new Error(`ai/context ${res.status}`)
+  const body = (await res.json()) as { code?: string; data?: AiContextResponse } | AiContextResponse
+  // Unwrap the EnvelopeResponse if present (backend default_response_class).
+  if (body && typeof body === 'object' && 'data' in body && body.data) {
+    return body.data
+  }
+  return body as AiContextResponse
+}

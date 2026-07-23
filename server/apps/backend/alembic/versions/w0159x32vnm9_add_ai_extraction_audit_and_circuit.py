@@ -9,16 +9,16 @@ Adds:
 - ai_extraction_circuits table for per-(family, capability) circuit breaker state
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'w0159x32vnm9'
-down_revision: Union[str, None] = 'r9047s21tlm7'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'r9047s21tlm7'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -54,16 +54,14 @@ def upgrade() -> None:
         sa.Column('manually_reset_at', sa.DateTime(), nullable=True),
         sa.Column('reset_by_user_id', sa.BigInteger(), nullable=True),
         sa.Column('last_evaluated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint('family_id', 'capability', name='uq_extraction_circuit_family_capability'),
     )
-    op.create_unique_constraint(
-        'uq_extraction_circuit_family_capability',
-        'ai_extraction_circuits',
-        ['family_id', 'capability'],
-    )
+    # Note: uq_extraction_circuit_family_constraint declared inline above.
+    # SQLite does not support ALTER TABLE ADD CONSTRAINT, so a standalone
+    # op.create_unique_constraint would raise NotImplementedError on fresh DBs.
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_extraction_circuit_family_capability', 'ai_extraction_circuits', type_='unique')
     op.drop_table('ai_extraction_circuits')
     op.drop_index('ix_ai_extraction_audits_family_capability_time', table_name='ai_extraction_audits')
     op.drop_index('ix_ai_extraction_audits_capability', table_name='ai_extraction_audits')

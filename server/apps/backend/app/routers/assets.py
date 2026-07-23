@@ -74,7 +74,7 @@ def create_asset(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.create_asset(db, user, req)
-    record_activity(db, user, "create", "asset", asset.id, f"添加资产「{asset.name}」", asset.purchase_price)
+    record_activity(db, user, "create", "asset", asset.id, f"添加资产「{asset.name}」", float(asset.purchase_price) if asset.purchase_price is not None else None)
     return _to_response(asset, db)
 
 
@@ -128,7 +128,7 @@ def sell_asset(
     user: User = Depends(require_adult),
 ):
     result = asset_service.sell_asset(db, user, asset_id, req)
-    record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result['name']}」", req.sell_price)
+    record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result['name']}」", float(req.sell_price))
     return result
 
 

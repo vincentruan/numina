@@ -105,7 +105,7 @@ const showSheet = ref(false)
 const showTypePicker = ref(false)
 const editingChannel = ref<NotificationChannelResponse | null>(null)
 
-const reminderTypes = ['large_purchase', 'allocation_drift', 'expiring_soon', 'maturity']
+const reminderTypes = ['large_purchase', 'expiring_soon', 'maturity']
 
 const typePickerColumns = computed(() => [
   { text: t('reminders.channelType.telegram'), value: 'telegram' },

@@ -26,6 +26,10 @@ def test_parse_returns_preview(client, auth_headers, db):
     ), patch(
         "apps.backend.app.routers.import_report._extract_pdf_text",
         return_value="贵州茅台 100股",
+    ), patch(
+        # C 方案：纯文本路径测试，mock 为非图片型 PDF（跳过 vision 渲染分流）
+        "apps.backend.app.routers.import_report._is_image_based_pdf",
+        return_value=False,
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
@@ -60,6 +64,10 @@ def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
     ), patch(
         "apps.backend.app.routers.import_report._extract_pdf_text",
         return_value="这不是金融文档",
+    ), patch(
+        # C 方案：纯文本路径测试，mock 为非图片型 PDF
+        "apps.backend.app.routers.import_report._is_image_based_pdf",
+        return_value=False,
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
@@ -67,6 +75,80 @@ def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
             headers=auth_headers,
         )
     assert resp.status_code == 422
+
+
+def test_parse_image_based_pdf_passes_thread_id_and_image_paths(client, auth_headers):
+    """C 方案（vision）：图片型 PDF → 渲染页图 → 传 thread_id + image_paths 给 agent。
+
+    验证 backend 把 vision 路径所需的契约传给 agent：thread_id（让 agent 用
+    同一沙箱，PNG 已落 uploads/）+ image_paths（容器虚拟路径列表）。
+    """
+    mock_agent_resp = {"source": "", "report_date": None, "items": []}
+    captured: dict = {}
+
+    async def _capture_call(text, family_id, thread_id=None, image_paths=None):
+        captured["text"] = text
+        captured["thread_id"] = thread_id
+        captured["image_paths"] = image_paths
+        return mock_agent_resp
+
+    with patch(
+        "apps.backend.app.routers.import_report._call_agent_parse",
+        new=AsyncMock(side_effect=_capture_call),
+    ), patch(
+        "apps.backend.app.routers.import_report._extract_pdf_text",
+        return_value="",  # 图片型 PDF 文本通常为空
+    ), patch(
+        "apps.backend.app.routers.import_report._is_image_based_pdf",
+        return_value=True,
+    ), patch(
+        "apps.backend.app.routers.import_report._render_pdf_pages_to_sandbox",
+        return_value=["/mnt/user-data/uploads/page_1.png", "/mnt/user-data/uploads/page_2.png"],
+    ):
+        resp = client.post(
+            "/api/v1/import/parse-pdf",
+            files={"file": ("scan.pdf", b"fake-pdf", "application/pdf")},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 422  # agent 返空 items → 422（与纯文本空结果一致）
+    # thread_id + image_paths 必须传给 agent
+    assert captured["thread_id"] is not None
+    assert captured["thread_id"].startswith("importparse-thread-")
+    assert captured["image_paths"] == [
+        "/mnt/user-data/uploads/page_1.png",
+        "/mnt/user-data/uploads/page_2.png",
+    ]
+
+
+def test_parse_text_pdf_does_not_pass_image_paths(client, auth_headers):
+    """C 方案：文本型 PDF 走纯文本路径，不传 thread_id/image_paths（向后兼容）。"""
+    mock_agent_resp = {"source": "", "report_date": None, "items": []}
+    captured: dict = {}
+
+    async def _capture_call(text, family_id, thread_id=None, image_paths=None):
+        captured["thread_id"] = thread_id
+        captured["image_paths"] = image_paths
+        return mock_agent_resp
+
+    with patch(
+        "apps.backend.app.routers.import_report._call_agent_parse",
+        new=AsyncMock(side_effect=_capture_call),
+    ), patch(
+        "apps.backend.app.routers.import_report._extract_pdf_text",
+        return_value="贵州茅台 100股 市值158000",
+    ), patch(
+        "apps.backend.app.routers.import_report._is_image_based_pdf",
+        return_value=False,
+    ):
+        resp = client.post(
+            "/api/v1/import/parse-pdf",
+            files={"file": ("text.pdf", b"fake-pdf", "application/pdf")},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 422
+    # 纯文本路径不传 vision 契约
+    assert captured["thread_id"] is None
+    assert captured["image_paths"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse } from '@/types'
+import type { Asset, AssetFilter, AssetMoneyField, AssetRequestPayload, AssetSellRequest, AssetSellResponse } from '@/types'
+import { ASSET_MONEY_FIELDS } from '@/types'
 import * as assetApi from '@/api/assets'
 import { useDashboardStore } from '@/stores/dashboard'
 import { nanoid } from 'nanoid'
@@ -60,7 +61,7 @@ export const useAssetStore = defineStore('asset', () => {
     }
   }
 
-  function createAsset(data: Partial<Asset>): Promise<Asset> {
+  function createAsset(data: AssetRequestPayload): Promise<Asset> {
     // 1. Generate dedup key from input data (for create operations)
     // Use serialized form data as key to dedupe rapid double-clicks
     const dedupKey = `create:${JSON.stringify({
@@ -80,15 +81,34 @@ export const useAssetStore = defineStore('asset', () => {
     // 3. Generate temp ID for the optimistic asset
     const tempId = generateTempId()
 
-    // 4. Build temp asset object with form data + tempId + placeholder fields
+    // 4. Build temp asset object with form data + tempId + placeholder fields.
+    // Money fields are driven from the ASSET_MONEY_FIELDS SSOT (same source the update
+    // path uses) so adding/renaming a money field stays a one-line change in types/.
+    // `data` is a request payload: present money field → coerce to str; omitted required
+    // money field (purchase_price/current_value) → '0' placeholder; omitted optional → undefined.
     // Use undefined instead of null to match Asset type
+    // Required money fields default to '0' on create; the rest stay undefined when omitted
+    // (e.g. sell_price/sell_fee — a new asset is unsold).
+    const REQUIRED_MONEY_ON_CREATE: AssetMoneyField[] = ['purchase_price', 'current_value']
+    const moneyFields = {} as Pick<Asset, AssetMoneyField>
+    for (const k of ASSET_MONEY_FIELDS) {
+      const v = data[k]
+      if (v != null) {
+        moneyFields[k] = String(v)
+      } else if (REQUIRED_MONEY_ON_CREATE.includes(k)) {
+        moneyFields[k] = '0'
+      } else {
+        // Optional money field omitted on create — leave unset (undefined), valid for
+        // the optional Asset money fields (sell_price/sell_fee/target_daily_cost/...).
+        delete moneyFields[k]
+      }
+    }
     const tempAsset: Asset = {
       id: tempId,
       name: data.name || '',
       category_id: data.category_id || '',
       asset_type: data.asset_type || 'physical',
-      purchase_price: data.purchase_price || 0,
-      current_value: data.current_value || 0,
+      ...moneyFields,
       currency: data.currency || 'CNY',
       purchase_date: data.purchase_date || '',
       status: 'in_use',
@@ -97,11 +117,9 @@ export const useAssetStore = defineStore('asset', () => {
       interest_rate: data.interest_rate,
       maturity_date: data.maturity_date,
       expected_lifespan_days: data.expected_lifespan_days,
-      annual_maintenance_cost: data.annual_maintenance_cost,
       usage_frequency: data.usage_frequency,
       properties: data.properties,
       notes: data.notes,
-      target_daily_cost: data.target_daily_cost,
       image_url: data.image_url,
       tags: data.tags || [],
       // Placeholder fields (server-only)
@@ -186,7 +204,7 @@ export const useAssetStore = defineStore('asset', () => {
     return operationPromise
   }
 
-  function updateAsset(id: string, data: Partial<Asset>): Promise<Asset> {
+  function updateAsset(id: string, data: AssetRequestPayload): Promise<Asset> {
     // 1. Check for existing pending operation (dedup)
     const dedupKey = `update:${id}`
     const existingOp = _pendingUpdateOperations.get(dedupKey)
@@ -204,11 +222,29 @@ export const useAssetStore = defineStore('asset', () => {
     // 3. Snapshot original asset (deep copy for rollback)
     const originalAsset = JSON.parse(JSON.stringify(assets.value[idx])) as Asset
 
-    // 4. Build updated asset (optimistic)
+    // 4. Build updated asset (optimistic). `data` is a request payload: its money
+    // fields are numbers and it carries tag_ids, neither of which belongs on the
+    // Asset wire shape (money-as-str). Spread only the scalar (non-money, non-tag)
+    // fields, then set each money field from ASSET_MONEY_FIELDS: present (≠ undefined)
+    // → coerce back to str; omitted → keep the existing asset's value.
+    const { tag_ids: _tagIds, ...rest } = data
+    // Strip the number-typed money keys so the spread is Asset-shaped; the loop below
+    // is the sole writer of money fields. The cast is a truthful narrowing: after the
+    // deletes, only scalar (non-money) fields remain.
+    const scalarData = { ...rest }
+    for (const k of ASSET_MONEY_FIELDS) {
+      delete scalarData[k]
+    }
+    const scalar = scalarData as Omit<Partial<Asset>, AssetMoneyField>
+    const toStr = (v: number | null | undefined): string | null => (v != null ? String(v) : null)
     const updatedAsset: Asset = {
       ...assets.value[idx],
-      ...data,
+      ...scalar,
       updated_at: new Date().toISOString(),
+    }
+    for (const k of ASSET_MONEY_FIELDS) {
+      const v = data[k]
+      updatedAsset[k] = v !== undefined ? toStr(v) : (assets.value[idx][k] ?? null)
     }
 
     // 5. Apply optimistic update

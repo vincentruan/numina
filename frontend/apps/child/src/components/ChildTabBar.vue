@@ -2,23 +2,23 @@
   <div class="tab-bar-wrapper">
     <van-tabbar v-model="activeTab" @change="onTabChange">
       <van-tabbar-item name="home">
-        <template #icon><span class="tab-icon">🏠</span></template>
+        <template #icon><van-icon name="wap-home-o" size="22" /></template>
         {{ t('nav.home') }}
       </van-tabbar-item>
       <van-tabbar-item name="wishes">
-        <template #icon><span class="tab-icon">🌟</span></template>
+        <template #icon><van-icon name="star-o" size="22" /></template>
         {{ t('nav.wishes') }}
       </van-tabbar-item>
       <van-tabbar-item name="tasks">
-        <template #icon><span class="tab-icon">📋</span></template>
+        <template #icon><van-icon name="todo-list-o" size="22" /></template>
         {{ t('nav.tasks') }}
       </van-tabbar-item>
       <van-tabbar-item name="treasures">
-        <template #icon><span class="tab-icon">🏆</span></template>
+        <template #icon><van-icon name="medal-o" size="22" /></template>
         {{ t('nav.treasures') }}
       </van-tabbar-item>
       <van-tabbar-item name="ledger">
-        <template #icon><span class="tab-icon">💰</span></template>
+        <template #icon><van-icon name="balance-list-o" size="22" /></template>
         {{ t('nav.ledger') }}
       </van-tabbar-item>
     </van-tabbar>
@@ -68,10 +68,5 @@ function onTabChange(name: string) {
 <style scoped>
 .tab-bar-wrapper {
   position: relative;
-}
-
-.tab-icon {
-  font-size: 20px;
-  line-height: 1;
 }
 </style>

@@ -77,6 +77,40 @@ async def test_search_threads_surfaces_original_title_in_metadata():
         assert len(result) == 1
         assert result[0].metadata["original_title"] == "家庭资产总览"
         assert result[0].metadata["title"] == "我的重命名"
+        # U3: non-branch session surfaces is_branch=False, parent_thread_id=None
+        assert result[0].metadata["is_branch"] is False
+        assert result[0].metadata["parent_thread_id"] is None
+
+
+async def test_search_threads_surfaces_branch_lineage_in_metadata():
+    """U3: a branch session (source=='branch') surfaces is_branch + parent_thread_id."""
+    with patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo:
+        repo = MockRepo.return_value
+        repo.list_sessions = AsyncMock(
+            return_value=(
+                [
+                    {
+                        "session_id": "branch-1",
+                        "title": "分支: 原始",
+                        "original_title": "原始",
+                        "is_pinned": False,
+                        "source": "branch",
+                        "parent_thread_id": "parent-1",
+                        "status": "idle",
+                        "created_at": "2026-07-17T00:00:00Z",
+                        "updated_at": "2026-07-17T00:00:00Z",
+                    }
+                ],
+                1,
+            )
+        )
+
+        result = await search_threads(
+            ThreadSearchRequest(limit=20, offset=0), "family-1", verified=_verified()
+        )
+
+        assert result[0].metadata["is_branch"] is True
+        assert result[0].metadata["parent_thread_id"] == "parent-1"
 
 
 async def test_get_thread_surfaces_original_title_in_metadata():
@@ -106,6 +140,36 @@ async def test_get_thread_surfaces_original_title_in_metadata():
         assert result.metadata["original_title"] == "自动生成标题"
         assert result.metadata["title"] == "自定义标题"
         assert result.metadata["is_pinned"] is True
+
+
+async def test_get_thread_surfaces_branch_lineage_in_metadata():
+    """U3: get_thread must merge is_branch + parent_thread_id from the session record."""
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+    ):
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(
+            return_value={
+                "session_id": "branch-1",
+                "title": "分支: 原始",
+                "original_title": "原始",
+                "is_pinned": False,
+                "source": "branch",
+                "parent_thread_id": "parent-1",
+                "status": "idle",
+                "created_at": "2026-07-17T00:00:00Z",
+                "updated_at": "2026-07-17T00:00:00Z",
+                "metadata": {},
+            }
+        )
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=None)
+
+        result = await get_thread("branch-1", "family-1", verified=_verified())
+
+        assert result.metadata["is_branch"] is True
+        assert result.metadata["parent_thread_id"] == "parent-1"
 
 
 async def test_get_thread_state_404_when_no_checkpoint_and_no_session():

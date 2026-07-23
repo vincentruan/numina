@@ -71,22 +71,29 @@ def apply_sync_tool_patches() -> None:
     # ``return`` statement runs tools through ``_ensure_sync_invocable_tool``;
     # the older code only wraps ``loaded_tools`` (line ~44) but leaves
     # ``SUBAGENT_TOOLS`` (``task``) and other builtins unwrapped.
+    #
+    # IMPORTANT: Even when the upstream fix is present, we MUST still patch
+    # get_available_tools to replace DeerFlow's placeholder ask_clarification
+    # with Numina's interrupt-based version. The upstream fix only handles
+    # sync wrapping — it does NOT know about our interrupt mechanism.
+    upstream_fix_present = False
     try:
         source = inspect.getsource(_orig_get_available_tools)
         return_section = source.rsplit("return", 1)[-1]
         if "_ensure_sync_invocable_tool" in return_section:
-            logger.debug("[sync_tool_patch] upstream fix already present; skipping get_available_tools patch")
-            _patched = True
-            _apply_contextvar_propagation_patch()
-            _apply_mcp_proxy_bypass_patch()
-            return
+            upstream_fix_present = True
+            logger.debug("[sync_tool_patch] upstream sync-wrap fix detected; will still patch for interrupt tools")
     except Exception:
         pass
 
     def _patched_get_available_tools(*args, **kwargs):
         tools = _orig_get_available_tools(*args, **kwargs)
-        for t in tools:
-            _ensure_sync_invocable_tool(t)
+
+        # When the upstream fix is present, tools are already sync-wrapped.
+        # When it's absent, we must wrap them ourselves.
+        if not upstream_fix_present:
+            for t in tools:
+                _ensure_sync_invocable_tool(t)
 
         # Remove DeerFlow's placeholder ask_clarification before adding our interrupt tool.
         # DeerFlow's builtin returns a static string and does NOT call interrupt(),
@@ -96,8 +103,25 @@ def apply_sync_tool_patches() -> None:
         # Add interrupt tools
         interrupt_tools = get_interrupt_tools()
         for t in interrupt_tools:
-            _ensure_sync_invocable_tool(t)
+            if not upstream_fix_present:
+                _ensure_sync_invocable_tool(t)
         tools.extend(interrupt_tools)
+
+        # Note: describe_skill is NOT injected here. DeerFlow registers its native
+        # describe_skill tool (deerflow.skills.describe.build_describe_skill_tool)
+        # only when skills.deferred_discovery=True (lead_agent/agent.py:540-566).
+        # With deferred_discovery=False (Numina default), the full skill metadata is
+        # inlined into the system prompt's <available_skills> and the LLM loads the
+        # full SKILL.md directly via read_file — describe_skill is unneeded.
+
+        # Restrict tools to the active skill's declared allowed-tools whitelist.
+        # Numina's worker pre-selects one skill per chat run (chat / chat-search)
+        # and sets it via active_skill_context. DeerFlow's native
+        # SkillToolPolicyMiddleware is passive (no slash activation, no
+        # skill_context load) in our flow, so we filter here using the pure
+        # filter_tools_by_skill_allowed_tools function. Skills without an
+        # allowed-tools declaration (None) → allow-all (no filtering).
+        tools = _apply_active_skill_tool_filter(tools)
 
         return tools
 
@@ -120,6 +144,59 @@ def apply_sync_tool_patches() -> None:
     _patched = True
     _apply_contextvar_propagation_patch()
     _apply_mcp_proxy_bypass_patch()
+
+
+def _apply_active_skill_tool_filter(tools):
+    """Filter tools to the active skill's allowed-tools whitelist.
+
+    Called from the patched ``get_available_tools``. No active skill (e.g.
+    trigger-based feature dispatch, which loads tools via ``enable_tools``) →
+    return tools unchanged (legacy allow-all). Active skill with no
+    allowed-tools declaration (``allowed_tools is None``) → the filter returns
+    all tools (``allowed_tool_names_for_skills`` returns None for undeclared
+    skills, meaning allow-all). Only skills that declare ``allowed-tools`` (even
+    ``[]``) restrict the tool set.
+    """
+    try:
+        from apps.agent.services.deerflow_adapter.active_skill_context import (
+            get_active_skill,
+        )
+        active_skill_name = get_active_skill()
+    except Exception:
+        return tools
+    if not active_skill_name:
+        return tools
+    try:
+        from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
+        from deerflow.skills.tool_policy import (
+            ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
+            filter_tools_by_skill_allowed_tools,
+        )
+        storage = LocalSkillStorage()
+        all_skills = storage.load_skills(enabled_only=True)
+        active_skills = [s for s in all_skills if s.name == active_skill_name]
+        if not active_skills:
+            logger.warning(
+                "[sync_tool_patch] active skill %r not found in skill storage; skipping tool filter",
+                active_skill_name,
+            )
+            return tools
+        filtered = filter_tools_by_skill_allowed_tools(
+            tools,
+            active_skills,
+            always_allowed_tool_names=ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
+        )
+        if len(filtered) < len(tools):
+            logger.debug(
+                "[sync_tool_patch] filtered tools %d -> %d for active skill %r",
+                len(tools), len(filtered), active_skill_name,
+            )
+        return filtered
+    except Exception as e:
+        logger.warning(
+            "[sync_tool_patch] active-skill tool filter failed (allowing all): %s", e
+        )
+        return tools
 
 
 def _apply_contextvar_propagation_patch() -> None:
@@ -334,7 +411,14 @@ def _apply_mcp_proxy_bypass_patch() -> None:
         return
 
     async def _patched_get_mcp_tools():
-        """Patched get_mcp_tools that injects trust_env=False into SSE/HTTP."""
+        """Patched get_mcp_tools that injects trust_env=False into SSE/HTTP.
+
+        The extensions config path is resolved inside ``ExtensionsConfig.from_file``
+        via the patched ``resolve_config_path`` (see
+        ``_apply_extensions_config_path_patch``), which consults Numina's per-run
+        ContextVar before the process-global env var — so no explicit path needs
+        to be passed here.
+        """
         extensions_config = ExtensionsConfig.from_file()
         servers_config = build_servers_config(extensions_config)
         if not servers_config:
@@ -343,9 +427,34 @@ def _apply_mcp_proxy_bypass_patch() -> None:
 
         # Inject the no-proxy httpx client factory into every SSE/HTTP server
         # so internal MCP calls bypass system proxy env vars.
+        # Also inject X-Agent-Token + X-Family-Id headers — the Numina Backend MCP
+        # SSE endpoint (mcp_internal.py:72) requires X-Agent-Token; without it the
+        # connection 403s and ALL MCP tools (get_assets/import_assets_batch/...) are
+        # unavailable. The worker sets srv["headers"] on the runtime mcp_servers
+        # dict, but the MCP client reads from extensions_config (file-based) which
+        # has no auth headers — so inject them here from settings + family context.
+        from apps.agent.app.config import settings as _agent_settings
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_caller_user_id_context as _get_caller,
+        )
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_family_sandbox_context as _get_family,
+        )
+        _mcp_family_id = _get_family()
+        _mcp_caller_user_id = _get_caller()
+        _mcp_agent_token = getattr(_agent_settings, "AGENT_INTERNAL_TOKEN", None)
         for _name, cfg in servers_config.items():
             if cfg.get("transport") in ("sse", "http"):
                 cfg["httpx_client_factory"] = _no_proxy_httpx_client
+                if _mcp_agent_token or _mcp_family_id or _mcp_caller_user_id:
+                    existing_headers = dict(cfg.get("headers", {}))
+                    if _mcp_agent_token:
+                        existing_headers["X-Agent-Token"] = _mcp_agent_token
+                    if _mcp_family_id:
+                        existing_headers["X-Family-Id"] = _mcp_family_id
+                    if _mcp_caller_user_id:
+                        existing_headers["X-Caller-User-Id"] = _mcp_caller_user_id
+                    cfg["headers"] = existing_headers
 
         # Replicate the original OAuth header + interceptor handling.
         initial_oauth_headers = await get_initial_oauth_headers(extensions_config)
@@ -363,10 +472,21 @@ def _apply_mcp_proxy_bypass_patch() -> None:
             tool_interceptors.append(oauth_interceptor)
 
         try:
+            # tool_name_prefix=False: MCP tools keep their base names (e.g.
+            # ``get_assets``) instead of ``{server_name}_get_assets`` (e.g.
+            # ``Numina Backend MCP_get_assets``). Skill ``allowed-tools``
+            # declarations use base names, and ``filter_tools_by_skill_allowed_tools``
+            # (deerflow/skills/tool_policy.py:65) matches by full name — a prefixed
+            # name would never match the base-name allowlist, silently filtering
+            # out every business tool (root cause of "all records empty" and
+            # asset-report Recursion-100). Numina runs a single MCP server, so
+            # there is no cross-server tool-name collision risk from disabling
+            # the prefix. Mirrors DeerFlow reference skills (e.g. skill-reviewer)
+            # which declare ``allowed-tools`` as unprefixed base names.
             client = MultiServerMCPClient(
                 servers_config,
                 tool_interceptors=tool_interceptors,
-                tool_name_prefix=True,
+                tool_name_prefix=False,
             )
             tools = await client.get_tools()
             _mcp_mod.logger.info(f"Successfully loaded {len(tools)} tool(s) from MCP servers")
@@ -382,3 +502,48 @@ def _apply_mcp_proxy_bypass_patch() -> None:
 
     _mcp_mod.get_mcp_tools = _patched_get_mcp_tools
     logger.info("[sync_tool_patch] patched get_mcp_tools to bypass system proxy (trust_env=False) on SSE/HTTP MCP connections")
+    _apply_extensions_config_path_patch()
+
+
+def _apply_extensions_config_path_patch() -> None:
+    """Patch ``ExtensionsConfig.resolve_config_path`` to read the per-run ContextVar.
+
+    DeerFlow resolves the MCP extensions config file via
+    ``ExtensionsConfig.resolve_config_path(config_path=None)``, which consults the
+    process-global ``DEER_FLOW_EXTENSIONS_CONFIG_PATH`` env var (priority 2). That
+    env var is a single process-wide slot — under multi-family concurrency two
+    interleaved runs overwrite each other's value, leaking family-A's MCP SSE URL
+    (which embeds family-A's id) into family-B's run.
+
+    This patch inserts a new priority-0 step: when no explicit ``config_path``
+    argument is passed, consult Numina's coroutine-scoped
+    ``numina_extensions_config_path`` ContextVar (set by the adapter alongside
+    family_id). The ContextVar is propagated into the deerflow executor thread
+    and the sync tool-executor pool, so every call site that resolves the
+    extensions config — ``get_available_tools``' gate check, the MCP cache's
+    staleness check, and ``_patched_get_mcp_tools`` — all see the same per-run
+    path with no cross-family leakage. An explicit ``config_path`` argument
+    still takes precedence (priority 1), preserving the original API contract.
+    """
+    try:
+        from deerflow.config.extensions_config import ExtensionsConfig
+    except ImportError:
+        logger.warning("[sync_tool_patch] ExtensionsConfig not found; skipping resolve_config_path patch")
+        return
+
+    _orig_resolve_config_path = ExtensionsConfig.resolve_config_path
+
+    def _patched_resolve_config_path(cls, config_path=None):  # type: ignore[no-untyped-def]
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_extensions_config_path as _get_ext_path,
+        )
+        if config_path is None:
+            ctx_path = _get_ext_path()
+            if ctx_path:
+                # Hand off to the original resolver with an explicit path so it
+                # still validates existence and returns a Path (priority 1 path).
+                return _orig_resolve_config_path.__func__(cls, ctx_path)
+        return _orig_resolve_config_path.__func__(cls, config_path)
+
+    ExtensionsConfig.resolve_config_path = classmethod(_patched_resolve_config_path)  # type: ignore[assignment]
+    logger.info("[sync_tool_patch] patched ExtensionsConfig.resolve_config_path to consult per-run ContextVar before env var")

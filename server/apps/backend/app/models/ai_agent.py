@@ -50,6 +50,12 @@ class AIAgent(Base):
 
     agent_type = Column(String(20), nullable=False, server_default=text("'system'"))  # system | custom
     is_enabled = Column(Boolean, nullable=False, default=True)
+    # Whether DeerMem memory (injection + write) is enabled for this agent.
+    # Fixed-flow agents (asset-report) set this False to be stateless — each run
+    # fetches fresh data instead of accumulating history that pollutes later
+    # runs. Defaults True (chat + custom agents keep memory). Read by the agent
+    # AgentRegistry at adapter-config time (plan U4 Open Question: DeerMem).
+    memory_enabled = Column(Boolean, nullable=False, server_default=text("true"))
     display_order = Column(Integer, nullable=False, default=0)
     created_by = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

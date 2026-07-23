@@ -50,12 +50,13 @@ import { useCurrency } from '@/composables/useCurrency'
 import { useExchangeRate } from '@/composables/useExchangeRate'
 
 const props = withDefaults(defineProps<{
-  amount: number
+  // Money is str on the wire (money-as-str); coerced to number below. Accept both.
+  amount: number | string
   size?: 'small' | 'normal' | 'large'
   showSign?: boolean
   colorful?: boolean
   sourceCurrency?: string
-  originalValue?: number
+  originalValue?: number | string
 }>(), {
   size: 'normal',
   showSign: false,
@@ -63,6 +64,11 @@ const props = withDefaults(defineProps<{
   sourceCurrency: 'CNY',
   originalValue: 0
 })
+
+// Numeric coercions of the wire (possibly string) money props. Number() is
+// runtime-benign for numeric strings; null/undefined/'' -> 0.
+const numAmount = computed(() => Number(props.amount) || 0)
+const numOriginalValue = computed(() => Number(props.originalValue) || 0)
 
 const { currency } = useCurrency()
 const { getRateInfo } = useExchangeRate()
@@ -119,7 +125,7 @@ const locale = computed(() => CURRENCY_LOCALES[currency.value] || 'zh-CN')
 const showConversionInfo = computed(() => {
   return props.sourceCurrency &&
     props.sourceCurrency !== currency.value &&
-    props.originalValue > 0
+    numOriginalValue.value > 0
 })
 
 // Source currency symbol for popover
@@ -129,8 +135,8 @@ const sourceCurrencySymbol = computed(() =>
 
 // Format original amount display
 const originalAmountDisplay = computed(() => {
-  if (!props.originalValue) return ''
-  const formatted = Math.abs(props.originalValue).toLocaleString(
+  if (!numOriginalValue.value) return ''
+  const formatted = Math.abs(numOriginalValue.value).toLocaleString(
     CURRENCY_LOCALES[props.sourceCurrency] || 'zh-CN',
     { minimumFractionDigits: 2, maximumFractionDigits: 2 }
   )
@@ -158,7 +164,7 @@ const formattedFetchTime = computed(() => {
 })
 
 const displayValue = computed(() => {
-  const abs = Math.abs(props.amount)
+  const abs = Math.abs(numAmount.value)
 
   // CNY使用万/亿单位
   if (currency.value === 'CNY') {
@@ -178,12 +184,12 @@ const displayValue = computed(() => {
 
 const sign = computed(() => {
   if (!props.showSign) return ''
-  return props.amount >= 0 ? '+' : '-'
+  return numAmount.value >= 0 ? '+' : '-'
 })
 
 const colorClass = computed(() => {
   if (!props.colorful) return ''
-  return props.amount >= 0 ? 'money-positive' : 'money-negative'
+  return numAmount.value >= 0 ? 'money-positive' : 'money-negative'
 })
 
 const sizeClass = computed(() => `money-${props.size}`)

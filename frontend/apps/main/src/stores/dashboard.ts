@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import i18n from '@/i18n'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
@@ -27,6 +27,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const recentActivities = ref<ActivityItem[]>([])
   const statesSummary = ref<StatesSummaryResponse | null>(null)
   const newAssets = ref<NewAssetsResponse | null>(null)
+  const educationRewardSummary = ref<EducationRewardSummary | null>(null)
   const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
 
@@ -45,6 +46,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const activeAssetStatus = ref<string>('in_use')
   // Current active category filter (null = all categories)
   const activeAssetCategoryId = ref<string | null>(null)
+  // Feature-parity filters (ported from AssetListPage): search/sort/asset_type
+  const assetSearch = ref<string>('')
+  const assetSortBy = ref<string>('current_value')
+  const assetSortOrder = ref<'asc' | 'desc'>('desc')
+  const activeAssetType = ref<'physical' | 'financial' | null>(null)
   // Category counts for nav (full counts from backend, not page-limited)
   const categoryCounts = ref<Array<{ id: string; name: string; icon: string; color: string; count: number }>>([])
 
@@ -98,6 +104,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
     investmentReturns.value = res.data
   }
 
+  async function fetchEducationRewardSummary() {
+    try {
+      const res = await dashboardApi.getEducationRewardSummary()
+      educationRewardSummary.value = res.data
+    } catch {
+      // non-critical
+    }
+  }
+
   async function fetchRecentActivities() {
     try {
       const res = await dashboardApi.getRecentActivities()
@@ -145,6 +160,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchLowUsageAssets(),
         fetchExpiringSoonAssets(),
         fetchHomeAssets(),
+        fetchEducationRewardSummary(),
       ]).catch(() => {
         // Phase 2 failures are non-critical; individual fetch functions
         // do not throw by default, so this is a safety net only
@@ -168,7 +184,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
 
     try {
-      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize, activeAssetCategoryId.value)
+      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize, activeAssetCategoryId.value, {
+        search: assetSearch.value || undefined,
+        sortBy: assetSortBy.value || undefined,
+        sortOrder: assetSortOrder.value,
+        assetType: activeAssetType.value || undefined,
+      })
       const data = res.data
 
       // Store page data in cache
@@ -296,6 +317,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   /**
+   * Apply feature-parity filters (search/sort/asset_type) and refetch from page 1.
+   * The page cache is keyed by status only, so any filter change invalidates it —
+   * reset pagination for the active status before refetching.
+   */
+  async function applyAssetFilters(filters: {
+    search?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    assetType?: 'physical' | 'financial' | null
+  }): Promise<void> {
+    if (filters.search !== undefined) assetSearch.value = filters.search
+    if (filters.sortBy !== undefined) assetSortBy.value = filters.sortBy
+    if (filters.sortOrder !== undefined) assetSortOrder.value = filters.sortOrder
+    if (filters.assetType !== undefined) activeAssetType.value = filters.assetType
+    const status = activeAssetStatus.value
+    resetAssetPagination(status)
+    await fetchAssetsPage(status, 1, assetPageSize, activeAssetCategoryId.value || undefined)
+  }
+
+  /**
    * Legacy function - kept for backward compatibility
    * Now uses server-side pagination
    */
@@ -317,6 +358,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     recentActivities.value = []
     statesSummary.value = null
     newAssets.value = null
+    educationRewardSummary.value = null
     homeAssets.value = {}
     resetAssetPagination()
   }
@@ -324,12 +366,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, newAssets, homeAssets, loading,
+    educationRewardSummary,
     displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
     assetPagesCache, assetPageInfo, activeAssetStatus, activeAssetCategoryId, categoryCounts,
+    assetSearch, assetSortBy, assetSortOrder, activeAssetType,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchNewAssets, fetchHomeAssets, fetchAll,
-    fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets,
+    fetchEducationRewardSummary,
+    fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets, applyAssetFilters,
     fetchCategoryCounts, invalidateDashboard,
   }
 })

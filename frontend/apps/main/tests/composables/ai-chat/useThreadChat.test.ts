@@ -12,6 +12,12 @@ vi.mock('@/api/ai-chat', () => ({
   deleteThread: vi.fn(),
 }))
 
+// Mock the sessions API module (used by feedback hydration/submit)
+vi.mock('@/api/sessions', () => ({
+  submitMessageFeedback: vi.fn(),
+  getSessionFeedback: vi.fn().mockResolvedValue({ data: { items: {} } }),
+}))
+
 vi.mock('@/stores/family', () => ({
   useFamilyStore: () => ({ family: { id: 'fam-1' } }),
 }))
@@ -187,6 +193,57 @@ describe('useThreadChat — U1 SSE extensions', () => {
 
     expect(callCount).toBe(2)
     expect(chat.error.value).toBeNull()
+    vi.useRealTimers()
+  }, 10000)
+
+  it('retries with input:null when prior attempt already streamed AI content (no duplicate user message)', async () => {
+    // Regression: when the first attempt streamed an AI greeting and then the
+    // backend sent an `error` event (worker.py completion_status defaults to
+    // "error" when DeerFlow emits an error frame mid-stream), finalizeAllInProgress
+    // flipped the AI message to phase='done' before throwing. The retry's
+    // hasPriorProgress check only looked for phase==='answering', so it returned
+    // false → re-sent the user message → backend re-executed the LLM with a NEW
+    // message id → mergeValuesMessages (dedup by id) appended a duplicate
+    // greeting instead of merging. Each of 3 retries produced a fresh duplicate
+    // until SSE_MAX_RETRIES exhausted and the last was flagged error — matching
+    // the reported "greeting output, then repeated twice, third attempt failed".
+    // Fix: hasPriorProgress keys off any AI message that arrived after this
+    // turn's user message, regardless of phase. Retry must pass input:null.
+    vi.useFakeTimers()
+    const streamCalls: Array<{ input: unknown }> = []
+    let callCount = 0
+    vi.mocked(getClient).mockReturnValue({
+      runs: {
+        stream: (_threadId: string, _agent: string, opts: { input?: unknown }) => {
+          callCount++
+          streamCalls.push({ input: opts?.input ?? null })
+          if (callCount === 1) {
+            // First attempt: stream an AI greeting, then error mid-stream.
+            return makeMockStream([
+              { event: 'messages-tuple', data: { type: 'ai', id: 'ai-1', content: '你好，我是数鸣。' } },
+              { event: 'error', data: { message: 'upstream error' } },
+            ])
+          }
+          // Retry succeeds.
+          return makeMockStream([{ event: 'end', data: { status: 'complete' } }])
+        },
+        cancel: vi.fn(),
+      },
+    } as never)
+
+    const chat = useThreadChat()
+    const promise = chat.sendMessage('帮我看看家庭财务近况', undefined, 'thread-1')
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+
+    // First attempt sends the user message; retry must resume with input:null.
+    expect(streamCalls).toHaveLength(2)
+    expect(streamCalls[0].input).not.toBeNull()
+    expect(streamCalls[1].input).toBeNull()
+    // No duplicate AI greeting — the original is the only one.
+    const aiMessages = chat.messages.value.filter(m => m.type === 'ai')
+    expect(aiMessages).toHaveLength(1)
+    expect(aiMessages[0].content).toBe('你好，我是数鸣。')
     vi.useRealTimers()
   }, 10000)
 

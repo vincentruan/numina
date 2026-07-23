@@ -17,11 +17,12 @@
  *   - 未知：下载提示
  */
 import { ref, computed, watch } from 'vue'
-import { showToast, showSuccessToast, Popup, NavBar, Button, Loading } from 'vant'
+import { Popup, NavBar, Button, Loading } from 'vant'
 import { useI18n } from 'vue-i18n'
 import IIcon from '@/components/IIcon.vue'
 import CodeBlock from './CodeBlock.vue'
 import MarkdownContent from './MarkdownContent.vue'
+import CopyButton from '@/components/ai-chat/CopyButton.vue'
 import {
   getFileName,
   getFileLanguage,
@@ -151,13 +152,6 @@ function handleBack() {
   emit('update:show', false)
 }
 
-function handleCopy() {
-  if (contentRef.value) {
-    navigator.clipboard.writeText(contentRef.value)
-    showSuccessToast(t('toast.copied'))
-  }
-}
-
 function handleDownload() {
   window.open(downloadUrl.value, '_blank')
 }
@@ -182,9 +176,17 @@ function handleOpenNewWindow() {
         <template #right>
           <div class="nav-actions">
             <!-- 复制 -->
-            <Button size="small" plain @click="handleCopy">
-              <IIcon icon="copy" />
-            </Button>
+            <CopyButton
+              v-if="contentRef"
+              v-slot="{ copy }"
+              :content="contentRef"
+              success-key="toast.copied"
+              fail-key="toast.copyFailed"
+            >
+              <Button size="small" plain @click="copy">
+                <IIcon icon="copy" />
+              </Button>
+            </CopyButton>
             <!-- 下载 -->
             <Button size="small" plain @click="handleDownload">
               <IIcon icon="download" />

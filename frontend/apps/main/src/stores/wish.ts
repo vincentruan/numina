@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Wish } from '@/types'
+import type { Wish, WishRequestPayload } from '@/types'
 import * as wishApi from '@/api/wishes'
 
 export const useWishStore = defineStore('wish', () => {
@@ -28,13 +28,13 @@ export const useWishStore = defineStore('wish', () => {
     }
   }
 
-  async function createWish(data: Partial<Wish>) {
+  async function createWish(data: WishRequestPayload) {
     const res = await wishApi.createWish(data)
     wishes.value.unshift(res.data)
     return res.data
   }
 
-  async function updateWish(id: string, data: Partial<Wish>) {
+  async function updateWish(id: string, data: WishRequestPayload) {
     const res = await wishApi.updateWish(id, data)
     const idx = wishes.value.findIndex(w => w.id === id)
     if (idx !== -1) wishes.value[idx] = res.data

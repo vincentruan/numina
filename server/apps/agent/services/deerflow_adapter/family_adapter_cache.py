@@ -281,12 +281,19 @@ def _generate_temp_config(
     ai_config: dict[str, Any],
     family_id: str = "",
     mcp_servers: list[dict[str, Any]] | None = None,
+    memory_enabled: bool = True,
 ) -> Path:
     """生成临时配置文件，动态注入家庭的 AI 配置到 models 列表。
 
     Args:
         base_config_dir: 基础配置目录路径
         ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
+        family_id: 家庭 ID（用于 memory 存储路径隔离）
+        memory_enabled: Whether DeerMem injection + write are enabled for this
+            agent (read from ai_agents.memory_enabled via AgentRegistry by the
+            caller). Fixed-flow agents (asset-report) pass False to be
+            stateless — each run fetches fresh data instead of accumulating
+            history that pollutes later runs (plan U4 Open Question: DeerMem).
 
     Returns:
         临时配置文件的路径
@@ -333,6 +340,22 @@ def _generate_temp_config(
     else:
         thinking_supported = bool(ai_config.get("thinking_supported", False))
 
+    # Vision capability: "vision" or "vision_understanding" in model_1_capabilities
+    # (frontend CapabilityPickerSheet stores "vision_understanding"; accept both for
+    # backward compat), or a dedicated vision_model_id configured (mirrors
+    # ai_config.py:579's logic). Wiring supports_vision into the model entry lets
+    # the DeerFlow harness assembly-time gate the view_image_tool (tools.py:110)
+    # and mount ViewImageMiddleware (factory.py:270) — without it the agent cannot
+    # read images even when the underlying model supports them.
+    if model_1_caps is not None:
+        vision_supported = (
+            "vision" in model_1_caps
+            or "vision_understanding" in model_1_caps
+            or bool(ai_config.get("vision_model_id"))
+        )
+    else:
+        vision_supported = bool(ai_config.get("vision_model_id"))
+
     # Select appropriate LangChain model class based on provider and thinking support.
     # DeerFlow provides patched model classes for vendor-specific reasoning_content
     # extraction. Native OpenAI uses the stock class because reasoning is delivered
@@ -366,6 +389,7 @@ def _generate_temp_config(
         "model": model_id,
         "api_key": api_key,
         "supports_thinking": thinking_supported,
+        "supports_vision": vision_supported,
     }
 
     # Resolve max_tokens with three-tier priority: user (DB) > yaml prefix > None.
@@ -490,14 +514,44 @@ def _generate_temp_config(
     # 移除旧的 llm 节（已弃用）
     config.pop("llm", None)
 
-    # 注入家庭级 memory 隔离路径：每家庭独立文件，防止跨家庭 facts 污染
-    # Context7 确认 DeerFlow memory 配置键为 storage_path（非 path）
+    # 注入家庭级 memory 隔离路径：每家庭独立目录，防止跨家庭 facts 污染
+    # DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
+    # deermem storage path from the top-level ``memory.storage_path`` key into
+    # ``memory.backend_config.storage_path`` (parsed by DeerMemConfig). The
+    # top-level MemoryConfig now carries ``manager_class`` + ``backend_config``
+    # instead of a flat ``storage_path`` field.
+    #
+    # storage_path must be a DIRECTORY (not a file): DeerMem stores per-user
+    # memory under ``{storage_path}/users/{uid}/memory.json``. The pre-#4122
+    # convention pointed at a ``memory.json`` file; the guard in
+    # ``get_memory_manager`` (manager.py:439-446) raises on a file-style value
+    # to fail loud rather than silently NotADirectoryError on save. Point at a
+    # per-family ``memory/`` directory; the legacy ``memory.json`` file (if any)
+    # is left in place as a sibling and simply no longer read — its pre-
+    # abstraction schema (version/user/personalContext) is incompatible with
+    # the new per-uid layout and cannot be auto-migrated. Memory is derived
+    # context state, not core family data, so loss is recoverable.
     from apps.agent.app.config import settings
-    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory.json"
-    memory_path.parent.mkdir(parents=True, exist_ok=True)
+    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory"
+    memory_path.mkdir(parents=True, exist_ok=True)
     if "memory" not in config:
         config["memory"] = {}
-    config["memory"]["storage_path"] = str(memory_path)
+    config["memory"]["manager_class"] = "deermem"
+    backend_config = config["memory"].get("backend_config") or {}
+    backend_config["storage_path"] = str(memory_path)
+    config["memory"]["backend_config"] = backend_config
+
+    # U4 Open Question (DeerMem pollution): agents with memory_enabled=False
+    # (read from ai_agents.memory_enabled via AgentRegistry by the caller) are
+    # stateless — disable DeerMem injection (DynamicContextMiddleware skips the
+    # <memory> block) + write (MemoryMiddleware skips fact writes). Fixed-flow
+    # agents (asset-report) declare memory_enabled=False on their ai_agents row;
+    # chat + custom agents keep the default True. The flag is a per-agent
+    # attribute, not an adapter-layer agent_name hardcode — adding a new
+    # stateless agent is just setting the column.
+    if not memory_enabled:
+        config["memory"]["enabled"] = False
+        config["memory"]["injection_enabled"] = False
 
     # [Integrated with Numina Multi-Tenant] — inject Numina's sandbox provider
     # so that the per-family config YAML uses the family-scoped provider.
@@ -505,6 +559,16 @@ def _generate_temp_config(
         config["sandbox"] = {
             "use": "apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider"
         }
+
+    # Inject host-resolved skills.path. The base config ships a container path
+    # (/app/apps/agent/skills/builtin) that does not resolve on the host dev
+    # machine, so DeerFlow's native skill scanner (LocalSkillStorage) would find
+    # zero skills. Resolve to the same builtin/public/ root that skill_loader.py
+    # uses (SKILLS_DIR's parent), computed from this file's location for both
+    # local dev and container layouts.
+    _skills_root = Path(__file__).resolve().parent.parent.parent / "skills" / "builtin"
+    config.setdefault("skills", {})
+    config["skills"]["path"] = str(_skills_root)
 
     if mcp_servers:
         config["mcp_servers"] = mcp_servers
@@ -521,18 +585,43 @@ def _generate_temp_config(
         provider_api_key = first_provider.get("api_key", "")
         provider_max_results = first_provider.get("max_results", 5)
 
-        # Find and update the web_search tool entry
-        tools = config.get("tools", [])
-        for tool in tools:
-            if tool.get("name") == "web_search":
-                tool["use"] = provider_class
-                tool["api_key"] = provider_api_key
-                tool["max_results"] = provider_max_results
-                break
+        # Guard: empty provider_class would cause resolve_variable("") to fail
+        if not provider_class:
+            logger.warning(
+                "[deerflow_config] web_search provider_class is empty for family=%s; "
+                "removing web_search tool",
+                family_id,
+            )
+            tools = config.get("tools", [])
+            config["tools"] = [t for t in tools if t.get("name") != "web_search"]
+        else:
+            # Find and update the web_search tool entry
+            tools = config.get("tools", [])
+            for tool in tools:
+                if tool.get("name") == "web_search":
+                    tool["use"] = provider_class
+                    tool["api_key"] = provider_api_key
+                    tool["max_results"] = provider_max_results
+                    break
+
+            # Inject web_fetch tool (Jina AI-based page content fetcher).
+            # chat-search/SKILL.md declares allowed-tools: [web_search, web_fetch];
+            # without this entry the tool policy silently drops web_fetch and the
+            # LLM only sees web_search.
+            tools = config.get("tools", [])
+            if not any(t.get("name") == "web_fetch" for t in tools):
+                tools.append({
+                    "name": "web_fetch",
+                    "group": "web",
+                    "use": "deerflow.community.jina_ai.tools:web_fetch_tool",
+                    "timeout": 10,
+                    "trust_env": False,
+                })
+                config["tools"] = tools
     else:
         # No native providers — remove web_search tool (MCP fallback handled separately)
         tools = config.get("tools", [])
-        config["tools"] = [t for t in tools if t.get("name") != "web_search"]
+        config["tools"] = [t for t in tools if t.get("name") not in ("web_search", "web_fetch")]
 
         # Inject web search MCP servers from ai_config if available and not already injected
         # The mcp_servers parameter may contain general MCP servers; web_search_mcp_servers
@@ -588,6 +677,9 @@ def get_family_adapter(
     subagent_enabled: bool = False,
     plan_mode: bool = False,
     mcp_servers: list[dict[str, Any]] | None = None,
+    agent_name: str | None = None,
+    middlewares: list[Any] | None = None,
+    memory_enabled: bool = True,
 ) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
@@ -596,9 +688,14 @@ def get_family_adapter(
     so different families' conversations remain isolated even with a shared
     checkpointer instance.
 
-    Cache key is (family_id, config_id, subagent_enabled, plan_mode) — different
-    flag combinations create distinct client instances since these are init-time
-    parameters on DeerFlowClient.
+    Cache key is (family_id, config_id, subagent_enabled, plan_mode, mcp_key,
+    agent_name, middlewares_key) — different flag combinations create distinct
+    client instances since these are init-time parameters on DeerFlowClient.
+    agent_name is in the key because it selects a distinct DeerMem memory
+    bucket (per (agent_name, user_id)) — an asset-report client must not share
+    a chat client's memory. middlewares is in the key (as id() tuple) because
+    a client with a custom middleware must not be reused for a chat run
+    that should not emit that middleware's events.
 
     Thread safety:
     - _cache_lock guards all reads/writes to _adapter_cache.
@@ -622,8 +719,13 @@ def get_family_adapter(
         base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
 
     config_id: str = ai_config.get("config_id", "")
-    cache_key: tuple[str, str, bool, bool, str] = (
-        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers),
+    # middlewares are unhashable objects; key by their id() tuple so a client
+    # built with a custom middleware never collides with a no-middleware
+    # chat client. (Both are module-singleton or per-pipeline lists, so id()
+    # is stable across calls within a process.)
+    middlewares_key = tuple(id(m) for m in middlewares) if middlewares else ()
+    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...], bool] = (
+        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key, memory_enabled,
     )
 
     # Fast path: return cached client
@@ -649,7 +751,10 @@ def get_family_adapter(
     # Serialise reload_app_config() + DeerFlowClient() to prevent concurrent
     # threads from interleaving global DeerFlow config state. File I/O for
     # _generate_temp_config happens outside this lock to minimise contention.
-    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id, mcp_servers=mcp_servers)
+    # memory_enabled is read by the async caller (worker) via AgentRegistry and
+    # threaded down as a bool — get_family_adapter is sync (runs inside the
+    # adapter's ThreadPoolExecutor), so it cannot await the registry itself.
+    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id, mcp_servers=mcp_servers, memory_enabled=memory_enabled)
 
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
@@ -687,6 +792,8 @@ def get_family_adapter(
                     thinking_enabled=bool(ai_config.get("thinking_supported", False)),
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
+                    agent_name=agent_name,
+                    middlewares=middlewares,
                 )
             finally:
                 # Restore previous value (or remove if it wasn't set)

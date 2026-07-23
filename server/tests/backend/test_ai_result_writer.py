@@ -1,153 +1,21 @@
-"""Tests for AI result writer service."""
+"""Tests for AI result writer service.
+
+U7: 5 外扩 trigger skill writers (alerts/disposal/spending_leak/allocation/liability)
+removed; only ``write_report_results`` remains. ``_validate_asset_ownership`` helper
+was deleted with the trigger writers (it had no other callers).
+"""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from unittest.mock import MagicMock
 
+from apps.backend.app.database import Base
+from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.services.ai_result_writer import (
-    _validate_asset_ownership,
-    write_alerts_results,
-    write_disposal_results,
-    write_spending_leak_results,
     write_report_results,
-    write_allocation_drift_results,
-    write_liability_results,
     write_capability_results,
 )
-
-
-class TestValidateAssetOwnership:
-    """Tests for _validate_asset_ownership function."""
-
-    def test_returns_none_for_null_asset_id(self, db_session, test_family):
-        """Returns None when asset_id is None."""
-        result = _validate_asset_ownership(None, test_family.id, db_session)
-        assert result is None
-
-    def test_returns_id_for_owned_asset(self, db_session, test_family, test_asset):
-        """Returns asset_id when asset belongs to family."""
-        result = _validate_asset_ownership(test_asset.id, test_family.id, db_session)
-        assert result == test_asset.id
-
-    def test_returns_none_for_other_family_asset(self, db_session, test_family, other_family_asset):
-        """Returns None when asset belongs to different family."""
-        result = _validate_asset_ownership(other_family_asset.id, test_family.id, db_session)
-        assert result is None
-
-    def test_returns_none_for_archived_asset(self, db_session, test_family, archived_asset):
-        """Returns None when asset is archived."""
-        result = _validate_asset_ownership(archived_asset.id, test_family.id, db_session)
-        assert result is None
-
-    def test_returns_none_for_nonexistent_asset(self, db_session, test_family):
-        """Returns None when asset doesn't exist."""
-        result = _validate_asset_ownership(999999999, test_family.id, db_session)
-        assert result is None
-
-
-class TestWriteAlertsResults:
-    """Tests for write_alerts_results function."""
-
-    def test_writes_valid_results(self, db_session, test_family, test_asset):
-        """Writes valid alerts to database."""
-        results = [
-            {
-                "asset_id": test_asset.id,
-                "asset_name": test_asset.name,
-                "alert_type": "aging",
-                "severity": "high",
-                "suggestion": "Replace soon",
-            }
-        ]
-        count = write_alerts_results(test_family.id, results, db_session)
-        assert count == 1
-
-    def test_handles_empty_results(self, db_session, test_family):
-        """Handles empty results list."""
-        count = write_alerts_results(test_family.id, [], db_session)
-        assert count == 0
-
-    def test_replaces_previous_results(self, db_session, test_family, test_asset):
-        """Replaces previous alerts (clear before insert)."""
-        # Write first batch
-        write_alerts_results(test_family.id, [{"asset_name": "Old", "alert_type": "aging", "severity": "low"}], db_session)
-
-        # Write second batch
-        count = write_alerts_results(test_family.id, [{"asset_name": "New", "alert_type": "aging", "severity": "high"}], db_session)
-        assert count == 1
-
-    def test_skips_unowned_assets(self, db_session, test_family, other_family_asset):
-        """Skips results with asset_id not owned by family."""
-        results = [
-            {
-                "asset_id": other_family_asset.id,  # Different family
-                "asset_name": "Other Asset",
-                "alert_type": "aging",
-                "severity": "high",
-            }
-        ]
-        count = write_alerts_results(test_family.id, results, db_session)
-        assert count == 1  # Still writes, but asset_id is None
-
-    def test_rollback_on_error(self, db_session, test_family):
-        """Rolls back on database error."""
-        from unittest.mock import MagicMock
-
-        # Simulate error by making commit fail
-        original_commit = db_session.commit
-        db_session.commit = MagicMock(side_effect=Exception("DB error"))
-        db_session.rollback = MagicMock()
-
-        results = [{"asset_name": "Test", "alert_type": "aging", "severity": "high"}]
-
-        with pytest.raises(Exception):
-            write_alerts_results(test_family.id, results, db_session)
-
-        # Verify rollback was called
-        db_session.rollback.assert_called()
-        db_session.commit = original_commit
-
-
-class TestWriteDisposalResults:
-    """Tests for write_disposal_results function."""
-
-    def test_writes_valid_results(self, db_session, test_family, test_asset):
-        """Writes valid disposal suggestions."""
-        results = [
-            {
-                "asset_id": test_asset.id,
-                "asset_name": test_asset.name,
-                "inefficiency_score": 75,
-            }
-        ]
-        count = write_disposal_results(test_family.id, results, db_session)
-        assert count == 1
-
-    def test_handles_empty_results(self, db_session, test_family):
-        """Handles empty results."""
-        count = write_disposal_results(test_family.id, [], db_session)
-        assert count == 0
-
-
-class TestWriteSpendingLeakResults:
-    """Tests for write_spending_leak_results function."""
-
-    def test_writes_valid_results(self, db_session, test_family, test_asset):
-        """Writes valid spending leaks."""
-        results = [
-            {
-                "asset_id": test_asset.id,
-                "asset_name": test_asset.name,
-                "leak_type": "high_idle_cost",
-                "severity": "medium",
-            }
-        ]
-        count = write_spending_leak_results(test_family.id, results, db_session)
-        assert count == 1
-
-    def test_handles_empty_results(self, db_session, test_family):
-        """Handles empty results."""
-        count = write_spending_leak_results(test_family.id, [], db_session)
-        assert count == 0
 
 
 class TestWriteReportResults:
@@ -165,40 +33,6 @@ class TestWriteReportResults:
         assert count == 0
 
 
-class TestWriteAllocationDriftResults:
-    """Tests for write_allocation_drift_results function."""
-
-    def test_writes_valid_drift(self, db_session, test_family):
-        """Writes valid allocation drift."""
-        results = {"has_significant_drift": True, "drifts": [{"category": "stocks", "drift": 5}]}
-        count = write_allocation_drift_results(test_family.id, results, db_session)
-        assert count == 1
-
-    def test_handles_empty_results(self, db_session, test_family):
-        """Handles empty dict."""
-        count = write_allocation_drift_results(test_family.id, {}, db_session)
-        assert count == 0
-
-
-class TestWriteLiabilityResults:
-    """Tests for write_liability_results function."""
-
-    def test_writes_valid_liability(self, db_session, test_family):
-        """Writes valid liability result."""
-        results = {
-            "has_liabilities": True,
-            "total_remaining": 50000,
-            "recommended_strategy": "avalanche",
-        }
-        count = write_liability_results(test_family.id, results, db_session)
-        assert count == 1
-
-    def test_handles_empty_results(self, db_session, test_family):
-        """Handles empty dict."""
-        count = write_liability_results(test_family.id, {}, db_session)
-        assert count == 0
-
-
 class TestWriteCapabilityResults:
     """Tests for write_capability_results dispatcher."""
 
@@ -211,3 +45,59 @@ class TestWriteCapabilityResults:
         """Returns 0 for unknown capability."""
         count = write_capability_results("unknown", test_family.id, {}, db_session)
         assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# Markdown-path persistence + replace strategy (ported from the former
+# apps/backend/tests/unit/test_ai_result_writer.py — U4 step 7). These use an
+# in-memory SQLite engine so they don't depend on the conftest db_session
+# fixture; the writer's family_id filter + replace logic is what's under test,
+# not the FK.
+# ---------------------------------------------------------------------------
+
+
+def _mem_db() -> Session:
+    """In-memory SQLite — FKs off by default, so AIReport rows can be inserted
+    without a matching families row."""
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    return Session(engine)
+
+
+def test_write_report_persists_json_and_markdown_path():
+    db = _mem_db()
+    results = {"overall_score": 72, "data_completeness_score": 80, "indicators": []}
+
+    count = write_report_results(
+        100, results, db, markdown_file_path="report_20260718_100530.md"
+    )
+
+    assert count == 1
+    row = db.query(AIReport).filter(AIReport.family_id == 100).one()
+    assert row.report_json == results
+    assert row.overall_score == 72
+    assert row.data_completeness_score == 80
+    assert row.status == "completed"
+    assert row.markdown_file_path == "report_20260718_100530.md"
+
+
+def test_write_report_markdown_path_defaults_none():
+    """markdown_file_path is optional — defaults to None when not passed."""
+    db = _mem_db()
+    write_report_results(100, {"overall_score": 50}, db)
+
+    row = db.query(AIReport).filter(AIReport.family_id == 100).one()
+    assert row.markdown_file_path is None
+
+
+def test_write_report_replaces_previous_for_family():
+    """Replace strategy: a second write clears the first row for the family."""
+    db = _mem_db()
+    write_report_results(100, {"overall_score": 60}, db, markdown_file_path="old.md")
+    write_report_results(100, {"overall_score": 90}, db, markdown_file_path="new.md")
+
+    rows = db.query(AIReport).filter(AIReport.family_id == 100).all()
+    assert len(rows) == 1
+    assert rows[0].overall_score == 90
+    assert rows[0].markdown_file_path == "new.md"
+

@@ -141,6 +141,17 @@ class BackendClient:
         resp.raise_for_status()
         return _unwrap(resp)
 
+    async def get_agent_by_name(self, agent_name: str) -> dict:
+        """Fetch an agent config by name (system agent family_id=0 preferred)."""
+        validated_id = _validate_family_id(self.family_id)
+        client = await get_shared_client()
+        resp = await client.get(
+            f"/api/v1/internal/ai/agents/by-name/{agent_name}",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)
+
     async def get_enabled_skills(self) -> list[dict]:
         """Fetch enabled skill registry records for the family."""
         validated_id = _validate_family_id(self.family_id)
@@ -181,6 +192,7 @@ class BackendClient:
         agent_id: str | None = None,
         last_model: str | None = None,
         source: str | None = None,
+        parent_thread_id: str | None = None,
     ) -> None:
         await upsert_session(
             self.family_id,
@@ -189,6 +201,7 @@ class BackendClient:
             agent_id=agent_id,
             last_model=last_model,
             source=source,
+            parent_thread_id=parent_thread_id,
         )
 
     async def update_session_summary(
@@ -207,6 +220,19 @@ class BackendClient:
             model=model,
             status=status,
             title=title,
+        )
+
+    async def persist_report_result(
+        self,
+        *,
+        report_json: dict,
+        markdown_file_path: str | None = None,
+    ) -> dict:
+        """U4 step 7: persist an asset-report result to ai_reports (backend)."""
+        return await persist_report_result(
+            self.family_id,
+            report_json=report_json,
+            markdown_file_path=markdown_file_path,
         )
 
     async def update_session(
@@ -554,6 +580,7 @@ async def upsert_session(
     agent_id: str | None = None,
     last_model: str | None = None,
     source: str | None = None,
+    parent_thread_id: str | None = None,
 ) -> None:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
@@ -563,6 +590,7 @@ async def upsert_session(
         "agent_id": agent_id,
         "last_model": last_model,
         "source": source,
+        "parent_thread_id": parent_thread_id,
     }
     resp = await client.post(
         "/api/v1/internal/ai/sessions/upsert",
@@ -592,6 +620,32 @@ async def update_session_summary(
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
+
+
+async def persist_report_result(
+    family_id: str,
+    *,
+    report_json: dict,
+    markdown_file_path: str | None = None,
+) -> dict:
+    """U4 step 7: persist an asset-report result to ``ai_reports`` via backend.
+
+    Calls ``POST /api/v1/internal/ai/reports`` (verify_agent_token auth).
+    Returns the backend's response dict (``{"ok": True, "written": <count>}``).
+    Raises ``httpx.HTTPStatusError`` on non-2xx so the worker can catch + log.
+    """
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    payload: dict = {"report_json": report_json}
+    if markdown_file_path is not None:
+        payload["markdown_file_path"] = markdown_file_path
+    resp = await client.post(
+        "/api/v1/internal/ai/reports",
+        json=payload,
+        headers=_make_headers(validated_id),
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def update_session(

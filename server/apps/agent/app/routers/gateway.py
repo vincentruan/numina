@@ -11,10 +11,13 @@
 
 import logging
 import re
+from types import SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from apps.agent.app.config import settings
@@ -22,6 +25,8 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import RedactedContext
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.deerflow_adapter.exceptions import DeerFlowTimeoutError
+from apps.agent.services.runtime.lifespan import get_run_manager, get_stream_bridge
+from apps.agent.services.runtime.sse_gateway import sse_consumer, start_run
 
 logger = logging.getLogger(__name__)
 
@@ -214,3 +219,223 @@ async def skill_dispatch(
         raise HTTPException(status_code=502, detail=f"DeerFlow dispatch failed: {e}") from e
 
     return {"content": result}
+
+
+class AssetReportRunRequest(BaseModel):
+    """Request body for internal asset-report run trigger (backend → agent).
+
+    The backend ``trigger_generate_events`` endpoint calls this after passing
+    its own require_owner + require_ai_enabled + per-family concurrency gate.
+    Trust model mirrors ``skill_dispatch``: family_id is trusted because the
+    endpoint requires ``X-Agent-Token`` and the backend passes JWT-derived
+    family_id (R1 internal bypass — see ``start_run(internal=True)``).
+    """
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/asset-report/{thread_id}")
+async def trigger_asset_report_run(
+    thread_id: str,
+    body: AssetReportRunRequest,
+    request: Request,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> StreamingResponse:
+    """Trigger an asset-report stream_run from the backend (service-to-service).
+
+    U4 step 5: the backend report trigger creates a stream_run with
+    ``app="asset-report"`` via this X-Agent-Token-authenticated endpoint,
+    bypassing R1's frontend 409 gate (internal=True). The worker's
+    ``_run_asset_report_pipeline`` then drives the 3-step pipeline and emits
+    ``report.step2_json`` custom events; this endpoint streams them back as SSE
+    for the backend to forward to the frontend.
+    """
+    _verify_token(x_agent_token)
+    _validate_path_segment(thread_id, "thread_id")
+
+    # Build a duck-typed body matching start_run's getattr() access pattern.
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "asset-report"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/asset-report/{thread_id}/{record.run_id}",
+        },
+    )
+
+
+class FinanceCoachRunRequest(BaseModel):
+    """Request body for internal finance-coach run trigger (backend → agent).
+
+    Plan A: the backend /ai/finance-coach/generate endpoint calls this after
+    passing its own require_ai_enabled + require_adult + per-family concurrency
+    gate. Trust model mirrors ``AssetReportRunRequest``: family_id is trusted
+    because the endpoint requires ``X-Agent-Token`` and the backend passes
+    JWT-derived family_id (R1 internal bypass — see ``start_run(internal=True)``).
+    """
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/finance-coach/{thread_id}")
+async def trigger_finance_coach_run(
+    thread_id: str,
+    body: FinanceCoachRunRequest,
+    request: Request,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> StreamingResponse:
+    """Trigger a finance-coach stream_run from the backend (service-to-service).
+
+    Plan A: the backend finance-coach trigger creates a stream_run with
+    ``app="finance-coach"`` via this X-Agent-Token-authenticated endpoint,
+    bypassing R1's frontend 409 gate (internal=True). The worker's
+    ``_run_finance_coach_agent`` then drives the single-run advice agent and
+    emits a ``finance_coach.result`` custom event with the validated
+    ``suggestions[]`` JSON; this endpoint streams frames back as SSE for the
+    backend to forward to the frontend (D2 dashboard card).
+    """
+    _verify_token(x_agent_token)
+    _validate_path_segment(thread_id, "thread_id")
+
+    # Build a duck-typed body matching start_run's getattr() access pattern.
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "finance-coach"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/finance-coach/{thread_id}/{record.run_id}",
+        },
+    )
+
+
+class WishAdviceRunRequest(BaseModel):
+    """Request body for internal wish-advice run trigger (backend → agent).
+
+    Plan B T7: the backend /ai/wish-advice/generate endpoint calls this after
+    passing its own require_ai_enabled + require_adult + require_owner. Trust
+    model mirrors ``FinanceCoachRunRequest``: family_id is trusted because the
+    endpoint requires ``X-Agent-Token`` (R1 internal bypass — ``start_run(internal=True)``).
+    """
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/wish-advice/{thread_id}")
+async def trigger_wish_advice_run(
+    thread_id: str,
+    body: WishAdviceRunRequest,
+    request: Request,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> StreamingResponse:
+    """Trigger a wish-advice stream_run from the backend (service-to-service).
+
+    Plan B T7: the backend wish-advice trigger creates a stream_run with
+    ``app="wish-advice"`` via this X-Agent-Token-authenticated endpoint, bypassing
+    R1's frontend 409 gate (internal=True). The worker's ``_run_wish_advice_agent``
+    then drives the single-run advice agent and emits a ``wish_advice.result``
+    custom event with the validated ``redistribution[]`` JSON; this endpoint
+    streams frames back as SSE for the backend to forward to the frontend
+    (W4 WishAdviceCard).
+    """
+    _verify_token(x_agent_token)
+    _validate_path_segment(thread_id, "thread_id")
+
+    # Build a duck-typed body matching start_run's getattr() access pattern.
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "wish-advice"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/wish-advice/{thread_id}/{record.run_id}",
+        },
+    )

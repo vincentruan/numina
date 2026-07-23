@@ -150,7 +150,7 @@ export function useTenantAiResources(): {
     try {
       const [response, mcpRes] = await Promise.all([
         http.get<ModelsApiResponse>('/ai/models'),
-        getMCPServers().catch(() => [] as MCPServer[]),
+        getMCPServers().then((res) => res.data).catch(() => [] as MCPServer[]),
       ])
       models.value = response.data.models
       mcpServers.value = mcpRes

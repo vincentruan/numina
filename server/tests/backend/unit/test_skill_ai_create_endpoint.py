@@ -222,12 +222,14 @@ class TestRawSkillSaveEndpoint:
         assert resp.status_code == 422
 
     def test_builtin_skill_id_rejected(self, client):
-        """skill_id matching builtin capabilities is rejected."""
+        """skill_id matching builtin/reserved capabilities is rejected."""
+        # "report" was removed in the two-ai-apps refactor; use a current
+        # RESERVED_NAMES entry (finance-coach) to verify the rejection logic.
         resp = client.post(
             "/api/v1/ai/skills/custom/raw",
             json={
-                "skill_id": "report",
-                "content": "---\nname: report\n---\nContent",
+                "skill_id": "finance-coach",
+                "content": "---\nname: finance-coach\n---\nContent",
                 "icon": "⚡",
                 "color": "#007aff",
             },

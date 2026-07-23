@@ -44,7 +44,7 @@ class TestDeerFlowAdapterDispatch:
         mock_client = MagicMock()
         mock_client.stream.return_value = iter(["分析结果"])
         adapter = self._make_adapter(mock_client)
-        result = asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
+        result = asyncio.run(adapter.dispatch("chat", _make_redacted(), "thread-1"))
         assert isinstance(result, str)
 
     def test_dispatch_collects_stream_events(self):
@@ -62,7 +62,7 @@ class TestDeerFlowAdapterDispatch:
             FakeEvent(type="messages-tuple", data={"type": "ai", "content": "第二段"}),
         ])
         adapter = self._make_adapter(mock_client)
-        result = asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
+        result = asyncio.run(adapter.dispatch("chat", _make_redacted(), "thread-1"))
         assert "第一段" in result or "第二段" in result
 
     def test_dispatch_raises_deerflow_error_on_exception(self):
@@ -70,7 +70,7 @@ class TestDeerFlowAdapterDispatch:
         mock_client.stream.side_effect = RuntimeError("connection failed")
         adapter = self._make_adapter(mock_client)
         try:
-            asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
+            asyncio.run(adapter.dispatch("chat", _make_redacted(), "thread-1"))
             raise AssertionError("Should have raised")
         except DeerFlowError:
             pass
@@ -97,7 +97,7 @@ class TestDeerFlowAdapterDispatch:
 
         with patch("apps.agent.services.deerflow_adapter.adapter.asyncio.wait_for", fake_wait_for):
             try:
-                asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
+                asyncio.run(adapter.dispatch("chat", _make_redacted(), "thread-1"))
                 raise AssertionError("Should have raised")
             except DeerFlowTimeoutError:
                 pass

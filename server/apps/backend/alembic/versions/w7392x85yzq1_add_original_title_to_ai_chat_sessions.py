@@ -19,10 +19,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "ai_chat_sessions",
-        sa.Column("original_title", sa.String(length=256), nullable=True),
-    )
+    # Fresh-DB guard: bootstrap creates ai_chat_sessions with original_title already.
+    bind = op.get_bind()
+    cols = {c['name'] for c in bind.dialect.get_columns(bind, 'ai_chat_sessions')} if bind.dialect.has_table(bind, 'ai_chat_sessions') else set()
+    if 'original_title' not in cols:
+        op.add_column(
+            "ai_chat_sessions",
+            sa.Column("original_title", sa.String(length=256), nullable=True),
+        )
 
 
 def downgrade() -> None:

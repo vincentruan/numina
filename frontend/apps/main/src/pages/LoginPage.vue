@@ -5,9 +5,6 @@
     <!-- Deer-masked particle canvas (bright particles clipped to deer silhouette) -->
     <canvas ref="deerCanvasRef" class="deer-canvas deer-canvas--deer" aria-hidden="true"></canvas>
 
-    <!-- Pixel-style loading shown briefly when transitioning into step 2 -->
-    <PixelLoading :visible="stepLoading" :aria-label="t('common.loading')" />
-
     <!-- Login content (above canvas) -->
     <div class="login-content">
       <div class="login-header">
@@ -213,7 +210,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
-import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'
+import { TrustedDeviceCard, readDeviceId } from '@numina/auth'
 import { checkDevice, selectDeviceUser, getDeviceWebAuthnAuthOptions, verifyDeviceWebAuthn } from '@/api/device'
 import type { DeviceCheckUser } from '@/api/device'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
@@ -234,7 +231,6 @@ const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
 useDeerField(bgCanvasRef, deerCanvasRef)
 
 const step = ref<0 | 1 | 2>(1)
-const stepLoading = ref(false)
 const tempToken = ref('')
 const secondFactorType = ref('')
 const pinInput = ref('')
@@ -321,11 +317,7 @@ async function onStep1Submit() {
       if (result.display_name && result.avatar_color) {
         step2User.value = { displayName: result.display_name, avatarColor: result.avatar_color }
       }
-      stepLoading.value = true
-      setTimeout(() => {
-        step.value = 2
-        stepLoading.value = false
-      }, 700)
+      step.value = 2
     } else if (!result.second_factor_required) {
       // Single-step login complete — token already set via cookie
       await authStore.fetchMe()
@@ -401,11 +393,7 @@ async function authenticateWithWebAuthn(user: BoundUser) {
         displayName: data.display_name ?? user.displayName,
         avatarColor: data.avatar_color ?? user.avatarColor,
       }
-      stepLoading.value = true
-      setTimeout(() => {
-        step.value = 2
-        stepLoading.value = false
-      }, 700)
+      step.value = 2
     } else {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
@@ -449,11 +437,7 @@ async function onSelectAltchaComplete() {
         displayName: data.display_name ?? selectedUser.value.displayName,
         avatarColor: data.avatar_color ?? selectedUser.value.avatarColor,
       }
-      stepLoading.value = true
-      setTimeout(() => {
-        step.value = 2
-        stepLoading.value = false
-      }, 700)
+      step.value = 2
     } else {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))

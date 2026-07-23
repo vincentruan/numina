@@ -2,7 +2,7 @@
   <div class="daily-cost-chart">
     <div class="chart-header">
       <span class="chart-title">日均成本趋势</span>
-      <span class="chart-current">当前 ¥{{ currentDailyCost.toFixed(2) }}/天</span>
+      <span class="chart-current">当前 {{ currency.format(currentDailyCost) }}/天</span>
     </div>
     <div v-if="hasData" class="chart-wrapper">
       <v-chart class="chart" :option="chartOption" autoresize />
@@ -20,10 +20,12 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
+import { useCurrency } from '@/composables/useCurrency'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, MarkLineComponent])
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const props = defineProps<{
   purchasePrice: number
@@ -106,9 +108,10 @@ const chartOption = computed(() => {
 
   const markLines: { yAxis: number; label: object; lineStyle: object }[] = []
   if (props.targetDailyCost) {
+    const target = props.targetDailyCost
     markLines.push({
-      yAxis: props.targetDailyCost,
-      label: { formatter: `目标 ¥${props.targetDailyCost}`, position: 'end', fontSize: 10 },
+      yAxis: target,
+      label: { formatter: () => `目标 ${currency.format(target)}`, position: 'end', fontSize: 10 },
       lineStyle: { color: '#07c160', type: 'dashed' }
     })
   }
@@ -118,7 +121,7 @@ const chartOption = computed(() => {
       trigger: 'axis',
       formatter: (params: CallbackDataParams[]) => {
         const p = params[0] as CallbackDataParams & { axisValue: string }
-        return `${p.axisValue}<br/>日均 ¥${Number(p.value).toFixed(2)}`
+        return `${p.axisValue}<br/>日均 ${currency.format(Number(p.value))}`
       }
     },
     grid: {
@@ -138,7 +141,7 @@ const chartOption = computed(() => {
       type: 'value',
       axisLabel: {
         fontSize: 10,
-        formatter: (val: number) => `¥${val}`
+        formatter: (val: number) => currency.format(val)
       },
       splitLine: { lineStyle: { type: 'dashed' } }
     },

@@ -1,4 +1,4 @@
-"""Tests for run_family_agent — title sync is scheduled from the finally block.
+"""Tests for _run_numina_agent — title sync is scheduled from the finally block.
 
 Regression guard: the worker's ``finally`` block must schedule
 ``sync_title_from_checkpoint`` (which reads the title DeerFlow's
@@ -8,7 +8,7 @@ takes ``(thread_id, family_id)`` as positional args plus kwargs
 (``ai_config``, ``user_message``, ``ai_response``) used to generate an LLM
 title when the checkpoint only has the sync ``[SKILL:chat]`` fallback.
 
-Calls ``run_family_agent`` directly with stubbed dependencies, bypassing the
+Calls ``_run_numina_agent`` directly with stubbed dependencies, bypassing the
 FastAPI lifespan layer (the v2 SSE contract tests are pre-existing broken on
 this branch) to isolate the worker's wiring.
 """
@@ -20,10 +20,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from deerflow.runtime import RunStatus
 
-from apps.agent.services.runtime.worker import run_family_agent
+from apps.agent.services.runtime.worker import _run_numina_agent
 
 
-async def test_run_family_agent_schedules_title_sync_from_checkpoint():
+async def test_run_numina_agent_schedules_title_sync_from_checkpoint():
     """sync_title_from_checkpoint is scheduled with (thread_id, family_id)."""
     # --- record / bridge / run_manager stubs ---
     record = MagicMock()
@@ -91,7 +91,7 @@ async def test_run_family_agent_schedules_title_sync_from_checkpoint():
         )
         mock_pii.redact = MagicMock(side_effect=lambda ctx: ctx)
 
-        await run_family_agent(
+        await _run_numina_agent(
             bridge=bridge,
             run_manager=run_manager,
             record=record,

@@ -8,10 +8,14 @@ excluded from this module — do not import from here in migration scripts.
 # System agent IDs (family_id=0, agent_type="system")
 NUMINA_AGENT_ID: int = 100000000000005
 ASSET_REPORT_AGENT_ID: int = 100000000000006
-
-# System skill IDs (family_id=0, skill_type="builtin")
-SKILL_FAMILY_ASSET_CHECKUP_ID: int = 100000000000010
-SKILL_REPORT_ID: int = 100000000000014
-SKILL_FAMILY_FINANCE_INSIGHT_PLANNER_ID: int = 100000000000011
-SKILL_FAMILY_LIABILITY_REVIEW_ID: int = 100000000000012
-SKILL_FIXED_ASSET_FOLLOWUP_ID: int = 100000000000013
+IMPORT_PARSE_AGENT_ID: int = 100000000000007
+# Plan A: finance-coach system agent (家庭财务处方建议). Stateless stream_run
+# agent — each run builds a fresh family finance snapshot; DeerMem would
+# pollute advice with stale snapshots. soul_md is a minimal persona (the real
+# advice contract lives in skills/builtin/public/finance-coach/SKILL.md).
+FINANCE_COACH_AGENT_ID: int = 100000000000008
+# Plan B T7: wish-advice system agent (W4 心愿优先储蓄建议). Stateless stream_run
+# agent — each run builds a fresh wishes snapshot; DeerMem would pollute advice
+# with stale wish state. soul_md is a minimal persona (the real advice contract
+# lives in skills/builtin/public/wish-advice/SKILL.md).
+WISH_ADVICE_AGENT_ID: int = 100000000000009

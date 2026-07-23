@@ -17,9 +17,9 @@ const i18n = createI18n({
       common: { loading: '加载中...', back: '返回' },
       wishes: {
         sectionActive: '✨ 进行中',
-        priorityLabelHigh: '高优先级 🔥',
-        priorityLabelMedium: '中优先级 ⭐',
-        priorityLabelLow: '低优先级 💤',
+        priorityLabelHigh: '最想要 🔥',
+        priorityLabelMedium: '比较想 ⭐',
+        priorityLabelLow: '以后再说 💤',
         progressFull: '积分已够',
         waitingGoal: '等待爸妈',
         waitingRedemption: '等待兑现',
@@ -27,7 +27,7 @@ const i18n = createI18n({
         realized: '已实现',
         rejected: '未通过',
         redeemBtn: '让爸妈实现',
-        timeUnitDays: '≈ {days} 天',
+        timeUnitDays: '按最近速度约 {days} 天',
         timeUnitPlaceholder: '继续做家务',
         constellation: { detailUnknown: '没找到这个心愿' },
       },
@@ -114,7 +114,7 @@ describe('ChildWishDetailPage', () => {
     ])
     const wrapper = await mountAt('w1')
     await flushPromises()
-    expect(wrapper.find('.hint-days').text()).toBe('≈ 10 天')
+    expect(wrapper.find('.hint-days').text()).toBe('按最近速度约 10 天')
   })
 
   it('renders "已实现" status line for realized wish; no redeem button', async () => {

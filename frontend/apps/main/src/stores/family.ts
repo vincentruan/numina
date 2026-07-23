@@ -11,6 +11,9 @@ export const useFamilyStore = defineStore('family', () => {
   // Coin tier exchange rates (loaded from family settings, defaults match backend)
   const coinCopperToSilver = ref(10)
   const coinSilverToGold = ref(10)
+  // Education reward (family-level opt-in: convert chore star coins to yuan in activity feed)
+  const educationRewardEnabled = ref(false)
+  const coinToYuanRate = ref(1)
 
   async function fetchFamily() {
     loading.value = true
@@ -33,6 +36,8 @@ export const useFamilyStore = defineStore('family', () => {
       const res = await familyApi.getFamilySettings()
       coinCopperToSilver.value = res.data.coin_copper_to_silver
       coinSilverToGold.value = res.data.coin_silver_to_gold
+      educationRewardEnabled.value = res.data.education_reward_enabled
+      coinToYuanRate.value = res.data.coin_to_yuan_rate
     } catch {
       // Keep defaults on failure — non-critical
     }
@@ -65,6 +70,7 @@ export const useFamilyStore = defineStore('family', () => {
   return {
     family, members, loading,
     coinCopperToSilver, coinSilverToGold,
+    educationRewardEnabled, coinToYuanRate,
     fetchFamily, fetchMembers, loadCoinConfig,
     regenerateInviteCode, updateMemberRole, removeMember, updateFamilyTitle,
   }

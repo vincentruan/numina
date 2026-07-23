@@ -58,8 +58,20 @@ from deerflow.config.app_config import (
     push_current_app_config,
 )
 from deerflow.config import memory_config as _memory_config_mod
-from deerflow.agents.memory import queue as _queue_mod
-from deerflow.agents.memory import updater as _updater_mod
+
+# DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
+# deermem backend's queue/updater classes out of the top-level
+# ``deerflow.agents.memory`` package into
+# ``deerflow.agents.memory.backends.deermem.deermem.core.*``. The classes
+# themselves (``MemoryUpdateQueue``, ``MemoryUpdater``) and the patched method
+# (``_do_update_memory_sync``) are unchanged — only the import path moved.
+# Try the new path first, fall back to the legacy path for older harness revs.
+try:
+    from deerflow.agents.memory.backends.deermem.deermem.core import queue as _queue_mod  # type: ignore
+    from deerflow.agents.memory.backends.deermem.deermem.core import updater as _updater_mod  # type: ignore
+except ImportError:  # legacy harness (pre-#4122)
+    from deerflow.agents.memory import queue as _queue_mod  # type: ignore
+    from deerflow.agents.memory import updater as _updater_mod  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -160,45 +172,26 @@ def install() -> None:
     _orig_add = _queue_mod.MemoryUpdateQueue.add
     _orig_add_nowait = _queue_mod.MemoryUpdateQueue.add_nowait
 
-    def _patched_add(
-        self: Any,
-        thread_id: str,
-        messages: list[Any],
-        agent_name: str | None = None,
-        user_id: str | None = None,
-        correction_detected: bool = False,
-        reinforcement_detected: bool = False,
-    ) -> None:
-        snapshot_config(thread_id, user_id, agent_name)
-        return _orig_add(
-            self,
-            thread_id,
-            messages,
-            agent_name=agent_name,
-            user_id=user_id,
-            correction_detected=correction_detected,
-            reinforcement_detected=reinforcement_detected,
-        )
+    def _snapshot_from_call(args: tuple, kwargs: dict) -> None:
+        """Extract (thread_id, user_id, agent_name) from an add/add_nowait call.
 
-    def _patched_add_nowait(
-        self: Any,
-        thread_id: str,
-        messages: list[Any],
-        agent_name: str | None = None,
-        user_id: str | None = None,
-        correction_detected: bool = False,
-        reinforcement_detected: bool = False,
-    ) -> None:
+        Signature: add(self, thread_id, messages, agent_name=None, user_id=None,
+        trace_id=None, ...). args excludes ``self`` (it is bound to the method).
+        thread_id is positional args[0]; agent_name/user_id may be positional
+        (args[2]/args[3]) or keyword.
+        """
+        thread_id = kwargs.get("thread_id") or (args[0] if len(args) > 0 else None)
+        agent_name = kwargs.get("agent_name") or (args[2] if len(args) > 2 else None)
+        user_id = kwargs.get("user_id") or (args[3] if len(args) > 3 else None)
         snapshot_config(thread_id, user_id, agent_name)
-        return _orig_add_nowait(
-            self,
-            thread_id,
-            messages,
-            agent_name=agent_name,
-            user_id=user_id,
-            correction_detected=correction_detected,
-            reinforcement_detected=reinforcement_detected,
-        )
+
+    def _patched_add(self: Any, *args: Any, **kwargs: Any) -> None:
+        _snapshot_from_call(args, kwargs)
+        return _orig_add(self, *args, **kwargs)
+
+    def _patched_add_nowait(self: Any, *args: Any, **kwargs: Any) -> None:
+        _snapshot_from_call(args, kwargs)
+        return _orig_add_nowait(self, *args, **kwargs)
 
     _queue_mod.MemoryUpdateQueue.add = _patched_add
     _queue_mod.MemoryUpdateQueue.add_nowait = _patched_add_nowait
@@ -214,6 +207,7 @@ def install() -> None:
         correction_detected: bool = False,
         reinforcement_detected: bool = False,
         user_id: str | None = None,
+        trace_id: str | None = None,
     ) -> bool:
         cfg = pop_config(thread_id, user_id, agent_name)
         if cfg is None:
@@ -227,6 +221,7 @@ def install() -> None:
                 correction_detected=correction_detected,
                 reinforcement_detected=reinforcement_detected,
                 user_id=user_id,
+                trace_id=trace_id,
             )
         push_current_app_config(cfg)
         try:
@@ -238,6 +233,7 @@ def install() -> None:
                 correction_detected=correction_detected,
                 reinforcement_detected=reinforcement_detected,
                 user_id=user_id,
+                trace_id=trace_id,
             )
         finally:
             pop_current_app_config()

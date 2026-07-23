@@ -97,6 +97,7 @@ import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { postWhatIf, type WhatIfAction, type WhatIfResponse } from '@/api/timeMachine'
+import { useCurrency } from '@/composables/useCurrency'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
@@ -105,6 +106,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const actions = ref<WhatIfAction[]>([{ action_type: 'invest', annual_return_rate: 0.06 }])
 const projectionYears = ref(10)
@@ -150,8 +152,8 @@ function onActionTypeSelect(item: { name: string; value: string }) {
 }
 
 function formatDiff(v: number) {
-  const sign = v >= 0 ? '+' : ''
-  return `${sign}¥${Math.abs(v).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
+  const sign = v >= 0 ? '+' : '-'
+  return `${sign}${currency.format(Math.abs(v))}`
 }
 
 async function calculate() {

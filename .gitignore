@@ -188,12 +188,17 @@ server/apps/backend/data/
 # Dogfood audit output (screenshots, reports — local only)
 dogfood-output/
 
+# UI simulation test audit reports (local only; historical reports already
+# tracked remain tracked — new daily reports are not committed)
+tests/audit-reports/
+
 # Playwright E2E Tests
 tests/playwright-report/
 tests/test-results/
 
 # Screenshot test runtime screenshots
 tests/screenshot/screenshots/
+tmp-test-screenshots/
 .claude/worktrees/
 .gstack/
 .worktrees/

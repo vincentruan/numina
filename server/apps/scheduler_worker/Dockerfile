@@ -13,6 +13,11 @@ RUN uv sync --frozen --no-dev --extra worker
 
 # Copy application code
 COPY apps/scheduler_worker/ ./apps/scheduler_worker/
+# Phase 2 coupling: packages/domain/notification/ and packages/domain/snapshot/
+# lazily import apps.backend.app.services.* at job runtime. The scheduler_worker
+# image must therefore include apps/backend/ until Phase 3 fully extracts that
+# logic into packages/. See packages/domain/notification/service.py.
+COPY apps/backend/ ./apps/backend/
 COPY packages/ ./packages/
 
 CMD ["uv", "run", "--no-dev", "uvicorn", "apps.scheduler_worker.main:app", "--host", "0.0.0.0", "--port", "8002"]

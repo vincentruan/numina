@@ -32,6 +32,7 @@ from apps.backend.app.config import settings
 from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
@@ -135,14 +136,23 @@ def _get_session_for_family(
     if session_id is None:
         return None
     try:
-        sid = int(session_id)
+        fid = int(family_id)
     except (ValueError, TypeError):
         return None
-    return (
-        db.query(AIChatSession)
-        .filter(AIChatSession.id == sid, AIChatSession.family_id == int(family_id))
-        .first()
-    )
+    try:
+        sid = int(session_id)
+        return (
+            db.query(AIChatSession)
+            .filter(AIChatSession.id == sid, AIChatSession.family_id == fid)
+            .first()
+        )
+    except (ValueError, TypeError):
+        # UUID format — query as string (DeerFlow agent creates UUID thread_ids)
+        return (
+            db.query(AIChatSession)
+            .filter(AIChatSession.id == str(session_id), AIChatSession.family_id == fid)
+            .first()
+        )
 
 
 def _get_latest_session(family_id: str, db: Session) -> AIChatSession | None:
@@ -391,6 +401,110 @@ async def stream_session_events(
 
 
 
+# ── Message Feedback (点赞/点踩) ─────────────────────────────────────────────
+
+
+class FeedbackRequest(BaseModel):
+    """点赞/点踩请求体。feedback: 1=点赞, -1=点踩, 0=取消。"""
+
+    feedback: Literal[1, -1, 0]
+
+
+class FeedbackResponse(BaseModel):
+    """单条消息的反馈状态回执。"""
+
+    message_id: str
+    feedback: int
+
+
+class FeedbackMapResponse(BaseModel):
+    """某会话下当前用户所有消息的反馈状态 (用于历史回填)。"""
+
+    items: dict[str, int]
+
+
+@sessions_router.post(
+    "/sessions/{session_id}/messages/{message_id}/feedback",
+    response_model=FeedbackResponse,
+)
+def submit_message_feedback(
+    session_id: str,
+    message_id: str,
+    body: FeedbackRequest,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> FeedbackResponse:
+    """提交对某条 AI 消息的点赞/点踩。
+
+    语义:再点同一个值会取消(feedback=0)。按用户独立记录,家庭内成员互不影响。
+    安全校验:session_id 必须属于当前 family。
+    """
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    thread_id = str(session.id)
+    row = (
+        db.query(AIChatMessageFeedback)
+        .filter(
+            AIChatMessageFeedback.family_id == current_user.family_id,
+            AIChatMessageFeedback.thread_id == thread_id,
+            AIChatMessageFeedback.message_id == message_id,
+            AIChatMessageFeedback.user_id == current_user.id,
+        )
+        .first()
+    )
+    if row is None:
+        row = AIChatMessageFeedback(
+            family_id=current_user.family_id,
+            user_id=current_user.id,
+            thread_id=thread_id,
+            message_id=message_id,
+            feedback=body.feedback,
+        )
+        db.add(row)
+    else:
+        # 再点同一个值 → 取消 (0);否则切换为新值
+        row.feedback = 0 if row.feedback == body.feedback else body.feedback
+    db.commit()
+    return FeedbackResponse(message_id=message_id, feedback=row.feedback)
+
+
+@sessions_router.get(
+    "/sessions/{session_id}/feedback",
+    response_model=FeedbackMapResponse,
+)
+def get_session_feedback(
+    session_id: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> FeedbackMapResponse:
+    """获取某会话下当前用户对所有消息的反馈状态 (用于历史加载时回填高亮)。"""
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    thread_id = str(session.id)
+    rows = (
+        db.query(AIChatMessageFeedback)
+        .filter(
+            AIChatMessageFeedback.family_id == current_user.family_id,
+            AIChatMessageFeedback.thread_id == thread_id,
+            AIChatMessageFeedback.user_id == current_user.id,
+            AIChatMessageFeedback.feedback != 0,
+        )
+        .all()
+    )
+    items = {r.message_id: r.feedback for r in rows}
+    return FeedbackMapResponse(items=items)
+
+
+
+
 # ── Artifacts endpoint (Phase 5: DeerFlow artifact preview) ───────────────────
 
 
@@ -439,38 +553,66 @@ async def get_artifact(
         raise AppError(ErrorCode.NOT_FOUND)
 
     # Security: Reject path traversal patterns in decoded path
-    if ".." in decoded_filepath or decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
+    if ".." in decoded_filepath:
         logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
         raise AppError(ErrorCode.NOT_FOUND)
 
-    # Try to find artifact in multiple possible locations:
-    # 1. DeerFlow tenant reports directory: ~/.numina/data/workspaces/tenants/{family_id}/reports/
-    # 2. Session artifact directory: CHAT_DIR/session_{session_id}/artifacts/
+    # Strip DeerFlow virtual sandbox prefix (/mnt/user-data/outputs/) so the
+    # bare filename can be resolved against the tenant reports directory.
+    from packages.core.path_manager import DEERFLOW_SANDBOX_OUTPUT_PREFIX
+    if decoded_filepath.startswith(DEERFLOW_SANDBOX_OUTPUT_PREFIX):
+        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_OUTPUT_PREFIX):]
+
+    # After stripping, reject any remaining absolute paths
+    if decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
+        logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    # Try to find artifact in two locations (search order matters):
+    # 1. Per-thread sandbox outputs (DeerFlow layout, unified 2026-07-19):
+    #    workspaces/users/{family_id}/threads/{thread_id}/user-data/outputs/
+    #    (agent write_file/str_replace with thread_id write here — per-thread isolation)
+    # 2. Tenant reports directory: workspaces/tenants/{family_id}/reports/
+    #    (MCP tools without thread_id, or old files — per-family fallback)
     family_id = current_user.family_id
     data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
 
+    # DeerFlow layout: {DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/user-data/outputs/
+    # DEER_FLOW_HOME (agent) = AGENT_DATA_DIR = {DATA_ROOT}/workspaces
+    family_threads = data_root / "workspaces" / "users" / str(family_id) / "threads"
     possible_paths = [
-        # DeerFlow tenant reports (primary location)
+        # Per-thread sandbox outputs (primary — agent writes with thread_id here)
+        family_threads / session_id / "user-data" / "outputs" / decoded_filepath,
+        # Tenant reports (backward compat — MCP tools without thread_id)
         data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
-        # Session artifacts (legacy location)
-        Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts" / decoded_filepath,
     ]
+    # Fallback: scan all per-thread user-data/outputs dirs for the family. This
+    # handles the case where session_id is a Snowflake int (agent writes use a
+    # UUID thread_id, so files land in a different thread dir than session_id
+    # would suggest). The filename regex validation above ensures the glob
+    # only matches safe filenames.
+    if family_threads.exists():
+        for match in family_threads.glob(f"*/user-data/outputs/{decoded_filepath}"):
+            possible_paths.append(match)
+
+    allowed_dirs = [
+        (family_threads / session_id / "user-data" / "outputs").resolve(),
+        (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
+    ]
+    # Also allow any resolved thread user-data/outputs dir (for the glob fallback)
+    if family_threads.exists():
+        allowed_dirs.append(family_threads.resolve())
 
     artifact_path = None
     for candidate_path in possible_paths:
-        # Security: Final check - resolved path must be within allowed directories
-        allowed_dirs = [
-            (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
-            (Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts").resolve(),
-        ]
-
         try:
             resolved = candidate_path.resolve()
-            # Check if resolved path is within any allowed directory
-            if any(resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()):
-                if resolved.exists():
-                    artifact_path = resolved
-                    break
+            # Security: resolved path must be within allowed directories
+            if resolved.exists() and any(
+                resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()
+            ):
+                artifact_path = resolved
+                break
         except (ValueError, OSError):
             continue
 

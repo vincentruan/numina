@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.snapshot import AssetSnapshot
@@ -14,12 +15,14 @@ from apps.backend.app.schemas.dashboard import (
     DailyCostStat,
     DurationBucket,
     DurationDistributionResponse,
+    EducationRewardSummaryResponse,
     ExpiringSoonItem,
     GoalProgressItem,
     GoalProgressResponse,
     GoalProgressSummary,
     InsightsResponse,
     InvestmentReturnItem,
+    InvestmentReturnSummary,
     LongestHeldStat,
     LowUsageItem,
     NewAssetItem,
@@ -37,7 +40,10 @@ from apps.backend.app.schemas.dashboard import (
     UpcomingPaymentItem,
     UpcomingPaymentsResponse,
 )
-from apps.backend.app.services.asset import compute_daily_cost, compute_return_rate
+from apps.backend.app.services.asset import (
+    compute_annualized_return,
+    compute_daily_cost,
+)
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 
 
@@ -63,7 +69,9 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
     for a in assets:
         if a.current_value is not None:
             asset_currency = a.currency or "CNY"
-            converted = ExchangeRateService.convert(a.current_value, asset_currency, default_currency, db)
+            # a.current_value is Decimal (Numeric); ExchangeRateService.convert
+            # takes float (Decimal/float mixed arithmetic raises TypeError).
+            converted = ExchangeRateService.convert(float(a.current_value), asset_currency, default_currency, db)
             total_assets_val += converted
 
     # Query liabilities and convert each to default currency
@@ -76,7 +84,10 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
     for l in liabilities:
         if l.remaining_amount is not None:
             liability_currency = getattr(l, "currency", "CNY") or "CNY"
-            converted = ExchangeRateService.convert(l.remaining_amount, liability_currency, default_currency, db)
+            # l.remaining_amount is Decimal (Numeric); ExchangeRateService.convert
+            # expects float. Coerce here — the aggregate is a stat where float
+            # precision is sufficient.
+            converted = ExchangeRateService.convert(float(l.remaining_amount), liability_currency, default_currency, db)
             total_liabilities_val += converted
 
     asset_count = len(assets)
@@ -109,10 +120,12 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         .first()
     )
     mom_change = None
+    mom_change_amount = None
     current_net = total_assets_val - total_liabilities_val
     if last_snapshot and last_snapshot.net_worth != 0:
         # Snapshot net_worth is stored in CNY, convert to default_currency for comparison
         snapshot_net = ExchangeRateService.convert(last_snapshot.net_worth, "CNY", default_currency, db)
+        mom_change_amount = round(current_net - snapshot_net, 2)
         mom_change = round((current_net - snapshot_net) / abs(snapshot_net) * 100, 2)
 
     return OverviewResponse(
@@ -121,6 +134,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         net_worth=round(current_net, 2),
         asset_count=asset_count,
         month_over_month_change=mom_change,
+        month_over_month_change_amount=mom_change_amount,
         total_daily_cost=total_daily_cost,
     )
 
@@ -144,7 +158,7 @@ def get_allocation(db: Session, user: User) -> AllocationResponse:
             continue
         cat_id = a.category_id
         asset_currency = a.currency or "CNY"
-        converted = ExchangeRateService.convert(a.current_value, asset_currency, default_currency, db)
+        converted = ExchangeRateService.convert(float(a.current_value), asset_currency, default_currency, db)
 
         if cat_id not in category_totals:
             category_totals[cat_id] = {
@@ -225,7 +239,7 @@ def get_top_assets(db: Session, user: User, limit: int = 10) -> list[TopAssetIte
     items = []
     for a in assets:
         asset_currency = a.currency or "CNY"
-        converted = ExchangeRateService.convert(a.current_value, asset_currency, default_currency, db)
+        converted = ExchangeRateService.convert(float(a.current_value), asset_currency, default_currency, db)
         items.append(
             TopAssetItem(
                 id=a.id,
@@ -264,7 +278,7 @@ def get_daily_cost_ranking(db: Session, user: User, limit: int = 10) -> list[Dai
         if dc is not None and dc > 0:
             days = (date.today() - a.purchase_date).days
             years = days / 365.0
-            total_cost = a.purchase_price + (a.annual_maintenance_cost or 0) * years
+            total_cost = float(a.purchase_price) + float(a.annual_maintenance_cost or 0) * years
 
             # Convert to default currency
             asset_currency = a.currency or "CNY"
@@ -310,7 +324,7 @@ def get_low_usage_assets(db: Session, user: User) -> list[LowUsageItem]:
             icon=a.category.icon if a.category else "",
             current_value=round(
                 ExchangeRateService.convert(
-                    a.current_value or 0, a.currency or "CNY", default_currency, db
+                    float(a.current_value or 0), a.currency or "CNY", default_currency, db
                 ),
                 2,
             ),
@@ -341,14 +355,14 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
 
     items = []
     for a in assets:
-        rr = compute_return_rate(a)
+        rr = compute_annualized_return(a)
         if rr is not None:
             asset_currency = a.currency or "CNY"
             purchase_price_converted = ExchangeRateService.convert(
-                a.purchase_price, asset_currency, default_currency, db
+                float(a.purchase_price), asset_currency, default_currency, db
             )
             current_value_converted = ExchangeRateService.convert(
-                a.current_value, asset_currency, default_currency, db
+                float(a.current_value), asset_currency, default_currency, db
             )
             profit = current_value_converted - purchase_price_converted
 
@@ -370,6 +384,48 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
 
     items.sort(key=lambda x: x.return_rate, reverse=True)
     return items
+
+
+def get_education_reward_summary(db: Session, user: User) -> EducationRewardSummaryResponse:
+    """B1 教育奖励支出专项统计（方案 B）。
+
+    聚合当前 family 的 `type='education_reward'` Activity：
+    - total / count：全时段 sum(amount) / count
+    - month_total：本月 sum(amount)（created_at >= 本月 1 号，KTD-3）
+
+    不做货币换算（KTD-1：amount 写入时已是元值）。无记录返回 0，不报错（KTD-2）。
+    """
+    family_id = user.family_id
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
+
+    total_row = (
+        db.query(
+            func.coalesce(func.sum(Activity.amount), 0).label("total"),
+            func.count(Activity.id).label("cnt"),
+        )
+        .filter(
+            Activity.family_id == family_id,
+            Activity.type == "education_reward",
+        )
+        .one()
+    )
+
+    month_total = (
+        db.query(func.coalesce(func.sum(Activity.amount), 0).label("month_total"))
+        .filter(
+            Activity.family_id == family_id,
+            Activity.type == "education_reward",
+            Activity.created_at >= month_start,
+        )
+        .scalar()
+    )
+
+    return EducationRewardSummaryResponse(
+        total=float(total_row.total or 0),
+        month_total=float(month_total or 0),
+        count=int(total_row.cnt or 0),
+    )
 
 
 def get_states_summary(db: Session, user: User) -> dict:
@@ -473,8 +529,12 @@ def get_home_assets_page(
     page: int = 1,
     page_size: int = 20,
     category_id: str | None = None,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "desc",
+    asset_type: str | None = None,
 ) -> dict:
-    """分页获取指定状态的资产列表"""
+    """分页获取指定状态的资产列表（支持搜索/排序/类型筛选）"""
     import math
 
     from apps.backend.app.schemas.asset import AssetResponse
@@ -492,12 +552,26 @@ def get_home_assets_page(
             filters.append(Asset.category_id == int(category_id))
         except ValueError:
             pass  # invalid category_id format — ignore filter, return all
+    if asset_type in ("physical", "financial"):
+        filters.append(Asset.asset_type == asset_type)
+    if search:
+        filters.append(Asset.name.ilike(f"%{search}%"))
+
+    # Sorting: whitelist columns to avoid arbitrary-column injection; default updated_at desc
+    sort_columns = {
+        "current_value": Asset.current_value,
+        "purchase_date": Asset.purchase_date,
+        "name": Asset.name,
+        "updated_at": Asset.updated_at,
+    }
+    sort_col = sort_columns.get(sort_by or "", Asset.updated_at)
+    order = sort_col.asc() if sort_order == "asc" else sort_col.desc()
 
     query = (
         db.query(Asset)
         .options(joinedload(Asset.category), joinedload(Asset.tags))
         .filter(*filters)
-        .order_by(Asset.updated_at.desc())
+        .order_by(order)
     )
 
     total = query.count()
@@ -561,7 +635,7 @@ def get_expiring_soon_assets(db: Session, user: User, days_threshold: int = 90) 
         if remaining_days <= days_threshold:
             asset_currency = a.currency or "CNY"
             current_value_converted = ExchangeRateService.convert(
-                a.current_value or 0, asset_currency, default_currency, db
+                float(a.current_value or 0), asset_currency, default_currency, db
             )
 
             items.append(
@@ -651,7 +725,7 @@ def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsR
                 category_name=a.category.name if a.category else "",
                 current_value=round(
                     ExchangeRateService.convert(
-                        a.current_value or 0, a.currency or "CNY", default_currency, db
+                        float(a.current_value or 0), a.currency or "CNY", default_currency, db
                     ),
                     2,
                 ),
@@ -965,7 +1039,7 @@ def get_retention_rate(db: Session, user: User) -> RetentionRateResponse:
             continue
 
         asset_currency = a.currency or "CNY"
-        bought = ExchangeRateService.convert(a.purchase_price, asset_currency, default_currency, db)
+        bought = ExchangeRateService.convert(float(a.purchase_price), asset_currency, default_currency, db)
 
         # Get current value (or 0 if sold/retired)
         if a.status in ("sold", "retired"):
@@ -973,7 +1047,7 @@ def get_retention_rate(db: Session, user: User) -> RetentionRateResponse:
             # Add to sold total
             total_sold += bought
         else:
-            current = ExchangeRateService.convert(a.current_value or 0, asset_currency, default_currency, db)
+            current = ExchangeRateService.convert(float(a.current_value or 0), asset_currency, default_currency, db)
 
         total_bought += bought
 
@@ -1014,6 +1088,23 @@ def get_retention_rate(db: Session, user: User) -> RetentionRateResponse:
 
 def get_insights(db: Session, user: User) -> InsightsResponse:
     """获取洞悉 Tab 完整数据"""
+    investment_items = get_investment_returns(db, user)
+    if investment_items:
+        avg_annualized = round(
+            sum(i.return_rate for i in investment_items) / len(investment_items), 2
+        )
+        investment_summary = InvestmentReturnSummary(
+            annualized_rate=avg_annualized,
+            asset_count=len(investment_items),
+            description="金融资产年化收益率（按持有天数年化）",
+        )
+    else:
+        investment_summary = InvestmentReturnSummary(
+            annualized_rate=None,
+            asset_count=0,
+            description="暂无有效持有天数的金融资产",
+        )
+
     return InsightsResponse(
         smart_discovery=get_smart_discovery(db, user),
         daily_cost_ranking=get_daily_cost_ranking(db, user, limit=5),
@@ -1021,6 +1112,7 @@ def get_insights(db: Session, user: User) -> InsightsResponse:
         type_distribution=get_type_distribution(db, user),
         duration_distribution=get_duration_distribution(db, user),
         retention_rate=get_retention_rate(db, user),
+        investment_returns=investment_summary,
     )
 
 
@@ -1075,7 +1167,7 @@ def get_upcoming_payments(db: Session, user: User, days: int = 7) -> UpcomingPay
             UpcomingPaymentItem(
                 liability_id=liability.id,
                 name=liability.name,
-                amount=liability.monthly_payment,
+                amount=float(liability.monthly_payment) if liability.monthly_payment is not None else None,
                 due_date=next_due.isoformat(),
             )
         )

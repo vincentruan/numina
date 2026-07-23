@@ -6,6 +6,10 @@ export interface ThreadSession {
   original_title?: string
   status: 'idle' | 'interrupted' | 'error'
   is_pinned: boolean
+  /** True when this session was branched from another thread (source=='branch'). */
+  is_branch?: boolean
+  /** Thread id this session was branched from; undefined for non-branch sessions. */
+  parent_thread_id?: string
   created_at: string
   updated_at: string
 }

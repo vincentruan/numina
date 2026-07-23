@@ -1,16 +1,39 @@
 from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
+
+
+def _coerce_to_decimal(v: Any) -> Decimal | None:
+    """Accept int/float/str/Decimal and return a Decimal (or None).
+
+    Shared input coercion for money fields on Create/Update/PaymentRequest.
+    """
+    if v is None or isinstance(v, Decimal):
+        return v
+    return Decimal(str(v))
+
+
+def _coerce_money_str(v: Any) -> str | None:
+    """Serialize a money value to a 2-decimal str (or None) for the wire.
+
+    Shared output coercion for money fields on LiabilityResponse — the
+    money-as-str convention (Decimal in compute, str on the wire).
+    """
+    if v is None or isinstance(v, str):
+        return v
+    return str(Decimal(v).quantize(Decimal("0.01")))
 
 
 class LiabilityCreate(BaseModel):
     category: str
     name: str
-    original_amount: float
-    remaining_amount: float
-    monthly_payment: float | None = None
+    original_amount: Decimal
+    remaining_amount: Decimal
+    monthly_payment: Decimal | None = None
     interest_rate: float | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -19,13 +42,18 @@ class LiabilityCreate(BaseModel):
     notes: str | None = None
     currency: str = "CNY"
 
+    @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_to_decimal(v)
+
 
 class LiabilityUpdate(BaseModel):
     category: str | None = None
     name: str | None = None
-    original_amount: float | None = None
-    remaining_amount: float | None = None
-    monthly_payment: float | None = None
+    original_amount: Decimal | None = None
+    remaining_amount: Decimal | None = None
+    monthly_payment: Decimal | None = None
     interest_rate: float | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -34,9 +62,52 @@ class LiabilityUpdate(BaseModel):
     notes: str | None = None
     currency: str | None = None
 
+    @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_to_decimal(v)
+
 
 class PaymentRequest(BaseModel):
-    amount: float
+    amount: Decimal
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_to_decimal(v)
+
+
+class PaymentRecordResponse(SnowflakeBase):
+    id: int
+    liability_id: int
+    # Money field serialized as str (2 decimals) per the money-as-str convention.
+    amount: str
+    paid_at: datetime
+    notes: str | None = None
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_money_str(v)
+
+
+class LinkedAssetSummary(BaseModel):
+    """Summary of a liability's collateral asset (L7).
+
+    Populated only on the detail endpoint (KTD-2) so the frontend can render a
+    "current value vs remaining loan (coverage %)" comparison without a second
+    round-trip. current_value is str on the wire (money-as-str convention).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    current_value: str | None = None
+
+    @field_validator("current_value", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_money_str(v)
 
 
 class LiabilityResponse(SnowflakeBase):
@@ -45,9 +116,10 @@ class LiabilityResponse(SnowflakeBase):
     family_id: int
     category: str
     name: str
-    original_amount: float
-    remaining_amount: float
-    monthly_payment: float | None = None
+    # Money fields serialized as str (2 decimals) per the money-as-str convention.
+    original_amount: str
+    remaining_amount: str
+    monthly_payment: str | None = None
     interest_rate: float | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -58,3 +130,19 @@ class LiabilityResponse(SnowflakeBase):
     currency: str = "CNY"
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_money_str(v)
+
+
+class LiabilityDetailResponse(LiabilityResponse):
+    """Detail-only response (L7, KTD-2).
+
+    Adds the linked_asset summary so the frontend can render a collateral
+    coverage comparison. Kept off the list response to avoid an N+1 per row —
+    only the detail endpoint resolves the relationship.
+    """
+
+    linked_asset: LinkedAssetSummary | None = None

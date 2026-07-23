@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -7,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Numeric,
     String,
     Text,
     func,
@@ -25,9 +27,12 @@ class Liability(Base):
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
     category: Mapped[str] = mapped_column(String(30), nullable=False)  # mortgage/car_loan/credit_card/personal_loan/other
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    original_amount: Mapped[float] = mapped_column(Float, nullable=False)
-    remaining_amount: Mapped[float] = mapped_column(Float, nullable=False)
-    monthly_payment: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Money fields are NUMERIC(18,2) — Decimal in Python, serialized as str on
+    # the wire (SnowflakeBase money-as-str convention, CLAUDE.md §bigint). Was
+    # Float pre-T8b (precision risk for currency); migrated to Numeric.
+    original_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    remaining_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    monthly_payment: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     interest_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -12,6 +12,7 @@ const GUEST_ROUTES: string[] = []
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior: () => ({ top: 0 }),
   routes: [
     // Authenticated child routes
     {
@@ -74,6 +75,11 @@ const router = createRouter({
           name: 'ChildDayDetail',
           component: () => import('@/pages/ChildDayDetailPage.vue'),
           meta: { hasSkeleton: true }
+        },
+        {
+          path: 'settings',
+          name: 'ChildSettings',
+          component: () => import('@/pages/ChildSettingsPage.vue'),
         },
       ],
     },

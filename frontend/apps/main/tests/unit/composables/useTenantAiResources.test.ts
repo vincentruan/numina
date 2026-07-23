@@ -3,10 +3,32 @@
  *
  * 参考: frontend/src/components/workspace/input-box.tsx INPUT_MODE_CONFIGS + getResolvedMode
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
+
+// Hoisted mocks for the loadResources / MCP-unwrap tests. The pure-function suites
+// below (INPUT_MODE_CONFIGS, getResolvedMode) do not touch these modules, so the
+// mocks are inert for them.
+const httpGetMock = vi.fn()
+const getMCPServersMock = vi.fn()
+vi.mock('@/api', () => ({
+  default: { get: (...args: unknown[]) => httpGetMock(...args) },
+}))
+vi.mock('@/api/ai', () => ({
+  getMCPServers: () => getMCPServersMock(),
+}))
+vi.mock('@/stores/family', () => ({
+  useFamilyStore: () => ({ family: { id: 'fam-1' } }),
+}))
+vi.mock('vant', () => ({ showFailToast: vi.fn() }))
+vi.mock('@/i18n', () => ({
+  default: { global: { t: (k: string) => k } },
+}))
+
 import {
   INPUT_MODE_CONFIGS,
   getResolvedMode,
+  useTenantAiResources,
   type InputMode,
 } from '@/composables/ai-chat/useTenantAiResources'
 
@@ -112,5 +134,49 @@ describe('getResolvedMode', () => {
   it('does not upgrade mode when requested is lower', () => {
     // If user explicitly requests flash, stay flash even if capable
     expect(getResolvedMode('flash', true, true)).toBe('flash')
+  })
+})
+
+// Regression coverage for the axios-unwrap bugfix: getMCPServers() returns an
+// AxiosResponse, and loadResources must assign res.data (the MCPServer[]), not the
+// wrapper. Pre-fix, mcpServers held the AxiosResponse and hasWebSearchMcp's
+// `.some(...)` would throw (`.some is not a function`). mcpServers is internal, so
+// we assert through the derived hasWebSearchMcp.
+describe('loadResources MCP unwrap', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    httpGetMock.mockReset()
+    getMCPServersMock.mockReset()
+    httpGetMock.mockResolvedValue({
+      data: { models: [], subagent_enabled: false, websearch_enabled: false },
+    })
+  })
+
+  it('assigns res.data (the array), so hasWebSearchMcp reflects an enabled websearch server', async () => {
+    getMCPServersMock.mockResolvedValue({
+      data: [{ name: 'ws', mcp_type: 'websearch', is_enabled: true }],
+    })
+    const { loadResources, hasWebSearchMcp } = useTenantAiResources()
+    await loadResources()
+    // Would throw `.some is not a function` if mcpServers held the AxiosResponse.
+    expect(hasWebSearchMcp.value).toBe(true)
+  })
+
+  it('hasWebSearchMcp is false when no websearch server is enabled', async () => {
+    getMCPServersMock.mockResolvedValue({
+      data: [{ name: 'other', mcp_type: 'other', is_enabled: true }],
+    })
+    const { loadResources, hasWebSearchMcp } = useTenantAiResources()
+    await loadResources()
+    expect(hasWebSearchMcp.value).toBe(false)
+  })
+
+  it('falls back to [] (hasWebSearchMcp false) when getMCPServers rejects', async () => {
+    getMCPServersMock.mockRejectedValue(new Error('network'))
+    const { loadResources, hasWebSearchMcp, error } = useTenantAiResources()
+    await loadResources()
+    expect(hasWebSearchMcp.value).toBe(false)
+    // models load succeeded, so no error surfaced from the MCP failure
+    expect(error.value).toBeNull()
   })
 })

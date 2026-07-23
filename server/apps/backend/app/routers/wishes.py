@@ -5,8 +5,16 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.asset import AssetResponse
-from apps.backend.app.schemas.wish import WishCreate, WishRealizeRequest, WishResponse, WishUpdate
+from apps.backend.app.schemas.wish import (
+    WishCreate,
+    WishIgnoreDebtWarning,
+    WishRealizeRequest,
+    WishResponse,
+    WishUpdate,
+)
+from apps.backend.app.schemas.wish_savings import SavingsLogCreate, SavingsLogResponse
 from apps.backend.app.services import wish as wish_service
+from apps.backend.app.services import wish_savings
 
 router = APIRouter(prefix="/wishes", tags=["wishes"])
 
@@ -55,3 +63,49 @@ def realize_wish(
     resp.daily_cost = asset_service.compute_daily_cost(asset)
     resp.return_rate = asset_service.compute_return_rate(asset)
     return resp
+
+
+@router.post("/{wish_id}/savings", response_model=SavingsLogResponse, status_code=201)
+def record_savings(
+    wish_id: int,
+    req: SavingsLogCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Record a savings deposit/withdrawal for a wish (W1)."""
+    return wish_savings.record_savings(db, user, str(wish_id), req.amount, req.log_date, req.note)
+
+
+@router.get("/{wish_id}/savings", response_model=list[SavingsLogResponse])
+def list_savings(
+    wish_id: int,
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """List a wish's savings logs, newest first (W1)."""
+    return wish_savings.list_savings(db, user, str(wish_id), page, size)
+
+
+@router.delete("/{wish_id}/savings/{log_id}")
+def delete_savings(
+    wish_id: int,
+    log_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Delete a savings log + reverse its amount from saved_amount (W1)."""
+    wish_savings.delete_savings(db, user, str(wish_id), str(log_id))
+    return {"detail": "已删除"}
+
+
+@router.patch("/{wish_id}/ignore-debt-warning", response_model=WishResponse)
+def set_ignore_debt_warning(
+    wish_id: int,
+    req: WishIgnoreDebtWarning,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Toggle the wish's debt-warning override flag (W5)."""
+    return wish_service.set_ignore_debt_warning(db, user, str(wish_id), req.ignore)

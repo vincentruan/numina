@@ -10,6 +10,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.child_economy_config import ChildEconomyConfig
+from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
@@ -122,6 +123,11 @@ def get_aggregate(
         .filter(Asset.family_id == family_id, Asset.is_archived == False)
         .scalar()
     )
+    # Coerce to float: asset values are Float, liability amounts are now
+    # Decimal (Numeric); mixing them raises TypeError. The aggregate is a
+    # dashboard stat where float precision is sufficient.
+    total_assets = float(total_assets or 0)
+    total_liabilities = float(total_liabilities or 0)
     return {
         "total_assets": total_assets,
         "total_liabilities": total_liabilities,
@@ -159,6 +165,10 @@ def get_member_summary(
         .filter(Asset.user_id == member_id, Asset.is_archived == False)
         .scalar()
     )
+    # Coerce to float: asset values are Float, liability amounts are Decimal
+    # (Numeric); mixing them raises TypeError (mirror get_aggregate's fix).
+    total_assets = float(total_assets or 0)
+    total_liabilities = float(total_liabilities or 0)
     return MemberSummary(
         user=UserResponse.model_validate(member),
         total_assets=total_assets,
@@ -282,6 +292,10 @@ def update_family_settings(
         config.coin_copper_to_silver = body.coin_copper_to_silver
     if body.coin_silver_to_gold is not None:
         config.coin_silver_to_gold = body.coin_silver_to_gold
+    if body.education_reward_enabled is not None:
+        config.education_reward_enabled = body.education_reward_enabled
+    if body.coin_to_yuan_rate is not None:
+        config.coin_to_yuan_rate = body.coin_to_yuan_rate
     db.commit()
     db.refresh(config)
 
@@ -295,6 +309,8 @@ def update_family_settings(
         ai_enabled=ai_enabled,
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
+        education_reward_enabled=config.education_reward_enabled,
+        coin_to_yuan_rate=config.coin_to_yuan_rate,
     )
 
 
@@ -320,7 +336,75 @@ def get_family_settings(
         ai_enabled=ai_enabled,
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
+        education_reward_enabled=config.education_reward_enabled,
+        coin_to_yuan_rate=config.coin_to_yuan_rate,
     )
+
+
+# W5 (Plan B T8): high-interest-debt thresholds. A liability is "high-interest"
+# when its annual interest_rate >= its category's threshold. Owner-only write
+# (spec §5.1 security-lens: a non-owner must not suppress/unsuppress the whole
+# family's warnings); all family members read.
+DEFAULT_DEBT_THRESHOLDS: dict[str, int] = {
+    "credit_card": 12,
+    "personal_loan": 10,
+    "mortgage": 6,
+    "other": 10,
+}
+
+
+class DebtThresholdsRequest(BaseModel):
+    thresholds: dict[str, int]
+
+
+def _thresholds_dict(cfg: FamilyDebtThresholds) -> dict[str, int]:
+    return {
+        "credit_card": cfg.credit_card,
+        "personal_loan": cfg.personal_loan,
+        "mortgage": cfg.mortgage,
+        "other": cfg.other,
+    }
+
+
+def _get_or_create_debt_thresholds(db: Session, family_id: int) -> FamilyDebtThresholds:
+    cfg = db.query(FamilyDebtThresholds).filter_by(family_id=family_id).first()
+    if cfg is None:
+        cfg = FamilyDebtThresholds(family_id=family_id)
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+    return cfg
+
+
+@router.get("/debt-thresholds")
+def get_debt_thresholds(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """W5: read debt-interest thresholds (visible to all family members)."""
+    cfg = _get_or_create_debt_thresholds(db, user.family_id)
+    return {"thresholds": _thresholds_dict(cfg)}
+
+
+@router.put("/debt-thresholds")
+def put_debt_thresholds(
+    body: DebtThresholdsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """W5: update debt-interest thresholds. Owner-only — a non-owner could
+    suppress/unsuppress the whole family's high-interest warnings."""
+    if user.role != "owner":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+
+    cfg = _get_or_create_debt_thresholds(db, user.family_id)
+    # Merge: only the 4 known categories are writable; unknown keys ignored.
+    for key in DEFAULT_DEBT_THRESHOLDS:
+        if key in body.thresholds:
+            setattr(cfg, key, body.thresholds[key])
+    db.commit()
+    db.refresh(cfg)
+    return {"thresholds": _thresholds_dict(cfg)}
 
 
 @router.get("/children/{child_id}/balance", response_model=ChildBalanceResponse)
@@ -523,6 +607,10 @@ def update_economy_config(
         cfg.coin_copper_to_silver = body.coin_copper_to_silver
     if body.coin_silver_to_gold is not None:
         cfg.coin_silver_to_gold = body.coin_silver_to_gold
+    if body.education_reward_enabled is not None:
+        cfg.education_reward_enabled = body.education_reward_enabled
+    if body.coin_to_yuan_rate is not None:
+        cfg.coin_to_yuan_rate = body.coin_to_yuan_rate
     db.commit()
     db.refresh(cfg)
     return ChildEconomyConfigResponse.model_validate(cfg)

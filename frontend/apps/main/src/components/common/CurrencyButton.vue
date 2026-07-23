@@ -1,5 +1,5 @@
 <template>
-  <div class="currency-button" @click="showPicker = true">
+  <div class="currency-button" role="button" tabindex="0" @click="showPicker = true" @keydown.enter="showPicker = true" @keydown.space.prevent="showPicker = true">
     <span class="currency-flag">{{ flag }}</span>
     <span class="currency-symbol">{{ symbol }}</span>
     <van-icon name="arrow-down" size="10" />

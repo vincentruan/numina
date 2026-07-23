@@ -11,14 +11,15 @@ import { useI18n } from 'vue-i18n'
 import { getDaysUntilPayment } from '@/utils/date'
 
 const props = defineProps<{
-  startDate: string | null
+  // Derived from liability.start_date's day-of-month; assumes start_date day == billing day
+  nextPaymentDate: string | null
   endDate: string | null
   isActive: boolean
 }>()
 
 const { t } = useI18n()
 
-const daysUntil = computed(() => getDaysUntilPayment(props.startDate))
+const daysUntil = computed(() => getDaysUntilPayment(props.nextPaymentDate))
 
 const isEndDatePast = computed(() => {
   if (!props.endDate) return false
@@ -31,7 +32,7 @@ const isEndDatePast = computed(() => {
 
 const shouldShow = computed(() => {
   if (!props.isActive) return false
-  if (!props.startDate) return false
+  if (!props.nextPaymentDate) return false
   if (isEndDatePast.value) return false
   return daysUntil.value !== null
 })

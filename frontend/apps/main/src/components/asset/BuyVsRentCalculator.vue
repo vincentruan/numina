@@ -37,8 +37,8 @@
     </van-cell>
 
     <template v-if="result">
-      <van-cell title="买入总成本" :value="`¥${result.buy_total.toLocaleString()}`" />
-      <van-cell title="租用总成本" :value="`¥${result.rent_total.toLocaleString()}`" />
+      <van-cell title="买入总成本" :value="format(Number(result.buy_total))" />
+      <van-cell title="租用总成本" :value="format(Number(result.rent_total))" />
       <van-cell
         title="盈亏平衡月数"
         :value="result.breakeven_months != null ? `${result.breakeven_months} 个月` : '--'"
@@ -59,10 +59,12 @@ import { ref } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { calculateBuyVsRent, type BuyVsRentResult } from '@/api/assetsAnalysis'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{ initialPrice?: number }>()
 
 const { t } = useI18n()
+const { format } = useCurrency()
 
 const loading = ref(false)
 const result = ref<BuyVsRentResult | null>(null)

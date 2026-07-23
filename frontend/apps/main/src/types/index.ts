@@ -9,6 +9,7 @@ export interface User {
   theme: string
   language: string
   default_currency: string
+  theme_color: string | null
   view_mode: string
   created_at: string
   second_factor_enabled?: boolean
@@ -46,8 +47,10 @@ export interface Asset {
   category?: Category
   name: string
   asset_type: 'physical' | 'financial'
-  purchase_price: number
-  current_value: number
+  // Money fields are str on the wire (money-as-str: Decimal in compute, str on
+  // the wire; JS double loses precision >2^53). Backend migrated Float→Numeric(18,2).
+  purchase_price: string | null
+  current_value: string | null
   currency: string
   purchase_date: string
   status: 'in_use' | 'idle' | 'sold' | 'retired'
@@ -57,16 +60,16 @@ export interface Asset {
   maturity_date?: string
   warranty_expiry_date?: string
   expected_lifespan_days?: number
-  annual_maintenance_cost?: number
+  annual_maintenance_cost?: string | null
   usage_frequency?: 'daily' | 'weekly' | 'monthly' | 'rarely' | 'idle'
   properties?: string
   notes?: string
-  sell_price?: number
+  sell_price?: string | null
   sell_date?: string
-  sell_fee?: number
+  sell_fee?: string | null
   sell_channel?: string
   retire_date?: string
-  target_daily_cost?: number
+  target_daily_cost?: string | null
   image_url?: string
   tags?: Tag[]
   daily_cost?: number
@@ -86,19 +89,19 @@ export interface AssetSellRequest {
 export interface AssetSellResponse {
   asset_id: string
   name: string
-  net_recovery: number
-  total_profit_loss: number
-  actual_daily_cost: number
-  target_daily_cost: number | null
+  net_recovery: string
+  total_profit_loss: string
+  actual_daily_cost: string
+  target_daily_cost: string | null
   days_held: number
-  purchase_price: number | null
-  sell_price: number
+  purchase_price: string | null
+  sell_price: string
 }
 
 export interface AssetValuation {
   id: string
   asset_id: string
-  value: number
+  value: string
   valued_at: string
   notes?: string
 }
@@ -109,17 +112,60 @@ export interface Liability {
   family_id: string
   category: 'mortgage' | 'car_loan' | 'credit_card' | 'personal_loan' | 'other'
   name: string
-  original_amount: number
-  remaining_amount: number
+  // Money fields are str on the wire (SnowflakeBase money-as-str). Was number
+  // pre-T8b; backend migrated Float→Numeric(18,2)+str serialization.
+  original_amount: string
+  remaining_amount: string
   currency: string
-  monthly_payment: number
-  interest_rate: number
+  monthly_payment: string | null
+  interest_rate: number | null
   start_date: string
   end_date?: string
   institution?: string
   linked_asset_id?: string
+  // L7 (KTD-2): populated only on the detail endpoint — {name, current_value(str)}.
+  // Absent on list/create/update responses.
+  linked_asset?: { name: string; current_value: string | null }
   notes?: string
   is_active: boolean
+}
+
+// The Asset money fields, single source of truth. Money is `string` on the response
+// (money-as-str) but `number` on the request (backend coerces). Both AssetRequestPayload
+// (below) and the asset store's optimistic update derive from this list, so adding or
+// renaming a money field is a one-line change here instead of editing three places.
+export const ASSET_MONEY_FIELDS = [
+  'purchase_price',
+  'current_value',
+  'annual_maintenance_cost',
+  'sell_price',
+  'sell_fee',
+  'target_daily_cost',
+] as const
+export type AssetMoneyField = (typeof ASSET_MONEY_FIELDS)[number]
+
+// Request payloads for create/update. The response types above carry money as
+// `string` (money-as-str on the wire OUT), but the backend's create/update schemas
+// declare these fields `float`/`Decimal` and Pydantic coerces numeric input — so the
+// forms send numbers. These payload types make that direction honest instead of
+// reusing the response shape (which mistypes the money fields as string).
+export type AssetRequestPayload = Omit<Partial<Asset>, AssetMoneyField> & {
+  purchase_price?: number | null
+  current_value?: number | null
+  annual_maintenance_cost?: number | null
+  sell_price?: number | null
+  sell_fee?: number | null
+  target_daily_cost?: number | null
+  tag_ids?: string[]
+}
+
+export type LiabilityRequestPayload = Omit<Partial<Liability>, 'original_amount' | 'remaining_amount' | 'monthly_payment' | 'linked_asset_id'> & {
+  original_amount?: number
+  remaining_amount?: number
+  monthly_payment?: number | null
+  // null = explicitly unlink (backend update uses exclude_unset, so null clears the
+  // link while omitting the key preserves it). Distinct from undefined.
+  linked_asset_id?: string | null
 }
 
 export interface Tag {
@@ -135,6 +181,7 @@ export interface DashboardOverview {
   net_worth: number
   asset_count: number
   month_over_month_change: number | null
+  month_over_month_change_amount: number | null
   total_daily_cost: number
 }
 
@@ -211,6 +258,12 @@ export interface StatesSummaryResponse {
   states: Record<string, StatusSummary>
   total_count: number
   total_value: number
+}
+
+export interface EducationRewardSummary {
+  total: number
+  month_total: number
+  count: number
 }
 
 export interface NewAssetItem {
@@ -294,7 +347,9 @@ export interface Wish {
   user_id: string
   name: string
   description?: string
-  expected_price?: number
+  // Serialized as str from the backend (SnowflakeBase money-as-str), like
+  // saved_amount/monthly_saving below. WishResponse.expected_price is str | None.
+  expected_price?: string
   currency: string
   priority: string
   status: string
@@ -303,6 +358,13 @@ export interface Wish {
   converts_to_asset: boolean
   realized_asset_id?: string
   fulfilled_at?: string
+  // W1 savings fields (Plan B T1-T3). Serialized as str from the backend
+  // (SnowflakeBase money-as-str); typed loosely here as the existing fields.
+  saved_amount?: string
+  monthly_saving?: string
+  target_date?: string
+  savings_count?: number
+  ignore_debt_warning?: boolean
   created_at: string
   updated_at: string
 }
@@ -314,6 +376,49 @@ export interface CategoryInfo {
   asset_type: string
 }
 
+// Wish create/update payload. The form sends expected_price/monthly_saving as numbers
+// (parseFloat of the text input); the redistribution path sends monthly_saving as a
+// numeric string. Backend declares these Decimal and coerces either, so accept both.
+export type WishRequestPayload = Omit<Partial<Wish>, 'expected_price' | 'monthly_saving'> & {
+  expected_price?: number
+  monthly_saving?: number | string
+}
+
+// W4 wish-priority advice (Plan B T7). Independent of finance_coach's suggestions[].
+export interface WishRedistribution {
+  wish_id: string
+  suggested_amount: string
+  note: string
+}
+export interface WishAdvice {
+  primary_wish_id: string
+  reason: string
+  suggested_monthly: string
+  redistribution: WishRedistribution[]
+}
+
+// W1 savings log (Plan B T9 frontend). T3 added the backend route + schema.
+export interface SavingsLog {
+  id: string
+  wish_id: string
+  amount: string
+  log_date: string
+  note: string | null
+  created_at: string
+}
+
+// L2 /liabilities/simulate result (Plan B T9 frontend). T4 added the endpoint.
+export interface LiabilitySimResult {
+  total_interest: string
+  months: number
+  monthly_payment: string | null
+  warning: string | null
+  baseline_total_interest?: string
+  baseline_months?: number
+  savings_vs_baseline?: string
+  months_saved?: number
+}
+
 export interface WishRealizeRequest {
   purchase_price: number
   purchase_date: string
@@ -323,7 +428,7 @@ export interface WishRealizeRequest {
 export interface PaymentRecord {
   id: string
   liability_id: string
-  amount: number
+  amount: string
   paid_at: string
   notes?: string
 }
@@ -348,67 +453,6 @@ export interface RatesResponse {
 }
 
 // ── AI types ──────────────────────────────────────────────────────────────────
-
-export interface AssetAlert {
-  id: string
-  asset_id: string
-  asset_name: string
-  alert_type: string
-  severity: 'low' | 'medium' | 'high'
-  suggestion: string | null
-  remaining_life_days: number | null
-  daily_cost: number | null
-  created_at: string
-}
-
-export interface DisposalSuggestion {
-  id: string
-  asset_id: string
-  asset_name: string
-  category_name: string
-  inefficiency_score: number | null
-  suggested_channel: string | null
-  estimated_resale_range: string | null
-  suggestion: string | null
-  daily_cost: number | null
-  created_at: string
-}
-
-export interface LiabilityStrategy {
-  strategy: string
-  strategy_name: string
-  priority_debt: string
-  estimated_interest_saved: number
-  order: Array<{ id: string; category: string; rate?: number }>
-}
-
-export interface LiabilityAdviceResponse {
-  has_result: boolean
-  has_liabilities: boolean
-  total_remaining: number | null
-  total_monthly_payment: number | null
-  liability_count: number | null
-  narrative: string | null
-  recommended_strategy: string | null
-  strategies: LiabilityStrategy[]
-  generated_at: string
-}
-
-export interface AllocationDriftItem {
-  category: string
-  target_pct: number
-  current_pct: number
-  drift: number
-  exceeds_threshold: boolean
-}
-
-export interface AllocationDriftResponse {
-  has_result: boolean
-  has_significant_drift: boolean
-  narrative: string | null
-  drifts: AllocationDriftItem[] | null
-  generated_at: string
-}
 
 export interface AIReportSection {
   score?: number
@@ -452,6 +496,25 @@ export interface AIReport {
   }
   suggestions?: string[]
   risk_flags?: string[]
+}
+
+// D2/A1a: finance_coach proactive suggestions (Plan B T5). The backend
+// /ai/finance-coach/generate endpoint returns cached JSON or streams a
+// finance_coach.result frame; both carry the same report shape.
+export type SuggestionSeverity = 'high' | 'medium' | 'low'
+export interface FinanceSuggestion {
+  id: string
+  severity: SuggestionSeverity
+  title: string
+  action: string
+  target_type: 'liability' | 'asset' | 'wish'
+  target_id: string
+  cta_label: string
+}
+export interface FinanceCoachResponse {
+  status: 'cached' | 'streaming'
+  generated_at?: string
+  report: { suggestions: FinanceSuggestion[] }
 }
 
 export interface ChatMessage {

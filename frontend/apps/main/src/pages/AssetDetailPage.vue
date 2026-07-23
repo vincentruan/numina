@@ -37,21 +37,21 @@
           <div class="hero-value-item">
             <div class="hero-value-label">{{ t('asset.purchasePrice') }}</div>
             <MoneyDisplay
-              :amount="asset.purchase_price"
+              :amount="asset.purchase_price || 0"
               :source-currency="asset.currency"
-              :original-value="asset.purchase_price"
+              :original-value="asset.purchase_price || 0"
             />
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
             <div class="hero-value-label">{{ t('asset.dailyCostLabel') }}</div>
-            <div class="hero-daily-cost">¥{{ asset.daily_cost.toFixed(2) }}</div>
+            <div class="hero-daily-cost">{{ currency.format(asset.daily_cost) }}</div>
           </div>
         </div>
         <div v-if="asset.status !== 'sold'" class="hero-change" :class="returnClass">
           {{ returnText }}
         </div>
         <div v-if="asset.status === 'sold'" class="sell-summary">
-          {{ t('assetDetail.netRecovery', { amount: (asset.sell_price! - (asset.sell_fee || 0)).toLocaleString() }) }}
+          {{ t('assetDetail.netRecovery', { amount: (Number(asset.sell_price!) - Number(asset.sell_fee || 0)).toLocaleString() }) }}
           <span v-if="asset.sell_date"> · {{ asset.sell_date }}</span>
         </div>
       </div>
@@ -59,9 +59,9 @@
       <!-- Daily Cost Chart -->
       <DailyCostChart
         v-if="asset.purchase_price && asset.purchase_date"
-        :purchase-price="asset.purchase_price"
+        :purchase-price="Number(asset.purchase_price)"
         :purchase-date="asset.purchase_date"
-        :target-daily-cost="asset.target_daily_cost"
+        :target-daily-cost="asset.target_daily_cost != null ? Number(asset.target_daily_cost) : null"
       />
 
       <!-- Basic Info -->
@@ -76,9 +76,9 @@
         <van-cell :title="t('assetDetail.fieldPurchasePrice')">
           <template #value>
             <MoneyDisplay
-              :amount="asset.purchase_price"
+              :amount="asset.purchase_price || 0"
               :source-currency="asset.currency"
-              :original-value="asset.purchase_price"
+              :original-value="asset.purchase_price || 0"
             />
           </template>
         </van-cell>
@@ -100,17 +100,17 @@
         <van-cell v-if="asset.location" :title="t('assetDetail.fieldLocation')" :value="asset.location" />
         <van-cell v-if="asset.expected_lifespan_days" :title="t('assetDetail.fieldExpectedLifespan')" :value="t('assetDetail.lifespanDays', { days: asset.expected_lifespan_days })" />
         <van-cell v-if="asset.annual_maintenance_cost" :title="t('assetDetail.fieldAnnualMaintenance')">
-          <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost" /></template>
+          <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost || 0" /></template>
         </van-cell>
         <van-cell v-if="asset.usage_frequency" :title="t('assetDetail.fieldUsageFrequency')" :value="usageText" />
         <van-cell v-if="asset.daily_cost" :title="t('assetDetail.fieldDailyCost')">
           <template #value>
-            <span class="daily-cost">¥{{ asset.daily_cost.toFixed(2) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="daily-cost">{{ currency.format(asset.daily_cost) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
         <van-cell v-if="asset.target_daily_cost" :title="t('assetDetail.fieldTargetDailyCost')">
           <template #value>
-            <span class="target-cost">¥{{ asset.target_daily_cost.toFixed(2) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="target-cost">{{ currency.format(Number(asset.target_daily_cost)) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
       </van-cell-group>
@@ -135,7 +135,7 @@
           <template #value><MoneyDisplay :amount="asset.sell_price || 0" /></template>
         </van-cell>
         <van-cell v-if="asset.sell_fee" :title="t('assetDetail.fieldSellFee')">
-          <template #value><MoneyDisplay :amount="asset.sell_fee" /></template>
+          <template #value><MoneyDisplay :amount="asset.sell_fee || 0" /></template>
         </van-cell>
         <van-cell v-if="asset.sell_channel" :title="t('assetDetail.fieldSellChannel')" :value="asset.sell_channel" />
         <van-cell v-if="asset.sell_date" :title="t('assetDetail.fieldSellDate')" :value="asset.sell_date" />
@@ -159,18 +159,44 @@
         <van-cell :title="asset.notes" />
       </van-cell-group>
 
+      <!-- Interval Return -->
+      <van-cell-group v-if="valuations.length" inset :title="t('assetDetail.intervalReturn')">
+        <div class="interval-return">
+          <div class="interval-buttons">
+            <van-button
+              v-for="opt in intervalOptions"
+              :key="opt.key"
+              size="small"
+              :type="selectedInterval === opt.key ? 'primary' : 'default'"
+              @click="selectedInterval = opt.key"
+            >
+              {{ t(opt.labelKey) }}
+            </van-button>
+          </div>
+          <div v-if="selectedInterval === null" class="interval-hint">
+            {{ t('assetDetail.intervalSelectHint') }}
+          </div>
+          <div v-else-if="intervalReturn === null" class="interval-hint">
+            {{ t('assetDetail.intervalNoData') }}
+          </div>
+          <div v-else class="interval-detail">
+            {{ intervalReturnText }}
+          </div>
+        </div>
+      </van-cell-group>
+
       <!-- Valuation History -->
       <van-cell-group v-if="valuations.length" inset :title="t('assetDetail.sectionValuationHistory')">
         <van-cell
           v-for="v in valuations"
           :key="v.id"
-          :title="`¥${v.value.toLocaleString()}`"
+          :title="currency.format(Number(v.value))"
           :value="v.valued_at.slice(0, 10)"
         />
       </van-cell-group>
 
       <!-- Buy vs Rent Calculator -->
-      <BuyVsRentCalculator :initial-price="asset.purchase_price ?? undefined" />
+      <BuyVsRentCalculator :initial-price="asset.purchase_price != null ? Number(asset.purchase_price) : undefined" />
 
       <!-- Cost Equivalence -->
       <CostEquivalenceCard :asset-id="asset.id" />
@@ -225,6 +251,7 @@ import BuyVsRentCalculator from '@/components/asset/BuyVsRentCalculator.vue'
 import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getIconId } from '@/utils/icon'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
@@ -236,6 +263,7 @@ const acting = ref(false)
 const valuations = ref<AssetValuation[]>([])
 const imageError = ref(false)
 const { increment, decrement } = usePageLoading()
+const currency = useCurrency()
 
 const asset = computed(() => assetStore.currentAsset)
 
@@ -308,9 +336,63 @@ const returnClass = computed(() => {
 
 const returnText = computed(() => {
   if (!asset.value?.purchase_price || !asset.value?.current_value) return ''
-  const diff = asset.value.current_value - asset.value.purchase_price
+  const diff = Number(asset.value.current_value) - Number(asset.value.purchase_price)
   const sign = diff >= 0 ? '+' : ''
-  return `${sign}¥${diff.toLocaleString()} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
+  return `${sign}${currency.format(diff)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
+})
+
+// D8: interval return rate (preset intervals vs current_value).
+const INTERVAL_DAYS: Record<string, number> = {
+  '1M': 30,
+  '3M': 90,
+  '6M': 180,
+  '1Y': 365,
+}
+const intervalOptions = [
+  { key: '1M', labelKey: 'assetDetail.interval1M' },
+  { key: '3M', labelKey: 'assetDetail.interval3M' },
+  { key: '6M', labelKey: 'assetDetail.interval6M' },
+  { key: '1Y', labelKey: 'assetDetail.interval1Y' },
+]
+const selectedInterval = ref<string | null>(null)
+
+interface IntervalReturn {
+  startDate: string
+  startValue: number
+  endValue: number
+  rate: number
+}
+
+const intervalReturn = computed<IntervalReturn | null>(() => {
+  const key = selectedInterval.value
+  if (key === null || !asset.value) return null
+  const days = INTERVAL_DAYS[key]
+  const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000)
+  // valuations are newest-first; first point at/before cutoff is the closest from below.
+  const start = valuations.value.find((v) => new Date(v.valued_at) <= cutoff)
+  if (!start) return null
+  const startValue = Number(start.value)
+  if (startValue === 0) return null
+  const endValue = Number(asset.value.current_value)
+  const rate = ((endValue - startValue) / startValue) * 100
+  return {
+    startDate: start.valued_at.slice(0, 10),
+    startValue,
+    endValue,
+    rate: Math.round(rate * 100) / 100,
+  }
+})
+
+const intervalReturnText = computed(() => {
+  const r = intervalReturn.value
+  if (!r) return ''
+  const sign = r.rate >= 0 ? '+' : '-'
+  return t('assetDetail.intervalReturnDetail', {
+    date: r.startDate,
+    start: currency.format(r.startValue),
+    end: currency.format(r.endValue),
+    rate: `${sign}${Math.abs(r.rate).toFixed(2)}%`,
+  })
 })
 
 async function onRetire() {
@@ -681,6 +763,35 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.interval-return {
+  padding: 12px 16px;
+}
+
+.interval-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interval-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-tertiary, rgba(0, 0, 0, 0.45));
+}
+[data-theme='dark'] .interval-hint {
+  color: var(--text-tertiary);
+}
+
+.interval-detail {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary, rgba(0, 0, 0, 0.85));
+}
+[data-theme='dark'] .interval-detail {
+  color: var(--text-primary);
 }
 
 .actions {

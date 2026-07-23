@@ -63,10 +63,9 @@ const router = createRouter({
           component: () => import('@/pages/AssetAnalyticsPage.vue')
         },
         {
+          // U6: standalone asset list removed — redirect to the finance hub assets tab.
           path: 'assets',
-          name: 'AssetList',
-          component: () => import('@/pages/AssetListPage.vue'),
-          meta: { hasSkeleton: true }
+          redirect: { path: '/finance', query: { tab: 'assets' } }
         },
         {
           path: 'assets/new',
@@ -89,10 +88,10 @@ const router = createRouter({
           component: () => import('@/pages/AssetSellPage.vue')
         },
         {
+          // U6: standalone liability list removed — redirect to the finance hub liabilities
+          // tab. Preserve the W5 `focus` deep-link param (e.g. focus=liability_strategy).
           path: 'liabilities',
-          name: 'LiabilityList',
-          component: () => import('@/pages/LiabilityListPage.vue'),
-          meta: { hasSkeleton: true }
+          redirect: (to) => ({ path: '/finance', query: { ...to.query, tab: 'liabilities' } })
         },
         {
           path: 'liabilities/new',
@@ -110,10 +109,9 @@ const router = createRouter({
           component: () => import('@/pages/LiabilityDetailPage.vue')
         },
         {
+          // U6: standalone wish list removed — redirect to the finance hub wishes tab.
           path: 'wishes',
-          name: 'WishList',
-          component: () => import('@/pages/WishListPage.vue'),
-          meta: { hasSkeleton: true }
+          redirect: { path: '/finance', query: { tab: 'wishes' } }
         },
         {
           path: 'wishes/new',
@@ -129,6 +127,14 @@ const router = createRouter({
           path: 'wishes/:id',
           name: 'WishDetail',
           component: () => import('@/pages/WishDetailPage.vue')
+        },
+        {
+          // N1 finance hub: unified entry for assets/liabilities/wishes.
+          // Sub-tab ?tab= contract honored by FinanceHubPage onMounted.
+          path: 'finance',
+          name: 'FinanceHub',
+          component: () => import('@/pages/FinanceHubPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'blind-box/draws',
@@ -277,21 +283,6 @@ const router = createRouter({
           component: () => import('@/pages/AIReportPage.vue')
         },
         {
-          path: 'ai/alerts',
-          name: 'AIAlerts',
-          component: () => import('@/pages/AIAlertsPage.vue')
-        },
-        {
-          path: 'ai/disposal',
-          name: 'AIDisposal',
-          component: () => import('@/pages/AIDisposalPage.vue')
-        },
-        {
-          path: 'ai/liability',
-          name: 'AILiability',
-          component: () => import('@/pages/AILiabilityAdvisorPage.vue')
-        },
-        {
           path: 'ai/chat/history',
           name: 'ChatHistory',
           component: () => import('@/pages/ChatHistoryPage.vue')
@@ -308,25 +299,10 @@ const router = createRouter({
           component: () => import('@/pages/AITimeMachinePage.vue')
         },
         {
-          path: 'ai/allocation',
-          name: 'AIAllocation',
-          component: () => import('@/pages/AIAllocationPage.vue')
-        },
-        {
-          path: 'ai/spending-leaks',
-          name: 'AISpendingLeaks',
-          component: () => import('@/pages/SpendingLeaksPage.vue')
-        },
-        {
           path: 'ai',
           name: 'AIHub',
           component: () => import('@/pages/AIHubPage.vue'),
           meta: { hasSkeleton: true }
-        },
-        {
-          path: 'stats',
-          name: 'DataStats',
-          component: () => import('@/pages/DataStatsPage.vue')
         },
         {
           path: 'baby/calendar/day',

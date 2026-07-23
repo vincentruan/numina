@@ -25,7 +25,10 @@ def _make_settings(**overrides):
     with patch.dict(os.environ, cleaned_env, clear=True):
         from packages.core.settings import Settings
 
-        return Settings()
+        # _env_file=None disables .env loading so the repo-root .env (which
+        # sets DATABASE_URL for the dev machine) cannot override the derivation
+        # logic under test — only the env vars above are honored.
+        return Settings(_env_file=None)
 
 
 def _resolve(p: str) -> str:
@@ -47,17 +50,17 @@ class TestDataRootExpansion:
 class TestDerivedPaths:
     def test_upload_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspace"
+        expected = _resolve("/tmp/test-numina") + "/workspaces"
         assert s.UPLOAD_DIR == expected
 
     def test_workspace_root_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspace"
+        expected = _resolve("/tmp/test-numina") + "/workspaces"
         assert s.WORKSPACE_ROOT == expected
 
     def test_chat_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        expected = _resolve("/tmp/test-numina") + "/workspace"
+        expected = _resolve("/tmp/test-numina") + "/workspaces"
         assert s.CHAT_DIR == expected
 
     def test_log_dir_derived_from_data_root(self):

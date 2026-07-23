@@ -39,6 +39,11 @@ backend = [
     # Analytics
     "user-agents>=2.2.0",
     "pdfplumber>=0.11",
+    # PDF page→image rendering for vision-based import-parse (scanned PDFs).
+    # pdfplumber extracts text; pymupdf renders pages to PNG when the PDF is
+    # image-based (chars/page < threshold) so the agent's vision model can read
+    # them via view_image.
+    "pymupdf>=1.24",
     # Cache
     "redis>=5.0.0",
     # MCP (Model Context Protocol) server
@@ -89,7 +94,7 @@ dev = [
 members = []
 
 [tool.uv.sources]
-deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "4538c3229875aebebcdeac5c3ffb9904c2d7944d" }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "10890e10" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -115,6 +115,11 @@
           <SvgIcon name="brain-circuit" :size="16" class="cell-icon" />
         </template>
       </van-cell>
+      <van-cell :title="t('settings.chatHistory')" is-link to="/ai/chat/history">
+        <template #icon>
+          <SvgIcon name="documentation" :size="16" class="cell-icon" />
+        </template>
+      </van-cell>
       <van-cell :title="t('settings.mcpManage')" is-link to="/settings/ai/mcp">
         <template #icon>
           <SvgIcon name="plug" :size="16" class="cell-icon" />
@@ -267,9 +272,11 @@ onMounted(async () => {
   } finally {
     decrement()
   }
-  // Initialize theme color from localStorage (sync, no need in try block)
-  const savedColor = localStorage.getItem('theme-primary')
+  // Initialize theme color: prefer server-persisted value, fall back to localStorage
+  const savedColor = authStore.user?.theme_color || localStorage.getItem('theme-primary')
   if (savedColor) {
+    currentThemeColor.value = savedColor
+    localStorage.setItem('theme-primary', savedColor)  // sync localStorage with server
     document.documentElement.style.setProperty('--theme-primary', savedColor)
     document.documentElement.style.setProperty('--van-primary-color', savedColor)
   }
@@ -328,9 +335,9 @@ const themeColorOptions = computed(() => [
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 
 const themeOptions = [
-  { text: '🌓 ' + t('settings.themeSystem'), value: 'system' },
-  { text: '☀️ ' + t('settings.themeLight'), value: 'light' },
-  { text: '🌙 ' + t('settings.themeDark'), value: 'dark' },
+  { text: t('settings.themeSystem'), value: 'system' },
+  { text: t('settings.themeLight'), value: 'light' },
+  { text: t('settings.themeDark'), value: 'dark' },
 ]
 
 const languageOptions = [
@@ -340,9 +347,9 @@ const languageOptions = [
 
 const themeLabel = computed(() => {
   const theme = authStore.user?.theme
-  if (theme === 'dark') return '🌙 ' + t('settings.themeDark')
-  if (theme === 'system') return '🌓 ' + t('settings.themeSystem')
-  return '☀️ ' + t('settings.themeLight')
+  if (theme === 'dark') return t('settings.themeDark')
+  if (theme === 'system') return t('settings.themeSystem')
+  return t('settings.themeLight')
 })
 
 const languageLabel = computed(() => {
@@ -397,13 +404,21 @@ async function onTitleConfirm() {
 }
 
 
-function selectThemeColor(color: string) {
+async function selectThemeColor(color: string) {
   currentThemeColor.value = color
   localStorage.setItem('theme-primary', color)
   document.documentElement.style.setProperty('--theme-primary', color)
   document.documentElement.style.setProperty('--van-primary-color', color)
   showThemeColorPicker.value = false
   showSuccessToast(t('toast.themeChanged'))
+  // Persist to server (fire-and-forget; localStorage already covers offline)
+  try {
+    await updateSettings({ theme_color: color })
+    // Update local authStore user so subsequent renders use the server value
+    if (authStore.user) authStore.user.theme_color = color
+  } catch {
+    // Non-critical: localStorage fallback preserves the choice locally
+  }
 }
 
 async function onLogout() {

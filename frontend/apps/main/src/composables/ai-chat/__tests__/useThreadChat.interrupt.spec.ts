@@ -17,6 +17,13 @@ vi.mock('@/api/ai-chat', () => ({
   getClient: vi.fn(),
   createThread: vi.fn(),
   deleteThread: vi.fn(),
+  compactThread: vi.fn(),
+}))
+
+// Mock the sessions API module (used by feedback hydration/submit)
+vi.mock('@/api/sessions', () => ({
+  submitMessageFeedback: vi.fn(),
+  getSessionFeedback: vi.fn().mockResolvedValue({ data: { items: {} } }),
 }))
 
 describe('useThreadChat — interrupt SSE event handling', () => {
@@ -113,8 +120,9 @@ describe('useThreadChat — interrupt SSE event handling', () => {
       interrupt_id: 'intr-456',
     })
     // options and context should be undefined when not provided
-    expect(msg.additional_kwargs?.interruptData.options).toBeUndefined()
-    expect(msg.additional_kwargs?.interruptData.context).toBeUndefined()
+    const interruptData = msg.additional_kwargs?.interruptData as Record<string, unknown>
+    expect(interruptData.options).toBeUndefined()
+    expect(interruptData.context).toBeUndefined()
   })
 
   it('generates interrupt_id when not provided by backend', async () => {

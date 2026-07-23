@@ -35,7 +35,7 @@ def sample_agent_config():
     return {
         "agent_name": "asset-health-advisor",
         "soul_md": "You are a professional asset health advisor.",
-        "skills": ["family-asset-checkup"],
+        "skills": ["chat"],
         "tool_groups": [],
         "model": None,
         "subagent_enabled": False,
@@ -149,9 +149,9 @@ class TestEffectiveConfigWithProvider:
 
 class TestEffectiveConfigSkillMerging:
     def test_builtin_skill_source_path(self, builder, pm, sample_ai_provider, sample_agent_config):
-        skills = [{"skill_name": "family-asset-checkup", "is_builtin": True}]
+        skills = [{"skill_name": "chat", "is_builtin": True}]
         result = builder.build(family_id=12345, agent_name="my-agent", ai_provider=sample_ai_provider, agent_config=sample_agent_config, enabled_skills=skills, mcp_servers=[])
-        assert result.skill_sources == [{"name": "family-asset-checkup", "source": pm.builtin_skill_dir("family-asset-checkup"), "is_builtin": True}]
+        assert result.skill_sources == [{"name": "chat", "source": pm.builtin_skill_dir("chat"), "is_builtin": True}]
 
     def test_custom_skill_source_path(self, builder, pm, sample_ai_provider, sample_agent_config):
         skills = [{"skill_name": "my-custom-skill", "is_builtin": False}]

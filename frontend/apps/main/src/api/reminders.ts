@@ -3,7 +3,7 @@ import http from './index'
 export interface ReminderResponse {
   id: string
   family_id: string
-  reminder_type: 'large_purchase' | 'allocation_drift' | 'expiring_soon' | 'maturity'
+  reminder_type: 'large_purchase' | 'expiring_soon' | 'maturity'
   title: string
   body: string
   severity: 'info' | 'warning' | 'critical'
@@ -16,7 +16,6 @@ export interface ReminderResponse {
 
 export interface ReminderSummary {
   large_purchase: number
-  allocation_drift: number
   expiring_soon: number
   maturity: number
   total: number

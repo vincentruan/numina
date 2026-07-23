@@ -141,6 +141,7 @@ class TestSSEHandshakeCallerValidation:
                         family_id="100",
                         caller_user_id="u1",
                         caller_role="member",
+                        thread_id=None,
                     )
 
     def test_owner_caller_passes(self, client, valid_token):
@@ -167,4 +168,5 @@ class TestSSEHandshakeCallerValidation:
                         family_id="100",
                         caller_user_id="u1",
                         caller_role="owner",
+                        thread_id=None,
                     )

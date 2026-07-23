@@ -1,5 +1,6 @@
 """Tests for AI asset health report endpoints."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from apps.backend.app.models.ai_report import AIReport
@@ -29,42 +30,46 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
-def _make_streaming_mock(chunks: list[str] | None = None):
-    """Build a mock httpx.AsyncClient that supports async streaming via client.stream() for NDJSON."""
-    import json
+def _make_sse_streaming_mock(frames: list[tuple[str, dict]] | None = None) -> MagicMock:
+    """Build a mock AgentClient for the SSE report passthrough.
 
-    if chunks is None:
-        # Default: emit capability.end event with parseable structured data
-        summary = (
-            "报告生成完成。\n"
-            "<!-- STRUCTURED_DATA "
-            '{"overall_score": 75, "data_completeness_score": 0.8, "narrative": "示例", "sections": {}}'
-            " -->"
-        )
-        chunks = [json.dumps({"type": "capability.end", "result": {"summary": summary}})]
+    ``_stream_asset_report_sse`` is a pure passthrough: it ``await``s
+    ``agent_client.stream(...)``, checks ``resp.status_code == 200``, then
+    forwards every line from ``resp.aiter_lines()`` as raw SSE bytes. The mock
+    yields the given ``(event, data)`` pairs as ``event:``/``data:`` SSE lines
+    (blank line separating events) so the route returns ``text/event-stream``.
 
-    async def _aiter_lines():
-        for chunk in chunks:
-            yield chunk
+    Note: the SSE route does NOT transition the AITask to completed/failed —
+    that lifecycle moved to the agent worker side during the U4 SSE refactor.
+    Backend ``complete_task`` has no report-path caller, so after the stream
+    the task stays ``running``.
+    """
+    if frames is None:
+        frames = [("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]
 
-    # The innermost object: the response returned by `async with client.stream(...) as resp`
-    mock_resp = MagicMock()
-    mock_resp.aiter_lines = _aiter_lines
+    lines: list[str] = []
+    for event, data in frames:
+        lines.append(f"event: {event}")
+        lines.append(f"data: {json.dumps(data, ensure_ascii=False)}")
+        lines.append("")
+    lines.append("event: end")
+    lines.append("data: null")
+    lines.append("")
 
-    # The context manager returned by client.stream(...)
-    mock_stream_cm = MagicMock()
-    mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.aiter_lines = lambda: (_l for _l in lines)
+    resp.aread = AsyncMock(return_value=b"")
 
-    # The client returned by `async with httpx.AsyncClient(...) as client`
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
     mock_client = MagicMock()
-    mock_client.stream = MagicMock(return_value=mock_stream_cm)
+    mock_client.stream = MagicMock(return_value=cm)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-
-    # The class itself: httpx.AsyncClient(...)
-    mock_cls = MagicMock(return_value=mock_client)
-    return mock_cls
+    return MagicMock(return_value=mock_client)
 
 
 # ── GET /ai/report ──────────────────────────────────────────────────────────────
@@ -134,25 +139,30 @@ def test_get_report_requires_auth(client):
 # ── POST /ai/report/generate ─────────────────────────────────────────────────────
 
 def test_generate_report_creates_pending_then_completes(client, auth_headers, db):
-    """POST /ai/report/generate/events streams response and creates a completed AITask."""
+    """POST /ai/report/generate/events streams SSE and leaves the task running.
+
+    U4 SSE refactor: the route is a pure passthrough — it creates the AITask
+    (status=running) and forwards the agent's SSE stream, but task completion
+    is now the agent worker's responsibility (backend ``complete_task`` has no
+    report-path caller). So after the stream the task stays ``running``.
+    """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
     # CRITICAL: Consume entire response body to let generator complete execution
-    # TestClient.post() returns after first chunk, but generator hasn't finished yet
     _ = resp.content  # Force full response consumption
 
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
-    assert task.status == "completed"
+    assert task.status == "running"
 
 
 def test_generate_report_requires_ai_enabled(client, auth_headers, db):
@@ -171,11 +181,11 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate/events requires owner role (embedded in JWT)."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
 
 def test_generate_report_resumes_running_task(client, auth_headers, db):
@@ -190,7 +200,6 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     # Create an existing session and running task (simulates a task started earlier)
     session = AIChatSession(
         family_id=family_id,
-        jsonl_path=f"{family_id}/test-session.jsonl",
         status="active",
     )
     db.add(session)
@@ -207,16 +216,22 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     db.add(task)
     db.commit()
 
-    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Should resume (200 + NDJSON stream) instead of 409
+    # Should resume (200 + SSE stream) instead of 409
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
-    """If agent streaming fails, AITask is marked as failed and error event is yielded."""
+    """If agent streaming raises, the route emits an SSE error frame (200) but
+    does NOT transition the AITask — task lifecycle moved to the agent worker
+    in the U4 SSE refactor, so the task stays ``running``.
+
+    The passthrough's ``except`` catches the exception and yields a single
+    ``event: error`` SSE frame so the frontend gets a graceful close.
+    """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
@@ -226,7 +241,9 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
         yield  # make it an async generator
 
     mock_resp = MagicMock()
+    mock_resp.status_code = 200
     mock_resp.aiter_lines = _aiter_raises
+    mock_resp.aread = AsyncMock(return_value=b"")
 
     mock_stream_cm = MagicMock()
     mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -239,21 +256,21 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
 
     mock_cls = MagicMock(return_value=mock_client)
 
-    with patch("httpx.AsyncClient", new=mock_cls), \
-         patch("apps.backend.app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()):
-        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+    with patch("apps.backend.app.routers.ai_report.AgentClient", new=mock_cls):
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Response should still be 200 with error event (helper catches errors)
+    # Response is still 200 SSE (passthrough catches the error and emits an error frame)
     assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
 
     # CRITICAL: Consume response to let generator's except/finally block execute
     _ = resp.content
 
-    # The task should be marked failed in DB
+    # Task stays running — backend no longer owns report task completion
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
-    assert task.status == "failed"
+    assert task.status == "running"
 
 
 # ── Cross-family isolation ──────────────────────────────────────────────────────

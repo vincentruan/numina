@@ -42,6 +42,7 @@ def create_template(db: Session, user: User, req: ChoreTemplateCreate) -> ChoreT
         coin_reward=req.coin_reward,
         frequency=req.frequency,
         assignment_type=req.assignment_type,
+        real_reward_enabled=req.real_reward_enabled,
     )
     db.add(template)
     db.flush()  # get template.id before adding assignees
@@ -86,6 +87,8 @@ def update_template(db: Session, user: User, template_id: str, req: ChoreTemplat
         t.emoji = req.emoji
     if req.coin_reward is not None:
         t.coin_reward = req.coin_reward
+    if req.real_reward_enabled is not None:
+        t.real_reward_enabled = req.real_reward_enabled
     if req.assignee_ids is not None:
         _validate_assignees(db, user.family_id, req.assignee_ids)
         db.execute(
@@ -337,6 +340,59 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
         db.rollback()  # already written (idempotent)
 
     db.refresh(instance)
+
+    # B1 教育联动：family 级 opt-in 开关开启时，按 coin_to_yuan_rate 将星币换算成元
+    # 写入成人 Activity 活动流水（type=education_reward），不动资产/负债，不进净资产。
+    # _auto_approve 不走此路径（仅家长显式审批触发）。幂等：按 instance_id 查重防双写。
+    # best-effort：失败仅 log warning 不阻断审批（与 milestone/notification 一致）。
+    try:
+        from apps.backend.app.models.activity import Activity
+        from apps.backend.app.models.child_economy_config import ChildEconomyConfig
+        from apps.backend.app.services.activity import record_activity
+
+        config = (
+            db.query(ChildEconomyConfig)
+            .filter_by(family_id=parent_user.family_id)
+            .first()
+        )
+        # B1 per-template granularity: family switch (全局门) × template flag (per-template 门).
+        # Query the template at approval time (not snapshotted) so editing a template never
+        # retroactively changes already-approved instances — consistent with coin_to_yuan_rate
+        # being read live from config here.
+        template = (
+            db.query(ChoreTemplate)
+            .filter_by(id=instance.template_id)
+            .first()
+        )
+        if config and config.education_reward_enabled and template and template.real_reward_enabled:
+            # entity_id is stored as BigInteger; coerce instance_id (str) to int
+            # so the idempotency query matches the stored value.
+            entity_id_int = int(instance_id)
+            already_written = (
+                db.query(Activity)
+                .filter_by(
+                    type="education_reward",
+                    entity_id=entity_id_int,
+                    family_id=parent_user.family_id,
+                )
+                .first()
+            )
+            if not already_written:
+                yuan = round(float(actual_amount) * float(config.coin_to_yuan_rate), 2)
+                record_activity(
+                    db,
+                    parent_user,
+                    "education_reward",
+                    "chore",
+                    instance_id,
+                    f"教育奖励金-「{instance.chore_name}」",
+                    yuan,
+                )
+    except Exception:
+        logger.warning(
+            "Failed to write education_reward Activity for instance %s — ignoring",
+            instance_id,
+        )
 
     # Check milestones after primary transaction — failure never blocks approval
     from apps.backend.app.services.milestones import check_and_record_milestones

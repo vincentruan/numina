@@ -120,9 +120,9 @@ def internal_get_liabilities(
         {
             "id": li.id,
             "category": li.category,
-            "remaining_amount": li.remaining_amount,
-            "original_amount": li.original_amount,
-            "monthly_payment": li.monthly_payment,
+            "remaining_amount": float(li.remaining_amount) if li.remaining_amount is not None else None,
+            "original_amount": float(li.original_amount) if li.original_amount is not None else None,
+            "monthly_payment": float(li.monthly_payment) if li.monthly_payment is not None else None,
             "interest_rate": li.interest_rate,
             "start_date": li.start_date.isoformat() if li.start_date else None,
             "end_date": li.end_date.isoformat() if li.end_date else None,
@@ -735,6 +735,7 @@ class SessionUpsertRequest(BaseModel):
     agent_id: str | None = None
     last_model: str | None = None
     source: str | None = None
+    parent_thread_id: str | None = None
 
 
 class SessionSummaryRequest(BaseModel):
@@ -743,6 +744,13 @@ class SessionSummaryRequest(BaseModel):
     status: str = "completed"
     title: str | None = None
     is_pinned: bool | None = None
+
+
+class ReportResultRequest(BaseModel):
+    """U4 step 7: agent worker → backend report persistence."""
+
+    report_json: dict
+    markdown_file_path: str | None = None
 
 
 def _session_to_dict(s: "object") -> dict:
@@ -758,6 +766,7 @@ def _session_to_dict(s: "object") -> dict:
         "last_model": s.last_model,  # type: ignore[attr-defined]
         "is_pinned": s.is_pinned,  # type: ignore[attr-defined]
         "source": s.source,  # type: ignore[attr-defined]
+        "parent_thread_id": s.parent_thread_id,  # type: ignore[attr-defined]
         "created_at": s.created_at.isoformat() if s.created_at else None,  # type: ignore[attr-defined]
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,  # type: ignore[attr-defined]
     }
@@ -780,6 +789,7 @@ def internal_upsert_session(
             agent_id=int(body.agent_id) if body.agent_id else None,
             last_model=body.last_model,
             source=body.source,
+            parent_thread_id=body.parent_thread_id,
         )
         db.add(row)
     else:
@@ -790,6 +800,13 @@ def internal_upsert_session(
             row.last_model = body.last_model
         if body.agent_id and not row.agent_id:
             row.agent_id = int(body.agent_id)
+        # parent_thread_id is insert-first: a re-upsert may populate a missing
+        # lineage pointer (e.g. a branch row created before the column existed),
+        # but an existing lineage is never overwritten — branching is immutable
+        # once recorded. Guards against a stray re-upsert silently repointing a
+        # branch's parent.
+        if body.parent_thread_id and not row.parent_thread_id:
+            row.parent_thread_id = body.parent_thread_id
     db.commit()
     return {"ok": True}
 
@@ -831,6 +848,59 @@ def internal_update_session_summary(
     db.commit()
     logger.info("[backend] session updated successfully session=%s title=%s", session_id, repr(row.title))
     return {"ok": True}
+
+
+@router.post("/ai/reports")
+def internal_persist_report(
+    body: ReportResultRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """U4 step 7: persist an asset-report result (agent worker → backend).
+
+    The agent worker's ``_run_asset_report_pipeline`` calls this after step 3
+    (json-repair) to store the indicators JSON + step-1 markdown audit path in
+    ``ai_reports``. Service-to-service auth via ``verify_agent_token``; the
+    family_id from the token scopes the write (defense in depth — the worker
+    also passes family_id in its payload path, but the token is the trust root).
+
+    Security-lens Open Question #22 (P0, defense-in-depth): the cache-read path
+    (``trigger_generate_events``) re-validates ``report_json`` against the report
+    schema + markdown-table check before re-serving. The write path MUST apply
+    the same validation — otherwise malformed/LLM-injected output is persisted
+    and later re-served from cache, bypassing fresh-generation sanitization. A
+    validation failure returns an error so the worker marks the run as error
+    rather than persisting unvalidated data.
+    """
+    import logging
+
+    from apps.backend.app.services.ai_result_parser import (
+        _contains_markdown_table,
+        _validate_json,
+    )
+    from apps.backend.app.services.ai_result_writer import write_report_results
+
+    logger = logging.getLogger(__name__)
+
+    report_json = body.report_json
+    if not (
+        isinstance(report_json, dict)
+        and _validate_json(report_json, "report")
+        and not _contains_markdown_table(report_json)
+    ):
+        logger.warning(
+            "[internal_persist_report] rejected unvalidated report_json family=%s",
+            family_id,
+        )
+        raise AppError(ErrorCode.AI_DATA_WRITE_FAILED)
+
+    count = write_report_results(
+        int(family_id),
+        report_json,
+        db,
+        markdown_file_path=body.markdown_file_path,
+    )
+    return {"ok": True, "written": count}
 
 
 @router.get("/ai/sessions")

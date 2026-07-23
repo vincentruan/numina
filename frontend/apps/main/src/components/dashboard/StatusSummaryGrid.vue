@@ -1,12 +1,20 @@
 <template>
   <div class="status-tabs-wrapper">
-    <div class="status-tabs">
+    <div class="status-tabs" role="tablist">
       <div
-        v-for="status in statusList"
+        v-for="(status, idx) in statusList"
         :key="status.key ?? 'all'"
+        ref="tabRefs"
         class="status-tab"
+        role="tab"
         :class="{ active: activeStatus === status.key }"
+        :aria-selected="activeStatus === status.key"
+        :tabindex="activeStatus === status.key ? 0 : -1"
         @click="onSelect(status.key)"
+        @keydown.enter.prevent="onSelect(status.key)"
+        @keydown.space.prevent="onSelect(status.key)"
+        @keydown.left.prevent="moveFocus(idx, -1)"
+        @keydown.right.prevent="moveFocus(idx, 1)"
       >
         <span class="tab-label">{{ status.label }}</span>
         <span class="tab-count">{{ getCount(status.key) }}</span>
@@ -17,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { StatesSummaryResponse } from '@/types'
 
@@ -31,6 +39,15 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [status: string | null]
 }>()
+
+const tabRefs = ref<HTMLElement[]>([])
+
+function moveFocus(currentIdx: number, delta: number) {
+  const total = tabRefs.value.length
+  if (total === 0) return
+  const next = (currentIdx + delta + total) % total
+  tabRefs.value[next]?.focus()
+}
 
 const statusList = computed<{ key: string | null; label: string }[]>(() => [
   { key: null, label: t('statusGrid.all') },

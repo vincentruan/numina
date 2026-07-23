@@ -34,13 +34,25 @@
       />
       <div class="ring-center">
         <span class="ring-center-icon">⭐</span>
-        <span class="ring-center-coins">{{ totalCoins }}</span>
+        <span v-if="allDone" class="ring-center-done">{{ t('home.progressRingAllDone') }}</span>
+        <span v-else class="ring-center-coins">{{ remainingCoins }}</span>
       </div>
     </div>
 
-    <!-- Subtitle -->
+    <!-- Graphical denominator: one dot per task (filled = done) -->
+    <div v-if="total > 0" class="ring-dots" :aria-hidden="true">
+      <span
+        v-for="i in total"
+        :key="i"
+        class="ring-dot"
+        :class="{ done: i <= completed, pending: i > completed && i <= completed + pending }"
+      />
+    </div>
+
+    <!-- Subtitle: child-facing "X stars left to finish" -->
     <p v-if="total > 0" class="ring-subtitle">
-      {{ t('home.progressRingSubtitle', { completed, total }) }}
+      <template v-if="allDone">{{ t('home.progressRingAllDone') }}</template>
+      <template v-else>{{ t('home.progressRingSubtitle', { remaining: remainingCoins }) }}</template>
     </p>
   </div>
 </template>
@@ -62,6 +74,16 @@ const { t } = useI18n()
 const reducedMotion = useReducedMotion()
 
 const allDone = computed(() => props.total > 0 && props.completed === props.total)
+
+// Stars still earnable today = coins from tasks not yet approved.
+const remainingCoins = computed(() => Math.max(0, props.totalCoins - completedCoins(props)))
+
+function completedCoins(p: { total: number; totalCoins: number; completed: number }): number {
+  // Even split across tasks is an approximation; totalCoins is the sum of all
+  // task rewards, so the per-task average gives a fair "earned so far" share.
+  if (p.total <= 0) return 0
+  return Math.round((p.totalCoins / p.total) * p.completed)
+}
 
 // Build conic-gradient: gold (completed) → teal (pending) → gray (remaining)
 // Each segment is a fraction of 360deg
@@ -173,6 +195,42 @@ const ringStyle = computed(() => {
   font-weight: 700;
   color: var(--color-ink);
   line-height: 1;
+}
+.ring-center-done {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-brand-ochre);
+  line-height: 1.1;
+  text-align: center;
+  padding: 0 6px;
+}
+
+/* ── Graphical denominator: one dot per task ── */
+.ring-dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  max-width: 130px;
+}
+.ring-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-surface-strong);
+  border: 1px solid var(--color-hairline);
+  transition: background 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+}
+.ring-dot.done {
+  background: var(--color-brand-ochre);
+  border-color: var(--color-brand-ochre);
+}
+.ring-dot.pending {
+  background: var(--color-brand-teal);
+  border-color: var(--color-brand-teal);
+  opacity: 0.55;
 }
 
 /* ── Subtitle ── */

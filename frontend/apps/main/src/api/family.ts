@@ -6,6 +6,8 @@ export interface FamilySettings {
   ai_enabled: boolean
   coin_copper_to_silver: number
   coin_silver_to_gold: number
+  education_reward_enabled: boolean
+  coin_to_yuan_rate: number
 }
 
 export function getFamily() {
@@ -41,12 +43,16 @@ export function updateFamilySettings(settings: {
   aiEnabled?: boolean
   coinCopperToSilver?: number
   coinSilverToGold?: number
+  educationRewardEnabled?: boolean
+  coinToYuanRate?: number
 }) {
   const body: Record<string, unknown> = {}
   if (settings.autoApproveHours !== undefined) body.auto_approve_hours = settings.autoApproveHours
   if (settings.aiEnabled !== undefined) body.ai_enabled = settings.aiEnabled
   if (settings.coinCopperToSilver !== undefined) body.coin_copper_to_silver = settings.coinCopperToSilver
   if (settings.coinSilverToGold !== undefined) body.coin_silver_to_gold = settings.coinSilverToGold
+  if (settings.educationRewardEnabled !== undefined) body.education_reward_enabled = settings.educationRewardEnabled
+  if (settings.coinToYuanRate !== undefined) body.coin_to_yuan_rate = settings.coinToYuanRate
   return http.patch<FamilySettings>('/family/settings', body)
 }
 

@@ -23,10 +23,10 @@ from deerflow.runtime import (
     RunStatus,
     StreamBridge,
 )
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from .lifespan import get_run_manager, get_stream_bridge
-from .worker import run_family_agent
+from .worker import run_agent
 
 logger = logging.getLogger(__name__)
 
@@ -119,12 +119,25 @@ async def sse_consumer(
 
 
 # [Integrated with Numina Multi-Tenant] — family_id in metadata
+def _app_rejected_error(*, status_code: int, app: str, reason: str) -> HTTPException:
+    """Build an HTTPException rejecting a disallowed ``app`` dispatch value.
+
+    Used by ``start_run`` to enforce the R1 allowlist before the run is created.
+    """
+    return HTTPException(
+        status_code=status_code,
+        detail=f"app='{app}' 不允许直连：{reason}",
+    )
+
+
 async def start_run(
     body: Any,
     thread_id: str,
     request: Request,
     family_id: str,
     user_id: str | None,
+    *,
+    internal: bool = False,
 ) -> RunRecord:
     """Create a ``RunRecord`` and launch the background family agent task.
 
@@ -134,6 +147,12 @@ async def start_run(
         request: FastAPI request — used to retrieve singletons from ``app.state``.
         family_id: Numina family (tenant) ID.
         user_id: Optional user ID.
+        internal: When True, the caller is a trusted backend service (authenticated
+            via ``X-Agent-Token`` at the gateway endpoint, e.g. the asset-report
+            trigger). The R1 ``app`` allowlist gate is relaxed for internal calls
+            because the backend trigger endpoint already enforces owner +
+            require_ai_enabled + per-family concurrency gating — R1's purpose is
+            to stop *frontend* direct dispatch, not service-to-service dispatch.
 
     Returns:
         The created ``RunRecord`` with an attached ``asyncio.Task``.
@@ -142,6 +161,69 @@ async def start_run(
     """
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
+
+    # R1 security gate (P0): the ``app`` field in body.metadata controls which
+    # worker dispatch branch fires (numina / asset-report / import-parse /
+    # finance-coach / wish-advice). It originates from the client, so the server
+    # must validate it. allowlist is intentionally narrow here and widened only
+    # as each app's auth is wired:
+    #   - "numina" (default): always allowed (the /ai/chat path).
+    #   - "asset-report": REJECTED direct — the report pipeline must be entered
+    #     via the backend trigger_generate_events endpoint, which enforces
+    #     require_owner + require_ai_enabled + per-family concurrency gating.
+    #     Accepting it here would bypass that gating (R1 Finding 1).
+    #     SKIPPED for internal callers (backend trigger via X-Agent-Token) —
+    #     those have already passed the backend's owner/concurrency gate.
+    #   - "import-parse": REJECTED direct (U8) — the parse pipeline must be
+    #     entered via the backend /import/parse-pdf endpoint, which enforces
+    #     require_adult (owner/member) gating. SKIPPED for internal callers
+    #     (backend trigger via X-Agent-Token gateway) — those have already
+    #     passed the backend's auth gate (lockstep with allowlist, no window).
+    #   - "finance-coach": REJECTED direct (Plan A) — the advice pipeline must
+    #     be entered via the backend /ai/finance-coach/generate endpoint, which
+    #     enforces require_ai_enabled + require_adult + per-family concurrency
+    #     gating. SKIPPED for internal callers (backend trigger via X-Agent-Token
+    #     gateway) — those have already passed the backend's auth gate.
+    #   - "wish-advice": REJECTED direct (Plan B T7) — the W4 advice pipeline
+    #     must be entered via the backend /ai/wish-advice/generate endpoint,
+    #     which enforces require_ai_enabled + require_adult + require_owner
+    #     gating. SKIPPED for internal callers (backend trigger via X-Agent-Token
+    #     gateway) — those have already passed the backend's auth gate.
+    #   - any other value: 400.
+    body_meta = getattr(body, "metadata", None) or {}
+    app = body_meta.get("app", "numina") if isinstance(body_meta, dict) else "numina"
+    if not internal and app == "asset-report":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="报告生成须经由后端触发端点，请勿直连 /runs/stream",
+        )
+    if not internal and app == "import-parse":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="导入解析须经由后端 /import/parse-pdf 端点，请勿直连 /runs/stream",
+        )
+    if not internal and app == "finance-coach":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="财务教练建议须经由后端 /ai/finance-coach/generate 端点，请勿直连 /runs/stream",
+        )
+    if not internal and app == "wish-advice":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="心愿储蓄建议须经由后端 /ai/wish-advice/generate 端点，请勿直连 /runs/stream",
+        )
+    if (
+        app != "numina"
+        and app != "asset-report"
+        and app != "import-parse"
+        and app != "finance-coach"
+        and app != "wish-advice"
+    ):
+        raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
     disconnect = (
         DisconnectMode.cancel
@@ -157,6 +239,9 @@ async def start_run(
             **(getattr(body, "metadata", None) or {}),
             "family_id": family_id,
             "user_id": user_id,
+            # Normalise so worker.py can always read record.metadata["app"]
+            # without re-checking body shape. Defaults to "numina".
+            "app": app,
         },
         kwargs={
             "input": getattr(body, "input", None),
@@ -166,7 +251,7 @@ async def start_run(
     )
 
     task = asyncio.create_task(
-        run_family_agent(
+        run_agent(
             bridge=bridge,
             run_manager=run_mgr,
             record=record,

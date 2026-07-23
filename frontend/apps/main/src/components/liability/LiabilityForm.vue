@@ -114,6 +114,25 @@
 
       <van-field v-model="form.institution" :label="t('liability.institution')" :placeholder="t('liability.institutionPlaceholder')" />
 
+      <!-- L7 (KTD-3): optional collateral asset picker. -->
+      <van-field
+        v-model="linkedAssetDisplay"
+        is-link
+        readonly
+        :label="t('liability.linkedAssetPicker')"
+        :placeholder="t('liability.linkedAssetPickerPlaceholder')"
+        @click="showAssetPicker = true"
+      />
+      <van-popup v-model:show="showAssetPicker" position="bottom" round>
+        <van-picker
+          v-model="assetPickerValue"
+          :columns="assetPickerColumns"
+          :title="t('liability.linkedAssetPicker')"
+          @confirm="onAssetConfirm"
+          @cancel="showAssetPicker = false"
+        />
+      </van-popup>
+
       <van-field v-model="form.notes" type="textarea" :label="t('liability.notes')" :placeholder="t('liability.notesPlaceholder')" rows="2" autosize />
     </van-cell-group>
 
@@ -126,10 +145,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Liability } from '@/types'
+import type { Asset, Liability, LiabilityRequestPayload } from '@/types'
 import { getLiabilityField } from '@/types'
+import { getAssets } from '@/api/assets'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const { t } = useI18n()
@@ -145,7 +165,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  submit: [data: Partial<Liability>]
+  submit: [data: LiabilityRequestPayload]
 }>()
 
 interface FormState {
@@ -159,6 +179,7 @@ interface FormState {
   start_date: string
   end_date: string
   institution: string
+  linked_asset_id: string | null
   notes: string
 }
 
@@ -173,6 +194,7 @@ const form = ref<FormState>({
   start_date: '',
   end_date: '',
   institution: '',
+  linked_asset_id: null,
   notes: ''
 })
 
@@ -200,6 +222,7 @@ watch(() => props.initialData, (data) => {
     if (data.start_date !== undefined) form.value.start_date = String(data.start_date ?? '')
     if (data.end_date !== undefined) form.value.end_date = String(data.end_date ?? '')
     if (data.institution !== undefined) form.value.institution = String(data.institution ?? '')
+    if (data.linked_asset_id !== undefined) form.value.linked_asset_id = data.linked_asset_id ? String(data.linked_asset_id) : null
     if (data.notes !== undefined) form.value.notes = String(data.notes ?? '')
   }
 }, { immediate: true })
@@ -234,6 +257,47 @@ function selectCategory(value: string) {
   showCategoryPicker.value = false
 }
 
+// L7 (KTD-3): collateral asset picker. Fetches family assets once on mount;
+// a leading "无" option (value '') unsets the link. Value is the asset id.
+const showAssetPicker = ref(false)
+const assets = ref<Asset[]>([])
+const NONE_ASSET_VALUE = ''
+const assetPickerValue = ref<string[]>([])
+
+const assetPickerColumns = computed(() => [
+  { text: t('liability.noLinkedAsset'), value: NONE_ASSET_VALUE },
+  ...assets.value.map(a => ({ text: a.name, value: a.id })),
+])
+
+const linkedAssetDisplay = computed(() => {
+  if (!form.value.linked_asset_id) return ''
+  const a = assets.value.find(x => x.id === form.value.linked_asset_id)
+  return a?.name ?? ''
+})
+
+function onAssetConfirm({ selectedValues }: { selectedValues: string[] }) {
+  const v = selectedValues[0] ?? NONE_ASSET_VALUE
+  form.value.linked_asset_id = v === NONE_ASSET_VALUE ? null : v
+  showAssetPicker.value = false
+}
+
+// Keep the picker's cursor in sync with the current selection when opened.
+watch(showAssetPicker, (open) => {
+  if (open) {
+    assetPickerValue.value = [form.value.linked_asset_id ?? NONE_ASSET_VALUE]
+  }
+})
+
+onMounted(async () => {
+  try {
+    const res = await getAssets()
+    assets.value = res.data
+  } catch {
+    // Non-fatal: picker just shows the "无" option if assets fail to load.
+    assets.value = []
+  }
+})
+
 function onStartConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.start_date = selectedValues.join('-')
   showStartPicker.value = false
@@ -245,7 +309,7 @@ function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
 }
 
 function onSubmit() {
-  const data: Partial<Liability> = {
+  const data: LiabilityRequestPayload = {
     name: form.value.name,
     category: form.value.category,
     original_amount: Number(form.value.original_amount),
@@ -256,6 +320,7 @@ function onSubmit() {
     start_date: form.value.start_date || undefined,
     end_date: form.value.end_date || undefined,
     institution: form.value.institution || undefined,
+    linked_asset_id: form.value.linked_asset_id ?? null,
     notes: form.value.notes || undefined
   }
   emit('submit', data)

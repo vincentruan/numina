@@ -51,15 +51,17 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { getPurchasingPower, type PurchasingPowerResponse } from '@/api/timeMachine'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
+const { format } = useCurrency()
 
 const form = ref({ amount: 100000, fromYear: 2015, toYear: new Date().getFullYear() })
 const loading = ref(false)
 const result = ref<PurchasingPowerResponse | null>(null)
 
 function formatMoney(v: number) {
-  return `¥${v.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return format(v)
 }
 
 async function calculate() {

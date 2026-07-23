@@ -60,6 +60,7 @@ class User(Base):
         String(10), default="zh-CN"
     )  # 'zh-CN' or 'en-US'
     default_currency: Mapped[str] = mapped_column(String(10), default="CNY")
+    theme_color: Mapped[str | None] = mapped_column(String(20), nullable=True)  # hex color e.g. #007aff
     view_mode: Mapped[str] = mapped_column(
         String(20), default="card"
     )  # 'card' or 'list'

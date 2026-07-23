@@ -5,23 +5,26 @@ See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting
 
 ## Quality Commands
 
+Run from `server/` (the uv workspace root). The canonical test root is `tests/backend/` (the legacy `apps/backend/tests/` was removed); `pyproject.toml` sets `testpaths = ["tests"]`.
+
 ```bash
-uv run ruff check .                    # lint
-uv run ruff check . --fix              # lint + auto-fix
-uv run ruff format .                   # format (only files you touch)
-uv run mypy app/                       # type check
-uv run pytest tests/ -v                # run all tests
-uv run pytest tests/ -v -k "keyword"   # run tests matching keyword
-uv run alembic revision --autogenerate -m "description"   # create migration
-uv run alembic upgrade head                                # apply migrations
+uv run ruff check apps/backend/                    # lint
+uv run ruff check apps/backend/ --fix              # lint + auto-fix
+uv run ruff format apps/backend/                   # format (only files you touch)
+uv run mypy apps/backend/                          # type check
+uv run pytest tests/backend/ -v                    # run all backend tests
+uv run pytest tests/backend/ -v -k "keyword"       # run tests matching keyword
+uv run pytest tests/ -v                            # run all server tests (backend + agent + packages + scheduler_worker)
+cd apps/backend && uv run alembic revision --autogenerate -m "description"   # create migration
+cd apps/backend && uv run alembic upgrade head                                # apply migrations
 ```
 
 ## Tooling
 
 - **uv:** package manager. Use `uv add`/`uv remove` to manage dependencies. Never use `pip install` directly.
 - **ruff:** lint + format. Config in `pyproject.toml` under `[tool.ruff]`. Rules: E, F, I (imports), UP (pyupgrade).
-- **mypy:** type checker. Config in `pyproject.toml` under `[tool.mypy]`. Starts lenient (`ignore_missing_imports = true`) — ratchet strictness over time by adding `disallow_untyped_defs = true` per module.
-- **pytest:** test runner. Tests in `backend/tests/`. Each test gets a fresh in-memory SQLite DB.
+- **mypy:** type checker. Config in `pyproject.toml` under `[tool.mypy]` (`python_version = "3.12"`, `ignore_missing_imports = true`, `warn_return_any = true`, `plugins = ["pydantic.mypy"]`). Ratchet strictness over time by adding `disallow_untyped_defs = true` per module.
+- **pytest:** test runner. Tests in `tests/backend/` (canonical root; `testpaths = ["tests"]`). Each test gets a fresh in-memory SQLite DB.
 
 ## Cache Backend
 
@@ -154,25 +157,27 @@ All routers live in `app/routers/` and are mounted with `prefix="/api/v1"` in `a
 | `notification_config` | `/api/v1/notification-config` | Per-user channel binding |
 | `reminders` | `/api/v1/reminders` | Smart reminder rules |
 
-### AI (frontend → backend → agent proxy)
+### AI (frontend → backend → agent dispatch)
 
-| Router | Final prefix | Purpose |
-|--------|--------------|---------|
-| `ai_capabilities` | `/api/v1/ai/capabilities` | Capability discovery |
-| `ai_config` | `/api/v1/ai` | Per-family AI provider config (encrypted at rest) |
-| `ai_chat` | `/api/v1/ai/chat` + `/api/v1/ai` (sessions_router) | Chat + session journal |
-| `ai_report` | `/api/v1/ai/report` | Family report generation |
-| `ai_suggest` | `/api/v1/ai/suggest` | Asset suggestions |
-| `ai_alerts` | `/api/v1/ai/asset-alerts` | Asset aging alerts |
-| `ai_spending_leaks` | `/api/v1/ai/spending-leaks` | Spending leak detection |
-| `ai_disposal` | `/api/v1/ai/disposal-suggestions` | Disposal recommendations |
-| `ai_liability` | `/api/v1/ai/liability-advice` | Liability advice |
-| `ai_allocation` | `/api/v1/ai/allocation-target` | Allocation drift |
-| `ai_time_machine` | `/api/v1/ai` | Time-machine projections |
-| `ai_tasks` | `/api/v1/ai/tasks` | Long-running AI task tracking |
-| `ai_skills` | `/api/v1/ai/skills` | Per-family skill overrides |
-| `ai_mcp` | `/api/v1/ai/mcp` | MCP tool catalogue |
-| `ai_agents` | `/api/v1/ai/agents` | Agent catalogue (frontend) |
+Backend AI routers are the frontend's entry point. Multi-step capabilities proxy to the agent via `AgentClient.stream` (SSE, `X-Agent-Token`); the agent runs them as `stream_run` apps (`numina`/`asset-report`/`import-parse`/`finance-coach`/`wish-advice`) — see `server/apps/agent/CLAUDE.md` §Runtime & Dispatch. Lightweight single-call capabilities (suggest) call the agent's lightweight LLM endpoint directly.
+
+| Router | Final prefix | Purpose | Dispatch |
+|--------|--------------|---------|----------|
+| `ai_capabilities` | `/api/v1/ai/capabilities` | Capability discovery | — |
+| `ai_config` | `/api/v1/ai` | Per-family AI provider config (encrypted at rest) | — |
+| `ai_chat` | `/api/v1/ai/chat` | Chat (live conversation) | `AgentClient.stream` → `numina` app |
+| `ai_threads` | `/api/v1/ai/threads` | Thread CRUD + state + history + token-usage (proxy to agent `threads` router) | `AgentClient` |
+| `ai_context` | `/api/v1/ai/context` | GET family AI context (4-source bundle) | direct |
+| `ai_report` | `/api/v1/ai/report` | Family report generation (SSE 3-step) | `AgentClient.stream` → `asset-report` app |
+| `ai_finance_coach` | `/api/v1/ai/finance-coach` | Finance coach advice (cached) | `AgentClient.stream` → `finance-coach` app |
+| `ai_wish_advice` | `/api/v1/ai/wish-advice` | Wish savings advice (cached) | `AgentClient.stream` → `wish-advice` app |
+| `ai_suggest` | `/api/v1/ai/suggest` | Asset field suggestions | lightweight LLM |
+| `ai_skills` | `/api/v1/ai/skills` | Per-family skill overrides (`RESERVED_NAMES = ["chat","asset-report","import-parse","finance-coach"]`) | — |
+| `ai_mcp` | `/api/v1/ai/mcp` | MCP tool catalogue | — |
+| `ai_agents` | `/api/v1/ai/agents` | Agent catalogue (frontend) | — |
+| `ai_tasks` | `/api/v1/ai/tasks` | Long-running AI task tracking | — |
+| `ai_web_search` | `/api/v1/ai/web-search` | Web search proxy | — |
+| `ai_time_machine` | `/api/v1/ai` | Time-machine projections (legacy) | — |
 
 ### Internal (agent ↔ backend, admin)
 

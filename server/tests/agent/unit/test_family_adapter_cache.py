@@ -21,6 +21,19 @@ from apps.agent.services.deerflow_adapter.family_adapter_cache import (
 )
 
 
+def _cache_key(family_id: str, config_id: str) -> tuple:
+    """Build the full 8-element cache key for a default get_family_adapter() call.
+
+    The production cache key is
+    ``(family_id, config_id, subagent_enabled, plan_mode, mcp_key, agent_name,
+    middlewares_key, memory_enabled)``. Tests that call ``get_family_adapter``
+    without agent_name/middlewares/memory_enabled get the defaults
+    ``agent_name=""``, ``middlewares_key=()``, ``memory_enabled=True`` and an
+    empty ``mcp_key``.
+    """
+    return (family_id, config_id, False, False, "", "", (), True)
+
+
 @pytest.fixture
 def base_config_dir():
     """Provide a temporary base config directory for tests."""
@@ -249,8 +262,8 @@ class TestFamilyAdapterCache:
         # First entry should be evicted
         assert ("family_0", "cfg-000") not in _adapter_cache
         assert ("family_100", "cfg-100") not in _adapter_cache
-        assert ("family_0", "cfg-000", False, False, "") not in _adapter_cache
-        assert ("family_100", "cfg-100", False, False, "") in _adapter_cache
+        assert _cache_key("family_0", "cfg-000") not in _adapter_cache
+        assert _cache_key("family_100", "cfg-100") in _adapter_cache
 
         clear_cache()
 
@@ -271,7 +284,7 @@ class TestFamilyAdapterCache:
 
         stats = get_cache_stats()
         assert stats["cached_families"] == 0
-        assert ("family_1", "cfg-001", False, False, "") not in _adapter_cache
+        assert _cache_key("family_1", "cfg-001") not in _adapter_cache
 
     def test_invalidate_nonexistent_family(self):
         """Should handle invalidation of non-cached family gracefully."""
@@ -373,8 +386,8 @@ class TestIU6CacheKeyAndCapabilities:
             client_b = get_family_adapter("family_x", cfg_b, base_config_dir)
 
         assert client_a is not client_b
-        assert ("family_x", "cfg-aaa", False, False, "") in _adapter_cache
-        assert ("family_x", "cfg-bbb", False, False, "") in _adapter_cache
+        assert _cache_key("family_x", "cfg-aaa") in _adapter_cache
+        assert _cache_key("family_x", "cfg-bbb") in _adapter_cache
         assert get_cache_stats()["cached_families"] == 2
         clear_cache()
 
@@ -397,8 +410,8 @@ class TestIU6CacheKeyAndCapabilities:
             client_new = get_family_adapter("family_y", cfg_new, base_config_dir)
 
         assert client_old is not client_new
-        assert ("family_y", "cfg-old", False, False, "") in _adapter_cache
-        assert ("family_y", "cfg-new", False, False, "") in _adapter_cache
+        assert _cache_key("family_y", "cfg-old") in _adapter_cache
+        assert _cache_key("family_y", "cfg-new") in _adapter_cache
         clear_cache()
 
     def test_thinking_supported_from_model_1_capabilities(self, base_config_dir):
@@ -450,6 +463,79 @@ class TestIU6CacheKeyAndCapabilities:
         model_entry = content["models"][0]
         assert model_entry.get("supports_thinking") is True
 
+    def test_vision_supported_from_model_1_capabilities(self, base_config_dir):
+        """supports_vision must be True when 'vision' is in model_1_capabilities.
+
+        This wiring lets the DeerFlow harness assembly-time gate view_image_tool
+        (tools.py:110) and mount ViewImageMiddleware (agent.py:352) — without it
+        the agent cannot read images even when the underlying model supports them.
+        """
+        import yaml
+
+        cfg_vision = {
+            "config_id": "cfg-vision",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-sonnet-4-6",
+            "ai_provider": "anthropic",
+            "model_1_capabilities": ["text_generation", "vision"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_vision)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is True
+
+    def test_vision_supported_from_vision_understanding_capability(self, base_config_dir):
+        """supports_vision must be True when 'vision_understanding' is in
+        model_1_capabilities. Frontend CapabilityPickerSheet stores this key
+        (not 'vision'); both must be accepted to match the actual DB value."""
+        import yaml
+
+        cfg_vu = {
+            "config_id": "cfg-vu",
+            "api_key": "sk-test",
+            "ai_model_id": "qwen-vl-plus",
+            "ai_provider": "openai_compatible",
+            "model_1_capabilities": ["text_generation", "deep_thinking", "vision_understanding"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_vu)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is True
+
+    def test_vision_supported_from_vision_model_id(self, base_config_dir):
+        """supports_vision must be True when vision_model_id is set (mirrors
+        ai_config.py:579's ``or bool(cfg.vision_model_id)`` logic)."""
+        import yaml
+
+        cfg_vision_model = {
+            "config_id": "cfg-vm",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-haiku-4-5",
+            "ai_provider": "anthropic",
+            "vision_model_id": "claude-sonnet-4-6",
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_vision_model)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is True
+
+    def test_vision_not_supported_without_vision_config(self, base_config_dir):
+        """supports_vision must be False when neither 'vision' capability nor
+        vision_model_id is set."""
+        import yaml
+
+        cfg_no_vision = {
+            "config_id": "cfg-novision",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-haiku-4-5",
+            "ai_provider": "anthropic",
+            "model_1_capabilities": ["text_generation"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_no_vision)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_vision") is False
+
     def test_batch_invalidate_clears_all_entries_for_family(self, base_config_dir, ai_config):
         """invalidate_family_adapter_cache(family_id) must clear all (family_id, *) entries."""
         clear_cache()
@@ -471,9 +557,9 @@ class TestIU6CacheKeyAndCapabilities:
         # Batch invalidate family_z only
         invalidate_family_adapter_cache("family_z")
 
-        assert ("family_z", "cfg-z1", False, False, "") not in _adapter_cache
-        assert ("family_z", "cfg-z2", False, False, "") not in _adapter_cache
-        assert ("family_other", "cfg-o1", False, False, "") in _adapter_cache
+        assert _cache_key("family_z", "cfg-z1") not in _adapter_cache
+        assert _cache_key("family_z", "cfg-z2") not in _adapter_cache
+        assert _cache_key("family_other", "cfg-o1") in _adapter_cache
         assert get_cache_stats()["cached_families"] == 1
         clear_cache()
 
@@ -494,8 +580,8 @@ class TestIU6CacheKeyAndCapabilities:
 
         invalidate_family_adapter_cache("family_w", config_id="cfg-w1")
 
-        assert ("family_w", "cfg-w1", False, False, "") not in _adapter_cache
-        assert ("family_w", "cfg-w2", False, False, "") in _adapter_cache
+        assert _cache_key("family_w", "cfg-w1") not in _adapter_cache
+        assert _cache_key("family_w", "cfg-w2") in _adapter_cache
         clear_cache()
 
 class TestCacheFixes:

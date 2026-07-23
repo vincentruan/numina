@@ -1,13 +1,13 @@
 <template>
   <van-tabbar :model-value="activeTab" class="app-tabbar" :z-index="1000" @change="onTabChange">
     <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
-    <van-tabbar-item name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
+    <van-tabbar-item name="finance" icon="balance-o">{{ t('nav.finance') }}</van-tabbar-item>
     <van-tabbar-item name="ai" :aria-label="t('settings.aiAssistant')">
       <template #icon="{ active: isActive }">
         <AIBrainIcon :active="isActive" />
       </template>
+      {{ t('nav.ai') }}
     </van-tabbar-item>
-    <van-tabbar-item name="liabilities" icon="bill-o">{{ t('nav.liabilities') }}</van-tabbar-item>
     <van-tabbar-item v-if="isOwner" name="baby" icon="friends-o">{{ t('nav.baby') }}</van-tabbar-item>
     <van-tabbar-item name="settings" icon="setting-o">{{ t('nav.settings') }}</van-tabbar-item>
   </van-tabbar>
@@ -32,18 +32,20 @@ const activeTab = computed(() => {
   if (path === '/ai' || path.startsWith('/ai/')) return 'ai'
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings'
   if (path === '/family' || path.startsWith('/family/')) return 'settings'
-  if (path === '/liabilities' || path.startsWith('/liabilities/')) return 'liabilities'
-  if (path === '/wishes' || path.startsWith('/wishes/')) return 'wishes'
   if (path === '/baby' || path.startsWith('/baby/')) return 'baby'
   if (path.startsWith('/blind-box/')) return 'baby'
   if (path === '/chore-approvals') return 'baby'
+  // KTD-2: finance hub covers assets/liabilities/wishes groups (path-prefix match,
+  // covers all sub-routes incl. params). All three list paths now live under finance.
+  if (path.startsWith('/assets') || path.startsWith('/liabilities')) return 'finance'
+  if (path.startsWith('/finance')) return 'finance'
+  if (path.startsWith('/wishes')) return 'finance'
   return 'dashboard'
 })
 
 const tabToRoute: Record<string, string> = {
   dashboard: '/',
-  wishes: '/wishes',
-  liabilities: '/liabilities',
+  finance: '/finance',
   baby: '/baby',
   settings: '/settings',
   ai: '/ai',

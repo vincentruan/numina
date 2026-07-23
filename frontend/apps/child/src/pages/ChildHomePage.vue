@@ -13,24 +13,39 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-      <!-- Balance hero — progress ring card -->
-      <div class="hero-card">
-        <p class="hero-label">{{ t('home.myStars') }}</p>
-        <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-        <ProgressRing
-          v-if="!loadingChores && todayChores.length > 0"
-          :completed="completedChores"
-          :pending="pendingChores"
-          :total="todayChores.length"
-          :total-coins="totalChoreCoins"
-          :loading="loadingChores"
-          class="hero-ring"
-        />
-      </div>
+      <!-- Settings entry — top-right gear, out of the main scroll flow -->
+      <router-link to="/settings" class="home-settings-link" :aria-label="t('home.settings')">
+        <van-icon name="setting-o" size="20" />
+      </router-link>
+      <!-- Greeting (home-only) -->
+      <HackerGreeting
+        :name="childAuthStore.childUser?.display_name ?? ''"
+        :balance="balance"
+        class="hero-greeting"
+      />
 
-    <!-- Today's chores -->
+      <!-- Balance hero — shared component -->
+      <BalanceHero :amount="balance" variant="home" coin-tiers-mode="collapsible" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+
+      <!-- Progress ring — own row below the hero -->
+      <ProgressRing
+        v-if="!loadingChores && todayChores.length > 0"
+        :completed="completedChores"
+        :pending="pendingChores"
+        :total="todayChores.length"
+        :total-coins="totalChoreCoins"
+        :loading="loadingChores"
+        class="home-progress-ring"
+      />
+
+    <!-- Today's chores — read-only preview; tap a card to manage on the Tasks page -->
     <div class="section">
-      <p class="section-title">{{ t('home.todayTasks') }}</p>
+      <div class="section-head">
+        <p class="section-title">{{ t('home.todayTasks') }}</p>
+        <router-link v-if="todayChores.length > 0" to="/tasks" class="section-link">
+          {{ t('home.viewAllTasks') }}<van-icon name="arrow" size="12" />
+        </router-link>
+      </div>
       <div v-if="loadingChores" class="hint">{{ t('common.loading') }}</div>
       <EmptyState
         v-else-if="todayChores.length === 0"
@@ -38,85 +53,35 @@
         :text="t('empty.noTasks')"
       />
       <div v-else class="chore-list">
-        <div
+        <router-link
           v-for="c in todayChores"
           :key="c.id"
+          to="/tasks"
           class="chore-card"
           :class="c.status"
         >
-          <div class="chore-card-row">
-            <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
-            <div class="chore-info">
-              <p class="chore-name">{{ c.chore_name }}</p>
-              <p class="chore-reward">
-                +{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐
-                <span
-                  v-if="c.streak_count > 1"
-                  class="streak-badge"
-                  :class="['flame-tier-' + streakTier(c.streak_count), { 'reduced-motion': reducedMotion }]"
-                >🔥{{ c.streak_count }}</span>
-              </p>
-              <p v-if="daysToNextBonus(c.streak_count) !== null" class="days-to-bonus">
-                {{ t('chore.daysToBonus', { days: daysToNextBonus(c.streak_count) }) }}
-              </p>
-            </div>
-            <button
-              v-if="c.is_pool_unclaimed"
-              class="btn-complete"
-              :disabled="!isClaimable(c) || claimingId === c.id || submittingId === c.id"
-              @click="claim(c.id)"
-            >{{ claimingId === c.id ? t('chore.claiming') : t('chore.claim') }}</button>
-            <template v-else-if="c.status === 'available'">
-              <button
-                class="btn-complete"
-                :disabled="submittingId === c.id"
-                @click="complete(c.id)"
-              >{{ t('chore.complete') }}</button>
-              <button
-                class="btn-abandon"
-                :disabled="submittingId === c.id || claimingId === c.id || abandoningId === c.id"
-                @click="abandon(c)"
-              >{{ t('chore.abandon') }}</button>
-            </template>
-            <span v-else class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
+          <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
+          <div class="chore-info">
+            <p class="chore-name">{{ c.chore_name }}</p>
+            <p class="chore-reward">
+              +{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐
+              <span
+                v-if="c.streak_count > 1"
+                class="streak-badge"
+                :class="['flame-tier-' + streakTier(c.streak_count), { 'reduced-motion': reducedMotion }]"
+              >🔥{{ c.streak_count }}</span>
+            </p>
           </div>
-          <p
-            v-if="c.is_pool_unclaimed && claimDisabledReason(c)"
-            class="claim-disabled-hint"
-          >{{ claimDisabledReason(c) }}</p>
-        </div>
+          <span class="chore-status-badge" :class="c.status">
+            <van-icon v-if="c.status === 'approved'" name="success" size="14" />
+            <van-icon v-else-if="c.status === 'rejected'" name="warning-o" size="14" />
+            <van-icon v-else-if="c.status === 'pending_approval'" name="clock-o" size="14" />
+            <van-icon v-else name="arrow" size="14" />
+            <span class="chore-status-text">{{ statusLabel(c.status) }}</span>
+          </span>
+        </router-link>
       </div>
     </div>
-
-    <!-- Motivational abandon sheet -->
-    <van-popup
-      v-model:show="abandonSheetVisible"
-      position="bottom"
-      round
-      :style="{ padding: '24px 20px 40px' }"
-    >
-      <p class="abandon-sheet-title">{{ t('chore.abandonTitle') }}</p>
-      <div v-if="abandonTarget" class="abandon-sheet-chore">
-        <span class="abandon-sheet-emoji">{{ abandonTarget.chore_emoji || '✅' }}</span>
-        <div>
-          <p class="abandon-sheet-name">{{ abandonTarget.chore_name }}</p>
-          <p class="abandon-sheet-reward">+{{ abandonTarget.coin_reward }} ⭐</p>
-        </div>
-      </div>
-      <p v-if="topWish && topWish.star_coin_cost" class="abandon-sheet-hint">
-        {{ t('chore.abandonWishHint', { wishName: topWish.name, remaining: Math.max(0, topWish.star_coin_cost - balance) }) }}
-      </p>
-      <button class="btn-keep-going" @click="abandonSheetVisible = false">
-        {{ t('chore.abandonKeepGoing') }}
-      </button>
-      <button
-        class="btn-abandon-confirm"
-        :disabled="abandoningId !== null"
-        @click="doAbandon"
-      >
-        {{ t('chore.abandonConfirm') }}
-      </button>
-    </van-popup>
 
     <!-- Active challenges -->
     <ChallengeCard ref="challengeCard" />
@@ -148,43 +113,6 @@
     </div>
     </van-pull-refresh>
 
-    <!-- Settings section — collapsible -->
-    <div class="settings-section">
-      <button class="settings-toggle" @click="settingsExpanded = !settingsExpanded">
-        <span>{{ t('home.settings') }}</span>
-        <van-icon :name="settingsExpanded ? 'arrow-up' : 'arrow-down'" size="14" />
-      </button>
-      <div v-if="settingsExpanded" class="settings-body">
-        <p class="settings-label">{{ t('home.settingsTheme') }}</p>
-        <div class="theme-options">
-          <button
-            v-for="opt in themeOptions"
-            :key="opt.value"
-            class="theme-btn"
-            :class="{ active: themeMode === opt.value }"
-            @click="setMode(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <p class="settings-label">{{ t('home.settingsLanguage') }}</p>
-        <div class="theme-options">
-          <button
-            v-for="opt in languageOptions"
-            :key="opt.value"
-            class="theme-btn"
-            :class="{ active: currentLocale === opt.value }"
-            @click="setLocale(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <button class="logout-btn" @click="handleLogout">
-          {{ t('home.logout') }}
-        </button>
-      </div>
-    </div>
-
     <!-- Celebration animation -->
     <CelebrationAnimation
       :visible="celebrationVisible"
@@ -204,39 +132,33 @@ import ProgressRing from '@/components/ProgressRing.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'vant'
-import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
+import { getMyChores, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import { getCoinBalance } from '@/api/coins'
-import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import BalanceHero from '@/components/BalanceHero.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import ChallengeCard from '@/components/ChallengeCard.vue'
+import HackerGreeting from '@/components/HackerGreeting.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
 import { useFamilyStore } from '@/stores/family'
 
 const noTasksSvg = noTasksSvgRaw
-import { useDarkMode } from '@/utils/darkMode'
-import { useLocale } from '@/utils/locale'
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
-import { tryVibrate } from '@/composables/useHaptic'
-import { MOTION } from '@/utils/motionTokens'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 const { complete: completeLoading } = usePageLoading()
-const { themeMode, setMode } = useDarkMode()
-const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
 
-// Balance polling via composable
-const { balance, refresh: refreshBalance } = useBalancePolling()
+// Balance polling via composable (singleton auto-refreshes; no manual refresh needed)
+const { balance } = useBalancePolling()
 const reducedMotion = useReducedMotion()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
@@ -246,13 +168,7 @@ const refreshing = ref(false)
 const completedChores = computed(() => todayChores.value.filter(c => c.status === 'approved').length)
 const pendingChores = computed(() => todayChores.value.filter(c => c.status === 'pending_approval').length)
 const totalChoreCoins = computed(() => todayChores.value.reduce((sum, c) => sum + (c.coin_reward ?? 0), 0))
-const submittingId = ref<string | null>(null)
-const claimingId = ref<string | null>(null)
-const abandoningId = ref<string | null>(null)
-const abandonSheetVisible = ref(false)
-const abandonTarget = ref<ChoreInstance | null>(null)
 const topWish = ref<ChildWish | null>(null)
-const settingsExpanded = ref(false)
 
 // Celebration state via composable
 const {
@@ -263,32 +179,12 @@ const {
   checkAndTriggerCelebration,
 } = useCelebration()
 
-const themeOptions = computed(() => [
-  { value: 'system' as const, label: t('home.themeSystem') },
-  { value: 'light' as const, label: t('home.themeLight') },
-  { value: 'dark' as const, label: t('home.themeDark') },
-])
-
-const languageOptions = computed(() => [
-  { value: 'zh-CN' as const, label: t('home.langZhCN') },
-  { value: 'en-US' as const, label: t('home.langEnUS') },
-])
-
 // Streak tier helper: returns threshold value (7, 14, 30) or '0' for below 7
 function streakTier(count: number): string {
   if (count >= 30) return '30'
   if (count >= 14) return '14'
   if (count >= 7) return '7'
   return '0'
-}
-
-// Days to next streak bonus tier
-function daysToNextBonus(streakCount: number): number | null {
-  if (streakCount <= 1) return null // No streak yet
-  if (streakCount >= 30) return null // Already at max tier
-  const thresholds = [7, 14, 30]
-  const nextThreshold = thresholds.find(t => streakCount < t)
-  return nextThreshold ? nextThreshold - streakCount : null
 }
 
 function statusLabel(status: ChoreInstance['status']): string {
@@ -298,98 +194,6 @@ function statusLabel(status: ChoreInstance['status']): string {
     case 'approved': return t('chore.approved')
     case 'rejected': return t('chore.rejected')
     default: return ''
-  }
-}
-
-function isClaimable(c: ChoreInstance): boolean {
-  return c.is_pool_unclaimed && c.status === 'available'
-}
-
-function claimDisabledReason(c: ChoreInstance): string {
-  if (!c.is_pool_unclaimed) return ''
-  if (c.status !== 'available') return t('chore.claimDisabledUnavailable')
-  return ''
-}
-
-async function complete(instanceId: string) {
-  submittingId.value = instanceId
-  try {
-    const updated = await markChoreComplete(instanceId)
-    const idx = todayChores.value.findIndex(c => c.id === instanceId)
-    if (idx !== -1) todayChores.value[idx] = updated
-    // Haptic feedback after successful completion
-    tryVibrate(MOTION.haptic.rewardPulse)
-    // Wish progress bump toast if active wish exists
-    if (topWish.value) {
-      const chore = todayChores.value.find(c => c.id === instanceId)
-      const stars = chore?.coin_reward ?? 0
-      showSuccessToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
-    }
-    // Refresh balance after completing a chore
-    await refreshBalance()
-  } catch {
-    showFailToast(t('toast.submitFailed'))
-  } finally {
-    submittingId.value = null
-  }
-}
-
-async function claim(instanceId: string) {
-  const target = todayChores.value.find(c => c.id === instanceId)
-  if (!target || !isClaimable(target)) return
-  claimingId.value = instanceId
-  // Optimistic update
-  const idx = todayChores.value.findIndex(c => c.id === instanceId)
-  if (idx !== -1) todayChores.value[idx] = { ...todayChores.value[idx], is_pool_unclaimed: false }
-  try {
-    const updated = await claimChore(instanceId)
-    if (idx !== -1) todayChores.value[idx] = updated
-  } catch {
-    // Revert optimistic update
-    if (idx !== -1) todayChores.value[idx] = { ...todayChores.value[idx], is_pool_unclaimed: true }
-    showFailToast(t('chore.claimFailed'))
-  } finally {
-    claimingId.value = null
-  }
-}
-
-function abandon(chore: ChoreInstance) {
-  abandonTarget.value = chore
-  abandonSheetVisible.value = true
-}
-
-async function doAbandon() {
-  if (!abandonTarget.value) return
-  const instanceId = abandonTarget.value.id
-  abandoningId.value = instanceId
-  try {
-    await abandonChore(instanceId)
-    todayChores.value = todayChores.value.filter(c => c.id !== instanceId)
-    abandonSheetVisible.value = false
-    abandonTarget.value = null
-  } catch {
-    showFailToast(t('chore.abandonFailed'))
-    abandonTarget.value = null
-  } finally {
-    abandoningId.value = null
-  }
-}
-
-async function handleLogout() {
-  try {
-    await showConfirmDialog({
-      title: t('common.confirm'),
-      message: t('home.logoutConfirm'),
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-    })
-    await childAuthStore.childLogout()
-    showToast(t('toast.logoutSuccess'))
-    // Redirect to main app login page (child app has no auth routes)
-    const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
-    window.location.href = `${baseUrl}/login`
-  } catch {
-    // User cancelled or logout failed
   }
 }
 
@@ -433,55 +237,47 @@ onMounted(load)
 <style scoped>
 /* ── Canvas ── */
 .home-page {
+  position: relative;
   padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
 }
 
-/* ── Hero card — ochre feature card ── */
-.hero-card {
-  background: var(--color-brand-ochre);
-  border-radius: var(--radius-xl);
-  padding: 32px 20px;
+/* ── Greeting (home-only, sits above the shared balance hero) ── */
+.hero-greeting {
   text-align: center;
-  color: var(--color-ink);
+  margin-bottom: var(--space-md);
+}
+
+/* Progress ring — its own row below the hero */
+.home-progress-ring {
   margin-bottom: var(--space-lg);
-  --coin-text-gold:   var(--color-ink);
-  --coin-text-silver: var(--color-ink);
-  --coin-text-copper: var(--color-ink);
-}
-[data-theme="dark"] .hero-card {
-  background:
-    linear-gradient(135deg, rgba(var(--color-brand-ochre-rgb), 0.16), rgba(var(--color-brand-ochre-rgb), 0.08)),
-    var(--color-surface-card);
-  color: var(--color-on-feature-ochre);
-  --coin-text-gold:   var(--color-on-feature-ochre);
-  --coin-text-silver: var(--color-on-feature-ochre);
-  --coin-text-copper: var(--color-on-feature-ochre);
-}
-.hero-label {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0 0 8px;
-  opacity: 0.75;
-}
-.hero-balance {
-  font-size: 32px;
-  font-weight: 600;
-}
-.hero-ring {
-  margin-top: 20px;
 }
 
 /* ── Sections ── */
 .section { margin-bottom: var(--space-lg); }
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+}
 .section-title {
   font-family: Inter, sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-muted);
-  margin: 0 0 12px;
+  margin: 0;
+}
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-brand-ochre);
+  text-decoration: none;
 }
 .hint {
   font-size: 14px;
@@ -490,38 +286,33 @@ onMounted(load)
   padding: 16px 0;
 }
 
-/* ── Chore cards ── */
+/* ── Chore preview cards — tap to manage on Tasks page ── */
 .chore-list { display: flex; flex-direction: column; gap: 8px; }
 .chore-card {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   background: var(--color-surface-soft);
   border-radius: var(--radius-md);
   padding: 12px 14px;
   border: 1px solid var(--color-hairline);
   min-height: 56px;
+  text-decoration: none;
+  transition: transform 0.1s;
 }
-.chore-card-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.chore-card:active { transform: scale(0.98); }
 .chore-card.approved { opacity: 0.55; }
-.chore-emoji { font-size: 24px; }
-.chore-info { flex: 1; }
-.claim-disabled-hint {
-  font-family: Inter, sans-serif;
-  font-size: 11px;
-  color: var(--color-muted-soft);
-  margin: 6px 0 0;
-  padding-left: 36px;
-}
+.chore-emoji { font-size: 24px; flex-shrink: 0; }
+.chore-info { flex: 1; min-width: 0; }
 .chore-name {
   font-family: Inter, sans-serif;
   font-size: 14px;
   font-weight: 600;
   color: var(--color-ink);
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chore-reward {
   font-family: Inter, sans-serif;
@@ -552,53 +343,11 @@ onMounted(load)
   50% { transform: scale(1.03); /* scales.pulse */ }
 }
 
-/* Days to bonus hint */
-.days-to-bonus {
-  font-family: Inter, sans-serif;
-  font-size: 11px;
-  color: var(--color-muted-soft);
-  margin: 2px 0 0;
-}
-
-/* Complete button */
-.btn-complete {
-  background: var(--color-brand-pink);
-  color: var(--color-on-dark);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 0 14px;
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  height: 36px;
-  white-space: nowrap;
-  transition: opacity 0.15s, transform 0.1s;
-}
-.btn-complete:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-complete:active:not(:disabled) { transform: scale(0.96); }
-
-/* Abandon button */
-.btn-abandon {
-  background: var(--color-surface-soft);
-  color: var(--color-muted);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
-  padding: 0 10px;
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  height: 36px;
-  white-space: nowrap;
-  transition: opacity 0.15s, transform 0.1s;
-  margin-left: 8px;
-}
-.btn-abandon:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-abandon:active:not(:disabled) { transform: scale(0.96); }
-
-/* Status badge — pill with color per state */
+/* Status badge — pill with Vant icon + label, color per state */
 .chore-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: Inter, sans-serif;
   font-size: 12px;
   font-weight: 500;
@@ -607,11 +356,7 @@ onMounted(load)
   border-radius: var(--radius-pill);
   background: var(--color-surface-card);
   color: var(--color-muted);
-}
-.chore-status-badge.available {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-weight: 600;
+  flex-shrink: 0;
 }
 .chore-status-badge.approved {
   background: var(--color-brand-mint);
@@ -684,165 +429,22 @@ onMounted(load)
   font-weight: 600;
 }
 
-/* ── Settings section ── */
-.settings-section {
-  margin-top: 8px;
-  margin-bottom: var(--space-lg);
+/* ── Settings entry — top-right gear, floats above the hero ── */
+.home-settings-link {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
   background: var(--color-surface-card);
-  border-radius: var(--radius-lg);
   border: 1px solid var(--color-hairline);
-  overflow: hidden;
-}
-.settings-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-ink);
-  min-height: 44px;
-}
-.settings-body {
-  padding: 0 16px 16px;
-  border-top: 1px solid var(--color-hairline);
-}
-.settings-label {
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
   color: var(--color-muted);
-  margin: 12px 0 10px;
+  z-index: 5;
+  transition: background 0.15s, color 0.15s;
 }
-.theme-options {
-  display: flex;
-  gap: 8px;
-}
-.theme-btn {
-  flex: 1;
-  padding: 10px 4px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-hairline);
-  background: var(--color-surface-soft);
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  min-height: 44px;
-}
-.theme-btn.active {
-  background: var(--color-brand-ochre);
-  border-color: var(--color-brand-ochre);
-  color: var(--color-ink);
-  font-weight: 600;
-}
-.theme-btn:active { transform: scale(0.96); }
-.logout-btn {
-  width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-hairline);
-  background: var(--color-surface-soft);
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  min-height: 44px;
-}
-.logout-btn:active { transform: scale(0.96); }
-
-/* ── Abandon sheet ── */
-.abandon-sheet-title {
-  font-family: Inter, sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin: 0 0 16px;
-  text-align: center;
-}
-
-.abandon-sheet-chore {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--color-surface-soft);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  margin-bottom: 16px;
-}
-
-.abandon-sheet-emoji {
-  font-size: 32px;
-}
-
-.abandon-sheet-name {
-  font-family: Inter, sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin: 0;
-}
-
-.abandon-sheet-reward {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-brand-ochre);
-  margin: 4px 0 0;
-  font-weight: 500;
-}
-
-.abandon-sheet-hint {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-muted);
-  margin: 0 0 20px;
-  text-align: center;
-  line-height: 1.5;
-}
-
-.btn-keep-going {
-  width: 100%;
-  background: var(--color-brand-pink);
-  color: var(--color-on-dark);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 14px;
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 44px;
-  transition: transform 0.1s;
-}
-.btn-keep-going:active { transform: scale(0.96); }
-
-.btn-abandon-confirm {
-  width: 100%;
-  background: var(--color-surface-soft);
-  color: var(--color-muted);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  min-height: 44px;
-  margin-top: 8px;
-  transition: transform 0.1s;
-}
-.btn-abandon-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-abandon-confirm:active:not(:disabled) { transform: scale(0.96); }
+.home-settings-link:active { transform: scale(0.92); color: var(--color-ink); }
 </style>

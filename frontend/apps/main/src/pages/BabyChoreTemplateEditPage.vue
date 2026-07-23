@@ -71,6 +71,21 @@
             </van-checkbox-group>
           </template>
         </van-field>
+        <van-field
+          :label="t('baby.choreForm.realRewardEnabled')"
+          name="real_reward_enabled"
+        >
+          <template #input>
+            <div class="immutable-field">
+              <van-switch
+                v-model="form.real_reward_enabled"
+                :disabled="!familySwitchOn"
+                :aria-label="t('baby.choreForm.realRewardEnabled')"
+              />
+              <span class="immutable-hint">{{ t('baby.choreForm.realRewardEnabledHint') }}</span>
+            </div>
+          </template>
+        </van-field>
       </van-cell-group>
 
       <div style="margin: 16px">
@@ -107,10 +122,15 @@ const template = ref<ChoreTemplate | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
 
+// B1 per-template granularity: disable the per-template switch when the family-level
+// education_reward_enabled switch is OFF (the per-template flag has no effect then).
+const familySwitchOn = computed(() => familyStore.educationRewardEnabled)
+
 const form = ref({
   name: '',
   emoji: '',
   assignee_ids: [] as string[],
+  real_reward_enabled: true,
 })
 const rewardStr = ref('')
 
@@ -121,6 +141,7 @@ async function loadData() {
   increment()
   try {
     await familyStore.fetchFamily()
+    await familyStore.loadCoinConfig()
   } catch {
     showFailToast(t('toast.loadFailed'))
     router.back()
@@ -142,6 +163,7 @@ async function loadData() {
       name: found.name,
       emoji: found.emoji ?? '',
       assignee_ids: found.assignees.map(a => String(a.id)),
+      real_reward_enabled: found.real_reward_enabled,
     }
     rewardStr.value = String(found.coin_reward)
   } catch {
@@ -167,6 +189,7 @@ async function onSubmit() {
       emoji: form.value.emoji || undefined,
       coin_reward: coinReward,
       assignee_ids: template.value?.assignment_type === 'assigned' ? form.value.assignee_ids : undefined,
+      real_reward_enabled: form.value.real_reward_enabled,
     })
     showToast(t('choreTemplate.saveSuccess'))
     router.back()

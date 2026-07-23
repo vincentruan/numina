@@ -94,8 +94,10 @@ export default tseslint.config(
 "lint":      "eslint src",
 "lint:fix":  "eslint src --fix",
 "format":    "prettier --write src",
-"typecheck": "vue-tsc --noEmit"
+"typecheck": "vue-tsc --noEmit -p tsconfig.app.json"
 ```
+
+> **⚠️ Correction (2026-07-23):** this doc previously recommended bare `"typecheck": "vue-tsc --noEmit"`. That is a **silent-pass no-op** when the root `tsconfig.json` is a references-only file with `"files": []` — vue-tsc reads the root config, checks zero files, and exits 0. Always pass `-p tsconfig.app.json` (and add `"typecheck:test": "vue-tsc --noEmit -p tsconfig.vitest.json"` for tests, wired into CI). See `vue-tsc-references-only-root-tsconfig-noop-typecheck-gate-2026-07-23.md`.
 
 ### Backend (FastAPI, Python 3.12): ruff + mypy
 

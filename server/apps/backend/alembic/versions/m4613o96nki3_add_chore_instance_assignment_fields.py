@@ -20,8 +20,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('chore_instances', sa.Column('assigned_by_user_id', sa.BigInteger(), nullable=True))
-    op.add_column('chore_instances', sa.Column('claimed_at', sa.DateTime(), nullable=True))
+    # Fresh-DB guard: bootstrap creates chore_instances with both columns already.
+    bind = op.get_bind()
+    cols = {c['name'] for c in bind.dialect.get_columns(bind, 'chore_instances')} if bind.dialect.has_table(bind, 'chore_instances') else set()
+    if 'assigned_by_user_id' not in cols:
+        op.add_column('chore_instances', sa.Column('assigned_by_user_id', sa.BigInteger(), nullable=True))
+    if 'claimed_at' not in cols:
+        op.add_column('chore_instances', sa.Column('claimed_at', sa.DateTime(), nullable=True))
 
 
 def downgrade() -> None:

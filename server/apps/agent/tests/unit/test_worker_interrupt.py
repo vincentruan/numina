@@ -1,4 +1,4 @@
-"""Tests for interrupt event detection in run_family_agent.
+"""Tests for interrupt event detection in _run_numina_agent.
 
 Task 4: Worker must detect interrupt events from the adapter stream and set
 run status to ``interrupted`` (not ``cancelled``), and skip the 300s cleanup GC
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from deerflow.runtime import RunStatus
 
-from apps.agent.services.runtime.worker import run_family_agent
+from apps.agent.services.runtime.worker import _run_numina_agent
 
 
 async def test_interrupt_event_sets_status_to_interrupted():
@@ -79,7 +79,7 @@ async def test_interrupt_event_sets_status_to_interrupted():
         )
         mock_pii.redact = MagicMock(side_effect=lambda ctx: ctx)
 
-        await run_family_agent(
+        await _run_numina_agent(
             bridge=bridge,
             run_manager=run_manager,
             record=record,
@@ -164,7 +164,7 @@ async def test_cleanup_skipped_for_interrupted_runs():
         )
         mock_pii.redact = MagicMock(side_effect=lambda ctx: ctx)
 
-        await run_family_agent(
+        await _run_numina_agent(
             bridge=bridge,
             run_manager=run_manager,
             record=record,
@@ -248,7 +248,7 @@ async def test_cleanup_called_for_cancelled_runs():
         )
         mock_pii.redact = MagicMock(side_effect=lambda ctx: ctx)
 
-        await run_family_agent(
+        await _run_numina_agent(
             bridge=bridge,
             run_manager=run_manager,
             record=record,

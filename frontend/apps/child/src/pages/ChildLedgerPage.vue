@@ -13,14 +13,9 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-    <!-- Balance hero — teal feature card -->
-    <div class="balance-card">
-      <p class="balance-label">{{ t('ledger.myStars') }}</p>
-      <p class="balance-value">
-        <CoinDisplay :amount="balance" :icon-size="28" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-      </p>
-      <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">{{ t('ledger.giftBtn') }}</button>
-    </div>
+    <!-- Balance hero — shared component -->
+    <BalanceHero :amount="balance" variant="ledger" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+    <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">{{ t('ledger.giftBtn') }}</button>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
@@ -72,14 +67,23 @@
           :label="t('ledger.amountLabel')"
           :placeholder="t('ledger.amountPlaceholder')"
           class="sheet-field"
+          :class="{ 'field-error': giftExceedsBalance }"
         />
+        <p v-if="giftAmountStr" class="gift-preview" :class="{ 'is-error': giftExceedsBalance }">
+          <template v-if="giftExceedsBalance">
+            {{ t('ledger.giftInsufficient', { max: balance }) }}
+          </template>
+          <template v-else>
+            {{ t('ledger.giftRemaining', { remaining: giftRemaining }) }}
+          </template>
+        </p>
         <van-button
           block
           type="primary"
-          :disabled="!selectedSiblingId || !giftAmountStr"
+          :disabled="!giftCanSubmit"
           class="btn-confirm"
           @click="doGift"
-        >{{ t('ledger.confirmGift') }}</van-button>
+        >{{ giftCanSubmit ? t('ledger.confirmGiftWithRemaining', { remaining: giftRemaining }) : t('ledger.confirmGift') }}</van-button>
       </div>
     </van-popup>
     </template>
@@ -94,7 +98,7 @@ import ChildLedgerSkeleton from '@/components/skeletons/ChildLedgerSkeleton.vue'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
-import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import BalanceHero from '@/components/BalanceHero.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import noRecordsSvgRaw from '@/assets/empty-states/no-records.svg?raw'
 
@@ -119,6 +123,18 @@ const giftAmountStr = ref('')
 
 const hasSiblings = computed(() => siblings.value.length > 0)
 
+// Gift preview: show "after this transfer you'll have N ⭐" so the
+// consequence is visible before the irreversible submit, and block amounts
+// that exceed the current balance.
+const giftAmount = computed(() => parseInt(giftAmountStr.value) || 0)
+const giftExceedsBalance = computed(() => giftAmount.value > balance.value)
+const giftRemaining = computed(() => Math.max(0, balance.value - giftAmount.value))
+const giftCanSubmit = computed(() =>
+  !!selectedSiblingId.value &&
+  giftAmount.value > 0 &&
+  !giftExceedsBalance.value,
+)
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -141,8 +157,8 @@ async function onRefresh() {
 }
 
 async function doGift() {
-  const amount = parseInt(giftAmountStr.value)
-  if (!selectedSiblingId.value || !amount || amount <= 0) return
+  if (!giftCanSubmit.value) return
+  const amount = giftAmount.value
   try {
     const res = await giftCoins(selectedSiblingId.value, amount, '🎁')
     showToast(t('toast.childGrantedStars', { amount: res.sent_amount, name: res.to_display_name }))
@@ -167,39 +183,14 @@ onMounted(load)
   min-height: 100vh;
 }
 
-/* ── Balance card — teal feature card ── */
-.balance-card {
-  background: var(--color-brand-teal);
-  border-radius: var(--radius-xl);
-  padding: 32px 24px;
-  text-align: center;
-  margin-bottom: var(--space-lg);
-  color: var(--color-on-dark);
-}
-[data-theme="dark"] .balance-card {
-  background:
-    linear-gradient(135deg, rgba(var(--color-brand-mint-rgb), 0.14), rgba(var(--color-brand-mint-rgb), 0.06)),
-    var(--color-surface-card);
-  color: var(--color-on-feature-teal);
-}
-.balance-label {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-  opacity: 0.75;
-}
-.balance-value {
-  font-size: 32px;
-  font-weight: 600;
-  margin: 8px 0 0;
-}
-
-/* Gift button — button-on-color spec: canvas bg, ink text */
+/* Gift button — secondary action below the hero */
 .gift-btn {
-  margin-top: 16px;
-  background: var(--color-canvas);
-  border: none;
+  margin-top: -8px;
+  margin-bottom: var(--space-lg);
+  margin-left: auto;
+  display: block;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-hairline);
   color: var(--color-ink);
   border-radius: var(--radius-md);
   padding: 0 20px;
@@ -207,7 +198,7 @@ onMounted(load)
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  height: 44px;
+  height: 40px;
   transition: opacity 0.15s;
 }
 .gift-btn:active { opacity: 0.8; }
@@ -317,6 +308,20 @@ onMounted(load)
   margin-top: 16px;
   border-radius: var(--radius-md);
   background: var(--color-surface-soft);
+}
+.sheet-field.field-error :deep(.van-field__control) {
+  color: var(--color-brand-coral);
+}
+.gift-preview {
+  margin: 8px 4px 0;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-brand-mint);
+  line-height: 1.4;
+}
+.gift-preview.is-error {
+  color: var(--color-brand-coral);
 }
 .btn-confirm {
   margin-top: 16px;

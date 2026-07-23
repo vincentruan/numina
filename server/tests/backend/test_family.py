@@ -74,6 +74,38 @@ def test_get_family_aggregate_with_assets(client, auth_headers):
     assert data["net_worth"] == 1200000
 
 
+def test_get_member_summary_with_liability_and_asset(client, auth_headers):
+    """GET /family/members/{id}/summary must not crash when the family has both
+    Float asset values and Decimal (Numeric) liability amounts. Regression for the
+    float - Decimal TypeError that the liability Float->Numeric migration introduced
+    (get_member_summary was not fixed alongside get_aggregate)."""
+    cats = client.get("/api/v1/categories", headers=auth_headers).json()["data"]
+    cat_id = next(c["id"] for c in cats if c["asset_type"] == "physical")
+    client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "房产",
+        "category_id": cat_id,
+        "asset_type": "physical",
+        "purchase_price": 1000000,
+        "current_value": 1200000,
+    })
+    client.post("/api/v1/liabilities", headers=auth_headers, json={
+        "name": "房贷",
+        "category": "mortgage",
+        "original_amount": 800000,
+        "remaining_amount": 600000,
+        "monthly_payment": 5000,
+        "interest_rate": 4.2,
+    })
+
+    me = client.get("/api/v1/auth/me", headers=auth_headers).json()["data"]
+    response = client.get(f"/api/v1/family/members/{me['id']}/summary", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["total_assets"] == 1200000
+    assert data["total_liabilities"] == 600000
+    assert data["net_worth"] == 600000
+
+
 def test_regenerate_invite_code(client, auth_headers):
     """POST /family/invite-code regenerates the invite code (owner only)."""
     # Get original invite code

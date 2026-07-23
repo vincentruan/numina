@@ -17,7 +17,6 @@
             <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
             <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
             <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
-            <template v-if="store.summary.allocation_drift > 0"> · {{ t('reminders.types.allocation_drift') }} {{ store.summary.allocation_drift }}</template>
             <template v-if="store.summary.large_purchase > 0"> · {{ t('reminders.types.large_purchase') }} {{ store.summary.large_purchase }}</template>
           </span>
           <span v-else class="reminder-summary reminder-summary--empty">{{ t('reminders.empty') }}</span>
@@ -65,7 +64,7 @@
                   <div class="expiring-meta">{{ item.due_date }} · {{ t('liability.title') }}</div>
                 </div>
                 <div class="expiring-right">
-                  <div class="payment-amount">¥{{ (item.amount ?? 0).toLocaleString() }}</div>
+                  <div class="payment-amount">{{ currency.format(item.amount ?? 0) }}</div>
                   <div class="expiring-remaining" :class="getPaymentUrgencyClass(item.due_date)">
                     {{ formatPaymentDays(item.due_date) }}
                   </div>
@@ -89,7 +88,6 @@
                 :title="item.name"
                 :label="item.category_name"
                 icon="box-o"
-                is-link
                 @click="$emit('select-status', 'idle')"
               />
             </template>
@@ -139,6 +137,7 @@ import IIcon from '@/components/IIcon.vue'
 import { useRemindersStore } from '@/stores/reminders'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem, UpcomingPaymentItem } from '@/api/dashboard'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   idleAssets?: LowUsageItem[]
@@ -152,6 +151,7 @@ defineEmits<{
 
 const { t } = useI18n()
 const router = useRouter()
+const currency = useCurrency()
 const store = useRemindersStore()
 const expanded = ref<string[]>([])
 const loaded = ref(false)

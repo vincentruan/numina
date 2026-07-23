@@ -25,7 +25,7 @@ from apps.agent.services.runtime.sse_gateway import (
     normalize_stream_modes,
     sse_consumer,
 )
-from apps.agent.services.runtime.worker import run_family_agent
+from apps.agent.services.runtime.worker import run_agent
 from apps.agent.services.session_store import AiSessionRepository
 from deerflow.runtime import DisconnectMode
 
@@ -118,6 +118,7 @@ async def resume_run(
         metadata={
             "family_id": x_family_id,
             "user_id": verified.user_id,
+            "app": "numina",  # resume is always the /ai/chat numina path
         },
         kwargs={
             "resume_answer": body.answer,
@@ -127,7 +128,7 @@ async def resume_run(
     )
 
     task = asyncio.create_task(
-        run_family_agent(
+        run_agent(
             bridge=bridge,
             run_manager=run_mgr,
             record=run_record,

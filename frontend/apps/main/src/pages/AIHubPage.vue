@@ -11,7 +11,7 @@
       <div class="hub-header-main">
         <div class="hub-greeting">
           <span class="hub-greeting-label">{{ t('aiHub.title') }}</span>
-          <span class="hub-greeting-hi">{{ t('aiHub.greeting', { userName }) }}</span>
+          <span class="hub-greeting-hi"><ShimmerText :text="t('aiHub.greeting', { userName })" :duration="3" /></span>
         </div>
         <!-- Health score ring -->
         <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="scoreAriaLabel">
@@ -127,7 +127,7 @@
 
       <!-- 我的智能体 Section -->
       <div class="agent-section">
-        <div class="agent-section__header" @click="toggleMyAgents">
+        <div class="agent-section__header" role="button" tabindex="0" @click="toggleMyAgents" @keydown.enter="toggleMyAgents" @keydown.space.prevent="toggleMyAgents">
           <span class="agent-section__title">{{ t('aiHub.myAgents') }}</span>
           <span class="agent-section__count">{{ t('aiHub.myAgentsCount', { count: enabledCustomAgents.length }) }}</span>
           <van-icon :name="myAgentsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
@@ -160,7 +160,7 @@
               @edit="handleAgentEdit"
             />
             <!-- Create agent card -->
-            <div v-if="isOwner" class="agent-card agent-card--create" @click="router.push({ name: 'AgentCreate' })">
+            <div v-if="isOwner" class="agent-card agent-card--create" role="button" tabindex="0" @click="router.push({ name: 'AgentCreate' })" @keydown.enter="router.push({ name: 'AgentCreate' })" @keydown.space.prevent="router.push({ name: 'AgentCreate' })">
               <div class="agent-card__icon">＋</div>
               <div class="agent-card__body">
                 <div class="agent-card__name">{{ t('agents.createAgent') }}</div>
@@ -172,7 +172,7 @@
 
       <!-- 分析应用 Section -->
       <div class="agent-section">
-        <div class="agent-section__header" @click="toggleAnalysisApps">
+        <div class="agent-section__header" role="button" tabindex="0" @click="toggleAnalysisApps" @keydown.enter="toggleAnalysisApps" @keydown.space.prevent="toggleAnalysisApps">
           <span class="agent-section__title">{{ t('aiHub.analysisApps') }}</span>
           <span class="agent-section__count">{{ t('aiHub.analysisAppsCount', { count: analysisApps.length }) }}</span>
           <van-icon :name="analysisAppsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
@@ -252,7 +252,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
@@ -262,7 +262,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { useAIReportStream } from '@/composables/useAIReportStream'
+import { useReportStream } from '@/composables/useReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
@@ -284,7 +284,7 @@ const router = useRouter()
 const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
-const stream = useAIReportStream()
+const stream = useReportStream()
 const isOwner = authStore.user?.role === 'owner'
 
 const currentReport = ref<AIReport | null>(null)
@@ -300,8 +300,6 @@ const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
 const webSearch = ref<boolean | undefined>(undefined)
 const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const photoInputRef = ref<HTMLInputElement | null>(null)
 
 // Enabled custom agents for the grid
 const enabledCustomAgents = computed(() =>
@@ -374,32 +372,6 @@ function selectAgent(agent: Agent) {
   showAgentPicker.value = false
 }
 
-function triggerFileUpload() {
-  fileInputRef.value?.click()
-}
-
-function triggerPhotoUpload() {
-  photoInputRef.value?.click()
-}
-
-function handleFileSelect(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.fileSelected', { name: file.name }))
-    // TODO: implement file upload to chat
-  }
-  ;(e.target as HTMLInputElement).value = ''
-}
-
-function handlePhotoSelect(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.photoSelected'))
-    // TODO: implement photo upload to chat
-  }
-  ;(e.target as HTMLInputElement).value = ''
-}
-
 function submitChat() {
   const q = chatInput.value.trim()
   if (!q || !selectedAgent.value) return
@@ -430,12 +402,6 @@ function submitChat() {
 function submitChatFromInput(payload: SubmitPayload) {
   chatInput.value = payload.text
   submitChat()
-}
-
-function onInputAction(type: 'file' | 'image' | 'camera') {
-  if (type === 'camera') triggerPhotoUpload()
-  else if (type === 'file') triggerFileUpload()
-  else if (type === 'image') triggerPhotoUpload()
 }
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
@@ -486,21 +452,12 @@ const alertCount = computed(() => {
   return sections.filter(s => s && typeof s.score === 'number' && s.score < 60).length
 })
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h
-
 async function loadReport() {
   try {
     const res = await getAIReport()
     if (res.data.report) {
       currentReport.value = res.data.report as unknown as AIReport
       reportGeneratedAt.value = res.data.generated_at ?? null
-      // Trigger background refresh if cache is stale (>24h)
-      if (reportGeneratedAt.value) {
-        const age = Date.now() - new Date(reportGeneratedAt.value).getTime()
-        if (age > CACHE_TTL_MS) {
-          refreshReport(true)
-        }
-      }
     }
   } catch {
     // no report yet
@@ -529,7 +486,9 @@ async function refreshReport(silent?: boolean) {
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
-    await stream.connect()
+    // force=true bypasses the 8h cache (plan step 6) — the refresh button
+    // means the user wants a fresh report, not the cached one.
+    await stream.connect(true)
     if (stream.report.value) {
       currentReport.value = stream.report.value as unknown as AIReport
       reportGeneratedAt.value = stream.generatedAt.value
@@ -592,6 +551,17 @@ onMounted(async () => {
   await agentStore.loadAgents()
   await loadReport()
   initialLoading.value = false
+})
+
+// This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
+// navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
+// Abort the report SSE stream + stop the cookie-refresh interval on deactivate
+// (and on full unmount) so they don't leak while the cached page sits in memory.
+onDeactivated(() => {
+  stream.abort()
+})
+onUnmounted(() => {
+  stream.abort()
 })
 
 // Expose refs and functions for testing purposes

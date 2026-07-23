@@ -1,5 +1,5 @@
 import http from './index'
-import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse } from '@/types'
+import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary } from '@/types'
 
 export interface ExpiringSoonItem {
   id: string
@@ -96,6 +96,12 @@ export interface RetentionRateResponse {
   top_items: RetentionItem[]
 }
 
+export interface InvestmentReturnSummary {
+  annualized_rate: number | null
+  asset_count: number
+  description: string
+}
+
 export interface InsightsResponse {
   smart_discovery: SmartDiscoveryResponse
   daily_cost_ranking: DailyCostItem[]
@@ -103,6 +109,7 @@ export interface InsightsResponse {
   type_distribution: TypeDistributionResponse
   duration_distribution: DurationDistributionResponse
   retention_rate: RetentionRateResponse
+  investment_returns: InvestmentReturnSummary | null
 }
 
 export function getOverview() {
@@ -137,6 +144,10 @@ export function getInvestmentReturns(limit = 10) {
   return http.get<InvestmentReturnItem[]>('/dashboard/investment-returns', { params: { limit } })
 }
 
+export function getEducationRewardSummary() {
+  return http.get<EducationRewardSummary>('/dashboard/education-reward-summary')
+}
+
 export function getRecentActivities(limit = 20) {
   return http.get<ActivityItem[]>('/activities/recent', { params: { limit } })
 }
@@ -159,10 +170,24 @@ export function getHomeAssetsPaginated(
   status: string,
   page: number = 1,
   pageSize: number = 20,
-  categoryId?: string | null
+  categoryId?: string | null,
+  options?: {
+    search?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    assetType?: 'physical' | 'financial'
+  }
 ) {
   return http.get<HomeAssetsPageResponse>(`/dashboard/home-assets/${status}`, {
-    params: { page, page_size: pageSize, ...(categoryId ? { category_id: categoryId } : {}) }
+    params: {
+      page,
+      page_size: pageSize,
+      ...(categoryId ? { category_id: categoryId } : {}),
+      ...(options?.search ? { search: options.search } : {}),
+      ...(options?.sortBy ? { sort_by: options.sortBy } : {}),
+      ...(options?.sortOrder ? { sort_order: options.sortOrder } : {}),
+      ...(options?.assetType ? { asset_type: options.assetType } : {})
+    }
   })
 }
 

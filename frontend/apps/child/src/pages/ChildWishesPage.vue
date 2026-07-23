@@ -13,21 +13,19 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-      <!-- Hero stats banner — peach feature card -->
-      <div v-if="stats" class="hero-banner">
-        <div class="hero-balance">
-          <span class="hero-balance-num">{{ polledBalance }}</span>
-          <span class="hero-balance-unit">{{ t('wishes.starUnit') }}</span>
+      <!-- Balance hero — shared component -->
+      <BalanceHero :amount="polledBalance" variant="wishes" />
+
+      <!-- Wish stats — moved out of the hero per unified-hero design -->
+      <div v-if="stats" class="stats-strip">
+        <div class="stats-item">
+          <span class="stats-num">{{ stats.active_wish_count }}</span>
+          <span class="stats-label">{{ t('wishes.activeCount') }}</span>
         </div>
-        <div class="hero-divider" />
-        <div class="hero-stat">
-          <span class="hero-stat-num">{{ stats.active_wish_count }}</span>
-          <span class="hero-stat-label">{{ t('wishes.activeCount') }}</span>
-        </div>
-        <div class="hero-divider" />
-        <div class="hero-stat">
-          <span class="hero-stat-num">{{ totalWishes }}</span>
-          <span class="hero-stat-label">{{ t('wishes.allWishes') }}</span>
+        <div class="stats-divider" />
+        <div class="stats-item">
+          <span class="stats-num">{{ totalWishes }}</span>
+          <span class="stats-label">{{ t('wishes.allWishes') }}</span>
         </div>
       </div>
 
@@ -71,9 +69,14 @@
                 :class="jarClass(wish.progress)"
                 :style="{ width: Math.min((wish.progress ?? 0) * 100, 100) + '%' }"
               />
-              <span class="progress-star" :style="{ left: '25%' }">⭐</span>
-              <span class="progress-star" :style="{ left: '50%' }">⭐</span>
-              <span class="progress-star" :style="{ left: '75%' }">⭐</span>
+              <span
+                v-for="(pos, i) in [0.25, 0.5, 0.75]"
+                :key="i"
+                class="progress-star"
+                :class="{ lit: (wish.progress ?? 0) >= pos }"
+                :style="{ left: pos * 100 + '%' }"
+                :aria-hidden="true"
+              >⭐</span>
             </div>
             <div class="progress-footer">
               <span class="progress-pct" :class="{ 'pct-full': (wish.progress ?? 0) >= 1 }">
@@ -183,6 +186,7 @@ import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { daysEstimate, reachabilityTint, previewSpend, type ReachabilityTint, type SpendDelta } from '@numina/math'
+import BalanceHero from '@/components/BalanceHero.vue'
 import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import noWishesSvgRaw from '@/assets/empty-states/no-wishes.svg?raw'
@@ -332,57 +336,41 @@ onMounted(load)
   padding: var(--space-md) var(--space-md) 140px;
 }
 
-/* ── Hero banner — peach feature card ── */
-.hero-banner {
+/* ── Stats strip — wish counts, below the shared balance hero ── */
+.stats-strip {
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  background: var(--color-brand-peach);
-  border-radius: var(--radius-xl);
-  padding: 32px 16px;
+  justify-content: center;
+  gap: 24px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
   margin-bottom: var(--space-lg);
+}
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.stats-num {
+  font-family: Inter, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
   color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
 }
-[data-theme="dark"] .hero-banner { color: var(--color-on-feature-peach); }
-.hero-balance {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.hero-balance-num {
-  font-family: Inter, sans-serif;
-  font-size: 32px;
-  font-weight: 600;
-  line-height: 1;
-}
-.hero-balance-unit {
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  opacity: 0.7;
-}
-.hero-divider {
-  width: 1px;
-  height: 36px;
-  background: var(--color-hairline);
-  opacity: 0.4;
-}
-.hero-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.hero-stat-num {
-  font-family: Inter, sans-serif;
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1;
-}
-.hero-stat-label {
+.stats-label {
   font-family: Inter, sans-serif;
   font-size: 12px;
-  opacity: 0.7;
+  color: var(--color-muted);
+}
+.stats-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--color-hairline);
 }
 
 /* ── Sections ── */
@@ -444,7 +432,7 @@ onMounted(load)
   white-space: nowrap;
 }
 
-/* Priority badges */
+/* Want-level badges */
 .priority-badge {
   font-family: Inter, sans-serif;
   font-size: 11px;
@@ -492,7 +480,16 @@ onMounted(load)
   font-size: 14px;
   z-index: 1;
   pointer-events: none;
-  opacity: 0.6;
+  /* Unlit milestone marker: dim and desaturated so it reads as "not yet",
+     not as real data. Lights up gold once progress crosses its threshold. */
+  filter: grayscale(1);
+  opacity: 0.35;
+  transition: filter 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+}
+.progress-star.lit {
+  filter: none;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.12);
 }
 .progress-footer {
   display: flex;
@@ -517,7 +514,9 @@ onMounted(load)
   margin-bottom: 4px;
 }
 
-/* Redeem button — ochre celebration CTA */
+/* Redeem button — ochre celebration CTA. One-shot entrance pulse when it
+   appears (wish is fully funded → "you can redeem now!"), then stays static
+   so it doesn't bleed attention. No permanent shimmer. */
 .btn-redeem {
   width: 100%;
   background: var(--color-brand-ochre);
@@ -530,8 +529,16 @@ onMounted(load)
   font-weight: 600;
   cursor: pointer;
   height: 52px;
-  animation: goldShimmer 1.5s ease-in-out infinite;
+  animation: redeem-pulse 0.5s ease-out 1;
   transition: transform 0.1s;
+}
+@keyframes redeem-pulse {
+  0%   { transform: scale(0.96); opacity: 0.6; }
+  60%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-redeem { animation: none; }
 }
 .btn-redeem:disabled {
   opacity: 0.4;

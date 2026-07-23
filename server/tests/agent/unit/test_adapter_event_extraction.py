@@ -140,8 +140,9 @@ async def test_tool_call_chunk_includes_tool_metadata():
     tool_calls = [{"name": "get_assets", "args": {}, "id": "c1"}]
     chunks = await _collect([_ai_event(tool_calls=tool_calls)])
     data = chunks[0].data
-    assert data["tool_type"] == "asset_query"
-    assert data["display_name"] == "查询资产"
+    # U7: get_assets is now an MCP base-name tool in the data_collect category.
+    assert data["tool_type"] == "data_collect"
+    assert data["display_name"] == "查询资产数据"
     assert data["icon"] == "💰"
 
 

@@ -84,6 +84,8 @@
   "CALENDAR_DATE_INVALID": "日期格式无效，请使用 YYYY-MM-DD",
   "CHILD_NOT_FOUND": "孩子不存在",
   "AI_SPENDING_LEAK_NOT_FOUND": "消费漏洞记录不存在",
+  "AI_REPORT_NOT_FOUND": "报告不存在",
+  "AI_REPORT_MARKDOWN_NOT_FOUND": "报告文件不存在或已被删除",
   "NOTIFICATION_NO_CHANNEL": "未配置通知渠道",
   "CHORE_INSTANCE_NOT_FOUND": "家务实例不存在",
   "CHORE_INSTANCE_STATUS_CONFLICT": "家务实例当前状态不允许此操作",

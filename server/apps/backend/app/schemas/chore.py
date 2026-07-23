@@ -24,6 +24,8 @@ class ChoreTemplateCreate(BaseModel):
     frequency: str
     assignment_type: str
     assignee_ids: list[int] = []  # required when assignment_type='assigned'
+    # B1 per-template granularity: opt-out flag (default True = backward compatible).
+    real_reward_enabled: bool = True
 
     @field_validator("name")
     @classmethod
@@ -64,6 +66,7 @@ class ChoreTemplateUpdate(BaseModel):
     emoji: str | None = None
     coin_reward: int | None = None
     assignee_ids: list[int] | None = None
+    real_reward_enabled: bool | None = None
 
     @field_validator("name")
     @classmethod
@@ -99,6 +102,7 @@ class ChoreTemplateResponse(SnowflakeBase):
     frequency: str
     assignment_type: str
     is_active: bool
+    real_reward_enabled: bool
     assignees: list[AssigneeResponse] = []
 
 

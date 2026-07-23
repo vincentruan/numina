@@ -36,7 +36,7 @@
           <div class="hero-value-item">
             <div class="hero-value-label">{{ t('wish.expectedPrice') }}</div>
             <div class="hero-value-num">
-              <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
+              <span v-if="wish.expected_price">{{ currency.format(wish.expected_price) }}</span>
               <span v-else class="hero-value-unset">{{ t('wish.unset') }}</span>
             </div>
           </div>
@@ -62,6 +62,17 @@
         <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
 
+      <!-- W1 (Plan B T9): savings progress + record/log dialogs. -->
+      <WishSavingsProgress
+        v-if="wish.status === 'pending'"
+        :wish="wish"
+        :net-worth="0"
+        @record="recordShow = true"
+        @show-log="logShow = true"
+      />
+      <WishSavingsRecordDialog v-model:show="recordShow" :wish-id="wish.id" @saved="onSavingsChanged" />
+      <WishSavingsLogDialog v-model:show="logShow" :wish-id="wish.id" @changed="onSavingsChanged" />
+
       <!-- Detail Info -->
       <van-cell-group inset :title="t('wish.detailInfo')">
         <van-cell :title="t('wish.status')" :value="statusText">
@@ -71,7 +82,7 @@
         </van-cell>
         <van-cell :title="t('wish.expectedPrice')">
           <template #value>
-            <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
+            <span v-if="wish.expected_price">{{ currency.format(wish.expected_price) }}</span>
             <span v-else class="unset">{{ t('wish.unset') }}</span>
           </template>
         </van-cell>
@@ -91,6 +102,10 @@
         <template v-if="wish.status === 'pending'">
           <van-button v-if="wish.converts_to_asset" block type="primary" @click="showRealizeDialog = true">
             {{ t('wish.convertToAsset') }}
+          </van-button>
+          <!-- A1b (Plan B T6/T9): passive '问 AI 规划储蓄' button → /ai/chat?source=wish_detail&id= -->
+          <van-button block type="default" plain @click="router.push({ name: 'AIChat', query: { source: 'wish_detail', id: wish.id } })">
+            {{ t('wish.advice.askPlanSavings') }}
           </van-button>
           <van-button block type="default" plain @click="$router.push(`/wishes/${wish.id}/edit`)">
             {{ t('common.edit') }}
@@ -114,6 +129,16 @@
         </template>
         <van-button block type="danger" plain :loading="deleting" class="delete-btn" @click="onDelete">
           {{ t('common.delete') }}
+        </van-button>
+      </div>
+
+      <!-- W5 (Plan B T8): high-interest-debt hint + 忽略 button (only when the
+           current wish has monthly_saving>0 + high-interest debt + not ignored). -->
+      <div v-if="showDebtWarning" class="debt-warning-bar">
+        <van-icon name="warning-o" />
+        <span>{{ t('wish.debtWarning.detailHint') }}</span>
+        <van-button size="mini" plain @click="ignoreDebtWarning">
+          {{ t('wish.debtWarning.ignore') }}
         </van-button>
       </div>
 
@@ -197,32 +222,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, toRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useWishStore } from '@/stores/wish'
+import { useLiabilityStore } from '@/stores/liability'
+import { useDebtWarning } from '@/composables/useDebtWarning'
 import { getCategories } from '@/api/categories'
-import type { Category } from '@/types'
-import { realizeWish } from '@/api/wishes'
+import type { Category, Wish } from '@/types'
+import { realizeWish, setIgnoreDebtWarning as setIgnoreDebtWarningApi } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
+import WishSavingsProgress from '@/components/wishes/WishSavingsProgress.vue'
+import WishSavingsRecordDialog from '@/components/wishes/WishSavingsRecordDialog.vue'
+import WishSavingsLogDialog from '@/components/wishes/WishSavingsLogDialog.vue'
 import { getIconId } from '@/utils/icon'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t, locale } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
 const wishStore = useWishStore()
+const liabilityStore = useLiabilityStore()
 const deleting = ref(false)
 const acting = ref(false)
 const { increment, decrement } = usePageLoading()
+const currency = useCurrency()
 
 // Realize dialog
 const showRealizeDialog = ref(false)
 const realizing = ref(false)
 const showDatePicker = ref(false)
 const showCategoryPicker = ref(false)
+
+// W1 (Plan B T9): savings record + log dialogs.
+const recordShow = ref(false)
+const logShow = ref(false)
+
+async function onSavingsChanged() {
+  // Refresh the wish so saved_amount + savings_count update after record/delete.
+  if (wish.value) {
+    await wishStore.fetchWish(wish.value.id)
+  }
+}
 const realizeForm = ref({
   purchase_price: '',
   purchase_date: '',
@@ -231,6 +275,26 @@ const realizeForm = ref({
 const categories = ref<Category[]>([])
 
 const wish = computed(() => wishStore.currentWish)
+
+// W5 (Plan B T8): high-interest-debt ↔ wish linkage hint + 忽略 button.
+// Pass a single-element wishes ref so shouldWarnForWish + ignore_debt_warning
+// work on the current wish; the composable only needs liabilities + hasHighInterestDebt.
+const wishesRef = ref<Wish[]>([])
+const debtWarning = useDebtWarning(toRef(liabilityStore, 'liabilities'), wishesRef)
+const showDebtWarning = computed(
+  () => wish.value ? debtWarning.shouldWarnForWish(wish.value) : false,
+)
+
+async function ignoreDebtWarning() {
+  if (!wish.value) return
+  try {
+    await setIgnoreDebtWarningApi(wish.value.id, true)
+    wishStore.currentWish = { ...wish.value, ignore_debt_warning: true }
+    showSuccessToast(t('common.saved'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  }
+}
 
 const statusMap = computed<Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }>>(() => ({
   pending: { text: t('wish.statusPending'), type: 'primary' },
@@ -336,6 +400,11 @@ onMounted(async () => {
   try {
     const id = route.params.id as string
     await wishStore.fetchWish(id)
+    wishesRef.value = wishStore.currentWish ? [wishStore.currentWish] : []
+
+    // W5: load debt thresholds + liabilities so the high-interest hint can render.
+    void debtWarning.loadThresholds()
+    liabilityStore.fetchLiabilities().catch(() => {})
 
     // Pre-fill form
     if (wish.value?.expected_price) {
@@ -365,6 +434,22 @@ onMounted(async () => {
   background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
+}
+
+/* W5 (Plan B T8): debt-warning hint bar */
+.debt-warning-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 16px;
+  padding: 8px 12px;
+  background: rgba(255, 151, 106, 0.12);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-primary, #323233);
+}
+.debt-warning-bar span {
+  flex: 1;
 }
 
 /* ── Hero Card: Pastel Cloud Gradient (light mode) ── */

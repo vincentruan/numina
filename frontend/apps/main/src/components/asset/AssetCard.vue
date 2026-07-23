@@ -165,7 +165,7 @@ const daysUsed = computed(() => {
   return diff > 0 ? diff : 0
 })
 
-function formatPrice(price: number | null | undefined): string {
+function formatPrice(price: number | string | null | undefined): string {
   if (price == null) return '-'
   return currency.format(price)
 }
@@ -241,18 +241,51 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   object-fit: cover;
 }
 .card-icon {
+  position: relative;
   width: 88px;
   height: 88px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+.card-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  animation: icon-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
 }
 .icon-svg {
+  position: relative;
+  z-index: 1;
   width: 36px;
   height: 36px;
   fill: white;
   color: white;
+}
+@keyframes icon-shimmer {
+  0% {
+    transform: translateX(-150%);
+  }
+  60%,
+  100% {
+    transform: translateX(150%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-icon::before {
+    animation: none;
+    display: none;
+  }
 }
 .card-right {
   flex: 1;

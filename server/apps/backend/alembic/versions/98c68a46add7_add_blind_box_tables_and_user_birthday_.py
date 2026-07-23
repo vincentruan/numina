@@ -8,12 +8,11 @@ Create Date: 2026-04-24 00:14:59.343882
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '98c68a46add7'
-down_revision: str | None = 'e3cba86157fd'
+down_revision: str | None = 'b00t5trap0001'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

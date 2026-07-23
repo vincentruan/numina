@@ -20,11 +20,15 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
 import VoiceInputButton from './VoiceInputButton.vue'
+import SlashPalette from './SlashPalette.vue'
 import IIcon from '@/components/IIcon.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
+import { useSlashCommands } from '@/composables/ai-chat/useSlashCommands'
+import type { SlashCommand } from '@/composables/ai-chat/useSlashCommands'
 import { getWebSearchStatus } from '@/api/webSearch'
+import { polishInputDraft } from '@/api/ai-chat'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -35,7 +39,7 @@ interface AgentOption {
   agent_name?: string
   icon?: string
   color?: string | null
-  description?: string
+  description?: string | null
 }
 
 interface Attachment {
@@ -98,6 +102,71 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const cameraInputRef = ref<HTMLInputElement | null>(null)
+
+// ── Input polish (D3 DeerFlow sync) ──
+// Stateless single-LLM-call draft rewrite. Abortable + staleness-guarded so a
+// thread switch or rapid re-click cannot land a stale rewrite. Undo restores
+// the original draft while the textarea still shows the rewritten text.
+const polishingInput = ref(false)
+const inputPolishUndo = ref<{ originalText: string; rewrittenText: string } | null>(null)
+let polishAbort: AbortController | null = null
+
+const inputPolishUndoAvailable = computed(
+  () => !polishingInput.value
+    && inputPolishUndo.value !== null
+    && internalValue.value === inputPolishUndo.value.rewrittenText,
+)
+
+const canPolishInput = computed(
+  () => !polishingInput.value
+    && props.status !== 'streaming'
+    && props.status !== 'submitted'
+    && internalValue.value.trim().length > 0
+    && !internalValue.value.trim().startsWith('/'),
+)
+
+async function onPolishInput() {
+  const originalText = internalValue.value
+  if (!originalText.trim() || polishingInput.value) return
+  if (polishAbort) polishAbort.abort()
+  polishAbort = new AbortController()
+  polishingInput.value = true
+  try {
+    const result = await polishInputDraft(originalText, polishAbort.signal)
+    // Staleness guard: textarea changed mid-flight → discard.
+    if (internalValue.value !== originalText) return
+    if (!result.changed) {
+      showToast(t('aiChat.inputPolishNoChanges'))
+      return
+    }
+    internalValue.value = result.rewritten_text
+    inputPolishUndo.value = { originalText, rewrittenText: result.rewritten_text }
+    await nextTick()
+    inputRef.value?.focus()
+  } catch (err) {
+    // AbortError is expected on cancel/thread-switch — not a user-facing failure.
+    if (err instanceof DOMException && err.name === 'AbortError') return
+    showToast(t('aiChat.inputPolishFailed'))
+  } finally {
+    polishingInput.value = false
+    polishAbort = null
+  }
+}
+
+function onUndoPolishInput() {
+  if (!inputPolishUndoAvailable.value || !inputPolishUndo.value) return
+  internalValue.value = inputPolishUndo.value.originalText
+  inputPolishUndo.value = null
+  nextTick(() => inputRef.value?.focus())
+}
+
+function abortInputPolish() {
+  if (polishAbort) {
+    polishAbort.abort()
+    polishAbort = null
+  }
+  polishingInput.value = false
+}
 
 // Track whether web search state was explicitly set (by the user toggling it,
 // or by the parent passing a definite webSearch prop e.g. inherited from the
@@ -171,8 +240,21 @@ function onToggleAgentInfo() {
   showAgentInfo.value = !showAgentInfo.value
 }
 
+// ── Slash command palette (U1 — D1/D2 shared entry) ──
+// Local static registry (/goal + /compact); NOT useCapabilityStore (those are
+// routable features from /ai/capabilities, not chat commands — plan risk #4).
+// Plumbed from the deprecated components/common/AIChatInput.vue
+// onInput/onKeydown/selectCapability logic.
+const { filteredCommands, query: slashQuery } = useSlashCommands()
+const slashPaletteOpen = ref(false)
+const slashSelectedIndex = ref(0)
+const slashCommands = computed(() => filteredCommands.value)
+
 // ── Watchers ──
-watch(internalValue, (val) => emit('update:modelValue', val))
+watch(internalValue, (val) => {
+  emit('update:modelValue', val)
+  syncSlashState(val)
+})
 watch(() => props.modelValue, (val) => {
   if (val !== undefined && val !== internalValue.value) {
     internalValue.value = val
@@ -230,10 +312,57 @@ function syncDesktop() {
   isDesktop.value = window.matchMedia?.('(pointer: fine)').matches ?? false
 }
 
+// Slash palette: open whenever the textarea starts with `/`; close otherwise.
+function syncSlashState(val: string) {
+  const shouldOpen = val.startsWith('/')
+  slashQuery.value = val
+  if (shouldOpen) {
+    if (!slashPaletteOpen.value) {
+      slashSelectedIndex.value = 0
+      panelOpen.value = false
+    }
+  }
+  slashPaletteOpen.value = shouldOpen
+}
+
+function closeSlashPalette() {
+  slashPaletteOpen.value = false
+  slashQuery.value = ''
+}
+
+function selectSlashCommand(command?: SlashCommand) {
+  if (!command) return
+  const currentValue = internalValue.value.trim()
+  const handled = command.apply({
+    value: currentValue,
+    setValue: (next: string) => {
+      internalValue.value = next
+    },
+  })
+  closeSlashPalette()
+  nextTick(() => inputRef.value?.focus())
+  // When the apply callback reports "fully handled" (e.g. /compact triggers
+  // its own flow), proceed to submit so U5/U6 can wire the real flows on top
+  // of a normal submit. Otherwise (e.g. /goal fills the prefix) leave the
+  // textarea focused for the user to finish typing.
+  if (handled) {
+    onSubmit()
+  }
+}
+
 function onKeydownEnter(e: KeyboardEvent) {
   if (!isDesktop.value) return
   if (e.shiftKey) {
     // Let the textarea insert a newline (default behavior)
+    return
+  }
+  // When the slash palette is open, Enter selects instead of submitting.
+  if (slashPaletteOpen.value) {
+    e.preventDefault()
+    const cmds = slashCommands.value
+    if (cmds.length > 0) {
+      selectSlashCommand(cmds[slashSelectedIndex.value])
+    }
     return
   }
   e.preventDefault()
@@ -248,8 +377,14 @@ function onSubmit() {
   const text = internalValue.value.trim()
   if (!text) return
 
-  // Guard against submitting before models have loaded
-  if (!context.value.model_name) return
+  // Models not loaded yet (e.g. /ai/models still in flight on first entry to
+  // welcome mode). Previously this returned silently, making the send button
+  // appear broken. Toast so the user knows to wait, and keep their text
+  // intact so they can retry once models resolve.
+  if (!context.value.model_name) {
+    showToast(t('aiChat.modelsLoading'))
+    return
+  }
 
   emit('submit', {
     text,
@@ -261,6 +396,31 @@ function onSubmit() {
   })
   internalValue.value = ''
   expanded.value = false
+  closeSlashPalette()
+}
+
+// Slash palette keyboard navigation (ArrowUp/Down/Tab/Esc). Enter is handled
+// by onKeydownEnter above. Only active while the palette is open.
+function onKeydownNav(e: KeyboardEvent) {
+  if (!slashPaletteOpen.value) return
+  const cmds = slashCommands.value
+  if (e.key === 'ArrowDown') {
+    if (cmds.length === 0) return
+    e.preventDefault()
+    slashSelectedIndex.value = (slashSelectedIndex.value + 1) % cmds.length
+  } else if (e.key === 'ArrowUp') {
+    if (cmds.length === 0) return
+    e.preventDefault()
+    slashSelectedIndex.value = (slashSelectedIndex.value - 1 + cmds.length) % cmds.length
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    closeSlashPalette()
+  } else if (e.key === 'Tab') {
+    if (cmds[slashSelectedIndex.value]) {
+      e.preventDefault()
+      selectSlashCommand(cmds[slashSelectedIndex.value])
+    }
+  }
 }
 
 function onModeSelect(mode: InputMode) {
@@ -413,6 +573,11 @@ function togglePanel() {
 // Click outside handler (for plus panel)
 function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement
+  // Close slash palette on any outside click (palette items use
+  // @mousedown.prevent so they handle their own selection before this fires).
+  if (slashPaletteOpen.value && !target.closest('.slash-palette') && !target.closest('.chat-textarea')) {
+    closeSlashPalette()
+  }
   if (!panelOpen.value) return
   // Don't close if clicking the trigger button or the panel itself
   if (panelTriggerRef.value?.contains(target)) return
@@ -453,6 +618,7 @@ onUnmounted(() => {
   window.visualViewport?.removeEventListener('resize', onScrollOrResize)
   window.matchMedia?.('(pointer: fine)').removeEventListener('change', syncDesktop)
   window.removeEventListener('ai-chat:quote', onQuoteEvent)
+  abortInputPolish()
 })
 </script>
 
@@ -498,14 +664,25 @@ onUnmounted(() => {
 
         <!-- Textarea container -->
         <div class="textarea-container">
+          <!-- Slash command palette (U1) -->
+          <SlashPalette
+            :open="slashPaletteOpen"
+            :commands="slashCommands"
+            :selected-index="slashSelectedIndex"
+            @select="selectSlashCommand"
+          />
           <textarea
             ref="inputRef"
             v-model="internalValue"
             class="chat-textarea"
             :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
             :disabled="disabled || status === 'submitted'"
+            aria-haspopup="menu"
+            :aria-expanded="slashPaletteOpen"
+            aria-controls="slash-palette-list"
             rows="4"
             @keydown.enter="onKeydownEnter"
+            @keydown="onKeydownNav"
             @focus="focused = true"
             @blur="focused = false"
           />
@@ -555,13 +732,14 @@ onUnmounted(() => {
               </Transition>
             </Teleport>
 
-            <!-- [1] Agent button: clickable in welcome mode, static icon in chat mode -->
+            <!-- [1] Agent button in welcome mode: readonly -> info popup, else -> agent picker -->
             <button
               v-if="agents && agents.length > 0 && isWelcomeMode"
               class="control-btn control-btn--agent"
-              :aria-label="t('aiHub.selectAgent')"
-              :title="t('aiHub.selectAgent')"
-              @click="emit('selectAgent')"
+              :class="{ 'agent-chat-icon': readonly }"
+              :aria-label="readonly ? t('aiChat.agentInfoAria') : t('aiHub.selectAgent')"
+              :title="readonly ? displayAgentLabel : t('aiHub.selectAgent')"
+              @click="readonly ? onToggleAgentInfo() : emit('selectAgent')"
             >
               <!-- 小鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
@@ -620,6 +798,35 @@ onUnmounted(() => {
               <span v-if="webSearchEnabled" class="control-indicator" aria-hidden="true"></span>
             </button>
 
+            <!-- [4] Input polish (D3 DeerFlow sync) — rewrite draft via LLM -->
+            <button
+              v-if="inputPolishUndoAvailable"
+              class="control-btn control-btn--polish-undo"
+              :aria-label="t('aiChat.inputPolishUndo')"
+              :title="t('aiChat.inputPolishUndo')"
+              @click="onUndoPolishInput"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 7v6h6"/>
+                <path d="M3 13a9 9 0 1 0 3-7.7L3 8"/>
+              </svg>
+            </button>
+            <button
+              v-else
+              class="control-btn control-btn--polish"
+              :class="{ 'control-btn--polishing': polishingInput }"
+              :disabled="!canPolishInput"
+              :aria-label="t('aiChat.inputPolish')"
+              :title="t('aiChat.inputPolish')"
+              @click="onPolishInput"
+            >
+              <svg v-if="!polishingInput" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3l1.9 5.8L20 10.7l-5.1 1.9L12 18l-1.9-5.4L5 10.7l6.1-1.9z"/>
+                <path d="M19 3v4M21 5h-4"/>
+              </svg>
+              <span v-else class="polish-spinner" aria-hidden="true"></span>
+            </button>
+
             <!-- [5] Plus button -->
             <button
               ref="panelTriggerRef"
@@ -669,8 +876,8 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <!-- Agent info popup (chat mode) - teleported to body to escape stacking context -->
-    <Teleport v-if="showAgentInfo && selectedAgent && !isWelcomeMode" to="body">
+    <!-- Agent info popup - teleported to body to escape stacking context -->
+    <Teleport v-if="showAgentInfo && selectedAgent" to="body">
       <div
         class="agent-info-backdrop"
         @click="showAgentInfo = false"
@@ -975,6 +1182,45 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+/* Input polish (D3) */
+.control-btn--polish:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.control-btn--polish:not(:disabled):hover {
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.control-btn--polishing {
+  background: rgba(99, 102, 241, 0.16);
+  cursor: progress;
+}
+
+.control-btn--polish-undo {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--ai-btn-color);
+}
+
+.control-btn--polish-undo:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.polish-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: polish-spin 0.7s linear infinite;
+}
+
+@keyframes polish-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .control-indicator {

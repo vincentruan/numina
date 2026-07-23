@@ -536,3 +536,269 @@ def test_cross_family_child_cannot_complete_chore(client, auth_headers, child_us
     # Family B child cannot complete family A's chore instance
     resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_b_headers)
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# B1 教育联动：家长审批通过时，按汇率将星币换算成元写入 Activity（education_reward）
+# ---------------------------------------------------------------------------
+
+def _set_economy_config(client, auth_headers, **overrides):
+    """PUT /family/economy-config with given overrides; returns response JSON."""
+    resp = client.put("/api/v1/family/economy-config", headers=auth_headers, json=overrides)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def _complete_and_approve(client, auth_headers, child_user):
+    """Mark today's instance complete and have parent approve it. Returns instance_id."""
+    instances = client.get(
+        "/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]
+    ).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+    resp = client.post(
+        f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=auth_headers
+    )
+    assert resp.status_code == 200, resp.text
+    return instance_id
+
+
+def test_approve_writes_education_reward_when_enabled(client, db, auth_headers, child_user, daily_template):
+    """Switch ON + rate=2 → Activity education_reward written with yuan = coins × rate."""
+    from apps.backend.app.models.activity import Activity
+
+    _set_economy_config(
+        client, auth_headers, education_reward_enabled=True, coin_to_yuan_rate=2
+    )
+    instance_id = _complete_and_approve(client, auth_headers, child_user)
+
+    activity = (
+        db.query(Activity)
+        .filter_by(type="education_reward", entity_id=int(instance_id))
+        .first()
+    )
+    assert activity is not None
+    assert activity.entity_type == "chore"
+    assert activity.amount == 10.0  # 5 coins × rate 2
+    assert "教育奖励金" in activity.title
+    assert "扫地" in activity.title
+
+
+def test_approve_skips_education_reward_when_disabled(client, db, auth_headers, child_user, daily_template):
+    """Switch OFF → no education_reward Activity written."""
+    from apps.backend.app.models.activity import Activity
+
+    _set_economy_config(
+        client, auth_headers, education_reward_enabled=False, coin_to_yuan_rate=2
+    )
+    instance_id = _complete_and_approve(client, auth_headers, child_user)
+
+    activity = (
+        db.query(Activity)
+        .filter_by(type="education_reward", entity_id=int(instance_id))
+        .first()
+    )
+    assert activity is None
+
+
+def test_approve_education_reward_idempotent(client, db, auth_headers, child_user, daily_template):
+    """Approving the same instance twice → exactly one education_reward Activity.
+
+    The second approve returns 422 (not pending_approval) so no second write occurs;
+    the idempotency guard also defends against any retry path that re-enters the
+    post-commit block for an already-approved instance.
+    """
+    from apps.backend.app.models.activity import Activity
+
+    _set_economy_config(
+        client, auth_headers, education_reward_enabled=True, coin_to_yuan_rate=1
+    )
+    instance_id = _complete_and_approve(client, auth_headers, child_user)
+
+    # Second approve is rejected (instance already approved) — must not double-write.
+    second = client.post(
+        f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=auth_headers
+    )
+    assert second.status_code == 422
+
+    count = (
+        db.query(Activity)
+        .filter_by(type="education_reward", entity_id=int(instance_id))
+        .count()
+    )
+    assert count == 1
+
+
+def test_approve_education_reward_uses_streak_multiplied_amount(
+    client, db, auth_headers, child_user
+):
+    """amount must use streak-multiplied actual_amount, not raw coin_reward.
+
+    Builds a 6-day streak (so the 7th approve → streak 7 → multiplier 1.5) for a
+    10-coin chore → actual_amount 15, with rate 2 → 30.0 yuan. Proves the rate
+    applies to the bonus-inclusive amount.
+    """
+    from datetime import datetime, timedelta
+
+    from apps.backend.app.models.activity import Activity
+    from apps.backend.app.models.chore import ChoreInstance
+
+    # Dedicated 10-coin template (10 × 1.5 = 15 when streak ≥ 7).
+    resp = client.post("/api/v1/family/chore-templates", headers=auth_headers, json={
+        "name": "阅读",
+        "emoji": "📖",
+        "coin_reward": 10,
+        "frequency": "daily",
+        "assignment_type": "assigned",
+        "assignee_ids": [child_user["id"]],
+    })
+    assert resp.status_code == 201
+    template_id = resp.json()["data"]["id"]
+
+    _set_economy_config(
+        client, auth_headers, education_reward_enabled=True, coin_to_yuan_rate=2
+    )
+
+    def _approve_for_date(date_str: str) -> str:
+        instances = client.get(
+            f"/api/v1/child/chores?date={date_str}", headers=child_user["headers"]
+        ).json()["data"]
+        # Pick this template's instance (扫地主模板共存于同日)。
+        iid = next(i["id"] for i in instances if i["template_id"] == template_id)
+        client.post(f"/api/v1/child/chores/{iid}/complete", headers=child_user["headers"])
+        appr = client.post(
+            f"/api/v1/family/chore-approvals/{iid}/approve", headers=auth_headers
+        )
+        assert appr.status_code == 200, appr.text
+        return iid
+
+    # Approve 6 consecutive prior days (2026-04-09 .. 2026-04-14).
+    base = datetime(2026, 4, 9)
+    for i in range(6):
+        _approve_for_date((base + timedelta(days=i)).strftime("%Y-%m-%d"))
+
+    # 7th consecutive day (2026-04-15) → streak 7 → multiplier 1.5 → 15 coins → 30 yuan.
+    instance_id = _approve_for_date("2026-04-15")
+
+    activity = (
+        db.query(Activity)
+        .filter_by(type="education_reward", entity_id=int(instance_id))
+        .first()
+    )
+    assert activity is not None
+    inst = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    assert inst.streak_count == 7
+    assert activity.amount == 30.0
+
+
+def test_auto_approve_skips_education_reward(client, db, auth_headers, child_user, daily_template):
+    """_auto_approve (timeout path) must NOT write an education_reward Activity."""
+    from datetime import datetime, timedelta
+
+    from apps.backend.app.models.activity import Activity
+    from apps.backend.app.models.chore import ChoreInstance
+
+    _set_economy_config(
+        client, auth_headers, education_reward_enabled=True, coin_to_yuan_rate=2
+    )
+
+    instances = client.get(
+        "/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]
+    ).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    row.submitted_at = datetime.utcnow() - timedelta(hours=25)
+    db.commit()
+
+    # Trigger auto-approve via list_pending_approvals.
+    resp = client.get("/api/v1/family/chore-approvals", headers=auth_headers)
+    assert resp.status_code == 200
+
+    activity = (
+        db.query(Activity)
+        .filter_by(type="education_reward", entity_id=int(instance_id))
+        .first()
+    )
+    assert activity is None
+
+
+def test_approve_skips_education_reward_when_template_disabled(client, db, auth_headers, child_user):
+    """B1 per-template granularity: family switch ON + template.real_reward_enabled OFF
+    → no education_reward Activity written."""
+    from apps.backend.app.models.activity import Activity
+
+    # Create a template with per-template flag OFF.
+    resp = client.post("/api/v1/family/chore-templates", headers=auth_headers, json={
+        "name": "整理床铺",
+        "emoji": "🛏️",
+        "coin_reward": 5,
+        "frequency": "daily",
+        "assignment_type": "assigned",
+        "assignee_ids": [child_user["id"]],
+        "real_reward_enabled": False,
+    })
+    assert resp.status_code == 201
+    template_id = resp.json()["data"]["id"]
+    assert resp.json()["data"]["real_reward_enabled"] is False
+
+    # Family-level switch ON — the per-template flag is the only thing gating the write.
+    _set_economy_config(
+        client, auth_headers, education_reward_enabled=True, coin_to_yuan_rate=2
+    )
+
+    instances = client.get(
+        "/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]
+    ).json()["data"]
+    iid = next(i["id"] for i in instances if i["template_id"] == template_id)
+    client.post(f"/api/v1/child/chores/{iid}/complete", headers=child_user["headers"])
+    appr = client.post(
+        f"/api/v1/family/chore-approvals/{iid}/approve", headers=auth_headers
+    )
+    assert appr.status_code == 200, appr.text
+
+    activity = (
+        db.query(Activity)
+        .filter_by(type="education_reward", entity_id=int(iid))
+        .first()
+    )
+    assert activity is None
+
+
+def test_template_persists_real_reward_enabled(client, auth_headers, child_user, daily_template):
+    """B1 per-template granularity: create defaults to True; update flips the flag."""
+    # daily_template fixture omits the flag → default True.
+    assert daily_template["real_reward_enabled"] is True
+
+    # Explicit False on create is persisted.
+    resp = client.post("/api/v1/family/chore-templates", headers=auth_headers, json={
+        "name": "擦桌子",
+        "emoji": "🧽",
+        "coin_reward": 3,
+        "frequency": "daily",
+        "assignment_type": "assigned",
+        "assignee_ids": [child_user["id"]],
+        "real_reward_enabled": False,
+    })
+    assert resp.status_code == 201
+    assert resp.json()["data"]["real_reward_enabled"] is False
+    template_id = resp.json()["data"]["id"]
+
+    # Update flips it back to True.
+    upd = client.patch(
+        f"/api/v1/family/chore-templates/{template_id}",
+        headers=auth_headers,
+        json={"real_reward_enabled": True},
+    )
+    assert upd.status_code == 200
+    assert upd.json()["data"]["real_reward_enabled"] is True
+
+    # Update flips to False again (isolated field update, other fields untouched).
+    upd2 = client.patch(
+        f"/api/v1/family/chore-templates/{template_id}",
+        headers=auth_headers,
+        json={"real_reward_enabled": False},
+    )
+    assert upd2.status_code == 200
+    assert upd2.json()["data"]["real_reward_enabled"] is False

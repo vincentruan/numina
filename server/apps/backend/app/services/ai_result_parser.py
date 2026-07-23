@@ -47,55 +47,9 @@ JSON_FENCE_PATTERN = re.compile(
 )
 
 # Expected schemas per capability
+# U7: 5 外扩 trigger skill (alerts/disposal/spending_leak/allocation/liability) 全栈删除，
+# 仅保留 report schema；能力回归 numina SOUL（chat/SKILL.md 结构化分析框架）。
 CAPABILITY_SCHEMAS = {
-    "alerts": {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "required": ["asset_name", "alert_type", "severity"],
-            "properties": {
-                "asset_id": {"type": "integer"},
-                "asset_name": {"type": "string"},
-                "alert_type": {"type": "string", "enum": ["aging", "high_maintenance", "idle_cost"]},
-                "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                "suggestion": {"type": "string"},
-                "remaining_life_days": {"type": "integer"},
-                "daily_cost": {"type": "number"},
-            },
-        },
-    },
-    "disposal": {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "required": ["asset_name", "inefficiency_score"],
-            "properties": {
-                "asset_id": {"type": "integer"},
-                "asset_name": {"type": "string"},
-                "category_name": {"type": "string"},
-                "inefficiency_score": {"type": "integer", "minimum": 0, "maximum": 100},
-                "suggested_channel": {"type": "string"},
-                "estimated_resale_range": {"type": "string"},
-                "suggestion": {"type": "string"},
-                "daily_cost": {"type": "number"},
-            },
-        },
-    },
-    "spending_leak": {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "required": ["asset_name", "leak_type", "severity"],
-            "properties": {
-                "asset_id": {"type": "integer"},
-                "asset_name": {"type": "string"},
-                "leak_type": {"type": "string", "enum": ["high_idle_cost", "redundant", "high_maintenance"]},
-                "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                "estimated_annual_waste": {"type": "number"},
-                "suggestion": {"type": "string"},
-            },
-        },
-    },
     "report": {
         "type": "object",
         "required": ["overall_score", "indicators"],
@@ -123,47 +77,6 @@ CAPABILITY_SCHEMAS = {
                     },
                 },
             },
-            # Legacy fields for backward compatibility
-            "narrative": {"type": "string"},
-            "sections": {"type": "object"},
-            "net_worth_health": {"type": "object"},
-            "allocation_analysis": {"type": "object"},
-            "liability_pressure": {"type": "object"},
-            "asset_efficiency": {"type": "object"},
-        },
-    },
-    "allocation": {
-        "type": "object",
-        "required": ["has_significant_drift"],
-        "properties": {
-            "has_significant_drift": {"type": "boolean"},
-            "narrative": {"type": "string"},
-            "drifts": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "category": {"type": "string"},
-                        "target_pct": {"type": "number"},
-                        "current_pct": {"type": "number"},
-                        "drift": {"type": "number"},
-                        "exceeds_threshold": {"type": "boolean"},
-                    },
-                },
-            },
-        },
-    },
-    "liability": {
-        "type": "object",
-        "required": ["has_liabilities"],
-        "properties": {
-            "has_liabilities": {"type": "boolean"},
-            "total_remaining": {"type": "number"},
-            "total_monthly_payment": {"type": "number"},
-            "liability_count": {"type": "integer"},
-            "narrative": {"type": "string"},
-            "recommended_strategy": {"type": "string", "enum": ["avalanche", "snowball", "hybrid"]},
-            "strategies": {"type": "array"},
         },
     },
 }
@@ -321,7 +234,8 @@ async def parse_capability_result(
     """Parse structured results from LLM answer text.
 
     Args:
-        capability: One of alerts, disposal, spending_leak, report, allocation, liability
+        capability: Capability name (currently only ``report``; other capabilities
+            regressed to numina SOUL in U7 and have no schema here)
         answer_text: Full LLM response text
         family_id: Family ID for LLM fallback (fetches provider config)
         db: Database session

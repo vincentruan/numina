@@ -2,7 +2,13 @@
 
 from sqlalchemy.orm import Session
 
-from apps.backend.app.constants.system_ids import ASSET_REPORT_AGENT_ID, NUMINA_AGENT_ID
+from apps.backend.app.constants.system_ids import (
+    ASSET_REPORT_AGENT_ID,
+    FINANCE_COACH_AGENT_ID,
+    IMPORT_PARSE_AGENT_ID,
+    NUMINA_AGENT_ID,
+    WISH_ADVICE_AGENT_ID,
+)
 from apps.backend.app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +67,7 @@ _NUMINA_AGENT = {
 - 不在响应中泄露其他家庭成员的隐私数据""",
     "skills": ["*"],
     "agent_type": "system",
+    "memory_enabled": True,
     "display_order": 15,
 }
 
@@ -139,7 +146,79 @@ _ASSET_REPORT_AGENT = {
 - 数据不完整时在摘要中注明「数据可能不完整，分析仅供参考」""",
     "skills": ["report"],
     "agent_type": "system",
+    # asset-report is a fixed 3-step pipeline (write_file → read_file → JSON);
+    # it must be stateless — disable DeerMem injection + write so each run
+    # fetches fresh MCP data instead of reusing accumulated report history
+    # (plan U4 Open Question: DeerMem pollution).
+    "memory_enabled": False,
     "display_order": 20,
+}
+
+# System agent dedicated to import-parse (金融文档持仓解析).
+# U8 (Resolved-10): import_parse is refactored from orchestrator.dispatch to a
+# 3rd stream_run agent. Statelessness is required — each run parses the
+# backend-injected document fresh; DeerMem would only pollute the parse with
+# stale holdings from prior runs. soul_md is a minimal persona (the real parse
+# contract lives in skills/builtin/public/import-parse/SKILL.md, loaded by the
+# harness at runtime); bootstrap just seeds the agent_type + memory_enabled.
+_IMPORT_PARSE_AGENT = {
+    "id": IMPORT_PARSE_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "import-parse",
+    "display_name": "导入解析",
+    "description": "金融文档持仓解析智能体。读取上传的金融文档文本，提取持仓/资产条目，输出结构化 JSON。",
+    "icon": "📄",
+    "color": "#3b82f6",
+    "soul_md": "你是金融文档持仓解析器，在单次响应内完成：读取文档文本 → 提取持仓/资产条目 → 输出结构化 JSON。",
+    "skills": ["import-parse"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 30,
+}
+
+
+# System agent dedicated to finance-coach (家庭财务处方建议).
+# Plan A: a 4th stream_run agent (app="finance-coach"). Statelessness is
+# required — each run builds a fresh family finance snapshot from MCP data;
+# DeerMem would only pollute advice with stale snapshots from prior runs.
+# soul_md is a minimal persona (the real advice contract lives in
+# skills/builtin/public/finance-coach/SKILL.md, loaded by the harness at
+# runtime); bootstrap just seeds agent_type + memory_enabled.
+_FINANCE_COACH_AGENT = {
+    "id": FINANCE_COACH_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "finance-coach",
+    "display_name": "财务教练",
+    "description": "家庭财务处方建议智能体。读取家庭财务快照，输出结构化 suggestions JSON（前 3 条优先建议）。",
+    "icon": "🎯",
+    "color": "#10b981",
+    "soul_md": "你是家庭财务教练，在单次响应内完成：读取家庭财务快照 → 识别高息负债/闲置资产/储蓄缺口 → 输出结构化 suggestions JSON。",
+    "skills": ["finance-coach"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 40,
+}
+
+
+# System agent dedicated to wish-advice (W4 心愿优先储蓄建议, Plan B T7).
+# A 5th stream_run agent (app="wish-advice"). Stateless — each run rebuilds the
+# wishes snapshot from the backend-injected input; DeerMem would pollute advice
+# with stale wish state. soul_md is minimal (the advice contract lives in
+# skills/builtin/public/wish-advice/SKILL.md). Output schema is redistribution[],
+# NOT finance_coach's suggestions[] (spec §7.1 schema-mutually-exclusive).
+_WISH_ADVICE_AGENT = {
+    "id": WISH_ADVICE_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "wish-advice",
+    "display_name": "心愿储蓄顾问",
+    "description": "心愿优先储蓄建议智能体。读取家庭 pending 心愿快照，输出结构化 redistribution JSON（本月优先储蓄重分配建议）。",
+    "icon": "⭐",
+    "color": "#f59e0b",
+    "soul_md": "你是心愿储蓄顾问，在单次响应内完成：读取家庭 pending 心愿快照 → 识别本月最该优先存的心愿 → 输出结构化 redistribution JSON。",
+    "skills": ["wish-advice"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 50,
 }
 
 
@@ -161,17 +240,24 @@ def _upsert_builtin_agent(db: Session, spec: dict) -> None:
             soul_md=spec["soul_md"],
             skills=spec["skills"],
             agent_type=spec["agent_type"],
+            memory_enabled=spec.get("memory_enabled", True),
             display_order=spec["display_order"],
         ))
         logger.info("已初始化系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
-    elif existing.soul_md != spec["soul_md"]:
-        existing.soul_md = spec["soul_md"]
-        existing.description = spec["description"]
-        logger.info("已更新系统智能体 soul: %s (%s)", spec["display_name"], spec["agent_name"])
+    else:
+        # Keep soul_md / description / memory_enabled in sync with code on updates.
+        if existing.soul_md != spec["soul_md"] or existing.memory_enabled != spec.get("memory_enabled", True):
+            existing.soul_md = spec["soul_md"]
+            existing.description = spec["description"]
+            existing.memory_enabled = spec.get("memory_enabled", True)
+            logger.info("已更新系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
 
 
 def bootstrap_agents(db: Session) -> None:
     """Ensure builtin agents exist and their soul matches code. Idempotent."""
     _upsert_builtin_agent(db, _NUMINA_AGENT)
     _upsert_builtin_agent(db, _ASSET_REPORT_AGENT)
+    _upsert_builtin_agent(db, _IMPORT_PARSE_AGENT)
+    _upsert_builtin_agent(db, _FINANCE_COACH_AGENT)
+    _upsert_builtin_agent(db, _WISH_ADVICE_AGENT)
     db.commit()

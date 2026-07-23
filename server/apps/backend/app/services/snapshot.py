@@ -45,7 +45,7 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
             .all()
         )
         member_assets = sum(
-            ExchangeRateService.convert(a.current_value or 0, a.currency or "CNY", "CNY", db)
+            ExchangeRateService.convert(float(a.current_value or 0), a.currency or "CNY", "CNY", db)
             for a in total_assets
         )
 
@@ -56,7 +56,7 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
             .all()
         )
         member_liabilities = sum(
-            ExchangeRateService.convert(l.remaining_amount or 0, getattr(l, "currency", "CNY") or "CNY", "CNY", db)
+            ExchangeRateService.convert(float(l.remaining_amount or 0), getattr(l, "currency", "CNY") or "CNY", "CNY", db)
             for l in total_liabilities
         )
 

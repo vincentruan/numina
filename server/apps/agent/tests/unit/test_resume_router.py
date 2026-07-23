@@ -65,7 +65,7 @@ async def test_resume_endpoint_returns_success():
             with patch("apps.agent.routers.resume.get_stream_bridge") as mock_bridge:
                 bridge = mock_bridge.return_value
 
-                with patch("apps.agent.routers.resume.run_family_agent") as mock_run:
+                with patch("apps.agent.routers.resume.run_agent") as mock_run:
                     mock_run.return_value = None
 
                     request = ResumeRequest(

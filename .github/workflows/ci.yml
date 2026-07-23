@@ -75,6 +75,42 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
+        run: pnpm run typecheck && pnpm run typecheck:test
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 2b: Child Frontend typecheck
+  # The child app's `typecheck` script runs `vue-tsc --noEmit -p tsconfig.app.json`;
+  # its app config has no *.test.ts/*.spec.ts exclusion, so src + co-located tests
+  # are both type-checked. This job closes the green-while-red gap where child type
+  # errors previously reached CI unchecked (only vitest ran).
+  # ──────────────────────────────────────────────────────────────────────────
+  frontend-child-typecheck:
+    name: Child Frontend Typecheck (vue-tsc)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/apps/child
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
         run: pnpm run typecheck
 
   # ──────────────────────────────────────────────────────────────────────────

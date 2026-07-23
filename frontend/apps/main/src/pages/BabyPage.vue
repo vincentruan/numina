@@ -78,6 +78,7 @@
                 :fetch-month="fetchCalendarMonth"
                 day-route="/baby/calendar/day"
                 :extra-query="{ child_id: calendarChildId }"
+                :display-hint="calendarDisplayHint"
                 variant="parent"
                 :show-completion-rate="true"
               />
@@ -93,7 +94,11 @@
                   v-for="wish in pendingReviewWishes"
                   :key="wish.id"
                   class="wish-card"
+                  role="button"
+                  tabindex="0"
                   @click="openWishDetail(wish)"
+                  @keydown.enter="openWishDetail(wish)"
+                  @keydown.space.prevent="openWishDetail(wish)"
                 >
                   <div class="wish-card-top">
                     <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
@@ -139,7 +144,11 @@
                   v-for="wish in activeWishes"
                   :key="wish.id"
                   class="wish-card"
+                  role="button"
+                  tabindex="0"
                   @click="openWishDetail(wish)"
+                  @keydown.enter="openWishDetail(wish)"
+                  @keydown.space.prevent="openWishDetail(wish)"
                 >
                   <div class="wish-card-top">
                     <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
@@ -177,7 +186,11 @@
                   v-for="wish in fulfilledWishes"
                   :key="wish.id"
                   class="wish-card wish-card--fulfilled"
+                  role="button"
+                  tabindex="0"
                   @click="openWishDetail(wish)"
+                  @keydown.enter="openWishDetail(wish)"
+                  @keydown.space.prevent="openWishDetail(wish)"
                 >
                   <div class="wish-card-top">
                     <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
@@ -355,7 +368,7 @@
             </div>
 
             <!-- FAB: create new chore -->
-            <div class="fab" :aria-label="t('baby.addChore')" @click="$router.push('/baby/chores/new')">
+            <div class="fab" :aria-label="t('baby.addChore')" role="button" tabindex="0" @click="$router.push('/baby/chores/new')" @keydown.enter="$router.push('/baby/chores/new')" @keydown.space.prevent="$router.push('/baby/chores/new')">
               <IIcon icon="mdi:plus" size="22" />
             </div>
           </van-tab>
@@ -651,7 +664,7 @@ const activeWishes = computed(() =>
 )
 
 const fulfilledWishes = computed(() =>
-  sortWishes(filteredWishes.value.filter(w => ['fulfilled', 'realized', 'rejected'].includes(w.status))),
+  sortWishes(filteredWishes.value.filter(w => ['fulfilled', 'realized'].includes(w.status))),
 )
 
 // Wish review state
@@ -680,7 +693,7 @@ function truncateDesc(desc: string, max = 50): string {
 }
 
 function priorityShortLabel(p: string): string {
-  const map: Record<string, string> = { high: '🔥高', medium: '⭐中', low: '💤低' }
+  const map: Record<string, string> = { high: t('baby.wishPriorityHighShort'), medium: t('baby.wishPriorityMediumShort'), low: t('baby.wishPriorityLowShort') }
   return map[p] ?? p
 }
 
@@ -853,6 +866,14 @@ const calendarChildId = computed<string | null>(() => {
   return first ? String(first.id) : null
 })
 
+// B4: in 全部 mode the calendar silently shows the first child; surface
+// that via a hint. null in per-child mode (no hint needed).
+const calendarDisplayHint = computed<string | null>(() => {
+  if (selectedChildId.value) return null
+  const first = childMembers.value[0]
+  return first?.display_name ?? null
+})
+
 function fetchCalendarMonth(year: number, month: number) {
   if (!calendarChildId.value) return Promise.reject(new Error('no child'))
   return getFamilyChildCalendar(calendarChildId.value, year, month)
@@ -989,7 +1010,19 @@ async function doApproveChore(chore: ChoreInstance) {
     await approveChore(chore.id)
     showSuccessToast(t('baby.choreApproveSuccess'))
     await loadData()
-  } catch {
+  } catch (err) {
+    // Idempotent: if the chore was already approved (e.g. approved from the
+    // header section while the task tab still shows it as actionable), treat
+    // as success — show a friendly toast and refresh instead of an error.
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 422 || status === 409) {
+      await loadData()
+      const fresh = allChores.value.find(c => c.id === chore.id)
+      if (fresh?.status === 'approved') {
+        showSuccessToast(t('baby.choreAlreadyApproved'))
+        return
+      }
+    }
     showFailToast(t('baby.choreApproveFailed'))
   } finally {
     actioningId.value = null

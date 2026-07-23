@@ -53,7 +53,7 @@
         />
       </div>
 
-      <!-- Priority -->
+      <!-- Want level (child-facing "how much I want it") -->
       <div class="field-group">
         <label class="field-label">{{ t('wishes.priorityLabel') }}</label>
         <div class="priority-chips">
@@ -312,7 +312,7 @@ function goBackToList() {
 }
 .emoji-picker-btn:active { background: var(--color-surface-card); }
 
-/* ── Priority chips ── */
+/* ── Want-level chips ── */
 .priority-chips {
   display: flex;
   gap: var(--space-xs);

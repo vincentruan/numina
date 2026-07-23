@@ -15,9 +15,11 @@ tags: [skill-loader, deerflow, prompt, agent-extraction, skillconfig, static-ana
 
 # Async Agent Result Extraction — Production Sample Diagnostic Protocol (U10)
 
-**Status:** Resolved via static analysis (2026-05-19)
+**Status:** Resolved via static analysis (2026-05-19); conclusion reaffirmed by the 2026-07 unified-dispatch refactor
 **Date:** 2026-05-19
 **Decision:** **U11 NO-GO** (skill_loader.py:127 prompt-fix is unnecessary)
+
+> **Update note (2026-07-20):** The conclusion — `SkillConfig.prompt` is dead data; DeerFlow loads `SKILL.md` independently — **remains valid and was acted on by the unified-dispatch refactor**: U3 merged the four `family-*` skills into one `chat/SKILL.md` "numina SOUL" skill (DeerFlow loads SKILL.md directly, so the merge is how prompts reach the LLM). The code trace below references `orchestrator.py:348/357/601`, but `orchestrator.py`'s `dispatch()`/`stream_dispatch()` were **deleted** in U8 (the file is now ~185 lines of provider-selection helpers only); dispatch now flows through `worker.run_agent(app)` → per-app runner → `DeerFlowAdapter.typed_stream_dispatch`. `SkillConfig` / `skill_loader` and the adapter's `_build_message` (which sends `{skill, context, thinking}`, no prompt body) still behave as described. Treat the `orchestrator.py:NNN` line references as historical; the data-flow conclusion is unchanged.
 
 ## Purpose
 

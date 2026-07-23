@@ -15,6 +15,7 @@ from apps.backend.app.schemas.asset import (
     BatchItemError,
     BatchOperationResponse,
 )
+from apps.backend.app.services.finance_coach_cache import invalidate_capability
 
 
 def list_assets(
@@ -83,14 +84,40 @@ def compute_daily_cost(asset: Asset) -> float | None:
     if days <= 0:
         return None
     years = days / 365.0
-    total_cost = asset.purchase_price + (asset.annual_maintenance_cost or 0) * years
+    total_cost = float(asset.purchase_price) + float(asset.annual_maintenance_cost or 0) * years
     return round(total_cost / days, 2)
 
 
 def compute_return_rate(asset: Asset) -> float | None:
     if not asset.purchase_price or asset.purchase_price == 0 or not asset.current_value:
         return None
-    return round((asset.current_value - asset.purchase_price) / asset.purchase_price * 100, 2)
+    return round(
+        (float(asset.current_value) - float(asset.purchase_price))
+        / float(asset.purchase_price)
+        * 100,
+        2,
+    )
+
+
+def compute_annualized_return(asset: Asset) -> float | None:
+    """D8 金融资产年化收益率（期间收益率年化）。
+
+    rate = (current - purchase) / purchase × (365 / holding_days) × 100
+    holding_days = (today - purchase_date).days
+    purchase_date 缺失或 holding_days <= 0 → None
+    """
+    if not asset.purchase_price or asset.purchase_price == 0 or not asset.current_value:
+        return None
+    if not asset.purchase_date:
+        return None
+    holding_days = (date.today() - asset.purchase_date).days
+    if holding_days <= 0:
+        return None
+    total_ratio = (float(asset.current_value) - float(asset.purchase_price)) / float(
+        asset.purchase_price
+    )
+    annualized = total_ratio * (365 / holding_days) * 100
+    return round(annualized, 2)
 
 
 def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
@@ -120,6 +147,7 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
         tags = db.query(Tag).filter(Tag.id.in_(req.tag_ids), Tag.family_id == user.family_id).all()
         asset.tags = tags
     db.add(asset)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
@@ -142,6 +170,7 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
         tags = db.query(Tag).filter(Tag.id.in_(tag_ids), Tag.family_id == user.family_id).all()
         asset.tags = tags
 
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
@@ -155,6 +184,7 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
 def archive_asset(db: Session, user: User, asset_id: str) -> Asset:
     asset = get_asset(db, user, asset_id)
     asset.is_archived = True
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
@@ -166,6 +196,7 @@ def update_asset_value(db: Session, user: User, asset_id: str, value: float) -> 
     asset.current_value = value
     valuation = AssetValuation(asset_id=asset.id, value=value)
     db.add(valuation)
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
@@ -180,12 +211,12 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     if req.notes:
         asset.notes = req.notes
 
-    net_recovery = req.sell_price - (req.sell_fee or 0)
+    net_recovery = float(req.sell_price) - float(req.sell_fee or 0)
     days_held = (date.today() - asset.purchase_date).days if asset.purchase_date else 0
 
     years = days_held / 365.0 if days_held > 0 else 0
-    total_maintenance = (asset.annual_maintenance_cost or 0) * years
-    total_cost = (asset.purchase_price or 0) + total_maintenance
+    total_maintenance = float(asset.annual_maintenance_cost or 0) * years
+    total_cost = float(asset.purchase_price or 0) + total_maintenance
     total_profit_loss = net_recovery - total_cost
     actual_daily_cost = round(total_cost / days_held, 2) if days_held > 0 else 0
 
@@ -199,6 +230,7 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     )
     db.add(event)
 
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
 
@@ -228,6 +260,7 @@ def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
     )
     db.add(event)
 
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
@@ -238,6 +271,7 @@ def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
     if asset.status not in ('retired', 'idle'):
         raise AppError(ErrorCode.ASSET_FORBIDDEN)
     asset.status = 'in_use'
+    invalidate_capability(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset

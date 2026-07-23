@@ -40,6 +40,13 @@ class ChoreTemplate(Base):
     frequency: Mapped[str] = mapped_column(String(10), nullable=False)  # 'daily' | 'weekly'
     assignment_type: Mapped[str] = mapped_column(String(10), nullable=False)  # 'assigned' | 'pool'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # B1 per-template granularity: parent opt-out flag. When False, approving this
+    # template's instances will NOT write the education_reward Activity — even if the
+    # family-level education_reward_enabled switch is ON. Queried at approval time
+    # (not snapshotted) so editing a template never retroactively changes approvals.
+    real_reward_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

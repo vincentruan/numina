@@ -7,6 +7,7 @@
 
 import asyncio
 import contextlib
+import contextvars
 import json
 import logging
 import os
@@ -68,6 +69,37 @@ def _get_executor() -> ThreadPoolExecutor:
     return _executor
 
 
+def _run_in_executor_with_context(
+    loop: asyncio.AbstractEventLoop,
+    executor: ThreadPoolExecutor,
+    func: Any,
+    *args: Any,
+) -> asyncio.Future:
+    """Submit ``func`` to ``executor`` preserving the caller's contextvars.
+
+    ``loop.run_in_executor`` does NOT propagate ``contextvars`` from the
+    calling task into the pool thread. Numina relies on two coroutine-scoped
+    ContextVars set in ``worker.run_agent`` before dispatch:
+
+    - ``sandbox_family_id`` (``set_family_sandbox_context``) —
+      ``NuminaLocalSandboxProvider._build_thread_path_mappings`` reads it to
+      scope sandbox paths under ``AGENT_DATA_DIR/{family_id}/sandboxes/...``.
+      Without propagation the provider sees ``family_id=None`` and returns
+      empty path mappings, so ``write_file`` finds no mapping for
+      ``/mnt/user-data/workspace`` and the file silently never lands on disk
+      (the tool still returns ``"OK"`` — fail-open). This is the F2 root cause.
+    - ``numina_active_skill_name`` (``set_active_skill``) — runtime tool
+      filtering via ``filter_tools_by_skill_allowed_tools``.
+
+    Capturing ``contextvars.copy_context()`` here and running ``func`` inside
+    it (the same mechanism ``asyncio.to_thread`` uses) makes both ContextVars
+    visible inside the deerflow stream thread, where LangGraph's ToolNode
+    invokes sandbox tools (``write_file``/``read_file``) synchronously.
+    """
+    ctx = contextvars.copy_context()
+    return loop.run_in_executor(executor, lambda: ctx.run(func, *args))
+
+
 def _get_semaphore() -> asyncio.Semaphore:
     global _semaphore
     if _semaphore is None:
@@ -95,6 +127,9 @@ class DeerFlowAdapter:
         subagent_enabled: bool = False,
         plan_mode: bool = False,
         mcp_servers: list[dict[str, Any]] | None = None,
+        agent_name: str | None = None,
+        middlewares: list[Any] | None = None,
+        memory_enabled: bool = True,
     ) -> None:
         """Initialize adapter.
 
@@ -104,6 +139,14 @@ class DeerFlowAdapter:
             family_id: 家庭 ID（家庭级配置模式）
             ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
             mcp_servers: MCP server configs to inject into DeerFlow config YAML
+            agent_name: Optional DeerFlowClient agent_name. When set, DeerMem
+                buckets memory per (agent_name, user_id), isolating this adapter's
+                memory from others (e.g. asset-report vs chat/lead-agent). None
+                falls back to the client default (lead-agent global bucket).
+            middlewares: Optional list of AgentMiddleware instances to inject into
+                the DeerFlow agent. None = no custom middlewares (the default
+                for all current numina paths — report.step2_json is
+                worker-synthesized, not middleware-emitted).
         """
         self._timeout = timeout_seconds
         self._family_id = family_id
@@ -118,6 +161,9 @@ class DeerFlowAdapter:
                 subagent_enabled=subagent_enabled,
                 plan_mode=plan_mode,
                 mcp_servers=mcp_servers,
+                agent_name=agent_name,
+                middlewares=middlewares,
+                memory_enabled=memory_enabled,
             )
             self._is_family_mode = True
         elif config_path:
@@ -141,7 +187,8 @@ class DeerFlowAdapter:
             try:
                 loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(
+                    _run_in_executor_with_context(
+                        loop,
                         _get_executor(),
                         self._sync_dispatch,
                         skill_name,
@@ -214,24 +261,48 @@ class DeerFlowAdapter:
 
         async with _get_semaphore():
             loop = asyncio.get_running_loop()
-            import queue as thread_queue
             queue = asyncio.Queue()
 
             def _produce() -> None:
                 try:
                     if self._config_path:
-                        from deerflow.config.app_config import pop_current_app_config, push_current_app_config, reload_app_config
+                        from deerflow.config.app_config import (
+                            pop_current_app_config,
+                            push_current_app_config,
+                            reload_app_config,
+                        )
                         family_config = reload_app_config(str(self._config_path))
                         push_current_app_config(family_config)
 
-                        import os as _os
+                        # Set the per-run extensions_config path via ContextVar.
+                        # DeerFlow's ExtensionsConfig.from_file() reads MCP server
+                        # configs from this file. The extensions_config.json is
+                        # generated alongside config.yaml in
+                        # family_adapter_cache._generate_temp_config() when
+                        # mcp_servers is provided.
+                        #
+                        # We use a coroutine-scoped ContextVar instead of the
+                        # process-global DEER_FLOW_EXTENSIONS_CONFIG_PATH env var:
+                        # the env var is a single process-wide slot that two
+                        # concurrent family runs overwrite, leaking family-A's MCP
+                        # SSE URL (which embeds family-A's id) into family-B's run.
+                        # The ContextVar is propagated into the deerflow executor
+                        # thread + sync tool-executor pool, so _patched_get_mcp_tools
+                        # reads the correct per-run path. No env restore needed —
+                        # ContextVar isolation is automatic.
                         from pathlib import Path as _Path
+
+                        from apps.agent.services.runtime.sandbox_provider import (
+                            set_extensions_config_path,
+                        )
                         extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                        prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
                         if extensions_path.exists():
-                            _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                            set_extensions_config_path(str(extensions_path))
+                            # Reset MCP cache so DeerFlow picks up the new config
                             try:
-                                from deerflow.config.extensions_config import reset_extensions_config
+                                from deerflow.config.extensions_config import (
+                                    reset_extensions_config,
+                                )
                                 from deerflow.mcp.cache import reset_mcp_tools_cache
                                 reset_mcp_tools_cache()
                                 reset_extensions_config()
@@ -241,7 +312,6 @@ class DeerFlowAdapter:
                         try:
                             if resume_answer is not None:
                                 # Resume mode: use Command(resume=answer) instead of a new message
-                                from langgraph.types import Command
                                 message = self._build_prompt(skill_name, context)
                                 for event in self._client.stream(
                                     message,
@@ -255,10 +325,8 @@ class DeerFlowAdapter:
                                 for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
                                     loop.call_soon_threadsafe(queue.put_nowait, event)
                         finally:
-                            if prev_extensions_env is not None:
-                                _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-                            elif extensions_path.exists():
-                                _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                            if extensions_path.exists():
+                                set_extensions_config_path(None)
                             pop_current_app_config()
                     else:
                         if resume_answer is not None:
@@ -280,7 +348,7 @@ class DeerFlowAdapter:
                 finally:
                     loop.call_soon_threadsafe(queue.put_nowait, None)
 
-            future = loop.run_in_executor(_get_executor(), _produce)
+            future = _run_in_executor_with_context(loop, _get_executor(), _produce)
             try:
                 while True:
                     item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
@@ -482,16 +550,19 @@ class DeerFlowAdapter:
                     family_config = reload_app_config(str(self._config_path))
                     push_current_app_config(family_config)
 
-                    # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading.
-                    # DeerFlow's ExtensionsConfig.from_file() reads MCP server configs from
-                    # this file. The extensions_config.json is generated alongside config.yaml
-                    # in family_adapter_cache._generate_temp_config() when mcp_servers is provided.
-                    import os as _os
+                    # Set the per-run extensions_config path via ContextVar.
+                    # See raw_stream_dispatch._produce for the multi-family leak
+                    # rationale (process-global env var → cross-family MCP URL
+                    # leak). ContextVar is coroutine-scoped and propagated into
+                    # the deerflow executor thread + sync tool pool.
                     from pathlib import Path as _Path
+
+                    from apps.agent.services.runtime.sandbox_provider import (
+                        set_extensions_config_path,
+                    )
                     extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                    prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
                     if extensions_path.exists():
-                        _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                        set_extensions_config_path(str(extensions_path))
                         # Reset MCP cache so DeerFlow picks up the new config
                         try:
                             from deerflow.config.extensions_config import (
@@ -508,11 +579,8 @@ class DeerFlowAdapter:
                         for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
                             _process_event(event)
                     finally:
-                        # Restore previous extensions config path env var
-                        if prev_extensions_env is not None:
-                            _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-                        elif extensions_path.exists():
-                            _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                        if extensions_path.exists():
+                            set_extensions_config_path(None)
                         pop_current_app_config()
                 else:
                     # Global config mode — no per-family override needed
@@ -525,7 +593,7 @@ class DeerFlowAdapter:
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
-        future = loop.run_in_executor(_get_executor(), _produce)
+        future = _run_in_executor_with_context(loop, _get_executor(), _produce)
         try:
             while True:
                 item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
@@ -560,13 +628,17 @@ class DeerFlowAdapter:
                 family_config = reload_app_config(str(self._config_path))
                 push_current_app_config(family_config)
 
-                # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading.
-                import os as _os
+                # Set the per-run extensions_config path via ContextVar.
+                # See raw_stream_dispatch._produce for the multi-family leak
+                # rationale (process-global env var → cross-family MCP URL leak).
                 from pathlib import Path as _Path
+
+                from apps.agent.services.runtime.sandbox_provider import (
+                    set_extensions_config_path,
+                )
                 extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
                 if extensions_path.exists():
-                    _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                    set_extensions_config_path(str(extensions_path))
                     # Reset MCP cache so DeerFlow picks up the new config
                     try:
                         from deerflow.config.extensions_config import (
@@ -594,11 +666,8 @@ class DeerFlowAdapter:
                             if isinstance(content, str) and content:
                                 chunks.append(content)
                 finally:
-                    # Restore previous extensions config path env var
-                    if prev_extensions_env is not None:
-                        _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
-                    elif extensions_path.exists():
-                        _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                    if extensions_path.exists():
+                        set_extensions_config_path(None)
                     pop_current_app_config()
             else:
                 for event in self._client.stream(
@@ -630,9 +699,14 @@ class DeerFlowAdapter:
         the LLM trusting injected empty data over calling its MCP tools. The chat
         worker (worker.py) builds a minimal context with only family_id + free_text;
         pre-fetched skills that actually populate data still emit those fields.
+
+        Note: ``skill_name`` is no longer prefixed as ``[SKILL:{name}]`` — that
+        prefix had no consumer. Skill content is injected by DeerFlow's native
+        ``<skill_system>`` system-prompt section (filtered by ``available_skills``
+        passed to ``DeerFlowClient``), so the user message only needs the context.
         """
         ctx_dict = context.model_dump(exclude={"redaction_log"}, exclude_defaults=True)
-        return f"[SKILL:{skill_name}]\n{json.dumps(ctx_dict, ensure_ascii=False, indent=2)}"
+        return json.dumps(ctx_dict, ensure_ascii=False, indent=2)
 
 
 def _make_adapter() -> DeerFlowAdapter | None:
@@ -693,6 +767,9 @@ def create_family_adapter(
     subagent_enabled: bool = False,
     plan_mode: bool = False,
     mcp_servers: list[dict[str, Any]] | None = None,
+    agent_name: str | None = None,
+    middlewares: list[Any] | None = None,
+    memory_enabled: bool = True,
 ) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
@@ -703,6 +780,11 @@ def create_family_adapter(
         subagent_enabled: 是否启用子 agent 委托（init-time 参数）
         plan_mode: 是否启用 TodoList 规划中间件（init-time 参数）
         mcp_servers: MCP server configs to inject into DeerFlow config YAML
+        agent_name: Optional DeerMem memory-bucket key (see DeerFlowAdapter.__init__)
+        middlewares: Optional AgentMiddleware list (see DeerFlowAdapter.__init__)
+        memory_enabled: Whether DeerMem is enabled for this agent (read from
+            ai_agents.memory_enabled via AgentRegistry by the caller; False for
+            stateless fixed-flow agents like asset-report).
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
@@ -714,6 +796,9 @@ def create_family_adapter(
         subagent_enabled=subagent_enabled,
         plan_mode=plan_mode,
         mcp_servers=mcp_servers,
+        agent_name=agent_name,
+        middlewares=middlewares,
+        memory_enabled=memory_enabled,
     )
 
 

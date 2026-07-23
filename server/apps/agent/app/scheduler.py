@@ -7,21 +7,22 @@
 # APScheduler's default ThreadPoolExecutor and tried to call asyncio.wait_for()
 # without a running event loop.
 #
-# When USE_DEERFLOW=True, scheduled jobs must call orchestrator.dispatch() with
-# an explicit timeout budget (recommended: 60 s, shorter than DEERFLOW_TIMEOUT_SECONDS)
+# When USE_DEERFLOW=True, scheduled jobs must trigger a ``stream_run`` agent run
+# (via backend → agent gateway, ``app=<capability>`` in run metadata) with an
+# explicit timeout budget (recommended: 60 s, shorter than DEERFLOW_TIMEOUT_SECONDS)
 # to prevent a DeerFlow hang from blocking the scheduler indefinitely.
 #
 # Scheduler dispatch contract (for future job implementations):
-#   async def _dispatch_for_family(family_id: str, capability: str) -> None:
+#   async def _stream_run_for_family(family_id: str, app: str) -> None:
 #       try:
 #           await asyncio.wait_for(
-#               orchestrator.dispatch(capability, family_id),
+#               _trigger_stream_run(family_id, app),  # POST /internal/gateway/runs/{app}/{thread_id}
 #               timeout=60,
 #           )
 #       except asyncio.TimeoutError:
-#           logger.warning(f"[scheduler] dispatch timed out family={family_id} cap={capability}")
+#           logger.warning(f"[scheduler] stream_run timed out family={family_id} app={app}")
 #       except Exception as e:
-#           logger.warning(f"[scheduler] dispatch failed family={family_id}: {e}")
+#           logger.warning(f"[scheduler] stream_run failed family={family_id}: {e}")
 #           # Skip this family — do not abort the full scheduled run
 #
 # Each job must:
@@ -49,7 +50,7 @@
 #       families = await get_all_families()
 #       for family in families:
 #           await asyncio.sleep(random.uniform(0, 300))  # ← jitter per family
-#           await _dispatch_for_family(family.id, "monthly_report")
+#           await _stream_run_for_family(family.id, "asset-report")
 #
 # Human-in-the-loop (HITL) polling jitter contract:
 # ──────────────────────────────────────────────────

@@ -84,6 +84,8 @@
   "CALENDAR_DATE_INVALID": "Invalid date format, please use YYYY-MM-DD",
   "CHILD_NOT_FOUND": "Child not found",
   "AI_SPENDING_LEAK_NOT_FOUND": "Spending leak record not found",
+  "AI_REPORT_NOT_FOUND": "Report not found",
+  "AI_REPORT_MARKDOWN_NOT_FOUND": "Report file does not exist or has been deleted",
   "NOTIFICATION_NO_CHANNEL": "No notification channel configured",
   "CHORE_INSTANCE_NOT_FOUND": "Chore instance not found",
   "CHORE_INSTANCE_STATUS_CONFLICT": "Chore instance status does not allow this operation",

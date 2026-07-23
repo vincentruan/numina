@@ -66,7 +66,7 @@ async def test_cancel_run_cancels_inflight_run(client, run_manager):
     body = resp.json()
     assert body["run_id"] == record.run_id
     assert body["cancelled"] is True
-    assert run_manager.get(record.run_id).status == RunStatus.interrupted
+    assert (await run_manager.get(record.run_id)).status == RunStatus.interrupted
 
 
 async def test_cancel_unknown_run_returns_404(client):
@@ -81,7 +81,7 @@ async def test_cancel_run_with_mismatched_thread_returns_404(client, run_manager
     )
     assert resp.status_code == 404
     # Run is untouched.
-    assert run_manager.get(record.run_id).status == RunStatus.pending
+    assert (await run_manager.get(record.run_id)).status == RunStatus.pending
 
 
 async def test_cancel_cross_family_run_returns_404(client, run_manager):
@@ -91,4 +91,4 @@ async def test_cancel_cross_family_run_returns_404(client, run_manager):
     )
     assert resp.status_code == 404
     # Caller could not cancel a run belonging to another family.
-    assert run_manager.get(record.run_id).status == RunStatus.pending
+    assert (await run_manager.get(record.run_id)).status == RunStatus.pending

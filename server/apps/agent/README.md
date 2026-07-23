@@ -87,10 +87,12 @@ uv run pytest tests/ -v
 
 | Skill | 触发场景 |
 |-------|---------|
-| `family-asset-checkup` | 资产体检、净资产分析、财务状况评估 |
-| `family-liability-review` | 负债分析、还款压力、债务健康 |
-| `fixed-asset-followup` | 资产老化、维护提醒、闲置资产 |
-| `family-finance-insight-planner` | 深度分析、综合规划、长期财务 |
+| `chat` | 通用问答 + 结构化财务分析（资产体检 / 负债结构 / 固定资产跟踪 / 深度研究框架已并入） |
+| `chat-search` | 需要联网搜索的问答 |
+
+> 4 个原专项分析 skill（family-asset-checkup / family-liability-review /
+> fixed-asset-followup / family-finance-insight-planner）已合并进 `chat` SOUL
+>（见 `skills/builtin/public/chat/SKILL.md` 结构化分析框架段）。
 
 ## 安全边界
 

@@ -129,7 +129,8 @@ This is a `pnpm` workspace (`pnpm-workspace.yaml`) for the frontend, and a `uv` 
 # Main app (adult-facing) — http://localhost:5173
 cd frontend/apps/main
 pnpm dev --host 0.0.0.0  # Vite dev server, 支持局域网访问
-pnpm typecheck           # vue-tsc --noEmit
+pnpm typecheck           # vue-tsc --noEmit -p tsconfig.app.json (checks src; NOT root tsconfig — that one has files:[] and is a no-op)
+pnpm typecheck:test      # vue-tsc --noEmit -p tsconfig.vitest.json (also checks tests/)
 pnpm test:run            # vitest run (no watch)
 pnpm lint                # ESLint
 pnpm build               # Production build

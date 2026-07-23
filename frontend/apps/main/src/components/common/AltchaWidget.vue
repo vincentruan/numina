@@ -23,7 +23,7 @@
         <!-- Left: checkbox / progress / checkmark -->
         <div class="captcha-indicator" aria-hidden="true">
           <!-- Idle: plain checkbox -->
-          <div v-if="state === 'idle'" class="captcha-checkbox" @click="triggerVerification">
+          <div v-if="state === 'idle'" class="captcha-checkbox" role="button" tabindex="0" :aria-label="t('captcha.label')" @click="triggerVerification" @keydown.enter="triggerVerification" @keydown.space.prevent="triggerVerification">
             <div class="checkbox-box"></div>
           </div>
 
@@ -57,7 +57,7 @@
           </div>
 
           <!-- Error: red X -->
-          <div v-else-if="state === 'error'" class="captcha-error-icon" @click="triggerVerification">
+          <div v-else-if="state === 'error'" class="captcha-error-icon" role="button" tabindex="0" :aria-label="t('captcha.error')" @click="triggerVerification" @keydown.enter="triggerVerification" @keydown.space.prevent="triggerVerification">
             <svg viewBox="0 0 24 24" class="error-icon" aria-hidden="true">
               <circle cx="12" cy="12" r="11" class="error-circle" />
               <line x1="8" y1="8" x2="16" y2="16" class="error-line" />
@@ -68,7 +68,7 @@
 
         <!-- Right: label text -->
         <div class="captcha-label">
-          <span v-if="state === 'idle'" class="captcha-label__text" @click="triggerVerification">{{ t('captcha.label') }}</span>
+          <span v-if="state === 'idle'" class="captcha-label__text" role="button" tabindex="0" @click="triggerVerification" @keydown.enter="triggerVerification" @keydown.space.prevent="triggerVerification">{{ t('captcha.label') }}</span>
           <span v-else-if="state === 'verifying'" class="captcha-label__text captcha-label__text--muted">{{ t('captcha.labelVerifying') }}</span>
           <span v-else-if="state === 'verified'" class="captcha-label__text captcha-label__text--success">{{ t('captcha.labelVerified') }}</span>
           <span v-else-if="state === 'error'" class="captcha-label__text captcha-label__text--error">{{ t('captcha.error') }}</span>

@@ -17,6 +17,7 @@ import { computed, ref, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 import type { CitationSource } from '@/utils/ai-chat/citations'
+import CopyButton from '@/components/ai-chat/CopyButton.vue'
 import ReasoningSection from './ReasoningSection.vue'
 import ToolCallList from './ToolCallList.vue'
 import TodoListPanel from './TodoListPanel.vue'
@@ -123,11 +124,6 @@ function _phaseLabel(phase: string): string {
 }
 
 // Action handlers
-function onCopy() {
-  navigator.clipboard.writeText(props.content)
-  emit('copy', props.content)
-}
-
 function onFeedback(value: 1 | -1) {
   emit('feedback', value)
 }
@@ -310,12 +306,14 @@ watch(
 
       <!-- Actions -->
       <div class="message-actions">
-        <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="onCopy">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-          </svg>
-        </button>
+        <CopyButton v-slot="{ copy }" :content="content">
+          <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="copy(); emit('copy', content)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
+        </CopyButton>
         <button class="action-btn" :aria-label="t('aiChat.regenerateAria')" @click="emit('retry')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="1 4 1 10 7 10"/>

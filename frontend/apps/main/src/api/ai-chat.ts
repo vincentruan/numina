@@ -93,6 +93,8 @@ function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
     original_title: (r.metadata?.original_title as string) || undefined,
     status: (r.status as ThreadSession['status']) || 'idle',
     is_pinned: (r.metadata?.is_pinned as boolean) || false,
+    is_branch: (r.metadata?.is_branch as boolean) || false,
+    parent_thread_id: (r.metadata?.parent_thread_id as string) || undefined,
     created_at: r.created_at,
     updated_at: r.updated_at,
   }
@@ -201,6 +203,170 @@ export async function getTokenUsage(threadId: string): Promise<TokenUsageData> {
 }
 
 // ---------------------------------------------------------------------------
+// Compact (D2 DeerFlow sync) — POST /api/threads/{id}/compact.
+// Summarizes old history (RemoveMessage(ALL) + summary_text + preserved tail)
+// via the backend's canonical compact_thread_context wrapper. Cookie auth +
+// X-Family-Id, mirroring polishInputDraft / branchThreadFromTurn. Backend:
+// routers/threads.py compact_thread_endpoint + services/compact_service.py.
+// ---------------------------------------------------------------------------
+
+export interface ThreadCompactResult {
+  compacted: boolean
+  reason: string | null
+  removed_count: number
+  preserved_count: number
+  summary_updated: boolean
+  checkpoint_id: string | null
+  total_tokens: number
+}
+
+export async function compactThread(threadId: string): Promise<ThreadCompactResult> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/compact`, {
+    method: 'POST',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) {
+    let detail = `Failed to compact thread (${res.status})`
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+    } catch {
+      // ignore parse failure, use fallback detail
+    }
+    throw new Error(detail)
+  }
+  return res.json() as Promise<ThreadCompactResult>
+}
+
+// ---------------------------------------------------------------------------
+// Input polish (D3 DeerFlow sync) — frontend-direct, cookie auth + X-Family-Id.
+// Stateless single LLM call; no thread run, no persistence. Mirrors
+// runs_stream.py's verify_family_token path. Backend: routers/input_polish.py.
+// ---------------------------------------------------------------------------
+
+export interface InputPolishResult {
+  rewritten_text: string
+  changed: boolean
+}
+
+export async function polishInputDraft(text: string, signal?: AbortSignal): Promise<InputPolishResult> {
+  const res = await fetch(`${getAgentApiBase()}/api/input-polish`, {
+    method: 'POST',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({ text }),
+    signal,
+  })
+  if (!res.ok) throw new Error(`Input polish failed: ${res.status}`)
+  return res.json()
+}
+
+// ---------------------------------------------------------------------------
+// Goal (D1 DeerFlow sync) — GET/PUT/DELETE /api/threads/{id}/goal.
+// GoalState is persisted in the LangGraph checkpoint's channel_values["goal"]
+// (U2 backend); these thin wrappers mirror DeerFlow threads.py:832-880. Cookie
+// auth + X-Family-Id, same fetch pattern as polishInputDraft / compactThread.
+// Backend: routers/threads.py get/set/clear_thread_goal + services/goal_store.py
+// (delegates to deerflow.runtime.goal read_thread_goal / write_thread_goal).
+// ---------------------------------------------------------------------------
+
+/**
+ * DeerFlow-aligned goal state shape. Mirrors
+ * `backend/packages/harness/deerflow/agents/goal_state.py:22-31` — the backend
+ * `build_goal_state` delegates to DeerFlow's canonical builder, so every field
+ * here is produced server-side and round-trips through channel_values["goal"].
+ */
+export interface GoalState {
+  objective: string
+  status: 'active'
+  created_at: string
+  updated_at: string
+  continuation_count: number
+  max_continuations: number
+  no_progress_count: number
+  max_no_progress_continuations: number
+  last_evaluation?: {
+    satisfied: boolean
+    blocker:
+      | 'none'
+      | 'missing_evidence'
+      | 'needs_user_input'
+      | 'run_failed'
+      | 'external_wait'
+      | 'goal_not_met_yet'
+    reason: string
+    evidence_summary?: string
+    run_id?: string
+    evaluated_at?: string
+    progress_key?: string
+    stand_down_reason?: string
+  }
+}
+
+/** Request body for PUT /api/threads/{id}/goal (DeerFlow threads.py:320-329). */
+export interface SetThreadGoalInput {
+  objective: string
+  /** Optional override; the backend clamps to [0, 8] (R1b). */
+  max_continuations?: number
+}
+
+/** Response from GET/PUT/DELETE /api/threads/{id}/goal (DeerFlow threads.py:332-335). */
+export interface ThreadGoalResponse {
+  goal: GoalState | null
+}
+
+async function readGoalError(res: Response): Promise<string> {
+  let detail = `Failed goal request (${res.status})`
+  try {
+    const body = await res.json()
+    if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+  } catch {
+    // ignore parse failure, use fallback detail
+  }
+  return detail
+}
+
+export async function getThreadGoal(threadId: string): Promise<ThreadGoalResponse> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/goal`, {
+    method: 'GET',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await readGoalError(res))
+  return res.json() as Promise<ThreadGoalResponse>
+}
+
+export async function setThreadGoal(
+  threadId: string,
+  input: SetThreadGoalInput,
+): Promise<ThreadGoalResponse> {
+  const body: Record<string, unknown> = { objective: input.objective }
+  if (input.max_continuations !== undefined) {
+    body.max_continuations = input.max_continuations
+  }
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/goal`, {
+    method: 'PUT',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(await readGoalError(res))
+  return res.json() as Promise<ThreadGoalResponse>
+}
+
+export async function clearThreadGoal(threadId: string): Promise<ThreadGoalResponse> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/goal`, {
+    method: 'DELETE',
+    headers: getAgentHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await readGoalError(res))
+  return res.json() as Promise<ThreadGoalResponse>
+}
+
+// ---------------------------------------------------------------------------
 // Branch API (DeerFlow threads/api.ts:71-97)
 // ---------------------------------------------------------------------------
 
@@ -209,7 +375,26 @@ export interface ThreadBranchResponse {
   parent_thread_id: string
   parent_checkpoint_id: string
   branched_from_message_id: string
+  /**
+   * Sandbox artifact clone outcome (U1/U5). Mirrors the backend
+   * `WorkspaceCloneMode` Literal (server/apps/agent/routers/threads.py) so a
+   * typo on either side is a compile-time break, not a silent fall-through to
+   * the no-warning branch. Keep in sync with `branchCloneWarnKey` in
+   * AIChatBox.vue.
+   */
+  workspace_clone_mode?: WorkspaceCloneMode
 }
+
+/**
+ * Sandbox artifact clone outcome — single source of truth for the values that
+ * cross the backend->frontend boundary. Mirror of the backend
+ * `WorkspaceCloneMode` Literal.
+ */
+export type WorkspaceCloneMode =
+  | 'current_thread_best_effort'
+  | 'skipped_historical_turn'
+  | 'not_found'
+  | 'failed'
 
 export interface BranchThreadFromTurnInput {
   messageId: string

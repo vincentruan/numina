@@ -24,7 +24,6 @@ class ReminderSummary(BaseModel):
     """总览页摘要：各类型 active 数量"""
 
     large_purchase: int = 0
-    allocation_drift: int = 0
     expiring_soon: int = 0
     maturity: int = 0
     total: int = 0

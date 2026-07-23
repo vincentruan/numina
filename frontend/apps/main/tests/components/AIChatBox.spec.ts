@@ -11,6 +11,7 @@ import { useChatSessionStore } from '../../src/stores/chatSession'
 vi.mock('@/composables/ai-chat/useThreadChat', () => ({
   useThreadChat: () => ({
     messages: { value: [] },
+    visibleMessages: { value: [] },
     isLoading: { value: false },
     isStreaming: { value: false },
     error: { value: null },
@@ -20,13 +21,20 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     answeredInterruptIds: { value: new Set() },
     interruptErrorId: { value: null },
     runId: { value: null },
+    todos: { value: [] },
+    serverGoal: { value: undefined },
     sendMessage: vi.fn(),
     cancelStream: vi.fn(),
     loadHistory: vi.fn(),
     retry: vi.fn(),
     clearMessages: vi.fn(),
     resumeInterrupt: vi.fn(),
+    handleCompact: vi.fn(),
+    handleGoalCommand: vi.fn(),
   }),
+  // parseGoalCommand is a pure module-level export used by AIChatBox to detect
+  // /goal commands before they reach the agent.
+  parseGoalCommand: vi.fn(() => null),
 }))
 
 vi.mock('@/composables/ai-chat/useArtifacts', () => ({
@@ -45,13 +53,22 @@ vi.mock('@/api/ai-chat', () => ({
   updateThread: vi.fn(() => Promise.resolve({ thread_id: 'test-thread', title: 'Updated Title' })),
 }))
 
-// Mock router - useRouter returns mock push function
+// A1b (Plan B T6): useAiContext imports getAiContext from @/api/ai, which
+// otherwise pulls in the real http/router/i18n graph. Mock the module so the
+// composable stays lightweight in this component-render test.
+vi.mock('@/api/ai', () => ({
+  getAiContext: vi.fn(),
+}))
+
+// Mock router - useRouter returns mock push function; useRoute returns empty
+// query (A1b useAiContext reads route.query.source/id).
 const mockPush = vi.fn()
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...(actual as any),
     useRouter: () => ({ push: mockPush }),
+    useRoute: () => ({ query: {} }),
   }
 })
 

@@ -85,7 +85,7 @@ def __getattr__(name: str) -> Any:
 
 The `__getattr__` hook provides backward-compatible lazy initialization — the singleton is created on first access rather than at import time, avoiding circular imports and allowing test overrides.
 
-> **Note (2026-05):** Production code now uses the family-level adapter mode via `create_family_adapter()` and the `ChatAdapter` pattern. The global singleton exists only for backward compatibility. See [`docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md`](../architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) for the current architecture.
+> **Note (2026-05, updated 2026-07):** Production code now uses the family-level adapter mode via `create_family_adapter()` and the `ChatAdapter` pattern. The global singleton exists only for backward compatibility. As of the 2026-07 two-AI-apps unified-dispatch refactor, the `Orchestrator` class and its `dispatch()`/`stream_dispatch()` methods (the subject of Bugs 1–4 below) were **deleted entirely** — dispatch now flows through `worker.run_agent(app)` → per-app runner → `DeerFlowAdapter.typed_stream_dispatch`. The engineering *lessons* below (silent fallback swallowing exceptions; `asyncio.Lock` is not thread-safe so acquire it in the event loop before `run_in_executor`; dead config constants that mislead; cross-module private-import coupling) are durable and still apply. For the current dispatch architecture see [`two-ai-apps-unified-dispatch-stream-run.md`](../architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md); for the MCP/ChatAdapter patterns see [`mcp-chat-adapter-architecture-2026-05-21.md`](../architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md).
 
 ---
 

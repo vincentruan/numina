@@ -9,6 +9,7 @@ class OverviewResponse(BaseModel):
     net_worth: float
     asset_count: int
     month_over_month_change: float | None = None
+    month_over_month_change_amount: float | None = None
     total_daily_cost: float = 0
 
 
@@ -83,6 +84,17 @@ class InvestmentReturnItem(SnowflakeBase):
     currency: str = "CNY"
     original_purchase_price: float = 0.0
     original_current_value: float = 0.0
+
+
+class EducationRewardSummaryResponse(SnowflakeBase):
+    """B1 教育奖励支出专项统计（方案 B：只聚合展示，不动资产/净资产/收益率）。
+
+    amount 在 B1 教育联动写入时已是元值（family 默认币种），直接求和，无货币换算（KTD-1）。
+    """
+
+    total: float  # 累计总额（全时段）
+    month_total: float  # 本月总额
+    count: int  # 笔数（全时段）
 
 
 class ExpiringSoonItem(SnowflakeBase):
@@ -230,6 +242,13 @@ class RetentionRateResponse(BaseModel):
     top_items: list[RetentionItem]
 
 
+class InvestmentReturnSummary(BaseModel):
+    """D8 金融资产年化收益率摘要"""
+    annualized_rate: float | None  # None = 持有天数不足或无有效资产
+    asset_count: int  # 有有效年化收益率的金融资产数
+    description: str  # 简短说明（后端中性文案，前端以 i18n 为准）
+
+
 class InsightsResponse(BaseModel):
     """洞悉 Tab 完整响应"""
     smart_discovery: SmartDiscoveryResponse
@@ -238,6 +257,7 @@ class InsightsResponse(BaseModel):
     type_distribution: TypeDistributionResponse
     duration_distribution: DurationDistributionResponse
     retention_rate: RetentionRateResponse
+    investment_returns: InvestmentReturnSummary | None = None
 
 
 # ═══════════════════════════════════════

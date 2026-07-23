@@ -6,7 +6,6 @@ import { remindersApi, type ReminderResponse, type ReminderSummary } from '@/api
 export const useRemindersStore = defineStore('reminders', () => {
   const summary = ref<ReminderSummary>({
     large_purchase: 0,
-    allocation_drift: 0,
     expiring_soon: 0,
     maturity: 0,
     total: 0,

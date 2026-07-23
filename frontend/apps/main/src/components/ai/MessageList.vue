@@ -25,6 +25,7 @@ const emit = defineEmits<{
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
   branch: [messageId: string, messageIds: string[]]
   clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
+  feedback: [messageId: string, value: 1 | -1]
 }>()
 
 const { t } = useI18n()
@@ -194,6 +195,7 @@ onUnmounted(() => {
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
         @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
         @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
+        @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
       />
       <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
       <div v-if="showThinkingIndicator" class="thinking-placeholder">

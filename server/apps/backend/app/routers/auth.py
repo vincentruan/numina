@@ -211,6 +211,8 @@ def update_settings(
         user.default_currency = req.default_currency
     if req.view_mode is not None:
         user.view_mode = req.view_mode
+    if req.theme_color is not None:
+        user.theme_color = req.theme_color
     db.commit()
     db.refresh(user)
     return user

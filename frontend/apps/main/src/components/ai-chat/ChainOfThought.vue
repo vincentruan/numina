@@ -15,7 +15,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getToolIcon, explainToolCallKey, extractShortToolName } from '@/utils/ai-chat/tool-icon-map'
+import { getToolIcon, explainToolCallKey, extractShortToolName, TOOL_ACTION_KEY_MAP } from '@/utils/ai-chat/tool-icon-map'
 import {
   extractReasoningContentFromMessage,
   extractContentFromMessage,
@@ -69,6 +69,7 @@ const steps = computed(() => {
     content?: string
     name?: string
     displayName?: string
+    displayKey?: string
     args?: Record<string, unknown>
     result?: string
     status: 'pending' | 'running' | 'done' | 'error'
@@ -139,6 +140,7 @@ const steps = computed(() => {
           messageId: message.id,
           name: tc.name,
           displayName: tc.displayName,
+          displayKey: tc.displayKey,
           args: tc.args,
           result: resultStr,
           status: stepStatus,
@@ -256,10 +258,40 @@ function getIcon(step: { type: string; name?: string }): string {
 // 工具名称获取 - 参考 DeerFlow message-group.tsx ToolCall 的行动描述模式
 // 不再显示工具技术名，而是显示抽象后的行动步骤说明
 // （如 web_search + query -> "在网络上搜索 XXX"，read_file + path -> "读取文件: path"）
-function getName(step: { type: string; name?: string; displayName?: string; args?: Record<string, unknown> }): string {
+//
+// 标签优先级（对齐 DeerFlow explainToolCall + message-group ToolCall）：
+// 1. 已知工具的动作模板（explainToolCallKey）—— 含参数化文案，最精确
+// 2. 后端解析的 displayKey（toolName.* i18n）—— MCP/域工具的可读中文名
+// 3. 后端解析的 displayName —— 同上，无 i18n 时的 fallback
+// 4. 通用 fallback（mcp_generic / generic）
+function getName(step: { type: string; name?: string; displayName?: string; displayKey?: string; args?: Record<string, unknown> }): string {
   if (step.type === 'reasoning') return t('aiChat.thinkingLabel')
-  // 使用 explainToolCallKey 生成行动描述（i18n key + params）
-  const { key, params } = explainToolCallKey(step.name || '', step.args)
+
+  const rawName = step.name || ''
+  // 1. 已知工具优先用动作模板（含参数，如 "在网络上搜索: XXX" / "读取: path"）
+  const shortName = extractShortToolName(rawName)
+  const normalized = rawName.replace(/^(mcp|skill|builtin):\/\//, '')
+  const hasActionTemplate = Boolean(TOOL_ACTION_KEY_MAP[normalized] || (shortName !== normalized && TOOL_ACTION_KEY_MAP[shortName]))
+  if (hasActionTemplate) {
+    const { key, params } = explainToolCallKey(rawName, step.args)
+    return params ? t(key, params) : t(key)
+  }
+
+  // 2. 后端解析的 displayKey（toolName.* i18n，如 MCP 工具"查询资产数据"）
+  if (step.displayKey) {
+    const key = step.displayKey.startsWith('toolName.') ? step.displayKey : `toolName.${step.displayKey}`
+    const translated = t(key)
+    // t() 返回 key 本身表示翻译缺失 → fallback
+    if (translated && translated !== key) return translated
+  }
+
+  // 3. 后端解析的 displayName（与原始 name 不同时才用，避免回显原始名）
+  if (step.displayName && step.displayName !== rawName && step.displayName !== shortName) {
+    return step.displayName
+  }
+
+  // 4. 通用 fallback
+  const { key, params } = explainToolCallKey(rawName, step.args)
   return params ? t(key, params) : t(key)
 }
 
@@ -284,7 +316,7 @@ interface SearchResultItem {
 /**
  * Parse web_search result into clickable links
  */
-function getSearchResults(step: { name?: string; result?: string }): SearchResultItem[] | null {
+function getSearchResults(step: { name?: string; result?: string; args?: Record<string, unknown> }): SearchResultItem[] | null {
   const name = extractShortToolName(step.name || '')
   if (name !== 'web_search' && name !== 'image_search' && name !== 'web_fetch') return null
 

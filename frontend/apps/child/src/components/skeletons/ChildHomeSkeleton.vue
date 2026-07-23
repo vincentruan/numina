@@ -1,10 +1,15 @@
 <template>
   <div class="home-skeleton">
-    <!-- Hero card skeleton — ochre feature card -->
+    <!-- Hero card skeleton — matches the greeting-on-top + coins/ring layout -->
     <div class="hero-card-skeleton">
-      <van-skeleton :row="1" row-width="40%" animate class="label-skeleton" />
-      <van-skeleton :row="1" row-width="60%" animate class="balance-skeleton" />
-      <van-skeleton-avatar avatar-size="80px" avatar-shape="round" animate class="ring-skeleton" />
+      <van-skeleton :row="1" row-width="55%" animate class="greeting-skeleton" />
+      <div class="hero-body-skeleton">
+        <div class="hero-coins-skeleton">
+          <van-skeleton :row="1" row-width="45%" animate class="coin-total-skeleton" />
+          <van-skeleton :row="3" row-width="30%" animate class="coin-tiers-skeleton" />
+        </div>
+        <van-skeleton-avatar avatar-size="80px" avatar-shape="round" animate class="ring-skeleton" />
+      </div>
     </div>
 
     <!-- Today's chores section -->
@@ -41,19 +46,20 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
   min-height: 100vh;
 }
 
-/* Hero card — ochre feature card */
+/* Hero card — soft neutral card matching the real layout */
 .hero-card-skeleton {
-  background: var(--color-brand-ochre);
+  background: var(--color-surface-soft);
   border-radius: var(--radius-xl);
-  padding: 32px 20px;
-  text-align: center;
+  padding: 28px 20px 24px;
   margin-bottom: var(--space-lg);
+  border: 1px solid var(--color-hairline-soft);
 }
 
 [data-theme="dark"] .hero-card-skeleton {
   background:
-    linear-gradient(135deg, rgba(var(--color-brand-ochre-rgb), 0.16), rgba(var(--color-brand-ochre-rgb), 0.08)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
     var(--color-surface-card);
+  border-color: var(--color-hairline);
 }
 
 .hero-card-skeleton :deep(.van-skeleton) {
@@ -61,32 +67,44 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
 }
 
 .hero-card-skeleton :deep(.van-skeleton__row) {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--skeleton-bg);
   border-radius: 4px;
 }
 
-[data-theme="dark"] .hero-card-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.08);
+.greeting-skeleton {
+  margin: 0 auto 16px;
+}
+.greeting-skeleton :deep(.van-skeleton__row) {
+  height: 16px;
+  margin: 0 auto;
 }
 
-.label-skeleton :deep(.van-skeleton__row) {
-  height: 13px;
+.hero-body-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.balance-skeleton :deep(.van-skeleton__row) {
-  height: 32px;
+.hero-coins-skeleton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.coin-total-skeleton :deep(.van-skeleton__row) {
+  height: 28px;
+}
+.coin-tiers-skeleton :deep(.van-skeleton__row) {
+  height: 12px;
 }
 
 .ring-skeleton {
-  margin-top: 20px;
+  flex-shrink: 0;
 }
 
 .ring-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="dark"] .ring-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--skeleton-bg);
 }
 
 /* Sections */

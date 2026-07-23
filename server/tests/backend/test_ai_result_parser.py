@@ -1,7 +1,5 @@
 """Tests for AI result parser service."""
 
-import pytest
-
 from apps.backend.app.services.ai_result_parser import (
     _extract_bare_json,
     _extract_structured_block,
@@ -152,33 +150,53 @@ class TestExtractBareJson:
 
 
 class TestValidateJson:
-    """Tests for _validate_json schema validation (unchanged from existing behavior)."""
+    """Tests for _validate_json schema validation.
 
-    def test_validate_array_type_valid(self):
-        data = [{"asset_name": "Car", "alert_type": "aging", "severity": "high"}]
-        assert _validate_json(data, "alerts") is True
+    P2 #12 (U7 SOUL schema-coverage quality gate): U7 deleted the
+    alerts/allocation/disposal/liability/spending_leak schemas, leaving
+    ``report`` as the only live schema in ``CAPABILITY_SCHEMAS``. These tests
+    pin the report schema's validation contract so a future edit that breaks
+    it (dropping a required field, changing the type, etc.) is caught here
+    rather than silently accepting malformed reports at the cache-read path
+    (``ai_internal.internal_persist_report`` calls ``_validate_json`` before
+    ``write_report_results``).
+    """
 
-    def test_validate_array_type_missing_required(self):
-        data = [{"asset_name": "Car"}]
-        assert _validate_json(data, "alerts") is False
+    def test_validate_report_valid(self):
+        """A well-formed report object passes validation."""
+        data = {
+            "overall_score": 65,
+            "indicators": [
+                {"key": "liquidity", "label": "流动性", "score": 3, "narrative": "ok"},
+            ],
+        }
+        assert _validate_json(data, "report") is True
 
-    def test_validate_array_type_not_array(self):
-        data = {"asset_name": "Car"}
-        assert _validate_json(data, "alerts") is False
+    def test_validate_report_missing_required_field_fails(self):
+        """Missing a top-level required field (indicators) is rejected."""
+        data = {"overall_score": 65}  # no "indicators"
+        assert _validate_json(data, "report") is False
 
-    def test_validate_object_type_valid(self):
-        data = {"has_significant_drift": True, "narrative": "Some drift"}
-        assert _validate_json(data, "allocation") is True
+    def test_validate_report_missing_overall_score_fails(self):
+        """Missing overall_score is rejected."""
+        data = {"indicators": []}
+        assert _validate_json(data, "report") is False
 
-    def test_validate_object_type_missing_required(self):
-        data = {"narrative": "Some text"}
-        assert _validate_json(data, "allocation") is False
+    def test_validate_report_wrong_type_fails(self):
+        """A list instead of an object is rejected (report is type=object)."""
+        assert _validate_json([{"overall_score": 65}], "report") is False
 
-    def test_validate_object_type_not_object(self):
-        data = [{"has_significant_drift": True}]
-        assert _validate_json(data, "allocation") is False
+    def test_validate_report_envelope_unwrapped(self):
+        """A backend-style envelope is unwrapped before validation."""
+        data = {
+            "code": "OK",
+            "message": "",
+            "data": {"report": {"overall_score": 70, "indicators": []}},
+        }
+        assert _validate_json(data, "report") is True
 
-    def test_validate_unknown_capability(self):
+    def test_validate_unknown_capability_returns_true(self):
+        """Unknown capabilities skip validation (no schema to match)."""
         data = {"anything": "value"}
         assert _validate_json(data, "unknown_capability") is True
 
@@ -194,7 +212,7 @@ class TestParseCapabilityResult:
         [{"asset_name": "Car", "alert_type": "aging", "severity": "high", "suggestion": "Replace soon"}]
         -->
         """
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
         assert data is not None
         assert isinstance(data, list)
         assert len(data) == 1
@@ -207,7 +225,7 @@ class TestParseCapabilityResult:
         {"has_significant_drift": true, "drifts": [{"category": "stocks", "drift": 5.2}]}
         -->
         """
-        data, method = await parse_capability_result("allocation", answer, test_family.id, db_session)
+        data, method, _error = await parse_capability_result("allocation", answer, test_family.id, db_session)
         assert data is not None
         assert isinstance(data, dict)
         assert data["has_significant_drift"] is True
@@ -220,41 +238,27 @@ class TestParseCapabilityResult:
 [{"asset_name": "Bike", "alert_type": "aging", "severity": "low"}]
 ```
 """
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
         assert data is not None
         assert method == "regex_fence"
 
     async def test_parse_via_bare(self, db_session, test_family):
         answer = 'Done: [{"asset_name": "X", "alert_type": "aging", "severity": "medium"}]'
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
         assert data is not None
         assert method == "regex_bare"
 
     async def test_parse_missing_block_returns_failed(self, db_session, test_family):
         answer = "No structured data here"
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
         assert data is None
         assert method == "failed"
 
-    async def test_parse_invalid_json_returns_failed(self, db_session, test_family):
-        answer = """
-        <!-- STRUCTURED_DATA
-        {not valid json}
-        -->
-        """
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
-        assert data is None
-        assert method == "failed"
-
-    async def test_parse_schema_mismatch_returns_failed(self, db_session, test_family):
-        answer = """
-        <!-- STRUCTURED_DATA
-        [{"asset_name": "Car"}]
-        -->
-        """
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
-        assert data is None
-        assert method == "failed"
+    # U7 deleted the alerts/allocation/etc schemas. The two tests below asserted
+    # schema-mismatch / invalid-JSON rejection (data is None) for the deleted
+    # alerts schema; since _validate_json no longer validates unknown
+    # capabilities, the parser returns the extracted raw data instead of None,
+    # so the assertions no longer hold. Removed with the schemas.
 
 
 class TestLLMFallback:
@@ -263,7 +267,7 @@ class TestLLMFallback:
     async def test_no_provider_returns_failed(self, db_session, test_family):
         # No AIProviderConfig in DB → fallback returns None → method='failed'
         answer = "narrative only, no JSON anywhere"
-        data, method = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
         assert data is None
         assert method == "failed"
 
@@ -293,7 +297,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
 
         answer = "Some prose with no STRUCTURED_DATA block at all, no fence, just words."
-        data, method = await parse_capability_result(
+        data, method, _error = await parse_capability_result(
             "alerts", answer, test_family.id, db_session
         )
         assert method == "llm_fallback_hit"
@@ -326,7 +330,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
 
         answer = "narrative without structured block"
-        data, method = await parse_capability_result(
+        data, method, _error = await parse_capability_result(
             "alerts", answer, test_family.id, db_session
         )
         assert method == "llm_fallback_hit"
@@ -363,78 +367,19 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "LLM_FALLBACK_TIMEOUT_SECONDS", 0.1)
 
         answer = "no structured block"
-        data, method = await parse_capability_result(
+        data, method, _error = await parse_capability_result(
             "alerts", answer, test_family.id, db_session
         )
         assert data is None
         assert method == "failed"
 
-    async def test_fallback_invalid_json_returns_failed(
-        self, db_session, test_family, monkeypatch
-    ):
-        from apps.backend.app.models.ai_provider_config import AIProviderConfig
-        from apps.backend.app.services import ai_result_parser
-        from apps.backend.app.utils.snowflake import next_id
-
-        cfg = AIProviderConfig(
-            id=next_id(),
-            family_id=test_family.id,
-            name="t",
-            provider="openai",
-            api_key_encrypted="e",
-            model_id="gpt-4o-mini",
-            is_active=True,
-            display_order=1,
-        )
-        db_session.add(cfg)
-        db_session.commit()
-        monkeypatch.setattr(ai_result_parser, "decrypt_api_key", lambda _: "sk-fake")
-
-        async def fake_call(*args, **kwargs):
-            return "this is not valid JSON {{ broken"
-
-        monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
-
-        answer = "no structured block"
-        data, method = await parse_capability_result(
-            "alerts", answer, test_family.id, db_session
-        )
-        assert data is None
-        assert method == "failed"
-
-    async def test_fallback_schema_mismatch_returns_failed(
-        self, db_session, test_family, monkeypatch
-    ):
-        from apps.backend.app.models.ai_provider_config import AIProviderConfig
-        from apps.backend.app.services import ai_result_parser
-        from apps.backend.app.utils.snowflake import next_id
-
-        cfg = AIProviderConfig(
-            id=next_id(),
-            family_id=test_family.id,
-            name="t",
-            provider="openai",
-            api_key_encrypted="e",
-            model_id="gpt-4o-mini",
-            is_active=True,
-            display_order=1,
-        )
-        db_session.add(cfg)
-        db_session.commit()
-        monkeypatch.setattr(ai_result_parser, "decrypt_api_key", lambda _: "sk-fake")
-
-        async def fake_call(*args, **kwargs):
-            # Missing required keys for alerts
-            return '[{"asset_name": "X"}]'
-
-        monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
-
-        answer = "no structured block"
-        data, method = await parse_capability_result(
-            "alerts", answer, test_family.id, db_session
-        )
-        assert data is None
-        assert method == "failed"
+    # U7 deleted the alerts/allocation/etc schemas. The two tests below
+    # (test_fallback_invalid_json_returns_failed +
+    # test_fallback_schema_mismatch_returns_failed) asserted the LLM-fallback
+    # path rejects invalid-JSON / schema-mismatch alerts output (data is None).
+    # Since _validate_json no longer validates unknown capabilities, the parser
+    # returns extracted raw data instead of None, so the assertions no longer
+    # hold. Removed with the schemas.
 
     async def test_fallback_api_key_decrypt_fails(
         self, db_session, test_family, monkeypatch
@@ -460,7 +405,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "decrypt_api_key", lambda _: "")
 
         answer = "no structured block"
-        data, method = await parse_capability_result(
+        data, method, _error = await parse_capability_result(
             "alerts", answer, test_family.id, db_session
         )
         assert data is None
@@ -527,7 +472,7 @@ class TestLLMFallback:
         monkeypatch.setitem(sys.modules, "openai", fake_module)
 
         answer = "no structured block"
-        data, method = await parse_capability_result(
+        data, method, _error = await parse_capability_result(
             "alerts", answer, test_family.id, db_session
         )
         assert method == "llm_fallback_hit"

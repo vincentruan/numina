@@ -5,7 +5,9 @@ Skill catalog 命名空间约定：
 - ``RESERVED_NAMES`` 保留给系统内部能力，禁止 owner 创建同名 custom skill：
   - ``chat`` 是 AI 问答智能体的纯 LLM 对话内部能力（``agent.skills=["chat"]`` 由 dispatch 层
     识别为"无业务 skill"模式，不进入 catalog 查找）。
-- ``time_machine`` 是固定规则计算应用，作为独立 ``/ai/time-machine`` 页面入口暴露，不作为可调度 skill。
+  - ``asset-report`` 是系统内置固定流程（三步流水线，KTD-8），有独立 skill 目录但不可开关。
+- ``time_machine`` 已从 skill 系统解耦（KTD-9，非 AI 纯计算应用），保留为独立
+  ``/ai/time-machine`` 页面入口，不再占 RESERVED_NAMES。
 
 """
 
@@ -38,30 +40,25 @@ router = APIRouter(prefix="/ai/skills", tags=["ai-skills"])
 logger = logging.getLogger(__name__)
 
 # Business capabilities exposed to skill management (matches agent/skills/*.md).
-# 注意：`chat` 与 `time_machine` 不在此列 — 见 RESERVED_NAMES。
-BUILTIN_CAPABILITIES = [
-    "report",
-    "alerts",
-    "allocation",
-    "disposal",
-    "liability",
-    "spending_leak",
-]
+# 注意：`chat` 与 `asset-report` 不在此列 — 见 RESERVED_NAMES。
+# U7: 5 外扩 trigger skill 全栈删除后，业务能力回归 numina SOUL（chat/SKILL.md），
+# 此列表为空。U5: report 也已删除（asset-report 是系统内置固定流程，非可开关能力）。
+BUILTIN_CAPABILITIES: list[str] = []
 
 # Reserved namespace — not skills, but blocked from custom skill_id collisions.
-RESERVED_NAMES = ["chat", "time_machine"]
+# - ``chat`` 是 AI 问答智能体的纯 LLM 对话内部能力（``agent.skills=["chat"]`` 由
+#   dispatch 层识别为"无业务 skill"模式，不进入 catalog 查找）。
+# - ``asset-report`` 是系统内置固定流程（三步流水线，KTD-8），有独立 skill 目录
+#   放 prompt 但用户不可开关、不可创建同名 custom skill。
+# U5/KTD-9: ``time_machine`` 已移除（非 AI skill，纯计算应用，从 skill 系统解耦）。
+# U8: ``import-parse`` 加入（系统内置固定流程：金融文档持仓解析，KTD-8）。
+# Plan A: ``finance-coach`` 加入（系统内置固定流程：家庭财务处方建议，KTD-8）。
+RESERVED_NAMES = ["chat", "asset-report", "import-parse", "finance-coach"]
 
 # Internal-only skills excluded from user-facing catalog and creation.
 INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer"}
 
-BUILTIN_DEFAULT_ORDER = {
-    "report": 100,
-    "alerts": 101,
-    "allocation": 102,
-    "disposal": 103,
-    "liability": 104,
-    "spending_leak": 105,
-}
+BUILTIN_DEFAULT_ORDER: dict[str, int] = {}
 
 SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 

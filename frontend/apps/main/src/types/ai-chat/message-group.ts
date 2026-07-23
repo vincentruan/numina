@@ -88,6 +88,14 @@ export interface PlanningStep {
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'done' | 'error'
   timestamp: number
+  /** 后端 resolve_tool_metadata 解析的可读名称(如"查询资产数据") */
+  displayName?: string
+  /** 后端 i18n key(如"toolName.getAssetsData")，前端 t() 翻译 */
+  displayKey?: string
+  /** 工具图标(emoji) */
+  icon?: string
+  /** 工具类型分类 */
+  toolType?: string
 }
 
 /**
@@ -133,6 +141,8 @@ export interface ToolCallSummary {
   id: string
   name: string
   displayName?: string
+  /** 后端 i18n key(如"toolName.getAssetsData")，前端 t() 翻译 */
+  displayKey?: string
   args?: Record<string, unknown>
   result?: unknown
   status?: 'pending' | 'running' | 'success' | 'error'
