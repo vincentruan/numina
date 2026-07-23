@@ -199,6 +199,9 @@ tests/test-results/
 # Screenshot test runtime screenshots
 tests/screenshot/screenshots/
 tmp-test-screenshots/
+
+# E2E test screenshots (local only)
+e2e-screenshots/
 .claude/worktrees/
 .gstack/
 .worktrees/
