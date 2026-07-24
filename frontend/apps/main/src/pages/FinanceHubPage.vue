@@ -14,6 +14,9 @@
       </div>
 
       <template v-else>
+        <!-- U6 compact summary bar: net worth / liability ratio / monthly payment -->
+        <FinanceSummaryBar @navigate="onSummaryNavigate" />
+
         <!-- W5 cross-module decision-chain hint (useDebtWarning) -->
         <div v-if="debtWishHint" class="debt-wish-hint">
           <van-icon name="warning-o" />
@@ -45,6 +48,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
+import FinanceSummaryBar from '@/components/dashboard/FinanceSummaryBar.vue'
 import AssetListPanel from '@/components/asset/AssetListPanel.vue'
 import LiabilityListPanel from '@/components/liability/LiabilityListPanel.vue'
 import WishListPanel from '@/components/wishes/WishListPanel.vue'
@@ -103,6 +107,11 @@ const debtWishHint = computed(() => {
     months: delayedMonths,
   })
 })
+
+// --- U6 summary bar navigation ---
+function onSummaryNavigate(tab: 'assets' | 'liabilities') {
+  activeTab.value = tab
+}
 
 // --- ?tab= contract (KTD-1/U3): honor deep-link tab selection ---
 function applyQueryTab() {
