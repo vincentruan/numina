@@ -98,20 +98,50 @@
         >
           <div class="asset-list">
             <template v-if="viewMode === 'list'">
-              <AssetListItem
-                v-for="asset in filteredByCategoryAssets"
-                :key="asset.id"
-                :asset="asset"
-                @click="$router.push(`/assets/${asset.id}`)"
-              />
+              <template v-for="group in groupedByCategory" :key="group.key">
+                <AssetGroupHeader
+                  :category="group.category"
+                  :count="group.items.length"
+                  :subtotal="group.subtotal"
+                  :collapsed="collapsedGroups.has(group.key)"
+                  :selection-mode="selectionMode"
+                  :selected-count="groupSelectedCount(group.items)"
+                  @toggle="toggleGroup(group.key)"
+                />
+                <Transition name="collapse">
+                  <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                    <AssetListItem
+                      v-for="asset in group.items"
+                      :key="asset.id"
+                      :asset="asset"
+                      @click="$router.push(`/assets/${asset.id}`)"
+                    />
+                  </div>
+                </Transition>
+              </template>
             </template>
             <template v-else>
-              <AssetCard
-                v-for="asset in filteredByCategoryAssets"
-                :key="asset.id"
-                :asset="asset"
-                @click="$router.push(`/assets/${asset.id}`)"
-              />
+              <template v-for="group in groupedByCategory" :key="group.key">
+                <AssetGroupHeader
+                  :category="group.category"
+                  :count="group.items.length"
+                  :subtotal="group.subtotal"
+                  :collapsed="collapsedGroups.has(group.key)"
+                  :selection-mode="selectionMode"
+                  :selected-count="groupSelectedCount(group.items)"
+                  @toggle="toggleGroup(group.key)"
+                />
+                <Transition name="collapse">
+                  <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                    <AssetCard
+                      v-for="asset in group.items"
+                      :key="asset.id"
+                      :asset="asset"
+                      @click="$router.push(`/assets/${asset.id}`)"
+                    />
+                  </div>
+                </Transition>
+              </template>
             </template>
           </div>
         </van-list>
@@ -150,24 +180,54 @@
       </div>
       <div class="selection-list-cards">
         <template v-if="viewMode === 'list'">
-          <AssetListItem
-            v-for="asset in dashboardStore.displayedAssets"
-            :key="asset.id"
-            :asset="asset"
-            :selectable="true"
-            :selected="selectedIds.includes(asset.id)"
-            @click="toggleSelection(asset.id)"
-          />
+          <template v-for="group in groupedByCategory" :key="group.key">
+            <AssetGroupHeader
+              :category="group.category"
+              :count="group.items.length"
+              :subtotal="group.subtotal"
+              :collapsed="collapsedGroups.has(group.key)"
+              :selection-mode="true"
+              :selected-count="groupSelectedCount(group.items)"
+              @toggle="toggleGroup(group.key)"
+            />
+            <Transition name="collapse">
+              <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                <AssetListItem
+                  v-for="asset in group.items"
+                  :key="asset.id"
+                  :asset="asset"
+                  :selectable="true"
+                  :selected="selectedIds.includes(asset.id)"
+                  @click="toggleSelection(asset.id)"
+                />
+              </div>
+            </Transition>
+          </template>
         </template>
         <template v-else>
-          <AssetCard
-            v-for="asset in dashboardStore.displayedAssets"
-            :key="asset.id"
-            :asset="asset"
-            :selectable="true"
-            :selected="selectedIds.includes(asset.id)"
-            @click="toggleSelection(asset.id)"
-          />
+          <template v-for="group in groupedByCategory" :key="group.key">
+            <AssetGroupHeader
+              :category="group.category"
+              :count="group.items.length"
+              :subtotal="group.subtotal"
+              :collapsed="collapsedGroups.has(group.key)"
+              :selection-mode="true"
+              :selected-count="groupSelectedCount(group.items)"
+              @toggle="toggleGroup(group.key)"
+            />
+            <Transition name="collapse">
+              <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                <AssetCard
+                  v-for="asset in group.items"
+                  :key="asset.id"
+                  :asset="asset"
+                  :selectable="true"
+                  :selected="selectedIds.includes(asset.id)"
+                  @click="toggleSelection(asset.id)"
+                />
+              </div>
+            </Transition>
+          </template>
         </template>
       </div>
     </div>
@@ -252,7 +312,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -266,7 +326,10 @@ import { getIconId } from '@/utils/icon'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
+import AssetGroupHeader from '@/components/asset/AssetGroupHeader.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
+import { useCurrency } from '@/composables/useCurrency'
+import type { Asset, Category } from '@/types'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -348,6 +411,57 @@ const categoriesWithAssetCount = computed(() => {
 
 // Asset list: displayedAssets is already filtered by backend (status + optional category)
 const filteredByCategoryAssets = computed(() => dashboardStore.displayedAssets)
+
+// Grouped assets by category (for list view)
+const UNCATEGORIZED_KEY = '__uncategorized__'
+const collapsedGroups = ref<Set<string>>(new Set())
+
+interface AssetGroup {
+  key: string
+  category: Category | undefined
+  items: Asset[]
+  subtotal: number
+}
+
+const currency = useCurrency()
+
+const groupedByCategory = computed<AssetGroup[]>(() => {
+  const assets = filteredByCategoryAssets.value
+  const map = new Map<string, { category: Category | undefined; items: Asset[]; subtotal: number }>()
+
+  for (const asset of assets) {
+    const key = asset.category?.id ?? UNCATEGORIZED_KEY
+    let group = map.get(key)
+    if (!group) {
+      group = { category: asset.category, items: [], subtotal: 0 }
+      map.set(key, group)
+    }
+    group.items.push(asset)
+    group.subtotal += Number(asset.current_value ?? 0)
+  }
+
+  // Sort by subtotal descending (highest value category first)
+  return Array.from(map.values())
+    .sort((a, b) => b.subtotal - a.subtotal)
+    .map((g) => ({ key: g.category?.id ?? UNCATEGORIZED_KEY, ...g }))
+})
+
+function toggleGroup(key: string) {
+  if (collapsedGroups.value.has(key)) {
+    collapsedGroups.value.delete(key)
+  } else {
+    collapsedGroups.value.add(key)
+  }
+}
+
+function groupSelectedCount(items: Asset[]): number {
+  return items.filter((a) => selectedIds.value.includes(a.id)).length
+}
+
+// Expand all groups when search/filter changes
+watch([searchText, sortBy, activeTypeIndex, activeCategoryIndex, activeStatus], () => {
+  collapsedGroups.value.clear()
+})
 
 function statusLabel(status: string): string {
   const key = status === 'in_use' ? 'statusGrid.inUse' : `statusGrid.${status}`
@@ -775,6 +889,32 @@ defineExpose({
 }
 .asset-list {
   /* cards have their own margin-bottom */
+}
+
+/* Group items wrapper for collapse transition */
+.group-items {
+  overflow: hidden;
+}
+
+/* Collapse transition */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 200ms ease;
+  max-height: 2000px;
+  overflow: hidden;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapse-enter-active,
+  .collapse-leave-active {
+    transition: none;
+  }
 }
 
 /* Selection Mode */
