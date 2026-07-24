@@ -41,7 +41,7 @@
       </div>
 
       <!-- L1 (Plan B T9): payoff strategy card (only when ≥2 active liabilities). -->
-      <LiabilityStrategyCard :liabilities="liabilityStore.liabilities" />
+      <LiabilityStrategyCard :liabilities="liabilityStore.liabilities" @adopt="onStrategyAdopt" />
 
       <!-- Summary Banner -->
       <div v-if="liabilityStore.liabilities.length" class="summary-banner">
@@ -204,12 +204,24 @@ function toggleSort() {
   else sortOrder.value = 'default'
 }
 
+// U5: strategy-driven sort from LiabilityStrategyCard adoption.
+const strategySort = ref<'avalanche' | 'snowball' | null>(null)
+
+function onStrategyAdopt(strategy: 'avalanche' | 'snowball' | null) {
+  strategySort.value = strategy
+}
+
 const filteredLiabilities = computed(() => {
   let list = liabilityStore.liabilities
   if (filterCategory.value) {
     list = list.filter(l => l.category === filterCategory.value)
   }
-  if (sortOrder.value === 'desc') {
+  // Strategy sort takes priority over manual sort when adopted.
+  if (strategySort.value === 'avalanche') {
+    list = [...list].sort((a, b) => (b.interest_rate ?? 0) - (a.interest_rate ?? 0))
+  } else if (strategySort.value === 'snowball') {
+    list = [...list].sort((a, b) => Number(a.remaining_amount ?? 0) - Number(b.remaining_amount ?? 0))
+  } else if (sortOrder.value === 'desc') {
     list = [...list].sort((a, b) => Number(b.remaining_amount) - Number(a.remaining_amount))
   } else if (sortOrder.value === 'asc') {
     list = [...list].sort((a, b) => Number(a.remaining_amount) - Number(b.remaining_amount))
@@ -398,6 +410,7 @@ defineExpose({
   activeTab,
   filterCategory,
   sortOrder,
+  strategySort,
   filteredLiabilities,
   totalAmount,
   totalMonthlyPayment,
@@ -406,6 +419,7 @@ defineExpose({
   selectedIds,
   onTabChange,
   toggleSort,
+  onStrategyAdopt,
   onLongPress,
   toggleSelect,
   selectAll,
