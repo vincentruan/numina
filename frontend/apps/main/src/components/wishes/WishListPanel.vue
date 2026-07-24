@@ -106,6 +106,28 @@
                 <span v-else-if="affordFor(wish).state.value.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
                 <span v-if="affordAccelerate(wish)" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
               </div>
+
+              <!-- U3: savings progress bar (priority-colored, 3px). -->
+              <div
+                v-if="wish.expected_price && wish.status === 'pending'"
+                class="wish-progress"
+                role="progressbar"
+                :aria-valuenow="wishProgress(wish)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-label="`${wish.name} 储蓄进度`"
+              >
+                <div class="wish-progress-bar" :class="{ 'wish-progress-empty': wishProgress(wish) === 0 && !Number(wish.monthly_saving), 'wish-progress-empty-dot': wishProgress(wish) === 0 && Number(wish.monthly_saving) > 0 }">
+                  <div
+                    class="wish-progress-fill"
+                    :class="[`priority-${wish.priority}`, { 'almost-reached': wishProgress(wish) >= 80 }]"
+                    :style="{ width: `${wishProgress(wish) || (Number(wish.monthly_saving) > 0 ? 2 : 0)}%` }"
+                  />
+                </div>
+                <span v-if="wishProgress(wish) >= 80" class="almost-badge">
+                  {{ t('wish.almostReached') }}
+                </span>
+              </div>
             </div>
           </li>
         </ul>
@@ -257,6 +279,16 @@ function affordAccelerate(w: Wish) {
   return affordFor(w).accelerate.value
 }
 
+// U3: savings progress percentage (saved_amount / expected_price * 100).
+// Returns 0 when no target or target <= 0; clamps to 100 max.
+function wishProgress(wish: Wish): number {
+  if (!wish.expected_price) return 0
+  const saved = Number(wish.saved_amount ?? 0)
+  const target = Number(wish.expected_price)
+  if (target <= 0) return 0
+  return Math.min(100, Math.round((saved / target) * 100))
+}
+
 async function loadWishes() {
   await wishStore.fetchWishes()
   wishes.value = wishStore.wishes
@@ -284,6 +316,7 @@ defineExpose({
   sortedWishes,
   toggleSort,
   goToLiabilityStrategy,
+  wishProgress,
 })
 </script>
 
@@ -646,6 +679,74 @@ defineExpose({
 .afford-bar .accelerate {
   font-weight: 600;
   margin-left: 2px;
+}
+
+/* ── U3: Progress bar ── */
+.wish-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.wish-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--bg-tertiary, #f5f5f5);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.wish-progress-empty {
+  background: transparent;
+  border: 1px dashed var(--color-text-tertiary, #999);
+  height: 3px;
+}
+
+.wish-progress-empty-dot .wish-progress-fill {
+  min-width: 2%;
+}
+
+.wish-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.wish-progress-fill.priority-high {
+  background: var(--color-coral, #f44336);
+}
+
+.wish-progress-fill.priority-medium {
+  background: var(--color-warning, #ff976a);
+}
+
+.wish-progress-fill.priority-low {
+  background: var(--color-success, #07c160);
+}
+
+.wish-progress-fill.almost-reached {
+  background: var(--color-success, #07c160) !important;
+  animation: pulse-almost 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-almost {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wish-progress-fill.almost-reached {
+    animation: none;
+  }
+}
+
+.almost-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-success, #07c160);
+  white-space: nowrap;
 }
 
 /* FAB */

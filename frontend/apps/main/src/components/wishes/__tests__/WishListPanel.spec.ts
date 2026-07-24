@@ -280,4 +280,174 @@ describe('WishListPanel', () => {
 
     expect(wrapper.find('.empty-state').exists()).toBe(true)
   })
+
+  describe('U3: Progress bar', () => {
+    it('does not render progress bar for realized wishes', async () => {
+      wishesRef.value = [makeWish({ id: 'r', name: 'Realized', status: 'realized', saved_amount: '500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      expect(wrapper.find('.wish-progress').exists()).toBe(false)
+    })
+
+    it('does not render progress bar for cancelled wishes', async () => {
+      wishesRef.value = [makeWish({ id: 'c', name: 'Cancelled', status: 'cancelled', saved_amount: '500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      expect(wrapper.find('.wish-progress').exists()).toBe(false)
+    })
+
+    it('does not render progress bar when expected_price is missing', async () => {
+      wishesRef.value = [makeWish({ id: 'no-price', name: 'No Price', status: 'pending', expected_price: undefined, saved_amount: '500' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      expect(wrapper.find('.wish-progress').exists()).toBe(false)
+    })
+
+    it('renders dashed border when progress is 0% and monthly_saving is not set', async () => {
+      wishesRef.value = [makeWish({ id: 'empty', name: 'Empty', status: 'pending', saved_amount: '0', monthly_saving: '0', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const bar = wrapper.find('.wish-progress-bar')
+      expect(bar.exists()).toBe(true)
+      expect(bar.classes()).toContain('wish-progress-empty')
+    })
+
+    it('renders 2% minimum width when progress is 0% but monthly_saving is set', async () => {
+      wishesRef.value = [makeWish({ id: 'started', name: 'Started', status: 'pending', saved_amount: '0', monthly_saving: '100', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const bar = wrapper.find('.wish-progress-bar')
+      expect(bar.exists()).toBe(true)
+      expect(bar.classes()).toContain('wish-progress-empty-dot')
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.attributes('style')).toContain('width: 2%')
+    })
+
+    it('renders 50% width when progress is 50%', async () => {
+      wishesRef.value = [makeWish({ id: 'half', name: 'Half', status: 'pending', saved_amount: '500', monthly_saving: '100', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.attributes('style')).toContain('width: 50%')
+    })
+
+    it('renders 100% width when progress is 100%', async () => {
+      wishesRef.value = [makeWish({ id: 'full', name: 'Full', status: 'pending', saved_amount: '1000', monthly_saving: '100', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.attributes('style')).toContain('width: 100%')
+    })
+
+    it('applies priority-high class for high priority wishes', async () => {
+      wishesRef.value = [makeWish({ id: 'high', name: 'High', status: 'pending', priority: 'high', saved_amount: '500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.classes()).toContain('priority-high')
+    })
+
+    it('applies priority-medium class for medium priority wishes', async () => {
+      wishesRef.value = [makeWish({ id: 'med', name: 'Med', status: 'pending', priority: 'medium', saved_amount: '500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.classes()).toContain('priority-medium')
+    })
+
+    it('applies priority-low class for low priority wishes', async () => {
+      wishesRef.value = [makeWish({ id: 'low', name: 'Low', status: 'pending', priority: 'low', saved_amount: '500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.classes()).toContain('priority-low')
+    })
+
+    it('shows "almost reached" badge when progress >= 80%', async () => {
+      wishesRef.value = [makeWish({ id: 'almost', name: 'Almost', status: 'pending', saved_amount: '800', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const badge = wrapper.find('.almost-badge')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('wish.almostReached')
+    })
+
+    it('applies almost-reached class when progress >= 80%', async () => {
+      wishesRef.value = [makeWish({ id: 'almost', name: 'Almost', status: 'pending', saved_amount: '800', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const fill = wrapper.find('.wish-progress-fill')
+      expect(fill.classes()).toContain('almost-reached')
+    })
+
+    it('does not show "almost reached" badge when progress < 80%', async () => {
+      wishesRef.value = [makeWish({ id: 'not-almost', name: 'Not Almost', status: 'pending', saved_amount: '700', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const badge = wrapper.find('.almost-badge')
+      expect(badge.exists()).toBe(false)
+    })
+
+    it('wishProgress calculation is correct', async () => {
+      wishesRef.value = [makeWish({ id: 'calc', name: 'Calc', status: 'pending', saved_amount: '333', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const vm = wrapper.vm as unknown as { wishProgress: (w: Wish) => number }
+      expect(vm.wishProgress(wishesRef.value[0])).toBe(33)
+    })
+
+    it('wishProgress returns 0 when expected_price is missing', async () => {
+      wishesRef.value = [makeWish({ id: 'no-price', name: 'No Price', status: 'pending', expected_price: undefined })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const vm = wrapper.vm as unknown as { wishProgress: (w: Wish) => number }
+      expect(vm.wishProgress(wishesRef.value[0])).toBe(0)
+    })
+
+    it('wishProgress returns 0 when expected_price is 0', async () => {
+      wishesRef.value = [makeWish({ id: 'zero-price', name: 'Zero Price', status: 'pending', expected_price: '0', saved_amount: '500' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const vm = wrapper.vm as unknown as { wishProgress: (w: Wish) => number }
+      expect(vm.wishProgress(wishesRef.value[0])).toBe(0)
+    })
+
+    it('wishProgress clamps to 100 when saved > target', async () => {
+      wishesRef.value = [makeWish({ id: 'over', name: 'Over', status: 'pending', saved_amount: '1500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const vm = wrapper.vm as unknown as { wishProgress: (w: Wish) => number }
+      expect(vm.wishProgress(wishesRef.value[0])).toBe(100)
+    })
+
+    it('progress bar has correct aria attributes', async () => {
+      wishesRef.value = [makeWish({ id: 'aria', name: 'Aria', status: 'pending', saved_amount: '500', expected_price: '1000' })]
+      const wrapper = mount(WishListPanel, { global: { stubs } })
+      await flushPromises()
+
+      const progress = wrapper.find('.wish-progress')
+      expect(progress.attributes('role')).toBe('progressbar')
+      expect(progress.attributes('aria-valuenow')).toBe('50')
+      expect(progress.attributes('aria-valuemin')).toBe('0')
+      expect(progress.attributes('aria-valuemax')).toBe('100')
+      expect(progress.attributes('aria-label')).toBe('Aria 储蓄进度')
+    })
+  })
 })
