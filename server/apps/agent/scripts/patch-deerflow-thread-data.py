@@ -41,6 +41,13 @@ original_line = '"run_id": runtime.context.get("run_id"),'
 fixed_line = '"run_id": context.get("run_id"),'
 
 if original_line not in content:
+    # Upstream may have already applied the equivalent fix: deerflow 10890e10+
+    # uses context.get("run_id") directly (the very change this patch makes).
+    # Treat that as a successful no-op so the build stays idempotent across
+    # harness upgrades.
+    if fixed_line in content:
+        print(f"Upstream already fixed (no patch needed): {middleware_path}")
+        sys.exit(0)
     print(f"WARNING: Expected pattern not found in {middleware_path}")
     print("The deerflow version may have changed. Manual inspection required.")
     sys.exit(1)
