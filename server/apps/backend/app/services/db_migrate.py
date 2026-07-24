@@ -251,6 +251,12 @@ def get_expected_columns_from_model(table_name: str) -> dict[str, Any]:
                 if isinstance(arg, str):
                     default_val = arg
                     default_type = 'sql_expr'
+                elif hasattr(arg, 'text') and isinstance(getattr(arg, 'text', None), str):
+                    # text("...") yields a TextClause whose .text holds the raw
+                    # SQL expression (e.g. text("true") -> "true"). Use it as the
+                    # default so server_default=text("true") produces DEFAULT true.
+                    default_val = arg.text
+                    default_type = 'sql_expr'
                 elif hasattr(arg, 'name'):
                     default_type = 'func_now' if arg.name == 'now' else 'sql_func'
                 else:
@@ -369,6 +375,21 @@ def add_column(engine: Engine, table_name: str, column_name: str, column_info: d
             escaped_val = default_val.replace("'", "''")
             default_clause = f"DEFAULT '{escaped_val}'"
         # Skip callable defaults and other complex types
+
+    # SQLite cannot ALTER TABLE ADD COLUMN with NOT NULL and no default:
+    # existing rows would need a value, so SQLite rejects it with
+    # "Cannot add a NOT NULL column with default value NULL". Provide a
+    # type-appropriate fallback so legacy DBs can be upgraded in place.
+    # (Columns with a real server_default are already handled above.)
+    if db_type == "sqlite" and not column_info["nullable"] and not default_clause:
+        if "BOOLEAN" in type_sql.upper():
+            default_clause = "DEFAULT 0"
+        elif "INTEGER" in type_sql.upper():
+            default_clause = "DEFAULT 0"
+        elif any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT")):
+            default_clause = "DEFAULT 0"
+        else:  # TEXT and other string types
+            default_clause = "DEFAULT ''"
 
     sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {type_sql} {nullable_clause} {default_clause}"
     sql = sql.strip()
