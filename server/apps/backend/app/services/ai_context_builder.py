@@ -1,11 +1,14 @@
 """Build + sanitize the A1b context payload per source (Plan B T6).
 
-spec §7.3: the injected entity JSON is sanitized (control-char strip + length
+spec §7.3: the injected entity context is sanitized (control-char strip + length
 cap) before entering the first user turn. Family-scope is enforced by the
 caller via the family_id filter on the query — the builder only shapes +
 sanitizes what's already family-scoped.
+
+Output format: structured text with Chinese labels and formatted values —
+AI-friendly (clear delimiters, precise numbers) and human-readable when
+displayed in the chat bubble.
 """
-import json
 import re
 from typing import Any
 
@@ -18,6 +21,20 @@ from apps.backend.app.models.wish import Wish
 MAX_CONTEXT_LEN = 4000  # chars — cap to bound the first user turn.
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+_CATEGORY_LABELS = {
+    "mortgage": "房贷",
+    "car_loan": "车贷",
+    "credit_card": "信用卡",
+    "personal_loan": "个人贷款",
+    "other": "其他",
+}
+
+_PRIORITY_LABELS = {
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+}
 
 
 def _sanitize(text: str) -> str:
@@ -32,23 +49,43 @@ def _dec(v: Any) -> float | None:
     return float(v)
 
 
+def _fmt_money(v: Any) -> str:
+    """Format a numeric value as currency string, e.g. ¥1,800,000.00."""
+    f = _dec(v)
+    if f is None:
+        return "未设置"
+    return f"¥{f:,.2f}"
+
+
+def _fmt_pct(v: Any) -> str:
+    """Format a decimal rate as percentage, e.g. 0.049 → 4.90%."""
+    f = _dec(v)
+    if f is None:
+        return "未设置"
+    return f"{f * 100:.2f}%"
+
+
+def _fmt_date(v: Any) -> str:
+    s = str(v) if v else None
+    return s if s else "未设置"
+
+
 def build_liability_detail(db: Session, user: User, liability_id: str) -> str | None:
     liab = db.query(Liability).filter(
         Liability.id == liability_id, Liability.family_id == user.family_id
     ).first()
     if not liab:
         return None
-    payload = {
-        "type": "liability_detail",
-        "id": str(liab.id),
-        "category": liab.category,
-        "remaining_amount": _dec(liab.remaining_amount),
-        "interest_rate": _dec(liab.interest_rate),
-        "monthly_payment": _dec(liab.monthly_payment),
-        "is_active": liab.is_active,
-        "end_date": str(liab.end_date) if liab.end_date else None,
-    }
-    return _sanitize(json.dumps(payload, ensure_ascii=False))
+    cat = _CATEGORY_LABELS.get(liab.category, liab.category)
+    lines = [
+        f"【负债详情】{cat}「{liab.name}」",
+        f"  剩余本金：{_fmt_money(liab.remaining_amount)}",
+        f"  年利率：{_fmt_pct(liab.interest_rate)}",
+        f"  月供：{_fmt_money(liab.monthly_payment)}",
+        f"  状态：{'还款中' if liab.is_active else '已结清'}",
+        f"  到期日：{_fmt_date(liab.end_date)}",
+    ]
+    return _sanitize("\n".join(lines))
 
 
 def build_wish_detail(db: Session, user: User, wish_id: str) -> str | None:
@@ -57,19 +94,17 @@ def build_wish_detail(db: Session, user: User, wish_id: str) -> str | None:
     ).first()
     if not w:
         return None
-    payload = {
-        "type": "wish_detail",
-        "id": str(w.id),
-        # name is prompt-required for wish context (the user names wishes)
-        "name": w.name,
-        "expected_price": _dec(w.expected_price),
-        "saved_amount": _dec(w.saved_amount),
-        "monthly_saving": _dec(w.monthly_saving),
-        "target_date": str(w.target_date) if w.target_date else None,
-        "priority": w.priority,
-        "status": w.status,
-    }
-    return _sanitize(json.dumps(payload, ensure_ascii=False))
+    pri = _PRIORITY_LABELS.get(w.priority, w.priority or "未设置")
+    lines = [
+        f"【心愿详情】{w.name}",
+        f"  目标金额：{_fmt_money(w.expected_price)}",
+        f"  已存金额：{_fmt_money(w.saved_amount)}",
+        f"  每月储蓄：{_fmt_money(w.monthly_saving)}",
+        f"  目标日期：{_fmt_date(w.target_date)}",
+        f"  优先级：{pri}",
+        f"  状态：{w.status}",
+    ]
+    return _sanitize("\n".join(lines))
 
 
 def build_liability_strategy(db: Session, user: User) -> str:
@@ -77,20 +112,18 @@ def build_liability_strategy(db: Session, user: User) -> str:
     liabilities = db.query(Liability).filter(
         Liability.family_id == user.family_id, Liability.is_active.is_(True)
     ).all()
-    payload = {
-        "type": "liability_strategy",
-        "liabilities": [
-            {
-                "id": str(liab.id),
-                "category": liab.category,
-                "remaining_amount": _dec(liab.remaining_amount),
-                "interest_rate": _dec(liab.interest_rate),
-                "monthly_payment": _dec(liab.monthly_payment),
-            }
-            for liab in liabilities
-        ],
-    }
-    return _sanitize(json.dumps(payload, ensure_ascii=False))
+    if not liabilities:
+        return _sanitize("【负债还款规划】暂无还款中的负债。")
+    parts = [f"【负债还款规划】共 {len(liabilities)} 笔还款中负债："]
+    for i, liab in enumerate(liabilities, 1):
+        cat = _CATEGORY_LABELS.get(liab.category, liab.category)
+        parts.append(
+            f"【负债 {i}】{cat}「{liab.name}」\n"
+            f"  剩余本金：{_fmt_money(liab.remaining_amount)}\n"
+            f"  年利率：{_fmt_pct(liab.interest_rate)}\n"
+            f"  月供：{_fmt_money(liab.monthly_payment)}"
+        )
+    return _sanitize("\n".join(parts))
 
 
 def build_wish_advice(db: Session, user: User) -> str:
@@ -98,19 +131,17 @@ def build_wish_advice(db: Session, user: User) -> str:
     wishes = db.query(Wish).filter(
         Wish.family_id == user.family_id, Wish.status == "pending"
     ).all()
-    payload = {
-        "type": "wish_advice",
-        "wishes": [
-            {
-                "id": str(w.id),
-                "name": w.name,
-                "expected_price": _dec(w.expected_price),
-                "saved_amount": _dec(w.saved_amount),
-                "monthly_saving": _dec(w.monthly_saving),
-                "target_date": str(w.target_date) if w.target_date else None,
-                "priority": w.priority,
-            }
-            for w in wishes
-        ],
-    }
-    return _sanitize(json.dumps(payload, ensure_ascii=False))
+    if not wishes:
+        return _sanitize("【心愿储蓄建议】暂无待实现心愿。")
+    parts = [f"【心愿储蓄建议】共 {len(wishes)} 个待实现心愿："]
+    for i, w in enumerate(wishes, 1):
+        pri = _PRIORITY_LABELS.get(w.priority, w.priority or "未设置")
+        parts.append(
+            f"【心愿 {i}】{w.name}\n"
+            f"  目标金额：{_fmt_money(w.expected_price)}\n"
+            f"  已存金额：{_fmt_money(w.saved_amount)}\n"
+            f"  每月储蓄：{_fmt_money(w.monthly_saving)}\n"
+            f"  目标日期：{_fmt_date(w.target_date)}\n"
+            f"  优先级：{pri}"
+        )
+    return _sanitize("\n".join(parts))
