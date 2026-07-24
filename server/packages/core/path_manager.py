@@ -15,6 +15,8 @@ _UUID_PATTERN = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a
 
 # DeerFlow virtual sandbox output prefix (used in artifact paths)
 DEERFLOW_SANDBOX_OUTPUT_PREFIX = "/mnt/user-data/outputs/"
+# DeerFlow virtual sandbox skills prefix (read-only builtin skills)
+DEERFLOW_SANDBOX_SKILLS_PREFIX = "/mnt/skills/"
 
 
 class PathSecurityError(Exception):

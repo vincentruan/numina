@@ -559,8 +559,15 @@ async def get_artifact(
 
     # Strip DeerFlow virtual sandbox prefix (/mnt/user-data/outputs/) so the
     # bare filename can be resolved against the tenant reports directory.
-    from packages.core.path_manager import DEERFLOW_SANDBOX_OUTPUT_PREFIX
-    if decoded_filepath.startswith(DEERFLOW_SANDBOX_OUTPUT_PREFIX):
+    from packages.core.path_manager import DEERFLOW_SANDBOX_OUTPUT_PREFIX, DEERFLOW_SANDBOX_SKILLS_PREFIX
+    is_skills_path = False
+    if decoded_filepath.startswith(DEERFLOW_SANDBOX_SKILLS_PREFIX):
+        # /mnt/skills/ paths resolve to the agent's builtin skills directory
+        # (read-only, shared across families — no tenant isolation needed for
+        # public skill definitions like SKILL.md)
+        is_skills_path = True
+        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_SKILLS_PREFIX):]
+    elif decoded_filepath.startswith(DEERFLOW_SANDBOX_OUTPUT_PREFIX):
         decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_OUTPUT_PREFIX):]
 
     # After stripping, reject any remaining absolute paths
@@ -574,34 +581,53 @@ async def get_artifact(
     #    (agent write_file/str_replace with thread_id write here — per-thread isolation)
     # 2. Tenant reports directory: workspaces/tenants/{family_id}/reports/
     #    (MCP tools without thread_id, or old files — per-family fallback)
+    # 3. Builtin skills directory (read-only, for /mnt/skills/ paths):
+    #    workspaces/builtin/skills/ (symlinked from agent/skills/builtin at startup)
     family_id = current_user.family_id
     data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
 
     # DeerFlow layout: {DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/user-data/outputs/
     # DEER_FLOW_HOME (agent) = AGENT_DATA_DIR = {DATA_ROOT}/workspaces
     family_threads = data_root / "workspaces" / "users" / str(family_id) / "threads"
-    possible_paths = [
-        # Per-thread sandbox outputs (primary — agent writes with thread_id here)
-        family_threads / session_id / "user-data" / "outputs" / decoded_filepath,
-        # Tenant reports (backward compat — MCP tools without thread_id)
-        data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
-    ]
-    # Fallback: scan all per-thread user-data/outputs dirs for the family. This
-    # handles the case where session_id is a Snowflake int (agent writes use a
-    # UUID thread_id, so files land in a different thread dir than session_id
-    # would suggest). The filename regex validation above ensures the glob
-    # only matches safe filenames.
-    if family_threads.exists():
-        for match in family_threads.glob(f"*/user-data/outputs/{decoded_filepath}"):
-            possible_paths.append(match)
+    builtin_skills_root = data_root / "workspaces" / "builtin" / "skills"
+    possible_paths = []
+    allowed_dirs = []
 
-    allowed_dirs = [
-        (family_threads / session_id / "user-data" / "outputs").resolve(),
-        (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
-    ]
-    # Also allow any resolved thread user-data/outputs dir (for the glob fallback)
-    if family_threads.exists():
-        allowed_dirs.append(family_threads.resolve())
+    if is_skills_path:
+        # /mnt/skills/ paths → resolve against builtin skills directory (read-only).
+        # DeerFlow maps /mnt/skills/public → agent/skills/builtin/public, but the
+        # agent startup symlinks flatten the public/private category, so
+        # "public/chat/SKILL.md" → builtin/skills/chat/SKILL.md.
+        # Try both with and without the first segment (category prefix).
+        skills_rel = Path(decoded_filepath)
+        possible_paths.append(builtin_skills_root / skills_rel)
+        if len(skills_rel.parts) > 1:
+            # Strip category prefix (public/ or private/)
+            possible_paths.append(builtin_skills_root / Path(*skills_rel.parts[1:]))
+        allowed_dirs.append(builtin_skills_root.resolve())
+    else:
+        possible_paths = [
+            # Per-thread sandbox outputs (primary — agent writes with thread_id here)
+            family_threads / session_id / "user-data" / "outputs" / decoded_filepath,
+            # Tenant reports (backward compat — MCP tools without thread_id)
+            data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
+        ]
+        # Fallback: scan all per-thread user-data/outputs dirs for the family. This
+        # handles the case where session_id is a Snowflake int (agent writes use a
+        # UUID thread_id, so files land in a different thread dir than session_id
+        # would suggest). The filename regex validation above ensures the glob
+        # only matches safe filenames.
+        if family_threads.exists():
+            for match in family_threads.glob(f"*/user-data/outputs/{decoded_filepath}"):
+                possible_paths.append(match)
+
+        allowed_dirs = [
+            (family_threads / session_id / "user-data" / "outputs").resolve(),
+            (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
+        ]
+        # Also allow any resolved thread user-data/outputs dir (for the glob fallback)
+        if family_threads.exists():
+            allowed_dirs.append(family_threads.resolve())
 
     artifact_path = None
     for candidate_path in possible_paths:

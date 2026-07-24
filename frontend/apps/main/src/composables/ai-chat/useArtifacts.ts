@@ -172,8 +172,13 @@ export function clearArtifactContentCache() {
  * 参考: frontend/src/core/artifacts/loader.ts loadArtifactContent()
  */
 export async function loadArtifactContent(filepath: string, sessionId: string): Promise<string> {
-  // P0: Prevent path traversal - reject any path containing .. or starting with /
-  if (filepath.includes('..') || filepath.startsWith('/')) {
+  // P0: Prevent path traversal - reject any path containing ..
+  // Allow known DeerFlow virtual sandbox prefixes (/mnt/skills/, /mnt/user-data/)
+  // that the backend will strip and resolve against scoped directories.
+  if (filepath.includes('..')) {
+    throw new Error(`Invalid artifact path: ${filepath}`)
+  }
+  if (filepath.startsWith('/') && !filepath.startsWith('/mnt/skills/') && !filepath.startsWith('/mnt/user-data/')) {
     throw new Error(`Invalid artifact path: ${filepath}`)
   }
 
