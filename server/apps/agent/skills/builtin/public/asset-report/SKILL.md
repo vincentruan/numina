@@ -260,6 +260,34 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
         "liability_ratio": 51,
         "monthly_payment_ratio": 45
       }
+    },
+    {
+      "key": "liquidity_analysis",
+      "label": "流动性分析",
+      "score": 2,
+      "narrative": "**分析结论**\n\n- 流动资产仅占总资产2%，低于安全线\n- 紧急备用金不足3个月支出\n- 资产变现能力较弱",
+      "suggestions": [
+        "建议储备至少6个月家庭支出作为紧急备用金",
+        "将部分低效资产转化为高流动性金融产品"
+      ],
+      "data": {
+        "liquidity_ratio": 2,
+        "emergency_months": 1.5
+      }
+    },
+    {
+      "key": "risk_assessment",
+      "label": "风险评估",
+      "score": 2,
+      "narrative": "**分析结论**\n\n- 资产高度集中于单一品类（房产95%）\n- 缺乏分散化配置\n- 抗风险能力较弱",
+      "suggestions": [
+        "建议将资产配置分散至3-5个品类以降低集中风险",
+        "关注负债到期与现金流的匹配情况"
+      ],
+      "data": {
+        "concentration_ratio": 95,
+        "diversification_score": 2
+      }
     }
   ]
 }
@@ -311,7 +339,7 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
 - **必须声明 filename**：`write_file` 成功只返回 `"OK"`，不返回路径，故必须在响应文本中 `WRITE_FILE: <filename>` 声明
 - **最终只输出 JSON**：步骤3的 `read_file` 之后，最终响应只能是 ```json 代码块
 - **narrative 禁止表格**：使用 `**加粗**` + `-` 无序列表，发现自己在写 `|` 分隔符立即停止转换
-- 所有文本字段用中文
+- **所有用户可见文本必须用中文**：包括 `label`、`narrative`、`suggestions`、`summary`，严禁出现英文。`key` 字段用英文 snake_case
 - 严禁投资建议，使用观察性语言
 
 ## 再次提醒
