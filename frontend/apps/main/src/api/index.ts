@@ -100,13 +100,16 @@ http.interceptors.response.use(
   (response) => {
     const url = response.config.url ?? ''
     // Unwrap most endpoints; keep login/register/refresh/family-join wrapped (they return tokens directly)
-    // /auth/devices, /auth/me, /auth/login/step1, /auth/login/step2 should be unwrapped like regular endpoints
+    // /auth/device/*, /auth/devices/*, /auth/me, /auth/login/step1, /auth/login/step2
+    // return EnvelopeResponse and must be unwrapped like regular endpoints.
+    // Note: '/auth/device' matches both singular (/device/trust) and plural (/devices).
     const isAuthEndpoint =
       url.includes('/auth/') &&
       !url.includes('/auth/me') &&
-      !url.includes('/auth/devices') &&
+      !url.includes('/auth/device') &&
       !url.includes('/auth/login/step1') &&
       !url.includes('/auth/login/step2')
+
 
     // Check for auth errors in response body (HTTP 200 with code like AUTH_TOKEN_EXPIRED)
     // Backend sometimes returns 200 with error code instead of 401 for certain auth failures

@@ -5,6 +5,7 @@
 
   <van-dialog
     v-model:show="authStore.showTrustPrompt"
+    teleport="body"
     :title="t('device.trustPromptTitle')"
     :message="t('device.trustPromptMessage')"
     :confirm-button-text="t('device.trustConfirm')"
