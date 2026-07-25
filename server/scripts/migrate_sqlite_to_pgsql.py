@@ -8,14 +8,15 @@ Strategy:
 
 Usage:
     cd server/
-    DATABASE_URL=postgresql+psycopg2://numina:numinapass@localhost:5432/numina \
-    SQLITE_URL=sqlite:////Users/vincentruan/.numina/data/db/numina.db \
+    DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/numina \
+    SQLITE_URL=sqlite:///$HOME/.numina/data/db/numina.db \
     uv run python scripts/migrate_sqlite_to_pgsql.py
 """
 
 import json
 import os
 import sys
+from pathlib import Path
 
 import sqlalchemy as sa
 from sqlalchemy import inspect, text
@@ -192,11 +193,20 @@ def convert_value(value, pg_type: str, col_name: str):
 
 
 def migrate_data():
-    sqlite_url = os.environ.get("SQLITE_URL", "sqlite:////Users/vincentruan/.numina/data/db/numina.db")
-    pgsql_url = os.environ.get("DATABASE_URL", "postgresql+psycopg2://numina:numinapass@localhost:5432/numina")
+    sqlite_url = os.environ.get("SQLITE_URL")
+    if not sqlite_url:
+        default_sqlite = Path.home() / ".numina" / "data" / "db" / "numina.db"
+        print(f"⚠ SQLITE_URL not set, using default: {default_sqlite}")
+        sqlite_url = f"sqlite:///{default_sqlite}"
+
+    pgsql_url = os.environ.get("DATABASE_URL")
+    if not pgsql_url:
+        print("❌ DATABASE_URL environment variable is required")
+        print("   Example: DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/numina")
+        sys.exit(1)
 
     print(f"📦 SQLite: {sqlite_url}")
-    print(f"🐘 PostgreSQL: {pgsql_url}")
+    print(f"🐘 PostgreSQL: [credentials hidden]")
 
     src = sa.create_engine(sqlite_url)
     dst = sa.create_engine(pgsql_url)
@@ -317,8 +327,7 @@ def migrate_data():
                 print(f"   {table}: ERROR - {e}")
 
     print("\n🎉 Migration complete!")
-    print(f"\n   To use PostgreSQL, set:")
-    print(f"   DATABASE_URL=postgresql+psycopg2://numina:numinapass@localhost:5432/numina")
+    print("\n   To use PostgreSQL, update your DATABASE_URL environment variable.")
 
 
 if __name__ == "__main__":
