@@ -14,7 +14,7 @@
           <span class="hub-greeting-hi"><ShimmerText :text="t('aiHub.greeting', { userName })" :duration="3" /></span>
         </div>
         <!-- Health score ring -->
-        <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="scoreAriaLabel">
+        <div class="hub-score-ring" role="img" :aria-label="scoreAriaLabel">
           <svg viewBox="0 0 64 64" class="score-svg" aria-hidden="true">
             <circle class="score-track" cx="32" cy="32" r="26" />
             <circle
@@ -78,7 +78,7 @@
           </template>
           <template v-else-if="reportGeneratedAt">
             <span>{{ reportAge }}</span>
-            <button class="refresh-btn" :disabled="reportLoading" :aria-label="t('aiHub.refreshReport')" @click="() => refreshReport()">
+            <button class="refresh-btn" :aria-label="t('aiHub.refreshReport')" @click="() => refreshReport()">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -447,24 +447,23 @@ const scoreArc = computed(() => {
   return ((s / 100) * 163.36).toFixed(2)
 })
 
-const scoreClass = computed(() => {
-  const s = currentReport.value?.overall_score ?? 0
-  if (s >= 80) return 'score-excellent'
-  if (s >= 60) return 'score-good'
-  if (s >= 40) return 'score-fair'
-  return s > 0 ? 'score-poor' : 'score-empty'
-})
-
 const scoreAriaLabel = computed(() => {
   const score = displayScore.value
   return t('aiHub.scoreAriaLabel', { score })
 })
 
-// Parse markdown summary for display in the summary card
+// Generate short summary (120-200 chars) for display in the summary card
 const renderedSummary = computed(() => {
   if (!currentReport.value?.summary) return ''
+  // Parse markdown to plain text
   const raw = marked.parse(currentReport.value.summary, { async: false }) as string
-  return DOMPurify.sanitize(raw, PURIFY_CONFIG)
+  const plainText = DOMPurify.sanitize(raw, { ALLOWED_TAGS: [] }).trim()
+  // Truncate to ~180 chars (middle of 120-200 range) at word boundary
+  const maxLength = 180
+  if (plainText.length <= maxLength) return plainText
+  const truncated = plainText.slice(0, maxLength)
+  const lastSpace = truncated.lastIndexOf(' ')
+  return (lastSpace > maxLength * 0.7 ? truncated.slice(0, lastSpace) : truncated) + '...'
 })
 
 const reportAge = computed(() => {
@@ -760,17 +759,8 @@ defineExpose({
   transition: stroke-dasharray 0.6s ease;
 }
 
-.score-excellent .score-fill { stroke: #059669; }
-.score-good      .score-fill { stroke: #2563eb; }
-.score-fair      .score-fill { stroke: #d97706; }
-.score-poor      .score-fill { stroke: #dc2626; }
+.score-fill { stroke: var(--van-primary-color); }
 .score-empty .score-fill { stroke: var(--separator); }
-
-[data-theme='dark'] .score-excellent .score-fill { stroke: var(--color-trend-down); }
-[data-theme='dark'] .score-good      .score-fill { stroke: #93c5fd; }
-[data-theme='dark'] .score-fair      .score-fill { stroke: #fcd34d; }
-[data-theme='dark'] .score-poor      .score-fill { stroke: var(--color-trend-up); }
-[data-theme='dark'] .score-empty .score-fill { stroke: var(--separator); }
 
 .score-inner {
   position: absolute;

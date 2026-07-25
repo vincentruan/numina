@@ -64,13 +64,12 @@
                 r="54"
                 fill="none"
                 class="score-ring-fill"
-                :class="overallScoreClass"
                 :stroke-dasharray="`${scoreProgress} ${324 - scoreProgress}`"
                 stroke-dashoffset="81"
               />
             </svg>
             <div class="score-inner">
-              <span class="score-number" :class="overallScoreClass">{{ currentReport.overall_score ?? 0 }}</span>
+              <span class="score-number">{{ currentReport.overall_score ?? 0 }}</span>
               <span class="score-unit">{{ t('aiReport.scoreUnit') }}</span>
             </div>
           </div>
@@ -327,14 +326,6 @@ const hasMarkdownPreview = computed(() => {
   return currentReport.value?.markdown_file_path != null
 })
 
-const overallScoreClass = computed(() => {
-  const s = currentReport.value?.overall_score ?? 0
-  if (s >= 80) return 'score-excellent'
-  if (s >= 60) return 'score-good'
-  if (s >= 40) return 'score-fair'
-  return 'score-poor'
-})
-
 const scoreProgress = computed(() => {
   const score = currentReport.value?.overall_score ?? 0
   // Circle circumference is 2πr = 2 * π * 54 ≈ 339, but we use 324 for smooth animation
@@ -516,14 +507,7 @@ onUnmounted(() => {
   stroke-linecap: round;
   transition: stroke-dasharray 0.6s ease;
 }
-.score-ring-fill.score-excellent { stroke: #2e7d32; }
-.score-ring-fill.score-good      { stroke: var(--color-primary); }
-.score-ring-fill.score-fair      { stroke: #f57f17; }
-.score-ring-fill.score-poor      { stroke: #dc2626; }
-[data-theme='dark'] .score-ring-fill.score-excellent { stroke: #81c784; }
-[data-theme='dark'] .score-ring-fill.score-good      { stroke: var(--color-coral); }
-[data-theme='dark'] .score-ring-fill.score-fair      { stroke: #ffd54f; }
-[data-theme='dark'] .score-ring-fill.score-poor      { stroke: #f87171; }
+.score-ring-fill { stroke: var(--van-primary-color); }
 .score-inner {
   position: absolute;
   top: 50%;
@@ -539,14 +523,7 @@ onUnmounted(() => {
   font-weight: 700;
   letter-spacing: -0.5px;
 }
-.score-number.score-excellent { color: #2e7d32; }
-.score-number.score-good      { color: var(--color-primary); }
-.score-number.score-fair      { color: #f57f17; }
-.score-number.score-poor      { color: #dc2626; }
-[data-theme='dark'] .score-number.score-excellent { color: #81c784; }
-[data-theme='dark'] .score-number.score-good      { color: var(--color-coral); }
-[data-theme='dark'] .score-number.score-fair      { color: #ffd54f; }
-[data-theme='dark'] .score-number.score-poor      { color: #f87171; }
+.score-number { color: var(--van-primary-color); }
 .score-unit {
   font-size: 12px;
   color: var(--text-secondary);
