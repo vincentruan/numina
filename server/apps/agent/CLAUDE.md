@@ -58,6 +58,7 @@ services/deerflow_adapter/
 ├── client_factory.py       # builds DeerFlowClient from generated config
 ├── active_skill_context.py # ContextVar holding the active skill name (drives tool filtering)
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
+├── original_user_content_context.py  # ContextVar preserving original user content through middleware
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
 └── exceptions.py
 ```
@@ -137,7 +138,6 @@ agent/
 ├── routers/                   # External routers (JWT cookie auth via verify_family_token unless noted)
 │   ├── runs_stream.py         # POST /api/threads/{id}/runs/stream (stream_run) + /runs/{run_id}/cancel
 │   ├── threads.py             # Thread CRUD + checkpointer state/history/token-usage/branches + goal + compact
-│   ├── capabilities.py        # GET /capabilities (X-Agent-Token)
 │   ├── import_parse.py        # POST /import/parse — sync JSON parse (X-Agent-Token)
 │   ├── input_polish.py        # POST /input-polish — D3 DeerFlow-synced draft polish (cookie auth)
 │   ├── model_test.py          # POST /test/model — stateless model capability test (X-Agent-Token)
@@ -160,6 +160,14 @@ agent/
 │   │   ├── asset_report_middleware.py
 │   │   └── gc.py
 │   ├── deerflow_adapter/      # DeerFlow harness integration — see §Adapter Location
+│   │   ├── adapter.py
+│   │   ├── family_adapter_cache.py
+│   │   ├── client_factory.py
+│   │   ├── active_skill_context.py
+│   │   ├── memory_config_bridge.py
+│   │   ├── original_user_content_context.py  # ContextVar for original user content
+│   │   ├── sync_tool_patch.py
+│   │   └── exceptions.py
 │   ├── agent_dispatch.py      # LEGACY NDJSON gateway path (stream_agent_dispatch) — not the v2 path; imports _fire_and_forget/_select_model from orchestrator.py
 │   ├── agent_registry.py      # AgentRegistry — per-agent attribute cache (memory_enabled)
 │   ├── asset_suggest.py       # lightweight LLM single-call (suggest_asset_fields)
@@ -171,7 +179,7 @@ agent/
 │   ├── session_journal.py     # Append-only JSONL event log per session
 │   ├── session_store.py       # AiSessionRepository (delegates to backend via HTTP)
 │   ├── stream_events.py       # EventStreamBuilder
-│   ├── capability_registry.py # Loads capabilities from builtin/public/<name>/SKILL.md frontmatter
+│   ├── capability_registry.py # Loads capabilities from builtin/public/<name>/SKILL.md frontmatter (legacy; skill refactor in progress)
 │   ├── compact_service.py     # Thread compaction — wraps DeerFlow's compact_thread_context
 │   ├── goal_store.py          # Thread-scoped goal persistence (read/write/build state)
 │   ├── goal_evaluator.py      # Non-thinking LLM that judges goal completion
@@ -222,9 +230,11 @@ agent/
 | `AGENT_DATA_DIR` | `{DATA_ROOT}/workspaces` | Agent data root (memory, sandboxes); also sets `DEER_FLOW_HOME` if unset |
 | `DEERFLOW_DB_PATH` | `{DATA_ROOT}/db/deerflow-checkpoints.db` | DeerFlow checkpointer SQLite path |
 | `DEERFLOW_CONCURRENCY` | `8` | DeerFlow ThreadPoolExecutor workers + semaphore |
+| `DEERFLOW_DEFAULT_TIMEOUT` | `300` | Default timeout for DeerFlow operations |
 | `SSE_HEARTBEAT_INTERVAL` | `15.0` | SSE heartbeat seconds |
 | `SSE_QUEUE_MAXSIZE` | `256` | Per-run SSE queue cap |
 | `RUN_CLEANUP_DELAY_SECONDS` | `300.0` | Deferred run GC |
+| `RUN_DRAIN_TIMEOUT_SECONDS` | `30.0` | Timeout for draining active runs |
 | `STREAM_CLEANUP_DELAY_SECONDS` | `60.0` | Deferred bridge cleanup |
 | `SUBAGENT_MAX_CONCURRENT` | `3` | Subagent bg tasks |
 | `SUBAGENT_TIMEOUT_SECONDS` | `900` | Subagent timeout |

@@ -35,7 +35,7 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
 - **Pydantic v2 only** — see root [CLAUDE.md](../../../CLAUDE.md) §Key Invariants for rule; see §Patterns below for examples.
 - **Import direction** — apps never import sibling apps. Use `packages/` for shared logic. Never `from apps.agent import ...` or `from apps.scheduler_worker import ...` inside backend code.
-- **Error detail convention** — backend raises `HTTPException(status_code=..., detail={"code": "ENGLISH_CODE", "message": "中文消息"})`. Frontend catches via axios interceptor and maps `code` to i18n key `t('errors.ENGLISH_CODE')`. Chinese message is fallback if frontend lacks i18n mapping.
+- **Error detail convention** — backend uses `AppError` (`app/errors/exceptions.py`) with `ErrorCode` enum (`app/errors/codes.py`). Each error code maps to a status code via `ERROR_META` and to i18n messages via `app/errors/locales/{zh-CN,en-US}.json`. The global `error_handlers.py` catches `AppError`, `RequestValidationError`, `StarletteHTTPException`, and `StorageError`, returning a unified JSON envelope: `{"code": "ERROR_CODE", "message": "localized message", "data": null, "request_id": "..."}`. Language is selected via `Accept-Language` header. Frontend catches via axios interceptor and maps `code` to i18n key `t('errors.ERROR_CODE')`.
 - **Agent Communication** — Never use raw `httpx.AsyncClient` to call Agent microservices. Always use `apps.backend.app.services.agent_client.AgentClient`. It guarantees tenant isolation by automatically injecting `X-Family-Id`, `X-User-Id`, and `X-Agent-Token` headers.
 
 ## Snowflake ID Serialization
@@ -83,10 +83,11 @@ Serializing as strings preserves exact values across the API boundary.
 
 ```
 app/
-├── main.py            # FastAPI entry point + router registration (53 routers)
+├── main.py            # FastAPI entry point + router registration (54 routers)
 ├── config.py          # AppSettings (pydantic-settings)
 ├── database.py        # SessionLocal binding + dependency
-├── error_handlers.py  # Global exception handlers (HTTPException → JSON envelope)
+├── errors/            # AppError, ErrorCode enum, i18n locales (zh-CN.json, en-US.json)
+├── error_handlers.py  # Global exception handlers (AppError → i18n JSON envelope)
 ├── responses.py       # Shared response helpers
 ├── auth/              # JWT helpers, password hashing, dependency-injection guards
 ├── routers/           # All HTTP route definitions (one file per resource)
@@ -163,15 +164,16 @@ Backend AI routers are the frontend's entry point. Multi-step capabilities proxy
 
 | Router | Final prefix | Purpose | Dispatch |
 |--------|--------------|---------|----------|
-| `ai_capabilities` | `/api/v1/ai/capabilities` | Capability discovery | — |
 | `ai_config` | `/api/v1/ai` | Per-family AI provider config (encrypted at rest) | — |
 | `ai_chat` | `/api/v1/ai/chat` | Chat (live conversation) | `AgentClient.stream` → `numina` app |
-| `ai_threads` | `/api/v1/ai/threads` | Thread CRUD + state + history + token-usage (proxy to agent `threads` router) | `AgentClient` |
+| `ai_chat.sessions_router` | `/api/v1/ai` | Session events, artifacts, system-default | — |
+| `ai_threads` | `/api/threads` | Thread CRUD + state + history + token-usage (proxy to agent `threads` router) | `AgentClient` |
 | `ai_context` | `/api/v1/ai/context` | GET family AI context (4-source bundle) | direct |
 | `ai_report` | `/api/v1/ai/report` | Family report generation (SSE 3-step) | `AgentClient.stream` → `asset-report` app |
 | `ai_finance_coach` | `/api/v1/ai/finance-coach` | Finance coach advice (cached) | `AgentClient.stream` → `finance-coach` app |
 | `ai_wish_advice` | `/api/v1/ai/wish-advice` | Wish savings advice (cached) | `AgentClient.stream` → `wish-advice` app |
 | `ai_suggest` | `/api/v1/ai/suggest` | Asset field suggestions | lightweight LLM |
+| `ai_input_polish` | `/api` | D3 DeerFlow-synced draft polish (cookie auth) | lightweight LLM |
 | `ai_skills` | `/api/v1/ai/skills` | Per-family skill overrides (`RESERVED_NAMES = ["chat","asset-report","import-parse","finance-coach"]`) | — |
 | `ai_mcp` | `/api/v1/ai/mcp` | MCP tool catalogue | — |
 | `ai_agents` | `/api/v1/ai/agents` | Agent catalogue (frontend) | — |
@@ -187,6 +189,7 @@ Backend AI routers are the frontend's entry point. Multi-step capabilities proxy
 | `ai_agents_internal` | `/api/v1/internal/ai/agents` | Agent → backend (agent-side) |
 | `mcp_internal` | `/api/v1/internal/mcp` | MCP runtime → backend |
 | `admin_ai_extraction` | `/api/v1/admin` | Admin tooling for AI extraction review |
+| `admin_audit_logs` | `/api/v1/admin` | Admin audit log viewing |
 
 When adding a new router: register it in `app/main.py`, set `prefix=""` for root-path decorators (see §URL Style in root [CLAUDE.md](../../../CLAUDE.md)), and inherit response schemas from `SnowflakeBase`.
 
@@ -256,7 +259,7 @@ Financial assets carry return fields:
 - `TokenResponse` does not include `user` — call `GET /auth/me` separately after login
 - `DELETE /assets/{id}` archives (sets `is_archived=True`), does not hard-delete
 - Dashboard queries filter `is_archived=False` — archived assets are excluded from all aggregates
-- **Error handling pattern:** backend raises `HTTPException(status_code=404, detail="资产不存在")`; frontend catches via axios interceptor and maps to `showToast(t('errors.*'))`. Never return raw English error strings to users.
+- **Error handling pattern:** raise `AppError(ErrorCode.XXX, details=...)` from `app/errors/exceptions.py`. The global handler in `error_handlers.py` maps it to the i18n JSON envelope via `errors/codes.py` + `errors/locales/{zh-CN,en-US}.json`. Never raise raw `HTTPException` with English strings for new code — use `AppError` + `ErrorCode`.
 
 ### Failure Patterns
 

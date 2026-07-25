@@ -40,7 +40,8 @@ src/
 ### Gotchas
 
 - **No virtual scroll**: Vant `van-list` for infinite scroll; for 1000+ items use `vue-virtual-scroller`
-- **Route cache**: Dashboard, AssetList, WishList, LiabilityList, AIHub, Baby, Settings
+- **Route cache**: Dashboard, FinanceHub, AIHub, Baby, Family, Settings (in `MainLayout.vue`)
+- **Finance redirects**: `/assets`, `/liabilities`, `/wishes` routes redirect to `/finance?tab=...` (no standalone list pages)
 
 ## Dark Mode (WCAG AA)
 
