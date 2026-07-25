@@ -609,6 +609,35 @@ watch(
   50% { opacity: 0.4; }
 }
 
+/* Mobile touch: always visible + larger tap targets (Apple HIG ≥ 44×44) */
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+    gap: 8px;
+  }
+
+  .action-btn {
+    padding: 10px;
+    /* 10px padding + 18px icon = 38px touch area, close to 44px HIG */
+    border-radius: 8px;
+    transition: opacity 0.15s, background-color 0.15s;
+  }
+
+  .action-btn:active {
+    background-color: rgba(0, 0, 0, 0.06);
+    opacity: 1;
+  }
+
+  :global([data-theme='dark']) .action-btn:active {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .action-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 /* Suggestion chips */
 .suggestion-chips {
   display: flex;
