@@ -31,21 +31,44 @@
       </div>
       <!-- Stats row -->
       <div class="hub-stats">
-        <div class="hub-stat-item">
-          <span class="hub-stat-num">{{ suggestionCount }}</span>
-          <span class="hub-stat-label">{{ t('aiHub.suggestionsCount') }}</span>
-        </div>
-        <div class="hub-stat-divider" aria-hidden="true"></div>
-        <div class="hub-stat-item">
-          <span class="hub-stat-num warn">{{ alertCount }}</span>
-          <span class="hub-stat-label">{{ t('aiHub.alertsCount') }}</span>
-        </div>
-        <div class="hub-stat-divider" aria-hidden="true"></div>
-        <div class="hub-stat-item">
-          <span class="hub-stat-num">{{ currentReport?.data_completeness_score != null ? currentReport.data_completeness_score.toFixed(0) : '-' }}%</span>
-          <span class="hub-stat-label">{{ t('aiHub.dataCompleteness') }}</span>
-        </div>
-        <div class="hub-stat-divider" aria-hidden="true"></div>
+        <template v-for="stat in statItems" :key="stat.type">
+          <div class="hub-stat-item">
+            <div class="hub-stat-num-wrap">
+              <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
+              <van-popover
+                :show="activePopover === stat.type"
+                @update:show="(v) => (activePopover = v ? stat.type : null)"
+                placement="bottom"
+                :offset="[0, 8]"
+              >
+                <div class="stat-popover-content">
+                  <div class="stat-popover-header">
+                    <span class="stat-popover-value" :class="{ warn: stat.warn }">{{ stat.value }}</span>
+                    <span class="stat-popover-label">{{ stat.label }}</span>
+                  </div>
+                  <p class="stat-popover-desc">{{ stat.tip }}</p>
+                  <button class="stat-popover-action" type="button" @click="goToReport">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    {{ t('aiHub.viewFullReport') }}
+                  </button>
+                </div>
+                <template #reference>
+                  <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="7" x2="12" y2="13"/>
+                      <line x1="12" y1="16.5" x2="12.01" y2="16.5"/>
+                    </svg>
+                  </button>
+                </template>
+              </van-popover>
+            </div>
+            <span class="hub-stat-label">{{ stat.label }}</span>
+          </div>
+          <div class="hub-stat-divider" aria-hidden="true"></div>
+        </template>
         <div class="hub-stat-meta" aria-live="polite">
           <template v-if="reportLoading">
             <van-loading size="10" />
@@ -437,9 +460,18 @@ const reportAge = computed(() => {
   return t('aiHub.daysAgo', { days: Math.floor(hrs / 24) })
 })
 
+type HubStatType = 'suggestions' | 'alerts' | 'completeness'
+
+const activePopover = ref<HubStatType | null>(null)
+
 const suggestionCount = computed(() => {
   const r = currentReport.value
   if (!r) return 0
+  // New format: indicators array - sum of suggestions across all indicators
+  if (r.indicators?.length) {
+    return r.indicators.reduce((sum, ind) => sum + (ind.suggestions?.length ?? 0), 0)
+  }
+  // Legacy format fallback: count populated sections
   return [r.net_worth_health, r.allocation_analysis, r.liability_pressure, r.asset_efficiency]
     .filter(Boolean).length
 })
@@ -447,10 +479,48 @@ const suggestionCount = computed(() => {
 const alertCount = computed(() => {
   const r = currentReport.value
   if (!r) return 0
-  // count sections with score < 60
+  // New format: indicators with 1-5 score scale; alerts = score <= 2 (poor/critical)
+  if (r.indicators?.length) {
+    return r.indicators.filter(ind => typeof ind.score === 'number' && ind.score <= 2).length
+  }
+  // Legacy format fallback: score < 60 on 0-100 scale
   const sections = [r.net_worth_health, r.allocation_analysis, r.liability_pressure, r.asset_efficiency]
   return sections.filter(s => s && typeof s.score === 'number' && s.score < 60).length
 })
+
+const dataCompletenessDisplay = computed(() => {
+  const score = currentReport.value?.data_completeness_score
+  return score != null ? `${score.toFixed(0)}%` : '-'
+})
+
+const statItems = computed<Array<{ type: HubStatType; value: string; label: string; tip: string; warn: boolean }>>(() => [
+  {
+    type: 'suggestions',
+    value: String(suggestionCount.value),
+    label: t('aiHub.suggestionsCount'),
+    tip: t('aiHub.suggestionCountTip'),
+    warn: false,
+  },
+  {
+    type: 'alerts',
+    value: String(alertCount.value),
+    label: t('aiHub.alertsCount'),
+    tip: t('aiHub.alertCountTip'),
+    warn: true,
+  },
+  {
+    type: 'completeness',
+    value: dataCompletenessDisplay.value,
+    label: t('aiHub.dataCompleteness'),
+    tip: t('aiHub.dataCompletenessTip'),
+    warn: false,
+  },
+])
+
+function goToReport() {
+  activePopover.value = null
+  router.push('/ai/report')
+}
 
 async function loadReport() {
   try {
@@ -806,6 +876,99 @@ defineExpose({
 
 [data-theme='dark'] .hub-stat-divider {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.hub-stat-num-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hub-stat-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(0, 0, 0, 0.30);
+  cursor: pointer;
+  line-height: 1;
+}
+
+[data-theme='dark'] .hub-stat-info {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.hub-stat-info:active {
+  color: var(--color-primary, #1989fa);
+}
+
+.stat-popover-content {
+  padding: 12px 14px;
+  max-width: 220px;
+  box-sizing: border-box;
+}
+
+.stat-popover-header {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.stat-popover-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #000000;
+  line-height: 1;
+}
+
+[data-theme='dark'] .stat-popover-value {
+  color: #ffffff;
+}
+
+.stat-popover-value.warn { color: #d97706; }
+[data-theme='dark'] .stat-popover-value.warn { color: #fcd34d; }
+
+.stat-popover-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.50);
+}
+
+[data-theme='dark'] .stat-popover-label {
+  color: rgba(255, 255, 255, 0.50);
+}
+
+.stat-popover-desc {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+[data-theme='dark'] .stat-popover-desc {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.stat-popover-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  background: var(--color-primary, #1989fa);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.stat-popover-action:active {
+  opacity: 0.85;
 }
 
 /* Meta (freshness + refresh) — rightmost slot in stats row */
