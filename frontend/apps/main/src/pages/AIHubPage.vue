@@ -568,6 +568,17 @@ async function generateReport() {
 
 async function refreshReport(silent?: boolean) {
   if (reportLoading.value) return // avoid duplicate with scheduler
+
+  // 1-hour cooldown: prevent unnecessary regenerations if report is fresh
+  if (reportGeneratedAt.value && !silent) {
+    const ageMs = Date.now() - new Date(reportGeneratedAt.value).getTime()
+    const oneHourMs = 60 * 60 * 1000
+    if (ageMs < oneHourMs) {
+      showFailToast(t('toast.reportTooFrequent'))
+      return
+    }
+  }
+
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
@@ -577,8 +588,20 @@ async function refreshReport(silent?: boolean) {
     // Stream completed — reload from API to get the persisted report
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
-  } catch {
-    if (!silent) showFailToast(t('toast.refreshFailed'))
+  } catch (err) {
+    if (!silent) {
+      // Check if it's a timeout or connection error
+      const isTimeout = err instanceof Error && err.message.includes('timeout')
+      const isConnectionError = err instanceof Error &&
+        (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))
+      if (isTimeout) {
+        showFailToast(t('toast.reportTimeout'))
+      } else if (isConnectionError) {
+        showFailToast(t('toast.refreshFailed'))
+      } else {
+        showFailToast(stream.errorMessage.value || t('toast.refreshFailed'))
+      }
+    }
   } finally {
     if (!silent) reportLoading.value = false
   }

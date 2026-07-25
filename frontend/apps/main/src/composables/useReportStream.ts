@@ -22,6 +22,7 @@
 import { ref, computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
+import { getAITask } from '@/api/ai'
 
 export type ReportStreamStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'error'
 export type StepStatus = 'waiting' | 'process' | 'finish' | 'error'
@@ -258,6 +259,45 @@ export function useReportStream(): UseReportStreamReturn {
     }
   }
 
+  /** Poll task status until completed/failed (for 202 queued responses). */
+  async function pollTaskUntilComplete(): Promise<void> {
+    const MAX_POLL_DURATION = 10 * 60 * 1000 // 10 minutes max
+    const POLL_INTERVAL = 3000 // 3 seconds
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < MAX_POLL_DURATION) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL))
+
+      try {
+        const taskStatus = await getAITask('report')
+        if (taskStatus.status === 'completed' || taskStatus.status === 'idle') {
+          // Task completed — caller will reload report from API
+          status.value = 'completed'
+          if (!generatedAt.value) {
+            generatedAt.value = new Date().toISOString()
+          }
+          return
+        } else if (taskStatus.status === 'failed' || taskStatus.status === 'cancelled' || taskStatus.status === 'timeout') {
+          status.value = 'error'
+          errorMessage.value = t('toast.aiGenerateFailed')
+          throw new Error(`task_${taskStatus.status}`)
+        }
+        // Still running/queued — continue polling
+      } catch (err) {
+        // Network error during polling — continue unless it's a task failure
+        if (err instanceof Error && err.message.startsWith('task_')) {
+          throw err
+        }
+        // Otherwise continue polling
+      }
+    }
+
+    // Timeout — polling exceeded max duration
+    status.value = 'error'
+    errorMessage.value = t('toast.reportTimeout')
+    throw new Error('poll_timeout')
+  }
+
   async function connect(force = false): Promise<void> {
     if (status.value === 'streaming' || status.value === 'connecting') return
     abortController = new AbortController()
@@ -287,10 +327,18 @@ export function useReportStream(): UseReportStreamReturn {
       throw new Error(`${res.status}`)
     }
 
-    // Cache hit: JSON response (non-stream) → short-circuit.
+    // JSON response: either cache hit (200) or queued task (202).
     const contentType = res.headers.get('Content-Type') || ''
     if (contentType.includes('application/json')) {
       const data = await res.json()
+      // 202 = task queued/running — poll until complete instead of returning immediately.
+      if (res.status === 202 && data.status === 'queued') {
+        status.value = 'streaming'
+        progressMessage.value = t('aiHub.reportQueued')
+        await pollTaskUntilComplete()
+        return
+      }
+      // 200 = cache hit — short-circuit with cached report.
       handleCacheHit(data)
       return
     }
