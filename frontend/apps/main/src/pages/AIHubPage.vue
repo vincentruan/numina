@@ -556,10 +556,9 @@ async function generateReport() {
   stream.reset()
   try {
     await stream.connect()
-    if (stream.report.value) {
-      currentReport.value = stream.report.value as unknown as AIReport
-      reportGeneratedAt.value = stream.generatedAt.value
-    }
+    // Stream completed — reload from API to get the persisted report
+    // (stream.report is only populated on cache hit, not fresh generation)
+    await loadReport()
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
@@ -575,10 +574,9 @@ async function refreshReport(silent?: boolean) {
     // force=true bypasses the 8h cache (plan step 6) — the refresh button
     // means the user wants a fresh report, not the cached one.
     await stream.connect(true)
-    if (stream.report.value) {
-      currentReport.value = stream.report.value as unknown as AIReport
-      reportGeneratedAt.value = stream.generatedAt.value
-    }
+    // Stream completed — reload from API to get the persisted report
+    // (stream.report is only populated on cache hit, not fresh generation)
+    await loadReport()
   } catch {
     if (!silent) showFailToast(t('toast.refreshFailed'))
   } finally {

@@ -119,9 +119,7 @@ onMounted(() => {
           </div>
           <div class="fc-footer">
             <span class="fc-disclaimer">{{ t('dashboard.financeCoach.disclaimer') }}</span>
-            <van-button size="mini" plain :loading="refreshing" @click.stop="load(true)">
-              {{ t('dashboard.financeCoach.refresh') }}
-            </van-button>
+            <van-button size="mini" plain icon="replay" :loading="refreshing" @click.stop="load(true)" />
           </div>
         </template>
 

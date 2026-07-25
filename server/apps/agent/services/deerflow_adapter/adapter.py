@@ -356,7 +356,13 @@ class DeerFlowAdapter:
                     with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                         await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
         finally:
-            reset_original_user_content(original_content_token)
+            # Reset the ContextVar, but catch ValueError in case we're in a
+            # different context (e.g., after GeneratorExit when client disconnects)
+            try:
+                reset_original_user_content(original_content_token)
+            except ValueError:
+                # Token was created in a different context, ignore
+                pass
 
     async def typed_stream_dispatch(
         self,

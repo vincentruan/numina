@@ -80,6 +80,7 @@ async def _stream_asset_report_sse(
     user_id: str,
     thread_id: str,
     task_id: str,
+    language: str | None = None,
 ) -> AsyncGenerator[bytes, None]:
     """Proxy the agent's asset-report SSE stream to the frontend (U4 step 5).
 
@@ -98,7 +99,7 @@ async def _stream_asset_report_sse(
         async with agent_client.stream(
             "POST",
             agent_url,
-            json={"family_id": str(family_id), "user_id": str(user_id), "language": current_user.language},
+            json={"family_id": str(family_id), "user_id": str(user_id), "language": language},
         ) as resp:
             if resp.status_code != 200:
                 body = await resp.aread()
@@ -223,6 +224,7 @@ async def trigger_generate_events(
             user_id=user_id,
             thread_id=session_id,
             task_id=task_id,
+            language=current_user.language,
         ),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},

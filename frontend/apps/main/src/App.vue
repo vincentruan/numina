@@ -23,10 +23,47 @@ import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
 import { checkWebAuthnSupport, registerPasskey } from '@/utils/webauthn'
 import { getDeviceTrustWebAuthnOptions, registerDeviceTrustWebAuthn } from '@/api/device'
+import { refreshTokenIfNeeded } from '@/api'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const { locale, t } = useI18n()
+
+// Proactive token refresh — keep the access cookie alive while the tab is
+// visible. The access token TTL is 15 min; refreshing every 12 min leaves a
+// 3-min safety margin and prevents the 401 toast users saw on idle return.
+const PROACTIVE_REFRESH_INTERVAL_MS = 12 * 60 * 1000
+let proactiveRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+function startProactiveRefresh() {
+  if (proactiveRefreshTimer) return
+  proactiveRefreshTimer = setInterval(async () => {
+    if (document.visibilityState !== 'visible') return
+    if (!authStore.user) return
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      // best-effort; the axios interceptor will handle auth failure
+    }
+  }, PROACTIVE_REFRESH_INTERVAL_MS)
+}
+
+function stopProactiveRefresh() {
+  if (proactiveRefreshTimer) {
+    clearInterval(proactiveRefreshTimer)
+    proactiveRefreshTimer = null
+  }
+}
+
+async function onVisibilityChange() {
+  if (document.visibilityState === 'visible' && authStore.user) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      // best-effort
+    }
+  }
+}
 
 // System dark mode detection
 const systemIsDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -72,6 +109,10 @@ onMounted(() => {
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)
 
+  // Refresh token when tab becomes visible again — the access cookie may have
+  // expired while the tab was in the background (timer is suspended by browsers).
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
   // Load family data for agent API calls (X-Family-Id header)
   familyStore.fetchFamily()
 
@@ -92,9 +133,14 @@ onMounted(() => {
     familyStore.loadCoinConfig()
   }
 
+  // Start proactive token refresh to prevent access cookie expiry
+  startProactiveRefresh()
+
 })
 
 onUnmounted(() => {
+  stopProactiveRefresh()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (mediaQuery) {
     mediaQuery.removeEventListener('change', handleSystemThemeChange)
   }
