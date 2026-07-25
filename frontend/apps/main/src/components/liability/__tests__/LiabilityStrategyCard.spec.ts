@@ -197,4 +197,24 @@ describe('LiabilityStrategyCard', () => {
     })
     expect(wrapper.find('.strat-subtitle').text()).toBe('liability.strategy.subtitle')
   })
+
+  it('migrates old localStorage key (avalanche-only) to new key on mount', async () => {
+    localStorage.setItem('liability_strategy_adopted_avalanche', '1')
+    const wrapper = mount(LiabilityStrategyCard, {
+      props: {
+        liabilities: [
+          makeLiability({ id: '1', interest_rate: 18, remaining_amount: '5000' }),
+          makeLiability({ id: '2', interest_rate: 12, remaining_amount: '3000' }),
+        ],
+      },
+      global: { stubs },
+    })
+    await flushPromises()
+    // Old key removed, new key set to 'avalanche'
+    expect(localStorage.getItem('liability_strategy_adopted_avalanche')).toBeNull()
+    expect(localStorage.getItem('liability_strategy_adopted')).toBe('avalanche')
+    // Strategy card shows adopted state
+    expect(wrapper.find('.strat-adopted').exists()).toBe(true)
+    expect(wrapper.emitted('adopt')![0]).toEqual(['avalanche'])
+  })
 })

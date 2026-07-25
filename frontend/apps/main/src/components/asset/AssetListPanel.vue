@@ -437,7 +437,8 @@ const groupedByCategory = computed<AssetGroup[]>(() => {
       map.set(key, group)
     }
     group.items.push(asset)
-    group.subtotal += Number(asset.current_value ?? 0)
+    const val = Number(asset.current_value ?? 0)
+    group.subtotal += isNaN(val) ? 0 : val
   }
 
   // Sort by subtotal descending (highest value category first)

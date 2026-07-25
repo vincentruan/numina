@@ -58,6 +58,7 @@ import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useLiabilityStore } from '@/stores/liability'
 import { useCurrency } from '@/composables/useCurrency'
+import { useMonthlyPaymentTotal } from '@/composables/useMonthlyPaymentTotal'
 
 defineOptions({ name: 'FinanceSummaryBar' })
 
@@ -87,16 +88,7 @@ const liabilityRatioDisplay = computed(() => {
 
 // Monthly payment total: sum of active liabilities' monthly_payment.
 // For liabilities without monthly_payment, estimate from remaining * monthly rate.
-// Mirrors OverviewStatCard pattern.
-const monthlyPaymentTotal = computed(() => {
-  const activeLiabilities = (liabilityStore.liabilities || []).filter((l) => l.is_active)
-  return activeLiabilities.reduce((sum, l) => {
-    const mp = Number(l.monthly_payment ?? 0)
-    if (mp > 0) return sum + mp
-    const rate = (l.interest_rate ?? 0) / 100 / 12
-    return sum + Number(l.remaining_amount ?? 0) * rate
-  }, 0)
-})
+const { monthlyPaymentTotal } = useMonthlyPaymentTotal(() => liabilityStore.liabilities)
 </script>
 
 <style scoped>

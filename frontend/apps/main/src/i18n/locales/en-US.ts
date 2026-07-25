@@ -817,6 +817,7 @@ export default {
     },
     prioritySuffix: ' priority',
     almostReached: 'Almost there!',
+    progressAria: '{name} savings progress',
     afford: {
       canAfford: 'Affordable',
       shortage: '¥{amount} short',

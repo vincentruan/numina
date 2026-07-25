@@ -89,6 +89,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import { useCurrency } from '@/composables/useCurrency'
+import { useMonthlyPaymentTotal } from '@/composables/useMonthlyPaymentTotal'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
@@ -124,19 +125,8 @@ const changeText = computed(() => {
   return text
 })
 
-// --- Monthly payment total + estimate tag (ported from FinanceHubPage) ---
-const activeLiabilities = computed(() => (liabilities.value || []).filter((l) => l.is_active))
-const monthlyPaymentTotal = computed(() =>
-  activeLiabilities.value.reduce((sum, l) => {
-    const mp = Number(l.monthly_payment ?? 0)
-    if (mp > 0) return sum + mp
-    const rate = (l.interest_rate ?? 0) / 100 / 12
-    return sum + Number(l.remaining_amount ?? 0) * rate
-  }, 0),
-)
-const monthlyPaymentIsEstimate = computed(() =>
-  activeLiabilities.value.some((l) => !l.monthly_payment || Number(l.monthly_payment) === 0),
-)
+// --- Monthly payment total + estimate tag ---
+const { activeLiabilities, monthlyPaymentTotal, monthlyPaymentIsEstimate } = useMonthlyPaymentTotal(() => liabilities.value)
 
 // --- Wish progress (ported from FinanceHubPage): sum(saved)/sum(expected), cap 100 ---
 const wishCount = computed(() => (wishes.value || []).length)

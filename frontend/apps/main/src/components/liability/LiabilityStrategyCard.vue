@@ -54,9 +54,17 @@ const savedByAvalanche = computed(() => Math.max(0, snowballInterest.value - ava
 
 // --- Adoption state (persisted in localStorage) ---
 const ADOPT_KEY = 'liability_strategy_adopted'
+const OLD_ADOPT_KEY = 'liability_strategy_adopted_avalanche' // Legacy key for migration
 const adoptedStrategy = ref<'avalanche' | 'snowball' | null>(null)
 
 onMounted(() => {
+  // Migrate from old key (avalanche-only) to new key (avalanche/snowball)
+  const oldStored = localStorage.getItem(OLD_ADOPT_KEY)
+  if (oldStored === '1') {
+    localStorage.setItem(ADOPT_KEY, 'avalanche')
+    localStorage.removeItem(OLD_ADOPT_KEY)
+  }
+
   const stored = localStorage.getItem(ADOPT_KEY)
   if (stored === 'avalanche' || stored === 'snowball') {
     adoptedStrategy.value = stored

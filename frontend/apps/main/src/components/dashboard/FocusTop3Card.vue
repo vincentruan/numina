@@ -160,6 +160,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
 import { useCurrency } from '@/composables/useCurrency'
 import type { Liability, Wish } from '@/types'
+import { wishProgress } from '@/utils/wishProgress'
 
 const { t } = useI18n()
 const dashboardStore = useDashboardStore()
@@ -223,12 +224,8 @@ function formatRate(rate: number | null): string {
   return rate == null ? '—' : `${rate}%`
 }
 
-function wishProgress(wish: Wish): number {
-  const expected = Number(wish.expected_price ?? 0) || 0
-  if (expected <= 0) return 0
-  const saved = Number(wish.saved_amount ?? 0) || 0
-  return Math.min(100, Math.round((saved / expected) * 100))
-}
+// Locale-aware list formatter for aria-labels (replaces hardcoded '，')
+const listFormatter = new Intl.ListFormat(undefined, { style: 'short', type: 'conjunction' })
 
 function wishRemaining(wish: Wish): number {
   const expected = Number(wish.expected_price ?? 0) || 0
@@ -268,7 +265,7 @@ function wishAria(wish: Wish): string {
   const remaining = wishRemaining(wish)
   if (wishProgress(wish) < 100) parts.push(`${t('focusTop3.wishRemaining')} ${currency.format(remaining)}`)
   if (wish.target_date) parts.push(`${t('focusTop3.wishGoalDate')} ${wish.target_date}`)
-  return parts.join('，')
+  return listFormatter.format(parts)
 }
 
 // --- Liability compute ---
@@ -308,7 +305,7 @@ function liabilityAria(liability: Liability): string {
   if (liabilityProgress(liability) < 100 && monthsToClear(liability) > 0) {
     parts.push(t('focusTop3.liabilityMonthsToClear', { months: monthsToClear(liability) }))
   }
-  return parts.join('，')
+  return listFormatter.format(parts)
 }
 
 async function loadLiabilities() {

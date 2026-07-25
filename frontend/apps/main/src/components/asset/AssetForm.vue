@@ -1,5 +1,6 @@
 <template>
   <van-form ref="formRef" @submit="onSubmit" @failed="onValidationFailed">
+    <div ref="formContainerRef">
 
     <!-- P1: Image upload — top independent section -->
     <div class="image-upload-section">
@@ -276,6 +277,7 @@
         {{ isEdit ? t('asset.editAsset') : t('asset.addAsset') }}
       </van-button>
     </div>
+    </div>
   </van-form>
 </template>
 
@@ -312,6 +314,7 @@ const aiStore = useAIStore()
 
 // Form ref for validation
 const formRef = ref<FormInstance>()
+const formContainerRef = ref<HTMLFormElement>()
 
 // Collapsible sections state — shared array of expanded section names
 // Basic info is always expanded (not collapsible). Others default collapsed.
@@ -668,8 +671,8 @@ async function onValidationFailed({ errors }: { errors: Array<{ name?: string; m
     await nextTick()
   }
 
-  // Find the field element and scroll/focus it
-  const fieldEl = document.querySelector(`[name="${fieldName}"]`) as HTMLInputElement | null
+  // Find the field element within form container and scroll/focus it
+  const fieldEl = formContainerRef.value?.querySelector(`[name="${fieldName}"]`) as HTMLInputElement | null
   if (fieldEl) {
     fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
     fieldEl.focus()

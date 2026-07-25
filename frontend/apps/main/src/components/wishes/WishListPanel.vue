@@ -115,7 +115,7 @@
                 :aria-valuenow="wishProgress(wish)"
                 aria-valuemin="0"
                 aria-valuemax="100"
-                :aria-label="`${wish.name} 储蓄进度`"
+                :aria-label="t('wish.progressAria', { name: wish.name })"
               >
                 <div class="wish-progress-bar" :class="{ 'wish-progress-empty': wishProgress(wish) === 0 && !Number(wish.monthly_saving), 'wish-progress-empty-dot': wishProgress(wish) === 0 && Number(wish.monthly_saving) > 0 }">
                   <div

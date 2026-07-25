@@ -1138,6 +1138,7 @@ export default {
     },
     prioritySuffix: '优先',
     almostReached: '即将达成！',
+    progressAria: '{name} 储蓄进度',
     afford: {
       canAfford: '净资产可负担',
       shortage: '还差 ¥{amount}',
