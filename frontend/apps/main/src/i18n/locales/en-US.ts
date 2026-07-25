@@ -119,7 +119,6 @@ export default {
     },
     financeCoach: {
       title: 'Finance Coach',
-      refresh: 'Refresh',
       disclaimer: 'Based on your entries, for reference only',
       count: '{count} suggestions',
       empty: 'No suggestions',
