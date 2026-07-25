@@ -1,4 +1,4 @@
-"""AI capability result parser — extract structured data from LLM answer text.
+"""AI skill_id result parser — extract structured data from LLM answer text.
 
 Strategy:
 1. Regex extraction: Look for `<!-- STRUCTURED_DATA ... -->` delimiter, then
@@ -27,7 +27,7 @@ LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1
 LLM_FALLBACK_TIMEOUT_SECONDS = 30.0
 LLM_FALLBACK_MAX_RETRIES = 3  # Maximum retries for LLM fallback extraction
-LLM_FALLBACK_MAX_RETRIES_REPORT = 5  # Maximum retries for report capability (Phase 2 retry loop)
+LLM_FALLBACK_MAX_RETRIES_REPORT = 5  # Maximum retries for report skill (Phase 2 retry loop)
 
 # Pre-compiled regex patterns for markdown table detection (performance optimization)
 _MARKDOWN_TABLE_PATTERN_FULL = re.compile(r'\|[^\n]+\|[^\n]*\|')  # Full table row (at least 2 columns)
@@ -46,10 +46,10 @@ JSON_FENCE_PATTERN = re.compile(
     re.DOTALL
 )
 
-# Expected schemas per capability
+# Expected schemas per skill_id
 # U7: 5 外扩 trigger skill (alerts/disposal/spending_leak/allocation/liability) 全栈删除，
 # 仅保留 report schema；能力回归 numina SOUL（chat/SKILL.md 结构化分析框架）。
-CAPABILITY_SCHEMAS = {
+SKILL_SCHEMAS = {
     "report": {
         "type": "object",
         "required": ["overall_score", "indicators"],
@@ -159,17 +159,17 @@ def _extract_structured_block(answer_text: str) -> tuple[str | None, str]:
     return None, "regex_failed"
 
 
-def _unwrap_agent_envelope(data: dict[str, Any], capability: str) -> dict[str, Any] | None:
+def _unwrap_agent_envelope(data: dict[str, Any], skill_id: str) -> dict[str, Any] | None:
     """Unwrap agent envelope formats before schema validation.
 
     Some LLMs output JSON wrapped in backend-style envelope:
     {"code": "OK", "message": "", "data": {"report": {...}}}
 
-    This function unwraps such formats to extract the actual capability data.
+    This function unwraps such formats to extract the actual skill data.
 
     Args:
         data: Parsed JSON data (may be wrapped or direct)
-        capability: The capability name (e.g., "report")
+        skill_id: The skill name (e.g., "report")
 
     Returns:
         Unwrapped data dict if envelope detected and inner structure valid.
@@ -180,32 +180,32 @@ def _unwrap_agent_envelope(data: dict[str, Any], capability: str) -> dict[str, A
     if isinstance(data, dict) and "code" in data and "data" in data:
         inner = data.get("data")
         if isinstance(inner, dict):
-            # For report capability, data may be nested as {"report": {...}}
-            if capability == "report" and "report" in inner:
+            # For report skill, data may be nested as {"report": {...}}
+            if skill_id == "report" and "report" in inner:
                 report_data = inner.get("report")
                 if isinstance(report_data, dict):
-                    logger.info(f"[{capability}] unwrapped agent envelope: code={data.get('code')}, data.report")
+                    logger.info(f"[{skill_id}] unwrapped agent envelope: code={data.get('code')}, data.report")
                     return report_data
-            # For other capabilities, data might be directly the result
-            # Check if inner has the required fields for the capability
-            schema = CAPABILITY_SCHEMAS.get(capability)
+            # For other skills, data might be directly the result
+            # Check if inner has the required fields for the skill
+            schema = SKILL_SCHEMAS.get(skill_id)
             if schema and schema.get("type") == "object":
                 required = schema.get("required", [])
                 if all(k in inner for k in required):
-                    logger.info(f"[{capability}] unwrapped agent envelope: code={data.get('code')}, data direct")
+                    logger.info(f"[{skill_id}] unwrapped agent envelope: code={data.get('code')}, data direct")
                     return inner
     return data
 
 
-def _validate_json(data: Any, capability: str) -> bool:
+def _validate_json(data: Any, skill_id: str) -> bool:
     """Validate parsed JSON against expected schema (basic check)."""
-    schema = CAPABILITY_SCHEMAS.get(capability)
+    schema = SKILL_SCHEMAS.get(skill_id)
     if not schema:
-        return True  # Unknown capability, skip validation
+        return True  # Unknown skill, skip validation
 
     # Unwrap envelope format before validation
     if isinstance(data, dict):
-        data = _unwrap_agent_envelope(data, capability) or data
+        data = _unwrap_agent_envelope(data, skill_id) or data
 
     if schema["type"] == "array":
         if not isinstance(data, list):
@@ -225,8 +225,8 @@ def _validate_json(data: Any, capability: str) -> bool:
     return True
 
 
-async def parse_capability_result(
-    capability: str,
+async def parse_skill_result(
+    skill_id: str,
     answer_text: str,
     family_id: int,
     db: Session,
@@ -234,7 +234,7 @@ async def parse_capability_result(
     """Parse structured results from LLM answer text.
 
     Args:
-        capability: Capability name (currently only ``report``; other capabilities
+        skill_id: Skill name (currently only ``report``; other skills
             regressed to numina SOUL in U7 and have no schema here)
         answer_text: Full LLM response text
         family_id: Family ID for LLM fallback (fetches provider config)
@@ -255,58 +255,58 @@ async def parse_capability_result(
             data = repair_json(block, return_objects=True)
             # Type guard: repair_json may return str on partial failure
             if not isinstance(data, (dict, list)):
-                logger.warning(f"[{capability}] repair_json returned {type(data).__name__}, expected dict/list")
+                logger.warning(f"[{skill_id}] repair_json returned {type(data).__name__}, expected dict/list")
                 data = None
             # Unwrap envelope format before returning
-            unwrapped_data = _unwrap_agent_envelope(data, capability) if isinstance(data, dict) else data
-            if unwrapped_data is not None and _validate_json(unwrapped_data, capability):
-                logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(unwrapped_data) if isinstance(unwrapped_data, list) else 1} items")
+            unwrapped_data = _unwrap_agent_envelope(data, skill_id) if isinstance(data, dict) else data
+            if unwrapped_data is not None and _validate_json(unwrapped_data, skill_id):
+                logger.info(f"[{skill_id}] regex extraction succeeded via {method}, got {len(unwrapped_data) if isinstance(unwrapped_data, list) else 1} items")
                 return unwrapped_data, method, None
-            elif data is not None and _validate_json(data, capability):
-                # Fallback: _validate_json already unwrapped internally, return data directly
+            elif data is not None and _validate_json(data, skill_id):
+                # _validate_json already unwrapped internally, return data directly
                 # This path handles cases where envelope was detected but inner structure validates
-                logger.info(f"[{capability}] regex extraction succeeded via {method} (fallback), got {len(data) if isinstance(data, list) else 1} items")
+                logger.info(f"[{skill_id}] regex extraction succeeded via {method} (fallback), got {len(data) if isinstance(data, list) else 1} items")
                 return data, method, None
             else:
-                logger.warning(f"[{capability}] regex extracted JSON via {method} but validation failed")
+                logger.warning(f"[{skill_id}] regex extracted JSON via {method} but validation failed")
         except (ValueError, TypeError) as e:
-            logger.warning(f"[{capability}] regex found block via {method} but JSON repair failed: {e}")
+            logger.warning(f"[{skill_id}] regex found block via {method} but JSON repair failed: {e}")
 
     # Step 2: LLM fallback (convert answer text to structured JSON)
-    fallback_data, fallback_error_type = await _llm_fallback_extract(capability, answer_text, family_id, db)
+    fallback_data, fallback_error_type = await _llm_fallback_extract(skill_id, answer_text, family_id, db)
     if fallback_data is not None:
         return fallback_data, "llm_fallback_hit", None
 
     # Return specific error type for user messaging
     error_type = fallback_error_type or "extraction_failed"
-    logger.warning(f"[{capability}] structured data extraction failed (error_type={error_type}), no results persisted")
+    logger.warning(f"[{skill_id}] structured data extraction failed (error_type={error_type}), no results persisted")
     return None, "failed", error_type
 
 
-def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int = 0) -> str:
+def _build_extraction_prompt(skill_id: str, answer_text: str, retry_count: int = 0) -> str:
     """Build extraction prompt for LLM fallback.
 
-    For report capability, includes special handling for markdown tables.
+    For report skill, includes special handling for markdown tables.
     """
-    schema = CAPABILITY_SCHEMAS.get(capability, {})
+    schema = SKILL_SCHEMAS.get(skill_id, {})
     schema_str = json.dumps(schema, ensure_ascii=False, indent=2)
 
     # Truncate long text to avoid token limits
-    if capability == "report" and len(answer_text) > 3000:
+    if skill_id == "report" and len(answer_text) > 3000:
         truncated = answer_text[:1500] + "\n...\n" + answer_text[-2000:]
     else:
         truncated = answer_text[:3000]
 
     # Base prompt
     base_prompt = (
-        f"以下是 {capability} 分析文本，请提取其中的结构化信息为 JSON。\n"
+        f"以下是 {skill_id} 分析文本，请提取其中的结构化信息为 JSON。\n"
         f"Schema：\n{schema_str}\n\n"
         f"分析文本：\n{truncated}\n\n"
         f"仅输出 JSON，不输出任何解释。"
     )
 
-    # Enhanced prompt for report capability - handle markdown tables
-    if capability == "report":
+    # Enhanced prompt for report skill - handle markdown tables
+    if skill_id == "report":
         retry_hint = ""
         if retry_count > 0:
             retry_hint = f"\n\n【注意：这是第{retry_count + 1}次尝试，前次提取失败。如果之前因为表格格式失败，这次必须将表格转换为列表格式。】"
@@ -354,7 +354,7 @@ def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int
 
 
 def _build_extraction_prompt_with_feedback(
-    capability: str,
+    skill_id: str,
     answer_text: str,
     retry_count: int = 0,
     failure_reasons: list[str] | None = None,
@@ -365,7 +365,7 @@ def _build_extraction_prompt_with_feedback(
     repeating the same mistakes on retries.
     """
     # Build the base prompt first
-    base_prompt = _build_extraction_prompt(capability, answer_text, retry_count=retry_count)
+    base_prompt = _build_extraction_prompt(skill_id, answer_text, retry_count=retry_count)
 
     # If no failures or first attempt, return base prompt
     if retry_count == 0 or not failure_reasons:
@@ -385,7 +385,7 @@ def _build_extraction_prompt_with_feedback(
         )
 
     # Insert failure history before the final "仅输出 JSON" instruction
-    if capability == "report":
+    if skill_id == "report":
         # For report, insert before the retry hint section
         if "【注意：这是第" in base_prompt:
             # Insert after retry hint
@@ -396,7 +396,7 @@ def _build_extraction_prompt_with_feedback(
             parts = base_prompt.split("仅输出 JSON。")
             return parts[0] + failure_history + "\n\n仅输出 JSON。"
     else:
-        # For other capabilities, append failure history
+        # For other skills, append failure history
         return base_prompt + failure_history
 
 
@@ -424,7 +424,7 @@ def _format_failure_reason(reason: str) -> str:
 
 
 async def _llm_fallback_extract(
-    capability: str,
+    skill_id: str,
     answer_text: str,
     family_id: int,
     db: Session,
@@ -434,7 +434,7 @@ async def _llm_fallback_extract(
     Picks family's cheapest active provider (by display_order ASC NULLS LAST),
     calls LLM with extraction prompt under a 30s timeout, parses and validates.
     Retries up to LLM_FALLBACK_MAX_RETRIES times on validation failure.
-    For report capability, uses LLM_FALLBACK_MAX_RETRIES_REPORT (5 retries).
+    For report skill, uses LLM_FALLBACK_MAX_RETRIES_REPORT (5 retries).
 
     Returns:
         (data, error_type) where:
@@ -453,17 +453,17 @@ async def _llm_fallback_extract(
     )
 
     if not configs:
-        logger.warning(f"[{capability}] LLM fallback: no active provider for family {family_id}")
+        logger.warning(f"[{skill_id}] LLM fallback: no active provider for family {family_id}")
         return None, "no_provider"
 
     config = configs[0]
     api_key = decrypt_api_key(config.api_key_encrypted)
     if not api_key:
-        logger.warning(f"[{capability}] LLM fallback: could not decrypt API key")
+        logger.warning(f"[{skill_id}] LLM fallback: could not decrypt API key")
         return None, "api_key_error"
 
-    # Use higher retry count for report capability (Phase 2 retry loop)
-    max_retries = LLM_FALLBACK_MAX_RETRIES_REPORT if capability == "report" else LLM_FALLBACK_MAX_RETRIES
+    # Use higher retry count for report skill (Phase 2 retry loop)
+    max_retries = LLM_FALLBACK_MAX_RETRIES_REPORT if skill_id == "report" else LLM_FALLBACK_MAX_RETRIES
 
     # Track failure reasons for feedback in retries
     failure_reasons: list[str] = []
@@ -475,7 +475,7 @@ async def _llm_fallback_extract(
         # Reset quota tracking for this iteration
         last_iteration_quota_error = False
         prompt = _build_extraction_prompt_with_feedback(
-            capability, answer_text, retry_count=retry, failure_reasons=failure_reasons
+            skill_id, answer_text, retry_count=retry, failure_reasons=failure_reasons
         )
 
         try:
@@ -491,21 +491,21 @@ async def _llm_fallback_extract(
             )
         except TimeoutError:
             failure_reasons.append("timeout")
-            logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})")
+            logger.warning(f"[{skill_id}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})")
             continue  # Retry on timeout
         except Exception as e:
             error_str = str(e)
             # Detect quota/throttling errors for specific user messaging
             if _is_quota_error(error_str):
                 last_iteration_quota_error = True
-                logger.warning(f"[{capability}] LLM fallback quota error: {e} (retry {retry + 1})")
+                logger.warning(f"[{skill_id}] LLM fallback quota error: {e} (retry {retry + 1})")
             failure_reasons.append(f"call_failed: {type(e).__name__}")
-            logger.warning(f"[{capability}] LLM fallback call failed: {e} (retry {retry + 1})")
+            logger.warning(f"[{skill_id}] LLM fallback call failed: {e} (retry {retry + 1})")
             continue  # Retry on error
 
         if not raw:
             failure_reasons.append("empty_response")
-            logger.warning(f"[{capability}] LLM fallback returned empty response (retry {retry + 1})")
+            logger.warning(f"[{skill_id}] LLM fallback returned empty response (retry {retry + 1})")
             continue
 
         cleaned = _strip_markdown_fence(raw)
@@ -516,32 +516,32 @@ async def _llm_fallback_extract(
             # Type guard: repair_json may return str on partial failure
             if not isinstance(data, (dict, list)):
                 failure_reasons.append(f"repair_json_returned_{type(data).__name__}")
-                logger.warning(f"[{capability}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list (retry {retry + 1})")
+                logger.warning(f"[{skill_id}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list (retry {retry + 1})")
                 continue
         except (ValueError, TypeError) as e:
             failure_reasons.append(f"json_repair_failed: {e}")
-            logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e} (retry {retry + 1})")
+            logger.warning(f"[{skill_id}] LLM fallback JSON repair failed: {e} (retry {retry + 1})")
             continue
 
         # Unwrap envelope format before validation and return
-        unwrapped_data = _unwrap_agent_envelope(data, capability) if isinstance(data, dict) else data
+        unwrapped_data = _unwrap_agent_envelope(data, skill_id) if isinstance(data, dict) else data
         # Additional validation for report: check narrative fields don't contain markdown tables
         # Apply to unwrapped data if envelope was present
         data_to_check = unwrapped_data if isinstance(unwrapped_data, dict) else data
-        if capability == "report" and isinstance(data_to_check, dict) and _contains_markdown_table(data_to_check):
+        if skill_id == "report" and isinstance(data_to_check, dict) and _contains_markdown_table(data_to_check):
             failure_reasons.append("markdown_table_in_narrative")
-            logger.warning(f"[{capability}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})")
+            logger.warning(f"[{skill_id}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})")
             continue
 
-        if _validate_json(data, capability):
-            logger.info(f"[{capability}] LLM fallback extraction succeeded on retry {retry + 1}")
+        if _validate_json(data, skill_id):
+            logger.info(f"[{skill_id}] LLM fallback extraction succeeded on retry {retry + 1}")
             # Return unwrapped data if envelope was present
             return unwrapped_data if isinstance(unwrapped_data, dict) else data, None
 
         failure_reasons.append("schema_validation_failed")
-        logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
+        logger.warning(f"[{skill_id}] LLM fallback JSON validation failed (retry {retry + 1})")
 
-    logger.warning(f"[{capability}] LLM fallback exhausted {max_retries} retries, giving up")
+    logger.warning(f"[{skill_id}] LLM fallback exhausted {max_retries} retries, giving up")
     # Return specific error type if the LAST iteration was a quota error
     if last_iteration_quota_error:
         return None, "quota_exceeded"

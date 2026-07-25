@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +7,7 @@ import { useCurrency } from '@/composables/useCurrency'
 import type { Liability } from '@/types'
 
 const props = defineProps<{ liabilities: Liability[] }>()
+const emit = defineEmits<{ (e: 'adopt', strategy: 'avalanche' | 'snowball' | null): void }>()
 const router = useRouter()
 const { t } = useI18n()
 const { format } = useCurrency()
@@ -48,15 +49,40 @@ function estimateTotalInterest(order: Liability[]): number {
 
 const avalancheInterest = computed(() => estimateTotalInterest(avalancheOrder.value))
 const snowballInterest = computed(() => estimateTotalInterest(snowballOrder.value))
+// Avalanche is the recommended method; savings shown relative to snowball.
 const savedByAvalanche = computed(() => Math.max(0, snowballInterest.value - avalancheInterest.value))
 
-const adopted = ref(false)
-const ADOPT_KEY = 'liability_strategy_adopted_avalanche'
+// --- Adoption state (persisted in localStorage) ---
+const ADOPT_KEY = 'liability_strategy_adopted'
+const OLD_ADOPT_KEY = 'liability_strategy_adopted_avalanche' // Legacy key for migration
+const adoptedStrategy = ref<'avalanche' | 'snowball' | null>(null)
 
-function adoptAvalanche() {
-  localStorage.setItem(ADOPT_KEY, '1')
-  adopted.value = true
+onMounted(() => {
+  // Migrate from old key (avalanche-only) to new key (avalanche/snowball)
+  const oldStored = localStorage.getItem(OLD_ADOPT_KEY)
+  if (oldStored === '1') {
+    localStorage.setItem(ADOPT_KEY, 'avalanche')
+    localStorage.removeItem(OLD_ADOPT_KEY)
+  }
+
+  const stored = localStorage.getItem(ADOPT_KEY)
+  if (stored === 'avalanche' || stored === 'snowball') {
+    adoptedStrategy.value = stored
+    nextTick(() => emit('adopt', stored))
+  }
+})
+
+function adoptStrategy(strategy: 'avalanche' | 'snowball') {
+  localStorage.setItem(ADOPT_KEY, strategy)
+  adoptedStrategy.value = strategy
+  emit('adopt', strategy)
   showSuccessToast(t('liability.strategy.adopted'))
+}
+
+function resetStrategy() {
+  localStorage.removeItem(ADOPT_KEY)
+  adoptedStrategy.value = null
+  emit('adopt', null)
 }
 
 function askAi() {
@@ -68,28 +94,51 @@ function askAi() {
   <div v-if="shouldRender" class="liability-strategy-card strategy-card">
     <div class="strat-header">
       <span class="strat-title">{{ t('liability.strategy.title') }}</span>
+      <span class="strat-subtitle">{{ t('liability.strategy.subtitle', { count: activeLiabilities.length }) }}</span>
     </div>
-    <div class="strat-row">
-      <div class="strat-method">
-        <div class="strat-method-name">{{ t('liability.strategy.avalanche') }}</div>
-        <div class="strat-method-desc">{{ t('liability.strategy.avalancheDesc') }}</div>
-        <div class="strat-interest">≈ {{ format(avalancheInterest) }}</div>
+
+    <!-- Adopted state: single-line summary + change link -->
+    <div v-if="adoptedStrategy" class="strat-adopted">
+      <span class="strat-adopted-text">
+        {{ t('liability.strategy.currentStrategy') }}:
+        <strong>{{ adoptedStrategy === 'avalanche' ? t('liability.strategy.avalanche') : t('liability.strategy.snowball') }}</strong>
+        <van-icon name="success" class="strat-adopted-check" />
+      </span>
+      <a class="strat-change-link" role="button" tabindex="0" @click="resetStrategy" @keydown.enter.prevent="resetStrategy">
+        {{ t('liability.strategy.changeStrategy') }}
+      </a>
+    </div>
+
+    <!-- Comparison state: two methods stacked, recommended highlighted -->
+    <template v-else>
+      <div class="strat-row">
+        <div class="strat-method strat-method--recommended">
+          <div class="strat-method-header">
+            <span class="strat-method-name">{{ t('liability.strategy.avalanche') }}</span>
+            <span class="strat-badge">{{ t('liability.strategy.recommended') }}</span>
+          </div>
+          <div class="strat-method-desc">{{ t('liability.strategy.avalancheDesc') }}</div>
+          <div class="strat-interest">≈ {{ format(avalancheInterest) }}</div>
+        </div>
+        <div class="strat-method">
+          <div class="strat-method-name">{{ t('liability.strategy.snowball') }}</div>
+          <div class="strat-method-desc">{{ t('liability.strategy.snowballDesc') }}</div>
+          <div class="strat-interest">≈ {{ format(snowballInterest) }}</div>
+        </div>
       </div>
-      <div class="strat-method">
-        <div class="strat-method-name">{{ t('liability.strategy.snowball') }}</div>
-        <div class="strat-method-desc">{{ t('liability.strategy.snowballDesc') }}</div>
-        <div class="strat-interest">≈ {{ format(snowballInterest) }}</div>
+      <div v-if="savedByAvalanche > 0" class="strat-save">
+        {{ t('liability.strategy.saveByAvalanche', { amount: format(savedByAvalanche) }) }}
       </div>
-    </div>
-    <div v-if="savedByAvalanche > 0" class="strat-save">
-      {{ t('liability.strategy.saveEstimate', { amount: format(savedByAvalanche) }) }}
-    </div>
-    <div class="strat-actions">
-      <van-button size="small" type="primary" :disabled="adopted" @click="adoptAvalanche">
-        {{ adopted ? t('liability.strategy.adopted') : t('liability.strategy.adopt') }}
-      </van-button>
-      <van-button size="small" plain @click="askAi">{{ t('liability.strategy.askAi') }}</van-button>
-    </div>
+      <div class="strat-actions">
+        <van-button size="small" type="primary" @click="adoptStrategy('avalanche')">
+          {{ t('liability.strategy.adoptBySort') }}
+        </van-button>
+        <van-button size="small" plain @click="adoptStrategy('snowball')">
+          {{ t('liability.strategy.adoptSnowball') }}
+        </van-button>
+        <van-button size="small" plain @click="askAi">{{ t('liability.strategy.askAi') }}</van-button>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -102,24 +151,47 @@ function askAi() {
 }
 .strat-header {
   margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 .strat-title {
   font-weight: 600;
   font-size: 14px;
 }
+.strat-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary, #969799);
+}
 .strat-row {
   display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 .strat-method {
-  flex: 1;
-  padding: 8px;
+  padding: 8px 10px;
   background: var(--bg-secondary, #f7f8fa);
   border-radius: 8px;
+}
+.strat-method--recommended {
+  border-left: 3px solid var(--color-coral, #ff6b6b);
+}
+.strat-method-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .strat-method-name {
   font-size: 13px;
   font-weight: 600;
+}
+.strat-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-coral, #ff6b6b);
+  color: #fff;
+  font-weight: 500;
 }
 .strat-method-desc {
   font-size: 11px;
@@ -140,5 +212,25 @@ function askAi() {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+}
+.strat-adopted {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+.strat-adopted-text {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.strat-adopted-check {
+  color: #07c160;
+}
+.strat-change-link {
+  font-size: 12px;
+  color: var(--color-primary, #6366f1);
+  cursor: pointer;
 }
 </style>

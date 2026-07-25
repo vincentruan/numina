@@ -11,10 +11,10 @@ dispatch, and ``sync_tool_patch._patched_get_available_tools`` reads it to call
 ``filter_tools_by_skill_allowed_tools`` with that single skill, restricting the
 LLM's tool set to the skill's declared ``allowed-tools`` plus framework builtins.
 
-The ContextVar propagates into the DeerFlow sync tool thread via the existing
-``_apply_contextvar_propagation_patch`` in sync_tool_patch.py (which captures
-``contextvars.copy_context()`` at call time), so the active skill set in the
-worker's thread is visible inside ``get_available_tools``.
+The ContextVar propagates into the DeerFlow sync tool thread via the upstream
+``make_sync_tool_wrapper`` (which captures ``contextvars.copy_context()`` at
+call time as of harness 2.1.0), so the active skill set in the worker's
+thread is visible inside ``get_available_tools``.
 """
 
 from __future__ import annotations

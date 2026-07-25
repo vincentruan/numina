@@ -136,18 +136,12 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     argsTemplate: '资产范围：{scope}',
     resultTemplate: '生成分析报告',
   },
-  // Wish / spending analysis (心愿)
+  // Wish analysis (心愿)
   analyze_wishes: {
     displayName: '分析心愿计划',
     icon: '💝',
     argsTemplate: '心愿：{wish_name}',
     resultTemplate: '可达性 {reachability}',
-  },
-  analyze_spending_leaks: {
-    displayName: '分析支出漏洞',
-    icon: '💝',
-    argsTemplate: '范围：{scope}',
-    resultTemplate: '发现 {count} 项漏洞',
   },
 }
 

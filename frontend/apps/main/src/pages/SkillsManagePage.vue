@@ -399,23 +399,18 @@ const colorOptions = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8
 // Builtin skill IDs — must mirror the backend's BUILTIN_CAPABILITIES list.
 // chat and time_machine are NOT in this list; they're routing-only
 // capabilities, blocked from custom skill IDs via RESERVED_NAMES below.
-const builtinIds = ['alerts', 'allocation', 'disposal', 'liability', 'report', 'spending_leak']
+const builtinIds: string[] = []
 
 // Names reserved for system internal use; cannot be reused as custom skill IDs.
 // Mirrors the backend's RESERVED_NAMES constant in ai_skills.py.
-const RESERVED_NAMES = ['chat', 'time_machine']
+// chat = 纯 LLM 对话内部能力; asset-report/import-parse/finance-coach = 系统内置
+// 固定流程(不可开关); time_machine 已从 skill 系统解耦(KTD-9),不再占保留名。
+const RESERVED_NAMES = ['chat', 'asset-report', 'import-parse', 'finance-coach']
 
 const SKILL_ID_RE = /^[a-z][a-z0-9_-]*$/
 
 // Skill icons mapping - matches skills.capability.{id}.name emoji prefixes in i18n
-const skillIcons: Record<string, string> = {
-  alerts: '🔔',
-  allocation: '⚖️',
-  disposal: '🗑️',
-  liability: '💳',
-  report: '📊',
-  spending_leak: '🔍',
-}
+const skillIcons: Record<string, string> = {}
 
 function getSkillIcon(skillId: string): string {
   return skillIcons[skillId] || '✨'
@@ -470,8 +465,8 @@ function validateSkillId(value: string) {
     return
   }
   if (RESERVED_NAMES.includes(value)) {
-    // U14: chat and time_machine are reserved for system internal use.
-    // Mirror the backend's RESERVED_NAMES check (per U1 RESERVED_NAMES).
+    // U14: reserved names are for system internal use (chat / asset-report /
+    // import-parse / finance-coach). Mirror the backend's RESERVED_NAMES check.
     skillIdError.value = t('skills.form.skillIdReserved')
     return
   }

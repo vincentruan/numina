@@ -17,6 +17,24 @@
       <van-skeleton-avatar avatar-size="24px" />
     </div>
 
+    <!-- Finance Coach Card Skeleton (collapsed style matching the real component) -->
+    <div class="skeleton-coach">
+      <div class="skeleton-coach-header">
+        <van-skeleton-avatar avatar-size="18px" avatar-shape="square" animate />
+        <van-skeleton :row="1" row-width="80px" animate />
+        <van-skeleton :row="1" row-width="50px" animate />
+      </div>
+    </div>
+
+    <!-- Smart Reminders Skeleton (collapsed style) -->
+    <div class="skeleton-reminders">
+      <div class="skeleton-reminders-header">
+        <van-skeleton-avatar avatar-size="18px" avatar-shape="square" animate />
+        <van-skeleton :row="1" row-width="80px" animate />
+        <van-skeleton :row="1" row-width="100px" animate />
+      </div>
+    </div>
+
     <!-- Asset Cards Skeleton -->
     <div class="skeleton-assets">
       <AssetCardSkeleton v-for="i in 3" :key="i" />
@@ -65,6 +83,26 @@ import AssetCardSkeleton from '@/components/common/AssetCardSkeleton.vue'
   background: var(--card-bg);
   margin-top: 8px;
 }
+
+/* Coach & reminders collapsed skeleton rows */
+.skeleton-coach,
+.skeleton-reminders {
+  background: var(--card-bg);
+  border-radius: 12px;
+  margin: 8px 0;
+  padding: 12px 16px;
+}
+.skeleton-coach-header,
+.skeleton-reminders-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.skeleton-coach-header :deep(.van-skeleton),
+.skeleton-reminders-header :deep(.van-skeleton) {
+  padding: 0;
+}
+
 .skeleton-assets {
   margin-top: 12px;
 }

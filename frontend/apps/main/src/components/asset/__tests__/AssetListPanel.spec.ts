@@ -172,7 +172,7 @@ describe('AssetListPanel', () => {
     const vm = wrapper.vm as unknown as { onTypeTabChange: (n: string | number) => void }
     vm.onTypeTabChange('physical')
     await flushPromises()
-    expect(applyAssetFiltersMock).toHaveBeenCalledWith({ assetType: 'physical' })
+    expect(applyAssetFiltersMock).toHaveBeenCalledWith({ assetType: 'physical', resetCategory: true })
   })
 
   it('maps "all" type tab to null asset_type', async () => {
@@ -180,7 +180,7 @@ describe('AssetListPanel', () => {
     const vm = wrapper.vm as unknown as { onTypeTabChange: (n: string | number) => void }
     vm.onTypeTabChange('all')
     await flushPromises()
-    expect(applyAssetFiltersMock).toHaveBeenCalledWith({ assetType: null })
+    expect(applyAssetFiltersMock).toHaveBeenCalledWith({ assetType: null, resetCategory: true })
   })
 
   it('resets pagination and refetches page 1 on status select', async () => {
@@ -194,7 +194,7 @@ describe('AssetListPanel', () => {
   })
 
   it('resets pagination and refetches with category id on category change', async () => {
-    categoryCounts.value = [{ id: 'cat-1', name: '电子产品', icon: '', color: '', count: 3 }]
+    categoryCounts.value = [{ id: 'cat-1', name: '电子产品', icon: '', color: '', asset_type: 'physical', count: 3 }]
     const wrapper = mountPanel()
     const vm = wrapper.vm as unknown as { onCategoryChange: (i: number) => void }
     vm.onCategoryChange(1) // first real category (index 0 = 全部)

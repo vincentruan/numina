@@ -563,9 +563,16 @@ def _generate_temp_config(
     # Inject host-resolved skills.path. The base config ships a container path
     # (/app/apps/agent/skills/builtin) that does not resolve on the host dev
     # machine, so DeerFlow's native skill scanner (LocalSkillStorage) would find
-    # zero skills. Resolve to the same builtin/public/ root that skill_loader.py
-    # uses (SKILLS_DIR's parent), computed from this file's location for both
-    # local dev and container layouts.
+    # zero skills. Resolve to the agent's builtin skills root (containing the
+    # DeerFlow-native ``public/`` category subdir), computed from this file's
+    # location for both local dev and container layouts.
+    #
+    # Custom (per-family) skills are NOT read from this path: DeerFlow's
+    # UserScopedSkillStorage resolves them via get_paths().user_custom_skills_dir(
+    # family_id) = {DEER_FLOW_HOME}/users/{family_id}/skills/custom/, and
+    # DEER_FLOW_HOME == AGENT_DATA_DIR == backend WORKSPACE_ROOT (all derive from
+    # DATA_ROOT/workspaces). Backend workspace.create_custom_skill writes custom
+    # SKILL.md files to that exact path, so runtime reads align with zero bridging.
     _skills_root = Path(__file__).resolve().parent.parent.parent / "skills" / "builtin"
     config.setdefault("skills", {})
     config["skills"]["path"] = str(_skills_root)
@@ -680,6 +687,7 @@ def get_family_adapter(
     agent_name: str | None = None,
     middlewares: list[Any] | None = None,
     memory_enabled: bool = True,
+    available_skills: set[str] | None = None,
 ) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
@@ -689,13 +697,15 @@ def get_family_adapter(
     checkpointer instance.
 
     Cache key is (family_id, config_id, subagent_enabled, plan_mode, mcp_key,
-    agent_name, middlewares_key) — different flag combinations create distinct
-    client instances since these are init-time parameters on DeerFlowClient.
-    agent_name is in the key because it selects a distinct DeerMem memory
-    bucket (per (agent_name, user_id)) — an asset-report client must not share
-    a chat client's memory. middlewares is in the key (as id() tuple) because
-    a client with a custom middleware must not be reused for a chat run
-    that should not emit that middleware's events.
+    agent_name, middlewares_key, memory_enabled, available_skills_key) — different
+    flag combinations create distinct client instances since these are init-time
+    parameters on DeerFlowClient. agent_name is in the key because it selects a
+    distinct DeerMem memory bucket (per (agent_name, user_id)) — an asset-report
+    client must not share a chat client's memory. middlewares is in the key (as
+    id() tuple) because a client with a custom middleware must not be reused for
+    a chat run that should not emit that middleware's events. available_skills
+    is in the key because a client with a different skill whitelist must not be
+    reused for a run with a different set of enabled skills (U3: slash activation).
 
     Thread safety:
     - _cache_lock guards all reads/writes to _adapter_cache.
@@ -711,6 +721,10 @@ def get_family_adapter(
         ai_config: 家庭的 AI 配置
         base_config_dir: 基础配置目录，默认为 agent/deerflow_config
         timeout_seconds: DeerFlow 超时时间
+        available_skills: Optional set of skill names to make available for slash
+            activation. If None (default), all scanned skills are available. U3:
+            the worker fetches the family's enabled custom skills and passes them
+            here so DeerFlow's SkillActivationMiddleware enforces the whitelist.
 
     Returns:
         DeerFlowClient 实例
@@ -724,8 +738,11 @@ def get_family_adapter(
     # chat client. (Both are module-singleton or per-pipeline lists, so id()
     # is stable across calls within a process.)
     middlewares_key = tuple(id(m) for m in middlewares) if middlewares else ()
-    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...], bool] = (
-        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key, memory_enabled,
+    # available_skills is a set (unhashable); key by frozenset so a client with
+    # a different skill whitelist never collides (U3: slash activation).
+    available_skills_key = frozenset(available_skills) if available_skills is not None else None
+    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None] = (
+        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key, memory_enabled, available_skills_key,
     )
 
     # Fast path: return cached client
@@ -794,6 +811,7 @@ def get_family_adapter(
                     plan_mode=plan_mode,
                     agent_name=agent_name,
                     middlewares=middlewares,
+                    available_skills=available_skills,  # U3: slash activation whitelist
                 )
             finally:
                 # Restore previous value (or remove if it wasn't set)

@@ -19,8 +19,8 @@ from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services import wish_advice
 from apps.backend.app.services.finance_coach_cache import (
     is_cache_fresh,
-    latest_by_capability,
-    upsert_capability_result,
+    latest_by_skill,
+    upsert_skill_result,
 )
 
 router = APIRouter(prefix="/ai/wish-advice", tags=["ai-wish-advice"])
@@ -43,10 +43,10 @@ async def generate_wish_advice(
 
     if not force:
         # The wish_advice cache is keyed by fingerprint; we store under a single
-        # capability='wish_advice' row and compare fingerprints in the payload
-        # (pragmatic adaptation — keeps the capability column's cardinality
+        # skill_id='wish_advice' row and compare fingerprints in the payload
+        # (pragmatic adaptation — keeps the skill_id column's cardinality
         # bounded; see commit message for the spec §4.4 key-shape rationale).
-        cached = latest_by_capability(db, current_user.family_id, "wish_advice")
+        cached = latest_by_skill(db, current_user.family_id, "wish_advice")
         if (
             is_cache_fresh(cached, "wish_advice")
             and cached
@@ -67,7 +67,7 @@ async def generate_wish_advice(
         # → silent (spec §4.5).
         return JSONResponse(status_code=200, content={"status": "empty", "report": None})
 
-    upsert_capability_result(
+    upsert_skill_result(
         db, current_user.family_id, "wish_advice", {"fingerprint": fp, "advice": advice}
     )
     db.commit()

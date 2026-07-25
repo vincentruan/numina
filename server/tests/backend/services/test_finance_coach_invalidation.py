@@ -4,9 +4,9 @@ Spec §7.2: any asset/liability/wish write must invalidate the family's
 finance_coach cache row so the next dashboard load regenerates with fresh
 data (event-driven invalidation, not pure TTL).
 
-Each write endpoint calls ``invalidate_capability(db, user.family_id,
+Each write endpoint calls ``invalidate_skill(db, user.family_id,
 "finance_coach")`` before its final ``db.commit()``. These tests mock
-``invalidate_capability`` at each service module's import path and assert
+``invalidate_skill`` at each service module's import path and assert
 the call happens with the user's ``family_id`` and ``"finance_coach"``.
 """
 from datetime import date
@@ -20,7 +20,7 @@ from apps.backend.app.schemas.wish import WishCreate, WishUpdate
 from apps.backend.app.services import asset as asset_service
 from apps.backend.app.services import liability as liability_service
 from apps.backend.app.services import wish as wish_service
-from apps.backend.app.services.finance_coach_cache import upsert_capability_result
+from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -45,7 +45,7 @@ def _make_user(db_session) -> User:
 
 
 def _seed_cache(db_session, family_id) -> None:
-    upsert_capability_result(db_session, family_id, "finance_coach", {"suggestions": []})
+    upsert_skill_result(db_session, family_id, "finance_coach", {"suggestions": []})
     db_session.commit()
 
 
@@ -54,7 +54,7 @@ def test_wish_create_invalidates_finance_coach_cache(db_session):
     _seed_cache(db_session, str(user.family_id))
     req = WishCreate(name="MacBook", expected_price=15000, priority="high")
 
-    with patch("apps.backend.app.services.wish.invalidate_capability") as inv:
+    with patch("apps.backend.app.services.wish.invalidate_skill") as inv:
         wish_service.create_wish(db_session, user, req)
 
     # W4 (Plan B T7): wish writes bust both finance_coach and wish_advice caches.
@@ -73,7 +73,7 @@ def test_wish_update_invalidates_finance_coach_cache(db_session):
     )
     req = WishUpdate(name="Camera Pro")
 
-    with patch("apps.backend.app.services.wish.invalidate_capability") as inv:
+    with patch("apps.backend.app.services.wish.invalidate_skill") as inv:
         wish_service.update_wish(db_session, user, str(wish.id), req)
 
     assert inv.call_count == 2
@@ -90,7 +90,7 @@ def test_wish_delete_invalidates_finance_coach_cache(db_session):
         db_session, user, WishCreate(name="Bike", expected_price=2000)
     )
 
-    with patch("apps.backend.app.services.wish.invalidate_capability") as inv:
+    with patch("apps.backend.app.services.wish.invalidate_skill") as inv:
         wish_service.delete_wish(db_session, user, str(wish.id))
 
     assert inv.call_count == 2
@@ -110,7 +110,7 @@ def test_liability_write_invalidates_finance_coach_cache(db_session):
         remaining_amount=150000,
     )
 
-    with patch("apps.backend.app.services.liability.invalidate_capability") as inv:
+    with patch("apps.backend.app.services.liability.invalidate_skill") as inv:
         liability_service.create_liability(db_session, user, req)
 
     inv.assert_called_once()
@@ -136,7 +136,7 @@ def test_asset_write_invalidates_finance_coach_cache(db_session):
         purchase_date=date(2024, 1, 1),
     )
 
-    with patch("apps.backend.app.services.asset.invalidate_capability") as inv:
+    with patch("apps.backend.app.services.asset.invalidate_skill") as inv:
         asset_service.create_asset(db_session, user, req)
 
     inv.assert_called_once()

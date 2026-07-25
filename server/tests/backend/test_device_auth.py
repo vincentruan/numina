@@ -14,6 +14,94 @@ def test_device_session_model_exists(db):
     assert count == 0
 
 
+def test_device_ping_with_etag(client, db):
+    """GET /api/v1/auth/device-ping with If-None-Match header returns device_id if valid."""
+    # Create a valid device session directly (create_device_session doesn't accept device_id)
+    from datetime import datetime, timedelta
+    from apps.backend.app.utils.snowflake import next_id
+
+    family = _make_family(db)
+    user = _make_user(db, family.id)
+    device_id = "test-device-id-123"
+    session = DeviceSession(
+        id=next_id(),
+        user_id=user.id,
+        family_id=family.id,
+        device_id=device_id,
+        refresh_jti="test-jti-ping-1",
+        device_name="Test Device",
+        created_at=datetime.utcnow(),
+        last_seen_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(days=30),
+        is_revoked=False,
+    )
+    db.add(session)
+    db.commit()
+
+    response = client.get(
+        "/api/v1/auth/device-ping",
+        headers={"If-None-Match": f'"{device_id}"'},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["device_id"] == device_id
+    assert response.headers["ETag"] == f'"{device_id}"'
+    assert "max-age=2592000" in response.headers["Cache-Control"]
+
+
+def test_device_ping_without_etag(client):
+    """GET /api/v1/auth/device-ping without If-None-Match header returns null device_id."""
+    response = client.get("/api/v1/auth/device-ping")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["device_id"] is None
+    assert "no-store" in response.headers["Cache-Control"]
+
+
+def test_device_ping_with_weak_etag(client, db):
+    """GET /api/v1/auth/device-ping with weak ETag (W/) is handled correctly."""
+    from datetime import datetime, timedelta
+    from apps.backend.app.utils.snowflake import next_id
+
+    family = _make_family(db)
+    user = _make_user(db, family.id)
+    device_id = "weak-device-id"
+    session = DeviceSession(
+        id=next_id(),
+        user_id=user.id,
+        family_id=family.id,
+        device_id=device_id,
+        refresh_jti="test-jti-ping-2",
+        device_name="Test Device",
+        created_at=datetime.utcnow(),
+        last_seen_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(days=30),
+        is_revoked=False,
+    )
+    db.add(session)
+    db.commit()
+
+    response = client.get(
+        "/api/v1/auth/device-ping",
+        headers={"If-None-Match": f'W/"{device_id}"'},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["device_id"] == device_id
+
+
+def test_device_ping_with_invalid_etag(client):
+    """GET /api/v1/auth/device-ping with invalid device_id returns null."""
+    response = client.get(
+        "/api/v1/auth/device-ping",
+        headers={"If-None-Match": '"non-existent-device-id"'},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["device_id"] is None
+    assert "no-store" in response.headers["Cache-Control"]
+
+
 def _make_family(db) -> Family:
     from apps.backend.app.utils.snowflake import next_id
     fid = next_id()

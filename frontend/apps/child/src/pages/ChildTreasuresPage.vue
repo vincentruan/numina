@@ -71,7 +71,7 @@ import noTreasuresSvgRaw from '@/assets/empty-states/no-treasures.svg?raw'
 const noTreasuresSvg = noTreasuresSvgRaw
 
 const { t, locale } = useI18n()
-const { complete } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
 const refreshing = ref(false)
@@ -94,8 +94,6 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    complete()
   }
 }
 
@@ -104,7 +102,14 @@ async function onRefresh() {
   refreshing.value = false
 }
 
-onMounted(load)
+onMounted(async () => {
+  increment()
+  try {
+    await load()
+  } finally {
+    decrement()
+  }
+})
 </script>
 
 <style scoped>

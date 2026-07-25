@@ -130,14 +130,7 @@ function toggleSkill(skillId: string) {
   form.value.skills = [...skills]
 }
 
-const skillIcons: Record<string, string> = {
-  alerts: '🔔',
-  allocation: '⚖️',
-  disposal: '🗑️',
-  liability: '💳',
-  report: '📊',
-  spending_leak: '🔍',
-}
+const skillIcons: Record<string, string> = {}
 
 function getSkillIcon(skill: SkillDefinition): string {
   if (skill.skill_type === 'builtin') {

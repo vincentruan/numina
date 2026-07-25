@@ -100,13 +100,16 @@ http.interceptors.response.use(
   (response) => {
     const url = response.config.url ?? ''
     // Unwrap most endpoints; keep login/register/refresh/family-join wrapped (they return tokens directly)
-    // /auth/devices, /auth/me, /auth/login/step1, /auth/login/step2 should be unwrapped like regular endpoints
+    // /auth/device/*, /auth/devices/*, /auth/me, /auth/login/step1, /auth/login/step2
+    // return EnvelopeResponse and must be unwrapped like regular endpoints.
+    // Note: '/auth/device' matches both singular (/device/trust) and plural (/devices).
     const isAuthEndpoint =
       url.includes('/auth/') &&
       !url.includes('/auth/me') &&
-      !url.includes('/auth/devices') &&
+      !url.includes('/auth/device') &&
       !url.includes('/auth/login/step1') &&
       !url.includes('/auth/login/step2')
+
 
     // Check for auth errors in response body (HTTP 200 with code like AUTH_TOKEN_EXPIRED)
     // Backend sometimes returns 200 with error code instead of 401 for certain auth failures
@@ -144,14 +147,8 @@ http.interceptors.response.use(
     const originalRequest = error.config as RetryableConfig
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Don't try to refresh or redirect for auth endpoints — they handle their own errors
-      // This prevents a loop: LoginPage.onMounted calls checkDevice → 401 → router.push('/login') → loop
-      if (originalRequest.url?.includes('/auth/')) {
-        showFailToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
-        return Promise.reject(error)
-      }
-
-      // Refresh endpoint failure = session expired
+      // Refresh endpoint failure = session expired (check before the broader
+      // auth exclusion so it is not unreachable)
       if (originalRequest.url?.includes('/auth/refresh')) {
         clearAuth()
         showDialog({
@@ -161,6 +158,19 @@ http.interceptors.response.use(
         }).then(() => {
           redirectToLogin()
         })
+        return Promise.reject(error)
+      }
+
+      // Don't try to refresh or redirect for login/register endpoints — they
+      // handle their own errors. This prevents a loop: LoginPage.onMounted
+      // calls checkDevice → 401 → router.push('/login') → loop.
+      // /auth/me and /auth/devices ARE allowed to trigger refresh so that an
+      // expired access cookie is silently renewed instead of showing a toast.
+      if (
+        originalRequest.url?.includes('/auth/login') ||
+        originalRequest.url?.includes('/auth/register')
+      ) {
+        showFailToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
         return Promise.reject(error)
       }
 

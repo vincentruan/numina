@@ -22,7 +22,7 @@ def _seed_audits(db, family_id: int):
             AIExtractionAudit(
                 id=next_id(),
                 family_id=family_id,
-                capability="alerts",
+                skill_id="alerts",
                 method=m,
                 extracted_at=now - timedelta(minutes=i),
             )
@@ -32,7 +32,7 @@ def _seed_audits(db, family_id: int):
         AIExtractionAudit(
             id=next_id(),
             family_id=family_id,
-            capability="alerts",
+            skill_id="alerts",
             method="regex_html",
             extracted_at=now - timedelta(days=10),
         )
@@ -73,7 +73,7 @@ class TestListAudit:
             AIExtractionAudit(
                 id=next_id(),
                 family_id=99999,
-                capability="alerts",
+                skill_id="alerts",
                 method="regex_html",
                 extracted_at=datetime.utcnow(),
             )
@@ -88,17 +88,17 @@ class TestListAudit:
         body = resp.json()["data"]
         assert body["aggregates"]["total"] == 6  # only this family
 
-    def test_filter_by_capability(self, client, auth_headers, db):
+    def test_filter_by_skill_id(self, client, auth_headers, db):
         from apps.backend.app.models.user import User
 
         user = db.query(User).filter_by(username="testuser").first()
         _seed_audits(db, user.family_id)
-        # Add a different capability
+        # Add a different skill_id
         db.add(
             AIExtractionAudit(
                 id=next_id(),
                 family_id=user.family_id,
-                capability="disposal",
+                skill_id="disposal",
                 method="regex_html",
                 extracted_at=datetime.utcnow(),
             )
@@ -106,12 +106,12 @@ class TestListAudit:
         db.commit()
 
         resp = client.get(
-            "/api/v1/admin/ai-extraction-audit?capability=alerts&days=7",
+            "/api/v1/admin/ai-extraction-audit?skill_id=alerts&days=7",
             headers={"Authorization": auth_headers["Authorization"]},
         )
         body = resp.json()["data"]
         assert body["aggregates"]["total"] == 6
-        assert all(r["capability"] == "alerts" for r in body["rows"])
+        assert all(r["skill_id"] == "alerts" for r in body["rows"])
 
     def test_no_auth_returns_401(self, client):
         resp = client.get("/api/v1/admin/ai-extraction-audit")
@@ -123,14 +123,14 @@ class TestListCircuit:
         # Seed: one ok, one rate_limited, one circuit_open
         db.add(
             AIExtractionCircuit(
-                id=next_id(), family_id=1, capability="alerts", state="ok"
+                id=next_id(), family_id=1, skill_id="alerts", state="ok"
             )
         )
         db.add(
             AIExtractionCircuit(
                 id=next_id(),
                 family_id=2,
-                capability="disposal",
+                skill_id="disposal",
                 state="rate_limited",
                 opened_at=datetime.utcnow(),
                 opened_until=datetime.utcnow() + timedelta(minutes=20),
@@ -140,7 +140,7 @@ class TestListCircuit:
             AIExtractionCircuit(
                 id=next_id(),
                 family_id=3,
-                capability="spending_leak",
+                skill_id="spending_leak",
                 state="circuit_open",
                 opened_at=datetime.utcnow(),
             )
@@ -163,7 +163,7 @@ class TestResetCircuit:
         circuit = AIExtractionCircuit(
             id=next_id(),
             family_id=10,
-            capability="alerts",
+            skill_id="alerts",
             state="circuit_open",
             opened_at=datetime.utcnow(),
         )
@@ -172,7 +172,7 @@ class TestResetCircuit:
 
         resp = client.post(
             "/api/v1/admin/ai-extraction-circuit/reset",
-            json={"family_id": "10", "capability": "alerts"},
+            json={"family_id": "10", "skill_id": "alerts"},
             headers={"Authorization": auth_headers["Authorization"]},
         )
         assert resp.status_code == 200
@@ -186,14 +186,14 @@ class TestResetCircuit:
     def test_reset_creates_when_missing(self, client, auth_headers, db):
         resp = client.post(
             "/api/v1/admin/ai-extraction-circuit/reset",
-            json={"family_id": "777", "capability": "disposal"},
+            json={"family_id": "777", "skill_id": "disposal"},
             headers={"Authorization": auth_headers["Authorization"]},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["ok"] is True
         circuit = (
             db.query(AIExtractionCircuit)
-            .filter_by(family_id=777, capability="disposal")
+            .filter_by(family_id=777, skill_id="disposal")
             .first()
         )
         assert circuit is not None
@@ -202,7 +202,7 @@ class TestResetCircuit:
     def test_reset_missing_field_returns_422(self, client, auth_headers):
         resp = client.post(
             "/api/v1/admin/ai-extraction-circuit/reset",
-            json={"family_id": "10"},  # missing capability
+            json={"family_id": "10"},  # missing skill_id
             headers={"Authorization": auth_headers["Authorization"]},
         )
         assert resp.status_code == 422
@@ -210,6 +210,6 @@ class TestResetCircuit:
     def test_reset_no_auth_returns_401(self, client):
         resp = client.post(
             "/api/v1/admin/ai-extraction-circuit/reset",
-            json={"family_id": "10", "capability": "alerts"},
+            json={"family_id": "10", "skill_id": "alerts"},
         )
         assert resp.status_code == 401

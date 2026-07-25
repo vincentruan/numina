@@ -3,7 +3,7 @@ import { getUser } from '@/utils/storage'
 import { getChildBaseUrl } from '@/utils/childApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, clearRouterTimeout } from '@/composables/usePageLoading'
+import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, markRouterNprogressActive } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 
@@ -351,6 +351,7 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   NProgress.start()
+  markRouterNprogressActive()
 
   // /child/* paths belong to the child SPA (nginx routes /child/* to frontend-child).
   // The /child route handler does window.location.replace('/child/') to bounce
@@ -397,20 +398,11 @@ router.beforeEach((to, _from, next) => {
   next()
 })
 
-router.afterEach((to) => {
-  // Pages with skeleton: immediately complete NProgress, clear any pending timeout
-  // Skeleton takes over visual feedback during data loading
-  if (to.meta.hasSkeleton) {
-    clearRouterTimeout()
-    NProgress.done()
-    return
-  }
-
-  // Pages without skeleton: defer to page's usePageLoading
-  // Short transition timeout: if the page does not call increment() within 200ms,
-  // we assume it is idle (never starts loading) and complete NProgress.
-  // If the page does call increment() within 200ms, this router timeout is cleared
-  // by increment(), and the page's own usePageLoading controls the lifecycle.
+router.afterEach((_to) => {
+  // Unified lifecycle: all pages (including hasSkeleton) go through the same
+  // 200ms timeout. Pages that call increment() within 200ms take over NProgress
+  // control; pages without async work auto-complete via this timeout.
+  // This prevents the flicker caused by start→done→start across router/page.
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
   }, 200)

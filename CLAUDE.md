@@ -161,7 +161,7 @@ uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001
 uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002
 
 # Tests + lint + typecheck (scope to a path)
-uv run pytest apps/backend/tests/ -v
+uv run pytest tests/backend/ -v
 uv run ruff check apps/backend/
 uv run mypy apps/backend/
 

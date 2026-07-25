@@ -9,6 +9,16 @@ import type { ThreadSession } from '@/types/ai-chat/session'
 
 defineOptions({ name: 'ChatHistory' })
 
+const props = defineProps<{
+  /** When true, render as overlay inside AIChatBox (no router, emits events). When false/absent, render as standalone page. */
+  overlay?: boolean
+}>()
+
+const emit = defineEmits<{
+  close: []
+  'select-thread': [threadId: string]
+}>()
+
 const router = useRouter()
 const store = useChatSessionStore()
 const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession } = useThreadList()
@@ -98,14 +108,41 @@ onUnmounted(() => {
 })
 
 function close() {
-  // Clear active thread so the AI chat page enters welcome (new conversation) mode
-  store.clearActiveThread()
-  router.push({ name: 'AIChat' })
+  if (props.overlay) {
+    emit('close')
+  } else {
+    // Standalone page mode: return to the previous page (e.g. settings).
+    // Vue Router stores the back path in history.state.back; if absent the
+    // page was opened directly (e.g. URL paste / refresh), so fall back to
+    // the AI chat hub rather than leaving the app via router.back().
+    const back = (window.history.state as { back?: string | null } | null)?.back
+    if (back) {
+      router.back()
+    } else {
+      router.push('/ai/chat')
+    }
+  }
 }
 
 function selectThread(threadId: string) {
-  store.setActiveThread(threadId)
-  router.push(`/ai/chat?thread_id=${threadId}`)
+  if (props.overlay) {
+    emit('select-thread', threadId)
+  } else {
+    // Standalone page mode: set active thread and navigate
+    store.setActiveThread(threadId)
+    router.push(`/ai/chat?thread_id=${threadId}`)
+  }
+}
+
+function startNewChat() {
+  if (props.overlay) {
+    // In overlay mode, emit close and let parent handle new chat
+    emit('close')
+  } else {
+    // Standalone mode: clear active thread and navigate to chat
+    store.clearActiveThread()
+    router.push('/ai/chat')
+  }
 }
 
 function handleDelete(threadId: string) {
@@ -266,12 +303,20 @@ function closeSwipe(sessionId: string) {
     <!-- Header -->
     <div class="history-header">
       <h3 class="history-title">{{ t('aiChat.historyTitle') }}</h3>
-      <button class="close-btn" :aria-label="t('common.cancel')" @click="close">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
+      <div class="header-actions">
+        <!-- New chat button: only shown in standalone page mode (not overlay) -->
+        <button v-if="!overlay" class="new-chat-btn" :aria-label="t('aiChat.newChat')" @click="startNewChat">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <button class="close-btn" :aria-label="t('common.cancel')" @click="close">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Content -->
@@ -395,10 +440,20 @@ function closeSwipe(sessionId: string) {
 .chat-history-page {
   display: flex;
   flex-direction: column;
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: var(--van-background, #f7f8fa);
-  z-index: 100;
+  z-index: 10;
+  animation: slide-in-right 0.3s ease-out;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .history-header {
@@ -422,6 +477,13 @@ function closeSwipe(sessionId: string) {
   color: var(--van-text-color, #333);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-chat-btn,
 .close-btn {
   width: 40px;
   height: 40px;
@@ -436,9 +498,15 @@ function closeSwipe(sessionId: string) {
   transition: background 0.15s, color 0.15s;
 }
 
+.new-chat-btn:hover,
 .close-btn:hover {
   background: var(--van-active-color, rgba(0, 0, 0, 0.06));
   color: var(--van-text-color, #333);
+}
+
+.new-chat-btn:active,
+.close-btn:active {
+  background: var(--van-active-color, rgba(0, 0, 0, 0.1));
 }
 
 .history-content {

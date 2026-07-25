@@ -278,7 +278,7 @@ onMounted(async () => {
   webauthnSupported.value = supported
 
   try {
-    const deviceId = readDeviceId()
+    const deviceId = await readDeviceId()
 
     if (!deviceId) return
 

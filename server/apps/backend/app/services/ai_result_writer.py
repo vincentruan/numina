@@ -1,7 +1,7 @@
-"""AI capability result writer — persist structured results to DB tables.
+"""AI skill result writer — persist structured results to DB tables.
 
-Each capability has its own writer function with replace strategy:
-- Clear previous results for family+capability
+Each skill has its own writer function with replace strategy:
+- Clear previous results for family+skill
 - Bulk insert new structured records
 """
 
@@ -62,17 +62,17 @@ def write_report_results(
 
 
 # Unified dispatcher
-def write_capability_results(
-    capability: str,
+def write_skill_results(
+    skill_id: str,
     family_id: int,
     results: list[dict] | dict,
     db: Session,
 ) -> int:
-    """Dispatch to appropriate writer based on capability.
+    """Dispatch to appropriate writer based on skill_id.
 
     Args:
-        capability: Capability name (currently only ``report``; the 5 trigger
-            capabilities were removed in U7 and regress to numina SOUL)
+        skill_id: Skill name (currently only ``report``; the 5 trigger
+            skills were removed in U7 and regress to numina SOUL)
         family_id: Family ID
         results: Structured data (list for array-type, dict for object-type)
         db: Database session
@@ -84,9 +84,9 @@ def write_capability_results(
         "report": write_report_results,
     }
 
-    writer = writers.get(capability)
+    writer = writers.get(skill_id)
     if not writer:
-        logger.warning(f"[{capability}] no writer registered, skipping")
+        logger.warning(f"[{skill_id}] no writer registered, skipping")
         return 0
 
     return writer(family_id, results, db)

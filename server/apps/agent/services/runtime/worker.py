@@ -28,7 +28,6 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
-from apps.agent.services.deerflow_adapter.todo_middleware import get_todo_middleware
 from apps.agent.services.goal_evaluator import (
     GoalEvaluationError,
     evaluate_goal_completion,
@@ -269,8 +268,6 @@ async def run_agent(
     graph_input: dict | None,
     config: dict[str, Any],
     stream_modes: list[str] | None = None,
-    resume_answer: str | None = None,
-    interrupt_id: str | None = None,
 ) -> None:
     """Multi-app dispatch entry point.
 
@@ -363,8 +360,6 @@ async def run_agent(
             graph_input=graph_input,
             config=config,
             stream_modes=stream_modes,
-            resume_answer=resume_answer,
-            interrupt_id=interrupt_id,
         )
     finally:
         reset_family_sandbox_context()
@@ -479,7 +474,12 @@ async def _run_asset_report_pipeline(
         # initiated with no natural user message. Use the slash-activation form
         # so the LLM loads asset-report/SKILL.md (not chat/SKILL.md). If the
         # backend already supplied a user message in graph_input, prefer it.
-        user_message = _SYNTHETIC_ASSET_REPORT_TRIGGER
+        # Localize the trigger based on user's language preference so the first
+        # user input the LLM sees matches the target language.
+        user_language = (record.metadata or {}).get("language")
+        user_message = _SYNTHETIC_TRIGGERS_BY_LANG.get("asset-report", {}).get(
+            user_language, _SYNTHETIC_ASSET_REPORT_TRIGGER
+        )
         if graph_input and "messages" in graph_input:
             msgs = graph_input["messages"]
             if isinstance(msgs, list) and msgs:
@@ -488,6 +488,15 @@ async def _run_asset_report_pipeline(
                     content = last.get("content", "")
                     if content:
                         user_message = content
+
+        # 5b. Append language instruction based on user's language preference.
+        # SKILL.md is static; the LLM needs an explicit per-run directive to
+        # output in the user's chosen language (not always Chinese).
+        if user_language:
+            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+                user_language, _LANGUAGE_INSTRUCTIONS["default"]
+            )
+            user_message = f"{user_message}\n\n{lang_instruction}"
 
         # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)
@@ -669,7 +678,7 @@ async def _run_asset_report_pipeline(
                 family_id=family_id,
                 audit_id=run_id,
                 user_id=user_id or "",
-                capability="asset-report",
+                skill_id="asset-report",
                 success=success,
                 error_type=error_type,
                 deerflow_attempted=True,
@@ -712,6 +721,27 @@ _SYNTHETIC_FINANCE_COACH_TRIGGER = "/finance-coach 生成家庭财务建议"
 # message; the slash prefix steers skill loading to wish-advice (not chat). If
 # graph_input carries no user message, this triggers skill load.
 _SYNTHETIC_WISH_ADVICE_TRIGGER = "/wish-advice 生成心愿储蓄建议"
+
+
+# Per-user-language instructions for the synthetic trigger message.
+# SKILL.md is static; the LLM needs an explicit per-run directive to output
+# in the user's chosen language. The trigger message itself is also localized
+# so the first user input the LLM sees matches the target language.
+_LANGUAGE_INSTRUCTIONS = {
+    "en-US": "[LANGUAGE REQUIREMENT] Output language: English. All user-visible text fields (label, narrative, suggestions, summary) MUST be in English. Only 'key' fields use snake_case.",
+    "zh-CN": "[语言要求] 输出语言：中文。所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用 snake_case。",
+    "default": "[语言要求] 输出语言：中文。所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用 snake_case。",
+}
+
+# Localized synthetic triggers — the slash prefix loads the skill, the rest
+# sets the language tone for the LLM.
+_SYNTHETIC_TRIGGERS_BY_LANG = {
+    "asset-report": {
+        "en-US": "/asset-report Generate family asset report",
+        "zh-CN": "/asset-report 生成家庭资产报告",
+        "default": "/asset-report 生成家庭资产报告",
+    },
+}
 
 
 def _extract_import_parse_document(graph_input: dict | None) -> str | None:
@@ -942,7 +972,7 @@ async def _run_import_parse_agent(
                 family_id=family_id,
                 audit_id=run_id,
                 user_id=user_id or "",
-                capability="import-parse",
+                skill_id="import-parse",
                 success=success,
                 error_type=error_type,
                 deerflow_attempted=True,
@@ -1175,7 +1205,7 @@ async def _run_finance_coach_agent(
                 family_id=family_id,
                 audit_id=run_id,
                 user_id=user_id or "",
-                capability="finance-coach",
+                skill_id="finance-coach",
                 success=success,
                 error_type=error_type,
                 deerflow_attempted=True,
@@ -1449,7 +1479,7 @@ async def _run_wish_advice_agent(
                 family_id=family_id,
                 audit_id=run_id,
                 user_id=user_id or "",
-                capability="wish-advice",
+                skill_id="wish-advice",
                 success=success,
                 error_type=error_type,
                 deerflow_attempted=True,
@@ -1909,8 +1939,6 @@ async def _run_numina_agent(
     graph_input: dict | None,
     config: dict[str, Any],
     stream_modes: list[str] | None = None,
-    resume_answer: str | None = None,
-    interrupt_id: str | None = None,
 ) -> None:
     """Background agent execution for the Numina (/ai/chat) application.
 
@@ -1936,11 +1964,6 @@ async def _run_numina_agent(
     # Completion status surfaced to the client in the `end` frame (Q2). Default
     # to "error" so an unexpected path never reports "complete" falsely.
     completion_status = "error"
-    # Set True when the adapter stream yields a custom event with
-    # type="interrupt" (LangGraph interrupt() call from ask_clarification).
-    # Distinct from abort_event (user-initiated cancel) — interrupted runs
-    # skip the 300s cleanup GC so the checkpoint state is preserved for resume.
-    interrupted_by_event = False
     # Stream-extras inputs — initialised here so the ``finally`` block is safe
     # when the run aborts before streaming starts. Title/suggestion generation
     # are skipped when ``selected_provider`` stays None.
@@ -2005,15 +2028,23 @@ async def _run_numina_agent(
         call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
         call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
 
+        # U3: Fetch enabled custom skills for slash activation whitelist.
+        # The worker fetches the family's enabled custom skills and passes them
+        # to create_family_adapter so DeerFlow's SkillActivationMiddleware enforces
+        # the whitelist. Q1 resolution: custom-skills-only (builtin excluded).
+        enabled_skills = await client.get_enabled_skills()
+        available_skills = {s["skill_id"] for s in enabled_skills if s.get("skill_type") == "custom"}
+
         # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
-        # U7 (D5 TodoList): when plan_mode is on, inject the TodoMiddleware
-        # singleton so the agent gets the `write_todos` tool + context-loss /
-        # premature-exit hooks (sync hooks — R2; singleton — R3, keeps the LRU
-        # cache key's id() stable so the agent is not rebuilt every call).
-        # plan_mode is already part of the LRU cache key (family_adapter_cache.py
-        # cache_key), so plan_mode=True (with middleware) and False (without) get
+        # U7 (D5 TodoList): plan_mode=True makes DeerFlow's build_middlewares
+        # inject its own TodoMiddleware (write_todos tool + context-loss /
+        # premature-exit hooks) — see deerflow/agents/lead_agent/agent.py. No
+        # custom middleware is injected here: a second TodoMiddleware (the former
+        # numina copy) collided with DeerFlow's on LangChain's name-based dedup
+        # (``Please remove duplicate middleware instances``) and double-fired the
+        # after_model reminder. plan_mode is part of the LRU cache key
+        # (family_adapter_cache.py cache_key), so plan_mode=True / False get
         # distinct DeerFlowClient instances.
-        todo_middlewares = [get_todo_middleware()] if call_plan_mode else None
         adapter = create_family_adapter(
             family_id,
             selected_provider,
@@ -2021,7 +2052,8 @@ async def _run_numina_agent(
             subagent_enabled=call_subagent_enabled,
             plan_mode=call_plan_mode,
             mcp_servers=mcp_servers,
-            middlewares=todo_middlewares,
+            middlewares=None,
+            available_skills=available_skills,  # U3: slash activation whitelist
         )
 
         # 5. Extract user message for context
@@ -2061,13 +2093,24 @@ async def _run_numina_agent(
         # because typed_stream_dispatch yields raw LangGraph `messages` events
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        capability = "chat-search" if (call_websearch_enabled and has_search_capability) else "chat"
+        skill_id = "chat-search" if (call_websearch_enabled and has_search_capability) else "chat"
         # Set the active skill so sync_tool_patch can filter tools to this skill's
         # declared allowed-tools whitelist (see active_skill_context module docstring).
+        #
+        # U2: For slash-activated skills (e.g. `/my-budget task`), skip set_active_skill
+        # so DeerFlow's SkillToolPolicyMiddleware owns tool filtering instead of numina's
+        # _apply_active_skill_tool_filter. The adapter sets ORIGINAL_USER_CONTENT_KEY
+        # (U1), so DeerFlow's SkillActivationMiddleware can parse the slash.
+        from deerflow.skills.slash import parse_slash_skill_reference
+
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             set_active_skill,
         )
-        _skill_token = set_active_skill(capability)
+
+        _is_slash_message = parse_slash_skill_reference(user_message) is not None
+        # Slash-activated skill: skip set_active_skill, let DeerFlow handle it
+        # Non-slash message: use existing chat/chat-search pre-selection
+        _skill_token = None if _is_slash_message else set_active_skill(skill_id)
         async def _stream_once(stream_context: Any, *, is_continuation: bool = False) -> None:
             """Run one DeerFlow stream turn and forward events to the bridge.
 
@@ -2076,19 +2119,18 @@ async def _run_numina_agent(
             ``is_continuation`` is True the turn is a hidden goal-continuation
             turn (logged, not user-visible as a new prompt).
             """
-            # ``cumulative_usage`` and ``interrupted_by_event`` are reassigned
+            # ``cumulative_usage`` is reassigned
             # here but declared in the enclosing ``_run_numina_agent`` scope —
             # declare them nonlocal so the assignments propagate (and so the
             # continuation loop sees an interrupt flagged during a turn).
-            nonlocal cumulative_usage, interrupted_by_event
+            nonlocal cumulative_usage
             async for sse_type, data in adapter.typed_stream_dispatch(
-                skill_name=capability,
+                skill_name=skill_id,
                 context=stream_context,
                 thread_id=thread_id,
                 enable_thinking=call_thinking_enabled,
                 subagent_enabled=call_subagent_enabled,
                 plan_mode=call_plan_mode,
-                resume_answer=resume_answer if not is_continuation else None,
             ):
                 # Cooperative cancellation check (DeerFlow pattern)
                 if record.abort_event.is_set():
@@ -2173,15 +2215,6 @@ async def _run_numina_agent(
                                 "content": content,
                             })
 
-                # Detect LangGraph interrupt() events forwarded by the adapter as
-                # custom events with type="interrupt".  Set the flag so the
-                # terminal-status block below marks the run as ``interrupted``
-                # (distinct from ``cancelled`` via abort_event) and the finally
-                # block skips the 300c cleanup GC — the checkpoint must survive
-                # so the user can resume after providing human input.
-                if sse_type == "custom" and isinstance(data, dict) and data.get("type") == "interrupt":
-                    interrupted_by_event = True
-
         # 7a. First (user-visible) stream turn.
         await _stream_once(redacted)
 
@@ -2199,7 +2232,7 @@ async def _run_numina_agent(
         # (``CONTINUABLE_GOAL_BLOCKERS = {"goal_not_met_yet"}`` only), it does
         # NOT continue on them. Continuing on ``missing_evidence`` is the
         # unbounded-loop vector.
-        while not record.abort_event.is_set() and not interrupted_by_event:
+        while not record.abort_event.is_set():
             continuation = await _prepare_goal_continuation_input(
                 checkpointer=_get_shared_checkpointer_for_goal(),
                 thread_id=thread_id,
@@ -2217,12 +2250,9 @@ async def _run_numina_agent(
             )
             await _stream_once(continuation["context"], is_continuation=True)
 
-        # 8. Terminal status — drives the `end` completion signal (Q2).
-        # Two paths to ``interrupted``: (a) user-initiated cancel via
-        # abort_event, (b) LangGraph interrupt() detected as a custom event
-        # in the stream (ask_clarification tool). Both preserve the checkpoint
-        # so the run can be resumed, but only (a) sets abort_event.
-        if record.abort_event.is_set() or interrupted_by_event:
+        # 8. Terminal status - drives the `end` completion signal (Q2).
+        # ``interrupted`` is set only by user-initiated cancel via abort_event.
+        if record.abort_event.is_set():
             await run_manager.set_status(run_id, RunStatus.interrupted)
             completion_status = "interrupted"
         else:
@@ -2247,8 +2277,9 @@ async def _run_numina_agent(
     finally:
         # Clear the active-skill ContextVar so it cannot leak into a later run
         # reusing this thread/coroutine. Guarded: _skill_token is only set if
-        # dispatch reached the skill-selection step (line ~234).
-        if "_skill_token" in locals():
+        # dispatch reached the skill-selection step (line ~234), and is None
+        # for slash-activated messages (U2) where set_active_skill was skipped.
+        if "_skill_token" in locals() and _skill_token is not None:
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
@@ -2260,7 +2291,7 @@ async def _run_numina_agent(
                 family_id=family_id,
                 audit_id=run_id,
                 user_id=user_id or "",
-                capability="chat",
+                skill_id="chat",
                 success=success,
                 error_type=error_type,
                 deerflow_attempted=True,
@@ -2319,8 +2350,4 @@ async def _run_numina_agent(
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        # Skip the 300s cleanup GC for interrupted runs — the checkpoint must
-        # be preserved so the user can resume after providing human input.
-        # Cancelled runs (abort_event) still get cleaned up after 300s.
-        if not interrupted_by_event:
-            asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
+        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))

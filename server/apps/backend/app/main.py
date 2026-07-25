@@ -74,7 +74,6 @@ from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_
 from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
-from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
 from apps.backend.app.routers import ai_chat as ai_chat_router
 from apps.backend.app.routers import ai_config as ai_config_router
 from apps.backend.app.routers import ai_context as ai_context_router
@@ -82,6 +81,7 @@ from apps.backend.app.routers import ai_internal as ai_internal_router
 from apps.backend.app.routers import ai_finance_coach as ai_finance_coach_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
 from apps.backend.app.routers import ai_report as ai_report_router
+from apps.backend.app.routers import ai_input_polish as ai_input_polish_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
@@ -404,8 +404,6 @@ app.include_router(activities_router.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(captcha.router, prefix="/api/v1")
 app.include_router(files_router.router, prefix="/api/v1")
-# Register more specific AI routes first to avoid prefix conflicts
-app.include_router(ai_capabilities_router.router, prefix="/api/v1")
 app.include_router(admin_ai_extraction_router.router, prefix="/api/v1")
 app.include_router(admin_audit_logs_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
@@ -418,6 +416,7 @@ app.include_router(ai_context_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.sessions_router, prefix="/api/v1")
 app.include_router(ai_threads_router.router, prefix="/api/threads")
+app.include_router(ai_input_polish_router.router)
 app.include_router(children_router.router, prefix="/api/v1")
 app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")

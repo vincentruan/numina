@@ -61,6 +61,8 @@ interface ToolResultData {
   id?: string
   tool_call_id?: string
   name?: string
+  /** DeerFlow ClarificationMiddleware attaches ``artifact.human_input``. */
+  artifact?: Record<string, unknown>
 }
 
 type MessagesTupleData = AiTextData | ToolResultData
@@ -74,6 +76,8 @@ interface SerializedMessage {
   tool_calls?: Array<{ id?: string; name: string; args: string | object }>
   tool_call_id?: string
   additional_kwargs?: Record<string, unknown>
+  /** DeerFlow ClarificationMiddleware attaches ``artifact.human_input``. */
+  artifact?: Record<string, unknown>
   usage_metadata?: {
     input_tokens?: number
     output_tokens?: number
@@ -135,19 +139,30 @@ export function parseGoalCommand(value: string): GoalCommand | null {
 }
 
 /**
- * Interrupt event payload from DeerFlow ask_clarification tool.
+ * Clarification request payload from DeerFlow's ``ClarificationMiddleware``.
  *
- * The backend emits this as a `custom` SSE event with `type: 'interrupt'`
- * when the agent needs user clarification before continuing. The frontend
- * renders it as an `assistant:clarification` message group.
+ * DeerFlow's ``ask_clarification`` tool is intercepted by
+ * ``ClarificationMiddleware`` (always last in ``build_middlewares()``) which
+ * returns ``Command(goto=END)`` with a ``ToolMessage(artifact={"human_input":
+ * payload})``. The adapter preserves the ``artifact`` field (see
+ * ``sync_tool_patch._apply_clarification_artifact_patch``) so the frontend can
+ * extract the structured request and render an interactive clarification card.
+ * The user's answer is sent back as a NEW ``HumanMessage`` carrying
+ * ``additional_kwargs.human_input_response`` (DeerFlow pattern) - not via a
+ * resume endpoint.
+ *
+ * Mirrors DeerFlow's ``HumanInputRequest`` (core/messages/human-input.ts).
  */
 export interface InterruptData {
   question: string
-  options?: Array<{ label: string; value: string }>
+  options?: Array<{ id: string; label: string; value: string }>
   context?: string
+  /** Derived from ``input_mode === 'choice_with_other'``. */
   choiceWithOther?: boolean
-  multiSelect?: boolean
+  input_mode?: 'free_text' | 'single_choice' | 'choice_with_other'
+  /** DeerFlow ``request_id`` - used to match ``human_input_response``. */
   interrupt_id: string
+  source?: string
 }
 
 /** Format current time as HH:MM */
@@ -390,6 +405,50 @@ function toToolCallSummaries(
   }))
 }
 
+/**
+ * Extract a clarification request from a ``ToolMessage.artifact.human_input``.
+ *
+ * DeerFlow's ``ClarificationMiddleware`` intercepts ``ask_clarification`` and
+ * returns a ``ToolMessage`` whose ``artifact`` carries the structured
+ * ``human_input`` payload (version/kind/source/request_id/question/input_mode/
+ * options). This helper parses that payload into the frontend's ``InterruptData``
+ * shape so ``MessageGroup`` can render a ``HumanInputCard`` and
+ * ``submitClarification`` can build a matching ``human_input_response``.
+ *
+ * Returns ``null`` when the artifact is absent or malformed (non-clarification
+ * tool messages, or older backends without the artifact-preservation patch).
+ */
+function extractHumanInputFromArtifact(artifact: unknown): InterruptData | null {
+  if (typeof artifact !== 'object' || artifact === null) return null
+  const humanInput = (artifact as Record<string, unknown>).human_input
+  if (typeof humanInput !== 'object' || humanInput === null) return null
+  const h = humanInput as Record<string, unknown>
+  if (h.kind !== 'human_input_request') return null
+  if (typeof h.question !== 'string' || typeof h.request_id !== 'string') return null
+
+  const inputMode = h.input_mode as InterruptData['input_mode']
+  const options = Array.isArray(h.options)
+    ? h.options
+        .map((o): { id: string; label: string; value: string } | null => {
+          if (typeof o !== 'object' || o === null) return null
+          const rec = o as Record<string, unknown>
+          if (typeof rec.id !== 'string' || typeof rec.label !== 'string' || typeof rec.value !== 'string') return null
+          return { id: rec.id, label: rec.label, value: rec.value }
+        })
+        .filter((o): o is { id: string; label: string; value: string } => o !== null)
+    : undefined
+
+  return {
+    question: h.question,
+    options: options && options.length > 0 ? options : undefined,
+    context: typeof h.context === 'string' ? h.context : undefined,
+    choiceWithOther: inputMode === 'choice_with_other',
+    input_mode: inputMode,
+    interrupt_id: h.request_id,
+    source: typeof h.source === 'string' ? h.source : undefined,
+  }
+}
+
 /** Map a serialized backend message to rich ChatMessage */
 function serializedToChatMessage(m: SerializedMessage): ChatMessage {
   const type = m.type === 'human' ? 'human' as const
@@ -411,6 +470,16 @@ function serializedToChatMessage(m: SerializedMessage): ChatMessage {
     tool_call_id: m.tool_call_id,
     tool_calls: m.tool_calls ? toToolCallSummaries(m.tool_calls) : undefined,
     additional_kwargs: m.additional_kwargs,
+  }
+
+  // DeerFlow ClarificationMiddleware: extract human_input from ToolMessage.artifact
+  // so MessageGroup can render a HumanInputCard. The artifact is preserved by the
+  // adapter's sync_tool_patch (_apply_clarification_artifact_patch).
+  if (type === 'tool' && m.name === 'ask_clarification') {
+    const interruptData = extractHumanInputFromArtifact(m.artifact)
+    if (interruptData) {
+      msg.additional_kwargs = { ...(msg.additional_kwargs || {}), interruptData }
+    }
   }
 
   // Extract per-message usage_metadata from values events
@@ -450,12 +519,29 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // re-hydrated from state.values.goal (loadHistory) + values events (stream).
   const serverGoal = ref<GoalState | null | undefined>(undefined)
   /**
-   * Track interrupt IDs that have been answered by the user in this session.
+   * Clarification request IDs that have been answered by the user.
+   *
+   * Derived from the message history (DeerFlow ``deriveHumanInputThreadState``
+   * pattern): a human message carrying ``additional_kwargs.human_input_response``
+   * with a ``request_id`` marks that request as answered. This survives page
+   * refresh (``loadHistory`` replays the hidden response message) and doesn't
+   * require manual bookkeeping in ``submitClarification``.
+   *
    * Used by MessageGroup to transition HumanInputCard from 'pending' to
-   * 'answered' after resumeInterrupt completes. getMessageGroups doesn't
-   * set phase/answer on clarification groups, so we track externally.
+   * 'answered'. getMessageGroups doesn't set phase/answer on clarification
+   * groups, so we derive it here.
    */
-  const answeredInterruptIds = ref<Set<string>>(new Set())
+  const answeredInterruptIds = computed<Set<string>>(() => {
+    const answered = new Set<string>()
+    for (const m of messages.value) {
+      if (m.type !== 'human') continue
+      const response = m.additional_kwargs?.human_input_response as { request_id?: string } | undefined
+      if (response?.request_id) {
+        answered.add(response.request_id)
+      }
+    }
+    return answered
+  })
   const runId = ref<string | null>(null)
   /**
    * U6 transient bridge buffer. Holds live turns that a summarization `values`
@@ -513,7 +599,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   })
 
-  function addOptimisticUserMessage(text: string): ChatMessage {
+  function addOptimisticUserMessage(text: string, additionalKwargs?: Record<string, unknown>): ChatMessage {
     const msg: ChatMessage = {
       id: genId('msg'),
       type: 'human',
@@ -521,6 +607,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       content: text,
       displayTime: formatDisplayTime(),
       sendStatus: 'sending',
+      ...(additionalKwargs ? { additional_kwargs: additionalKwargs } : {}),
     }
     messages.value = [...messages.value, msg]
     return msg
@@ -612,6 +699,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         displayTime: formatDisplayTime(),
         name: chunk.name,
         tool_call_id: chunk.tool_call_id,
+      }
+      // DeerFlow ClarificationMiddleware: extract human_input from the
+      // ToolMessage artifact so MessageGroup can render a HumanInputCard.
+      if (chunk.name === 'ask_clarification') {
+        const interruptData = extractHumanInputFromArtifact(chunk.artifact)
+        if (interruptData) {
+          msg.additional_kwargs = { interruptData }
+        }
       }
       messages.value = [...messages.value, msg]
 
@@ -918,6 +1013,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       websearch_enabled?: boolean
     },
     source?: string,
+    /**
+     * ``additional_kwargs`` attached to the outgoing HumanMessage. Used by
+     * ``submitClarification`` to carry ``hide_from_ui`` + ``human_input_response``
+     * (DeerFlow pattern: the clarification answer is a new message, not a resume).
+     */
+    additionalKwargs?: Record<string, unknown>,
   ): Promise<void> {
     // If a previous stream is still marked as loading (e.g. dropped connection
     // that hasn't fully cleaned up, or user clicked retry mid-stream), cancel
@@ -937,7 +1038,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     userCancelled = false
     abortController = new AbortController()
 
-    const userMsg = addOptimisticUserMessage(text)
+    const userMsg = addOptimisticUserMessage(text, additionalKwargs)
 
     // Resolve thread before streaming
     try {
@@ -1036,7 +1137,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
         }
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
-          input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text }] },
+          input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text, ...(additionalKwargs ? { additional_kwargs: additionalKwargs } : {}) }] },
           signal: abortController.signal,
           // #17: drop 'events' — the active backend never emits an 'events' frame
           // and there is no handler branch for it; requesting it advertises an
@@ -1111,13 +1212,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               result?: string
               error?: string
               usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
-              // Interrupt event fields
-              question?: string
-              options?: Array<{ label: string; value: string }>
-              context?: string
-              choice_with_other?: boolean
-              multi_select?: boolean
-              interrupt_id?: string
             }
             if (customData.type === 'tool_call') {
               const step = createPlanningStep(customData)
@@ -1180,32 +1274,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                   ...messages.value.slice(lastAiIdx + 1),
                 ]
               }
-            } else if (customData.type === 'interrupt') {
-              // DeerFlow ask_clarification interrupt: the agent paused and needs
-              // user input to continue. Create a tool message named
-              // 'ask_clarification' so useMessageGroups routes it into an
-              // assistant:clarification group. Store the full interrupt payload
-              // in additional_kwargs so the clarification UI can render the
-              // question, options, and submit a resume with interrupt_id.
-              const interruptPayload: InterruptData = {
-                question: customData.question || '',
-                options: customData.options,
-                context: customData.context,
-                choiceWithOther: customData.choice_with_other,
-                multiSelect: customData.multi_select,
-                interrupt_id: customData.interrupt_id || genId('intr'),
-              }
-              const msg: ChatMessage = {
-                id: genId('clar'),
-                type: 'tool',
-                role: 'assistant',
-                content: interruptPayload.question,
-                displayTime: formatDisplayTime(),
-                name: 'ask_clarification',
-                tool_call_id: interruptPayload.interrupt_id,
-                additional_kwargs: { interruptData: interruptPayload },
-              }
-              messages.value = [...messages.value, msg]
             } else if (
               customData.type === 'task_started'
               || customData.type === 'task_running'
@@ -1696,7 +1764,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     tokenUsage.value = null
     planningSteps.value = []
     suggestions.value = []
-    answeredInterruptIds.value = new Set()
     runId.value = null
     error.value = null
     isLoading.value = false
@@ -1712,327 +1779,58 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   /**
-   * Resume an interrupted graph execution with the user's answer.
+   * Submit a clarification answer as a NEW HumanMessage (DeerFlow pattern).
    *
-   * Calls POST /api/threads/{threadId}/runs/resume which returns an SSE stream
-   * (same protocol as sendMessage). Processes the stream identically — messages-
-   * tuple, values, custom events — so the agent's continued response appears
-   * in the chat in real-time.
+   * DeerFlow's ClarificationMiddleware intercepts ``ask_clarification`` and
+   * ends the run (``Command(goto=END)``) with a
+   * ``ToolMessage(artifact={human_input})``. The user's answer is NOT sent via
+   * a resume endpoint - it's a new ``HumanMessage`` carrying
+   * ``additional_kwargs.human_input_response`` (structured) + ``hide_from_ui``
+   * (so it doesn't render as a duplicate chat bubble). The message text follows
+   * DeerFlow's ``buildHumanInputResponseText`` format so the LLM sees a
+   * natural-language answer.
    *
-   * Includes retry logic (3 attempts with exponential backoff) matching
-   * sendMessage's behavior. On failure, sets interruptError so HumanInputCard
-   * can show error state with retry button.
+   * ``answeredInterruptIds`` (computed from message history) automatically
+   * marks the clarification card as 'answered' once the response message lands.
    */
-  const interruptError = ref<string | null>(null)
-
-  /**
-   * The interrupt_id that most recently failed (all retries exhausted).
-   * Used by MessageGroup to set HumanInputCard status to 'error' so the
-   * retry button appears. Cleared on new resumeInterrupt attempt.
-   */
-  const interruptErrorId = ref<string | null>(null)
-
-  async function resumeInterrupt(
+  async function submitClarification(
     threadId: string,
     interruptId: string,
     answer: string,
   ): Promise<void> {
     if (isLoading.value) return
-    isLoading.value = true
-    error.value = null
-    interruptError.value = null
-    planningSteps.value = []
-    suggestions.value = []
-    runId.value = null
-    userCancelled = false
-    abortController = new AbortController()
 
-    // Add an optimistic user message so the answer appears in the chat
-    const userMsg = addOptimisticUserMessage(answer)
+    // Locate the InterruptData for this request to build a structured response.
+    const clarificationMsg = messages.value.find(
+      m => m.type === 'tool' && m.name === 'ask_clarification'
+        && (m.additional_kwargs?.interruptData as InterruptData | undefined)?.interrupt_id === interruptId,
+    )
+    const request = clarificationMsg?.additional_kwargs?.interruptData as InterruptData | undefined
+    const source = request?.source || 'ask_clarification'
+    const question = request?.question || ''
 
-    let retryCount = 0
-    let streamSucceeded = false
+    // Build HumanInputResponse (DeerFlow core/messages/human-input.ts). If the
+    // answer matches an option value, it's an option response; otherwise text.
+    const matchedOption = request?.options?.find(o => o.value === answer)
+    const response: Record<string, unknown> = matchedOption
+      ? { version: 1, kind: 'human_input_response', source, request_id: interruptId, response_kind: 'option', option_id: matchedOption.id, value: matchedOption.value }
+      : { version: 1, kind: 'human_input_response', source, request_id: interruptId, response_kind: 'text', value: answer }
 
-    while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
-      if (retryCount > 0) {
-        // Exponential backoff with jitter
-        const baseDelay = SSE_RETRY_DELAYS[retryCount - 1]
-        const jitteredDelay = Math.floor(baseDelay * (0.85 + Math.random() * 0.15))
-        await new Promise(resolve => {
-          retryDelayId = setTimeout(resolve, jitteredDelay)
-        })
-        retryDelayId = null
-        if (userCancelled || !abortController || abortController.signal.aborted) break
-      }
+    // DeerFlow buildHumanInputResponseText: natural-language wrapper so the LLM
+    // sees a readable answer, not just a raw value.
+    const text = `For your clarification "${question}", my answer is: ${answer}`
 
-      streamTimeoutId = setTimeout(() => {
-        abortController?.abort()
-      }, STREAM_TIMEOUT_MS)
-
-      try {
-        const apiUrl = typeof window !== 'undefined' ? window.location.origin : ''
-        const authStore = (await import('@/stores/auth')).useAuthStore()
-        const familyStore = (await import('@/stores/family')).useFamilyStore()
-        const familyId = familyStore.family?.id || authStore.user?.family_id
-        if (!familyId) throw new Error('Family not loaded')
-
-        const res = await fetch(
-          `${apiUrl}/api/threads/${encodeURIComponent(threadId)}/runs/resume`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Family-Id': familyId,
-              ...(authStore.user?.id ? { 'X-User-Id': String(authStore.user.id) } : {}),
-            },
-            credentials: 'include',
-            body: JSON.stringify({ answer, interrupt_id: interruptId }),
-            signal: abortController.signal,
-          },
-        )
-
-        if (!res.ok) {
-          throw new Error(`Resume failed: ${res.status}`)
-        }
-
-        setUserMsgStatus(userMsg.id, 'sent')
-
-        // Parse the SSE stream from the resume endpoint
-        const reader = res.body?.getReader()
-        if (!reader) throw new Error('No response body')
-
-        const decoder = new TextDecoder()
-        let buffer = ''
-        let streamEnded = false
-        let currentEvent = ''
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            // Handle SSE event: field
-            if (line.startsWith('event:')) {
-              currentEvent = line.slice(6).trim()
-              continue
-            }
-            // Handle SSE data: field
-            if (!line.startsWith('data:')) continue
-            const dataStr = line.slice(5).trim()
-            if (!dataStr || dataStr === '[DONE]') continue
-
-            try {
-              const parsed = JSON.parse(dataStr) as {
-                event?: string
-                data?: unknown
-              }
-              // Prefer event: field, fallback to parsed.event
-              const event = currentEvent || parsed.event || 'message'
-              const data = parsed.data
-              currentEvent = '' // Reset after use
-
-              if (event === 'metadata' && data) {
-                const metaData = data as { run_id?: string }
-                if (metaData.run_id) runId.value = metaData.run_id
-              } else if ((event === 'messages-tuple' || event === 'messages') && data) {
-                mergeMessagesTuple(data as MessagesTupleData)
-              } else if (event === 'values' && data) {
-                const valData = data as ValuesData
-                if (valData.messages) mergeValuesMessages(valData.messages)
-                // U7 (D5 TodoList): todos channel on the resume path too.
-                if (valData.todos !== undefined) {
-                  todos.value = Array.isArray(valData.todos) ? valData.todos : []
-                }
-                // U5 (D1 /goal): goal channel on the resume path too.
-                if (valData.goal !== undefined) {
-                  serverGoal.value = valData.goal
-                }
-              } else if (event === 'custom' && data) {
-                const customData = data as {
-                  type?: string
-                  question?: string
-                  options?: Array<{ label: string; value: string }>
-                  context?: string
-                  choice_with_other?: boolean
-                  multi_select?: boolean
-                  interrupt_id?: string
-                  suggestions?: string[]
-                  tool_call_id?: string
-                  tool_name?: string
-                  args?: Record<string, unknown>
-                  task_id?: string
-                  description?: string
-                  prompt?: string
-                  result?: string
-                  error?: string
-                  usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
-                }
-                if (customData.type === 'tool_call') {
-                  const step = createPlanningStep(customData)
-                  const exists = step.id && planningSteps.value.some(s => s.id === step.id)
-                  if (!exists) planningSteps.value = [...planningSteps.value, step]
-                } else if (customData.type === 'suggestions' && customData.suggestions) {
-                  suggestions.value = customData.suggestions
-                  // If the stream already ended (end arrived before suggestions),
-                  // retroactively attach suggestions to the last AI message so
-                  // they appear without requiring a new message.
-                  const lastAiIdx = messages.value.findLastIndex(m => m.type === 'ai')
-                  if (lastAiIdx >= 0 && messages.value[lastAiIdx].phase === 'done') {
-                    const msg = messages.value[lastAiIdx]
-                    messages.value = [
-                      ...messages.value.slice(0, lastAiIdx),
-                      { ...msg, suggestions: customData.suggestions },
-                      ...messages.value.slice(lastAiIdx + 1),
-                    ]
-                  }
-                } else if (customData.type === 'interrupt') {
-                  // Nested interrupt (agent asks another question)
-                  const interruptPayload: InterruptData = {
-                    question: customData.question || '',
-                    options: customData.options,
-                    context: customData.context,
-                    choiceWithOther: customData.choice_with_other,
-                    multiSelect: customData.multi_select,
-                    interrupt_id: customData.interrupt_id || genId('intr'),
-                  }
-                  const msg: ChatMessage = {
-                    id: genId('clar'),
-                    type: 'tool',
-                    role: 'assistant',
-                    content: interruptPayload.question,
-                    displayTime: formatDisplayTime(),
-                    name: 'ask_clarification',
-                    tool_call_id: interruptPayload.interrupt_id,
-                    additional_kwargs: { interruptData: interruptPayload },
-                  }
-                  messages.value = [...messages.value, msg]
-                } else if (
-                  customData.type === 'task_started'
-                  || customData.type === 'task_running'
-                  || customData.type === 'task_completed'
-                  || customData.type === 'task_failed'
-                  || customData.type === 'task_timed_out'
-                  || customData.type === 'task_cancelled'
-                ) {
-                  handleTaskEvent({ ...customData, type: customData.type })
-                }
-              } else if (event === 'end') {
-                streamEnded = true
-                let endStatus: string | undefined
-                let endError: string | undefined
-                if (data) {
-                  const endData = data as { usage?: TokenUsage; status?: string; error?: string; message?: string }
-                  endStatus = endData.status
-                  endError = endData.error || endData.message
-                  if (endData.usage) tokenUsage.value = endData.usage
-                }
-                // Mark all AI messages as done BEFORE checking for error status.
-                // This ensures cleanup happens even if the stream ended with an error.
-                const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
-                if (lastIdx >= 0) {
-                  const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
-                  const next = messages.value.map((msg, i) => {
-                    if (msg.type !== 'ai' || msg.phase === 'done') return msg
-                    const isLast = i === lastIdx
-                    return {
-                      ...msg,
-                      phase: 'done' as const,
-                      suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
-                    }
-                  })
-                  messages.value = next
-                }
-                planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
-                setUserMsgStatus(userMsg.id, 'sent')
-                // Clear standalone suggestions (now attached inline)
-                suggestions.value = []
-                if (currentThreadId) options.onStreamEnd?.(currentThreadId)
-
-                // NOW check for error status AFTER cleanup
-                if (endStatus === 'error') {
-                  throw new Error(endError || t('aiChat.sendFailed'))
-                }
-
-                streamSucceeded = true
-              } else if (event === 'error' && data) {
-                const errData = data as { error?: string; message?: string }
-                // Finalize in-progress messages BEFORE throwing
-                finalizeAllInProgress()
-                throw new Error(errData.error || errData.message || t('aiChat.sendFailed'))
-              }
-            } catch (parseErr) {
-              if (parseErr instanceof Error && parseErr.message !== t('aiChat.sendFailed')) {
-                // JSON parse error — skip malformed line
-                continue
-              }
-              throw parseErr
-            }
-          }
-        }
-
-        if (!streamEnded && !streamSucceeded) {
-          // Stream ended without explicit 'end' chunk — mark AI messages done
-          const next = messages.value.map(msg =>
-            msg.type === 'ai' && msg.phase !== 'done'
-              ? { ...msg, phase: 'done' as const }
-              : msg,
-          )
-          messages.value = next
-          planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
-          streamSucceeded = true
-        }
-      } catch (err) {
-        const e = err as Error & { name?: string }
-        setUserMsgStatus(userMsg.id, 'failed')
-        if (e.name === 'AbortError' && userCancelled) {
-          // User cancelled — finalize messages so they don't stay in-progress
-          finalizeAllInProgress()
-          break
-        }
-        retryCount++
-        if (retryCount <= SSE_MAX_RETRIES) {
-          setUserMsgStatus(userMsg.id, 'sending')
-        }
-        if (retryCount > SSE_MAX_RETRIES) {
-          // All retries exhausted — finalize messages and set interruptError
-          finalizeAllInProgress()
-          interruptError.value = e.message || t('aiChat.sendFailed')
-          interruptErrorId.value = interruptId
-          error.value = interruptError.value
-        }
-      } finally {
-        if (streamTimeoutId !== null) {
-          clearTimeout(streamTimeoutId)
-          streamTimeoutId = null
-        }
-      }
-    }
-
-    // Post-loop finalization: ensure no messages are stuck in-progress
-    if (!streamSucceeded) {
-      finalizeAllInProgress()
-    }
-
-    // Mark this interrupt as answered so HumanInputCard transitions to
-    // 'answered' state (checkmark + answer text). Without this, the card
-    // stays in 'pending' state forever after a successful resume.
-    if (streamSucceeded) {
-      answeredInterruptIds.value = new Set([...answeredInterruptIds.value, interruptId])
-    }
-
-    isLoading.value = false
-    abortController = null
+    await sendMessage(text, undefined, threadId, undefined, undefined, {
+      hide_from_ui: true,
+      human_input_response: response,
+    })
   }
 
   return {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
-    planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
+    planningSteps, suggestions, answeredInterruptIds, runId,
     todos, serverGoal,
-    sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
+    sendMessage, cancelStream, loadHistory, retry, clearMessages, submitClarification,
     submitFeedback, handleCompact, handleGoalCommand,
   }
 }

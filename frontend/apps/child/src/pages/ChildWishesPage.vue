@@ -195,7 +195,7 @@ const noWishesSvg = noWishesSvgRaw
 
 const { t } = useI18n()
 const router = useRouter()
-const { complete } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 
 // Balance polling via composable (separate from wish stats)
 const { balance: polledBalance } = useBalancePolling()
@@ -303,8 +303,6 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    complete()
   }
 }
 
@@ -325,7 +323,14 @@ async function redeem(wishId: string) {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  increment()
+  try {
+    await load()
+  } finally {
+    decrement()
+  }
+})
 </script>
 
 <style scoped>

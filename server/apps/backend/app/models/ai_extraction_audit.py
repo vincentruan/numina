@@ -14,7 +14,7 @@ class AIExtractionAudit(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    capability: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    skill_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     method: Mapped[str] = mapped_column(String(32), nullable=False)
     # method: regex_html | regex_fence | regex_bare | llm_fallback_hit | failed
@@ -26,9 +26,9 @@ class AIExtractionAudit(Base):
 
     __table_args__ = (
         Index(
-            "ix_ai_extraction_audits_family_capability_time",
+            "ix_ai_extraction_audits_family_skill_time",
             "family_id",
-            "capability",
+            "skill_id",
             "extracted_at",
         ),
     )

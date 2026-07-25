@@ -55,7 +55,7 @@ if "DEER_FLOW_CONFIG_PATH" not in os.environ:
         / "config.yaml"
     )
 
-setup_logging()
+setup_logging(log_level=settings.LOG_LEVEL, log_dir=settings.LOG_DIR)
 
 # Bridge the per-family DeerFlow AppConfig into the background memory-update
 # timer thread (see services/deerflow_adapter/memory_config_bridge.py for why).
@@ -218,11 +218,9 @@ app.add_middleware(
 # Router imports after app definition — noqa: E402
 from apps.agent.app.routers import cache as cache_router  # noqa: E402
 from apps.agent.app.routers import gateway as gateway_router  # noqa: E402
-from apps.agent.routers import capabilities as capabilities_router  # noqa: E402
 from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
 from apps.agent.routers import input_polish as input_polish_router  # noqa: E402
 from apps.agent.routers import model_test as model_test_router  # noqa: E402
-from apps.agent.routers import resume as resume_router  # noqa: E402
 from apps.agent.routers import runs_stream as runs_stream_router  # noqa: E402
 from apps.agent.routers import suggest as suggest_router  # noqa: E402
 from apps.agent.routers import threads as threads_router  # noqa: E402
@@ -231,12 +229,10 @@ app.include_router(suggest_router.router)
 app.include_router(cache_router.router)
 app.include_router(gateway_router.router)
 app.include_router(import_parse_router.router)
-app.include_router(capabilities_router.router)
 app.include_router(input_polish_router.router)
 app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)
-app.include_router(resume_router.router)
 
 
 @app.get("/health")

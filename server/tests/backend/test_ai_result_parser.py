@@ -4,7 +4,7 @@ from apps.backend.app.services.ai_result_parser import (
     _extract_bare_json,
     _extract_structured_block,
     _validate_json,
-    parse_capability_result,
+    parse_skill_result,
 )
 
 
@@ -154,7 +154,7 @@ class TestValidateJson:
 
     P2 #12 (U7 SOUL schema-coverage quality gate): U7 deleted the
     alerts/allocation/disposal/liability/spending_leak schemas, leaving
-    ``report`` as the only live schema in ``CAPABILITY_SCHEMAS``. These tests
+    ``report`` as the only live schema in ``SKILL_SCHEMAS``. These tests
     pin the report schema's validation contract so a future edit that breaks
     it (dropping a required field, changing the type, etc.) is caught here
     rather than silently accepting malformed reports at the cache-read path
@@ -202,7 +202,7 @@ class TestValidateJson:
 
 
 class TestParseCapabilityResult:
-    """Tests for parse_capability_result — returns (data, method) tuple."""
+    """Tests for parse_skill_result — returns (data, method) tuple."""
 
     async def test_parse_valid_alerts_html(self, db_session, test_family):
         answer = """
@@ -212,7 +212,7 @@ class TestParseCapabilityResult:
         [{"asset_name": "Car", "alert_type": "aging", "severity": "high", "suggestion": "Replace soon"}]
         -->
         """
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_skill_result("alerts", answer, test_family.id, db_session)
         assert data is not None
         assert isinstance(data, list)
         assert len(data) == 1
@@ -225,7 +225,7 @@ class TestParseCapabilityResult:
         {"has_significant_drift": true, "drifts": [{"category": "stocks", "drift": 5.2}]}
         -->
         """
-        data, method, _error = await parse_capability_result("allocation", answer, test_family.id, db_session)
+        data, method, _error = await parse_skill_result("allocation", answer, test_family.id, db_session)
         assert data is not None
         assert isinstance(data, dict)
         assert data["has_significant_drift"] is True
@@ -238,19 +238,19 @@ class TestParseCapabilityResult:
 [{"asset_name": "Bike", "alert_type": "aging", "severity": "low"}]
 ```
 """
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_skill_result("alerts", answer, test_family.id, db_session)
         assert data is not None
         assert method == "regex_fence"
 
     async def test_parse_via_bare(self, db_session, test_family):
         answer = 'Done: [{"asset_name": "X", "alert_type": "aging", "severity": "medium"}]'
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_skill_result("alerts", answer, test_family.id, db_session)
         assert data is not None
         assert method == "regex_bare"
 
     async def test_parse_missing_block_returns_failed(self, db_session, test_family):
         answer = "No structured data here"
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_skill_result("alerts", answer, test_family.id, db_session)
         assert data is None
         assert method == "failed"
 
@@ -267,7 +267,7 @@ class TestLLMFallback:
     async def test_no_provider_returns_failed(self, db_session, test_family):
         # No AIProviderConfig in DB → fallback returns None → method='failed'
         answer = "narrative only, no JSON anywhere"
-        data, method, _error = await parse_capability_result("alerts", answer, test_family.id, db_session)
+        data, method, _error = await parse_skill_result("alerts", answer, test_family.id, db_session)
         assert data is None
         assert method == "failed"
 
@@ -297,7 +297,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
 
         answer = "Some prose with no STRUCTURED_DATA block at all, no fence, just words."
-        data, method, _error = await parse_capability_result(
+        data, method, _error = await parse_skill_result(
             "alerts", answer, test_family.id, db_session
         )
         assert method == "llm_fallback_hit"
@@ -330,7 +330,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "_call_llm", fake_call)
 
         answer = "narrative without structured block"
-        data, method, _error = await parse_capability_result(
+        data, method, _error = await parse_skill_result(
             "alerts", answer, test_family.id, db_session
         )
         assert method == "llm_fallback_hit"
@@ -367,7 +367,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "LLM_FALLBACK_TIMEOUT_SECONDS", 0.1)
 
         answer = "no structured block"
-        data, method, _error = await parse_capability_result(
+        data, method, _error = await parse_skill_result(
             "alerts", answer, test_family.id, db_session
         )
         assert data is None
@@ -405,7 +405,7 @@ class TestLLMFallback:
         monkeypatch.setattr(ai_result_parser, "decrypt_api_key", lambda _: "")
 
         answer = "no structured block"
-        data, method, _error = await parse_capability_result(
+        data, method, _error = await parse_skill_result(
             "alerts", answer, test_family.id, db_session
         )
         assert data is None
@@ -472,7 +472,7 @@ class TestLLMFallback:
         monkeypatch.setitem(sys.modules, "openai", fake_module)
 
         answer = "no structured block"
-        data, method, _error = await parse_capability_result(
+        data, method, _error = await parse_skill_result(
             "alerts", answer, test_family.id, db_session
         )
         assert method == "llm_fallback_hit"

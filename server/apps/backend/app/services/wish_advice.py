@@ -4,7 +4,7 @@ spec §7.1 coherence c100: W4 output is ``redistribution[]``, NOT finance_coach'
 ``suggestions[]``. W4 shares only the prompt-template skeleton (家庭财务教练角色),
 not the output schema. Separate cache key ``family_id:wish_advice:{fingerprint}``.
 
-LLM call path: W4 runs as a dedicated ``wish-advice`` stream_run capability that
+LLM call path: W4 runs as a dedicated ``wish-advice`` stream_run skill that
 mirrors finance_coach's chain (system-agent + gateway route + worker branch +
 SKILL.md). The backend ``generate_advice`` calls the agent gateway via
 ``AgentClient.stream`` (X-Agent-Token service-to-service auth), consumes the SSE

@@ -51,7 +51,7 @@ def _get_audit_logger() -> logging.Logger:
 @dataclass
 class AuditEntry:
     family_id: str
-    capability: str
+    skill_id: str
     success: bool
     audit_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())

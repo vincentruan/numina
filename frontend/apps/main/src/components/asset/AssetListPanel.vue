@@ -62,9 +62,14 @@
             @search="onSearch"
             @clear="onSearch"
           />
-          <van-dropdown-menu>
-            <van-dropdown-item v-model="sortBy" :options="sortOptions" @change="onSearch" />
-          </van-dropdown-menu>
+          <button
+            class="sort-trigger"
+            :aria-label="t('asset.sortLabel') + ': ' + currentSortLabel"
+            @click="cycleSortOption"
+          >
+            <van-icon name="exchange" class="sort-trigger-icon" />
+            <span class="sort-trigger-label">{{ currentSortLabel }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -98,20 +103,50 @@
         >
           <div class="asset-list">
             <template v-if="viewMode === 'list'">
-              <AssetListItem
-                v-for="asset in filteredByCategoryAssets"
-                :key="asset.id"
-                :asset="asset"
-                @click="$router.push(`/assets/${asset.id}`)"
-              />
+              <template v-for="group in groupedByCategory" :key="group.key">
+                <AssetGroupHeader
+                  :category="group.category"
+                  :count="group.items.length"
+                  :subtotal="group.subtotal"
+                  :collapsed="collapsedGroups.has(group.key)"
+                  :selection-mode="selectionMode"
+                  :selected-count="groupSelectedCount(group.items)"
+                  @toggle="toggleGroup(group.key)"
+                />
+                <Transition name="collapse">
+                  <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                    <AssetListItem
+                      v-for="asset in group.items"
+                      :key="asset.id"
+                      :asset="asset"
+                      @click="$router.push(`/assets/${asset.id}`)"
+                    />
+                  </div>
+                </Transition>
+              </template>
             </template>
             <template v-else>
-              <AssetCard
-                v-for="asset in filteredByCategoryAssets"
-                :key="asset.id"
-                :asset="asset"
-                @click="$router.push(`/assets/${asset.id}`)"
-              />
+              <template v-for="group in groupedByCategory" :key="group.key">
+                <AssetGroupHeader
+                  :category="group.category"
+                  :count="group.items.length"
+                  :subtotal="group.subtotal"
+                  :collapsed="collapsedGroups.has(group.key)"
+                  :selection-mode="selectionMode"
+                  :selected-count="groupSelectedCount(group.items)"
+                  @toggle="toggleGroup(group.key)"
+                />
+                <Transition name="collapse">
+                  <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                    <AssetCard
+                      v-for="asset in group.items"
+                      :key="asset.id"
+                      :asset="asset"
+                      @click="$router.push(`/assets/${asset.id}`)"
+                    />
+                  </div>
+                </Transition>
+              </template>
             </template>
           </div>
         </van-list>
@@ -150,24 +185,54 @@
       </div>
       <div class="selection-list-cards">
         <template v-if="viewMode === 'list'">
-          <AssetListItem
-            v-for="asset in dashboardStore.displayedAssets"
-            :key="asset.id"
-            :asset="asset"
-            :selectable="true"
-            :selected="selectedIds.includes(asset.id)"
-            @click="toggleSelection(asset.id)"
-          />
+          <template v-for="group in groupedByCategory" :key="group.key">
+            <AssetGroupHeader
+              :category="group.category"
+              :count="group.items.length"
+              :subtotal="group.subtotal"
+              :collapsed="collapsedGroups.has(group.key)"
+              :selection-mode="true"
+              :selected-count="groupSelectedCount(group.items)"
+              @toggle="toggleGroup(group.key)"
+            />
+            <Transition name="collapse">
+              <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                <AssetListItem
+                  v-for="asset in group.items"
+                  :key="asset.id"
+                  :asset="asset"
+                  :selectable="true"
+                  :selected="selectedIds.includes(asset.id)"
+                  @click="toggleSelection(asset.id)"
+                />
+              </div>
+            </Transition>
+          </template>
         </template>
         <template v-else>
-          <AssetCard
-            v-for="asset in dashboardStore.displayedAssets"
-            :key="asset.id"
-            :asset="asset"
-            :selectable="true"
-            :selected="selectedIds.includes(asset.id)"
-            @click="toggleSelection(asset.id)"
-          />
+          <template v-for="group in groupedByCategory" :key="group.key">
+            <AssetGroupHeader
+              :category="group.category"
+              :count="group.items.length"
+              :subtotal="group.subtotal"
+              :collapsed="collapsedGroups.has(group.key)"
+              :selection-mode="true"
+              :selected-count="groupSelectedCount(group.items)"
+              @toggle="toggleGroup(group.key)"
+            />
+            <Transition name="collapse">
+              <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                <AssetCard
+                  v-for="asset in group.items"
+                  :key="asset.id"
+                  :asset="asset"
+                  :selectable="true"
+                  :selected="selectedIds.includes(asset.id)"
+                  @click="toggleSelection(asset.id)"
+                />
+              </div>
+            </Transition>
+          </template>
         </template>
       </div>
     </div>
@@ -252,7 +317,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -266,7 +331,10 @@ import { getIconId } from '@/utils/icon'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
+import AssetGroupHeader from '@/components/asset/AssetGroupHeader.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
+import { useCurrency } from '@/composables/useCurrency'
+import type { Asset, Category } from '@/types'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -287,7 +355,7 @@ const activeCategoryId = ref<string | null>(null) // null = show all
 
 // Feature-parity filters (ported from AssetListPage): type tab / search / sort
 const TYPE_TABS = ['all', 'physical', 'financial'] as const
-const activeTypeIndex = ref(0)
+const activeTypeIndex = ref<string>('all')
 const searchText = ref('')
 const sortBy = ref('current_value')
 
@@ -340,14 +408,69 @@ function onFabAction(action: 'add' | 'import') {
 }
 
 // Category counts from backend (full counts, not page-limited)
+// Filter by active type tab: when "实物" or "金融" is selected, only show matching categories
 const categoriesWithAssetCount = computed(() => {
+  const activeType = activeTypeIndex.value as string
   return dashboardStore.categoryCounts
+    .filter((c) => activeType === 'all' || c.asset_type === activeType)
     .map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color, count: c.count }))
     .sort((a, b) => b.count - a.count)
 })
 
 // Asset list: displayedAssets is already filtered by backend (status + optional category)
 const filteredByCategoryAssets = computed(() => dashboardStore.displayedAssets)
+
+// Grouped assets by category (for list view)
+const UNCATEGORIZED_KEY = '__uncategorized__'
+const collapsedGroups = ref<Set<string>>(new Set())
+
+interface AssetGroup {
+  key: string
+  category: Category | undefined
+  items: Asset[]
+  subtotal: number
+}
+
+const currency = useCurrency()
+
+const groupedByCategory = computed<AssetGroup[]>(() => {
+  const assets = filteredByCategoryAssets.value
+  const map = new Map<string, { category: Category | undefined; items: Asset[]; subtotal: number }>()
+
+  for (const asset of assets) {
+    const key = asset.category?.id ?? UNCATEGORIZED_KEY
+    let group = map.get(key)
+    if (!group) {
+      group = { category: asset.category, items: [], subtotal: 0 }
+      map.set(key, group)
+    }
+    group.items.push(asset)
+    const val = Number(asset.current_value ?? 0)
+    group.subtotal += isNaN(val) ? 0 : val
+  }
+
+  // Sort by subtotal descending (highest value category first)
+  return Array.from(map.values())
+    .sort((a, b) => b.subtotal - a.subtotal)
+    .map((g) => ({ key: g.category?.id ?? UNCATEGORIZED_KEY, ...g }))
+})
+
+function toggleGroup(key: string) {
+  if (collapsedGroups.value.has(key)) {
+    collapsedGroups.value.delete(key)
+  } else {
+    collapsedGroups.value.add(key)
+  }
+}
+
+function groupSelectedCount(items: Asset[]): number {
+  return items.filter((a) => selectedIds.value.includes(a.id)).length
+}
+
+// Expand all groups when search/filter changes
+watch([searchText, sortBy, activeTypeIndex, activeCategoryIndex, activeStatus], () => {
+  collapsedGroups.value.clear()
+})
 
 function statusLabel(status: string): string {
   const key = status === 'in_use' ? 'statusGrid.inUse' : `statusGrid.${status}`
@@ -379,6 +502,18 @@ const sortOptions = computed(() => [
   { text: t('asset.sortByName'), value: 'name' },
 ])
 
+const currentSortLabel = computed(() => {
+  const opt = sortOptions.value.find((o) => o.value === sortBy.value)
+  return opt?.text ?? t('asset.sortByValue')
+})
+
+const SORT_CYCLE = ['current_value', 'purchase_date', 'name'] as const
+function cycleSortOption() {
+  const idx = SORT_CYCLE.indexOf(sortBy.value as (typeof SORT_CYCLE)[number])
+  sortBy.value = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]
+  onSearch()
+}
+
 function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
   const targetStatus = activeStatus.value || 'in_use'
@@ -409,7 +544,11 @@ function onStatusSelect(status: string | null) {
 function onTypeTabChange(name: string | number) {
   const tab = typeof name === 'number' ? TYPE_TABS[name] : (name as (typeof TYPE_TABS)[number])
   const assetType = tab === 'all' ? null : (tab as 'physical' | 'financial')
-  dashboardStore.applyAssetFilters({ assetType })
+  // Reset category filter when type changes (filtered category list changes)
+  activeCategoryIndex.value = 0
+  activeCategoryId.value = null
+  // applyAssetFilters will reset pagination and fetch assets with updated filters
+  dashboardStore.applyAssetFilters({ assetType, resetCategory: true })
 }
 
 // Search / sort change (ported): apply current search text + sort, reset pagination, refetch page 1
@@ -554,6 +693,11 @@ async function setViewMode(mode: 'card' | 'list') {
 onMounted(() => {
   // Attach scroll listener for freeze/unfreeze logic
   window.addEventListener('scroll', onScroll, { passive: true })
+  // Load category counts for secondary filter nav on initial render
+  dashboardStore.fetchCategoryCounts(activeStatus.value || 'in_use')
+  // Load initial asset page — required because van-list is gated by
+  // v-if="filteredByCategoryAssets.length" and never fires @load on empty list.
+  dashboardStore.fetchAssetsPage(activeStatus.value || 'in_use', 1, 20, '')
 })
 
 onUnmounted(() => {
@@ -708,8 +852,37 @@ defineExpose({
   flex: 1;
   padding: 8px 12px;
 }
-.search-bar :deep(.van-dropdown-menu) {
-  flex-shrink: 0;
+
+/* Sort trigger button */
+.sort-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  margin-right: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.sort-trigger:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+.sort-trigger-icon {
+  font-size: 14px;
+}
+.sort-trigger-label {
+  line-height: 1;
+}
+[data-theme='dark'] .sort-trigger {
+  background: rgba(189, 187, 255, 0.15);
+  color: var(--color-lavender);
 }
 
 /* Asset Section */
@@ -775,6 +948,32 @@ defineExpose({
 }
 .asset-list {
   /* cards have their own margin-bottom */
+}
+
+/* Group items wrapper for collapse transition */
+.group-items {
+  overflow: hidden;
+}
+
+/* Collapse transition */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 200ms ease;
+  max-height: 2000px;
+  overflow: hidden;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapse-enter-active,
+  .collapse-leave-active {
+    transition: none;
+  }
 }
 
 /* Selection Mode */

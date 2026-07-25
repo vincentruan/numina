@@ -14,29 +14,29 @@ from apps.agent.services.audit_logger import AuditEntry, AuditLogger, setup_audi
 
 class TestAuditEntry:
     def test_audit_id_is_uuid4(self):
-        entry = AuditEntry(family_id="f1", capability="report", success=True)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True)
         parsed = uuid.UUID(entry.audit_id, version=4)
         assert str(parsed) == entry.audit_id
 
     def test_timestamp_is_iso(self):
         from datetime import datetime
-        entry = AuditEntry(family_id="f1", capability="report", success=True)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True)
         # Should parse without error
         datetime.fromisoformat(entry.timestamp)
 
     def test_output_summary_truncated_to_200(self):
         long_text = "x" * 500
-        entry = AuditEntry(family_id="f1", capability="report", success=True, output_summary=long_text)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True, output_summary=long_text)
         assert len(entry.output_summary) == 200
 
     def test_output_summary_short_not_truncated(self):
-        entry = AuditEntry(family_id="f1", capability="report", success=True, output_summary="short")
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True, output_summary="short")
         assert entry.output_summary == "short"
 
     def test_all_required_fields_present(self):
         entry = AuditEntry(
             family_id="f1",
-            capability="chat",
+            skill_id="chat",
             success=False,
             user_id="u1",
             skill_triggered="chat",
@@ -74,7 +74,7 @@ class TestAuditLogger:
             al._audit_logger.removeHandler(h)
         al._audit_logger.addHandler(CapturingHandler())
 
-        entry = AuditEntry(family_id="f1", capability="report", success=True)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True)
         al.AuditLogger().log_call(entry)
         assert len(messages) > 0
         assert al._audit_logger is not None
@@ -97,7 +97,7 @@ class TestAuditLogger:
 
         al._audit_logger.addHandler(BrokenHandler())
 
-        entry = AuditEntry(family_id="f1", capability="report", success=True)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True)
         # Must not raise
         al.AuditLogger().log_call(entry)
 
@@ -118,7 +118,7 @@ class TestAuditLogger:
             al._audit_logger.removeHandler(h)
         al._audit_logger.addHandler(CapturingHandler())
 
-        entry = AuditEntry(family_id="fam-123", capability="report", success=True)
+        entry = AuditEntry(family_id="fam-123", skill_id="report", success=True)
         al.AuditLogger().log_call(entry)
         assert any("fam-123" in m for m in messages)
 
@@ -138,16 +138,16 @@ class TestAuditLogger:
             al._audit_logger.removeHandler(h)
         al._audit_logger.addHandler(CapturingHandler())
 
-        entry = AuditEntry(family_id="f1", capability="chat", success=True, user_id="user-42")
+        entry = AuditEntry(family_id="f1", skill_id="chat", success=True, user_id="user-42")
         al.AuditLogger().log_call(entry)
         assert any("user-42" in m for m in messages)
 
 
 class TestDeerflowAuditFields:
     def test_deerflow_attempted_defaults_false(self):
-        entry = AuditEntry(family_id="f1", capability="report", success=True)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True)
         assert entry.deerflow_attempted is False
 
     def test_deerflow_attempted_true_when_set(self):
-        entry = AuditEntry(family_id="f1", capability="report", success=True, deerflow_attempted=True)
+        entry = AuditEntry(family_id="f1", skill_id="report", success=True, deerflow_attempted=True)
         assert entry.deerflow_attempted is True

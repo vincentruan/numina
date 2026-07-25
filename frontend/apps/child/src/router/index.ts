@@ -3,7 +3,7 @@ import { useAuthStore, setUser } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, clearRouterTimeout } from '@/composables/usePageLoading'
+import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, markRouterNprogressActive } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 
@@ -135,6 +135,7 @@ async function verifyChildSession(): Promise<boolean> {
 
 router.beforeEach(async (to, _from, next) => {
   NProgress.start()
+  markRouterNprogressActive()
 
   // Check cached localStorage first (fast path)
   const authStore = useAuthStore()
@@ -163,22 +164,14 @@ router.beforeEach(async (to, _from, next) => {
   next()
 })
 
-router.afterEach((to) => {
-  // Pages with skeleton: complete immediately, clear any pending timeout
-  if (to.meta.hasSkeleton) {
-    clearRouterTimeout()
-    NProgress.done()
-    return
-  }
-
-  // Pages without skeleton: defer to page's usePageLoading
-  // Safety timeout: force-complete after 5s (handles both idle and stuck cases)
-  // - If page never called increment(): completes idle NProgress
-  // - If page called increment() but hung: force-completes stuck loading
-  // - If page called increment() within 5s: timeout cleared by increment(), page controls
+router.afterEach((_to) => {
+  // Unified lifecycle: all pages go through the same safety timeout.
+  // Pages that call increment() within the timeout take over NProgress control;
+  // pages that call complete() (skeleton pages) dismiss NProgress immediately.
+  // Pages without async work auto-complete via this timeout.
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
-  }, 5000)
+  }, 200)
   registerRouterTimeout(timeoutId)
 })
 

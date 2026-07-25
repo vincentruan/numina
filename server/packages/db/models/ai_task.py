@@ -12,7 +12,7 @@ class AITask(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
-    capability: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    skill_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
     # status: running | queued | completed | failed | timeout | cancelled
     queue_position: Mapped[int | None] = mapped_column(nullable=True)

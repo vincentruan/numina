@@ -1,5 +1,6 @@
 <template>
-  <van-form @submit="onSubmit">
+  <van-form ref="formRef" @submit="onSubmit" @failed="onValidationFailed">
+    <div ref="formContainerRef">
 
     <!-- P1: Image upload — top independent section -->
     <div class="image-upload-section">
@@ -33,10 +34,12 @@
       >{{ t('assetForm.typeFinancial') }}</div>
     </div>
 
-    <!-- Basic info -->
+    <!-- Basic info — always expanded (not collapsible) -->
     <van-cell-group inset :title="t('assetForm.sectionBasicInfo')">
       <van-field
         v-model="form.name"
+        required
+        name="name"
         :label="t('assetForm.nameLabel')"
         :placeholder="t('assetForm.namePlaceholder')"
         :rules="[{ required: true, message: t('assetForm.nameRequired') }]"
@@ -50,6 +53,8 @@
       <!-- P0: Category — tap-to-open popup picker -->
       <van-field
         :model-value="selectedCategoryName"
+        required
+        name="category_id"
         is-link
         readonly
         :label="t('assetForm.categoryLabel')"
@@ -77,6 +82,8 @@
 
       <van-field
         v-model="form.purchase_price"
+        required
+        name="purchase_price"
         type="number" inputmode="decimal"
         :label="t('assetForm.purchasePriceLabel')"
         :placeholder="t('assetForm.purchasePricePlaceholder')"
@@ -90,6 +97,8 @@
       <!-- P0: current_value — with "同购入价" button -->
       <van-field
         v-model="form.current_value"
+        required
+        name="current_value"
         type="number" inputmode="decimal"
         :label="t('assetForm.currentValueLabel')"
         :placeholder="t('assetForm.currentValuePlaceholder')"
@@ -112,6 +121,8 @@
 
       <van-field
         v-model="form.purchase_date"
+        required
+        name="purchase_date"
         is-link
         readonly
         :label="t('assetForm.purchaseDateLabel')"
@@ -148,109 +159,132 @@
       </template>
     </van-cell-group>
 
-    <!-- Physical asset fields — reordered: freq → lifespan → location → maintenance -->
-    <van-cell-group v-if="form.asset_type === 'physical'" inset :title="t('assetForm.sectionPhysicalInfo')">
+    <!-- Physical asset fields — collapsible, auto-expand when asset_type=physical -->
+    <van-collapse
+      v-if="form.asset_type === 'physical'"
+      v-model="expandedSections"
+      class="form-collapse"
+    >
+      <van-collapse-item :title="t('assetForm.sectionPhysicalInfo')" name="physical">
+        <!-- P1: Usage frequency — icon button group -->
+        <van-cell :title="t('assetForm.usageFreqLabel')" />
+        <UsageFreqSelector v-model="form.usage_frequency" />
 
-      <!-- P1: Usage frequency — icon button group -->
-      <van-cell :title="t('assetForm.usageFreqLabel')" />
-      <UsageFreqSelector v-model="form.usage_frequency" />
+        <!-- P0: Expected lifespan — unit years + "不限" -->
+        <van-field
+          v-model="expectedLifeYears"
+          name="expected_lifespan_years"
+          type="digit"
+          :label="t('assetForm.lifespanLabel')"
+          :placeholder="t('assetForm.lifespanPlaceholder')"
+          :class="{ 'ai-fill': aiFilledFields.has('expected_lifespan_years') }"
+        >
+          <template #extra>
+            <span class="unit-label">{{ t('assetForm.lifespanUnitYears') }}</span>
+          </template>
+          <template #right-icon>
+            <van-button
+              size="mini"
+              plain
+              class="same-price-btn"
+              @click.stop="expectedLifeYears = ''"
+            >{{ t('assetForm.lifespanUnlimited') }}</van-button>
+          </template>
+        </van-field>
 
-      <!-- P0: Expected lifespan — unit years + "不限" -->
-      <van-field
-        v-model="expectedLifeYears"
-        type="digit"
-        :label="t('assetForm.lifespanLabel')"
-        :placeholder="t('assetForm.lifespanPlaceholder')"
-        :class="{ 'ai-fill': aiFilledFields.has('expected_lifespan_years') }"
-      >
-        <template #extra>
-          <span class="unit-label">{{ t('assetForm.lifespanUnitYears') }}</span>
-        </template>
-        <template #right-icon>
-          <van-button
-            size="mini"
-            plain
-            class="same-price-btn"
-            @click.stop="expectedLifeYears = ''"
-          >{{ t('assetForm.lifespanUnlimited') }}</van-button>
-        </template>
-      </van-field>
+        <van-field v-model="form.location" name="location" :label="t('assetForm.locationLabel')" :placeholder="t('assetForm.locationPlaceholder')" />
 
-      <van-field v-model="form.location" :label="t('assetForm.locationLabel')" :placeholder="t('assetForm.locationPlaceholder')" />
+        <van-field v-model="form.annual_maintenance_cost" name="annual_maintenance_cost" type="number" inputmode="decimal" :label="t('assetForm.maintenanceLabel')" :placeholder="t('assetForm.maintenancePlaceholder')">
+          <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
+        </van-field>
+      </van-collapse-item>
+    </van-collapse>
 
-      <van-field v-model="form.annual_maintenance_cost" type="number" inputmode="decimal" :label="t('assetForm.maintenanceLabel')" :placeholder="t('assetForm.maintenancePlaceholder')">
-        <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
-      </van-field>
-    </van-cell-group>
-
-    <!-- Financial asset fields -->
-    <van-cell-group v-if="form.asset_type === 'financial'" inset :title="t('assetForm.sectionFinancialInfo')">
-      <van-field v-model="form.institution" :label="t('assetForm.institutionLabel')" :placeholder="t('assetForm.institutionPlaceholder')" />
-      <van-field v-model="form.interest_rate" type="number" inputmode="decimal" :label="t('assetForm.interestRateLabel')" :placeholder="t('assetForm.interestRatePlaceholder')" />
-      <van-field
-        v-model="form.maturity_date"
-        is-link
-        readonly
-        :label="t('assetForm.maturityDateLabel')"
-        :placeholder="t('assetForm.maturityDatePlaceholder')"
-        @click="showMaturityPicker = true"
-      />
-      <van-popup v-model:show="showMaturityPicker" position="bottom" round>
-        <van-date-picker
-          v-model="maturityPickerValue"
-          :title="t('assetForm.maturityPickerTitle')"
-          @confirm="onMaturityConfirm"
-          @cancel="showMaturityPicker = false"
+    <!-- Financial asset fields — collapsible -->
+    <van-collapse
+      v-if="form.asset_type === 'financial'"
+      v-model="expandedSections"
+      class="form-collapse"
+    >
+      <van-collapse-item :title="t('assetForm.sectionFinancialInfo')" name="financial">
+        <van-field v-model="form.institution" name="institution" :label="t('assetForm.institutionLabel')" :placeholder="t('assetForm.institutionPlaceholder')" />
+        <van-field v-model="form.interest_rate" name="interest_rate" type="number" inputmode="decimal" :label="t('assetForm.interestRateLabel')" :placeholder="t('assetForm.interestRatePlaceholder')" />
+        <van-field
+          v-model="form.maturity_date"
+          name="maturity_date"
+          is-link
+          readonly
+          :label="t('assetForm.maturityDateLabel')"
+          :placeholder="t('assetForm.maturityDatePlaceholder')"
+          @click="showMaturityPicker = true"
         />
-      </van-popup>
-    </van-cell-group>
-
-    <!-- Physical asset: warranty expiry date -->
-    <van-cell-group v-if="form.asset_type === 'physical'" inset :title="t('assetForm.sectionWarrantyInfo')">
-      <van-field
-        v-model="form.warranty_expiry_date"
-        is-link
-        readonly
-        :label="t('assetForm.warrantyExpiryLabel')"
-        :placeholder="t('assetForm.warrantyExpiryPlaceholder')"
-        @click="showWarrantyPicker = true"
-      />
-      <van-popup v-model:show="showWarrantyPicker" position="bottom" round>
-        <van-date-picker
-          v-model="warrantyPickerValue"
-          :title="t('assetForm.warrantyPickerTitle')"
-          @confirm="onWarrantyConfirm"
-          @cancel="showWarrantyPicker = false"
-        />
-      </van-popup>
-    </van-cell-group>
-
-    <!-- P1: Tags + notes -->
-    <van-cell-group inset :title="t('assetForm.sectionTagsNotes')">
-      <van-cell :title="t('assetForm.tagsLabel')">
-        <template #value>
-          <TagSelector
-            v-model="selectedTagIds"
-            :tags="availableTags"
-            @tag-created="onTagCreated"
+        <van-popup v-model:show="showMaturityPicker" position="bottom" round>
+          <van-date-picker
+            v-model="maturityPickerValue"
+            :title="t('assetForm.maturityPickerTitle')"
+            @confirm="onMaturityConfirm"
+            @cancel="showMaturityPicker = false"
           />
-        </template>
-      </van-cell>
-      <van-field v-model="form.notes" type="textarea" :label="t('assetForm.notesLabel')" :placeholder="t('assetForm.notesPlaceholder')" rows="2" autosize :class="{ 'ai-fill': aiFilledFields.has('notes') }" />
-    </van-cell-group>
+        </van-popup>
+      </van-collapse-item>
+    </van-collapse>
+
+    <!-- Physical asset: warranty expiry date — collapsible -->
+    <van-collapse
+      v-if="form.asset_type === 'physical'"
+      v-model="expandedSections"
+      class="form-collapse"
+    >
+      <van-collapse-item :title="t('assetForm.sectionWarrantyInfo')" name="warranty">
+        <van-field
+          v-model="form.warranty_expiry_date"
+          name="warranty_expiry_date"
+          is-link
+          readonly
+          :label="t('assetForm.warrantyExpiryLabel')"
+          :placeholder="t('assetForm.warrantyExpiryPlaceholder')"
+          @click="showWarrantyPicker = true"
+        />
+        <van-popup v-model:show="showWarrantyPicker" position="bottom" round>
+          <van-date-picker
+            v-model="warrantyPickerValue"
+            :title="t('assetForm.warrantyPickerTitle')"
+            @confirm="onWarrantyConfirm"
+            @cancel="showWarrantyPicker = false"
+          />
+        </van-popup>
+      </van-collapse-item>
+    </van-collapse>
+
+    <!-- P1: Tags + notes — collapsible -->
+    <van-collapse v-model="expandedSections" class="form-collapse">
+      <van-collapse-item :title="t('assetForm.sectionTagsNotes')" name="tagsNotes">
+        <van-cell :title="t('assetForm.tagsLabel')">
+          <template #value>
+            <TagSelector
+              v-model="selectedTagIds"
+              :tags="availableTags"
+              @tag-created="onTagCreated"
+            />
+          </template>
+        </van-cell>
+        <van-field v-model="form.notes" name="notes" type="textarea" :label="t('assetForm.notesLabel')" :placeholder="t('assetForm.notesPlaceholder')" rows="2" autosize :class="{ 'ai-fill': aiFilledFields.has('notes') }" />
+      </van-collapse-item>
+    </van-collapse>
 
     <div class="form-actions">
       <van-button round block type="primary" native-type="submit" :loading="loading">
         {{ isEdit ? t('asset.editAsset') : t('asset.addAsset') }}
       </van-button>
     </div>
+    </div>
   </van-form>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { UploaderAfterRead } from 'vant'
+import type { UploaderAfterRead, FormInstance } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
@@ -277,6 +311,20 @@ const props = withDefaults(defineProps<{
 })
 
 const aiStore = useAIStore()
+
+// Form ref for validation
+const formRef = ref<FormInstance>()
+const formContainerRef = ref<HTMLFormElement>()
+
+// Collapsible sections state — shared array of expanded section names
+// Basic info is always expanded (not collapsible). Others default collapsed.
+const expandedSections = ref<string[]>([])
+
+function expandSection(name: string) {
+  if (!expandedSections.value.includes(name)) {
+    expandedSections.value.push(name)
+  }
+}
 
 const emit = defineEmits<{
   submit: [data: AssetRequestPayload]
@@ -340,7 +388,7 @@ function syncPurchasePrice() {
   }
 }
 
-// P1: Type change — clear type-specific fields
+// P1: Type change — clear type-specific fields + auto-expand physical section
 function onTypeChange(type: 'physical' | 'financial') {
   if (form.value.asset_type === type) return
   form.value.asset_type = type
@@ -356,8 +404,17 @@ function onTypeChange(type: 'physical' | 'financial') {
     form.value.interest_rate = ''
     form.value.maturity_date = ''
     form.value.usage_frequency = 'daily'
+    // Auto-expand physical section when switching to physical
+    expandSection('physical')
   }
 }
+
+// Auto-expand physical section when asset_type changes to physical (e.g. via initialData)
+watch(() => form.value.asset_type, (type) => {
+  if (type === 'physical') {
+    expandSection('physical')
+  }
+})
 
 // Currency symbol helper
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -496,6 +553,22 @@ watch(() => props.initialData, (data) => {
       const fullUrl = imageUrl.startsWith('/api/v1') ? imageUrl : `/api/v1${imageUrl}`
       fileList.value = [{ url: fullUrl, content: fullUrl, status: 'done' }]
     }
+
+    // Edit mode: auto-expand sections that have data
+    if (data.asset_type === 'physical') {
+      expandSection('physical')
+      // Expand warranty if warranty date is set
+      if (data.warranty_expiry_date) {
+        expandSection('warranty')
+      }
+    }
+    if (data.asset_type === 'financial') {
+      expandSection('financial')
+    }
+    // Expand tags/notes if tags or notes exist
+    if ((tags && tags.length > 0) || data.notes) {
+      expandSection('tagsNotes')
+    }
   }
 }, { immediate: true })
 
@@ -566,6 +639,44 @@ async function afterRead(file: { file: File; url?: string; content?: string; sta
 
 function onDelete() {
   form.value.image_url = ''
+}
+
+// Map field names to their collapsible section
+function findFieldSection(fieldName: string): string | null {
+  const physicalFields = ['location', 'expected_lifespan_years', 'annual_maintenance_cost', 'usage_frequency']
+  const financialFields = ['institution', 'interest_rate', 'maturity_date']
+  const warrantyFields = ['warranty_expiry_date']
+  const tagsNotesFields = ['notes', 'tags']
+
+  if (physicalFields.includes(fieldName)) return 'physical'
+  if (financialFields.includes(fieldName)) return 'financial'
+  if (warrantyFields.includes(fieldName)) return 'warranty'
+  if (tagsNotesFields.includes(fieldName)) return 'tagsNotes'
+  return null
+}
+
+// Validation failure: auto-expand section containing first invalid field, scroll and focus it
+async function onValidationFailed({ errors }: { errors: Array<{ name?: string; message: string }> }) {
+  if (!errors?.length) return
+
+  const firstError = errors[0]
+  const fieldName = firstError.name
+  if (!fieldName) return
+
+  const section = findFieldSection(fieldName)
+
+  // Auto-expand section if collapsed
+  if (section) {
+    expandSection(section)
+    await nextTick()
+  }
+
+  // Find the field element within form container and scroll/focus it
+  const fieldEl = formContainerRef.value?.querySelector(`[name="${fieldName}"]`) as HTMLInputElement | null
+  if (fieldEl) {
+    fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    fieldEl.focus()
+  }
 }
 
 function onSubmit() {
@@ -747,5 +858,37 @@ function onSubmit() {
 }
 .category-item.selected .cat-name {
   color: var(--van-primary-color);
+}
+
+/* Collapsible sections */
+.form-collapse {
+  margin: 8px 0;
+}
+
+.form-collapse :deep(.van-collapse-item__title) {
+  padding: 12px 16px;
+  background: transparent;
+}
+
+.form-collapse :deep(.van-collapse-item__title .van-cell__title) {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.form-collapse :deep(.van-collapse-item__content) {
+  padding: 0;
+}
+
+.form-collapse :deep(.van-cell-group--inset) {
+  margin: 0;
+  background: var(--van-background-2);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .form-collapse :deep(.van-collapse-item__wrapper) {
+    transition: none;
+  }
 }
 </style>

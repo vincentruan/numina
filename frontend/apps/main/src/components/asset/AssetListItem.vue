@@ -344,30 +344,9 @@ const remainingLabel = computed(() =>
   left: 0;
   top: 0;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    #ff6b6b 0%,
-    #ffa94d 18%,
-    #ffe066 36%,
-    #69db7c 54%,
-    #4dabf7 72%,
-    #748ffc 88%,
-    #da77f2 100%
-  );
+  background: var(--van-primary-color);
   border-radius: 3px;
   transition: width 0.3s ease;
-}
-[data-theme='dark'] .progress-fill {
-  background: linear-gradient(
-    90deg,
-    #c92a2a 0%,
-    #d9480f 18%,
-    #e67700 36%,
-    #2f9e44 54%,
-    #1971c2 72%,
-    #3b5bdb 88%,
-    #9c36b5 100%
-  );
 }
 
 .progress-marker {

@@ -14,14 +14,14 @@ locally, which is outside automated test scope (per CLAUDE.md: no dev servers).
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
-
 
 # ---------------------------------------------------------------------------
 # Stub adapter — deterministic SSE frame sequence
@@ -39,7 +39,6 @@ def _make_stub_adapter():
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
-        resume_answer: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         # 1. metadata is emitted by worker.py itself (not the adapter), so
         #    the adapter starts with messages events.

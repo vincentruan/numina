@@ -1,7 +1,6 @@
 """技能配置管理路由（per-family）。
 
 Skill catalog 命名空间约定：
-- ``BUILTIN_CAPABILITIES`` 列出可启用/禁用的业务能力 skill（对应 ``agent/skills/*.md`` 文件）。
 - ``RESERVED_NAMES`` 保留给系统内部能力，禁止 owner 创建同名 custom skill：
   - ``chat`` 是 AI 问答智能体的纯 LLM 对话内部能力（``agent.skills=["chat"]`` 由 dispatch 层
     识别为"无业务 skill"模式，不进入 catalog 查找）。
@@ -12,9 +11,7 @@ Skill catalog 命名空间约定：
 """
 
 import logging
-import os
 import re
-from pathlib import Path
 
 import httpx
 import yaml
@@ -24,26 +21,21 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult, require_owner
-from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.models.family_skill_config import FamilySkillConfig
 from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.user import User
-from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services import workspace
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.skill_command_parser import SkillCommandParser
-from apps.backend.app.services.skill_downloader import SkillDownloadError, SkillDownloader
+from apps.backend.app.services.skill_downloader import (
+    SkillDownloader,
+    SkillDownloadError,
+)
 from apps.backend.app.services.skill_parser import parse_skill_frontmatter
 
 router = APIRouter(prefix="/ai/skills", tags=["ai-skills"])
 logger = logging.getLogger(__name__)
-
-# Business capabilities exposed to skill management (matches agent/skills/*.md).
-# 注意：`chat` 与 `asset-report` 不在此列 — 见 RESERVED_NAMES。
-# U7: 5 外扩 trigger skill 全栈删除后，业务能力回归 numina SOUL（chat/SKILL.md），
-# 此列表为空。U5: report 也已删除（asset-report 是系统内置固定流程，非可开关能力）。
-BUILTIN_CAPABILITIES: list[str] = []
 
 # Reserved namespace — not skills, but blocked from custom skill_id collisions.
 # - ``chat`` 是 AI 问答智能体的纯 LLM 对话内部能力（``agent.skills=["chat"]`` 由
@@ -58,7 +50,6 @@ RESERVED_NAMES = ["chat", "asset-report", "import-parse", "finance-coach"]
 # Internal-only skills excluded from user-facing catalog and creation.
 INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer"}
 
-BUILTIN_DEFAULT_ORDER: dict[str, int] = {}
 
 SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 
@@ -83,50 +74,7 @@ def _strip_allowed_tools(content: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", stripped)
 
 
-# Resolve skills directory: prefer AGENT_SKILLS_DIR env var (set in docker-compose /
-# production), fall back to the sibling agent/skills/ path for local dev.
-_env_skills_dir = os.environ.get("AGENT_SKILLS_DIR")
-_SKILLS_DIR: Path = (
-    Path(_env_skills_dir)
-    if _env_skills_dir
-    else Path(__file__).parent.parent.parent.parent.parent / "agent" / "skills"
-)
-
-
-def _read_default_prompt(capability: str, family_id: str | None = None) -> str | None:
-    """Read skill prompt: workspace override first, then agent/skills/{capability}.md."""
-    if family_id is not None:
-        ws_prompt = workspace.get_skill_prompt(family_id, capability)
-        if ws_prompt is not None:
-            return str(ws_prompt.strip())
-    skill_file = _SKILLS_DIR / f"{capability}.md"
-    if not skill_file.exists():
-        return None
-    content = skill_file.read_text(encoding="utf-8")
-    if content.startswith("---"):
-        end = content.find("---", 3)
-        if end != -1:
-            return content[end + 3 :].strip()
-    return content.strip()
-
-
 # ── Schemas ───────────────────────────────────────────────────────────────────
-
-
-class SkillConfigResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    capability: str
-    is_enabled: bool
-    custom_prompt: str | None
-    default_prompt: (
-        str | None
-    )  # always populated from workspace override or skills/*.md
-
-
-class SkillConfigUpdate(BaseModel):
-    is_enabled: bool | None = None
-    custom_prompt: str | None = None  # None = keep existing; "" = clear override
 
 
 class SkillDefinitionResponse(BaseModel):
@@ -192,8 +140,6 @@ class CustomSkillCreate(BaseModel):
             )
         if len(v) > 64:
             raise ValueError("skill_id 长度不能超过 64 字符")
-        if v in BUILTIN_CAPABILITIES:
-            raise ValueError("skill_id 不能与内置技能冲突")
         if v in RESERVED_NAMES:
             raise ValueError("skill_id 与保留命名冲突")
         if v in INTERNAL_ONLY_SKILLS:
@@ -256,8 +202,6 @@ class RawSkillSaveRequest(BaseModel):
             )
         if len(v) > 64:
             raise ValueError("skill_id 长度不能超过 64 字符")
-        if v in BUILTIN_CAPABILITIES:
-            raise ValueError("skill_id 不能与内置技能冲突")
         if v in RESERVED_NAMES:
             raise ValueError("skill_id 与保留命名冲突")
         if v in INTERNAL_ONLY_SKILLS:
@@ -276,113 +220,6 @@ class ReorderRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-@router.get("", response_model=list[SkillConfigResponse])
-def list_skills(
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-) -> list[SkillConfigResponse]:
-    """列出所有内置技能及当前家庭的配置状态。"""
-    rows = {
-        r.capability: r
-        for r in db.query(FamilySkillConfig)
-        .filter(FamilySkillConfig.family_id == current_user.family_id)
-        .all()
-    }
-    result = []
-    for cap in BUILTIN_CAPABILITIES:
-        row = rows.get(cap)
-        default_prompt = _read_default_prompt(cap, current_user.family_id)
-        result.append(
-            SkillConfigResponse(
-                capability=cap,
-                is_enabled=row.is_enabled if row else True,
-                custom_prompt=row.custom_prompt if row else None,
-                default_prompt=default_prompt,
-            )
-        )
-    return result
-
-
-@router.put("/{capability}", response_model=SkillConfigResponse)
-def update_skill(
-    capability: str,
-    payload: SkillConfigUpdate,
-    current_user: User = Depends(require_owner),
-    db: Session = Depends(get_db),
-) -> SkillConfigResponse:
-    """更新技能配置（仅 owner）。空字符串 custom_prompt 表示清除自定义提示词。"""
-    if capability not in BUILTIN_CAPABILITIES:
-        raise AppError(ErrorCode.NOT_FOUND, f"未知技能: {capability}")
-
-    row = (
-        db.query(FamilySkillConfig)
-        .filter(
-            FamilySkillConfig.family_id == current_user.family_id,
-            FamilySkillConfig.capability == capability,
-        )
-        .first()
-    )
-
-    if row is None:
-        row = FamilySkillConfig(
-            family_id=current_user.family_id,
-            capability=capability,
-            is_enabled=True,
-            custom_prompt=None,
-        )
-        db.add(row)
-
-    if payload.is_enabled is not None:
-        row.is_enabled = payload.is_enabled
-    if payload.custom_prompt is not None:
-        # Empty string clears the override; non-empty sets it
-        row.custom_prompt = payload.custom_prompt if payload.custom_prompt else None
-
-    db.commit()
-    db.refresh(row)
-
-    default_prompt = _read_default_prompt(capability, current_user.family_id)
-    return SkillConfigResponse(
-        capability=row.capability,
-        is_enabled=row.is_enabled,
-        custom_prompt=row.custom_prompt,
-        default_prompt=default_prompt,
-    )
-
-
-@router.delete("/{capability}/prompt", response_model=SkillConfigResponse)
-def reset_skill_prompt(
-    capability: str,
-    current_user: User = Depends(require_owner),
-    db: Session = Depends(get_db),
-) -> SkillConfigResponse:
-    """重置技能提示词为默认值（仅 owner）。"""
-    if capability not in BUILTIN_CAPABILITIES:
-        raise AppError(ErrorCode.NOT_FOUND, f"未知技能: {capability}")
-
-    row = (
-        db.query(FamilySkillConfig)
-        .filter(
-            FamilySkillConfig.family_id == current_user.family_id,
-            FamilySkillConfig.capability == capability,
-        )
-        .first()
-    )
-
-    if row:
-        row.custom_prompt = None
-        db.commit()
-        db.refresh(row)
-
-    default_prompt = _read_default_prompt(capability, current_user.family_id)
-    return SkillConfigResponse(
-        capability=capability,
-        is_enabled=row.is_enabled if row else True,
-        custom_prompt=None,
-        default_prompt=default_prompt,
-    )
-
-
 # ── New Endpoints: Grouped, Custom CRUD, Toggle, Reorder ───────────────────────
 
 
@@ -393,31 +230,10 @@ def list_skills_grouped(
 ) -> SkillListGroupedResponse:
     """获取分组技能列表（fixed/builtin/custom）。"""
     family_id = current_user.family_id
-    db_records = {
-        r.skill_id: r
-        for r in db.query(SkillRegistry)
-        .filter(SkillRegistry.family_id == family_id)
-        .all()
-    }
 
     fixed: list[SkillDefinitionResponse] = []
 
-    builtin = []
-    for skill_id in BUILTIN_CAPABILITIES:
-        record = db_records.get(skill_id)
-        is_enabled = record.is_enabled if record else True
-        display_order = (
-            record.display_order if record else BUILTIN_DEFAULT_ORDER.get(skill_id, 100)
-        )
-        builtin.append(
-            SkillDefinitionResponse(
-                id=skill_id,
-                skill_type="builtin",
-                display_order=display_order,
-                is_enabled=is_enabled,
-            )
-        )
-    builtin.sort(key=lambda s: s.display_order)
+    builtin: list[SkillDefinitionResponse] = []
 
     custom = []
     for record in (
@@ -547,17 +363,7 @@ def reorder_skills_endpoint(
             )
             .first()
         )
-        if not record:
-            if skill_id in BUILTIN_CAPABILITIES:
-                record = SkillRegistry(
-                    family_id=family_id,
-                    skill_id=skill_id,
-                    skill_type="builtin",
-                    display_order=idx,
-                    is_enabled=True,
-                )
-                db.add(record)
-        else:
+        if record:
             record.display_order = idx
     db.commit()
     return {"ok": True}
@@ -586,17 +392,7 @@ def toggle_skill_endpoint(
     )
 
     if not record:
-        if skill_id in BUILTIN_CAPABILITIES:
-            record = SkillRegistry(
-                family_id=family_id,
-                skill_id=skill_id,
-                skill_type="builtin",
-                is_enabled=payload.is_enabled,
-                display_order=BUILTIN_DEFAULT_ORDER.get(skill_id, 100),
-            )
-            db.add(record)
-        else:
-            raise AppError(ErrorCode.NOT_FOUND, f"技能 '{skill_id}' 不存在")
+        raise AppError(ErrorCode.NOT_FOUND, f"技能 '{skill_id}' 不存在")
     else:
         record.is_enabled = payload.is_enabled
 
@@ -744,7 +540,7 @@ async def install_skill_endpoint(
     # Step 5: Validate skill_id
     if not SKILL_ID_PATTERN.match(skill_id):
         raise AppError(ErrorCode.VALIDATION_ERROR, f"非法技能标识符: {skill_id}")
-    if skill_id in BUILTIN_CAPABILITIES or skill_id in RESERVED_NAMES or skill_id in INTERNAL_ONLY_SKILLS:
+    if skill_id in RESERVED_NAMES or skill_id in INTERNAL_ONLY_SKILLS:
         raise AppError(ErrorCode.VALIDATION_ERROR, f"技能 ID '{skill_id}' 与内置/保留/内部技能冲突")
 
     # Step 6: Filesystem confinement guard

@@ -1,4 +1,4 @@
-"""Circuit-breaker gate for AI capability SSE endpoints.
+"""Circuit-breaker gate for AI skill SSE endpoints.
 
 KTD-7 (U4/U5 cleanup): the legacy NDJSON proxy helpers
 (``proxy_capability_events`` / ``proxy_agent_first_events`` /
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def _error_event(code: str, message: str | None = None) -> bytes:
-    """Build an SSE ``error`` frame for a capability error.
+    """Build an SSE ``error`` frame for a skill error.
 
     The consumer (``useReportStream``) parses SSE frames — ``event: <name>\\n``
     followed by ``data: <json>\\n\\n``. The previous NDJSON form (a bare
@@ -46,8 +46,8 @@ def _error_event(code: str, message: str | None = None) -> bytes:
     return f"event: error\ndata: {payload}\n\n".encode()
 
 
-def check_circuit_blocked(family_id: int, capability: str, db: object) -> StreamingResponse | None:
-    """Check if the circuit breaker blocks this capability for the family.
+def check_circuit_blocked(family_id: int, skill_id: str, db: object) -> StreamingResponse | None:
+    """Check if the circuit breaker blocks this skill for the family.
 
     Returns a StreamingResponse with a single SSE ``error`` frame if blocked,
     or None if the request should proceed normally. The caller
@@ -55,7 +55,7 @@ def check_circuit_blocked(family_id: int, capability: str, db: object) -> Stream
     so the frame is SSE-framed — not NDJSON — so ``useReportStream`` can parse
     it and surface the circuit-open error to the timeline.
     """
-    blocked, reason = AIExtractionCircuitService.is_open(family_id, capability, db)
+    blocked, reason = AIExtractionCircuitService.is_open(family_id, skill_id, db)
     if not blocked:
         return None
 

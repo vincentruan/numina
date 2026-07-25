@@ -13,9 +13,9 @@
     </div>
 
     <div v-else class="circuit-list">
-      <div v-for="c in circuits" :key="`${c.family_id}-${c.capability}`" class="circuit-card">
+      <div v-for="c in circuits" :key="`${c.family_id}-${c.skill_id}`" class="circuit-card">
         <div class="circuit-info">
-          <span class="circuit-capability">{{ c.capability }}</span>
+          <span class="circuit-capability">{{ c.skill_id }}</span>
           <span class="circuit-state" :class="`state--${c.state}`">{{ c.state }}</span>
           <span class="circuit-family">Family #{{ c.family_id }}</span>
         </div>
@@ -26,7 +26,7 @@
         <van-button
           size="small"
           type="warning"
-          :loading="resetting === `${c.family_id}-${c.capability}`"
+          :loading="resetting === `${c.family_id}-${c.skill_id}`"
           @click="onReset(c)"
         >
           {{ t('admin.extractionCircuit.reset') }}
@@ -44,7 +44,7 @@ import http from '@/api'
 
 interface CircuitRow {
   family_id: string
-  capability: string
+  skill_id: string
   state: string
   opened_at: string | null
   opened_until: string | null
@@ -71,15 +71,15 @@ async function loadCircuits() {
 }
 
 async function onReset(c: CircuitRow) {
-  const key = `${c.family_id}-${c.capability}`
+  const key = `${c.family_id}-${c.skill_id}`
   resetting.value = key
   try {
     await http.post('/admin/ai-extraction-circuit/reset', {
       family_id: c.family_id,
-      capability: c.capability,
+      skill_id: c.skill_id,
     })
     circuits.value = circuits.value.filter(
-      (r) => !(r.family_id === c.family_id && r.capability === c.capability),
+      (r) => !(r.family_id === c.family_id && r.skill_id === c.skill_id),
     )
     showSuccessToast(t('admin.extractionCircuit.resetSuccess'))
   } catch {

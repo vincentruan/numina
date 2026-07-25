@@ -130,6 +130,7 @@ class DeerFlowAdapter:
         agent_name: str | None = None,
         middlewares: list[Any] | None = None,
         memory_enabled: bool = True,
+        available_skills: set[str] | None = None,
     ) -> None:
         """Initialize adapter.
 
@@ -147,6 +148,11 @@ class DeerFlowAdapter:
                 the DeerFlow agent. None = no custom middlewares (the default
                 for all current numina paths — report.step2_json is
                 worker-synthesized, not middleware-emitted).
+            available_skills: Optional set of skill names to make available for
+                slash activation. If None (default), all scanned skills are
+                available. U3: the worker fetches the family's enabled custom
+                skills and passes them here so DeerFlow's SkillActivationMiddleware
+                enforces the whitelist.
         """
         self._timeout = timeout_seconds
         self._family_id = family_id
@@ -164,6 +170,7 @@ class DeerFlowAdapter:
                 agent_name=agent_name,
                 middlewares=middlewares,
                 memory_enabled=memory_enabled,
+                available_skills=available_skills,
             )
             self._is_family_mode = True
         elif config_path:
@@ -242,127 +249,120 @@ class DeerFlowAdapter:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
-        resume_answer: str | None = None,
     ) -> AsyncGenerator[Any, None]:
         """Yield raw LangGraph StreamEvents from DeerFlowClient.stream().
 
-        Args:
-            resume_answer: If provided, resume an interrupted graph with this answer
-                using LangGraph's Command(resume=answer) instead of sending a new message.
         """
-        # Build per-call kwargs for DeerFlowClient.stream(). Only include
-        # overrides that are explicitly set (not None) so the adapter's
-        # init-time defaults are preserved when no per-call mode is specified.
-        stream_kwargs: dict[str, Any] = {"thinking_enabled": enable_thinking}
-        if subagent_enabled is not None:
-            stream_kwargs["subagent_enabled"] = subagent_enabled
-        if plan_mode is not None:
-            stream_kwargs["plan_mode"] = plan_mode
+        # Set the original user content ContextVar so DeerFlow's
+        # SkillActivationMiddleware sees the raw user text (before JSON wrapping).
+        # The ContextVar propagates into the executor thread via
+        # _run_in_executor_with_context (which uses contextvars.copy_context()).
+        from apps.agent.services.deerflow_adapter.original_user_content_context import (
+            reset_original_user_content,
+            set_original_user_content,
+        )
 
-        async with _get_semaphore():
-            loop = asyncio.get_running_loop()
-            queue = asyncio.Queue()
+        original_content_token = set_original_user_content(context.free_text)
+        try:
+            # Build per-call kwargs for DeerFlowClient.stream(). Only include
+            # overrides that are explicitly set (not None) so the adapter's
+            # init-time defaults are preserved when no per-call mode is specified.
+            stream_kwargs: dict[str, Any] = {"thinking_enabled": enable_thinking}
+            if subagent_enabled is not None:
+                stream_kwargs["subagent_enabled"] = subagent_enabled
+            if plan_mode is not None:
+                stream_kwargs["plan_mode"] = plan_mode
 
-            def _produce() -> None:
-                try:
-                    if self._config_path:
-                        from deerflow.config.app_config import (
-                            pop_current_app_config,
-                            push_current_app_config,
-                            reload_app_config,
-                        )
-                        family_config = reload_app_config(str(self._config_path))
-                        push_current_app_config(family_config)
+            async with _get_semaphore():
+                loop = asyncio.get_running_loop()
+                queue = asyncio.Queue()
 
-                        # Set the per-run extensions_config path via ContextVar.
-                        # DeerFlow's ExtensionsConfig.from_file() reads MCP server
-                        # configs from this file. The extensions_config.json is
-                        # generated alongside config.yaml in
-                        # family_adapter_cache._generate_temp_config() when
-                        # mcp_servers is provided.
-                        #
-                        # We use a coroutine-scoped ContextVar instead of the
-                        # process-global DEER_FLOW_EXTENSIONS_CONFIG_PATH env var:
-                        # the env var is a single process-wide slot that two
-                        # concurrent family runs overwrite, leaking family-A's MCP
-                        # SSE URL (which embeds family-A's id) into family-B's run.
-                        # The ContextVar is propagated into the deerflow executor
-                        # thread + sync tool-executor pool, so _patched_get_mcp_tools
-                        # reads the correct per-run path. No env restore needed —
-                        # ContextVar isolation is automatic.
-                        from pathlib import Path as _Path
+                def _produce() -> None:
+                    try:
+                        if self._config_path:
+                            from deerflow.config.app_config import (
+                                pop_current_app_config,
+                                push_current_app_config,
+                                reload_app_config,
+                            )
+                            family_config = reload_app_config(str(self._config_path))
+                            push_current_app_config(family_config)
 
-                        from apps.agent.services.runtime.sandbox_provider import (
-                            set_extensions_config_path,
-                        )
-                        extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
-                        if extensions_path.exists():
-                            set_extensions_config_path(str(extensions_path))
-                            # Reset MCP cache so DeerFlow picks up the new config
+                            # Set the per-run extensions_config path via ContextVar.
+                            # DeerFlow's ExtensionsConfig.from_file() reads MCP server
+                            # configs from this file. The extensions_config.json is
+                            # generated alongside config.yaml in
+                            # family_adapter_cache._generate_temp_config() when
+                            # mcp_servers is provided.
+                            #
+                            # We use a coroutine-scoped ContextVar instead of the
+                            # process-global DEER_FLOW_EXTENSIONS_CONFIG_PATH env var:
+                            # the env var is a single process-wide slot that two
+                            # concurrent family runs overwrite, leaking family-A's MCP
+                            # SSE URL (which embeds family-A's id) into family-B's run.
+                            # The ContextVar is propagated into the deerflow executor
+                            # thread + sync tool-executor pool, so _patched_get_mcp_tools
+                            # reads the correct per-run path. No env restore needed —
+                            # ContextVar isolation is automatic.
+                            from pathlib import Path as _Path
+
+                            from apps.agent.services.runtime.sandbox_provider import (
+                                set_extensions_config_path,
+                            )
+                            extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+                            if extensions_path.exists():
+                                set_extensions_config_path(str(extensions_path))
+                                # Reset MCP cache so DeerFlow picks up the new config
+                                try:
+                                    from deerflow.config.extensions_config import (
+                                        reset_extensions_config,
+                                    )
+                                    from deerflow.mcp.cache import reset_mcp_tools_cache
+                                    reset_mcp_tools_cache()
+                                    reset_extensions_config()
+                                except ImportError:
+                                    pass
+
                             try:
-                                from deerflow.config.extensions_config import (
-                                    reset_extensions_config,
-                                )
-                                from deerflow.mcp.cache import reset_mcp_tools_cache
-                                reset_mcp_tools_cache()
-                                reset_extensions_config()
-                            except ImportError:
-                                pass
-
-                        try:
-                            if resume_answer is not None:
-                                # Resume mode: use Command(resume=answer) instead of a new message
-                                message = self._build_prompt(skill_name, context)
-                                for event in self._client.stream(
-                                    message,
-                                    thread_id=thread_id,
-                                    resume_answer=resume_answer,
-                                    **stream_kwargs,
-                                ):
-                                    loop.call_soon_threadsafe(queue.put_nowait, event)
-                            else:
                                 message = self._build_prompt(skill_name, context)
                                 for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
                                     loop.call_soon_threadsafe(queue.put_nowait, event)
-                        finally:
-                            if extensions_path.exists():
-                                set_extensions_config_path(None)
-                            pop_current_app_config()
-                    else:
-                        if resume_answer is not None:
-                            # Resume mode: use Command(resume=answer) instead of a new message
-                            message = self._build_prompt(skill_name, context)
-                            for event in self._client.stream(
-                                message,
-                                thread_id=thread_id,
-                                resume_answer=resume_answer,
-                                **stream_kwargs,
-                            ):
-                                loop.call_soon_threadsafe(queue.put_nowait, event)
+                            finally:
+                                if extensions_path.exists():
+                                    set_extensions_config_path(None)
+                                pop_current_app_config()
                         else:
                             message = self._build_prompt(skill_name, context)
                             for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
-                                loop.call_soon_threadsafe(queue.put_nowait, event)
-                except Exception as e:
-                    loop.call_soon_threadsafe(queue.put_nowait, e)
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
+                                    loop.call_soon_threadsafe(queue.put_nowait, event)
+                    except Exception as e:
+                        loop.call_soon_threadsafe(queue.put_nowait, e)
+                    finally:
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
 
-            future = _run_in_executor_with_context(loop, _get_executor(), _produce)
+                future = _run_in_executor_with_context(loop, _get_executor(), _produce)
+                try:
+                    while True:
+                        item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
+                        if item is None:
+                            break
+                        if isinstance(item, BaseException):
+                            raise DeerFlowError(f"DeerFlow stream error: {item}") from item
+                        yield item
+                except TimeoutError as e:
+                    raise DeerFlowTimeoutError(f"timeout after {self._timeout}s") from e
+                finally:
+                    import contextlib
+                    with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+                        await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+        finally:
+            # Reset the ContextVar, but catch ValueError in case we're in a
+            # different context (e.g., after GeneratorExit when client disconnects)
             try:
-                while True:
-                    item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
-                    if item is None:
-                        break
-                    if isinstance(item, BaseException):
-                        raise DeerFlowError(f"DeerFlow stream error: {item}") from item
-                    yield item
-            except TimeoutError as e:
-                raise DeerFlowTimeoutError(f"timeout after {self._timeout}s") from e
-            finally:
-                import contextlib
-                with contextlib.suppress(TimeoutError, asyncio.CancelledError):
-                    await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+                reset_original_user_content(original_content_token)
+            except ValueError:
+                # Token was created in a different context, ignore
+                pass
 
     async def typed_stream_dispatch(
         self,
@@ -372,7 +372,6 @@ class DeerFlowAdapter:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
-        resume_answer: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         """Yield (sse_event_type, data) tuples from DeerFlowClient.stream().
 
@@ -386,17 +385,12 @@ class DeerFlowAdapter:
           - ``error``         → ``"error"`` (stream error)
           - All other types   → ``"custom"`` (tool progress, metadata)
 
-        Args:
-            resume_answer: If provided, resume an interrupted graph with this answer
-                using LangGraph's Command(resume=answer) instead of sending a new message.
-
         Yields:
             (sse_event_type, data_dict) tuples ready for ``format_sse()``.
         """
         async for event in self.raw_stream_dispatch(
             skill_name, context, thread_id, enable_thinking,
             subagent_enabled=subagent_enabled, plan_mode=plan_mode,
-            resume_answer=resume_answer,
         ):
             if isinstance(event, BaseException):
                 yield ("error", {"error": str(event)})
@@ -415,15 +409,6 @@ class DeerFlowAdapter:
                 yield ("end", event_data)
             elif event_type == "error":
                 yield ("error", {"error": str(event_data)})
-            elif (
-                event_type == "custom"
-                and isinstance(event_data, dict)
-                and event_data.get("type") == "interrupt"
-            ):
-                # LangGraph interrupt() emits a custom event with type="interrupt".
-                # Forward as-is so the worker can publish it to the SSE stream
-                # and the frontend can render the HumanInputCard.
-                yield ("custom", event_data)
             else:
                 # All other event types (tool progress, metadata, etc.) → custom
                 if isinstance(event_data, dict):
@@ -770,6 +755,7 @@ def create_family_adapter(
     agent_name: str | None = None,
     middlewares: list[Any] | None = None,
     memory_enabled: bool = True,
+    available_skills: set[str] | None = None,
 ) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
@@ -785,6 +771,10 @@ def create_family_adapter(
         memory_enabled: Whether DeerMem is enabled for this agent (read from
             ai_agents.memory_enabled via AgentRegistry by the caller; False for
             stateless fixed-flow agents like asset-report).
+        available_skills: Optional set of skill names to make available for slash
+            activation. If None (default), all scanned skills are available. U3:
+            the worker fetches the family's enabled custom skills and passes them
+            here so DeerFlow's SkillActivationMiddleware enforces the whitelist.
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
@@ -799,6 +789,7 @@ def create_family_adapter(
         agent_name=agent_name,
         middlewares=middlewares,
         memory_enabled=memory_enabled,
+        available_skills=available_skills,
     )
 
 

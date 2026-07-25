@@ -1,9 +1,10 @@
 /**
  * AE4 + AE10 integration tests (Phase D / U16).
  *
- * AE4 — Given owner enters /settings/ai/skills, when the page renders, then
- * the "fixed skills" section header is gone; only the six business skills
- * appear in builtin + any custom skills.
+ * AE4 - Given owner enters /settings/ai/skills, when the page renders, then
+ * the "fixed skills" section header is gone. Per T11 (BUILTIN_CAPABILITIES
+ * deleted), builtin skills are no longer family-toggleable, so the builtin
+ * section renders no rows; only custom skills (if any) appear.
  *
  * AE10 — Given owner clicks the edit button on numina's card, when AgentFormPage
  * loads with agent_type='system', then all form fields are disabled, save
@@ -142,7 +143,7 @@ describe('AE4: SkillsManagePage', () => {
     expect(titleAttrs).toContain('内置技能')
   })
 
-  it('AE4: renders the six business skills, no chat or time_machine', async () => {
+  it('AE4: renders no builtin skill rows (BUILTIN_CAPABILITIES deleted per T11)', async () => {
     const SkillsManagePage = (await import('@/pages/SkillsManagePage.vue')).default
     const wrapper = mount(SkillsManagePage, {
       global: {
@@ -153,13 +154,13 @@ describe('AE4: SkillsManagePage', () => {
       },
     })
     await flushPromises()
-    // The VanCell stub doesn't render the `title` prop, so we can't assert
-    // on rendered skill names. Instead verify the structural shape: the page
-    // mounts six builtin rows for BUILTIN_CAPABILITIES (excluding chat /
-    // time_machine), and no fixed-section van-cell-group remains.
+    // T11: BUILTIN_CAPABILITIES deleted, builtinIds is empty, so the builtin
+    // section renders no rows. Builtin skills are no longer family-toggleable
+    // (is_enabled always True, no db row after family_skill_configs retirement).
+    // The custom section is empty so only the "暂无数据" placeholder cell remains.
     const cells = wrapper.findAll('.van-cell')
-    // 6 builtin skill rows. Custom section is empty so no rows there.
-    expect(cells.length).toBeGreaterThanOrEqual(6)
+    // 0 builtin rows + 1 noData placeholder in the custom section.
+    expect(cells.length).toBe(1)
   })
 })
 
@@ -269,10 +270,11 @@ describe('AgentFormPage custom agent create/edit optimization', () => {
     const cells = skillsGroup!.findAll('.van-cell, van-cell')
     expect(cells.length).toBe(2)
 
-    // Verify icons are rendered
+    // Verify icons are rendered. T11: skillIcons map is empty, so builtin
+    // 'report' falls back to '✨'; custom-skill has no icon -> '✨' as well.
     const icons = skillsGroup!.findAll('.skill-icon')
     expect(icons.length).toBe(2)
-    expect(icons[0].text()).toBe('📊')
+    expect(icons[0].text()).toBe('✨')
     expect(icons[1].text()).toBe('✨')
 
     // Verify model field and subagent toggle cell-group are completely absent

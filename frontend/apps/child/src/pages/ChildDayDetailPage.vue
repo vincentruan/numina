@@ -78,7 +78,7 @@ import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } fr
 
 const { t } = useI18n()
 const route = useRoute()
-const { complete } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 const rawDate = route.query.date
 const rawChildId = route.query.child_id
 const date = typeof rawDate === 'string' ? rawDate : ''
@@ -108,7 +108,8 @@ function milestoneEmoji(type: string): string {
 }
 
 onMounted(async () => {
-  if (!date) { loading.value = false; complete(); return }
+  if (!date) { loading.value = false; return }
+  increment()
   try {
     if (isParentView.value && childId) {
       detail.value = await getFamilyChildDayDetail(childId, date)
@@ -119,8 +120,7 @@ onMounted(async () => {
     detail.value = null
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    complete()
+    decrement()
   }
 })
 </script>

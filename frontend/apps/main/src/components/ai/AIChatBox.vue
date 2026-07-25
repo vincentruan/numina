@@ -21,12 +21,14 @@ import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
 import TodoListBar from '@/components/ai-chat/TodoListBar.vue'
 import GoalStatusBar from '@/components/ai-chat/GoalStatusBar.vue'
+import ChatHistoryPage from '@/pages/ChatHistoryPage.vue'
 import { useThreadTodos } from '@/composables/ai-chat/useThreadTodos'
 import { useActiveGoal } from '@/composables/ai-chat/useActiveGoal'
 import { parseGoalCommand } from '@/composables/ai-chat/useThreadChat'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 import { useAiContext } from '@/composables/useAiContext'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const NUMINA_AGENT_NAME = 'numina'
 const DEFAULT_MODEL = 'default'
@@ -41,6 +43,7 @@ const familyStore = useFamilyStore()
 // A1b (Plan B T6): passive '问 AI' buttons send ?source=&id= to /ai/chat;
 // loadContext fetches the entity context to inject as the first user turn.
 const { loadContext, contextLabel, clearContext } = useAiContext()
+const { increment, decrement } = usePageLoading()
 
 // Active agent for ChatHeader
 const activeAgent = computed(() => {
@@ -157,6 +160,27 @@ async function ensureThreadInSessions(threadId: string) {
 // Initial loading state for skeleton display (during thread creation + first send)
 const initialLoading = ref(true)
 
+// History overlay visibility — shown as a modal overlay inside AIChatBox so the
+// chat stream is NOT interrupted when the user browses history.
+const showHistory = ref(false)
+
+function onOpenHistory() {
+  showHistory.value = true
+}
+
+function onCloseHistory() {
+  showHistory.value = false
+}
+
+function onSelectHistoryThread(threadId: string) {
+  showHistory.value = false
+  // If switching to a different thread while streaming, cancel the current stream first
+  if (chat.isLoading.value && store.activeThreadId !== threadId) {
+    chat.cancelStream()
+  }
+  store.setActiveThread(threadId)
+}
+
 // Draft text recovered into the welcome InputBox after a failed auto-send /
 // submit. AIChatBox passes it to WelcomePage's InputBox as modelValue so the
 // user's original text is not lost when handleStartChat throws (e.g. backend
@@ -171,107 +195,116 @@ const chatWebSearch = ref<boolean | undefined>(undefined)
 
 // Initialize from URL on mount and auto-send pending message if present
 onMounted(async () => {
-  // Ensure agent data is available for ChatHeader logo. Direct navigation to
-  // /ai/chat (page refresh, direct URL, browser back) bypasses AIHubPage which
-  // normally loads agents - without this, systemAgents stays empty and the
-  // agent logo never renders. Non-blocking: logo appears once the API returns.
-  if (agentStore.systemAgents.length === 0) {
-    agentStore.loadAgents()
-  }
-  // Capture the store's active thread before initializeFromUrl possibly changes it.
-  // If the ID is unchanged after init (e.g. returning from /ai/chat/history to
-  // the same thread, or closing history back to /ai/chat), the activeThreadId
-  // watcher below won't fire — but this fresh composable instance has empty
-  // messages, so we must explicitly load history to avoid a blank page.
-  const prevActiveId = store.activeThreadId
-  store.initializeFromUrl()
-  // A1b (Plan B T6): if a passive button sent ?source=&id=, fetch the entity
-  // context and inject it as the first user turn. This is a DIFFERENT query
-  // param from the pendingMessage 'q' path below; if A1b yields a message we
-  // send it and skip the pendingMessage block (no double-send). Guard the
-  // await on the source param so the no-context path stays synchronous (no
-  // extra microtask that would delay initialLoading=false past one tick).
-  if (route.query.source) {
-    const a1bContext = await loadContext()
-    if (a1bContext) {
+  increment()
+  try {
+    // Ensure agent data is available for ChatHeader logo. Direct navigation to
+    // /ai/chat (page refresh, direct URL, browser back) bypasses AIHubPage which
+    // normally loads agents - without this, systemAgents stays empty and the
+    // agent logo never renders. Non-blocking: logo appears once the API returns.
+    if (agentStore.systemAgents.length === 0) {
+      agentStore.loadAgents()
+    }
+    // Capture the store's active thread before initializeFromUrl possibly changes it.
+    // If the ID is unchanged after init (e.g. closing the history overlay back to
+    // the same thread), the activeThreadId watcher below won't fire — but this fresh
+    // composable instance has empty messages, so we must explicitly load history to
+    // avoid a blank page.
+    const prevActiveId = store.activeThreadId
+    store.initializeFromUrl()
+    // A1b (Plan B T6): if a passive button sent ?source=&id=, fetch the entity
+    // context and inject it as the first user turn. This is a DIFFERENT query
+    // param from the pendingMessage 'q' path below; if A1b yields a message we
+    // send it and skip the pendingMessage block (no double-send). Guard the
+    // await on the source param so the no-context path stays synchronous (no
+    // extra microtask that would delay initialLoading=false past one tick).
+    // Only trigger for valid A1b entity sources — 'system_default' (from
+    // AIHubPage's handleNuminaConsult) is NOT an A1b source and must not
+    // call /ai/context (which would 400 and toast "上下文加载失败").
+    const A1B_SOURCES = new Set(['liability_detail', 'wish_detail', 'liability_strategy', 'wish_advice'])
+    if (route.query.source && A1B_SOURCES.has(route.query.source as string)) {
+      const a1bContext = await loadContext()
+      if (a1bContext) {
+        if (!familyStore.family) {
+          try {
+            await familyStore.fetchFamily()
+          } catch {
+            // fetchFamily failure is non-fatal — handleStartChat surfaces a toast.
+          }
+        }
+        const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = 'pro'
+        const modeConfig = INPUT_MODE_CONFIGS[mode]
+        await handleStartChat({
+          text: a1bContext,
+          model_name: DEFAULT_MODEL,
+          mode,
+          thinking_enabled: modeConfig.thinking_enabled,
+          is_plan_mode: modeConfig.is_plan_mode,
+          subagent_enabled: modeConfig.subagent_enabled,
+          reasoning_effort: modeConfig.reasoning_effort,
+        })
+        return
+      }
+    }
+    if (
+      store.activeThreadId
+      && store.activeThreadId === prevActiveId
+      && !store.pendingMessage
+    ) {
+      // Existing thread: load history and hide skeleton immediately
+      chat.loadHistory(store.activeThreadId)
+      // Watcher won't fire (same ID) - fetch thread metadata here too.
+      ensureThreadInSessions(store.activeThreadId)
+      initialLoading.value = false
+    }
+    // Auto-send pending message from URL (passed from AIHubPage)
+    if (store.pendingMessage) {
+      const msg = store.pendingMessage
+      // NOTE: do NOT clear pendingMessage here. It is cleared only after the
+      // send actually connects (handleStartChat success path). Clearing early
+      // meant that if handleStartChat threw (family race, /api/threads error,
+      // network) the message was gone for good — a cold reload would not
+      // re-send it. Deferring keeps it available for a re-mount retry, and
+      // draftText (fix #2) restores the visible input for an immediate retry.
+      // Inherit the hub page's web search toggle into the chat InputBox
+      if (msg.webSearch !== undefined) {
+        chatWebSearch.value = msg.webSearch
+      }
+      // Wait for family data before auto-sending. createThread →
+      // getAgentHeaders() (api/ai-chat.ts) needs familyStore.family?.id (or
+      // authStore.user.family_id, restored by App.vue's fetchMe()). App.vue /
+      // MainLayout fire fetchFamily() on mount but do not await it, so on first
+      // entry to /ai/chat the family id can still be unset when handleStartChat
+      // runs — which threw "Family not loaded" and dropped the user's text.
+      // Awaiting here closes that race for the auto-send path.
       if (!familyStore.family) {
         try {
           await familyStore.fetchFamily()
         } catch {
-          // fetchFamily failure is non-fatal — handleStartChat surfaces a toast.
+          // fetchFamily failure is non-fatal here — handleStartChat will surface
+          // a send-failed toast and draftText recovery kicks in below.
         }
       }
-      const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = 'pro'
+      // Construct complete SubmitPayload with mode config values
+      const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = msg.deepThink ? 'thinking' : 'pro'
       const modeConfig = INPUT_MODE_CONFIGS[mode]
       await handleStartChat({
-        text: a1bContext,
+        text: msg.text,
         model_name: DEFAULT_MODEL,
         mode,
         thinking_enabled: modeConfig.thinking_enabled,
         is_plan_mode: modeConfig.is_plan_mode,
         subagent_enabled: modeConfig.subagent_enabled,
         reasoning_effort: modeConfig.reasoning_effort,
-      })
-      return
+        websearch_enabled: msg.webSearch,
+      }, msg.source)
+      // handleStartChat completes after thread creation + send starts streaming
+      // Skeleton will be hidden once streaming begins (isLoading becomes true)
+    } else {
+      // No pending message: hide skeleton immediately
+      initialLoading.value = false
     }
-  }
-  if (
-    store.activeThreadId
-    && store.activeThreadId === prevActiveId
-    && !store.pendingMessage
-  ) {
-    // Existing thread: load history and hide skeleton immediately
-    chat.loadHistory(store.activeThreadId)
-    // Watcher won't fire (same ID) - fetch thread metadata here too.
-    ensureThreadInSessions(store.activeThreadId)
-    initialLoading.value = false
-  }
-  // Auto-send pending message from URL (passed from AIHubPage)
-  if (store.pendingMessage) {
-    const msg = store.pendingMessage
-    // NOTE: do NOT clear pendingMessage here. It is cleared only after the
-    // send actually connects (handleStartChat success path). Clearing early
-    // meant that if handleStartChat threw (family race, /api/threads error,
-    // network) the message was gone for good — a cold reload would not
-    // re-send it. Deferring keeps it available for a re-mount retry, and
-    // draftText (fix #2) restores the visible input for an immediate retry.
-    // Inherit the hub page's web search toggle into the chat InputBox
-    if (msg.webSearch !== undefined) {
-      chatWebSearch.value = msg.webSearch
-    }
-    // Wait for family data before auto-sending. createThread →
-    // getAgentHeaders() (api/ai-chat.ts) needs familyStore.family?.id (or
-    // authStore.user.family_id, restored by App.vue's fetchMe()). App.vue /
-    // MainLayout fire fetchFamily() on mount but do not await it, so on first
-    // entry to /ai/chat the family id can still be unset when handleStartChat
-    // runs — which threw "Family not loaded" and dropped the user's text.
-    // Awaiting here closes that race for the auto-send path.
-    if (!familyStore.family) {
-      try {
-        await familyStore.fetchFamily()
-      } catch {
-        // fetchFamily failure is non-fatal here — handleStartChat will surface
-        // a send-failed toast and draftText recovery kicks in below.
-      }
-    }
-    // Construct complete SubmitPayload with mode config values
-    const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = msg.deepThink ? 'thinking' : 'pro'
-    const modeConfig = INPUT_MODE_CONFIGS[mode]
-    await handleStartChat({
-      text: msg.text,
-      model_name: DEFAULT_MODEL,
-      mode,
-      thinking_enabled: modeConfig.thinking_enabled,
-      is_plan_mode: modeConfig.is_plan_mode,
-      subagent_enabled: modeConfig.subagent_enabled,
-      reasoning_effort: modeConfig.reasoning_effort,
-      websearch_enabled: msg.webSearch,
-    }, msg.source)
-    // handleStartChat completes after thread creation + send starts streaming
-    // Skeleton will be hidden once streaming begins (isLoading becomes true)
-  } else {
-    // No pending message: hide skeleton immediately
-    initialLoading.value = false
+  } finally {
+    decrement()
   }
 })
 
@@ -548,10 +581,11 @@ function branchCloneWarnKey(mode?: WorkspaceCloneMode): string | undefined {
 
 /**
  * Handle clarification submit from HumanInputCard.
- * Calls the resume API to continue the interrupted graph execution.
+ * Sends the answer as a new HumanMessage with human_input_response (DeerFlow
+ * ClarificationMiddleware pattern) - NOT a resume endpoint.
  */
 async function handleClarificationSubmit(payload: { threadId: string; interruptId: string; answer: string }) {
-  await chat.resumeInterrupt(payload.threadId, payload.interruptId, payload.answer)
+  await chat.submitClarification(payload.threadId, payload.interruptId, payload.answer)
 }
 </script>
 
@@ -570,6 +604,7 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         :is-streaming="chat.isLoading.value"
         @title-updated="handleTitleUpdated"
         @new-chat="handleNewChat"
+        @history="onOpenHistory"
       />
 
       <template v-if="store.isWelcomeMode">
@@ -592,7 +627,6 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
           :can-branch="canBranch"
           :branching-message-id="branchingMessageId"
           :answered-interrupt-ids="chat.answeredInterruptIds.value"
-          :interrupt-error-id="chat.interruptErrorId.value"
           @retry="handleRetry"
           @stop="handleStopStream"
           @suggestion-click="handleSuggestionClick"
@@ -643,6 +677,14 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         @context-change="handleContextChange"
       />
     </template>
+
+    <!-- History overlay (modal, does not interrupt streaming) -->
+    <ChatHistoryPage
+      v-if="showHistory"
+      :overlay="true"
+      @close="onCloseHistory"
+      @select-thread="onSelectHistoryThread"
+    />
 
     <!-- Artifact preview popup -->
     <ArtifactPreviewPopup

@@ -47,7 +47,6 @@ from apps.backend.app.models.family_invitation_code import (
 )
 from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
-from apps.backend.app.models.family_skill_config import FamilySkillConfig
 from apps.backend.app.models.file_remote_location import (
     FileRemoteLocation,
 )

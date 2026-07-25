@@ -99,7 +99,7 @@ def upgrade() -> None:
             sa.Column('generated_at', sa.DateTime(), nullable=False),
             sa.Column('status', sa.String(length=20), nullable=False),
             sa.Column('markdown_file_path', sa.String(length=255), nullable=True),
-            sa.Column('capability', sa.String(length=32), nullable=False, server_default=sa.text('report'))
+            sa.Column('capability', sa.String(length=32), nullable=False, server_default=sa.text("'report'"))
         )
         op.create_index('ix_ai_reports_family_id', 'ai_reports', ['family_id'])
 

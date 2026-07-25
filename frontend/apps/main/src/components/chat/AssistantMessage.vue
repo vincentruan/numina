@@ -609,6 +609,56 @@ watch(
   50% { opacity: 0.4; }
 }
 
+/* Mobile touch: always visible + larger tap targets (Apple HIG ≥ 44×44) */
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .action-btn {
+    padding: 10px;
+    /* 10px padding + 18px icon = 38px touch area, close to 44px HIG */
+    border-radius: 8px;
+    opacity: 1; /* override 0.7 default — buttons must look tappable on touch */
+    transition: background-color 0.15s;
+  }
+
+  .action-btn:active {
+    background-color: rgba(0, 0, 0, 0.06);
+  }
+
+  :global([data-theme='dark']) .action-btn:active {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .action-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Feedback buttons: more prominent to encourage interaction */
+  .action-btn--active {
+    background-color: rgba(var(--van-primary-color-rgb, 99, 102, 241), 0.1);
+  }
+
+  /* Narrow screen: hide timestamp to prevent overflow (iPhone SE 375px) */
+  @media (max-width: 400px) {
+    .message-time {
+      display: none;
+    }
+
+    .message-footer-spacer {
+      display: none;
+    }
+
+    .message-footer {
+      justify-content: flex-end;
+    }
+  }
+}
+
 /* Suggestion chips */
 .suggestion-chips {
   display: flex;

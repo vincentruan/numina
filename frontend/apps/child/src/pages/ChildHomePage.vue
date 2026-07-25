@@ -154,7 +154,7 @@ import { useChildAuthStore } from '@numina/auth'
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
-const { complete: completeLoading } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 const childAuthStore = useChildAuthStore()
 
 // Balance polling via composable (singleton auto-refreshes; no manual refresh needed)
@@ -217,8 +217,6 @@ async function load() {
     checkAndTriggerCelebration(chores)
   } finally {
     loadingChores.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    completeLoading()
   }
 }
 
@@ -231,7 +229,14 @@ function fetchChildMonth(year: number, month: number) {
   return getChildCalendar(year, month)
 }
 
-onMounted(load)
+onMounted(async () => {
+  increment()
+  try {
+    await load()
+  } finally {
+    decrement()
+  }
+})
 </script>
 
 <style scoped>

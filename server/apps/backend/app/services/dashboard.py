@@ -516,6 +516,7 @@ def get_home_assets_category_counts(db: Session, user: User, status: str) -> lis
             "name": cat_map[r.category_id].name if r.category_id in cat_map else "",
             "icon": cat_map[r.category_id].icon if r.category_id in cat_map else "",
             "color": cat_map[r.category_id].color if r.category_id in cat_map else "",
+            "asset_type": cat_map[r.category_id].asset_type if r.category_id in cat_map else "",
             "count": r.count,
         }
         for r in results

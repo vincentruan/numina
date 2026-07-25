@@ -5,11 +5,14 @@
  * Renders an interactive card where the AI agent asks the user a question
  * with optional choice buttons.
  *
- * Interaction modes (aligned with DeerFlow):
- * - Single-select (default): click option → immediate submit (one-step)
- * - Multi-select: checkbox list → submit button
- * - Free text: textarea → submit button
+ * Interaction modes (aligned with DeerFlow ClarificationMiddleware):
+ * - Single-select (default): click option -> immediate submit (one-step)
+ * - Free text: textarea -> submit button
  * - choiceWithOther: options (one-step) + textarea with separate submit
+ *
+ * The answer is emitted to the parent which calls ``submitClarification`` -
+ * sending a new ``HumanMessage`` with ``human_input_response`` (DeerFlow
+ * pattern), NOT a resume endpoint.
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,10 +30,8 @@ const props = withDefaults(defineProps<{
   options?: Option[]
   context?: string
   choiceWithOther?: boolean
-  multiSelect?: boolean
-  status?: 'pending' | 'submitting' | 'answered' | 'error' | 'superseded'
+  status?: 'pending' | 'submitting' | 'answered' | 'superseded'
   answer?: string
-  errorMessage?: string
   threadId: string
   interruptId: string
 }>(), {
@@ -43,60 +44,36 @@ const emit = defineEmits<{
 
 const customText = ref('')
 const isComposing = ref(false)
-/** Multi-select: Set of selected values */
-const selectedValues = ref<Set<string>>(new Set())
 
 const isInteractive = computed(() => props.status === 'pending')
 const isSubmitting = computed(() => props.status === 'submitting')
 const isAnswered = computed(() => props.status === 'answered')
-const isError = computed(() => props.status === 'error')
 const isSuperseded = computed(() => props.status === 'superseded')
 
 const hasOptions = computed(() => (props.options?.length ?? 0) > 0)
-const isMultiSelect = computed(() => props.multiSelect && hasOptions.value)
 
-/** Whether the submit button should be enabled (multi-select / text modes) */
+/** Whether the submit button should be enabled (free-text mode) */
 const canSubmit = computed(() => {
   if (!isInteractive.value || isSubmitting.value) return false
-  if (isMultiSelect.value) return selectedValues.value.size > 0
   // Free text mode (no options)
   return customText.value.trim().length > 0
 })
 
-/** Single-select: click option → immediate submit (DeerFlow pattern) */
+/** Single-select: click option -> immediate submit (DeerFlow pattern) */
 function handleOptionClick(value: string) {
   if (!isInteractive.value || isSubmitting.value) return
-  if (isMultiSelect.value) {
-    // Toggle checkbox
-    const next = new Set(selectedValues.value)
-    if (next.has(value)) {
-      next.delete(value)
-    } else {
-      next.add(value)
-    }
-    selectedValues.value = next
-  } else {
-    // Single-select: immediate submit
-    emit('submit', value)
-  }
+  // Single-select: immediate submit
+  emit('submit', value)
 }
 
-/** Submit for multi-select or free-text modes */
+/** Submit for free-text mode */
 function submitAnswer() {
   if (!canSubmit.value) return
-  if (isMultiSelect.value) {
-    // Serialize selected values as JSON array
-    const answer = JSON.stringify([...selectedValues.value])
+  const answer = customText.value.trim()
+  if (answer) {
     emit('submit', answer)
-    // Clear selection after submit
-    selectedValues.value.clear()
-  } else {
-    const answer = customText.value.trim()
-    if (answer) {
-      emit('submit', answer)
-      // Clear text after submit
-      customText.value = ''
-    }
+    // Clear text after submit
+    customText.value = ''
   }
 }
 
@@ -104,12 +81,6 @@ function handleCustomKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey && !isComposing.value) {
     e.preventDefault()
     submitAnswer()
-  }
-}
-
-function handleRetry() {
-  if (props.answer) {
-    emit('submit', props.answer)
   }
 }
 </script>
@@ -120,7 +91,6 @@ function handleRetry() {
     :class="[status]"
     role="group"
     :aria-label="t('aiChat.clarification.title')"
-    :aria-describedby="isError ? `error-${interruptId}` : undefined"
   >
     <!-- Header -->
     <div class="card-header">
@@ -140,8 +110,8 @@ function handleRetry() {
       <MarkdownContent :content="question" />
     </div>
 
-    <!-- Single-select options: click → immediate submit (DeerFlow pattern) -->
-    <div v-if="hasOptions && !isMultiSelect && isInteractive" class="card-options" role="radiogroup" :aria-labelledby="`question-${interruptId}`">
+    <!-- Single-select options: click -> immediate submit (DeerFlow pattern) -->
+    <div v-if="hasOptions && isInteractive" class="card-options" role="radiogroup" :aria-labelledby="`question-${interruptId}`">
       <button
         v-for="(opt, idx) in options"
         :key="idx"
@@ -155,26 +125,6 @@ function handleRetry() {
       </button>
     </div>
 
-    <!-- Multi-select options: checkbox list → submit button -->
-    <div v-if="isMultiSelect && isInteractive" class="card-options card-options--multi" role="group" :aria-labelledby="`question-${interruptId}`">
-      <label
-        v-for="(opt, idx) in options"
-        :key="idx"
-        class="checkbox-option"
-        :class="{ 'checkbox-option--checked': selectedValues.has(opt.value) }"
-      >
-        <input
-          type="checkbox"
-          class="checkbox-input"
-          :checked="selectedValues.has(opt.value)"
-          :disabled="isSubmitting"
-          :aria-label="opt.label"
-          @change="handleOptionClick(opt.value)"
-        />
-        <span class="checkbox-label">{{ opt.label }}</span>
-      </label>
-    </div>
-
     <!-- Answered state -->
     <div v-if="isAnswered && answer" class="card-answer" aria-live="polite">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="answer-icon" aria-hidden="true">
@@ -183,7 +133,7 @@ function handleRetry() {
       <span class="answer-text">{{ answer }}</span>
     </div>
 
-    <!-- Custom text input (choiceWithOther in single-select, or free-text mode, or multi-select "other") -->
+    <!-- Custom text input (choiceWithOther in single-select, or free-text mode) -->
     <div
       v-if="isInteractive && (choiceWithOther || !hasOptions)"
       class="card-input"
@@ -197,38 +147,11 @@ function handleRetry() {
         class="custom-textarea"
         :placeholder="hasOptions ? t('aiChat.clarification.customInput') : t('aiChat.clarification.inputPlaceholder')"
         :disabled="isSubmitting"
-        :aria-invalid="isError"
-        :aria-describedby="isError ? `error-${interruptId}` : undefined"
         rows="2"
         @keydown="handleCustomKeydown"
         @compositionstart="isComposing = true"
         @compositionend="isComposing = false"
       />
-    </div>
-
-    <!-- Submit button for multi-select mode -->
-    <div v-if="isMultiSelect && isInteractive" class="card-submit-row">
-      <button
-        class="submit-btn"
-        :disabled="!canSubmit"
-        :aria-label="t('aiChat.clarification.submit')"
-        @click="submitAnswer"
-      >
-        <svg
-          v-if="isSubmitting"
-          class="submit-spinner animate-spin"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          aria-hidden="true"
-        >
-          <path d="M21 12a9 9 0 11-6.219-8.56"/>
-        </svg>
-        <span v-else>{{ t('aiChat.clarification.submit') }}</span>
-      </button>
     </div>
 
     <!-- Submit button for custom-input-only mode (no options) -->
@@ -273,20 +196,6 @@ function handleRetry() {
       <span>{{ t('aiChat.clarification.submitting') }}</span>
     </div>
 
-    <!-- Error state -->
-    <div v-if="isError" :id="`error-${interruptId}`" class="card-error" role="alert" aria-live="assertive">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="15" y1="9" x2="9" y2="15"/>
-        <line x1="9" y1="9" x2="15" y2="15"/>
-      </svg>
-      <span class="error-text">{{ t('aiChat.clarification.error') }}</span>
-      <span v-if="errorMessage" class="error-detail">{{ errorMessage }}</span>
-      <button class="retry-btn" :aria-label="t('aiChat.clarification.retry')" @click="handleRetry">
-        {{ t('aiChat.clarification.retry') }}
-      </button>
-    </div>
-
     <!-- Superseded state -->
     <div v-if="isSuperseded" class="card-superseded" aria-live="polite">
       <span>{{ t('aiChat.clarification.superseded') }}</span>
@@ -308,10 +217,6 @@ function handleRetry() {
 .human-input-card.superseded {
   opacity: 0.5;
   pointer-events: none;
-}
-
-.human-input-card.error {
-  border-color: #ef4444;
 }
 
 /* Header */
@@ -350,7 +255,7 @@ function handleRetry() {
   line-height: 1.6;
 }
 
-/* Single-select options — full-width outline buttons (DeerFlow pattern) */
+/* Single-select options - full-width outline buttons (DeerFlow pattern) */
 .card-options {
   display: flex;
   flex-direction: column;
@@ -391,47 +296,6 @@ function handleRetry() {
 .option-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* Multi-select options — checkbox list */
-.card-options--multi {
-  gap: 6px;
-}
-
-.checkbox-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--van-border-color, rgba(255, 255, 255, 0.12));
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  user-select: none;
-}
-
-.checkbox-option:hover {
-  border-color: var(--van-primary-color);
-  background: rgba(99, 102, 241, 0.04);
-}
-
-.checkbox-option--checked {
-  border-color: var(--van-primary-color);
-  background: rgba(99, 102, 241, 0.08);
-}
-
-.checkbox-input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--van-primary-color);
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.checkbox-label {
-  font-size: 14px;
-  color: var(--text-primary);
-  line-height: 1.4;
 }
 
 /* Answer display */
@@ -531,52 +395,6 @@ function handleRetry() {
 
 .submit-spinner {
   color: var(--van-primary-color);
-}
-
-/* Error */
-.card-error {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 10px;
-  background: rgba(239, 68, 68, 0.08);
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.error-icon {
-  width: 14px;
-  height: 14px;
-  color: #ef4444;
-  flex-shrink: 0;
-}
-
-.error-text {
-  color: #ef4444;
-  font-weight: 500;
-}
-
-.error-detail {
-  color: var(--text-secondary);
-  width: 100%;
-  font-size: 12px;
-}
-
-.retry-btn {
-  margin-left: auto;
-  padding: 4px 12px;
-  font-size: 12px;
-  color: #ef4444;
-  background: transparent;
-  border: 1px solid #ef4444;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.retry-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
 }
 
 /* Superseded */

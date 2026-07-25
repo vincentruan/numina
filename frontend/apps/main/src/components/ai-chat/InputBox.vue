@@ -27,6 +27,7 @@ import { getAgentIcon, isEmoji } from '@/utils/agent'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
 import { useSlashCommands } from '@/composables/ai-chat/useSlashCommands'
 import type { SlashCommand } from '@/composables/ai-chat/useSlashCommands'
+import { useSlashSkills } from '@/composables/ai-chat/useSlashSkills'
 import { getWebSearchStatus } from '@/api/webSearch'
 import { polishInputDraft } from '@/api/ai-chat'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
@@ -246,9 +247,32 @@ function onToggleAgentInfo() {
 // Plumbed from the deprecated components/common/AIChatInput.vue
 // onInput/onKeydown/selectCapability logic.
 const { filteredCommands, query: slashQuery } = useSlashCommands()
+const { skills, fetchSkills } = useSlashSkills()
 const slashPaletteOpen = ref(false)
 const slashSelectedIndex = ref(0)
-const slashCommands = computed(() => filteredCommands.value)
+
+// Merge static commands with custom skills for slash palette
+const slashCommands = computed(() => {
+  const staticCommands = filteredCommands.value
+  const skillCommands: SlashCommand[] = skills.value.map(skill => ({
+    name: `/${skill.id}`,
+    description: skill.description || skill.name,
+    insertText: `/${skill.id} `,
+    apply: (ctx) => {
+      // Insert skill command and leave for user to type arguments
+      if (!ctx.value.startsWith(`/${skill.id}`)) {
+        ctx.setValue(`/${skill.id} `)
+      }
+      return false
+    },
+  }))
+  return [...staticCommands, ...skillCommands]
+})
+
+// Fetch skills on mount for slash autocomplete
+onMounted(() => {
+  fetchSkills()
+})
 
 // ── Watchers ──
 watch(internalValue, (val) => {
@@ -798,7 +822,28 @@ onUnmounted(() => {
               <span v-if="webSearchEnabled" class="control-indicator" aria-hidden="true"></span>
             </button>
 
-            <!-- [4] Input polish (D3 DeerFlow sync) — rewrite draft via LLM -->
+            <!-- [4] Plus button -->
+            <button
+              ref="panelTriggerRef"
+              class="control-btn control-btn--plus"
+              :class="{ 'control-btn--open': panelOpen }"
+              :aria-label="t('aiChat.moreFeatures')"
+              :aria-expanded="panelOpen"
+              @click.stop="togglePanel"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Right: Send/Stop button -->
+          <div class="send-actions">
+            <!-- Voice input button -->
+            <VoiceInputButton @result="onVoiceResult" @error="onVoiceError" />
+
+            <!-- Input polish (D3 DeerFlow sync) — rewrite draft via LLM -->
             <button
               v-if="inputPolishUndoAvailable"
               class="control-btn control-btn--polish-undo"
@@ -826,27 +871,6 @@ onUnmounted(() => {
               </svg>
               <span v-else class="polish-spinner" aria-hidden="true"></span>
             </button>
-
-            <!-- [5] Plus button -->
-            <button
-              ref="panelTriggerRef"
-              class="control-btn control-btn--plus"
-              :class="{ 'control-btn--open': panelOpen }"
-              :aria-label="t('aiChat.moreFeatures')"
-              :aria-expanded="panelOpen"
-              @click.stop="togglePanel"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-          </div>
-
-          <!-- Right: Send/Stop button -->
-          <div class="send-actions">
-            <!-- Voice input button -->
-            <VoiceInputButton @result="onVoiceResult" @error="onVoiceError" />
 
             <!-- Send/Stop button -->
             <button

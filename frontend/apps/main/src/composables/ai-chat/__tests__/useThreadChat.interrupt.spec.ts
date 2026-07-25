@@ -26,7 +26,14 @@ vi.mock('@/api/sessions', () => ({
   getSessionFeedback: vi.fn().mockResolvedValue({ data: { items: {} } }),
 }))
 
-describe('useThreadChat — interrupt SSE event handling', () => {
+/**
+ * DeerFlow ClarificationMiddleware sends ask_clarification as a ToolMessage
+ * with artifact.human_input (NOT a custom event with type=interrupt). The
+ * adapter preserves the artifact field (sync_tool_patch), so the frontend
+ * extracts human_input from the messages-tuple tool chunk into
+ * additional_kwargs.interruptData for HumanInputCard rendering.
+ */
+describe('useThreadChat - clarification artifact extraction', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -60,23 +67,32 @@ describe('useThreadChat — interrupt SSE event handling', () => {
     return chat
   }
 
-  it('creates a clarification message on interrupt custom event', async () => {
+  it('extracts human_input from a messages-tuple tool chunk with artifact', async () => {
     const chat = await runWithChunks([
       {
-        event: 'custom',
+        event: 'messages-tuple',
         data: {
-          type: 'interrupt',
-          question: 'Which category?',
-          options: [{ label: '股票', value: 'stock' }],
-          context: 'Need clarification',
-          interrupt_id: 'interrupt-123',
+          type: 'tool',
+          name: 'ask_clarification',
+          content: 'Which category?',
+          tool_call_id: 'call-abc',
+          artifact: {
+            human_input: {
+              version: 1,
+              kind: 'human_input_request',
+              source: 'ask_clarification',
+              request_id: 'req-123',
+              question: 'Which category?',
+              input_mode: 'choice_with_other',
+              context: 'Need clarification',
+              options: [{ id: 'stock', label: '股票', value: 'stock' }],
+            },
+          },
         },
       },
       { event: 'end', data: { status: 'success' } },
     ])
 
-    // The user message is optimistic + set to 'sent'; the interrupt creates
-    // a tool message. We expect at least the clarification message.
     const clarificationMsgs = chat.messages.value.filter(
       m => m.name === 'ask_clarification',
     )
@@ -86,23 +102,37 @@ describe('useThreadChat — interrupt SSE event handling', () => {
     expect(msg.type).toBe('tool')
     expect(msg.role).toBe('assistant')
     expect(msg.content).toBe('Which category?')
-    expect(msg.tool_call_id).toBe('interrupt-123')
+    expect(msg.tool_call_id).toBe('call-abc')
     expect(msg.additional_kwargs?.interruptData).toEqual({
       question: 'Which category?',
-      options: [{ label: '股票', value: 'stock' }],
+      options: [{ id: 'stock', label: '股票', value: 'stock' }],
       context: 'Need clarification',
-      interrupt_id: 'interrupt-123',
+      choiceWithOther: true,
+      input_mode: 'choice_with_other',
+      interrupt_id: 'req-123',
+      source: 'ask_clarification',
     })
   })
 
-  it('handles interrupt event without options gracefully', async () => {
+  it('handles free_text input_mode (no options) gracefully', async () => {
     const chat = await runWithChunks([
       {
-        event: 'custom',
+        event: 'messages-tuple',
         data: {
-          type: 'interrupt',
-          question: 'Please confirm',
-          interrupt_id: 'intr-456',
+          type: 'tool',
+          name: 'ask_clarification',
+          content: 'Please confirm',
+          tool_call_id: 'call-def',
+          artifact: {
+            human_input: {
+              version: 1,
+              kind: 'human_input_request',
+              source: 'ask_clarification',
+              request_id: 'req-456',
+              question: 'Please confirm',
+              input_mode: 'free_text',
+            },
+          },
         },
       },
       { event: 'end', data: { status: 'success' } },
@@ -115,36 +145,40 @@ describe('useThreadChat — interrupt SSE event handling', () => {
 
     const msg = clarificationMsgs[0]
     expect(msg.content).toBe('Please confirm')
-    expect(msg.additional_kwargs?.interruptData).toMatchObject({
-      question: 'Please confirm',
-      interrupt_id: 'intr-456',
-    })
-    // options and context should be undefined when not provided
     const interruptData = msg.additional_kwargs?.interruptData as Record<string, unknown>
+    expect(interruptData.interrupt_id).toBe('req-456')
+    expect(interruptData.input_mode).toBe('free_text')
+    expect(interruptData.choiceWithOther).toBe(false)
+    // options and context should be undefined when not provided
     expect(interruptData.options).toBeUndefined()
     expect(interruptData.context).toBeUndefined()
   })
 
-  it('generates interrupt_id when not provided by backend', async () => {
+  it('does not attach interruptData when artifact is absent (non-clarification tool)', async () => {
     const chat = await runWithChunks([
       {
-        event: 'custom',
+        event: 'messages-tuple',
         data: {
-          type: 'interrupt',
-          question: 'Which one?',
+          type: 'tool',
+          name: 'getAssetsData',
+          content: '{"assets":[]}',
+          tool_call_id: 'call-xyz',
         },
       },
       { event: 'end', data: { status: 'success' } },
     ])
 
+    // No clarification message
     const clarificationMsgs = chat.messages.value.filter(
       m => m.name === 'ask_clarification',
     )
-    expect(clarificationMsgs).toHaveLength(1)
+    expect(clarificationMsgs).toHaveLength(0)
 
-    const data = clarificationMsgs[0].additional_kwargs?.interruptData as any
-    expect(data.interrupt_id).toBeTruthy()
-    expect(typeof data.interrupt_id).toBe('string')
+    // The regular tool message should NOT have interruptData
+    const toolMsgs = chat.messages.value.filter(m => m.type === 'tool')
+    for (const msg of toolMsgs) {
+      expect(msg.additional_kwargs?.interruptData).toBeUndefined()
+    }
   })
 
   it('does not interfere with other custom events', async () => {
@@ -181,7 +215,6 @@ describe('useThreadChat — interrupt SSE event handling', () => {
     expect(chat.planningSteps.value[0].toolName).toBe('search')
 
     // Suggestions should be attached to the last AI message (not standalone)
-    // The code clears suggestions.value after attaching to the last AI message
     const lastAiMsg = [...chat.messages.value].reverse().find(m => m.type === 'ai')
     expect(lastAiMsg?.suggestions).toEqual(['opt1', 'opt2'])
 

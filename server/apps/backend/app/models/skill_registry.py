@@ -9,7 +9,6 @@ from sqlalchemy import (
     Integer,
     JSON,
     String,
-    Text,
     UniqueConstraint,
     func,
 )
@@ -50,7 +49,6 @@ class SkillRegistry(Base):
     # Configuration
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # for builtin prompt override
 
     # Provenance
     creation_type: Mapped[str] = mapped_column(String(16), nullable=False, server_default="manual")  # 'manual' | 'cmd' | 'ai_created'

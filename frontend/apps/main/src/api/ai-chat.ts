@@ -243,7 +243,10 @@ export async function compactThread(threadId: string): Promise<ThreadCompactResu
 // ---------------------------------------------------------------------------
 // Input polish (D3 DeerFlow sync) — frontend-direct, cookie auth + X-Family-Id.
 // Stateless single LLM call; no thread run, no persistence. Mirrors
-// runs_stream.py's verify_family_token path. Backend: routers/input_polish.py.
+// runs_stream.py's verify_family_token path. Agent: routers/input_polish.py
+// (mounted at /input-polish); reached via backend proxy
+// routers/ai_input_polish.py at /api/input-polish (dev Vite proxy + prod nginx
+// both route /api → backend, which forwards to the agent).
 // ---------------------------------------------------------------------------
 
 export interface InputPolishResult {

@@ -1,332 +1,258 @@
 # Numina 部署指南
 
-本文档记录 Numina 家庭资产管理系统的生产环境部署流程。
+本文档记录 Numina 家庭资产管理系统的部署流程。所有操作均通过 `make` 完成。
 
 ## 目录
 
 - [前置条件](#前置条件)
-- [服务器准备](#服务器准备)
-- [域名与 HTTPS 配置](#域名与-https-配置)
-- [部署步骤](#部署步骤)
-- [更新部署](#更新部署)
+- [快速开始](#快速开始)
+- [初始化配置](#初始化配置)
+- [数据库选择](#数据库选择)
+- [域名与 HTTPS](#域名与-https)
+- [生产部署](#生产部署)
+- [更新与回滚](#更新与回滚)
+- [备份与恢复](#备份与恢复)
 - [常见问题](#常见问题)
 
 ## 前置条件
 
 ### 服务器要求
 
-- **操作系统**: Linux (CentOS 7+ / Ubuntu 18.04+)
+- **操作系统**: Linux (Ubuntu 20.04+ / CentOS 8+ 推荐)
 - **内存**: 最低 1GB，推荐 2GB+
 - **磁盘**: 最低 10GB 可用空间
 - **网络**: 公网 IP，开放 80/443 端口
 
 ### 软件要求
 
-- Docker 20.10+
-- Docker Compose v2+
+- Docker 20.10+ 与 Docker Compose v2+
 - Git
+- OpenSSL（用于生成密钥）
+- Python 3.10+（用于生成 Fernet 加密密钥）
 
-### 域名要求
+## 快速开始
 
-- 已备案域名（国内服务器）
-- 域名 DNS 已解析到服务器 IP
-- 推荐使用 Cloudflare 代理获得免费 HTTPS
-
-## 服务器准备
-
-### 1. 安装 Docker
+最简三步完成部署：
 
 ```bash
-# CentOS 7
-yum install -y yum-utils
-yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-systemctl enable --now docker
+# 1. 克隆代码
+git clone https://github.com/YOUR_USERNAME/numina.git
+cd numina
 
-# 将当前用户加入 docker 组（免 sudo）
-usermod -aG docker $USER
-# 重新登录生效
+# 2. 交互式初始化（自动生成密钥、.env、数据目录）
+make setup
+
+# 3. 启动服务
+make deploy
 ```
 
-### 2. 创建部署目录
+部署完成后访问 http://localhost，然后生成邀请码：
 
 ```bash
-mkdir -p ~/data/numina
-cd ~/data/numina
+make setup-invitation-codes
 ```
 
-### 3. 克隆代码仓库
+## 初始化配置
+
+### 一键初始化
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/numina.git .
+make setup
 ```
 
-## 域名与 HTTPS 配置
+该命令会依次执行：
+1. **创建数据目录** — `.numina/data/{db,uploads}`
+2. **生成 .env 配置** — 自动填充所有安全密钥（如已存在则检查补全）
+3. **初始化数据库** — 默认 SQLite（可通过 `NUMINA_DB` 变量选择）
+
+### 分步初始化
+
+如需更精细的控制：
+
+```bash
+# 仅生成安全密钥（不写入文件）
+make setup-keys
+
+# 仅生成 .env（从模板创建，自动填充密钥）
+make setup-env
+
+# 仅创建数据目录
+make setup-data
+
+# 初始化数据库（默认 SQLite）
+make setup-db
+
+# 使用 MySQL
+NUMINA_DB=mysql make setup-db
+
+# 使用 PostgreSQL
+NUMINA_DB=postgres make setup-db
+```
+
+### 安全密钥说明
+
+| 密钥 | 用途 | 格式 | 生成方式 |
+|------|------|------|----------|
+| `SECRET_KEY` | JWT 签名 | hex (64 字符) | `openssl rand -hex 32` |
+| `ALTCHA_HMAC_KEY` | CAPTCHA 验证 | hex (64 字符) | `openssl rand -hex 32` |
+| `AI_ENCRYPTION_KEY` | AI API Key 加密 | Fernet (base64) | `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `STORAGE_ENCRYPTION_KEY` | 文件存储加密 | Fernet (base64) | 同上 |
+| `AGENT_INTERNAL_TOKEN` | 服务间通信 | hex (64 字符) | `openssl rand -hex 32` |
+
+> `make setup` 会自动生成全部密钥，无需手动操作。
+
+## 数据库选择
+
+Numina 支持三种数据库：
+
+### SQLite（默认）
+
+零配置，适合小规模家庭使用（< 5 个用户）。
+
+```bash
+# 默认即为 SQLite，无需额外操作
+make setup
+make deploy
+```
+
+数据文件位于 `.numina/data/db/numina.db`。
+
+### MySQL
+
+适合中大规模部署，需要额外的 MySQL 容器。
+
+```bash
+# 1. 启动 MySQL 容器
+make setup-db-mysql
+
+# 2. 编辑 .env，修改 DATABASE_URL
+#    DATABASE_URL=mysql+pymysql://numina:numinapass@numina-mysql:3306/numina
+
+# 3. 启动服务
+make deploy
+```
+
+MySQL 容器凭据可通过环境变量覆盖：
+
+```bash
+MYSQL_ROOT_PASSWORD=mysecret MYSQL_PASSWORD=mysecret make setup-db-mysql
+```
+
+### PostgreSQL
+
+```bash
+# 1. 启动 PostgreSQL 容器
+make setup-db-postgres
+
+# 2. 编辑 .env，修改 DATABASE_URL
+#    DATABASE_URL=postgresql+psycopg://numina:numinapass@numina-postgres:5432/numina
+
+# 3. 启动服务
+make deploy
+```
+
+## 域名与 HTTPS
 
 ### 方案一：Cloudflare 代理（推荐）
 
 1. 将域名 DNS 托管到 Cloudflare
-2. 添加 A 记录指向服务器 IP
-   - 类型: A
-   - 名称: numina（或 @ 使用根域名）
-   - 内容: 服务器 IP
-   - 代理状态: 已代理（橙色云朵）
-3. SSL/TLS 设置
-   - 加密模式: **Flexible**（源服务器 HTTP，Cloudflare 提供 HTTPS）
-4. 安全设置（可选）
-   - 开启 "Always Use HTTPS"
-   - 开启 "Auto Minify"
-   - 开启 "Brotli"
+2. 添加 A 记录指向服务器 IP（代理状态：已代理）
+3. SSL/TLS 加密模式设为 **Flexible**
+4. 编辑 `.env`，更新 `CORS_ORIGINS`：
+   ```
+   CORS_ORIGINS=["https://numina.example.com"]
+   ```
 
-### 方案二：Let's Encrypt 证书
+### 方案二：Let's Encrypt
 
-如果服务器有公网域名且未使用 Cloudflare：
+需自行配置 certbot 申请证书，并修改 `nginx.production.conf` 添加 SSL 配置。
 
-```bash
-# 安装 certbot
-yum install -y certbot
+## 生产部署
 
-# 申请证书
-certbot certonly --standalone -d numina.example.com
-
-# 证书续期（cron）
-echo "0 3 * * * certbot renew --quiet" | crontab -
-```
-
-## 本地开发部署
-
-快速在本地启动完整服务栈（用于开发和测试）。
-
-### 前置条件
-
-- Docker Desktop（macOS/Windows）或 Docker Engine（Linux）
-- `jq`（用于测试脚本）：`brew install jq`
-
-### 启动服务
+### 首次部署
 
 ```bash
-# 复制本地环境配置（已包含开发用默认值）
-cp .env.local .env   # 或直接使用已有的 .env
+# 1. 初始化
+make setup
 
-# 构建并启动所有服务
-docker-compose up -d --build
+# 2. 编辑 .env（配置域名、数据库等）
+# vim .env
 
-# 查看服务状态
-docker ps --format "{{.Names}}\t{{.Status}}" | grep numina
+# 3. 启动
+make deploy
+
+# 4. 生成邀请码（用户注册需要）
+make setup-invitation-codes
 ```
 
-服务启动后访问：
-- 成人端：http://localhost/
-- 儿童端：http://localhost/child/
-- API 健康检查：http://localhost/api/health
-
-### 初始化测试数据
-
-```bash
-# 创建所有测试账号（幂等，可重复执行）
-./tests/data/seed-data.sh
-
-# 测试账号说明：
-# demouser / DemoPass123     — 完整演示数据（含儿童：小宝/大宝）
-# test_rich / TestRich123!   — 完整回归数据（含儿童：testchild）
-# test_empty / TestEmpty123! — 空家庭
-```
-
-### 运行验收测试
-
-```bash
-./tests/e2e/acceptance.sh
-```
-
-### 重建单个服务
-
-```bash
-# 重建 agent（依赖变更后需要）
-docker-compose build agent && docker-compose up -d agent
-
-# 重建前端
-docker-compose build frontend frontend-child && docker-compose up -d frontend frontend-child
-
-# ⚠️ 重要：重建前端后必须重载 nginx，否则可能 502
-docker exec numina-nginx nginx -s reload
-```
-
-**为什么需要 nginx reload？**
-
-Docker 容器重建后，IP 地址可能变化。nginx worker 进程缓存了旧的 upstream DNS 解析结果，导致请求转发到失效的旧 IP，返回 502 Bad Gateway。
-
-| 操作 | 是否需要 nginx reload |
-|------|----------------------|
-| `docker-compose up -d`（首次启动） | ❌ 不需要 |
-| `docker-compose up -d --build`（全部重建） | ✅ 需要 |
-| `docker-compose build frontend && up -d frontend` | ✅ 需要 |
-| `docker-compose build backend && up -d backend` | ❌ 不需要（backend 不经 nginx proxy） |
-| `docker-compose restart frontend` | ✅ 可能需要（IP 可能变化） |
-
-### Agent 依赖管理
-
-Agent 使用 `uv` 管理依赖，`requirements.txt` 由 `uv.lock` 导出，确保 Docker 构建使用锁定版本：
-
-```bash
-# 更新依赖后重新生成 requirements.txt
-cd agent && uv lock && uv export --no-dev --no-hashes -o requirements.txt
-```
-
-## 部署步骤
-
-### 1. 配置环境变量
-
-```bash
-cd ~/data/numina
-
-# 生成安全密钥
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# 生成所有必要密钥
-SECRET_KEY=$(openssl rand -hex 32)
-ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
-AI_ENCRYPTION_KEY=$(openssl rand -hex 32)
-AGENT_INTERNAL_TOKEN=$(openssl rand -hex 32)
-# Fernet key (base64url of 32 random bytes)
-STORAGE_ENCRYPTION_KEY=$(python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
-
-# 创建环境配置
-cat > .env.production << EOF
-# Numina Production Environment Configuration
-SECRET_KEY=${SECRET_KEY}
-ENVIRONMENT=production
-
-# CORS - 配置你的域名
-CORS_ORIGINS=["https://numina.example.com"]
-
-# Database
-DATABASE_URL=sqlite:////app/.numina/data/numina.db
-
-# Token expiration
-ACCESS_TOKEN_EXPIRE_MINUTES=15
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-# CAPTCHA (必须配置，否则生产环境无法启动)
-ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
-
-# Agent / AI 加密 (必须配置)
-AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}
-AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN}
-STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY}
-EOF
-```
-
-### 2. 创建数据目录
-
-```bash
-mkdir -p .numina/data/uploads
-```
-
-### 3. 启动服务
-
-```bash
-docker compose -f docker-compose.production.yml up -d --build
-```
-
-### 4. 生成家庭邀请码（首次部署）
-
-生产环境需要家庭邀请码才能注册新用户：
-
-```bash
-# 生成 20 个邀请码
-docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py generate --count 20
-
-# 查看已生成的邀请码
-docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py list
-```
-
-### 5. 初始化测试数据（可选）
-
-如需初始化演示数据（demouser 账号 + 完整资产数据）：
-
-```bash
-# 临时切换到 development 模式（跳过 CAPTCHA 验证）
-sed -i.bak 's/^ENVIRONMENT=production/ENVIRONMENT=development/' .env.production
-docker compose -f docker-compose.production.yml up -d backend
-
-# 等待服务启动
-sleep 10
-
-# 生成足够的邀请码（需要约 10 个）
-docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py generate --count 15
-
-# 运行种子数据脚本
-FAMILY_INVITATION_CODES=$(docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py list --format csv | head -15 | tr '\n' ',')
-BASE_URL=http://localhost/api/v1 bash tests/data/seed-data.sh
-
-# 恢复生产模式
-sed -i 's/^ENVIRONMENT=development/ENVIRONMENT=production/' .env.production
-docker compose -f docker-compose.production.yml up -d backend
-```
-
-**测试账号：**
-- `demouser` / `DemoPass123` — 完整演示数据（19 实物资产 + 11 金融资产 + 负债 + 心愿 + 儿童）
-- `test_empty` / `TestEmpty123!` — 空家庭
-- `test_asset` / `TestAsset123!` — 5 个资产（多状态测试）
-- `test_rich` / `TestRich123!` — 完整数据（31 资产 + 28 负债 + 29 心愿）
-
-### 6. 验证部署
+### 验证部署
 
 ```bash
 # 检查容器状态
-docker ps
+make ps
 
-# 检查健康状态
+# 检查 API 健康
 curl http://localhost/api/health
 
 # 查看日志
-docker logs numina-backend --tail 50
-docker logs numina-nginx --tail 50
+make logs
 ```
 
-### 5. 外部访问验证
+### 家庭邀请码
+
+生产环境必须通过邀请码才能注册新用户：
 
 ```bash
-# 通过域名访问（Cloudflare HTTPS）
-curl https://numina.example.com/api/health
+# 生成 20 个邀请码
+make setup-invitation-codes
 
-# 浏览器访问
-# https://numina.example.com/
+# 自定义数量
+INVITATION_CODE_COUNT=50 make setup-invitation-codes
+
+# 在 backend 容器内手动管理
+docker exec -it numina-backend uv run --no-dev python scripts/family_invitation_codes.py list
+docker exec -it numina-backend uv run --no-dev python scripts/family_invitation_codes.py revoke --codes CODE1,CODE2
 ```
 
-## 更新部署
-
-### 常规更新流程
+### 开发模式部署（含种子数据）
 
 ```bash
-cd ~/data/numina
+make deploy-dev
+```
 
-# 1. 拉取最新代码
+该命令会：
+- 设置 `ENVIRONMENT=development`（跳过 CAPTCHA）
+- 自动初始化演示数据（demouser / DemoPass123 等）
+- 启动全部服务
+
+## 更新与回滚
+
+### 常规更新
+
+```bash
 git pull origin main
-
-# 2. 重新构建并启动
-docker compose -f docker-compose.production.yml up -d --build
-
-# 3. 验证更新
-curl https://numina.example.com/api/health
+make deploy
 ```
 
 ### 数据库迁移
 
-如果更新涉及数据库结构变更：
+迁移在 backend 启动时自动执行。如需手动操作：
 
 ```bash
-# 进入 backend 容器
-docker exec -it numina-backend bash
+# 查看当前版本
+make migrate-current
 
-# 执行迁移
-alembic upgrade head
+# 手动执行迁移
+make migrate
 
-# 退出容器
-exit
+# 回退一步
+make migrate-down
+
+# 生成新迁移
+make migrate-revision m="描述"
 ```
 
-### 回滚操作
+### 回滚
 
 ```bash
 # 查看历史版本
@@ -334,134 +260,7 @@ git log --oneline -10
 
 # 回滚到指定版本
 git checkout <commit-hash>
-
-# 重新部署
-docker compose -f docker-compose.production.yml up -d --build
-```
-
-## 文件结构
-
-部署后的目录结构：
-
-```
-~/data/numina/
-├── backend/                 # 后端代码
-├── agent/                   # AI Agent 微服务
-├── frontend/                # 前端 monorepo
-│   ├── apps/
-│   │   ├── main/            # 成人端 SPA（原 frontend/）
-│   │   └── child/           # 儿童端 SPA（原 frontend-child/）
-│   └── packages/
-│       └── auth/            # 共享认证包
-├── .numina/data/              # 数据目录（持久化）
-│   ├── db/numina.db           # SQLite 数据库
-│   └── uploads/               # 上传文件
-├── nginx.production.conf    # Nginx 配置
-├── docker-compose.production.yml
-└── .env.production          # 环境变量（不提交到 git）
-```
-
-## 安全加固清单
-
-- [x] SECRET_KEY 使用强随机密钥
-- [x] ENVIRONMENT 设置为 production
-- [x] CORS_ORIGINS 限制为生产域名
-- [x] Nginx 安全 Headers（X-Frame-Options, X-Content-Type-Options 等）
-- [x] 隐藏 Nginx 版本号（server_tokens off）
-- [x] 后端服务不直接暴露端口
-- [x] 敏感文件访问阻断（.env, .git 等）
-- [x] HTTPS 加密（Cloudflare / Let's Encrypt）
-
-## 常见问题
-
-### Q: 521 Web Server Is Down
-
-**原因**: Cloudflare 无法连接到源服务器
-
-**解决**:
-1. 确认 Docker 容器正常运行
-2. 确认服务器防火墙开放 80 端口
-3. 检查 Cloudflare SSL 模式是否为 Flexible
-
-### Q: 前端页面空白
-
-**原因**: Vue 路由配置问题或 API 请求失败
-
-**解决**:
-1. 检查浏览器控制台错误
-2. 确认 API 健康检查正常
-3. 检查 CORS 配置是否包含当前域名
-
-### Q: 数据库文件丢失
-
-**原因**: Docker 卷未正确挂载
-
-**解决**:
-1. 确认 `./.numina/data` 目录存在
-2. 检查 docker-compose.production.yml 中的 volumes 配置
-3. 定期备份数据目录
-
-### Q: Backend 启动失败 — ALTCHA_HMAC_KEY 未配置
-
-**原因**: 生产环境缺少必要的环境变量
-
-**解决**:
-```bash
-# 生成缺失的密钥
-ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
-AI_ENCRYPTION_KEY=$(openssl rand -hex 32)
-AGENT_INTERNAL_TOKEN=$(openssl rand -hex 32)
-STORAGE_ENCRYPTION_KEY=$(python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
-
-# 添加到 .env.production
-cat >> .env.production << EOF
-ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
-AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}
-AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN}
-STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY}
-EOF
-
-# 重新创建容器（restart 不会重新加载 env 文件）
-docker compose -f docker-compose.production.yml up -d backend
-```
-
-### Q: 数据库 schema 错误 — no such column
-
-**原因**: 数据库是旧版本创建的，缺少新增的列
-
-**解决**:
-```bash
-# 方案一：删除旧数据库，重新创建（仅适用于测试环境）
-docker compose -f docker-compose.production.yml stop backend
-rm -f .numina/data/db/numina.db
-docker compose -f docker-compose.production.yml up -d backend
-
-# 方案二：运行 Alembic 迁移（生产环境推荐）
-# 注意：当前项目 Alembic 迁移尚未完整覆盖所有 schema 变更
-# 建议在生产环境首次部署时使用全新数据库
-```
-
-### Q: 注册失败 — FAMILY_INVITATION_CODE_NOT_FOUND
-
-**原因**: 生产环境需要家庭邀请码才能注册
-
-**解决**:
-```bash
-# 生成邀请码
-docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py generate --count 10
-
-# 查看可用邀请码
-docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py list
-```
-
-### Q: 上传文件无法访问
-
-**原因**: uploads 目录权限问题
-
-**解决**:
-```bash
-chmod -R 755 ~/data/numina/.numina/data/uploads
-docker restart numina-backend numina-nginx
+make deploy
 ```
 
 ## 备份与恢复
@@ -469,264 +268,91 @@ docker restart numina-backend numina-nginx
 ### 备份
 
 ```bash
-# 备份数据目录
-tar -czvf numina-backup-$(date +%Y%m%d).tar.gz ~/data/numina/.numina/data/
+# 备份数据目录（数据库 + 上传文件）
+tar -czvf numina-backup-$(date +%Y%m%d).tar.gz .numina/data/
 
-# 备份配置文件
-tar -czvf numina-config-$(date +%Y%m%d).tar.gz \
-  ~/data/numina/.env.production \
-  ~/data/numina/nginx.production.conf
+# 备份配置
+tar -czvf numina-config-$(date +%Y%m%d).tar.gz .env nginx.production.conf
 ```
 
 ### 恢复
 
 ```bash
 # 停止服务
-docker compose -f docker-compose.production.yml down
+make down
 
 # 恢复数据
-tar -xzvf numina-backup-YYYYMMDD.tar.gz -C /
+tar -xzvf numina-backup-YYYYMMDD.tar.gz -C .
 
-# 重启服务
-docker compose -f docker-compose.production.yml up -d
+# 重启
+make deploy
 ```
 
-## 监控与日志
+## 常用命令速查
 
-### 查看日志
+| 操作 | 命令 |
+|------|------|
+| 初始化 | `make setup` |
+| 部署 | `make deploy` |
+| 开发模式部署 | `make deploy-dev` |
+| 停止服务 | `make down` |
+| 查看状态 | `make ps` |
+| 查看日志 | `make logs` |
+| 生成邀请码 | `make setup-invitation-codes` |
+| 重建单个服务 | `docker compose build backend && docker compose up -d backend` |
+| 进入容器 | `make shell` |
+| 数据库迁移 | `make migrate` |
+
+## 常见问题
+
+### Q: 注册失败 — FAMILY_INVITATION_CODE_NOT_FOUND
+
+生产环境需要邀请码才能注册。运行 `make setup-invitation-codes` 生成。
+
+### Q: 前端页面重建后 502 Bad Gateway
+
+nginx 缓存了旧的容器 IP。重建前端后需重载 nginx：
 
 ```bash
-# 实时日志
-docker logs -f numina-backend
-
-# 最近 100 行日志
-docker logs numina-backend --tail 100
-
-# 所有容器状态
-docker compose -f docker-compose.production.yml ps
-```
-
-### 日志轮转
-
-Docker 默认会管理日志轮转，如需自定义：
-
-```json
-// /etc/docker/daemon.json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-```
-
----
-
-### Q: Agent 容器启动失败 — ImportError: cannot import name 'ExecutionInfo'
-
-**原因**: `langgraph-prebuilt` 版本与 `langgraph` 核心版本不兼容。`langgraph<1.1.0` 的 `runtime` 模块不含 `ExecutionInfo` 符号，但 `langgraph-prebuilt>=1.0.9` 依赖它。
-
-**解决**:
-```bash
-cd agent
-# 放宽 deerflow-harness 中的 langgraph 版本约束（已修复）
-# 重新生成锁定的 requirements.txt
-uv lock && uv export --no-dev --no-hashes -o requirements.txt
-# 重建 agent 镜像
-docker-compose build agent && docker-compose up -d agent
-```
-
-### Q: seed-data.sh 失败 — jq: error: Cannot iterate over null
-
-**原因**: 脚本中 `$BASE_URL/family/` 带尾斜杠，nginx 返回 307 重定向，curl 跟随后 FastAPI 返回 404，导致 jq 解析 null。
-
-**解决**: 已修复脚本，将 `family/` 改为 `family`（无尾斜杠）。如遇类似问题，检查 API 调用是否有多余的尾斜杠。
-
-### Q: 前端重建后 502 Bad Gateway
-
-**原因**: nginx worker 缓存了旧的容器 IP。前端容器重建后 IP 变化，nginx 仍转发到旧 IP。
-
-**解决**:
-```bash
-# 重建前端后立即重载 nginx
-docker-compose build frontend frontend-child && docker-compose up -d frontend frontend-child
+docker compose build frontend-main frontend-child && docker compose up -d frontend-main frontend-child
 docker exec numina-nginx nginx -s reload
 ```
 
-**预防**: 任何涉及前端容器的重建操作，都要执行 `nginx -s reload`。
+### Q: Backend 启动失败 — 密钥未配置
 
-### Q: nginx 重启后 `/` 返回儿童端页面
+确保 `.env` 中所有密钥已正确配置。运行 `make setup-env` 自动检查并补全。
 
-**原因**: nginx worker 进程缓存了旧的 upstream DNS 解析结果。当 `frontend-child` 容器重建后，nginx 的 upstream `frontend` 可能短暂解析到错误 IP。
+### Q: 数据库 schema 错误
 
-**解决**:
 ```bash
-# 重载 nginx 配置（不中断连接）
-docker exec numina-nginx nginx -s reload
+# 方案一：运行迁移（推荐）
+make migrate
+
+# 方案二：删除旧数据库重建（仅限测试环境）
+make down
+rm -f .numina/data/db/numina.db
+make deploy
 ```
 
-**验证**:
+### Q: 上传文件无法访问
+
 ```bash
-curl -s http://localhost/ | grep title
-# 应显示: <title>Numina · 家庭资产管理</title>
+chmod -R 755 .numina/data/uploads
+docker compose restart backend nginx
 ```
 
-### Q: E2E 测试中儿童路由重定向到 `/child/select` 而非 `/login`
+### Q: 如何切换到 MySQL/PostgreSQL
 
-**原因**: 儿童路由（`/child/*`）由儿童端 SPA 独立处理，其路由守卫将未认证用户重定向到 `/child/select`（儿童登录页），而非成人端的 `/login`。这是正确行为。
-
-**说明**: `tests/lib/routes.ts` 中的 `CHILD_SPA_ROUTES` 记录了儿童 SPA 路由，不属于成人端 `PROTECTED_ROUTES`。
-
-### Q: 里程碑庆典弹窗不显示
-
-**原因**: `frontend/apps/child/src/api/milestones.ts` 中 `getMyMilestones()` 未正确解包 API 响应信封，返回 `{code, data}` 对象而非数组，导致 `filter()` 静默失败。
-
-**解决**: 已修复为 `return res.data.data ?? []`。修复后需重建儿童端容器：
 ```bash
-docker-compose build frontend-child && docker-compose up -d frontend-child
-docker exec numina-nginx nginx -s reload
+# 1. 启动对应数据库容器
+NUMINA_DB=mysql make setup-db
+# 或
+NUMINA_DB=postgres make setup-db
+
+# 2. 编辑 .env 中的 DATABASE_URL
+# 3. 重启服务
+make deploy
 ```
-
-### Q: 仿真测试中 `/child/me` 返回 404
-
-**原因**: 儿童端 `/child/me` 路由实际注册在 auth 路由器下，完整路径为 `/api/v1/auth/child/me`，而非 `/api/v1/child/me`。
-
-**正确调用**:
-```bash
-curl -H "Authorization: Bearer $CHILD_TOKEN" http://localhost/api/v1/auth/child/me
-```
-
-### Q: 儿童端 `/child/blind-box/*` 返回 403
-
-**原因**: `child_blind_box.py` 路由器中所有端点误用了 `get_current_user`（成人认证），导致儿童 token 被拒绝。
-
-**解决**: 已修复为 `get_current_child_user`（commit `4f289b6`）。修复后需重建后端：
-```bash
-docker-compose up -d --build backend
-```
-
-### Q: wishes-liabilities.sh 重复运行产生重复数据
-
-**原因**: `tests/e2e/wishes-liabilities.sh` 每次运行都向 demouser 账号创建新的心愿和负债，没有清理步骤，导致数据累积。
-
-**说明**: 该脚本设计为功能验证脚本，不是幂等的。如需清理，手动删除 demouser 账号下名称包含"深圳湾一号"、"宝马X5"等测试数据的条目，或重置数据库后重新运行 `seed-data.sh`。
-
-### Q: Docker 重建后登录失败 — AUTH_INVALID_CREDENTIALS
-
-**原因**: 容器内 `DATABASE_URL` 指向宿主机绝对路径（如 `/Users/xxx/.numina/data/db/numina.db`），该路径在容器内可能不存在或指向不同数据。`seed-data.sh` 更新的密码哈希写入了容器内的数据库，但后端实际使用的是另一个路径。
-
-**解决**:
-```bash
-# 1. 确认后端实际使用的数据库路径
-docker exec numina-backend env | grep DATABASE_URL
-
-# 2. 在该数据库中同步密码
-docker exec numina-backend uv run python -c "
-import bcrypt, sqlite3
-conn = sqlite3.connect('<ACTUAL_DB_PATH>')
-cursor = conn.cursor()
-for user, pw in [('demouser','DemoPass123'), ('xiaobao','DemoPass123')]:
-    h = bcrypt.hashpw(pw.encode(), bcrypt.gensalt(12)).decode()
-    cursor.execute('UPDATE users SET password_hash=? WHERE username=?', (h, user))
-conn.commit(); conn.close()
-print('Done')
-"
-```
-
-**预防**: 本地开发 `.env` 中的 `DATABASE_URL` 应使用容器内路径 `sqlite:////app/.numina/data/db/numina.db`，或确保宿主机路径在容器 volume 映射中一致。
-
-### Q: 儿童端仿真测试登录失败 — step1 返回 401
-
-**原因**: 儿童账号（如 `xiaoming`）的密码哈希与种子数据脚本中定义的不一致。容器重建后如果 volume 未清除，旧密码哈希仍然存在。
-
-**解决**: 运行 `seed-data.sh --force` 重新同步所有种子账号密码，或手动更新（见上方 Q&A）。
-
-### Q: multi-provider-sim-test.sh 中 frontend 健康检查失败
-
-**原因**: 脚本中 `docker inspect numina-frontend` 使用了错误的容器名。实际容器名为 `numina-frontend-main`。
-
-**解决**: 已修复为 `docker inspect numina-frontend-main`。
-
-### Q: 种子数据初始化后登录失败 — AUTH_INVALID_CREDENTIALS
-
-**原因**: `.env` 中 `DATABASE_URL` 指向宿主机绝对路径（如 `sqlite:////Users/xxx/.numina/data/db/numina.db`），容器内路径不同。种子脚本写入宿主机 DB 文件，但后端读取容器内路径。
-
-**解决**: 本地开发 `.env` 中的 `DATABASE_URL` 应使用容器内路径：
-```bash
-DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
-```
-部署脚本已修复此问题。如遇此错误，修改 `.env` 后重启 backend：
-```bash
-docker compose restart backend
-```
-
-### Q: 儿童账号 xiaoming 不存在 / 登录失败
-
-**原因**: `seed_full_scenario` 在 `test_rich` 已存在时直接 `return`，跳过了儿童账号创建。
-
-**解决**: 已修复 `tests/data/scenarios/full.py`，移除 early return，确保关联数据（儿童、家务、心愿）始终创建。重新运行种子数据：
-```bash
-cd server && TEST_DATABASE_URL="sqlite:////app/.numina/data/db/numina.db" uv run python ../tests/data/seed_data.py --force
-```
-
-### Q: test-child-simulation.sh 完成家务返回 405
-
-**原因**: 测试脚本对 `/complete` 端点发了两次 POST（一次取 body，一次取 status code），第一次成功后 chore 状态变为 `completed`，第二次请求因状态不匹配返回 405。
-
-**解决**: 已修复测试脚本，合并为单次请求同时获取 status code。
 
 ---
-
-## 仿真测试
-
-部署完成后，运行双角色仿真测试验证核心功能：
-
-```bash
-# 基础验收测试（23 项）— demouser 成人角色
-bash tests/e2e/acceptance.sh
-
-# 扩展 CRUD 测试（56 项）— demouser 成人角色
-bash tests/e2e/extended.sh
-
-# 多供应商 AI 配置 + 双角色测试（31 项）— demouser + xiaobao
-bash tests/e2e/multi-provider-sim-test.sh
-
-# 儿童角色完整仿真（19-22 项，视条件执行）— xiaoming (test_rich 家庭儿童)
-bash tests/e2e/test-child-simulation.sh
-
-# 心愿/负债功能测试
-bash tests/e2e/wishes-liabilities.sh
-
-# 种子数据（幂等，可重复执行）
-bash tests/data/seed-data.sh
-```
-
-**双角色验证要点**:
-
-| 角色 | 账号 | 密码 | 登录方式 | 权限 |
-|------|------|------|---------|------|
-| demouser (owner) | `demouser` | `DemoPass123` | `POST /auth/login` | 完整资产/负债/家庭管理 |
-| xiaobao (child) | `xiaobao` | `DemoPass123` + emoji PIN | `POST /auth/login/step1` → `step2` | 仅 `/child/*` 路由 |
-| xiaoming (child) | `xiaoming` | `TestRich123!` + emoji PIN | `POST /auth/login/step1` → `step2` | 仅 `/child/*` 路由 |
-
-**儿童登录流程**（两步验证）：
-```bash
-# Step 1: 用户名 + 密码 → temp_token
-STEP1=$(curl -s -X POST http://localhost/api/v1/auth/login/step1 \
-  -H "Content-Type: application/json" \
-  -d '{"username":"xiaobao","password":"DemoPass123"}')
-TEMP_TOKEN=$(echo "$STEP1" | jq -r '.data.temp_token')
-
-# Step 2: emoji PIN → access_token
-STEP2=$(curl -s -X POST http://localhost/api/v1/auth/login/step2 \
-  -H "Content-Type: application/json" \
-  -d "{\"temp_token\":\"$TEMP_TOKEN\",\"factor_type\":\"emoji_pin\",\"payload\":{\"pin_sequence\":[\"🐱\",\"🐶\",\"🌟\",\"🌈\"]}}")
-CHILD_TOKEN=$(echo "$STEP2" | jq -r '.data.access_token')
-```
-
-儿童账号 (`xiaoming`/`xiaobao`) 访问 `/assets`、`/liabilities` 等成人端点应返回 **403**。
-
----
-**最后更新**: 2026-07-16
-**维护者**: Numina Team
+**最后更新**: 2026-07-25

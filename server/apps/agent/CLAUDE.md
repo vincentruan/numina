@@ -56,12 +56,10 @@ services/deerflow_adapter/
 ├── adapter.py              # DeerFlowAdapter — typed_stream_dispatch + raw_stream_dispatch (ThreadPoolExecutor bridge)
 ├── family_adapter_cache.py # LRU cache (100 families) of per-family DeerFlowClient + temp config generation
 ├── client_factory.py       # builds DeerFlowClient from generated config
-├── skill_loader.py         # SkillLoader — reads thinking/mcp_tools flags from builtin/public/<name>/SKILL.md frontmatter
 ├── active_skill_context.py # ContextVar holding the active skill name (drives tool filtering)
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
-├── interrupt_tools.py      # tools used during interrupt/resume flows
+├── original_user_content_context.py  # ContextVar preserving original user content through middleware
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
-├── todo_middleware.py      # TodoMiddleware — plan-mode todo tracking (TodoListMiddleware subclass)
 └── exceptions.py
 ```
 
@@ -139,9 +137,7 @@ agent/
 │       └── gateway.py         # /internal/gateway/* — mgmt proxies + run triggers (asset-report/finance-coach/wish-advice)
 ├── routers/                   # External routers (JWT cookie auth via verify_family_token unless noted)
 │   ├── runs_stream.py         # POST /api/threads/{id}/runs/stream (stream_run) + /runs/{run_id}/cancel
-│   ├── resume.py              # POST /api/threads/{id}/runs/resume (interrupt resume)
 │   ├── threads.py             # Thread CRUD + checkpointer state/history/token-usage/branches + goal + compact
-│   ├── capabilities.py        # GET /capabilities (X-Agent-Token)
 │   ├── import_parse.py        # POST /import/parse — sync JSON parse (X-Agent-Token)
 │   ├── input_polish.py        # POST /input-polish — D3 DeerFlow-synced draft polish (cookie auth)
 │   ├── model_test.py          # POST /test/model — stateless model capability test (X-Agent-Token)
@@ -164,19 +160,26 @@ agent/
 │   │   ├── asset_report_middleware.py
 │   │   └── gc.py
 │   ├── deerflow_adapter/      # DeerFlow harness integration — see §Adapter Location
+│   │   ├── adapter.py
+│   │   ├── family_adapter_cache.py
+│   │   ├── client_factory.py
+│   │   ├── active_skill_context.py
+│   │   ├── memory_config_bridge.py
+│   │   ├── original_user_content_context.py  # ContextVar for original user content
+│   │   ├── sync_tool_patch.py
+│   │   └── exceptions.py
 │   ├── agent_dispatch.py      # LEGACY NDJSON gateway path (stream_agent_dispatch) — not the v2 path; imports _fire_and_forget/_select_model from orchestrator.py
 │   ├── agent_registry.py      # AgentRegistry — per-agent attribute cache (memory_enabled)
 │   ├── asset_suggest.py       # lightweight LLM single-call (suggest_asset_fields)
 │   ├── input_polish.py        # lightweight LLM single-call (polish_draft)
 │   ├── orchestrator.py        # provider-selection / retry / fire-and-forget helpers (no dispatch class)
-│   ├── fallback_engine.py     # STUB — module docstring only, no logic (import compat)
 │   ├── pii_redactor.py        # PII scrubbing (must run before any LLM/dispatch call)
 │   ├── policy_guard.py        # Request policy enforcement
 │   ├── audit_logger.py        # Structured audit log (log_call)
 │   ├── session_journal.py     # Append-only JSONL event log per session
 │   ├── session_store.py       # AiSessionRepository (delegates to backend via HTTP)
 │   ├── stream_events.py       # EventStreamBuilder
-│   ├── capability_registry.py # Loads capabilities from builtin/public/<name>/SKILL.md frontmatter
+│   ├── capability_registry.py # Loads capabilities from builtin/public/<name>/SKILL.md frontmatter (legacy; skill refactor in progress)
 │   ├── compact_service.py     # Thread compaction — wraps DeerFlow's compact_thread_context
 │   ├── goal_store.py          # Thread-scoped goal persistence (read/write/build state)
 │   ├── goal_evaluator.py      # Non-thinking LLM that judges goal completion
@@ -184,7 +187,7 @@ agent/
 │   ├── import_parse_service.py
 │   ├── model_tester.py
 │   ├── message_classifier.py
-│   └── (health_report.py, liability_advisor.py, spending_leak.py, vision_test_image.py, agent_temp_cache.py, chat.py, chat_adapter.py)
+│   └── (health_report.py, vision_test_image.py, agent_temp_cache.py, chat.py, chat_adapter.py)
 ├── skills/
 │   └── builtin/public/        # DeerFlow-native LocalSkillStorage scanner layout
 │       ├── chat/SKILL.md
@@ -205,7 +208,7 @@ agent/
 ├── prompts/chat/default_system_prompt.md
 ├── tests/                   # ⚠️ legacy dir — see §Quality Commands; canonical root is tests/agent/
 │   ├── integration/           # gateway, runs-cancel, u2-app-dispatch, v2-sse-contract
-│   └── unit/                  # worker_*, adapter_contextvar, sync_tool_patch, resume/threads routers, etc.
+│   └── unit/                  # worker_*, adapter_contextvar, sync_tool_patch, threads routers, etc.
 │   # Canonical tests live in tests/agent/ (unit/ ~26 files, integration/, golden/) — see top of file.
 └── scripts/                   # vendor-deerflow.sh, patch-deerflow-thread-data.py, patch-langgraph-runtime.py
 ```
@@ -227,9 +230,11 @@ agent/
 | `AGENT_DATA_DIR` | `{DATA_ROOT}/workspaces` | Agent data root (memory, sandboxes); also sets `DEER_FLOW_HOME` if unset |
 | `DEERFLOW_DB_PATH` | `{DATA_ROOT}/db/deerflow-checkpoints.db` | DeerFlow checkpointer SQLite path |
 | `DEERFLOW_CONCURRENCY` | `8` | DeerFlow ThreadPoolExecutor workers + semaphore |
+| `DEERFLOW_DEFAULT_TIMEOUT` | `300` | Default timeout for DeerFlow operations |
 | `SSE_HEARTBEAT_INTERVAL` | `15.0` | SSE heartbeat seconds |
 | `SSE_QUEUE_MAXSIZE` | `256` | Per-run SSE queue cap |
 | `RUN_CLEANUP_DELAY_SECONDS` | `300.0` | Deferred run GC |
+| `RUN_DRAIN_TIMEOUT_SECONDS` | `30.0` | Timeout for draining active runs |
 | `STREAM_CLEANUP_DELAY_SECONDS` | `60.0` | Deferred bridge cleanup |
 | `SUBAGENT_MAX_CONCURRENT` | `3` | Subagent bg tasks |
 | `SUBAGENT_TIMEOUT_SECONDS` | `900` | Subagent timeout |
@@ -244,7 +249,7 @@ agent/
 
 ### Streaming Protocols
 
-The v2 `stream_run` path uses the **LangGraph Platform SSE wire format** (`text/event-stream`) so `@langchain/langgraph-sdk`'s `useStream` works unmodified. Frame types: `messages`, `values`, `custom`, `end`, `error`, plus `interrupt` (custom event). Heartbeat sentinels fire every `SSE_HEARTBEAT_INTERVAL`s; client disconnect triggers run cancel; `Last-Event-ID` supports reconnection.
+The v2 `stream_run` path uses the **LangGraph Platform SSE wire format** (`text/event-stream`) so `@langchain/langgraph-sdk`'s `useStream` works unmodified. Frame types: `messages`, `values`, `custom`, `end`, `error`. Heartbeat sentinels fire every `SSE_HEARTBEAT_INTERVAL`s; client disconnect triggers run cancel; `Last-Event-ID` supports reconnection.
 
 The legacy NDJSON gateway path (`agent_dispatch.py:stream_agent_dispatch`) still exists for backward compatibility but is **not** the v2 path. Prefer `stream_run` for new capabilities. The legacy text stream used `[THINK]`/`[TEXT]` chunk prefixes — do not reintroduce.
 
@@ -310,7 +315,6 @@ All endpoints require `X-Agent-Token` header matching `AGENT_INTERNAL_TOKEN`. No
 
 - **`orchestrator.py` is not an orchestrator** — the file holds only provider-selection / retry / fire-and-forget helpers (`_select_model`, `_select_provider_with_retry`, `_is_transient_error`, `_should_route_to_half_open`, `_fire_and_forget`), imported by the legacy `agent_dispatch.py`. Multi-app dispatch lives in `runtime/worker.py`, not here.
 - **`agent_dispatch.py` is the legacy NDJSON path** — `stream_agent_dispatch` still works but is not the v2 `stream_run` path. Do not build new capabilities against it.
-- **`fallback_engine.py` is a stub** — module docstring only, no logic; kept for import compatibility. Do not add dispatch code to it.
 - **DeerFlow init failure is non-fatal** — checkpointer init in `main.py` lifespan is wrapped in `try/except`. If the persistence engine fails to init, the app starts but DeerFlow dispatches fail at run time and return error responses.
 - **`_CHECKPOINTER_LOCK` serialises non-streaming DeerFlow calls** — at most 1 concurrent non-streaming DeerFlow dispatch at a time. Streaming (`stream_run`) calls do not hold this lock.
 - **Temp config dirs accumulate in `/tmp`** — `family_adapter_cache.py` creates a `tempfile.mkdtemp()` per family. Evicted entries clean up, but a crash leaves orphaned dirs.

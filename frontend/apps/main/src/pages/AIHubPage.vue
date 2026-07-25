@@ -14,7 +14,7 @@
           <span class="hub-greeting-hi"><ShimmerText :text="t('aiHub.greeting', { userName })" :duration="3" /></span>
         </div>
         <!-- Health score ring -->
-        <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="scoreAriaLabel">
+        <div class="hub-score-ring" role="img" :aria-label="scoreAriaLabel">
           <svg viewBox="0 0 64 64" class="score-svg" aria-hidden="true">
             <circle class="score-track" cx="32" cy="32" r="26" />
             <circle
@@ -31,29 +31,54 @@
       </div>
       <!-- Stats row -->
       <div class="hub-stats">
-        <div class="hub-stat-item">
-          <span class="hub-stat-num">{{ suggestionCount }}</span>
-          <span class="hub-stat-label">{{ t('aiHub.suggestionsCount') }}</span>
-        </div>
-        <div class="hub-stat-divider" aria-hidden="true"></div>
-        <div class="hub-stat-item">
-          <span class="hub-stat-num warn">{{ alertCount }}</span>
-          <span class="hub-stat-label">{{ t('aiHub.alertsCount') }}</span>
-        </div>
-        <div class="hub-stat-divider" aria-hidden="true"></div>
-        <div class="hub-stat-item">
-          <span class="hub-stat-num">{{ currentReport?.data_completeness_score != null ? currentReport.data_completeness_score.toFixed(0) : '-' }}%</span>
-          <span class="hub-stat-label">{{ t('aiHub.dataCompleteness') }}</span>
-        </div>
-        <div class="hub-stat-divider" aria-hidden="true"></div>
+        <template v-for="stat in statItems" :key="stat.type">
+          <div class="hub-stat-item">
+            <div class="hub-stat-num-wrap">
+              <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
+              <van-popover
+                :show="activePopover === stat.type"
+                @update:show="(v) => (activePopover = v ? stat.type : null)"
+                placement="bottom"
+                :offset="[0, 8]"
+              >
+                <div class="stat-popover-content">
+                  <div class="stat-popover-header">
+                    <span class="stat-popover-value" :class="{ warn: stat.warn }">{{ stat.value }}</span>
+                    <span class="stat-popover-label">{{ stat.label }}</span>
+                  </div>
+                  <p class="stat-popover-desc">{{ stat.tip }}</p>
+                  <button class="stat-popover-action" type="button" @click="goToReport">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    {{ t('aiHub.viewFullReport') }}
+                  </button>
+                </div>
+                <template #reference>
+                  <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="7" x2="12" y2="13"/>
+                      <line x1="12" y1="16.5" x2="12.01" y2="16.5"/>
+                    </svg>
+                  </button>
+                </template>
+              </van-popover>
+            </div>
+            <span class="hub-stat-label">{{ stat.label }}</span>
+          </div>
+          <div class="hub-stat-divider" aria-hidden="true"></div>
+        </template>
         <div class="hub-stat-meta" aria-live="polite">
           <template v-if="reportLoading">
-            <van-loading size="10" />
             <span>{{ t('aiHub.generating') }}</span>
+            <button class="refresh-btn refresh-btn--loading" disabled :aria-label="t('aiHub.refreshReport')">
+              <van-loading size="11" color="var(--text-tertiary)" />
+            </button>
           </template>
           <template v-else-if="reportGeneratedAt">
             <span>{{ reportAge }}</span>
-            <button class="refresh-btn" :disabled="reportLoading" :aria-label="t('aiHub.refreshReport')" @click="() => refreshReport()">
+            <button class="refresh-btn" :aria-label="t('aiHub.refreshReport')" @click="() => refreshReport()">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -75,7 +100,7 @@
         </svg>
         {{ t('aiHub.latestReport') }}
       </div>
-      <p class="report-summary-text">{{ currentReport.summary }}</p>
+      <p class="report-summary-text" v-html="renderedSummary" />
       <div class="report-summary-cta">
         {{ t('aiHub.viewFullReport') }}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -252,7 +277,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onDeactivated, onUnmounted, watch } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
@@ -275,6 +302,7 @@ import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const NUMINA_AGENT_NAME = 'numina'
 
@@ -285,6 +313,7 @@ const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
 const stream = useReportStream()
+const { increment, decrement } = usePageLoading()
 const isOwner = authStore.user?.role === 'owner'
 
 const currentReport = ref<AIReport | null>(null)
@@ -404,6 +433,11 @@ function submitChatFromInput(payload: SubmitPayload) {
   submitChat()
 }
 
+const PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
+
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
 const displayScore = computed(() => currentReport.value?.overall_score ?? '?')
@@ -413,17 +447,23 @@ const scoreArc = computed(() => {
   return ((s / 100) * 163.36).toFixed(2)
 })
 
-const scoreClass = computed(() => {
-  const s = currentReport.value?.overall_score ?? 0
-  if (s >= 80) return 'score-excellent'
-  if (s >= 60) return 'score-good'
-  if (s >= 40) return 'score-fair'
-  return s > 0 ? 'score-poor' : 'score-empty'
-})
-
 const scoreAriaLabel = computed(() => {
   const score = displayScore.value
   return t('aiHub.scoreAriaLabel', { score })
+})
+
+// Generate short summary (120-200 chars) for display in the summary card
+const renderedSummary = computed(() => {
+  if (!currentReport.value?.summary) return ''
+  // Parse markdown to plain text
+  const raw = marked.parse(currentReport.value.summary, { async: false }) as string
+  const plainText = DOMPurify.sanitize(raw, { ALLOWED_TAGS: [] }).trim()
+  // Truncate to ~180 chars (middle of 120-200 range) at word boundary
+  const maxLength = 180
+  if (plainText.length <= maxLength) return plainText
+  const truncated = plainText.slice(0, maxLength)
+  const lastSpace = truncated.lastIndexOf(' ')
+  return (lastSpace > maxLength * 0.7 ? truncated.slice(0, lastSpace) : truncated) + '...'
 })
 
 const reportAge = computed(() => {
@@ -437,9 +477,18 @@ const reportAge = computed(() => {
   return t('aiHub.daysAgo', { days: Math.floor(hrs / 24) })
 })
 
+type HubStatType = 'suggestions' | 'alerts' | 'completeness'
+
+const activePopover = ref<HubStatType | null>(null)
+
 const suggestionCount = computed(() => {
   const r = currentReport.value
   if (!r) return 0
+  // New format: indicators array - sum of suggestions across all indicators
+  if (r.indicators?.length) {
+    return r.indicators.reduce((sum, ind) => sum + (ind.suggestions?.length ?? 0), 0)
+  }
+  // Legacy format fallback: count populated sections
   return [r.net_worth_health, r.allocation_analysis, r.liability_pressure, r.asset_efficiency]
     .filter(Boolean).length
 })
@@ -447,10 +496,48 @@ const suggestionCount = computed(() => {
 const alertCount = computed(() => {
   const r = currentReport.value
   if (!r) return 0
-  // count sections with score < 60
+  // New format: indicators with 1-5 score scale; alerts = score <= 2 (poor/critical)
+  if (r.indicators?.length) {
+    return r.indicators.filter(ind => typeof ind.score === 'number' && ind.score <= 2).length
+  }
+  // Legacy format fallback: score < 60 on 0-100 scale
   const sections = [r.net_worth_health, r.allocation_analysis, r.liability_pressure, r.asset_efficiency]
   return sections.filter(s => s && typeof s.score === 'number' && s.score < 60).length
 })
+
+const dataCompletenessDisplay = computed(() => {
+  const score = currentReport.value?.data_completeness_score
+  return score != null ? `${score.toFixed(0)}%` : '-'
+})
+
+const statItems = computed<Array<{ type: HubStatType; value: string; label: string; tip: string; warn: boolean }>>(() => [
+  {
+    type: 'suggestions',
+    value: String(suggestionCount.value),
+    label: t('aiHub.suggestionsCount'),
+    tip: t('aiHub.suggestionCountTip'),
+    warn: false,
+  },
+  {
+    type: 'alerts',
+    value: String(alertCount.value),
+    label: t('aiHub.alertsCount'),
+    tip: t('aiHub.alertCountTip'),
+    warn: true,
+  },
+  {
+    type: 'completeness',
+    value: dataCompletenessDisplay.value,
+    label: t('aiHub.dataCompleteness'),
+    tip: t('aiHub.dataCompletenessTip'),
+    warn: false,
+  },
+])
+
+function goToReport() {
+  activePopover.value = null
+  router.push('/ai/report')
+}
 
 async function loadReport() {
   try {
@@ -469,10 +556,9 @@ async function generateReport() {
   stream.reset()
   try {
     await stream.connect()
-    if (stream.report.value) {
-      currentReport.value = stream.report.value as unknown as AIReport
-      reportGeneratedAt.value = stream.generatedAt.value
-    }
+    // Stream completed — reload from API to get the persisted report
+    // (stream.report is only populated on cache hit, not fresh generation)
+    await loadReport()
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
@@ -482,19 +568,40 @@ async function generateReport() {
 
 async function refreshReport(silent?: boolean) {
   if (reportLoading.value) return // avoid duplicate with scheduler
-  if (!aiStore.aiEnabled) return
+
+  // 1-hour cooldown: prevent unnecessary regenerations if report is fresh
+  if (reportGeneratedAt.value && !silent) {
+    const ageMs = Date.now() - new Date(reportGeneratedAt.value).getTime()
+    const oneHourMs = 60 * 60 * 1000
+    if (ageMs < oneHourMs) {
+      showFailToast(t('toast.reportTooFrequent'))
+      return
+    }
+  }
+
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
     // force=true bypasses the 8h cache (plan step 6) — the refresh button
     // means the user wants a fresh report, not the cached one.
     await stream.connect(true)
-    if (stream.report.value) {
-      currentReport.value = stream.report.value as unknown as AIReport
-      reportGeneratedAt.value = stream.generatedAt.value
+    // Stream completed — reload from API to get the persisted report
+    // (stream.report is only populated on cache hit, not fresh generation)
+    await loadReport()
+  } catch (err) {
+    if (!silent) {
+      // Check if it's a timeout or connection error
+      const isTimeout = err instanceof Error && err.message.includes('timeout')
+      const isConnectionError = err instanceof Error &&
+        (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))
+      if (isTimeout) {
+        showFailToast(t('toast.reportTimeout'))
+      } else if (isConnectionError) {
+        showFailToast(t('toast.refreshFailed'))
+      } else {
+        showFailToast(stream.errorMessage.value || t('toast.refreshFailed'))
+      }
     }
-  } catch {
-    if (!silent) showFailToast(t('toast.refreshFailed'))
   } finally {
     if (!silent) reportLoading.value = false
   }
@@ -546,12 +653,22 @@ function handleAgentEdit(agent: Agent) {
   router.push({ name: 'AgentEdit', params: { id: agent.id } })
 }
 
-onMounted(async () => {
-  await aiStore.fetchConfig()
-  await agentStore.loadAgents()
-  await loadReport()
+async function loadPageData() {
+  increment()
+  try {
+    await aiStore.fetchConfig()
+    await agentStore.loadAgents()
+    await loadReport()
+  } finally {
+    decrement()
+  }
   initialLoading.value = false
-})
+}
+
+onMounted(loadPageData)
+
+// KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
+onActivated(loadPageData)
 
 // This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
@@ -582,28 +699,13 @@ defineExpose({
   padding-bottom: 140px;
 }
 
-/* ── Header: Pastel Cloud Gradient (mirrors NetWorthCard) ── */
+/* ── Header: Clean card style ── */
 .hub-header {
   position: relative;
   padding: 20px 16px 16px;
-  background:
-    linear-gradient(135deg,
-      rgba(239, 44, 193, 0.10) 0%,
-      rgba(189, 187, 255, 0.18) 45%,
-      rgba(160, 195, 255, 0.14) 100%),
-    #ffffff;
-  color: #000000;
+  background: var(--card-bg);
+  color: var(--text-primary);
   overflow: hidden;
-}
-
-[data-theme='dark'] .hub-header {
-  background:
-    linear-gradient(135deg,
-      rgba(189, 187, 255, 0.08) 0%,
-      rgba(189, 187, 255, 0.04) 50%,
-      transparent 100%),
-    #010120;
-  color: #ffffff;
 }
 
 /* Decorative blob */
@@ -614,12 +716,8 @@ defineExpose({
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(189, 187, 255, 0.22) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.08) 0%, transparent 70%);
   pointer-events: none;
-}
-
-[data-theme='dark'] .hub-header-blob {
-  background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
 }
 
 /* Main row: greeting + score ring */
@@ -642,12 +740,8 @@ defineExpose({
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
-  font-family: 'Georgia', monospace;
-}
-
-[data-theme='dark'] .hub-greeting-label {
   color: var(--text-tertiary);
+  font-family: 'Georgia', monospace;
 }
 
 /* Display name: tight negative tracking */
@@ -656,11 +750,7 @@ defineExpose({
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.05;
-  color: #000000;
-}
-
-[data-theme='dark'] .hub-greeting-hi {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 /* Score ring */
@@ -679,12 +769,8 @@ defineExpose({
 
 .score-track {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.12);
+  stroke: var(--separator);
   stroke-width: 4;
-}
-
-[data-theme='dark'] .score-track {
-  stroke: rgba(255, 255, 255, 0.15);
 }
 
 .score-fill {
@@ -694,17 +780,8 @@ defineExpose({
   transition: stroke-dasharray 0.6s ease;
 }
 
-.score-excellent .score-fill { stroke: #059669; }
-.score-good      .score-fill { stroke: #2563eb; }
-.score-fair      .score-fill { stroke: #d97706; }
-.score-poor      .score-fill { stroke: #dc2626; }
-.score-empty     .score-fill { stroke: rgba(0, 0, 0, 0.15); }
-
-[data-theme='dark'] .score-excellent .score-fill { stroke: var(--color-trend-down); }
-[data-theme='dark'] .score-good      .score-fill { stroke: #93c5fd; }
-[data-theme='dark'] .score-fair      .score-fill { stroke: #fcd34d; }
-[data-theme='dark'] .score-poor      .score-fill { stroke: var(--color-trend-up); }
-[data-theme='dark'] .score-empty     .score-fill { stroke: rgba(255, 255, 255, 0.15); }
+.score-fill { stroke: var(--van-primary-color); }
+.score-empty .score-fill { stroke: var(--separator); }
 
 .score-inner {
   position: absolute;
@@ -719,46 +796,29 @@ defineExpose({
   font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.03em;
-  color: #000000;
+  color: var(--text-primary);
   line-height: 1;
-}
-
-[data-theme='dark'] .score-number {
-  color: #ffffff;
 }
 
 .score-label {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.055px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
   line-height: 1;
 }
 
-[data-theme='dark'] .score-label {
-  color: var(--text-tertiary);
-}
-
-/* Stats row: frosted glass, 8px radius, dark-blue-tinted shadow */
+/* Stats row */
 .hub-stats {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   border-radius: 8px;
   padding: 10px 12px;
   margin-top: 12px;
-  box-shadow: rgba(1, 1, 32, 0.08) 0px 2px 8px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   position: relative;
-}
-
-[data-theme='dark'] .hub-stats {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: rgba(1, 1, 32, 0.4) 0px 2px 8px;
 }
 
 .hub-stat-item {
@@ -773,12 +833,8 @@ defineExpose({
   font-size: 16px;
   font-weight: 500;
   letter-spacing: -0.16px;
-  color: #000000;
+  color: var(--text-primary);
   line-height: 1;
-}
-
-[data-theme='dark'] .hub-stat-num {
-  color: #ffffff;
 }
 
 .hub-stat-num.warn { color: #d97706; }
@@ -789,23 +845,92 @@ defineExpose({
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.40);
-  font-family: 'Georgia', monospace;
-}
-
-[data-theme='dark'] .hub-stat-label {
   color: var(--text-tertiary);
+  font-family: 'Georgia', monospace;
 }
 
 .hub-stat-divider {
   width: 1px;
   height: 28px;
-  background: rgba(0, 0, 0, 0.10);
+  background: var(--separator);
   flex-shrink: 0;
 }
 
-[data-theme='dark'] .hub-stat-divider {
-  background: rgba(255, 255, 255, 0.12);
+.hub-stat-num-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hub-stat-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.hub-stat-info:active {
+  color: var(--color-primary, #1989fa);
+}
+
+.stat-popover-content {
+  padding: 12px 14px;
+  max-width: 220px;
+  box-sizing: border-box;
+}
+
+.stat-popover-header {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.stat-popover-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.stat-popover-value.warn { color: #d97706; }
+[data-theme='dark'] .stat-popover-value.warn { color: #fcd34d; }
+
+.stat-popover-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.stat-popover-desc {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.stat-popover-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  background: var(--color-primary, #1989fa);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.stat-popover-action:active {
+  opacity: 0.85;
 }
 
 /* Meta (freshness + refresh) — rightmost slot in stats row */
@@ -814,15 +939,11 @@ defineExpose({
   align-items: center;
   gap: 2px;
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.40);
+  color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
   letter-spacing: 0.055px;
   flex-shrink: 0;
   padding-left: 8px;
-}
-
-[data-theme='dark'] .hub-stat-meta {
-  color: var(--text-tertiary);
 }
 
 .refresh-btn {
@@ -831,7 +952,7 @@ defineExpose({
   padding: 8px;
   min-width: 32px;
   min-height: 32px;
-  color: rgba(0, 0, 0, 0.40);
+  color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -840,12 +961,7 @@ defineExpose({
   transition: color 0.15s;
 }
 
-[data-theme='dark'] .refresh-btn {
-  color: var(--text-tertiary);
-}
-
-.refresh-btn:hover { color: #000000; }
-[data-theme='dark'] .refresh-btn:hover { color: var(--text-primary); }
+.refresh-btn:hover { color: var(--text-primary); }
 .refresh-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Report summary card ── */
@@ -854,15 +970,10 @@ defineExpose({
   background: var(--card-bg);
   border-radius: 8px;
   padding: 14px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-elevated);
   cursor: pointer;
   transition: box-shadow 0.15s;
-}
-
-[data-theme='dark'] .report-summary-card {
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
 }
 
 .report-summary-card:active {
@@ -877,17 +988,12 @@ defineExpose({
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
   margin-bottom: 8px;
 }
 
-[data-theme='dark'] .report-summary-title {
-  color: var(--text-tertiary);
-}
-
-.report-summary-title svg { color: rgba(0, 0, 0, 0.35); }
-[data-theme='dark'] .report-summary-title svg { color: rgba(255, 255, 255, 0.35); }
+.report-summary-title svg { color: var(--text-tertiary); }
 
 .report-summary-text {
   font-size: 13px;
@@ -911,11 +1017,7 @@ defineExpose({
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.12px;
-  color: rgba(0, 0, 0, 0.55);
-}
-
-[data-theme='dark'] .report-summary-cta {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-secondary);
 }
 
 /* Generating report card */
@@ -925,15 +1027,11 @@ defineExpose({
   border-radius: 8px;
   padding: 28px 16px;
   text-align: center;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--color-card-border);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-}
-
-[data-theme='dark'] .report-generating-card {
-  border-color: rgba(255, 255, 255, 0.10);
 }
 
 .report-generating-text {
@@ -959,34 +1057,23 @@ defineExpose({
   padding: 24px 16px;
   text-align: center;
   cursor: pointer;
-  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border: 1px dashed var(--color-card-border);
   transition: border-color 0.15s;
 }
 
-[data-theme='dark'] .report-empty-card {
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.report-empty-card:active { border-color: rgba(0, 0, 0, 0.35); }
-[data-theme='dark'] .report-empty-card:active { border-color: rgba(255, 255, 255, 0.35); }
+.report-empty-card:active { border-color: var(--text-tertiary); }
 
 .report-empty-icon {
   width: 48px;
   height: 48px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px;
-  color: rgba(0, 0, 0, 0.40);
-}
-
-[data-theme='dark'] .report-empty-icon {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .report-empty-text {
@@ -1289,36 +1376,25 @@ defineExpose({
   border-radius: 8px;
   padding: 28px 20px 24px;
   text-align: center;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-elevated);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
 
-[data-theme='dark'] .ai-disabled-card {
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
-}
-
 .ai-disabled-icon {
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(0, 0, 0, 0.30);
+  color: var(--text-tertiary);
   margin-bottom: 4px;
-}
-
-[data-theme='dark'] .ai-disabled-icon {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.30);
 }
 
 .ai-disabled-title {
@@ -1343,7 +1419,7 @@ defineExpose({
   gap: 4px;
   padding: 8px 16px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--color-card-border);
   background: transparent;
   font-size: 13px;
   font-weight: 500;
@@ -1353,17 +1429,8 @@ defineExpose({
 }
 
 .ai-disabled-action:hover {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.25);
-}
-
-[data-theme='dark'] .ai-disabled-action {
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-[data-theme='dark'] .ai-disabled-action:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.30);
+  background: var(--bg-secondary);
+  border-color: var(--text-tertiary);
 }
 
 /* Focus rings */

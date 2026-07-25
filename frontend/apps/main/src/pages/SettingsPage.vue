@@ -161,7 +161,32 @@
         :model-value="[authStore.user?.theme || 'system']"
         @confirm="onThemeConfirm"
         @cancel="showThemePicker = false"
-      />
+      >
+        <template #option="{ text, value }">
+          <div class="theme-option">
+            <svg v-if="value === 'light'" class="theme-option-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4" />
+              <line x1="12" y1="2" x2="12" y2="5" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+              <line x1="2" y1="12" x2="5" y2="12" />
+              <line x1="19" y1="12" x2="22" y2="12" />
+              <line x1="4.93" y1="4.93" x2="7.17" y2="7.17" />
+              <line x1="16.83" y1="16.83" x2="19.07" y2="19.07" />
+              <line x1="4.93" y1="19.07" x2="7.17" y2="16.83" />
+              <line x1="16.83" y1="7.17" x2="19.07" y2="4.93" />
+            </svg>
+            <svg v-else-if="value === 'dark'" class="theme-option-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <svg v-else class="theme-option-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            <span>{{ text }}</span>
+          </div>
+        </template>
+      </van-picker>
     </van-popup>
 
     <!-- Language Picker -->
@@ -226,7 +251,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Settings' })
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -277,6 +302,32 @@ onMounted(async () => {
   if (savedColor) {
     currentThemeColor.value = savedColor
     localStorage.setItem('theme-primary', savedColor)  // sync localStorage with server
+    document.documentElement.style.setProperty('--theme-primary', savedColor)
+    document.documentElement.style.setProperty('--van-primary-color', savedColor)
+  }
+})
+
+// KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
+onActivated(async () => {
+  increment()
+  try {
+    if (!familyStore.family) {
+      await familyStore.fetchFamily()
+    }
+    await authStore.fetchMe()
+    if (authStore.user?.role === 'owner') {
+      await aiStore.fetchConfigs()
+    }
+  } catch (err) {
+    console.error('[SettingsPage] Failed to load data:', err)
+  } finally {
+    decrement()
+  }
+  // Re-apply theme color on reactivation
+  const savedColor = authStore.user?.theme_color || localStorage.getItem('theme-primary')
+  if (savedColor) {
+    currentThemeColor.value = savedColor
+    localStorage.setItem('theme-primary', savedColor)
     document.documentElement.style.setProperty('--theme-primary', savedColor)
     document.documentElement.style.setProperty('--van-primary-color', savedColor)
   }
@@ -489,6 +540,15 @@ async function onLogout() {
   border-color: var(--text-primary);
 }
 
+.theme-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.theme-option-icon {
+  flex-shrink: 0;
+  color: var(--van-text-color, var(--van-gray-8));
+}
 .cell-icon {
   margin-right: 4px;
   color: var(--van-cell-icon-color);

@@ -154,7 +154,7 @@ def _resolve_skills(
     """Resolve which skills an agent dispatches with, enforcing R5/R6/R15 + U9.
 
     Branches:
-    - ``agent_skills == ["chat"]`` → ``[]`` (R5: AI问答 reserved chat capability,
+    - ``agent_skills == ["chat"]`` → ``[]`` (R5: AI问答 reserved chat skill,
       pure LLM mode, no business skill catalog injection).
     - ``"*" in agent_skills`` → ``family_enabled_skills`` minus
       ``_INTERNAL_ONLY_SKILLS`` (R6: sentinel + U9 exclusion).
@@ -182,7 +182,7 @@ def _resolve_skills(
 
     if not agent_skills:
         return []
-    # Chat-reserved capability handling must come before the sentinel branch
+    # Chat-reserved skill handling must come before the sentinel branch
     # so an agent with skills=["chat"] never accidentally inherits family skills.
     if agent_skills == ["chat"]:
         return []
@@ -221,7 +221,7 @@ async def stream_agent_dispatch(
         "success": False,
     }
     builder_events = EventStreamBuilder(
-        capability_id=f"agent-{agent_id}", task_id=task_id
+        skill_id=f"agent-{agent_id}", task_id=task_id
     )
 
     def _emit_audit(error_type: str | None) -> None:
@@ -236,7 +236,7 @@ async def stream_agent_dispatch(
                     family_id=family_id,
                     audit_id=audit_id,
                     user_id=user_id,
-                    capability=audit_state["agent_name"] or f"agent-{agent_id}",
+                    skill_id=audit_state["agent_name"] or f"agent-{agent_id}",
                     success=error_type is None,
                     error_type=error_type,
                     deerflow_attempted=audit_state["deerflow_attempted"],
@@ -306,7 +306,7 @@ async def stream_agent_dispatch(
 
     # 2a. Policy guard — required by agent/CLAUDE.md Key Invariants #2.
     # CapabilityPolicy fields come from BackendClient.get_family_ai_config; the
-    # capability scoped to this dispatch is the agent_name (e.g. "numina"), so
+    # skill_id scoped to this dispatch is the agent_name (e.g. "numina"), so
     # families can whitelist agents by name in allowed_capabilities.
     policy = CapabilityPolicy(
         ai_enabled=ai_config.get("ai_enabled", True),
@@ -592,7 +592,7 @@ async def stream_agent_dispatch(
                 session_journal.resolve_path(
                     family_id=family_id,
                     session_id=thread_id,
-                    capability="agent",
+                    skill_id="agent",
                     user_id=user_segment,
                 )
             )
@@ -609,7 +609,7 @@ async def stream_agent_dispatch(
                 family_id=family_id,
                 session_id=thread_id,
                 user_id=user_id,
-                capability="agent",
+                skill_id="agent",
                 model_name=model_id,
                 jsonl_path=jsonl_path,
             )

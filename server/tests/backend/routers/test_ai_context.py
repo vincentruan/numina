@@ -114,8 +114,11 @@ def test_liability_detail_returns_summary(client, auth_headers, owned_liability_
     body = resp.json()["data"]
     assert body["source"] == "liability_detail"
     assert "summary" in body and isinstance(body["summary"], str)
-    # PII minimization: summary references the liability id, not raw PII leakage.
-    assert owned_liability_id in body["summary"]
+    # Structured text format: contains category label + formatted values,
+    # no internal snowflake IDs (AI doesn't need them).
+    assert "【负债详情】" in body["summary"]
+    assert "房贷" in body["summary"]
+    assert "¥" in body["summary"]
 
 
 def test_wish_detail_returns_summary(client, auth_headers, owned_wish_id):

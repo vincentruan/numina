@@ -27,18 +27,18 @@ FALLBACK_METHOD = "llm_fallback_hit"
 class AIExtractionCircuitService:
     @staticmethod
     def _get_or_create(
-        family_id: int, capability: str, db: Session
+        family_id: int, skill_id: str, db: Session
     ) -> AIExtractionCircuit:
         circuit = (
             db.query(AIExtractionCircuit)
-            .filter_by(family_id=family_id, capability=capability)
+            .filter_by(family_id=family_id, skill_id=skill_id)
             .first()
         )
         if circuit is None:
             circuit = AIExtractionCircuit(
                 id=next_id(),
                 family_id=family_id,
-                capability=capability,
+                skill_id=skill_id,
                 state="ok",
                 last_evaluated_at=datetime.utcnow(),
             )
@@ -49,7 +49,7 @@ class AIExtractionCircuitService:
 
     @staticmethod
     def is_open(
-        family_id: int | str, capability: str, db: Session
+        family_id: int | str, skill_id: str, db: Session
     ) -> tuple[bool, str | None]:
         """扫描请求发起前调用。返回 (是否阻塞, 阻塞原因)。
 
@@ -58,7 +58,7 @@ class AIExtractionCircuitService:
         fid = int(family_id)
         circuit = (
             db.query(AIExtractionCircuit)
-            .filter_by(family_id=fid, capability=capability)
+            .filter_by(family_id=fid, skill_id=skill_id)
             .first()
         )
         if circuit is None or circuit.state == "ok":
@@ -84,7 +84,7 @@ class AIExtractionCircuitService:
         return False, None
 
     @staticmethod
-    def evaluate(family_id: int | str, capability: str, db: Session) -> str:
+    def evaluate(family_id: int | str, skill_id: str, db: Session) -> str:
         """每次扫描结束（成功 or 失败）后调用。基于 audit 表时间窗口计数转移状态。
 
         返回新 state 字符串。circuit_open 优先级高于 rate_limited。
@@ -98,7 +98,7 @@ class AIExtractionCircuitService:
             db.query(func.count(AIExtractionAudit.id))
             .filter(
                 AIExtractionAudit.family_id == fid,
-                AIExtractionAudit.capability == capability,
+                AIExtractionAudit.skill_id == skill_id,
                 AIExtractionAudit.method == FALLBACK_METHOD,
                 AIExtractionAudit.extracted_at >= circuit_window_start,
             )
@@ -107,7 +107,7 @@ class AIExtractionCircuitService:
 
         if circuit_count >= CIRCUIT_OPEN_THRESHOLD:
             return AIExtractionCircuitService._upsert_state(
-                fid, capability, "circuit_open", opened_at=now, opened_until=None, db=db
+                fid, skill_id, "circuit_open", opened_at=now, opened_until=None, db=db
             )
 
         # 1h 阈值
@@ -116,7 +116,7 @@ class AIExtractionCircuitService:
             db.query(func.count(AIExtractionAudit.id))
             .filter(
                 AIExtractionAudit.family_id == fid,
-                AIExtractionAudit.capability == capability,
+                AIExtractionAudit.skill_id == skill_id,
                 AIExtractionAudit.method == FALLBACK_METHOD,
                 AIExtractionAudit.extracted_at >= rate_window_start,
             )
@@ -126,7 +126,7 @@ class AIExtractionCircuitService:
         if rate_count >= RATE_LIMIT_THRESHOLD:
             return AIExtractionCircuitService._upsert_state(
                 fid,
-                capability,
+                skill_id,
                 "rate_limited",
                 opened_at=now,
                 opened_until=now + timedelta(minutes=RATE_LIMIT_COOLDOWN_MINUTES),
@@ -135,19 +135,19 @@ class AIExtractionCircuitService:
 
         # 都未达阈值 → 维持/恢复 ok
         return AIExtractionCircuitService._upsert_state(
-            fid, capability, "ok", opened_at=None, opened_until=None, db=db
+            fid, skill_id, "ok", opened_at=None, opened_until=None, db=db
         )
 
     @staticmethod
     def _upsert_state(
         family_id: int,
-        capability: str,
+        skill_id: str,
         new_state: str,
         opened_at: datetime | None,
         opened_until: datetime | None,
         db: Session,
     ) -> str:
-        circuit = AIExtractionCircuitService._get_or_create(family_id, capability, db)
+        circuit = AIExtractionCircuitService._get_or_create(family_id, skill_id, db)
         circuit.state = new_state
         circuit.opened_at = opened_at
         circuit.opened_until = opened_until
@@ -160,12 +160,12 @@ class AIExtractionCircuitService:
 
     @staticmethod
     def reset(
-        family_id: int | str, capability: str, user_id: int | str, db: Session
+        family_id: int | str, skill_id: str, user_id: int | str, db: Session
     ) -> bool:
         """管理员手工重置。state=ok，写入 manually_reset_at + reset_by_user_id。"""
         fid = int(family_id)
         uid = int(user_id)
-        circuit = AIExtractionCircuitService._get_or_create(fid, capability, db)
+        circuit = AIExtractionCircuitService._get_or_create(fid, skill_id, db)
         circuit.state = "ok"
         circuit.opened_at = None
         circuit.opened_until = None

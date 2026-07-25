@@ -1,36 +1,37 @@
 """Runtime compatibility patches for the pinned DeerFlow harness.
 
-The installed ``deerflow-harness`` (rev ``4538c322``) predates upstream fix
-``3599b570`` ("fix(harness): wrap all async-only tools for sync clients"). In
-that older version, ``deerflow.tools.tools.get_available_tools`` only applies
-``_ensure_sync_invocable_tool`` to config-loaded tools, NOT to built-in tools
-added via ``SUBAGENT_TOOLS`` (i.e. ``task``). Because ``DeerFlowClient.stream``
-runs the graph synchronously, the async-only ``task`` StructuredTool raises
-``NotImplementedError: StructuredTool does not support sync invocation`` when
-the LLM tries to delegate to a subagent (ultra mode).
+The pinned ``deerflow-harness`` (rev ``10890e10``, version 2.1.0) upstream-fixed
+the two contextvar/CallbackManager bugs this module used to patch:
 
-This module monkey-patches ``get_available_tools`` to wrap every returned tool
-through ``_ensure_sync_invocable_tool`` so the sync stream path can invoke
-async-only tools (``task``) the same way it already invokes MCP tools.
+- ``deerflow.tools.sync.make_sync_tool_wrapper`` now captures
+  ``contextvars.copy_context()`` and runs the coroutine inside it in the pool
+  thread (upstream ``sync.py``). It also gained ``RunnableConfig`` injection
+  support (``_get_runnable_config_param``) that the old numina patch lacked.
+- ``deerflow.tools.builtins.task_tool._find_usage_recorder`` now unwraps
+  ``BaseCallbackManager`` via ``.handlers`` (upstream ``task_tool.py``).
 
-It also patches ``make_sync_tool_wrapper`` to propagate ``contextvars`` into
-the thread pool executor. Without this, ``task_tool`` (which runs in
-``_SYNC_TOOL_EXECUTOR``) cannot access ``get_app_config()`` (set via
-``push_current_app_config()`` ContextVar in the parent thread) or
-``get_stream_writer()`` (LangGraph runtime ContextVar). The result is that
-subagents load the wrong config (base template with placeholder API keys)
-and ``task_started``/``task_completed`` custom events are never emitted —
-the frontend stays stuck at "正在执行 N 个子任务".
+Both numina overrides were therefore **removed** as strictly weaker duplicates.
+What remains here is functionality the upstream harness does NOT provide:
 
-It also patches ``deerflow.mcp.tools.get_mcp_tools`` to inject an
-``httpx_client_factory`` that builds the MCP client's httpx AsyncClient with
-``trust_env=False``. Without this, ``langchain-mcp-adapters``' ``sse_client``
-creates an httpx client with the default ``trust_env=True``, which picks up
-system proxy env vars (HTTP_PROXY / ALL_PROXY / macOS system proxy). The proxy
-intercepts the internal MCP SSE call (``/api/v1/internal/mcp/{family_id}/sse``)
-and returns 503, so zero MCP tools load and the agent falls back to the empty
-context fields ("所有记录仍为空"). This mirrors the ``trust_env=False`` that
-Numina's own :class:`BackendClient` already sets for the same reason.
+1. ``get_available_tools`` patch - filters tools to the active skill's
+   allowed-tools whitelist. The upstream sync-wrap fix (3599b570) is detected
+   at runtime; when present we skip our own wrap. Clarification
+   (``ask_clarification``) is handled natively by DeerFlow's
+   ``ClarificationMiddleware`` (always last in ``build_middlewares``), which
+   intercepts the tool call and emits a ``human_input`` artifact - no numina
+   override needed.
+2. ``_apply_subagent_contextvar_patch`` — ``_submit_to_isolated_loop_in_context``
+   upstream wraps the ``run_coroutine_threadsafe`` *call* in
+   ``context.run(...)``; for parent-set ContextVars this already preserves
+   them (context is snapshot-bound at ``copy_context()`` time, verified
+   2026-07-24). Numina additionally wraps the coroutine *body*
+   (``await context.run(coro_factory)``) to also cover LangGraph runtime
+   ContextVars (e.g. ``get_stream_writer()``) whose injection point may not
+   be captured by the snapshot. Retained pending an end-to-end ultra-mode
+   regression test asserting ``task_started``/``task_completed`` emission.
+3. MCP proxy bypass + per-family extensions-config path resolution — Numina
+   specific (``trust_env=False`` + ``X-Agent-Token``/``X-Family-Id`` headers
+   + coroutine-scoped ContextVar for multi-family isolation).
 
 Call :func:`apply_sync_tool_patches` once from the agent lifespan startup.
 """
@@ -39,8 +40,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-
-from apps.agent.services.deerflow_adapter.interrupt_tools import get_interrupt_tools
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +72,8 @@ def apply_sync_tool_patches() -> None:
     # ``SUBAGENT_TOOLS`` (``task``) and other builtins unwrapped.
     #
     # IMPORTANT: Even when the upstream fix is present, we MUST still patch
-    # get_available_tools to replace DeerFlow's placeholder ask_clarification
-    # with Numina's interrupt-based version. The upstream fix only handles
-    # sync wrapping — it does NOT know about our interrupt mechanism.
+    # get_available_tools to filter tools to the active skill's allowed-tools
+    # whitelist. The upstream fix only handles sync wrapping.
     upstream_fix_present = False
     try:
         source = inspect.getsource(_orig_get_available_tools)
@@ -94,18 +92,6 @@ def apply_sync_tool_patches() -> None:
         if not upstream_fix_present:
             for t in tools:
                 _ensure_sync_invocable_tool(t)
-
-        # Remove DeerFlow's placeholder ask_clarification before adding our interrupt tool.
-        # DeerFlow's builtin returns a static string and does NOT call interrupt(),
-        # so if the LLM selects it instead of ours, human-in-the-loop breaks.
-        tools = [t for t in tools if t.name != "ask_clarification"]
-
-        # Add interrupt tools
-        interrupt_tools = get_interrupt_tools()
-        for t in interrupt_tools:
-            if not upstream_fix_present:
-                _ensure_sync_invocable_tool(t)
-        tools.extend(interrupt_tools)
 
         # Note: describe_skill is NOT injected here. DeerFlow registers its native
         # describe_skill tool (deerflow.skills.describe.build_describe_skill_tool)
@@ -142,8 +128,68 @@ def apply_sync_tool_patches() -> None:
 
     logger.info("[sync_tool_patch] patched get_available_tools to wrap all tools for sync invocation")
     _patched = True
-    _apply_contextvar_propagation_patch()
+    # Upstream 2.1.0 already fixed make_sync_tool_wrapper (contextvar propagation
+    # + RunnableConfig injection) and _find_usage_recorder (CallbackManager unwrap),
+    # so those two patches were removed. _apply_subagent_contextvar_patch targets a
+    # different call site (_submit_to_isolated_loop_in_context) whose upstream wrap
+    # scope differs from ours — kept until a regression test covers ultra-mode events.
+    _apply_subagent_contextvar_patch()
     _apply_mcp_proxy_bypass_patch()
+    _apply_clarification_artifact_patch()
+    _apply_original_user_content_patch()
+
+
+def _apply_original_user_content_patch() -> None:
+    """Patch ``HumanMessage.__init__`` to inject ``ORIGINAL_USER_CONTENT_KEY``.
+
+    DeerFlow's ``SkillActivationMiddleware`` reads ``ORIGINAL_USER_CONTENT_KEY``
+    from the HumanMessage's ``additional_kwargs`` to get the raw user text
+    (before JSON wrapping). Numina's adapter wraps user text as JSON context,
+    so without this key, ``parse_slash_skill_reference`` fails on the JSON's
+    leading ``{``.
+
+    This patch reads the ``numina_original_user_content`` ContextVar (set by
+    the adapter before calling ``stream()``) and merges it into the
+    HumanMessage's ``additional_kwargs`` at construction time, so DeerFlow's
+    middleware sees the raw user text.
+
+    The ContextVar propagates into the DeerFlow executor thread via
+    ``_run_in_executor_with_context`` (which uses ``contextvars.copy_context()``),
+    so the value set in the adapter's async context is visible inside
+    ``DeerFlowClient.stream()``.
+    """
+    try:
+        from langchain_core.messages import HumanMessage
+    except ImportError:
+        logger.warning("[sync_tool_patch] langchain_core.messages.HumanMessage not found; skipping")
+        return
+
+    _orig_init = HumanMessage.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        """Inject ORIGINAL_USER_CONTENT_KEY from ContextVar into additional_kwargs."""
+        try:
+            from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
+
+            from apps.agent.services.deerflow_adapter.original_user_content_context import (
+                get_original_user_content,
+            )
+
+            original_content = get_original_user_content()
+            if original_content is not None:
+                # Merge into additional_kwargs (don't overwrite if already set)
+                additional_kwargs = kwargs.get("additional_kwargs") or {}
+                if ORIGINAL_USER_CONTENT_KEY not in additional_kwargs:
+                    additional_kwargs[ORIGINAL_USER_CONTENT_KEY] = original_content
+                    kwargs["additional_kwargs"] = additional_kwargs
+        except Exception as e:
+            # Fail-open: if the patch fails, continue without the key
+            logger.debug("[sync_tool_patch] original_user_content patch failed: %s", e)
+
+        _orig_init(self, *args, **kwargs)
+
+    HumanMessage.__init__ = _patched_init
+    logger.info("[sync_tool_patch] patched HumanMessage.__init__ to inject ORIGINAL_USER_CONTENT_KEY")
 
 
 def _apply_active_skill_tool_filter(tools):
@@ -199,139 +245,28 @@ def _apply_active_skill_tool_filter(tools):
         return tools
 
 
-def _apply_contextvar_propagation_patch() -> None:
-    """Patch ``make_sync_tool_wrapper`` to propagate contextvars into the pool thread.
-
-    ``deerflow.tools.sync.make_sync_tool_wrapper`` submits async tool coroutines
-    to ``_SYNC_TOOL_EXECUTOR`` (a ``ThreadPoolExecutor``) via ``asyncio.run()``.
-    However, ``ThreadPoolExecutor.submit()`` does NOT propagate ``contextvars``
-    from the calling thread to the worker thread. This means:
-
-    - ``get_app_config()`` (set via ``push_current_app_config()`` ContextVar in
-      the parent deerflow thread) is not available → subagent loads wrong/empty
-      config (base template with placeholder API keys) → API 401 or wrong model
-    - ``get_stream_writer()`` (LangGraph runtime ContextVar) returns a no-op →
-      ``task_started``/``task_completed`` custom events are never emitted →
-      frontend stays stuck at "正在执行 N 个子任务"
-
-    The fix captures the calling context via ``contextvars.copy_context()`` and
-    runs the coroutine inside that context in the pool thread.
-    """
-    try:
-        import deerflow.tools.sync as _sync_mod
-        _orig_make_sync_tool_wrapper = _sync_mod.make_sync_tool_wrapper
-    except (ImportError, AttributeError):
-        logger.warning("[sync_tool_patch] deerflow.tools.sync not found; skipping contextvar patch")
-        return
-
-    def _patched_make_sync_tool_wrapper(coro, tool_name: str):
-        """Build a sync wrapper that propagates contextvars into the pool thread."""
-        import asyncio as _asyncio
-        import contextvars
-
-        # Capture the calling context (includes app_config, stream_writer, etc.)
-        # at the time the wrapper is CALLED (not when make_sync_tool_wrapper is called).
-        # This is critical: the context must be captured in sync_wrapper(), not here,
-        # because the tool is invoked from the deerflow thread which has the correct
-        # ContextVar values for this specific family request.
-        def sync_wrapper(*args, **kwargs):
-            # Capture context from the calling thread (deerflow stream thread)
-            ctx = contextvars.copy_context()
-
-            def _run_in_context():
-                return _asyncio.run(ctx.run(coro, *args, **kwargs))
-
-            try:
-                loop = _asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-
-            try:
-                if loop is not None and loop.is_running():
-                    # Called from within an event loop (deerflow stream thread) —
-                    # submit to the pool executor but run inside the captured context
-                    future = _sync_mod._SYNC_TOOL_EXECUTOR.submit(_run_in_context)
-                    return future.result()
-                # No running loop — run directly in the captured context
-                return _run_in_context()
-            except Exception as e:
-                _sync_mod.logger.error(
-                    "Error invoking tool %r via sync wrapper: %s", tool_name, e, exc_info=True
-                )
-                raise
-
-        return sync_wrapper
-
-    _sync_mod.make_sync_tool_wrapper = _patched_make_sync_tool_wrapper
-    logger.info("[sync_tool_patch] patched make_sync_tool_wrapper to propagate contextvars into pool thread")
-    _apply_subagent_contextvar_patch()
-    _apply_callback_manager_patch()
-
-
-def _apply_callback_manager_patch() -> None:
-    """Patch ``_find_usage_recorder`` to handle CallbackManager correctly.
-
-    DeerFlow's ``task_tool._find_usage_recorder`` tries to iterate over
-    ``runtime.config.get("callbacks", [])``, but in our environment this is
-    a ``CallbackManager`` object (not a list), causing:
-        TypeError: 'CallbackManager' object is not iterable
-
-    Fix: extract the handlers list from CallbackManager before iterating.
-    """
-    import sys
-    try:
-        # Import the actual module, not the tool instance
-        import importlib.util
-        spec = importlib.util.find_spec("deerflow.tools.builtins.task_tool")
-        if spec is None or spec.loader is None:
-            logger.warning("[sync_tool_patch] deerflow.tools.builtins.task_tool module not found; skipping")
-            return
-        _task_tool_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(_task_tool_mod)
-    except (ImportError, AttributeError, Exception) as e:
-        logger.warning(f"[sync_tool_patch] failed to load task_tool module: {e}; skipping")
-        return
-
-    if not hasattr(_task_tool_mod, '_find_usage_recorder'):
-        logger.warning("[sync_tool_patch] _find_usage_recorder not found in task_tool module; skipping")
-        return
-
-    _orig_find_usage_recorder = _task_tool_mod._find_usage_recorder
-
-    def _patched_find_usage_recorder(runtime):
-        """Extract usage recorder from runtime, handling CallbackManager."""
-        if runtime is None:
-            return None
-        config = getattr(runtime, "config", None)
-        if not isinstance(config, dict):
-            return None
-        callbacks = config.get("callbacks", [])
-        # Handle CallbackManager object (has .handlers attribute)
-        if hasattr(callbacks, "handlers"):
-            callbacks = callbacks.handlers
-        # Ensure callbacks is iterable
-        if not hasattr(callbacks, "__iter__"):
-            callbacks = [callbacks] if callbacks else []
-        for cb in callbacks:
-            if hasattr(cb, "record_external_llm_usage_records"):
-                return cb
-        return None
-
-    _task_tool_mod._find_usage_recorder = _patched_find_usage_recorder
-    # Also patch in sys.modules to ensure the patched version is used
-    if 'deerflow.tools.builtins.task_tool' in sys.modules:
-        sys.modules['deerflow.tools.builtins.task_tool']._find_usage_recorder = _patched_find_usage_recorder
-    logger.info("[sync_tool_patch] patched _find_usage_recorder to handle CallbackManager")
-
-
 def _apply_subagent_contextvar_patch() -> None:
-    """Patch ``_submit_to_isolated_loop_in_context`` to propagate contextvars.
+    """Patch ``_submit_to_isolated_loop_in_context`` to run the coroutine body in-context.
 
-    The original function calls ``context.run(lambda: asyncio.run_coroutine_threadsafe(...))``
-    which sets the context on the *calling* thread, but the coroutine runs on the
-    isolated loop thread where the context is NOT propagated.
+    Upstream 2.1.0 (rev ``10890e10``) wraps the ``run_coroutine_threadsafe``
+    *call* in ``context.run(lambda: ...)`` rather than the coroutine *body*.
+    Empirical probes (2026-07-24) show that for ContextVars set in the parent
+    thread before ``copy_context()``, upstream's wrap already preserves them
+    inside the coroutine body on the isolated loop thread — the context is
+    snapshot-bound at ``copy_context()`` time and travels with the coroutine.
+    Under that scenario this patch is a no-op equivalent.
 
-    Fix: wrap the coroutine so it runs inside the captured context on the isolated loop.
+    The patch is retained because the one path NOT covered by the probes is a
+    LangGraph runtime ContextVar (e.g. ``get_stream_writer()``) whose injection
+    point may not be captured by the ``copy_context()`` snapshot the way a
+    plain parent-set ContextVar is. Removing this patch requires a regression
+    test that exercises the ultra-mode subagent flow end-to-end and asserts
+    ``task_started`` / ``task_completed`` custom events are emitted — which
+    needs a LangGraph runtime + mocked LLM and is not yet in place.
+
+    Fix: wrap the coroutine so its body awaits inside ``context.run(...)``,
+    guaranteeing every ContextVar read — regardless of injection mechanism —
+    resolves against the captured context on the isolated loop thread.
     """
     try:
         import deerflow.subagents.executor as _executor_mod
@@ -547,3 +482,49 @@ def _apply_extensions_config_path_patch() -> None:
 
     ExtensionsConfig.resolve_config_path = classmethod(_patched_resolve_config_path)  # type: ignore[assignment]
     logger.info("[sync_tool_patch] patched ExtensionsConfig.resolve_config_path to consult per-run ContextVar before env var")
+
+def _apply_clarification_artifact_patch() -> None:
+    """Patch ``_tool_message_event`` + ``_serialize_message`` to preserve ``artifact``.
+
+    DeerFlow's ``ClarificationMiddleware`` stores the ``human_input`` payload
+    (question, ``input_mode``, ``options``, ``request_id``) in
+    ``ToolMessage.artifact``. Both ``DeerFlowClient._tool_message_event``
+    (``messages`` stream mode) and ``_serialize_message`` (``values`` stream
+    mode) drop this field, so the frontend never receives the structured
+    clarification request - only the formatted question text in ``content``.
+
+    This patch preserves ``artifact`` in both event paths so the frontend can
+    use DeerFlow's native ``extractHumanInputRequest`` pattern
+    (``message.artifact.human_input``) to render the clarification UI and
+    submit the answer as a new message (no LangGraph ``interrupt()``/resume).
+    """
+    try:
+        from deerflow.client import DeerFlowClient
+    except ImportError:
+        logger.warning("[sync_tool_patch] DeerFlowClient not found; skipping clarification artifact patch")
+        return
+
+    _orig_tool_message_event = DeerFlowClient._tool_message_event
+
+    def _patched_tool_message_event(msg):
+        event = _orig_tool_message_event(msg)
+        artifact = getattr(msg, "artifact", None)
+        if artifact is not None:
+            event.data["artifact"] = artifact
+        return event
+
+    DeerFlowClient._tool_message_event = staticmethod(_patched_tool_message_event)
+
+    _orig_serialize_message = DeerFlowClient._serialize_message
+
+    def _patched_serialize_message(msg):
+        d = _orig_serialize_message(msg)
+        # Only ToolMessage carries an artifact (ClarificationMiddleware's human_input)
+        artifact = getattr(msg, "artifact", None)
+        if artifact is not None and d.get("type") == "tool":
+            d["artifact"] = artifact
+        return d
+
+    DeerFlowClient._serialize_message = staticmethod(_patched_serialize_message)
+
+    logger.info("[sync_tool_patch] patched _tool_message_event + _serialize_message to preserve ToolMessage.artifact (human_input)")

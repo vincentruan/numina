@@ -81,11 +81,11 @@ def family_with_wishes(client, auth_headers, db_session):
 # ---------------------------------------------------------------------------
 
 def test_generate_returns_cached_when_fresh(client, auth_headers, db_session, family_with_wishes):
-    from apps.backend.app.services.finance_coach_cache import upsert_capability_result
+    from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     family_id = family_with_wishes
     # The router stores {fingerprint, advice}; seed it so the cached path matches.
-    upsert_capability_result(
+    upsert_skill_result(
         db_session,
         family_id,
         "wish_advice",
