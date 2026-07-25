@@ -253,7 +253,7 @@ onMounted(() => {
   z-index: 1;
 }
 
-/* Shimmer — a soft highlight band sweeps across the button left→right, then rests */
+/* Shimmer — shadow sweep in light mode, highlight sweep in dark mode */
 .trend-entry::after {
   content: '';
   position: absolute;
@@ -264,9 +264,9 @@ onMounted(() => {
   background: linear-gradient(
     100deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.18) 30%,
-    rgba(255, 255, 255, 0.55) 50%,
-    rgba(255, 255, 255, 0.18) 70%,
+    rgba(0, 0, 0, 0.06) 30%,
+    rgba(0, 0, 0, 0.15) 50%,
+    rgba(0, 0, 0, 0.06) 70%,
     transparent 100%
   );
   transform: skewX(-20deg);
