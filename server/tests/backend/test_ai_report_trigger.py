@@ -74,7 +74,7 @@ def client(monkeypatch):
         from apps.backend.app.auth.deps import require_adult
         from apps.backend.app.main import app
 
-        _fake_user = type("U", (), {"id": 1, "family_id": "family-1", "role": "owner"})()
+        _fake_user = type("U", (), {"id": 1, "family_id": "family-1", "role": "owner", "language": "zh-CN"})()
         app.dependency_overrides[require_adult] = lambda: _fake_user
         app.dependency_overrides[require_ai_enabled] = lambda: None
         app.dependency_overrides[require_owner] = lambda: _fake_user
