@@ -19,19 +19,30 @@ PYTHON ?= python3
 UV     ?= uv
 PNPM   ?= pnpm
 COMPOSE ?= docker compose
+OPENSSL ?= openssl
 
 SERVER_DIR   := server
 FRONTEND_DIR := frontend
 MAIN_APP     := frontend/apps/main
 CHILD_APP    := frontend/apps/child
 ALEMBIC_DIR  := $(SERVER_DIR)/apps/backend
+DATA_DIR     ?= .numina/data
 
 # 服务端测试 / lint / 类型检查命令（在 SERVER_DIR 下运行）
 PYTEST := $(UV) run pytest
 RUFF   := $(UV) run ruff
 MYPY   := $(UV) run mypy
 
+# ── 部署配置变量（可被环境变量覆盖）──────────────────────────
+# DB 选择: sqlite (默认) / mysql / postgres
+NUMINA_DB ?= sqlite
+# 生产域名（用于 CORS）
+NUMINA_DOMAIN ?= localhost
+# 邀请码数量
+INVITATION_CODE_COUNT ?= 20
+
 .PHONY: help check install \
+        setup setup-keys setup-env setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
         dev-backend dev-agent dev-worker dev-frontend dev-child dev-all \
         build build-main build-child \
         typecheck lint format \
@@ -50,6 +61,16 @@ help:
 	@echo "环境准备:"
 	@echo "  make check         - 检查 uv / pnpm / docker 等依赖工具"
 	@echo "  make install       - 安装服务端 (uv sync) + 前端 (pnpm install) 依赖"
+	@echo ""
+	@echo "初始化部署 (首次部署必须运行):"
+	@echo "  make setup         - 交互式初始化 (生成密钥 + .env + 数据目录 + 邀请码)"
+	@echo "  make setup-keys    - 仅生成所有安全密钥 (SECRET_KEY, 加密密钥等)"
+	@echo "  make setup-env     - 生成 .env 配置文件 (从模板)"
+	@echo "  make setup-data    - 创建数据目录 (.numina/data/{db,uploads})"
+	@echo "  make setup-db      - 初始化数据库 (默认 SQLite; 可选 NUMINA_DB=mysql|postgres)"
+	@echo "  make setup-db-mysql     - 启动 MySQL 容器并初始化"
+	@echo "  make setup-db-postgres  - 启动 PostgreSQL 容器并初始化"
+	@echo "  make setup-invitation-codes - 生成家庭邀请码 (首次部署后运行)"
 	@echo ""
 	@echo "本地开发 (热重载，阻塞终端，手动运行):"
 	@echo "  make dev-backend   - 后端 API  :8000"
@@ -101,7 +122,7 @@ help:
 	@echo "  make down-prod     - 停止 production 容器"
 	@echo ""
 	@echo "部署:"
-	@echo "  make deploy        - 生产部署 (scripts/deploy-docker.sh，含健康检查)"
+	@echo "  make deploy        - 生产部署 (含健康检查 + 邀请码初始化)"
 	@echo "  make deploy-dev    - 开发模式部署 (放宽安全检查 + 种子数据)"
 	@echo ""
 	@echo "维护:"
@@ -124,6 +145,177 @@ install:
 	@echo "安装前端依赖 (pnpm install)..."
 	@cd $(FRONTEND_DIR) && $(PNPM) install
 	@echo "✓ 全部依赖安装完成"
+
+# ══════════════════════════════════════════════════════════
+# 初始化部署 (首次部署)
+# ══════════════════════════════════════════════════════════
+
+setup-keys:
+	@echo "生成安全密钥..."
+	@command -v $(OPENSSL) >/dev/null 2>&1 || { echo "✗ openssl 未安装"; exit 1; }
+	@command -v $(PYTHON) >/dev/null 2>&1 || { echo "✗ python3 未安装"; exit 1; }
+	@$(PYTHON) -c "from cryptography.fernet import Fernet" 2>/dev/null || \
+		{ echo "安装 cryptography 库..."; pip3 install cryptography --quiet; }
+	@echo "  SECRET_KEY=$$($(OPENSSL) rand -hex 32)"
+	@echo "  ALTCHA_HMAC_KEY=$$($(OPENSSL) rand -hex 32)"
+	@echo "  AI_ENCRYPTION_KEY=$$($(PYTHON) -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+	@echo "  AGENT_INTERNAL_TOKEN=$$($(OPENSSL) rand -hex 32)"
+	@echo "  STORAGE_ENCRYPTION_KEY=$$($(PYTHON) -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+	@echo "✓ 密钥生成完成"
+
+setup-env:
+	@echo "配置环境变量..."
+	@if [ -f .env ]; then \
+		echo ".env 已存在，检查必要配置..."; \
+		$(MAKE) _validate-env; \
+	else \
+		echo "从模板创建 .env..."; \
+		$(MAKE) _create-env; \
+	fi
+
+_create-env:
+	@command -v $(OPENSSL) >/dev/null 2>&1 || { echo "✗ openssl 未安装"; exit 1; }
+	@command -v $(PYTHON) >/dev/null 2>&1 || { echo "✗ python3 未安装"; exit 1; }
+	@$(PYTHON) -c "from cryptography.fernet import Fernet" 2>/dev/null || \
+		{ echo "安装 cryptography 库..."; pip3 install cryptography --quiet; }
+	@$(PYTHON) scripts/generate_env.py --domain $(NUMINA_DOMAIN)
+	@echo "✓ .env 已创建"
+
+_validate-env:
+	@NEED_UPDATE=0; \
+	if ! grep -q "^SECRET_KEY=." .env || grep -q "^SECRET_KEY=your-secret-key" .env; then \
+		echo "⚠ SECRET_KEY 需要配置"; \
+		SECRET_KEY=$$($(OPENSSL) rand -hex 32); \
+		if grep -q "^SECRET_KEY=" .env; then \
+			sed -i.bak "s/^SECRET_KEY=.*/SECRET_KEY=$$SECRET_KEY/" .env; \
+		else \
+			echo "SECRET_KEY=$$SECRET_KEY" >> .env; \
+		fi; \
+		NEED_UPDATE=1; \
+	fi; \
+	if ! grep -q "^ALTCHA_HMAC_KEY=." .env || grep -q "^ALTCHA_HMAC_KEY=$$" .env; then \
+		echo "⚠ ALTCHA_HMAC_KEY 需要配置"; \
+		ALTCHA_HMAC_KEY=$$($(OPENSSL) rand -hex 32); \
+		if grep -q "^ALTCHA_HMAC_KEY=" .env; then \
+			sed -i.bak "s/^ALTCHA_HMAC_KEY=.*/ALTCHA_HMAC_KEY=$$ALTCHA_HMAC_KEY/" .env; \
+		else \
+			echo "ALTCHA_HMAC_KEY=$$ALTCHA_HMAC_KEY" >> .env; \
+		fi; \
+		NEED_UPDATE=1; \
+	fi; \
+	if ! $(PYTHON) -c "from cryptography.fernet import Fernet; Fernet('$$(grep "^AI_ENCRYPTION_KEY=" .env 2>/dev/null | cut -d= -f2-)'.encode())" 2>/dev/null; then \
+		echo "⚠ AI_ENCRYPTION_KEY 无效或未配置（需要 Fernet 格式）"; \
+		AI_ENCRYPTION_KEY=$$($(PYTHON) -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"); \
+		if grep -q "^AI_ENCRYPTION_KEY=" .env; then \
+			sed -i.bak "s|^AI_ENCRYPTION_KEY=.*|AI_ENCRYPTION_KEY=$$AI_ENCRYPTION_KEY|" .env; \
+		else \
+			echo "AI_ENCRYPTION_KEY=$$AI_ENCRYPTION_KEY" >> .env; \
+		fi; \
+		NEED_UPDATE=1; \
+	fi; \
+	if ! grep -q "^AGENT_INTERNAL_TOKEN=." .env || grep -q "^AGENT_INTERNAL_TOKEN=$$" .env; then \
+		echo "⚠ AGENT_INTERNAL_TOKEN 需要配置"; \
+		AGENT_INTERNAL_TOKEN=$$($(OPENSSL) rand -hex 32); \
+		if grep -q "^AGENT_INTERNAL_TOKEN=" .env; then \
+			sed -i.bak "s/^AGENT_INTERNAL_TOKEN=.*/AGENT_INTERNAL_TOKEN=$$AGENT_INTERNAL_TOKEN/" .env; \
+		else \
+			echo "AGENT_INTERNAL_TOKEN=$$AGENT_INTERNAL_TOKEN" >> .env; \
+		fi; \
+		NEED_UPDATE=1; \
+	fi; \
+	if ! grep -q "^STORAGE_ENCRYPTION_KEY=." .env || grep -q "^STORAGE_ENCRYPTION_KEY=$$" .env; then \
+		echo "⚠ STORAGE_ENCRYPTION_KEY 需要配置"; \
+		STORAGE_ENCRYPTION_KEY=$$($(PYTHON) -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"); \
+		if grep -q "^STORAGE_ENCRYPTION_KEY=" .env; then \
+			sed -i.bak "s/^STORAGE_ENCRYPTION_KEY=.*/STORAGE_ENCRYPTION_KEY=$$STORAGE_ENCRYPTION_KEY/" .env; \
+		else \
+			echo "STORAGE_ENCRYPTION_KEY=$$STORAGE_ENCRYPTION_KEY" >> .env; \
+		fi; \
+		NEED_UPDATE=1; \
+	fi; \
+	if [ "$$NEED_UPDATE" = "1" ]; then \
+		echo "✓ .env 已更新"; \
+	else \
+		echo "✓ .env 配置完整"; \
+	fi
+
+setup-data:
+	@echo "创建数据目录..."
+	@mkdir -p $(DATA_DIR)/db $(DATA_DIR)/uploads
+	@echo "✓ 数据目录已创建: $(DATA_DIR)"
+
+setup-db:
+	@echo "初始化数据库 ($(NUMINA_DB))..."
+	@if [ "$(NUMINA_DB)" = "sqlite" ]; then \
+		echo "使用 SQLite (默认)"; \
+		echo "数据库路径: $(DATA_DIR)/db/numina.db"; \
+		echo "✓ SQLite 数据库将在首次启动时自动创建"; \
+	elif [ "$(NUMINA_DB)" = "mysql" ]; then \
+		$(MAKE) setup-db-mysql; \
+	elif [ "$(NUMINA_DB)" = "postgres" ]; then \
+		$(MAKE) setup-db-postgres; \
+	else \
+		echo "✗ 未知数据库类型: $(NUMINA_DB)"; \
+		echo "  可选: sqlite (默认) / mysql / postgres"; \
+		exit 1; \
+	fi
+
+setup-db-mysql:
+	@echo "启动 MySQL 容器..."
+	@$(COMPOSE) --profile mysql up -d mysql
+	@echo "等待 MySQL 就绪..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) exec -T mysql mysqladmin ping -h localhost >/dev/null 2>&1; then \
+			echo "✓ MySQL 已就绪"; \
+			echo "  连接字符串: mysql://numina:numinapass@numina-mysql:3306/numina"; \
+			echo ""; \
+			echo "请将以下内容添加到 .env:"; \
+			echo "  DATABASE_URL=mysql+pymysql://numina:numinapass@numina-mysql:3306/numina"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done
+	@echo "✗ MySQL 启动超时"
+	@exit 1
+
+setup-db-postgres:
+	@echo "启动 PostgreSQL 容器..."
+	@$(COMPOSE) --profile postgres up -d postgres
+	@echo "等待 PostgreSQL 就绪..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) exec -T postgres pg_isready -U numina >/dev/null 2>&1; then \
+			echo "✓ PostgreSQL 已就绪"; \
+			echo "  连接字符串: postgresql://numina:numinapass@numina-postgres:5432/numina"; \
+			echo ""; \
+			echo "请将以下内容添加到 .env:"; \
+			echo "  DATABASE_URL=postgresql+psycopg://numina:numinapass@numina-postgres:5432/numina"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done
+	@echo "✗ PostgreSQL 启动超时"
+	@exit 1
+
+setup-invitation-codes:
+	@echo "生成家庭邀请码..."
+	@$(COMPOSE) exec -T backend $(UV) run --no-dev python scripts/family_invitation_codes.py generate --count $(INVITATION_CODE_COUNT)
+	@echo ""
+	@echo "已生成的邀请码:"
+	@$(COMPOSE) exec -T backend $(UV) run --no-dev python scripts/family_invitation_codes.py list
+	@echo ""
+	@echo "✓ 邀请码已生成 (新用户注册时需要)"
+
+setup: setup-data setup-env setup-db
+	@echo ""
+	@echo "========================================"
+	@echo "       Numina 初始化完成"
+	@echo "========================================"
+	@echo ""
+	@echo "下一步:"
+	@echo "  1. 编辑 .env 配置域名和数据库连接 (如使用 MySQL/PostgreSQL)"
+	@echo "  2. 启动服务: make up"
+	@echo "  3. 生成邀请码: make setup-invitation-codes"
+	@echo ""
 
 # ══════════════════════════════════════════════════════════
 # 本地开发 (热重载服务，阻塞终端)
@@ -284,13 +476,63 @@ down-prod:
 	@$(COMPOSE) -f docker-compose.production.yml down
 
 # ══════════════════════════════════════════════════════════
-# 部署 (复用现有脚本)
+# 部署
 # ══════════════════════════════════════════════════════════
-deploy:
-	@./scripts/deploy-docker.sh
+deploy: setup-data setup-env
+	@echo "构建并启动 Docker 服务..."
+	@$(COMPOSE) down --remove-orphans 2>/dev/null || true
+	@$(COMPOSE) up -d --build
+	@echo "等待服务启动..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
+		sleep 2; \
+	done
+	@$(COMPOSE) ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend 启动超时"; exit 1; }
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) ps agent 2>/dev/null | grep -q "healthy"; then break; fi; \
+		sleep 2; \
+	done
+	@$(COMPOSE) ps agent 2>/dev/null | grep -q "healthy" || { echo "✗ Agent 启动超时"; exit 1; }
+	@echo "验证 API 健康检查..."
+	@curl -sf http://localhost/api/health >/dev/null || { echo "✗ API 健康检查失败"; exit 1; }
+	@echo ""
+	@echo "========================================"
+	@echo "       Numina 部署完成"
+	@echo "========================================"
+	@echo ""
+	@$(COMPOSE) ps
+	@echo ""
+	@echo "访问地址: http://localhost"
+	@echo "数据目录: $(DATA_DIR)"
+	@echo ""
+	@echo "下一步: make setup-invitation-codes  (生成家庭邀请码)"
+	@echo ""
 
-deploy-dev:
-	@./scripts/deploy-docker.sh --dev
+deploy-dev: setup-data
+	@echo "开发模式部署..."
+	@if [ ! -f .env ]; then \
+		$(PYTHON) scripts/generate_env.py --dev --domain $(NUMINA_DOMAIN); \
+	fi
+	@$(COMPOSE) down --remove-orphans 2>/dev/null || true
+	@$(COMPOSE) up -d --build
+	@echo "等待服务启动..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
+		sleep 2; \
+	done
+	@echo "初始化种子数据..."
+	@cd $(SERVER_DIR) && TEST_DATABASE_URL="sqlite:///$$(pwd)/../$(DATA_DIR)/db/numina.db" $(UV) run python ../tests/data/seed_data.py --force || echo "⚠ 种子数据初始化失败"
+	@$(COMPOSE) restart backend
+	@echo ""
+	@echo "========================================"
+	@echo "   Numina 开发模式部署完成"
+	@echo "========================================"
+	@echo ""
+	@echo "测试账号:"
+	@echo "  demouser / DemoPass123     — 完整演示数据"
+	@echo "  test_rich / TestRich123!   — 完整回归数据"
+	@echo "  test_empty / TestEmpty123! — 空家庭"
+	@echo ""
 
 # ══════════════════════════════════════════════════════════
 # 维护
