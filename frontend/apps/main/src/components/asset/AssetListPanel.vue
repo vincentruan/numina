@@ -62,9 +62,14 @@
             @search="onSearch"
             @clear="onSearch"
           />
-          <van-dropdown-menu>
-            <van-dropdown-item v-model="sortBy" :options="sortOptions" @change="onSearch" />
-          </van-dropdown-menu>
+          <button
+            class="sort-trigger"
+            :aria-label="t('asset.sortLabel') + ': ' + currentSortLabel"
+            @click="cycleSortOption"
+          >
+            <van-icon name="exchange" class="sort-trigger-icon" />
+            <span class="sort-trigger-label">{{ currentSortLabel }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -350,7 +355,7 @@ const activeCategoryId = ref<string | null>(null) // null = show all
 
 // Feature-parity filters (ported from AssetListPage): type tab / search / sort
 const TYPE_TABS = ['all', 'physical', 'financial'] as const
-const activeTypeIndex = ref(0)
+const activeTypeIndex = ref<string>('all')
 const searchText = ref('')
 const sortBy = ref('current_value')
 
@@ -403,8 +408,11 @@ function onFabAction(action: 'add' | 'import') {
 }
 
 // Category counts from backend (full counts, not page-limited)
+// Filter by active type tab: when "实物" or "金融" is selected, only show matching categories
 const categoriesWithAssetCount = computed(() => {
+  const activeType = activeTypeIndex.value as string
   return dashboardStore.categoryCounts
+    .filter((c) => activeType === 'all' || c.asset_type === activeType)
     .map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color, count: c.count }))
     .sort((a, b) => b.count - a.count)
 })
@@ -494,6 +502,18 @@ const sortOptions = computed(() => [
   { text: t('asset.sortByName'), value: 'name' },
 ])
 
+const currentSortLabel = computed(() => {
+  const opt = sortOptions.value.find((o) => o.value === sortBy.value)
+  return opt?.text ?? t('asset.sortByValue')
+})
+
+const SORT_CYCLE = ['current_value', 'purchase_date', 'name'] as const
+function cycleSortOption() {
+  const idx = SORT_CYCLE.indexOf(sortBy.value as (typeof SORT_CYCLE)[number])
+  sortBy.value = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]
+  onSearch()
+}
+
 function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
   const targetStatus = activeStatus.value || 'in_use'
@@ -524,7 +544,11 @@ function onStatusSelect(status: string | null) {
 function onTypeTabChange(name: string | number) {
   const tab = typeof name === 'number' ? TYPE_TABS[name] : (name as (typeof TYPE_TABS)[number])
   const assetType = tab === 'all' ? null : (tab as 'physical' | 'financial')
-  dashboardStore.applyAssetFilters({ assetType })
+  // Reset category filter when type changes (filtered category list changes)
+  activeCategoryIndex.value = 0
+  activeCategoryId.value = null
+  // applyAssetFilters will reset pagination and fetch assets with updated filters
+  dashboardStore.applyAssetFilters({ assetType, resetCategory: true })
 }
 
 // Search / sort change (ported): apply current search text + sort, reset pagination, refetch page 1
@@ -669,6 +693,8 @@ async function setViewMode(mode: 'card' | 'list') {
 onMounted(() => {
   // Attach scroll listener for freeze/unfreeze logic
   window.addEventListener('scroll', onScroll, { passive: true })
+  // Load category counts for secondary filter nav on initial render
+  dashboardStore.fetchCategoryCounts(activeStatus.value || 'in_use')
 })
 
 onUnmounted(() => {
@@ -823,8 +849,37 @@ defineExpose({
   flex: 1;
   padding: 8px 12px;
 }
-.search-bar :deep(.van-dropdown-menu) {
-  flex-shrink: 0;
+
+/* Sort trigger button */
+.sort-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  margin-right: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.sort-trigger:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+.sort-trigger-icon {
+  font-size: 14px;
+}
+.sort-trigger-label {
+  line-height: 1;
+}
+[data-theme='dark'] .sort-trigger {
+  background: rgba(189, 187, 255, 0.15);
+  color: var(--color-lavender);
 }
 
 /* Asset Section */

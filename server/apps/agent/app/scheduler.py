@@ -8,7 +8,7 @@
 # without a running event loop.
 #
 # When USE_DEERFLOW=True, scheduled jobs must trigger a ``stream_run`` agent run
-# (via backend → agent gateway, ``app=<capability>`` in run metadata) with an
+# (via backend → agent gateway, ``app=<skill_id>`` in run metadata) with an
 # explicit timeout budget (recommended: 60 s, shorter than DEERFLOW_TIMEOUT_SECONDS)
 # to prevent a DeerFlow hang from blocking the scheduler indefinitely.
 #

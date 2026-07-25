@@ -43,13 +43,24 @@ const mockSuggestion = (
   cta_label: '查看',
 })
 
+const globalStubs = {
+  'van-button': true,
+  'van-skeleton': true,
+  'van-cell-group': true,
+  'van-collapse': true,
+  'van-collapse-item': true,
+  'van-loading': true,
+  'van-empty': true,
+  IIcon: true,
+}
+
 describe('FinanceCoachCard', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     pushMock.mockReset()
   })
 
-  it('renders up to 3 suggestions with severity color bars', async () => {
+  it('renders up to 3 suggestions with severity color bars when expanded', async () => {
     vi.spyOn(aiApi, 'getFinanceCoach').mockResolvedValue({
       status: 'cached',
       generated_at: '2026-07-19T10:00:00',
@@ -62,36 +73,36 @@ describe('FinanceCoachCard', () => {
         ],
       },
     })
-    const wrapper = mount(FinanceCoachCard, {
-      global: { stubs: ['van-button', 'van-skeleton'] },
-    })
+    const wrapper = mount(FinanceCoachCard, { global: { stubs: globalStubs } })
     await flushPromises()
-    // Only top 3 rendered (spec §7.2 "前 3 条").
+    // Card always renders (collapsed by default)
+    expect(wrapper.find('[data-test="finance-coach-card"]').exists()).toBe(true)
+    // Only top 3 rendered (spec §7.2 "前 3 条")
     expect(wrapper.findAll('[data-test^="suggestion-"]')).toHaveLength(3)
     expect(wrapper.find('[data-test="suggestion-1"]').classes()).toContain(
       'severity-high',
     )
   })
 
-  it('hides silently when suggestions is empty', async () => {
+  it('shows empty summary when suggestions is empty', async () => {
     vi.spyOn(aiApi, 'getFinanceCoach').mockResolvedValue({
       status: 'cached',
       generated_at: '2026-07-19T10:00:00',
       report: { suggestions: [] },
     })
-    const wrapper = mount(FinanceCoachCard, {
-      global: { stubs: ['van-button', 'van-skeleton'] },
-    })
+    const wrapper = mount(FinanceCoachCard, { global: { stubs: globalStubs } })
     await flushPromises()
-    expect(wrapper.find('[data-test="finance-coach-card"]').exists()).toBe(false)
+    // Card still renders (collapsed), showing empty summary text
+    expect(wrapper.find('[data-test="finance-coach-card"]').exists()).toBe(true)
+    expect(wrapper.find('.coach-summary--empty').exists()).toBe(true)
   })
 
-  it('hides silently on fetch failure', async () => {
+  it('shows empty summary on fetch failure', async () => {
     vi.spyOn(aiApi, 'getFinanceCoach').mockRejectedValue(new Error('network'))
-    const wrapper = mount(FinanceCoachCard, {
-      global: { stubs: ['van-button', 'van-skeleton'] },
-    })
+    const wrapper = mount(FinanceCoachCard, { global: { stubs: globalStubs } })
     await flushPromises()
-    expect(wrapper.find('[data-test="finance-coach-card"]').exists()).toBe(false)
+    // Card still renders (collapsed), showing empty summary text
+    expect(wrapper.find('[data-test="finance-coach-card"]').exists()).toBe(true)
+    expect(wrapper.find('.coach-summary--empty').exists()).toBe(true)
   })
 })

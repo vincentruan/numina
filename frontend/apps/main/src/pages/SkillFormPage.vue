@@ -40,8 +40,8 @@ const form = reactive({
 const emojiOptions = ['✨', '📊', '🔔', '💡', '🎯', '📈', '🔍', '💰', '🏠', '📋', '⚡', '🛡️', '🎨', '📦', '🔧', '💳', '📱', '🌐', '🤖', '📝']
 const colorOptions = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#a855f7']
 
-const builtinIds = ['alerts', 'allocation', 'disposal', 'liability', 'report', 'spending_leak']
-const RESERVED_NAMES = ['chat', 'time_machine']
+const builtinIds: string[] = []
+const RESERVED_NAMES = ['chat', 'asset-report', 'import-parse', 'finance-coach']
 
 const formValid = computed(() => {
   if (!isEdit.value && !form.skill_id) return false

@@ -52,7 +52,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const assetSortOrder = ref<'asc' | 'desc'>('desc')
   const activeAssetType = ref<'physical' | 'financial' | null>(null)
   // Category counts for nav (full counts from backend, not page-limited)
-  const categoryCounts = ref<Array<{ id: string; name: string; icon: string; color: string; count: number }>>([])
+  const categoryCounts = ref<Array<{ id: string; name: string; icon: string; color: string; asset_type: 'physical' | 'financial'; count: number }>>([])
 
   async function fetchCategoryCounts(status: string) {
     try {
@@ -326,11 +326,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
     sortBy?: string
     sortOrder?: 'asc' | 'desc'
     assetType?: 'physical' | 'financial' | null
+    resetCategory?: boolean
   }): Promise<void> {
     if (filters.search !== undefined) assetSearch.value = filters.search
     if (filters.sortBy !== undefined) assetSortBy.value = filters.sortBy
     if (filters.sortOrder !== undefined) assetSortOrder.value = filters.sortOrder
     if (filters.assetType !== undefined) activeAssetType.value = filters.assetType
+    if (filters.resetCategory) activeAssetCategoryId.value = null
     const status = activeAssetStatus.value
     resetAssetPagination(status)
     await fetchAssetsPage(status, 1, assetPageSize, activeAssetCategoryId.value || undefined)

@@ -106,6 +106,13 @@ export default {
     upcomingPayments: {
       title: 'Upcoming Payments',
     },
+    financeCoach: {
+      title: 'Finance Coach',
+      refresh: 'Refresh',
+      disclaimer: 'Based on your entries, for reference only',
+      count: '{count} suggestions',
+      empty: 'No suggestions',
+    },
   },
   aiChat: {
     connecting: 'Connecting model',

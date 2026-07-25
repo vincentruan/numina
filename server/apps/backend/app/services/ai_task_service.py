@@ -12,13 +12,13 @@ TASK_TIMEOUT_MINUTES = 30
 class AITaskService:
     @staticmethod
     def get_running_task(
-        family_id: int | str, capability: str, db: Session
+        family_id: int | str, skill_id: str, db: Session
     ) -> AITask | None:
         """返回 running 且未超时的任务。超时任务自动标记为 timeout 并返回 None。"""
         task = (
             db.query(AITask)
             .filter_by(
-                family_id=int(family_id), capability=capability, status="running"
+                family_id=int(family_id), skill_id=skill_id, status="running"
             )
             .first()
         )
@@ -36,13 +36,13 @@ class AITaskService:
 
     @staticmethod
     def get_any_running_task(family_id: int | str, db: Session) -> AITask | None:
-        """返回该家庭任意 capability 的 running 任务（不含 chat）。"""
+        """返回该家庭任意 skill_id 的 running 任务（不含 chat）。"""
         task = (
             db.query(AITask)
             .filter(
                 AITask.family_id == int(family_id),
                 AITask.status == "running",
-                AITask.capability != "chat",
+                AITask.skill_id != "chat",
             )
             .first()
         )
@@ -61,7 +61,7 @@ class AITaskService:
     @staticmethod
     def create_task(
         family_id: int | str,
-        capability: str,
+        skill_id: str,
         session_id: int | None,
         db: Session,
     ) -> AITask:
@@ -70,7 +70,7 @@ class AITaskService:
 
         task = AITask(
             family_id=int(family_id),
-            capability=capability,
+            skill_id=skill_id,
             status="running",
             session_id=session_id,
             started_at=datetime.utcnow(),
@@ -89,11 +89,11 @@ class AITaskService:
     @staticmethod
     def create_queued_task(
         family_id: int | str,
-        capability: str,
+        skill_id: str,
         session_id: int | None,
         db: Session,
     ) -> AITask:
-        """创建排队任务。当家庭已有其他 capability 运行时使用。
+        """创建排队任务。当家庭已有其他 skill_id 运行时使用。
 
         queue_position 在创建时设为 None，由 get_queued_task 动态计算，
         避免并发请求导致的位置竞态条件。
@@ -102,7 +102,7 @@ class AITaskService:
 
         task = AITask(
             family_id=int(family_id),
-            capability=capability,
+            skill_id=skill_id,
             status="queued",
             session_id=session_id,
             started_at=datetime.utcnow(),
@@ -121,14 +121,14 @@ class AITaskService:
 
     @staticmethod
     def get_queued_task(
-        family_id: int | str, capability: str, db: Session
+        family_id: int | str, skill_id: str, db: Session
     ) -> AITask | None:
-        """返回该 capability 的排队任务，并动态计算其队列位置。"""
+        """返回该 skill_id 的排队任务，并动态计算其队列位置。"""
         from sqlalchemy import func
         fid = int(family_id)
         task = (
             db.query(AITask)
-            .filter_by(family_id=fid, capability=capability, status="queued")
+            .filter_by(family_id=fid, skill_id=skill_id, status="queued")
             .first()
         )
         if task is None:
@@ -203,13 +203,13 @@ class AITaskService:
         return db.query(AITask).filter(AITask.id == int(task_id)).first()
 
     @staticmethod
-    def cancel_task(family_id: int | str, capability: str, db: Session) -> bool:
-        """终止指定 capability 的运行或排队任务。返回是否成功终止。"""
+    def cancel_task(family_id: int | str, skill_id: str, db: Session) -> bool:
+        """终止指定 skill_id 的运行或排队任务。返回是否成功终止。"""
         task = (
             db.query(AITask)
             .filter(
                 AITask.family_id == int(family_id),
-                AITask.capability == capability,
+                AITask.skill_id == skill_id,
                 AITask.status.in_(["running", "post_processing", "queued"]),
             )
             .first()

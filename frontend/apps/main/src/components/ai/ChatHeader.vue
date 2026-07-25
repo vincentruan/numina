@@ -185,7 +185,6 @@ function onBack() {
 
 function onOpenHistory() {
   emit('history')
-  router.push('/ai/chat/history')
 }
 
 function onNewChat() {

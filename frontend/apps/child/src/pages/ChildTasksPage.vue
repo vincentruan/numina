@@ -265,7 +265,7 @@ const allDoneSvg = allDoneSvgRaw
 
 const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
-const { complete: completeLoading } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -494,8 +494,6 @@ async function load() {
     error.value = t('toast.loadFailed')
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    completeLoading()
   }
 }
 
@@ -590,18 +588,23 @@ async function doAbandon() {
 }
 
 onMounted(async () => {
-  await load()
-  await checkNewMilestones()
+  increment()
   try {
-    const wishData = await listChildWishes().catch(() => null)
-    const active = wishData?.active ?? []
-    topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
-  } catch {
-    // non-blocking
-  }
+    await load()
+    await checkNewMilestones()
+    try {
+      const wishData = await listChildWishes().catch(() => null)
+      const active = wishData?.active ?? []
+      topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
+    } catch {
+      // non-blocking
+    }
 
-  // Check for pending celebrations after data loads
-  checkAndTriggerCelebration(chores.value)
+    // Check for pending celebrations after data loads
+    checkAndTriggerCelebration(chores.value)
+  } finally {
+    decrement()
+  }
 })
 
 // Drive candle state transitions when chore status changes after polling.

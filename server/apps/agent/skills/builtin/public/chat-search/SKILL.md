@@ -2,11 +2,23 @@
 name: chat-search
 description: |
   带联网搜索的智能问答。当用户启用联网搜索时使用此 skill，
-  可调用 web_search 和 web_fetch 工具获取最新信息。
+  可调用 web_search 和 web_fetch 工具获取最新信息，同时保留 MCP 家庭数据查询能力。
 
 trigger_phrases: []
 
-allowed-tools: [web_search, web_fetch]
+# allowed-tools includes both web search tools AND MCP family data tools so the
+# agent can answer family-data questions (e.g. "我家有多少资产？") even when the
+# user has enabled web search. Without the MCP tools here, filter_tools_by_skill
+# _allowed_tools (sync_tool_patch.py) would filter them out, and the agent would
+# report "MCP 工具不可用" - inconsistent with the chat skill (web search off).
+allowed-tools:
+  - web_search
+  - web_fetch
+  - get_family_overview
+  - get_assets
+  - get_liabilities
+  - get_members
+  - get_recent_alerts
 
 thinking: true
 ---

@@ -19,7 +19,6 @@ from apps.backend.app.models.ai_provider_config import (
     AIProviderConfig,
 )
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
-from apps.backend.app.models.family_skill_config import FamilySkillConfig
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.user import User
@@ -623,33 +622,6 @@ def internal_get_enabled_families(
         .all()
     )
     return [r.family_id for r in rows]
-
-
-@router.get("/ai/skills/{capability}")
-def internal_get_skill_config(
-    capability: str,
-    family_id: str = Depends(verify_agent_token),
-    db: Session = Depends(get_db),
-):
-    """返回家庭技能配置（custom_prompt + is_enabled + updated_at），供 agent skill_loader 缓存。"""
-    row = (
-        db.query(FamilySkillConfig)
-        .filter(
-            FamilySkillConfig.family_id == family_id,
-            FamilySkillConfig.capability == capability,
-        )
-        .first()
-    )
-    if not row:
-        # No override configured — return defaults
-        return {"capability": capability, "is_enabled": True, "custom_prompt": None, "updated_at": None}
-
-    return {
-        "capability": row.capability,
-        "is_enabled": row.is_enabled,
-        "custom_prompt": row.custom_prompt,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
 
 
 @router.get("/skill-registry/{family_id}")

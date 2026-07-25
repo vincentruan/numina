@@ -74,7 +74,7 @@ describe('ChildWishCreatePage — does not leak loading state across "continue c
     vi.mocked(wishesApi.createChildWish).mockResolvedValue({} as unknown as wishesApi.ChildWish)
   })
 
-  it('onMounted complete() leaves globalLoadingCount at 0', async () => {
+  it('form page with no async loading leaves globalLoadingCount at 0', async () => {
     await mountCreate()
     expect(globalLoadingCount.value).toBe(0)
   })
@@ -87,8 +87,8 @@ describe('ChildWishCreatePage — does not leak loading state across "continue c
     await wrapper.find('.btn-submit').trigger('click')
     await flushPromises()
 
-    // submitWish() ran; complete() in onMounted already balanced the router's
-    // NProgress.start(). The page neither increments nor leaves loading running.
+    // submitWish() ran; router's 200ms timeout auto-completes NProgress.
+    // The page neither increments nor leaves loading running.
     expect(wishesApi.createChildWish).toHaveBeenCalledTimes(1)
     expect(globalLoadingCount.value).toBe(0)
 

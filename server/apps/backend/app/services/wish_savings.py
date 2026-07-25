@@ -22,7 +22,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
 from apps.backend.app.models.wish_savings_log import WishSavingsLog
-from apps.backend.app.services.finance_coach_cache import invalidate_capability
+from apps.backend.app.services.finance_coach_cache import invalidate_skill
 from apps.backend.app.services.wish import get_wish
 
 
@@ -60,8 +60,8 @@ def record_savings(
     )
     db.add(log)
     wish.saved_amount = (wish.saved_amount or Decimal("0")) + amount
-    invalidate_capability(db, user.family_id, "finance_coach")
-    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
     db.commit()
     db.refresh(log)
     db.refresh(wish)
@@ -123,8 +123,8 @@ def delete_savings(
 
     db.delete(log)
     wish.saved_amount = (wish.saved_amount or Decimal("0")) - log.amount
-    invalidate_capability(db, user.family_id, "finance_coach")
-    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
     db.commit()
 
 

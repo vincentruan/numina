@@ -109,7 +109,7 @@ import { useBalancePolling } from '@/composables/useBalancePolling'
 const { t } = useI18n()
 
 const familyStore = useFamilyStore()
-const { complete } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 // Balance polling via composable
 const { balance, refresh: refreshBalance } = useBalancePolling()
 const transactions = ref<CoinTransaction[]>([])
@@ -146,8 +146,6 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    complete()
   }
 }
 
@@ -172,7 +170,14 @@ async function doGift() {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  increment()
+  try {
+    await load()
+  } finally {
+    decrement()
+  }
+})
 </script>
 
 <style scoped>

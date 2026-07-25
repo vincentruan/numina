@@ -97,7 +97,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { complete } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 
 const allWishes = ref<ChildWish[]>([])
 const stats = ref<ChildWishStats | null>(null)
@@ -140,8 +140,6 @@ async function load() {
     ledger.value = l
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    complete()
   }
 }
 
@@ -158,7 +156,14 @@ async function redeem() {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  increment()
+  try {
+    await load()
+  } finally {
+    decrement()
+  }
+})
 </script>
 
 <style scoped>

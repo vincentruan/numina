@@ -15,7 +15,6 @@ const props = defineProps<{
   canBranch?: boolean
   branchingMessageId?: string | null
   answeredInterruptIds?: Set<string>
-  interruptErrorId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -189,7 +188,6 @@ onUnmounted(() => {
         :can-branch="canBranch"
         :branching-message-id="branchingMessageId"
         :answered-interrupt-ids="answeredInterruptIds"
-        :interrupt-error-id="interruptErrorId"
         :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"

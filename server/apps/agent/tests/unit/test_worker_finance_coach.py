@@ -2,7 +2,7 @@
 
 Verifies the dispatch branch is wired and the agent function exists with the
 right signature + custom-event contract. Full SSE integration is covered by
-test_gateway_finance_coach.py (T5) + a later capability-cache integration test.
+test_gateway_finance_coach.py (T5) + a later skill-cache integration test.
 """
 import inspect
 

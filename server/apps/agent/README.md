@@ -18,7 +18,6 @@ Agent Service (FastAPI)
     ├── BackendClient      — 拉取家庭资产/负债/仪表盘数据
     ├── PIIRedactor        — 脱敏结构化数据 + 自由文本
     ├── DeerFlowAdapter    — USE_DEERFLOW=true 时调用 DeerFlow harness
-    │   └── FallbackEngine — DeerFlow 失败或禁用时走 legacy 路径
     ├── OutputMapper       — 将任意输出映射为稳定 AgentResponse
     └── AuditLogger        — 写入结构化审计日志
 ```

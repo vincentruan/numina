@@ -85,6 +85,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
 import { useCurrency } from '@/composables/useCurrency'
 import { useDebtWarning } from '@/composables/useDebtWarning'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 defineOptions({ name: 'FinanceHub' })
 
@@ -94,6 +95,7 @@ const dashboardStore = useDashboardStore()
 const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
 const currency = useCurrency()
+const { increment, decrement } = usePageLoading()
 
 const overview = computed(() => dashboardStore.overview)
 const liabilities = computed(() => liabilityStore.liabilities)
@@ -179,9 +181,14 @@ async function onRefresh() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   applyQueryTab()
-  loadHubData()
+  increment()
+  try {
+    await loadHubData()
+  } finally {
+    decrement()
+  }
 })
 </script>
 

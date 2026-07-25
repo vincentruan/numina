@@ -27,7 +27,12 @@
             class="chip"
             :class="{ active: filterCategory === cat.value }"
             @click="filterCategory = cat.value"
-          >{{ cat.label }}</button>
+          >
+            <span class="chip-icon" :style="{ background: cat.color }">
+              <SvgIcon :name="cat.icon" class="chip-svg" />
+            </span>
+            {{ cat.label }}
+          </button>
         </div>
         <button class="sort-btn" @click="toggleSort">
           <van-icon name="sort" size="16" />
@@ -170,6 +175,7 @@ import LiabilityCard from '@/components/liability/LiabilityCard.vue'
 import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
 import LiabilityStrategyCard from '@/components/liability/LiabilityStrategyCard.vue'
 import EducationRewardCard from '@/components/finance/EducationRewardCard.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 const { t } = useI18n()
 const { format: formatCurrencyAmount } = useCurrency()
@@ -184,12 +190,12 @@ const filterCategory = ref('')
 const sortOrder = ref<'default' | 'asc' | 'desc'>('default')
 
 const categories = computed(() => [
-  { value: 'mortgage', label: t('liability.mortgage') },
-  { value: 'car_loan', label: t('liability.carLoan') },
-  { value: 'credit_card', label: t('liability.creditCard') },
-  { value: 'consumer_loan', label: t('liability.consumerLoan') },
-  { value: 'personal_loan', label: t('liability.personalLoan') },
-  { value: 'other', label: t('liability.other') },
+  { value: 'mortgage', label: t('liability.mortgage'), icon: 'mortgage', color: '#6366f1' },
+  { value: 'car_loan', label: t('liability.carLoan'), icon: 'car-loan', color: '#0ea5e9' },
+  { value: 'credit_card', label: t('liability.creditCard'), icon: 'credit-card', color: '#f59e0b' },
+  { value: 'consumer_loan', label: t('liability.consumerLoan'), icon: 'wealth', color: '#10b981' },
+  { value: 'personal_loan', label: t('liability.personalLoan'), icon: 'personal-loan', color: '#8b5cf6' },
+  { value: 'other', label: t('liability.other'), icon: 'other-liability', color: '#6b7280' },
 ])
 
 const sortLabel = computed(() => {
@@ -470,7 +476,10 @@ defineExpose({
 
 .chip {
   flex-shrink: 0;
-  padding: 4px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 14px 4px 8px;
   border-radius: 30px;
   border: 1px solid rgba(0, 0, 0, 0.18);
   background: transparent;
@@ -479,6 +488,23 @@ defineExpose({
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+}
+
+.chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chip-svg {
+  width: 11px;
+  height: 11px;
+  fill: white;
+  color: white;
 }
 
 .chip.active {

@@ -10,7 +10,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
 from apps.backend.app.models.wish_savings_log import WishSavingsLog
 from apps.backend.app.schemas.wish import WishCreate, WishRealizeRequest, WishUpdate
-from apps.backend.app.services.finance_coach_cache import invalidate_capability
+from apps.backend.app.services.finance_coach_cache import invalidate_skill
 
 
 def _attach_savings_count(db: Session, wish: Wish) -> Wish:
@@ -73,8 +73,8 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         ignore_debt_warning=req.ignore_debt_warning or False,
     )
     db.add(wish)
-    invalidate_capability(db, user.family_id, "finance_coach")
-    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -89,8 +89,8 @@ def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(wish, key, value)
-    invalidate_capability(db, user.family_id, "finance_coach")
-    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -107,8 +107,8 @@ def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool)
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
     wish.ignore_debt_warning = ignore
-    invalidate_capability(db, user.family_id, "finance_coach")
-    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -120,8 +120,8 @@ def delete_wish(db: Session, user: User, wish_id: str) -> None:
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
-    invalidate_capability(db, user.family_id, "finance_coach")
-    invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
 
 
@@ -167,8 +167,8 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
         wish.fulfilled_at = datetime.now(UTC)
         asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
-        invalidate_capability(db, user.family_id, "finance_coach")
-        invalidate_capability(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+        invalidate_skill(db, user.family_id, "finance_coach")
+        invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
         db.commit()
         db.refresh(asset)
         return asset

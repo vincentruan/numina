@@ -178,6 +178,8 @@ export default {
       title: '财务教练建议',
       refresh: '刷新',
       disclaimer: '基于你录入的数据，仅供参考',
+      count: '{count} 条建议',
+      empty: '暂无建议',
     },
   },
   ai: {

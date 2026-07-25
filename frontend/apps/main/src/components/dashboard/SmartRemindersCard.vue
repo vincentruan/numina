@@ -1,25 +1,27 @@
 <template>
-  <van-cell-group inset class="chart-section">
+  <van-cell-group inset class="chart-section reminders-card">
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="reminders">
         <template #title>
-          <span class="reminder-title">
-            <span class="bell-icon" :class="{ 'bell-icon--ringing': hasExpiringSoon }">
-              <IIcon :icon="hasExpiringSoon ? 'lucide:bell-ring' : 'lucide:bell'" size="18" class="bell-icon__svg" />
-              <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--1" />
-              <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--2" />
-              <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--3" />
+          <div class="reminder-header">
+            <span class="reminder-title">
+              <span class="bell-icon" :class="{ 'bell-icon--ringing': hasExpiringSoon }">
+                <IIcon :icon="hasExpiringSoon ? 'lucide:bell-ring' : 'lucide:bell'" size="18" class="bell-icon__svg" />
+                <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--1" />
+                <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--2" />
+                <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--3" />
+              </span>
+              <span class="reminder-title__text">{{ t('alertCards.reminder') }}</span>
             </span>
-            <span class="reminder-title__text">{{ t('alertCards.reminder') }}</span>
-          </span>
-          <span v-if="totalCount > 0" class="reminder-summary">
-            <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
-            <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
-            <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
-            <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
-            <template v-if="store.summary.large_purchase > 0"> · {{ t('reminders.types.large_purchase') }} {{ store.summary.large_purchase }}</template>
-          </span>
-          <span v-else class="reminder-summary reminder-summary--empty">{{ t('reminders.empty') }}</span>
+            <span v-if="totalCount > 0" class="reminder-summary">
+              <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
+              <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
+              <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
+              <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
+              <template v-if="store.summary.large_purchase > 0"> · {{ t('reminders.types.large_purchase') }} {{ store.summary.large_purchase }}</template>
+            </span>
+            <span v-else class="reminder-summary reminder-summary--empty">{{ t('reminders.empty') }}</span>
+          </div>
         </template>
 
         <!-- Dynamic section order: 有数据的在前，都有/都无时智能提醒在前 -->
@@ -247,10 +249,26 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
 </script>
 
 <style scoped>
+.reminders-card :deep(.van-collapse-item__title) {
+  justify-content: flex-start;
+}
+.reminders-card :deep(.van-cell__title) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.reminder-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
 .reminder-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 .bell-icon {
   display: inline-flex;

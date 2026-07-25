@@ -30,10 +30,10 @@ def _enable_ai(db, auth_headers, client):
 
 def test_generate_returns_cached_when_fresh(client, auth_headers, db_session):
     """A cached finance_coach row younger than 8h is returned as JSON (non-stream)."""
-    from apps.backend.app.services.finance_coach_cache import upsert_capability_result
+    from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     family_id = _enable_ai(db_session, auth_headers, client)
-    upsert_capability_result(
+    upsert_skill_result(
         db_session, family_id, "finance_coach",
         {"suggestions": [{"id": "s1", "severity": "high", "title": "x", "action": "y",
                           "target_type": "liability", "target_id": "1", "cta_label": "去"}]},
@@ -51,10 +51,10 @@ def test_generate_returns_cached_when_fresh(client, auth_headers, db_session):
 
 def test_generate_force_bypasses_cache(client, auth_headers, db_session):
     """force=true skips the cache and regenerates (streams)."""
-    from apps.backend.app.services.finance_coach_cache import upsert_capability_result
+    from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     family_id = _enable_ai(db_session, auth_headers, client)
-    upsert_capability_result(db_session, family_id, "finance_coach", {"suggestions": []})
+    upsert_skill_result(db_session, family_id, "finance_coach", {"suggestions": []})
     db_session.commit()
 
     with patch("apps.backend.app.routers.ai_finance_coach.check_circuit_blocked", return_value=None), \

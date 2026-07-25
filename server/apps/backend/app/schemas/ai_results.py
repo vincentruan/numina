@@ -1,4 +1,4 @@
-"""Response schemas for AI capability result endpoints.
+"""Response schemas for AI skill result endpoints.
 
 All schemas inherit from SnowflakeBase to ensure bigint IDs are
 serialized as strings in JSON output, preventing JavaScript precision loss.

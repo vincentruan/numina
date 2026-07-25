@@ -30,9 +30,8 @@ _TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     # Reports
     "generate_report": ("report_gen", "生成家庭报告", "📄", "toolName.generateReport"),
     "compose_summary": ("report_gen", "生成摘要", "📝", "toolName.composeSummary"),
-    # Wish / spending analysis
+    # Wish analysis
     "analyze_wishes": ("wish_analysis", "分析心愿计划", "💭", "toolName.analyzeWishes"),
-    "analyze_spending_leaks": ("wish_analysis", "分析支出漏洞", "💸", "toolName.analyzeSpendingLeaks"),
     # Web search (smart mode tool)
     "web_search": ("web_search", "搜索网络", "🔍", "toolName.webSearch"),
     "tavily_search": ("web_search", "搜索网络", "🔍", "toolName.webSearch"),

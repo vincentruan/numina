@@ -108,9 +108,9 @@ const i18n = createI18n({
 })
 
 const mockCategories: Category[] = [
-  { id: 'cat-1', name: 'Electronics', icon: 'electronics', asset_type: 'physical', user_id: 'u1' },
-  { id: 'cat-2', name: 'Furniture', icon: 'furniture', asset_type: 'physical', user_id: 'u1' },
-  { id: 'cat-3', name: 'Bank Account', icon: 'bank', asset_type: 'financial', user_id: 'u1' },
+  { id: 'cat-1', name: 'Electronics', icon: 'electronics', color: '#fff', asset_type: 'physical', family_id: null, sort_order: 0, is_system: false },
+  { id: 'cat-2', name: 'Furniture', icon: 'furniture', color: '#fff', asset_type: 'physical', family_id: null, sort_order: 0, is_system: false },
+  { id: 'cat-3', name: 'Bank Account', icon: 'bank', color: '#fff', asset_type: 'financial', family_id: null, sort_order: 0, is_system: false },
 ]
 
 function mountForm(props: Record<string, unknown> = {}) {

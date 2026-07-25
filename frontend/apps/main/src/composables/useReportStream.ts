@@ -241,11 +241,20 @@ export function useReportStream(): UseReportStreamReturn {
     if (data?.status === 'complete') {
       if (step3Status.value !== 'error') step3Status.value = 'finish'
       status.value = 'completed'
+      // The SSE end frame does not carry generated_at (end_payload only has
+      // status + usage). Set it now so the caller sees a fresh timestamp
+      // instead of null — without this the "暂无报告" empty state shows.
+      if (!generatedAt.value) {
+        generatedAt.value = new Date().toISOString()
+      }
     } else if (data?.status === 'error') {
       status.value = 'error'
       errorMessage.value = errorMessage.value || t('toast.aiGenerateFailed')
     } else {
       status.value = 'completed'
+      if (!generatedAt.value) {
+        generatedAt.value = new Date().toISOString()
+      }
     }
   }
 

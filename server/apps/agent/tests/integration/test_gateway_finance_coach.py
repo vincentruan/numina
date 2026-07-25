@@ -36,7 +36,6 @@ def _make_stub_adapter() -> Any:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
-        resume_answer: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         yield (
             "messages",

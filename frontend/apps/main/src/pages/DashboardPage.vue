@@ -54,6 +54,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { getUpcomingPayments } from '@/api/dashboard'
 import type { UpcomingPaymentItem } from '@/api/dashboard'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
@@ -69,6 +70,7 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
+const { increment, decrement } = usePageLoading()
 const refreshing = ref(false)
 
 // Upcoming payments
@@ -107,22 +109,25 @@ async function onRefresh() {
   refreshing.value = false
 }
 
-onMounted(() => {
-  dashboardStore.fetchAll().then(() => {
-    maybeShowOnboarding()
-  })
-  if (authStore.user?.role === 'owner') {
-    choreStore.fetchPendingApprovals()
+onMounted(async () => {
+  increment()
+  try {
+    await Promise.all([
+      dashboardStore.fetchAll().then(() => {
+        maybeShowOnboarding()
+      }),
+      authStore.user?.role === 'owner' ? choreStore.fetchPendingApprovals() : Promise.resolve(),
+      getUpcomingPayments()
+        .then((res) => {
+          upcomingPayments.value = res.data.items
+        })
+        .catch(() => {
+          // Non-critical: silently ignore if endpoint not available
+        }),
+    ])
+  } finally {
+    decrement()
   }
-
-  // Fetch upcoming liability payments
-  getUpcomingPayments()
-    .then((res) => {
-      upcomingPayments.value = res.data.items
-    })
-    .catch(() => {
-      // Non-critical: silently ignore if endpoint not available
-    })
 })
 </script>
 

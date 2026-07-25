@@ -284,7 +284,7 @@ describe('ChatHeader', () => {
 
       const vm = wrapper.vm as any
       vm.onOpenHistory()
-      expect(mockPush).toHaveBeenCalledWith('/ai/chat/history')
+      expect(wrapper.emitted('history')).toBeTruthy()
     })
 
     it('back button pushes /ai to router', async () => {

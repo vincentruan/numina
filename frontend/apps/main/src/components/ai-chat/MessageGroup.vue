@@ -46,7 +46,6 @@ const props = defineProps<{
   canBranch?: boolean
   branchingMessageId?: string | null
   answeredInterruptIds?: Set<string>
-  interruptErrorId?: string | null
   /** Previous group's planSteps - used to detect redundant completion summaries */
   prevGroupPlanSteps?: PlanStep[]
 }>()
@@ -137,16 +136,16 @@ const clarificationInterruptData = computed(() => {
   return (props.group as AssistantClarificationGroup).interruptData ?? null
 })
 
-// Clarification status: check if this interrupt was answered via answeredInterruptIds
-// (tracked by useThreadChat after resumeInterrupt succeeds) or via group.phase.
-// Also check for error state from useThreadChat.interruptError.
-const clarificationStatus = computed((): 'pending' | 'submitting' | 'answered' | 'error' => {
+// Clarification status: derived from answeredInterruptIds (computed by
+// useThreadChat from human_input_response messages) or group.phase. The card
+// stays 'pending' while the answer is in-flight (sendMessage's isLoading guard
+// prevents double-submit); it transitions to 'answered' once the response
+// message lands in the thread.
+const clarificationStatus = computed((): 'pending' | 'submitting' | 'answered' => {
   if (props.group.type !== 'assistant:clarification') return 'pending'
   const interruptId = (props.group as AssistantClarificationGroup).interruptData?.interrupt_id
   if (interruptId && props.answeredInterruptIds?.has(interruptId)) return 'answered'
   if (props.group.phase === 'answered') return 'answered'
-  // Check if this specific interrupt failed (error state)
-  if (interruptId && props.interruptErrorId === interruptId) return 'error'
   return 'pending'
 })
 
@@ -176,7 +175,8 @@ function handleClarificationSubmit(group: MessageGroup, answer: string) {
   const interruptId = group.interruptData?.interrupt_id
   const threadId = props.threadId
   if (!interruptId || !threadId) return
-  // Emit to parent (AIChatBox) which calls the resume API
+  // Emit to parent (AIChatBox) which calls submitClarification (sends a new
+  // HumanMessage with human_input_response - DeerFlow pattern, not a resume)
   emit('clarificationSubmit', { threadId, interruptId, answer })
 }
 
@@ -270,7 +270,6 @@ const subagentTaskIds = computed(() => {
       :options="clarificationInterruptData?.options"
       :context="clarificationInterruptData?.context"
       :choice-with-other="clarificationInterruptData?.choiceWithOther"
-      :multi-select="clarificationInterruptData?.multiSelect"
       :status="clarificationStatus"
       :answer="group.answer"
       :thread-id="threadId || ''"

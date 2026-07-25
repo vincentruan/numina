@@ -5,7 +5,6 @@ They are used by both golden case tests and integration tests.
 """
 
 from apps.agent.schemas.context import RedactedContext
-from apps.agent.schemas.response import AgentResponse
 
 
 # ── Shared redacted context ────────────────────────────────────────────────────
@@ -112,34 +111,3 @@ REDACTED_CONTEXT = RedactedContext(
     ],
     redaction_log=["assets:name", "liabilities:name,institution,exact_amounts", "members:name"],
 )
-
-
-# ── Expected response shapes (structural assertions only) ─────────────────────
-
-def assert_valid_agent_response(response: AgentResponse, capability: str) -> None:
-    """Assert that an AgentResponse has the required structural properties."""
-    assert response.capability == capability, f"Expected capability={capability}, got {response.capability}"
-    assert isinstance(response.summary, str), "summary must be a string"
-    assert len(response.summary) > 0, "summary must not be empty"
-    assert isinstance(response.disclaimers, list), "disclaimers must be a list"
-    assert len(response.disclaimers) > 0, "disclaimers must not be empty"
-    assert isinstance(response.fallback_used, bool), "fallback_used must be bool"
-    assert isinstance(response.audit_id, str) and len(response.audit_id) > 0
-
-
-def assert_has_risk_flags(response: AgentResponse) -> None:
-    assert isinstance(response.risk_flags, list)
-
-
-def assert_has_recommendations(response: AgentResponse) -> None:
-    assert isinstance(response.recommendations, list)
-
-
-def assert_distinguishes_rule_vs_ai(response: AgentResponse) -> None:
-    """Verify rule_based_findings and ai_inferences are separate lists."""
-    assert isinstance(response.rule_based_findings, list)
-    assert isinstance(response.ai_inferences, list)
-    for f in response.ai_inferences:
-        assert 0.0 <= f.confidence <= 0.75, (
-            f"AI inference confidence {f.confidence} exceeds 0.75 cap"
-        )

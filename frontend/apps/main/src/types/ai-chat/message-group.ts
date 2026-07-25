@@ -40,14 +40,17 @@ export interface AssistantPresentFilesGroup {
   messages: ChatMessage[]
 }
 
-/** Interrupt data from DeerFlow ask_clarification tool (mirrored from useThreadChat). */
+/** Clarification request from DeerFlow ask_clarification tool (mirrored from useThreadChat). */
 export interface ClarificationInterruptData {
   question: string
-  options?: Array<{ label: string; value: string }>
+  options?: Array<{ id: string; label: string; value: string }>
   context?: string
+  /** Derived from ``input_mode === 'choice_with_other'``. */
   choiceWithOther?: boolean
-  multiSelect?: boolean
+  input_mode?: 'free_text' | 'single_choice' | 'choice_with_other'
+  /** DeerFlow ``request_id`` - used to match ``human_input_response``. */
   interrupt_id: string
+  source?: string
 }
 
 /** 智能体请求补充信息 — "需要补充信息" 提示 */

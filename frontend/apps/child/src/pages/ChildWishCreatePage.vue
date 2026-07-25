@@ -117,21 +117,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { usePageLoading } from '@/composables/usePageLoading'
 import { createChildWish } from '@/api/childWishes'
 
 const { t } = useI18n()
 const router = useRouter()
-const { complete } = usePageLoading()
 
-// Complete page loading immediately since this is a form page with no async data loading
-onMounted(() => {
-  complete()
-})
+// This is a form page with no async data loading, so we don't need to track loading state
+// The router's 200ms timeout will auto-complete NProgress
 
 const EMOJI_LIST = [
   '🎮', '🚲', '📚', '🎨', '🎸', '⚽', '🏀', '🎯',

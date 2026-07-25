@@ -15,7 +15,7 @@ class TestAIExtractionAudit:
         audit = AIExtractionAudit(
             id=next_id(),
             family_id=12345,
-            capability="alerts",
+            skill_id="alerts",
             task_id="task-abc",
             method="regex_html",
         )
@@ -24,17 +24,17 @@ class TestAIExtractionAudit:
 
         rows = db.query(AIExtractionAudit).filter_by(family_id=12345).all()
         assert len(rows) == 1
-        assert rows[0].capability == "alerts"
+        assert rows[0].skill_id == "alerts"
         assert rows[0].method == "regex_html"
         assert rows[0].extracted_at is not None
 
-    def test_query_by_family_capability_time_window(self, db):
+    def test_query_by_family_skill_id_time_window(self, db):
         now = datetime.utcnow()
         for i in range(5):
             audit = AIExtractionAudit(
                 id=next_id(),
                 family_id=99,
-                capability="disposal",
+                skill_id="disposal",
                 method="llm_fallback_hit",
                 extracted_at=now - timedelta(minutes=i * 10),
             )
@@ -46,7 +46,7 @@ class TestAIExtractionAudit:
             db.query(AIExtractionAudit)
             .filter(
                 AIExtractionAudit.family_id == 99,
-                AIExtractionAudit.capability == "disposal",
+                AIExtractionAudit.skill_id == "disposal",
                 AIExtractionAudit.extracted_at >= cutoff,
             )
             .all()
@@ -57,7 +57,7 @@ class TestAIExtractionAudit:
         audit = AIExtractionAudit(
             id=next_id(),
             family_id=1,
-            capability="spending_leak",
+            skill_id="spending_leak",
             method="failed",
             error_msg=None,
             answer_excerpt=None,
@@ -71,7 +71,7 @@ class TestAIExtractionAudit:
         audit = AIExtractionAudit(
             id=next_id(),
             family_id=2,
-            capability="allocation",
+            skill_id="allocation",
             method="failed",
             error_msg="json decode error",
             answer_excerpt="some redacted text",
@@ -88,7 +88,7 @@ class TestAIExtractionCircuit:
         circuit = AIExtractionCircuit(
             id=next_id(),
             family_id=1,
-            capability="alerts",
+            skill_id="alerts",
         )
         db.add(circuit)
         db.commit()
@@ -96,15 +96,15 @@ class TestAIExtractionCircuit:
         assert row.state == "ok"
         assert row.last_evaluated_at is not None
 
-    def test_unique_constraint_family_capability(self, db):
+    def test_unique_constraint_family_skill_id(self, db):
         circuit1 = AIExtractionCircuit(
-            id=next_id(), family_id=10, capability="disposal"
+            id=next_id(), family_id=10, skill_id="disposal"
         )
         db.add(circuit1)
         db.commit()
 
         circuit2 = AIExtractionCircuit(
-            id=next_id(), family_id=10, capability="disposal"
+            id=next_id(), family_id=10, skill_id="disposal"
         )
         db.add(circuit2)
         with pytest.raises(IntegrityError):
@@ -115,7 +115,7 @@ class TestAIExtractionCircuit:
         circuit = AIExtractionCircuit(
             id=next_id(),
             family_id=20,
-            capability="spending_leak",
+            skill_id="spending_leak",
             state="rate_limited",
             opened_at=datetime.utcnow(),
             opened_until=datetime.utcnow() + timedelta(minutes=30),
@@ -131,7 +131,7 @@ class TestAIExtractionCircuit:
         circuit = AIExtractionCircuit(
             id=next_id(),
             family_id=30,
-            capability="allocation",
+            skill_id="allocation",
             state="ok",
             manually_reset_at=now,
             reset_by_user_id=99999,
@@ -142,9 +142,9 @@ class TestAIExtractionCircuit:
         assert row.manually_reset_at is not None
         assert row.reset_by_user_id == 99999
 
-    def test_different_families_can_share_capability(self, db):
-        c1 = AIExtractionCircuit(id=next_id(), family_id=1, capability="alerts")
-        c2 = AIExtractionCircuit(id=next_id(), family_id=2, capability="alerts")
+    def test_different_families_can_share_skill_id(self, db):
+        c1 = AIExtractionCircuit(id=next_id(), family_id=1, skill_id="alerts")
+        c2 = AIExtractionCircuit(id=next_id(), family_id=2, skill_id="alerts")
         db.add(c1)
         db.add(c2)
         db.commit()

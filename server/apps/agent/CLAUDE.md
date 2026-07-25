@@ -56,12 +56,9 @@ services/deerflow_adapter/
 ├── adapter.py              # DeerFlowAdapter — typed_stream_dispatch + raw_stream_dispatch (ThreadPoolExecutor bridge)
 ├── family_adapter_cache.py # LRU cache (100 families) of per-family DeerFlowClient + temp config generation
 ├── client_factory.py       # builds DeerFlowClient from generated config
-├── skill_loader.py         # SkillLoader — reads thinking/mcp_tools flags from builtin/public/<name>/SKILL.md frontmatter
 ├── active_skill_context.py # ContextVar holding the active skill name (drives tool filtering)
 ├── memory_config_bridge.py # bridges DeerMem memory config per family
-├── interrupt_tools.py      # tools used during interrupt/resume flows
 ├── sync_tool_patch.py      # monkey-patches DeerFlow harness: sync wrapping, ContextVar propagation, MCP proxy, active-skill tool filter
-├── todo_middleware.py      # TodoMiddleware — plan-mode todo tracking (TodoListMiddleware subclass)
 └── exceptions.py
 ```
 
@@ -139,7 +136,6 @@ agent/
 │       └── gateway.py         # /internal/gateway/* — mgmt proxies + run triggers (asset-report/finance-coach/wish-advice)
 ├── routers/                   # External routers (JWT cookie auth via verify_family_token unless noted)
 │   ├── runs_stream.py         # POST /api/threads/{id}/runs/stream (stream_run) + /runs/{run_id}/cancel
-│   ├── resume.py              # POST /api/threads/{id}/runs/resume (interrupt resume)
 │   ├── threads.py             # Thread CRUD + checkpointer state/history/token-usage/branches + goal + compact
 │   ├── capabilities.py        # GET /capabilities (X-Agent-Token)
 │   ├── import_parse.py        # POST /import/parse — sync JSON parse (X-Agent-Token)
@@ -169,7 +165,6 @@ agent/
 │   ├── asset_suggest.py       # lightweight LLM single-call (suggest_asset_fields)
 │   ├── input_polish.py        # lightweight LLM single-call (polish_draft)
 │   ├── orchestrator.py        # provider-selection / retry / fire-and-forget helpers (no dispatch class)
-│   ├── fallback_engine.py     # STUB — module docstring only, no logic (import compat)
 │   ├── pii_redactor.py        # PII scrubbing (must run before any LLM/dispatch call)
 │   ├── policy_guard.py        # Request policy enforcement
 │   ├── audit_logger.py        # Structured audit log (log_call)
@@ -184,7 +179,7 @@ agent/
 │   ├── import_parse_service.py
 │   ├── model_tester.py
 │   ├── message_classifier.py
-│   └── (health_report.py, liability_advisor.py, spending_leak.py, vision_test_image.py, agent_temp_cache.py, chat.py, chat_adapter.py)
+│   └── (health_report.py, vision_test_image.py, agent_temp_cache.py, chat.py, chat_adapter.py)
 ├── skills/
 │   └── builtin/public/        # DeerFlow-native LocalSkillStorage scanner layout
 │       ├── chat/SKILL.md
@@ -205,7 +200,7 @@ agent/
 ├── prompts/chat/default_system_prompt.md
 ├── tests/                   # ⚠️ legacy dir — see §Quality Commands; canonical root is tests/agent/
 │   ├── integration/           # gateway, runs-cancel, u2-app-dispatch, v2-sse-contract
-│   └── unit/                  # worker_*, adapter_contextvar, sync_tool_patch, resume/threads routers, etc.
+│   └── unit/                  # worker_*, adapter_contextvar, sync_tool_patch, threads routers, etc.
 │   # Canonical tests live in tests/agent/ (unit/ ~26 files, integration/, golden/) — see top of file.
 └── scripts/                   # vendor-deerflow.sh, patch-deerflow-thread-data.py, patch-langgraph-runtime.py
 ```
@@ -244,7 +239,7 @@ agent/
 
 ### Streaming Protocols
 
-The v2 `stream_run` path uses the **LangGraph Platform SSE wire format** (`text/event-stream`) so `@langchain/langgraph-sdk`'s `useStream` works unmodified. Frame types: `messages`, `values`, `custom`, `end`, `error`, plus `interrupt` (custom event). Heartbeat sentinels fire every `SSE_HEARTBEAT_INTERVAL`s; client disconnect triggers run cancel; `Last-Event-ID` supports reconnection.
+The v2 `stream_run` path uses the **LangGraph Platform SSE wire format** (`text/event-stream`) so `@langchain/langgraph-sdk`'s `useStream` works unmodified. Frame types: `messages`, `values`, `custom`, `end`, `error`. Heartbeat sentinels fire every `SSE_HEARTBEAT_INTERVAL`s; client disconnect triggers run cancel; `Last-Event-ID` supports reconnection.
 
 The legacy NDJSON gateway path (`agent_dispatch.py:stream_agent_dispatch`) still exists for backward compatibility but is **not** the v2 path. Prefer `stream_run` for new capabilities. The legacy text stream used `[THINK]`/`[TEXT]` chunk prefixes — do not reintroduce.
 
@@ -310,7 +305,6 @@ All endpoints require `X-Agent-Token` header matching `AGENT_INTERNAL_TOKEN`. No
 
 - **`orchestrator.py` is not an orchestrator** — the file holds only provider-selection / retry / fire-and-forget helpers (`_select_model`, `_select_provider_with_retry`, `_is_transient_error`, `_should_route_to_half_open`, `_fire_and_forget`), imported by the legacy `agent_dispatch.py`. Multi-app dispatch lives in `runtime/worker.py`, not here.
 - **`agent_dispatch.py` is the legacy NDJSON path** — `stream_agent_dispatch` still works but is not the v2 `stream_run` path. Do not build new capabilities against it.
-- **`fallback_engine.py` is a stub** — module docstring only, no logic; kept for import compatibility. Do not add dispatch code to it.
 - **DeerFlow init failure is non-fatal** — checkpointer init in `main.py` lifespan is wrapped in `try/except`. If the persistence engine fails to init, the app starts but DeerFlow dispatches fail at run time and return error responses.
 - **`_CHECKPOINTER_LOCK` serialises non-streaming DeerFlow calls** — at most 1 concurrent non-streaming DeerFlow dispatch at a time. Streaming (`stream_run`) calls do not hold this lock.
 - **Temp config dirs accumulate in `/tmp`** — `family_adapter_cache.py` creates a `tempfile.mkdtemp()` per family. Evicted entries clean up, but a crash leaves orphaned dirs.

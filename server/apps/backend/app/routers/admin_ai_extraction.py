@@ -27,7 +27,7 @@ router = APIRouter(prefix="/admin", tags=["admin-ai-extraction"])
 class AuditRow(SnowflakeBase):
     id: int
     family_id: int
-    capability: str
+    skill_id: str
     task_id: str | None
     method: str
     extracted_at: datetime
@@ -52,7 +52,7 @@ class AuditResponse(BaseModel):
 
 class CircuitRow(SnowflakeBase):
     family_id: int
-    capability: str
+    skill_id: str
     state: str
     opened_at: datetime | None
     opened_until: datetime | None
@@ -67,7 +67,7 @@ class CircuitListResponse(BaseModel):
 
 class CircuitResetRequest(BaseModel):
     family_id: str
-    capability: str
+    skill_id: str
 
 
 class CircuitResetResponse(BaseModel):
@@ -78,7 +78,7 @@ class CircuitResetResponse(BaseModel):
 @router.get("/ai-extraction-audit")
 def list_audit(
     family_id: int | None = Query(None),
-    capability: str | None = Query(None),
+    skill_id: str | None = Query(None),
     days: int = Query(7, ge=1, le=90),
     limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(require_owner),
@@ -88,8 +88,8 @@ def list_audit(
     query = db.query(AIExtractionAudit).filter(AIExtractionAudit.extracted_at >= cutoff)
     if family_id is not None:
         query = query.filter(AIExtractionAudit.family_id == family_id)
-    if capability is not None:
-        query = query.filter(AIExtractionAudit.capability == capability)
+    if skill_id is not None:
+        query = query.filter(AIExtractionAudit.skill_id == skill_id)
 
     rows = query.order_by(AIExtractionAudit.extracted_at.desc()).limit(limit).all()
 
@@ -137,7 +137,7 @@ def reset_circuit(
 ) -> CircuitResetResponse:
     AIExtractionCircuitService.reset(
         family_id=int(body.family_id),
-        capability=body.capability,
+        skill_id=body.skill_id,
         user_id=current_user.id,
         db=db,
     )

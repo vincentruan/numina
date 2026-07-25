@@ -62,7 +62,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { complete } = usePageLoading()
+const { increment, decrement } = usePageLoading()
 
 const asset = ref<ChildAsset | null>(null)
 const loading = ref(true)
@@ -75,14 +75,14 @@ function formatDate(dateStr: string): string {
 async function load() {
   loading.value = true
   error.value = ''
+  increment()
   try {
     asset.value = await getChildAsset(String(route.params.id))
   } catch {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete page loading - skeleton takes over visual feedback
-    complete()
+    decrement()
   }
 }
 

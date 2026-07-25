@@ -569,12 +569,14 @@ import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
 import IIcon from '@/components/IIcon.vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
 const blindBoxStore = useBlindBoxStore()
+const { increment, decrement } = usePageLoading()
 
 const pendingDrawCount = computed(
   () => blindBoxStore.draws.filter((d) => d.status === 'pending_fulfillment').length,
@@ -1113,13 +1115,17 @@ async function onRefresh() {
 }
 
 onMounted(async () => {
-  loading.value = true
-  await familyStore.fetchFamily()
-  if (authStore.user?.role === 'owner') {
-    await choreStore.fetchPendingApprovals()
+  increment()
+  try {
+    await familyStore.fetchFamily()
+    if (authStore.user?.role === 'owner') {
+      await choreStore.fetchPendingApprovals()
+    }
+    await loadData()
+    await blindBoxStore.fetchDraws()
+  } finally {
+    decrement()
   }
-  await loadData()
-  await blindBoxStore.fetchDraws()
   loading.value = false
 })
 </script>

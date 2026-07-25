@@ -160,7 +160,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
     _ = resp.content  # Force full response consumption
 
     db.expire_all()
-    task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
+    task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
     assert task is not None
     assert task.status == "running"
 
@@ -208,7 +208,7 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
 
     task = AITask(
         family_id=family_id,
-        capability="report",
+        skill_id="report",
         status="running",
         session_id=session.id,
         started_at=datetime.utcnow(),
@@ -268,7 +268,7 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
 
     # Task stays running — backend no longer owns report task completion
     db.expire_all()
-    task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
+    task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
     assert task is not None
     assert task.status == "running"
 

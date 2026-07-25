@@ -1,5 +1,15 @@
 <template>
-  <div class="overview-stat-card">
+  <BorderGlow
+    class="overview-stat-card"
+    :edge-sensitivity="25"
+    :glow-color="'240 60 75'"
+    :background-color="glowBg"
+    :border-radius="0"
+    :glow-radius="24"
+    :glow-intensity="0.6"
+    :cone-spread="20"
+    :colors="glowColors"
+  >
     <!-- Net worth hero -->
     <div class="osc-main">
       <!-- Faded upward-growth arrow watermark on the right — visual beacon for the trend entry -->
@@ -81,13 +91,14 @@
         </div>
       </router-link>
     </div>
-  </div>
+  </BorderGlow>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+import BorderGlow from '@/components/common/BorderGlow.vue'
 import { useCurrency } from '@/composables/useCurrency'
 import { useMonthlyPaymentTotal } from '@/composables/useMonthlyPaymentTotal'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -103,6 +114,15 @@ const wishStore = useWishStore()
 const overview = computed(() => dashboardStore.overview)
 const liabilities = computed(() => liabilityStore.liabilities)
 const wishes = computed(() => wishStore.wishes)
+
+// BorderGlow theme-aware props
+const isDark = computed(() => document.documentElement.getAttribute('data-theme') === 'dark')
+const glowBg = computed(() => isDark.value ? '#010120' : '#ffffff')
+const glowColors = computed(() =>
+  isDark.value
+    ? ['#bdbbff', '#a0c3ff', '#ef2cc1']
+    : ['#f472b6', '#bdbbff', '#38bdf8']
+)
 
 // Per-domain loading / error. Stores expose only `loading` (fetch throws on failure),
 // so error is tracked here by catching the fetch rejection.
@@ -178,24 +198,12 @@ onMounted(() => {
 
 <style scoped>
 .overview-stat-card {
-  background:
-    linear-gradient(135deg,
-      rgba(239, 44, 193, 0.10) 0%,
-      rgba(189, 187, 255, 0.18) 45%,
-      rgba(160, 195, 255, 0.14) 100%),
-    #ffffff;
+  /* Background handled by BorderGlow wrapper */
   padding: 20px 16px 16px;
   color: #000000;
   position: relative;
-  overflow: hidden;
 }
 [data-theme='dark'] .overview-stat-card {
-  background:
-    linear-gradient(135deg,
-      rgba(189, 187, 255, 0.08) 0%,
-      rgba(189, 187, 255, 0.04) 50%,
-      transparent 100%),
-    #010120;
   color: var(--text-primary);
 }
 

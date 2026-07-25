@@ -71,62 +71,6 @@ describe('HumanInputCard', () => {
     })
   })
 
-  describe('multi-select mode', () => {
-    const options = [
-      { label: 'Red', value: 'red' },
-      { label: 'Blue', value: 'blue' },
-      { label: 'Green', value: 'green' },
-    ]
-
-    it('renders checkboxes when multiSelect is true', () => {
-      const wrapper = mountCard({ options, multiSelect: true })
-      const checkboxes = wrapper.findAll('.checkbox-input')
-      expect(checkboxes).toHaveLength(3)
-    })
-
-    it('toggles selection on checkbox change', async () => {
-      const wrapper = mountCard({ options, multiSelect: true })
-      const checkboxes = wrapper.findAll('.checkbox-input')
-
-      // Check first option
-      await checkboxes[0].setValue(true)
-      expect(wrapper.find('.checkbox-option--checked').exists()).toBe(true)
-
-      // Check second option
-      await checkboxes[1].setValue(true)
-      const checked = wrapper.findAll('.checkbox-option--checked')
-      expect(checked).toHaveLength(2)
-
-      // Uncheck first option
-      await checkboxes[0].setValue(false)
-      const checkedAfter = wrapper.findAll('.checkbox-option--checked')
-      expect(checkedAfter).toHaveLength(1)
-    })
-
-    it('submit button is disabled until at least one option selected', () => {
-      const wrapper = mountCard({ options, multiSelect: true })
-      const submitBtn = wrapper.find('.submit-btn')
-      expect(submitBtn.attributes('disabled')).toBeDefined()
-    })
-
-    it('emits JSON array of selected values on submit', async () => {
-      const wrapper = mountCard({ options, multiSelect: true })
-      const checkboxes = wrapper.findAll('.checkbox-input')
-
-      // Select red and green
-      await checkboxes[0].setValue(true)
-      await checkboxes[2].setValue(true)
-
-      const submitBtn = wrapper.find('.submit-btn')
-      await submitBtn.trigger('click')
-
-      const emitted = wrapper.emitted('submit')
-      expect(emitted).toHaveLength(1)
-      const answer = JSON.parse(emitted![0][0] as string)
-      expect(answer).toEqual(['red', 'green'])
-    })
-  })
-
   describe('free-text mode (no options)', () => {
     it('renders textarea when no options', () => {
       const wrapper = mountCard()
@@ -186,12 +130,6 @@ describe('HumanInputCard', () => {
     it('shows submitting spinner', () => {
       const wrapper = mountCard({ status: 'submitting' })
       expect(wrapper.find('.card-submitting').exists()).toBe(true)
-    })
-
-    it('shows error state', () => {
-      const wrapper = mountCard({ status: 'error', errorMessage: 'timeout' })
-      expect(wrapper.find('.card-error').exists()).toBe(true)
-      expect(wrapper.find('.error-detail').text()).toBe('timeout')
     })
 
     it('shows superseded state', () => {

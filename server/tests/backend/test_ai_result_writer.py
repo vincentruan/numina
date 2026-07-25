@@ -14,7 +14,7 @@ from apps.backend.app.database import Base
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.services.ai_result_writer import (
     write_report_results,
-    write_capability_results,
+    write_skill_results,
 )
 
 
@@ -34,16 +34,16 @@ class TestWriteReportResults:
 
 
 class TestWriteCapabilityResults:
-    """Tests for write_capability_results dispatcher."""
+    """Tests for write_skill_results dispatcher."""
 
     def test_dispatches_to_correct_writer(self, db_session, test_family):
         """Dispatches to correct writer based on capability."""
-        count = write_capability_results("report", test_family.id, {"overall_score": 80}, db_session)
+        count = write_skill_results("report", test_family.id, {"overall_score": 80}, db_session)
         assert count == 1
 
     def test_returns_zero_for_unknown_capability(self, db_session, test_family):
         """Returns 0 for unknown capability."""
-        count = write_capability_results("unknown", test_family.id, {}, db_session)
+        count = write_skill_results("unknown", test_family.id, {}, db_session)
         assert count == 0
 
 

@@ -7,6 +7,10 @@ const loadingCount = ref(0)
 // Track if NProgress was started by this system (module-level singleton)
 let nprogressStarted: boolean = false
 
+// Track if NProgress was started by the router (beforeEach)
+// This allows increment() to take over without restarting the progress bar
+let routerNprogressActive: boolean = false
+
 // Track router's safety timeout ID so increment() can clear it (prevents TOCTOU race)
 let routerTimeoutId: ReturnType<typeof setTimeout> | null = null
 
@@ -52,7 +56,13 @@ export function usePageLoading() {
     instance.count++
 
     if (loadingCount.value === 1 && !nprogressStarted) {
-      NProgress.start()
+      // If router already started NProgress, take over without restarting
+      // This prevents the flicker: start→done→start pattern
+      if (!routerNprogressActive) {
+        NProgress.start()
+      } else {
+        routerNprogressActive = false
+      }
       nprogressStarted = true
 
       // Start stuck safety timeout
@@ -199,4 +209,12 @@ export function clearRouterTimeout(): void {
     clearTimeout(routerTimeoutId)
     routerTimeoutId = null
   }
+}
+
+/**
+ * Mark that router has started NProgress (called from beforeEach).
+ * This allows increment() to take over without restarting the progress bar.
+ */
+export function markRouterNprogressActive(): void {
+  routerNprogressActive = true
 }

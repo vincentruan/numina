@@ -12,14 +12,14 @@ from apps.backend.app.services.ai_extraction_circuit_service import (
 from apps.backend.app.utils.snowflake import next_id
 
 
-def _insert_fallback_audits(db, family_id, capability, count, minutes_ago_start=0):
+def _insert_fallback_audits(db, family_id, skill_id, count, minutes_ago_start=0):
     """Insert N llm_fallback_hit audit records spread over time."""
     now = datetime.utcnow()
     for i in range(count):
         audit = AIExtractionAudit(
             id=next_id(),
             family_id=family_id,
-            capability=capability,
+            skill_id=skill_id,
             method="llm_fallback_hit",
             extracted_at=now - timedelta(minutes=minutes_ago_start + i),
         )
@@ -35,7 +35,7 @@ class TestIsOpen:
 
     def test_state_ok_returns_false(self, db):
         circuit = AIExtractionCircuit(
-            id=next_id(), family_id=1, capability="alerts", state="ok"
+            id=next_id(), family_id=1, skill_id="alerts", state="ok"
         )
         db.add(circuit)
         db.commit()
@@ -45,7 +45,7 @@ class TestIsOpen:
 
     def test_state_circuit_open_returns_true(self, db):
         circuit = AIExtractionCircuit(
-            id=next_id(), family_id=1, capability="alerts", state="circuit_open",
+            id=next_id(), family_id=1, skill_id="alerts", state="circuit_open",
             opened_at=datetime.utcnow(),
         )
         db.add(circuit)
@@ -56,7 +56,7 @@ class TestIsOpen:
 
     def test_state_rate_limited_not_expired_returns_true(self, db):
         circuit = AIExtractionCircuit(
-            id=next_id(), family_id=1, capability="disposal", state="rate_limited",
+            id=next_id(), family_id=1, skill_id="disposal", state="rate_limited",
             opened_at=datetime.utcnow(),
             opened_until=datetime.utcnow() + timedelta(minutes=20),
         )
@@ -68,7 +68,7 @@ class TestIsOpen:
 
     def test_state_rate_limited_expired_auto_recovers(self, db):
         circuit = AIExtractionCircuit(
-            id=next_id(), family_id=1, capability="disposal", state="rate_limited",
+            id=next_id(), family_id=1, skill_id="disposal", state="rate_limited",
             opened_at=datetime.utcnow() - timedelta(minutes=40),
             opened_until=datetime.utcnow() - timedelta(minutes=10),
         )
@@ -93,7 +93,7 @@ class TestEvaluate:
         _insert_fallback_audits(db, 1, "alerts", RATE_LIMIT_THRESHOLD)
         state = AIExtractionCircuitService.evaluate(1, "alerts", db)
         assert state == "rate_limited"
-        circuit = db.query(AIExtractionCircuit).filter_by(family_id=1, capability="alerts").first()
+        circuit = db.query(AIExtractionCircuit).filter_by(family_id=1, skill_id="alerts").first()
         assert circuit.opened_until is not None
         assert circuit.opened_until > datetime.utcnow()
 
@@ -101,7 +101,7 @@ class TestEvaluate:
         _insert_fallback_audits(db, 1, "disposal", CIRCUIT_OPEN_THRESHOLD)
         state = AIExtractionCircuitService.evaluate(1, "disposal", db)
         assert state == "circuit_open"
-        circuit = db.query(AIExtractionCircuit).filter_by(family_id=1, capability="disposal").first()
+        circuit = db.query(AIExtractionCircuit).filter_by(family_id=1, skill_id="disposal").first()
         assert circuit.opened_until is None
 
     def test_24h_priority_over_1h(self, db):
@@ -120,14 +120,14 @@ class TestEvaluate:
         _insert_fallback_audits(db, 99, "allocation", 2)
         state = AIExtractionCircuitService.evaluate(99, "allocation", db)
         assert state == "ok"
-        circuit = db.query(AIExtractionCircuit).filter_by(family_id=99, capability="allocation").first()
+        circuit = db.query(AIExtractionCircuit).filter_by(family_id=99, skill_id="allocation").first()
         assert circuit is not None
         assert circuit.state == "ok"
 
     def test_evaluate_expired_rate_limited_resets_if_below_threshold(self, db):
         # Set up an expired rate_limited state
         circuit = AIExtractionCircuit(
-            id=next_id(), family_id=1, capability="alerts", state="rate_limited",
+            id=next_id(), family_id=1, skill_id="alerts", state="rate_limited",
             opened_at=datetime.utcnow() - timedelta(minutes=40),
             opened_until=datetime.utcnow() - timedelta(minutes=10),
         )
@@ -142,7 +142,7 @@ class TestEvaluate:
 class TestReset:
     def test_reset_circuit_open(self, db):
         circuit = AIExtractionCircuit(
-            id=next_id(), family_id=1, capability="alerts", state="circuit_open",
+            id=next_id(), family_id=1, skill_id="alerts", state="circuit_open",
             opened_at=datetime.utcnow(),
         )
         db.add(circuit)
@@ -158,7 +158,7 @@ class TestReset:
     def test_reset_creates_record_if_not_exists(self, db):
         result = AIExtractionCircuitService.reset(77, "disposal", 10, db)
         assert result is True
-        row = db.query(AIExtractionCircuit).filter_by(family_id=77, capability="disposal").first()
+        row = db.query(AIExtractionCircuit).filter_by(family_id=77, skill_id="disposal").first()
         assert row is not None
         assert row.state == "ok"
         assert row.reset_by_user_id == 10

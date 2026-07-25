@@ -556,9 +556,12 @@ async function loadReport() {
     if (res.data.report) {
       currentReport.value = res.data.report as unknown as AIReport
       reportGeneratedAt.value = res.data.generated_at ?? null
+    } else {
+      console.warn('[AIHubPage] loadReport: no report in response', res.data)
     }
-  } catch {
+  } catch (err) {
     // no report yet
+    console.warn('[AIHubPage] loadReport: failed to fetch', err)
   }
 }
 
@@ -567,9 +570,10 @@ async function generateReport() {
   stream.reset()
   try {
     await stream.connect()
-    if (stream.report.value) {
-      currentReport.value = stream.report.value as unknown as AIReport
-      reportGeneratedAt.value = stream.generatedAt.value
+    // SSE stream only tracks step status, never sets stream.report.value.
+    // After completion, fetch the freshly-generated report from backend.
+    if (stream.status.value === 'completed') {
+      await loadReport()
     }
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
@@ -594,11 +598,17 @@ async function refreshReport(silent?: boolean) {
     // force=true bypasses the 8h cache (plan step 6) — the refresh button
     // means the user wants a fresh report, not the cached one.
     await stream.connect(true)
-    if (stream.report.value) {
-      currentReport.value = stream.report.value as unknown as AIReport
-      reportGeneratedAt.value = stream.generatedAt.value
+    console.log('[AIHubPage] refreshReport: stream completed, status=', stream.status.value)
+    // SSE stream only tracks step status, never sets stream.report.value.
+    // After completion, fetch the freshly-generated report from backend.
+    if (stream.status.value === 'completed') {
+      await loadReport()
+      console.log('[AIHubPage] refreshReport: after loadReport, currentReport=', !!currentReport.value)
+    } else {
+      console.warn('[AIHubPage] refreshReport: stream not completed, status=', stream.status.value)
     }
-  } catch {
+  } catch (err) {
+    console.error('[AIHubPage] refreshReport: caught error', err)
     // Restore old report on failure so the user doesn't lose it.
     currentReport.value = prevReport
     reportGeneratedAt.value = prevGeneratedAt

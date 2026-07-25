@@ -31,11 +31,12 @@ vi.mock('@/composables/useThreadList', () => ({
 
 // Mock router
 const mockPush = vi.fn()
+const mockBack = vi.fn()
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...(actual as any),
-    useRouter: () => ({ push: mockPush }),
+    useRouter: () => ({ push: mockPush, back: mockBack }),
   }
 })
 
@@ -163,7 +164,13 @@ describe('ChatHistoryPage', () => {
       expect(wrapper.find('.history-title').text()).toBe('aiChat.historyTitle')
     })
 
-    it('close button navigates to AIChat route', async () => {
+    it('close button calls router.back() when there is previous history', async () => {
+      const originalState = window.history.state
+      Object.defineProperty(window, 'history', {
+        configurable: true,
+        value: { state: { back: '/settings' } },
+      })
+
       wrapper = mount(ChatHistoryPage, {
         global: { stubs: vantStubs },
       })
@@ -172,7 +179,37 @@ describe('ChatHistoryPage', () => {
 
       const vm = wrapper.vm as any
       vm.close()
-      expect(mockPush).toHaveBeenCalledWith({ name: 'AIChat' })
+      expect(mockBack).toHaveBeenCalled()
+      expect(mockPush).not.toHaveBeenCalled()
+
+      Object.defineProperty(window, 'history', {
+        configurable: true,
+        value: { state: originalState },
+      })
+    })
+
+    it('close button falls back to /ai/chat when no previous history', async () => {
+      const originalState = window.history.state
+      Object.defineProperty(window, 'history', {
+        configurable: true,
+        value: { state: { back: null } },
+      })
+
+      wrapper = mount(ChatHistoryPage, {
+        global: { stubs: vantStubs },
+      })
+
+      await nextTick()
+
+      const vm = wrapper.vm as any
+      vm.close()
+      expect(mockPush).toHaveBeenCalledWith('/ai/chat')
+      expect(mockBack).not.toHaveBeenCalled()
+
+      Object.defineProperty(window, 'history', {
+        configurable: true,
+        value: { state: originalState },
+      })
     })
 
     it('close button has correct aria-label', async () => {
@@ -197,7 +234,7 @@ describe('ChatHistoryPage', () => {
   })
 
   describe('Session Selection', () => {
-    it('selectThread sets active thread and navigates', async () => {
+    it('selectThread emits select-thread event in overlay mode', async () => {
       mockDateGroups.value = [
         {
           label: 'today',
@@ -209,6 +246,7 @@ describe('ChatHistoryPage', () => {
       ]
 
       wrapper = mount(ChatHistoryPage, {
+        props: { overlay: true },
         global: { stubs: vantStubs },
       })
 
@@ -217,12 +255,12 @@ describe('ChatHistoryPage', () => {
       const vm = wrapper.vm as any
       vm.selectThread('thread-1')
 
-      // selectThread calls store.setActiveThread + router.push
-      // The store's setActiveThread sets activeThreadId via pinia
-      expect(mockPush).toHaveBeenCalledWith('/ai/chat?thread_id=thread-1')
+      // In overlay mode, selectThread emits an event
+      expect(wrapper.emitted('select-thread')).toBeTruthy()
+      expect(wrapper.emitted('select-thread')![0]).toEqual(['thread-1'])
     })
 
-    it('session click triggers selectThread', async () => {
+    it('session click triggers selectThread in overlay mode', async () => {
       mockDateGroups.value = [
         {
           label: 'today',
@@ -234,6 +272,7 @@ describe('ChatHistoryPage', () => {
       ]
 
       wrapper = mount(ChatHistoryPage, {
+        props: { overlay: true },
         global: { stubs: vantStubs },
       })
 
@@ -243,7 +282,9 @@ describe('ChatHistoryPage', () => {
       await wrapper.find('.session-content').trigger('click')
       await nextTick()
 
-      expect(mockPush).toHaveBeenCalledWith('/ai/chat?thread_id=thread-1')
+      // In overlay mode, emits select-thread event instead of navigating directly
+      expect(wrapper.emitted('select-thread')).toBeTruthy()
+      expect(wrapper.emitted('select-thread')![0]).toEqual(['thread-1'])
     })
 
     it('highlights active session', async () => {
@@ -463,7 +504,7 @@ describe('ChatHistoryPage', () => {
       expect(link.text()).toBe('aiChat.branchFromParent · Parent Thread')
     })
 
-    it('clicking the parent link navigates to the parent thread', async () => {
+    it('clicking the parent link emits select-thread event in overlay mode', async () => {
       mockDateGroups.value = [
         {
           label: 'today',
@@ -476,6 +517,7 @@ describe('ChatHistoryPage', () => {
       ]
 
       wrapper = mount(ChatHistoryPage, {
+        props: { overlay: true },
         global: { stubs: vantStubs },
       })
       await nextTick()
@@ -483,7 +525,8 @@ describe('ChatHistoryPage', () => {
       await wrapper.findAll('.history-session')[1].find('.branch-parent-link').trigger('click')
       await nextTick()
 
-      expect(mockPush).toHaveBeenCalledWith('/ai/chat?thread_id=parent-1')
+      expect(wrapper.emitted('select-thread')).toBeTruthy()
+      expect(wrapper.emitted('select-thread')![0]).toEqual(['parent-1'])
     })
 
     it('degrades to title-less link when parent is not in the loaded list', async () => {
