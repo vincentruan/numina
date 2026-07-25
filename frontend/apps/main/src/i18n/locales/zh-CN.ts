@@ -2059,6 +2059,8 @@ export default {
     configSaved: '通知配置已保存',
     agentToggleEnabled: '智能体已启用',
     agentToggleDisabled: '智能体已禁用',
+    assetEditCategoryHint: 'Use single asset edit to change category',
+    assetEditTagHint: 'Use single asset edit to change tags'
   },
   aiTask: {
     status: {
