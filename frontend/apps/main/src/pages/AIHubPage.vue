@@ -325,6 +325,11 @@ const isOwner = authStore.user?.role === 'owner'
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
+// Reactive tick so reportAge computed (which uses Date.now()) re-evaluates
+// every minute — otherwise the age text freezes at the value from when
+// reportGeneratedAt was last set.
+const ageTick = ref(0)
+let ageTimer: ReturnType<typeof setInterval> | null = null
 const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
@@ -472,6 +477,8 @@ const scoreAriaLabel = computed(() => {
 
 const reportAge = computed(() => {
   if (!reportGeneratedAt.value) return ''
+  // Touch ageTick so this computed re-evaluates every minute as the timer ticks.
+  void ageTick.value
   const diff = Date.now() - new Date(reportGeneratedAt.value).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return t('aiHub.justNow')
@@ -649,6 +656,8 @@ function handleAgentEdit(agent: Agent) {
 
 onMounted(async () => {
   increment()
+  // Tick every 60s so reportAge (which uses Date.now()) stays current.
+  ageTimer = setInterval(() => { ageTick.value++ }, 60_000)
   try {
     await aiStore.fetchConfig()
     await agentStore.loadAgents()
@@ -665,9 +674,11 @@ onMounted(async () => {
 // (and on full unmount) so they don't leak while the cached page sits in memory.
 onDeactivated(() => {
   stream.abort()
+  if (ageTimer) { clearInterval(ageTimer); ageTimer = null }
 })
 onUnmounted(() => {
   stream.abort()
+  if (ageTimer) { clearInterval(ageTimer); ageTimer = null }
 })
 
 // Expose refs and functions for testing purposes
