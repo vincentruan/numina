@@ -552,7 +552,6 @@ async function generateReport() {
 
 async function refreshReport(silent?: boolean) {
   if (reportLoading.value) return // avoid duplicate with scheduler
-  if (!aiStore.aiEnabled) return
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
