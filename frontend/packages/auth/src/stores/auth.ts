@@ -17,7 +17,7 @@ import type { User, LoginRequest, RegisterRequest, JoinFamilyRequest, LoginStep1
 import type { StoredUser } from '../utils/storage'
 import { getUser, setUser, clearAuth } from '../utils/storage'
 import { configureAuthHttp, getHttp } from './http'
-import { readDeviceId, writeDeviceId } from '../utils/deviceIdentity'
+import { readDeviceId, writeDeviceId, establishEtag } from '../utils/deviceIdentity'
 
 export { configureAuthHttp }
 
@@ -75,9 +75,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function trustDevice(options?: { onSuccess?: () => void; onError?: () => void; onTrusted?: () => Promise<void> }) {
     try {
-      const deviceId = readDeviceId()
+      const deviceId = await readDeviceId()
       const { data } = await getHttp().post<{ device_id: string }>('/auth/device/trust', { device_id: deviceId })
       writeDeviceId(data.device_id)
+      await establishEtag(data.device_id)
       if (options?.onTrusted) {
         await options.onTrusted()
       }

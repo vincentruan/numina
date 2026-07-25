@@ -693,3 +693,54 @@ def list_family_devices(
         current_refresh_jti=current_jti,
     )
     return [FamilyDeviceResponse(**row) for row in rows]
+
+
+@router.get("/device-ping", include_in_schema=False)
+def device_ping(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """ETag-based device ID recovery endpoint.
+
+    When all client-side storage (cookie, localStorage, IndexedDB) is cleared,
+    the browser's HTTP cache may still have the ETag from a previous trust response.
+    This endpoint extracts the device_id from the If-None-Match header, validates
+    it against the database, and returns it if valid, allowing the client to
+    recover and repopulate all storage layers.
+    """
+    if_none_match = request.headers.get("if-none-match")
+
+    if if_none_match:
+        # Extract device_id from ETag (format: "device-id" or W/"device-id")
+        device_id = if_none_match.strip()
+        if device_id.startswith("W/"):
+            device_id = device_id[2:]
+        device_id = device_id.strip('"')
+
+        if device_id:
+            # Validate device_id exists in database and is active
+            from datetime import datetime
+
+            from apps.backend.app.models.device_session import DeviceSession
+
+            now = datetime.utcnow()
+            valid_session = (
+                db.query(DeviceSession)
+                .filter(
+                    DeviceSession.device_id == device_id,
+                    DeviceSession.is_revoked.is_(False),
+                    DeviceSession.expires_at > now,
+                )
+                .first()
+            )
+
+            if valid_session:
+                # Return the device_id with ETag header to maintain cache
+                response.headers["ETag"] = f'"{device_id}"'
+                response.headers["Cache-Control"] = "private, max-age=2592000"  # 30 days
+                return {"device_id": device_id}
+
+    # No valid ETag found or device_id not valid
+    response.headers["Cache-Control"] = "no-store"
+    return {"device_id": None}
