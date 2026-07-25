@@ -249,18 +249,27 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
 </script>
 
 <style scoped>
+.reminders-card {
+  display: block;
+  margin: 8px 0;
+}
 .reminders-card :deep(.van-collapse-item__title) {
   justify-content: flex-start;
 }
 .reminders-card :deep(.van-cell__title) {
   flex: 1;
   display: flex;
-  align-items: center;
+  min-width: 0;
+}
+.reminders-card :deep(.van-cell__value) {
+  flex: none;
+  width: 0;
 }
 .reminder-header {
   display: flex;
   align-items: center;
   width: 100%;
+  min-width: 0;
   gap: 8px;
 }
 .reminder-title {

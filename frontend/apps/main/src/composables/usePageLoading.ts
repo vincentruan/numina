@@ -191,6 +191,7 @@ export function completeGlobalLoading(): void {
   // so we must complete NProgress unconditionally to prevent stuck progress bar
   NProgress.done()
   nprogressStarted = false
+  routerNprogressActive = false
 }
 
 /**

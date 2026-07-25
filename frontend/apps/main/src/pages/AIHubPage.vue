@@ -6,17 +6,8 @@
     <!-- Actual Content -->
     <template v-else>
     <!-- Header -->
-    <BorderGlow
-      class="hub-header"
-      :edge-sensitivity="25"
-      :glow-color="'240 60 75'"
-      :background-color="glowBg"
-      :border-radius="0"
-      :glow-radius="24"
-      :glow-intensity="0.6"
-      :cone-spread="20"
-      :colors="glowColors"
-    >
+    <div class="hub-header">
+      <div class="hub-header-blob" aria-hidden="true"></div>
       <div class="hub-header-main">
         <div class="hub-greeting">
           <span class="hub-greeting-label">{{ t('aiHub.title') }}</span>
@@ -80,8 +71,10 @@
         </template>
         <div class="hub-stat-meta" aria-live="polite">
           <template v-if="reportLoading">
-            <van-loading size="10" />
             <span>{{ t('aiHub.generating') }}</span>
+            <button class="refresh-btn refresh-btn--loading" disabled :aria-label="t('aiHub.refreshReport')">
+              <van-loading size="11" color="var(--text-tertiary)" />
+            </button>
           </template>
           <template v-else-if="reportGeneratedAt">
             <span>{{ reportAge }}</span>
@@ -97,7 +90,7 @@
           </template>
         </div>
       </div>
-    </BorderGlow>
+    </div>
 
     <!-- Report summary card -->
     <div v-if="currentReport" class="report-summary-card" role="button" tabindex="0" :aria-label="t('aiHub.viewFullReport')" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
@@ -107,7 +100,7 @@
         </svg>
         {{ t('aiHub.latestReport') }}
       </div>
-      <p class="report-summary-text">{{ currentReport.summary }}</p>
+      <p class="report-summary-text" v-html="renderedSummary" />
       <div class="report-summary-cta">
         {{ t('aiHub.viewFullReport') }}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -284,7 +277,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onDeactivated, onUnmounted, watch } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
@@ -298,7 +293,6 @@ import { useReportStream } from '@/composables/useReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
-import BorderGlow from '@/components/common/BorderGlow.vue'
 import IIcon from '@/components/IIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
@@ -325,11 +319,6 @@ const isOwner = authStore.user?.role === 'owner'
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
-// Reactive tick so reportAge computed (which uses Date.now()) re-evaluates
-// every minute — otherwise the age text freezes at the value from when
-// reportGeneratedAt was last set.
-const ageTick = ref(0)
-let ageTimer: ReturnType<typeof setInterval> | null = null
 const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
@@ -444,16 +433,12 @@ function submitChatFromInput(payload: SubmitPayload) {
   submitChat()
 }
 
-const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
+const PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
 
-// BorderGlow theme-aware props
-const isDark = computed(() => document.documentElement.getAttribute('data-theme') === 'dark')
-const glowBg = computed(() => isDark.value ? '#010120' : '#ffffff')
-const glowColors = computed(() =>
-  isDark.value
-    ? ['#bdbbff', '#a0c3ff', '#ef2cc1']
-    : ['#f472b6', '#bdbbff', '#38bdf8']
-)
+const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
 const displayScore = computed(() => currentReport.value?.overall_score ?? '?')
 
@@ -475,10 +460,15 @@ const scoreAriaLabel = computed(() => {
   return t('aiHub.scoreAriaLabel', { score })
 })
 
+// Parse markdown summary for display in the summary card
+const renderedSummary = computed(() => {
+  if (!currentReport.value?.summary) return ''
+  const raw = marked.parse(currentReport.value.summary, { async: false }) as string
+  return DOMPurify.sanitize(raw, PURIFY_CONFIG)
+})
+
 const reportAge = computed(() => {
   if (!reportGeneratedAt.value) return ''
-  // Touch ageTick so this computed re-evaluates every minute as the timer ticks.
-  void ageTick.value
   const diff = Date.now() - new Date(reportGeneratedAt.value).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return t('aiHub.justNow')
@@ -556,12 +546,9 @@ async function loadReport() {
     if (res.data.report) {
       currentReport.value = res.data.report as unknown as AIReport
       reportGeneratedAt.value = res.data.generated_at ?? null
-    } else {
-      console.warn('[AIHubPage] loadReport: no report in response', res.data)
     }
-  } catch (err) {
+  } catch {
     // no report yet
-    console.warn('[AIHubPage] loadReport: failed to fetch', err)
   }
 }
 
@@ -570,10 +557,9 @@ async function generateReport() {
   stream.reset()
   try {
     await stream.connect()
-    // SSE stream only tracks step status, never sets stream.report.value.
-    // After completion, fetch the freshly-generated report from backend.
-    if (stream.status.value === 'completed') {
-      await loadReport()
+    if (stream.report.value) {
+      currentReport.value = stream.report.value as unknown as AIReport
+      reportGeneratedAt.value = stream.generatedAt.value
     }
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
@@ -584,34 +570,17 @@ async function generateReport() {
 
 async function refreshReport(silent?: boolean) {
   if (reportLoading.value) return // avoid duplicate with scheduler
-  // Save old report so we can restore it on failure (otherwise the user
-  // loses the existing report if the refresh fails).
-  const prevReport = currentReport.value
-  const prevGeneratedAt = reportGeneratedAt.value
-  // Clear old report so the v-if chain falls through to the generating card
-  // (v-if="currentReport" would otherwise keep showing the stale summary).
-  currentReport.value = null
-  reportGeneratedAt.value = null
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
     // force=true bypasses the 8h cache (plan step 6) — the refresh button
     // means the user wants a fresh report, not the cached one.
     await stream.connect(true)
-    console.log('[AIHubPage] refreshReport: stream completed, status=', stream.status.value)
-    // SSE stream only tracks step status, never sets stream.report.value.
-    // After completion, fetch the freshly-generated report from backend.
-    if (stream.status.value === 'completed') {
-      await loadReport()
-      console.log('[AIHubPage] refreshReport: after loadReport, currentReport=', !!currentReport.value)
-    } else {
-      console.warn('[AIHubPage] refreshReport: stream not completed, status=', stream.status.value)
+    if (stream.report.value) {
+      currentReport.value = stream.report.value as unknown as AIReport
+      reportGeneratedAt.value = stream.generatedAt.value
     }
-  } catch (err) {
-    console.error('[AIHubPage] refreshReport: caught error', err)
-    // Restore old report on failure so the user doesn't lose it.
-    currentReport.value = prevReport
-    reportGeneratedAt.value = prevGeneratedAt
+  } catch {
     if (!silent) showFailToast(t('toast.refreshFailed'))
   } finally {
     if (!silent) reportLoading.value = false
@@ -664,10 +633,8 @@ function handleAgentEdit(agent: Agent) {
   router.push({ name: 'AgentEdit', params: { id: agent.id } })
 }
 
-onMounted(async () => {
+async function loadPageData() {
   increment()
-  // Tick every 60s so reportAge (which uses Date.now()) stays current.
-  ageTimer = setInterval(() => { ageTick.value++ }, 60_000)
   try {
     await aiStore.fetchConfig()
     await agentStore.loadAgents()
@@ -676,7 +643,12 @@ onMounted(async () => {
     decrement()
   }
   initialLoading.value = false
-})
+}
+
+onMounted(loadPageData)
+
+// KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
+onActivated(loadPageData)
 
 // This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
@@ -684,11 +656,9 @@ onMounted(async () => {
 // (and on full unmount) so they don't leak while the cached page sits in memory.
 onDeactivated(() => {
   stream.abort()
-  if (ageTimer) { clearInterval(ageTimer); ageTimer = null }
 })
 onUnmounted(() => {
   stream.abort()
-  if (ageTimer) { clearInterval(ageTimer); ageTimer = null }
 })
 
 // Expose refs and functions for testing purposes
@@ -709,15 +679,25 @@ defineExpose({
   padding-bottom: 140px;
 }
 
-/* ── Header: BorderGlow wrapper ── */
+/* ── Header: Clean card style ── */
 .hub-header {
   position: relative;
   padding: 20px 16px 16px;
-  color: #000000;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  overflow: hidden;
 }
 
-[data-theme='dark'] .hub-header {
-  color: #ffffff;
+/* Decorative blob */
+.hub-header-blob {
+  position: absolute;
+  top: -40px;
+  right: -30px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.08) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 /* Main row: greeting + score ring */
@@ -740,12 +720,8 @@ defineExpose({
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
-  font-family: 'Georgia', monospace;
-}
-
-[data-theme='dark'] .hub-greeting-label {
   color: var(--text-tertiary);
+  font-family: 'Georgia', monospace;
 }
 
 /* Display name: tight negative tracking */
@@ -754,11 +730,7 @@ defineExpose({
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.05;
-  color: #000000;
-}
-
-[data-theme='dark'] .hub-greeting-hi {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 /* Score ring */
@@ -777,12 +749,8 @@ defineExpose({
 
 .score-track {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.12);
+  stroke: var(--separator);
   stroke-width: 4;
-}
-
-[data-theme='dark'] .score-track {
-  stroke: rgba(255, 255, 255, 0.15);
 }
 
 .score-fill {
@@ -796,13 +764,13 @@ defineExpose({
 .score-good      .score-fill { stroke: #2563eb; }
 .score-fair      .score-fill { stroke: #d97706; }
 .score-poor      .score-fill { stroke: #dc2626; }
-.score-empty     .score-fill { stroke: rgba(0, 0, 0, 0.15); }
+.score-empty .score-fill { stroke: var(--separator); }
 
 [data-theme='dark'] .score-excellent .score-fill { stroke: var(--color-trend-down); }
 [data-theme='dark'] .score-good      .score-fill { stroke: #93c5fd; }
 [data-theme='dark'] .score-fair      .score-fill { stroke: #fcd34d; }
 [data-theme='dark'] .score-poor      .score-fill { stroke: var(--color-trend-up); }
-[data-theme='dark'] .score-empty     .score-fill { stroke: rgba(255, 255, 255, 0.15); }
+[data-theme='dark'] .score-empty .score-fill { stroke: var(--separator); }
 
 .score-inner {
   position: absolute;
@@ -817,46 +785,29 @@ defineExpose({
   font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.03em;
-  color: #000000;
+  color: var(--text-primary);
   line-height: 1;
-}
-
-[data-theme='dark'] .score-number {
-  color: #ffffff;
 }
 
 .score-label {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.055px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
   line-height: 1;
 }
 
-[data-theme='dark'] .score-label {
-  color: var(--text-tertiary);
-}
-
-/* Stats row: frosted glass, 8px radius, dark-blue-tinted shadow */
+/* Stats row */
 .hub-stats {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   border-radius: 8px;
   padding: 10px 12px;
   margin-top: 12px;
-  box-shadow: rgba(1, 1, 32, 0.08) 0px 2px 8px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   position: relative;
-}
-
-[data-theme='dark'] .hub-stats {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: rgba(1, 1, 32, 0.4) 0px 2px 8px;
 }
 
 .hub-stat-item {
@@ -871,12 +822,8 @@ defineExpose({
   font-size: 16px;
   font-weight: 500;
   letter-spacing: -0.16px;
-  color: #000000;
+  color: var(--text-primary);
   line-height: 1;
-}
-
-[data-theme='dark'] .hub-stat-num {
-  color: #ffffff;
 }
 
 .hub-stat-num.warn { color: #d97706; }
@@ -887,23 +834,15 @@ defineExpose({
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.40);
-  font-family: 'Georgia', monospace;
-}
-
-[data-theme='dark'] .hub-stat-label {
   color: var(--text-tertiary);
+  font-family: 'Georgia', monospace;
 }
 
 .hub-stat-divider {
   width: 1px;
   height: 28px;
-  background: rgba(0, 0, 0, 0.10);
+  background: var(--separator);
   flex-shrink: 0;
-}
-
-[data-theme='dark'] .hub-stat-divider {
-  background: rgba(255, 255, 255, 0.12);
 }
 
 .hub-stat-num-wrap {
@@ -919,13 +858,9 @@ defineExpose({
   background: none;
   border: none;
   padding: 0;
-  color: rgba(0, 0, 0, 0.30);
+  color: var(--text-tertiary);
   cursor: pointer;
   line-height: 1;
-}
-
-[data-theme='dark'] .hub-stat-info {
-  color: rgba(255, 255, 255, 0.35);
 }
 
 .hub-stat-info:active {
@@ -948,12 +883,8 @@ defineExpose({
 .stat-popover-value {
   font-size: 18px;
   font-weight: 600;
-  color: #000000;
+  color: var(--text-primary);
   line-height: 1;
-}
-
-[data-theme='dark'] .stat-popover-value {
-  color: #ffffff;
 }
 
 .stat-popover-value.warn { color: #d97706; }
@@ -961,22 +892,14 @@ defineExpose({
 
 .stat-popover-label {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.50);
-}
-
-[data-theme='dark'] .stat-popover-label {
-  color: rgba(255, 255, 255, 0.50);
+  color: var(--text-secondary);
 }
 
 .stat-popover-desc {
   margin: 0 0 10px;
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(0, 0, 0, 0.65);
-}
-
-[data-theme='dark'] .stat-popover-desc {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--text-secondary);
 }
 
 .stat-popover-action {
@@ -1005,15 +928,11 @@ defineExpose({
   align-items: center;
   gap: 2px;
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.40);
+  color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
   letter-spacing: 0.055px;
   flex-shrink: 0;
   padding-left: 8px;
-}
-
-[data-theme='dark'] .hub-stat-meta {
-  color: var(--text-tertiary);
 }
 
 .refresh-btn {
@@ -1022,7 +941,7 @@ defineExpose({
   padding: 8px;
   min-width: 32px;
   min-height: 32px;
-  color: rgba(0, 0, 0, 0.40);
+  color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1031,12 +950,7 @@ defineExpose({
   transition: color 0.15s;
 }
 
-[data-theme='dark'] .refresh-btn {
-  color: var(--text-tertiary);
-}
-
-.refresh-btn:hover { color: #000000; }
-[data-theme='dark'] .refresh-btn:hover { color: var(--text-primary); }
+.refresh-btn:hover { color: var(--text-primary); }
 .refresh-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Report summary card ── */
@@ -1045,15 +959,10 @@ defineExpose({
   background: var(--card-bg);
   border-radius: 8px;
   padding: 14px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-elevated);
   cursor: pointer;
   transition: box-shadow 0.15s;
-}
-
-[data-theme='dark'] .report-summary-card {
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
 }
 
 .report-summary-card:active {
@@ -1068,17 +977,12 @@ defineExpose({
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
   margin-bottom: 8px;
 }
 
-[data-theme='dark'] .report-summary-title {
-  color: var(--text-tertiary);
-}
-
-.report-summary-title svg { color: rgba(0, 0, 0, 0.35); }
-[data-theme='dark'] .report-summary-title svg { color: rgba(255, 255, 255, 0.35); }
+.report-summary-title svg { color: var(--text-tertiary); }
 
 .report-summary-text {
   font-size: 13px;
@@ -1102,11 +1006,7 @@ defineExpose({
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.12px;
-  color: rgba(0, 0, 0, 0.55);
-}
-
-[data-theme='dark'] .report-summary-cta {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-secondary);
 }
 
 /* Generating report card */
@@ -1116,15 +1016,11 @@ defineExpose({
   border-radius: 8px;
   padding: 28px 16px;
   text-align: center;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--color-card-border);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-}
-
-[data-theme='dark'] .report-generating-card {
-  border-color: rgba(255, 255, 255, 0.10);
 }
 
 .report-generating-text {
@@ -1150,34 +1046,23 @@ defineExpose({
   padding: 24px 16px;
   text-align: center;
   cursor: pointer;
-  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border: 1px dashed var(--color-card-border);
   transition: border-color 0.15s;
 }
 
-[data-theme='dark'] .report-empty-card {
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.report-empty-card:active { border-color: rgba(0, 0, 0, 0.35); }
-[data-theme='dark'] .report-empty-card:active { border-color: rgba(255, 255, 255, 0.35); }
+.report-empty-card:active { border-color: var(--text-tertiary); }
 
 .report-empty-icon {
   width: 48px;
   height: 48px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px;
-  color: rgba(0, 0, 0, 0.40);
-}
-
-[data-theme='dark'] .report-empty-icon {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .report-empty-text {
@@ -1480,36 +1365,25 @@ defineExpose({
   border-radius: 8px;
   padding: 28px 20px 24px;
   text-align: center;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-elevated);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
 
-[data-theme='dark'] .ai-disabled-card {
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
-}
-
 .ai-disabled-icon {
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(0, 0, 0, 0.30);
+  color: var(--text-tertiary);
   margin-bottom: 4px;
-}
-
-[data-theme='dark'] .ai-disabled-icon {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.30);
 }
 
 .ai-disabled-title {
@@ -1534,7 +1408,7 @@ defineExpose({
   gap: 4px;
   padding: 8px 16px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--color-card-border);
   background: transparent;
   font-size: 13px;
   font-weight: 500;
@@ -1544,17 +1418,8 @@ defineExpose({
 }
 
 .ai-disabled-action:hover {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.25);
-}
-
-[data-theme='dark'] .ai-disabled-action {
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-[data-theme='dark'] .ai-disabled-action:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.30);
+  background: var(--bg-secondary);
+  border-color: var(--text-tertiary);
 }
 
 /* Focus rings */

@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -110,6 +110,28 @@ async function onRefresh() {
 }
 
 onMounted(async () => {
+  increment()
+  try {
+    await Promise.all([
+      dashboardStore.fetchAll().then(() => {
+        maybeShowOnboarding()
+      }),
+      authStore.user?.role === 'owner' ? choreStore.fetchPendingApprovals() : Promise.resolve(),
+      getUpcomingPayments()
+        .then((res) => {
+          upcomingPayments.value = res.data.items
+        })
+        .catch(() => {
+          // Non-critical: silently ignore if endpoint not available
+        }),
+    ])
+  } finally {
+    decrement()
+  }
+})
+
+// KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
+onActivated(async () => {
   increment()
   try {
     await Promise.all([

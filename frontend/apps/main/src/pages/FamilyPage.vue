@@ -283,7 +283,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Family' })
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
@@ -636,6 +636,19 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
 }
 
 onMounted(async () => {
+  increment()
+  try {
+    await familyStore.fetchFamily()
+    if (isOwner.value) {
+      await loadChildDashboard()
+    }
+  } finally {
+    decrement()
+  }
+})
+
+// KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
+onActivated(async () => {
   increment()
   try {
     await familyStore.fetchFamily()

@@ -140,6 +140,7 @@ onMounted(() => {
 
 <style scoped>
 .finance-coach-card {
+  display: block;
   margin: 8px 0;
 }
 .finance-coach-card :deep(.van-collapse-item__title) {
@@ -148,8 +149,11 @@ onMounted(() => {
 .finance-coach-card :deep(.van-cell__title) {
   flex: 1;
   display: flex;
-  align-items: center;
   min-width: 0;
+}
+.finance-coach-card :deep(.van-cell__value) {
+  flex: none;
+  width: 0;
 }
 .coach-header {
   display: flex;

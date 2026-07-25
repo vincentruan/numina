@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onActivated, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AssetListSkeleton from '@/components/asset/AssetListSkeleton.vue'
@@ -182,6 +182,17 @@ async function onRefresh() {
 }
 
 onMounted(async () => {
+  applyQueryTab()
+  increment()
+  try {
+    await loadHubData()
+  } finally {
+    decrement()
+  }
+})
+
+// KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
+onActivated(async () => {
   applyQueryTab()
   increment()
   try {
