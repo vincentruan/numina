@@ -1,8 +1,20 @@
 <template>
   <div class="finance-hub-page" role="main" :aria-label="t('financeHub.aria.pageTitle')" :data-active-tab="activeTab">
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <!-- Skeleton: while overview not yet loaded and no asset_count baseline -->
-      <DashboardSkeleton v-if="hubLoading && !overview" />
+      <!-- Skeleton: tab-specific layout matching the actual content structure -->
+      <div v-if="hubLoading && !overview" class="hub-skeleton-wrapper">
+        <!-- Tab bar skeleton (3 tabs) -->
+        <div class="skeleton-tab-bar">
+          <div v-for="i in 3" :key="i" class="skeleton-tab-item">
+            <van-skeleton-avatar avatar-size="18px" avatar-shape="square" animate />
+            <van-skeleton :row="1" row-width="32px" animate />
+          </div>
+        </div>
+        <!-- Tab-specific skeleton content -->
+        <AssetListSkeleton v-if="activeTab === 'assets'" />
+        <LiabilityListSkeleton v-else-if="activeTab === 'liabilities'" />
+        <WishListSkeleton v-else />
+      </div>
 
       <!-- Error state: critical fetch (overview) failed → show retry, never silent 0 -->
       <div v-else-if="overviewError" class="hub-error">
@@ -14,9 +26,6 @@
       </div>
 
       <template v-else>
-        <!-- U6 compact summary bar: net worth / liability ratio / monthly payment -->
-        <FinanceSummaryBar @navigate="onSummaryNavigate" />
-
         <!-- W5 cross-module decision-chain hint (useDebtWarning) -->
         <div v-if="debtWishHint" class="debt-wish-hint">
           <van-icon name="warning-o" />
@@ -24,16 +33,34 @@
         </div>
 
         <!-- Three sub-tabs: 资产 / 负债 / 心愿 -->
-        <van-tabs v-model:active="activeTab" shrink>
-          <van-tab :title="t('nav.assets')" name="assets">
+        <van-tabs v-model:active="activeTab" shrink class="finance-tabs">
+          <van-tab name="assets">
+            <template #title>
+              <div class="tab-title">
+                <van-icon name="gold-coin-o" />
+                <span>{{ t('nav.assets') }}</span>
+              </div>
+            </template>
             <!-- Full asset list panel (status/category/type filters + search/sort + pagination + selection) -->
             <AssetListPanel />
           </van-tab>
-          <van-tab :title="t('nav.liabilities')" name="liabilities">
+          <van-tab name="liabilities">
+            <template #title>
+              <div class="tab-title">
+                <van-icon name="bill-o" />
+                <span>{{ t('nav.liabilities') }}</span>
+              </div>
+            </template>
             <!-- Full liability list panel (active/inactive tabs + strategy card + filters + selection) -->
             <LiabilityListPanel />
           </van-tab>
-          <van-tab :title="t('nav.wishes')" name="wishes">
+          <van-tab name="wishes">
+            <template #title>
+              <div class="tab-title">
+                <van-icon name="gift-o" />
+                <span>{{ t('nav.wishes') }}</span>
+              </div>
+            </template>
             <!-- Full wish list panel (pending/realized/cancelled tabs + advice card + sort) -->
             <WishListPanel />
           </van-tab>
@@ -44,11 +71,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
-import FinanceSummaryBar from '@/components/dashboard/FinanceSummaryBar.vue'
+import AssetListSkeleton from '@/components/asset/AssetListSkeleton.vue'
+import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
+import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import AssetListPanel from '@/components/asset/AssetListPanel.vue'
 import LiabilityListPanel from '@/components/liability/LiabilityListPanel.vue'
 import WishListPanel from '@/components/wishes/WishListPanel.vue'
@@ -108,12 +136,16 @@ const debtWishHint = computed(() => {
   })
 })
 
-// --- U6 summary bar navigation ---
-function onSummaryNavigate(tab: 'assets' | 'liabilities') {
-  activeTab.value = tab
-}
-
 // --- ?tab= contract (KTD-1/U3): honor deep-link tab selection ---
+// Watch route changes so dashboard drill-down links switch tabs without remounting.
+watch(
+  () => route.query.tab,
+  (q) => {
+    if (q === 'assets' || q === 'liabilities' || q === 'wishes') {
+      activeTab.value = q
+    }
+  },
+)
 function applyQueryTab() {
   const q = route.query.tab
   if (q === 'assets' || q === 'liabilities' || q === 'wishes') {
@@ -180,5 +212,49 @@ onMounted(() => {
 
 .hub-error {
   padding: 40px 0;
+}
+
+.tab-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finance-tabs :deep(.van-tab) .tab-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finance-tabs :deep(.van-tab) .van-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* ── Skeleton wrapper ── */
+.hub-skeleton-wrapper {
+  background: var(--bg-secondary);
+}
+
+/* Skeleton tab bar — mirrors van-tabs shrink layout (icon + label per tab) */
+.skeleton-tab-bar {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 12px 16px 10px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--separator, rgba(0, 0, 0, 0.04));
+}
+.skeleton-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.skeleton-tab-item :deep(.van-skeleton) {
+  padding: 0;
+}
+.skeleton-tab-item :deep(.van-skeleton__row) {
+  height: 14px;
+  border-radius: 4px;
 }
 </style>
