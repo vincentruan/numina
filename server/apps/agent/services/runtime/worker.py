@@ -474,7 +474,12 @@ async def _run_asset_report_pipeline(
         # initiated with no natural user message. Use the slash-activation form
         # so the LLM loads asset-report/SKILL.md (not chat/SKILL.md). If the
         # backend already supplied a user message in graph_input, prefer it.
-        user_message = _SYNTHETIC_ASSET_REPORT_TRIGGER
+        # Localize the trigger based on user's language preference so the first
+        # user input the LLM sees matches the target language.
+        user_language = (record.metadata or {}).get("language")
+        user_message = _SYNTHETIC_TRIGGERS_BY_LANG.get("asset-report", {}).get(
+            user_language, _SYNTHETIC_ASSET_REPORT_TRIGGER
+        )
         if graph_input and "messages" in graph_input:
             msgs = graph_input["messages"]
             if isinstance(msgs, list) and msgs:
@@ -487,7 +492,6 @@ async def _run_asset_report_pipeline(
         # 5b. Append language instruction based on user's language preference.
         # SKILL.md is static; the LLM needs an explicit per-run directive to
         # output in the user's chosen language (not always Chinese).
-        user_language = (record.metadata or {}).get("language")
         if user_language:
             lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
@@ -719,13 +723,24 @@ _SYNTHETIC_FINANCE_COACH_TRIGGER = "/finance-coach 生成家庭财务建议"
 _SYNTHETIC_WISH_ADVICE_TRIGGER = "/wish-advice 生成心愿储蓄建议"
 
 
-# Per-user-language instructions appended to the synthetic trigger message.
-# SKILL.md is static (always Chinese examples), so the LLM needs an explicit
-# per-run directive to override the implicit language when the user chose en-US.
+# Per-user-language instructions for the synthetic trigger message.
+# SKILL.md is static; the LLM needs an explicit per-run directive to output
+# in the user's chosen language. The trigger message itself is also localized
+# so the first user input the LLM sees matches the target language.
 _LANGUAGE_INSTRUCTIONS = {
-    "en-US": "IMPORTANT: All user-visible text fields (label, narrative, suggestions, summary) MUST be written in English. Only 'key' fields use English snake_case.",
-    "zh-CN": "重要：所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用英文 snake_case。",
-    "default": "重要：所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用英文 snake_case。",
+    "en-US": "[LANGUAGE REQUIREMENT] Output language: English. All user-visible text fields (label, narrative, suggestions, summary) MUST be in English. Only 'key' fields use snake_case.",
+    "zh-CN": "[语言要求] 输出语言：中文。所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用 snake_case。",
+    "default": "[语言要求] 输出语言：中文。所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用 snake_case。",
+}
+
+# Localized synthetic triggers — the slash prefix loads the skill, the rest
+# sets the language tone for the LLM.
+_SYNTHETIC_TRIGGERS_BY_LANG = {
+    "asset-report": {
+        "en-US": "/asset-report Generate family asset report",
+        "zh-CN": "/asset-report 生成家庭资产报告",
+        "default": "/asset-report 生成家庭资产报告",
+    },
 }
 
 
