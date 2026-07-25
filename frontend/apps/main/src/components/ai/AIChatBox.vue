@@ -217,7 +217,11 @@ onMounted(async () => {
     // send it and skip the pendingMessage block (no double-send). Guard the
     // await on the source param so the no-context path stays synchronous (no
     // extra microtask that would delay initialLoading=false past one tick).
-    if (route.query.source) {
+    // Only trigger for valid A1b entity sources — 'system_default' (from
+    // AIHubPage's handleNuminaConsult) is NOT an A1b source and must not
+    // call /ai/context (which would 400 and toast "上下文加载失败").
+    const A1B_SOURCES = new Set(['liability_detail', 'wish_detail', 'liability_strategy', 'wish_advice'])
+    if (route.query.source && A1B_SOURCES.has(route.query.source as string)) {
       const a1bContext = await loadContext()
       if (a1bContext) {
         if (!familyStore.family) {
