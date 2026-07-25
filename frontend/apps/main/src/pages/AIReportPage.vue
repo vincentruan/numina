@@ -34,7 +34,7 @@
         <p class="failed-text">{{ stream.errorMessage.value || t('toast.aiGenerateFailed') }}</p>
       </template>
       <van-button plain size="small" :loading="false" @click="onGenerate()" style="margin-top: 8px">
-        {{ t('aiTask.retryBtn') }}
+        {{ t('aiTask.retry') }}
       </van-button>
     </div>
 
@@ -146,7 +146,7 @@
               <!-- Generic data rows -->
               <template v-else>
                 <div v-for="(value, key) in indicator.data" :key="key" class="data-row">
-                  <span>{{ key }}</span>
+                  <span>{{ getDataLabel(key) }}</span>
                   <span v-if="typeof value === 'number'">{{ formatValue(key, value) }}</span>
                   <span v-else>{{ value }}</span>
                 </div>
@@ -302,11 +302,20 @@ const hasIndicatorsFormat = computed(() => {
   return currentReport.value.indicators != null && currentReport.value.indicators.length > 0
 })
 
+// Get localized indicator label (overrides LLM-generated label)
+function getIndicatorLabel(key: string): string {
+  const i18nKey = `aiReport.indicatorLabel_${key}`
+  const translated = t(i18nKey)
+  // If translation exists (not the key itself), use it; otherwise fall back to LLM label
+  return translated !== i18nKey ? translated : key
+}
+
 // Render indicators with markdown narrative
 const renderedIndicators = computed(() => {
   if (!currentReport.value?.indicators) return []
   return currentReport.value.indicators.map((indicator: AIReportIndicator) => ({
     ...indicator,
+    label: getIndicatorLabel(indicator.key),
     icon: getIndicatorIcon(indicator.key),
     scoreClass: getScoreClass(indicator.score),
     narrativeHtml: DOMPurify.sanitize(marked.parse(indicator.narrative, { async: false }) as string, SUMMARY_PURIFY_CONFIG),
@@ -356,6 +365,23 @@ function formatValue(key: string, val: number): string {
   }
   // Default: format with reasonable precision
   return val >= 1000 ? val.toFixed(0) : val.toFixed(2)
+}
+
+// Map LLM-emitted snake_case data keys to localized labels. Unknown keys fall
+// back to a humanized form (e.g. "mom_change_pct" → "Mom change pct") instead
+// of rendering the raw identifier to the user.
+const DATA_LABEL_KEYS = new Set([
+  'total_assets', 'total_liabilities', 'net_worth', 'mom_change_pct',
+  'liability_ratio', 'count', 'low_usage_count', 'total_daily_cost',
+  'real_net_worth',
+])
+
+function getDataLabel(key: string): string {
+  if (DATA_LABEL_KEYS.has(key)) {
+    return t(`aiReport.dataLabel_${key}`)
+  }
+  // Humanize fallback: "some_field_name" → "Some field name"
+  return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
 }
 
 function formatDate(iso: string | null): string {
