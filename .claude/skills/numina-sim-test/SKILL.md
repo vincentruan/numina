@@ -654,7 +654,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.20, Area3: C3.1–C3.20, Area4: C4.0–C4.13, Area5: C5.1–C5.10, Area6: C6.1–C6.27)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.20, Area3: C3.1–C3.23, Area4: C4.0–C4.13, Area5: C5.1–C5.10, Area6: C6.1–C6.27)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -745,7 +745,7 @@ bsk session stop "$SID"
 |------|-------|-------|------|
 | 1 — Child app (儿童页面) | G3 | C1.1–C1.17 | [`test-cases/groups/g3-child/area1-child.md`](./test-cases/groups/g3-child/area1-child.md) |
 | 2 — Financial management (财务管理) | G1 | C2.1–C2.20 | [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) |
-| 3 — AI (PDF/报告/数鸣/对话) | G1 | C3.1–C3.20 | [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md) |
+| 3 — AI (PDF/报告/数鸣/对话) | G1 | C3.1–C3.23 | [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md) |
 | 4 — Main app nav coverage (页签+币种切换) | G2 | C4.0–C4.16 | [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md) |
 | 5 — Child app nav coverage (页签+子页面) | G3 | C5.1–C5.10 | [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md) |
 | 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | G1 | C6.1–C6.27 (D1–D7) | [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md) |

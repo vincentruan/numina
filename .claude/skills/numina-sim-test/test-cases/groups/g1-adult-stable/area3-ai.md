@@ -67,12 +67,15 @@ bsk navigate ${BASE}ai --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk click @eN --session <id>   # consult button
 # → navigates to /ai/chat?agentId=<id>
+bsk wait-ms 3s
 bsk snapshot --session <id>
 ```
 
 Assertions:
 - [ ] Navigates to `/ai/chat?agentId=<id>` (or with `thread_id` if cached session exists)
 - [ ] Chat page loads with the selected agent context
+- [ ] **数鸣智能体自动发送预设问题**：进入聊天后，数鸣智能体自动发送一条预设问题（如"帮我看看家庭财务近况，我想快速了解有没有需要关注的变化"）
+- [ ] **预设问题内容质量**：预设问题包含一句话概括 + 值得关注的发现 + 具体可操作建议（精确到金额或账户）
 - [ ] Sending a message routes through that agent's system_ids + bootstrap
 - [ ] If agent has a cached session, `thread_id` is passed in query
 - [ ] `[console]` zero errors
@@ -416,4 +419,92 @@ Assertions:
 - [ ] If a cached thread exists for the agent, `thread_id` is in the query and the conversation resumes context
 - [ ] The follow-up message routes through the agent's system_ids (数鸣 SOUL, not a generic chat)
 - [ ] No blank response on context-resume
+- [ ] `[console]` zero errors
+
+---
+
+## New cases — 响应质量 + 性能基准 + 数据准确性
+
+Covers the quality dimensions validated in manual testing 2026-07-25: response
+quality (data accuracy, analysis depth, actionable suggestions, friendly tone),
+performance baseline (response time for simple/medium/complex questions), and
+data consistency (AI response vs API return values).
+
+### C3.21 数鸣响应质量验证
+
+```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value 请帮我分析一下我们家庭目前的资产配置情况，有什么优化建议吗？ --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 30s                  # 复杂分析需要较长时间
+bsk snapshot --session <id>
+bsk screenshot --session <id> --out dogfood-output/c3.21-response-quality.png
+```
+
+Assertions:
+- [ ] **数据准确性**：响应中引用的总资产、总负债、净资产数值与 `/dashboard/overview` API 返回一致（误差 < 1%）
+- [ ] **分析深度**：响应包含多维度分析（至少 3 个维度，如资产结构、负债管理、流动性、风险保障等）
+- [ ] **建议可操作性**：优化建议具体到金额或账户（如"建议预留 ¥15-20 万应急金"，而非"建议增加现金储备"）
+- [ ] **语气友好度**：语气温暖亲切，使用 emoji 增强可读性（如"🏠 家庭财务全景"、"💡 优化建议"）
+- [ ] **格式美观**：使用表格展示数据（如资产配置表、负债结构表），使用图表可视化（如饼图展示资产分布）
+- [ ] **异常识别**：如果系统中有测试数据（如 C1 开头的测试资产），响应中提醒清理
+- [ ] **后续引导**：响应末尾提供 2-3 个后续问题建议（如"如何快速更新负债余额？"）
+- [ ] `[console]` zero errors
+
+### C3.22 AI 响应性能基准
+
+```
+# 简单问题
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value 你好 --session <id>
+bsk click @eM --session <id>
+# 记录开始时间，轮询直到响应完成
+bsk wait-ms 5s
+bsk snapshot --session <id>
+# 记录简单问题响应时间
+
+# 中等问题
+bsk fill @eN --value 分析我的资产配置 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 15s
+bsk snapshot --session <id>
+# 记录中等问题响应时间
+
+# 复杂问题
+bsk fill @eN --value 深度研究我的资产负债结构并给出三套优化方案 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 30s
+bsk snapshot --session <id>
+# 记录复杂问题响应时间
+```
+
+Assertions:
+- [ ] **简单问题**（如"你好"）响应时间 < 5s
+- [ ] **中等问题**（如"分析资产配置"）响应时间 < 30s
+- [ ] **复杂问题**（如"深度研究+三套方案"）响应时间 < 60s
+- [ ] 响应时间超过 60s 时，显示"生成中"进度提示（非卡死状态）
+- [ ] 每个响应阶段（简单/中等/复杂）的 Token 消耗在合理范围内（简单 < 5K，中等 5K-15K，复杂 15K-30K）
+- [ ] `[console]` zero errors
+
+### C3.23 AI 响应数据准确性
+
+```
+bsk navigate ${BASE}ai/chat --session <id> --wait-until networkidle
+bsk fill @eN --value 我的总资产和净资产是多少 --session <id>
+bsk click @eM --session <id>
+bsk wait-ms 8s
+bsk snapshot --session <id>
+# 同时调用 API 获取真实数据
+# API_RESPONSE=$(curl -s -H "$AUTH" "$API_BASE/dashboard/overview")
+# API_TOTAL_ASSETS=$(echo "$API_RESPONSE" | jq -r '.data.total_assets')
+# API_NET_WORTH=$(echo "$API_RESPONSE" | jq -r '.data.net_worth')
+# 对比 AI 响应中的数值与 API 返回
+```
+
+Assertions:
+- [ ] AI 响应中的**总资产**数值与 `/dashboard/overview` API 返回的 `total_assets` 一致（误差 < 1%）
+- [ ] AI 响应中的**净资产**数值与 `/dashboard/overview` API 返回的 `net_worth` 一致（误差 < 1%）
+- [ ] AI 响应中的**总负债**数值与 `/dashboard/overview` API 返回的 `total_liabilities` 一致（误差 < 1%）
+- [ ] AI 响应中引用的具体资产/负债名称与系统数据一致（无幻觉，如不会编造不存在的资产）
+- [ ] 如果用户询问具体资产详情（如"茅台股票多少钱"），AI 响应与 `/assets/:id` API 返回一致
 - [ ] `[console]` zero errors
