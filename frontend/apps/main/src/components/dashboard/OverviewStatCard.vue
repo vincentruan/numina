@@ -1,15 +1,5 @@
 <template>
-  <BorderGlow
-    class="overview-stat-card"
-    :edge-sensitivity="25"
-    :glow-color="'240 60 75'"
-    :background-color="glowBg"
-    :border-radius="0"
-    :glow-radius="24"
-    :glow-intensity="0.6"
-    :cone-spread="20"
-    :colors="glowColors"
-  >
+  <div class="overview-stat-card">
     <!-- Net worth hero -->
     <div class="osc-main">
       <!-- Faded upward-growth arrow watermark on the right — visual beacon for the trend entry -->
@@ -91,14 +81,13 @@
         </div>
       </router-link>
     </div>
-  </BorderGlow>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
-import BorderGlow from '@/components/common/BorderGlow.vue'
 import { useCurrency } from '@/composables/useCurrency'
 import { useMonthlyPaymentTotal } from '@/composables/useMonthlyPaymentTotal'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -114,15 +103,6 @@ const wishStore = useWishStore()
 const overview = computed(() => dashboardStore.overview)
 const liabilities = computed(() => liabilityStore.liabilities)
 const wishes = computed(() => wishStore.wishes)
-
-// BorderGlow theme-aware props
-const isDark = computed(() => document.documentElement.getAttribute('data-theme') === 'dark')
-const glowBg = computed(() => isDark.value ? '#010120' : '#ffffff')
-const glowColors = computed(() =>
-  isDark.value
-    ? ['#bdbbff', '#a0c3ff', '#ef2cc1']
-    : ['#f472b6', '#bdbbff', '#38bdf8']
-)
 
 // Per-domain loading / error. Stores expose only `loading` (fetch throws on failure),
 // so error is tracked here by catching the fetch rejection.
@@ -198,13 +178,11 @@ onMounted(() => {
 
 <style scoped>
 .overview-stat-card {
-  /* Background handled by BorderGlow wrapper */
+  background: var(--card-bg);
   padding: 20px 16px 16px;
-  color: #000000;
-  position: relative;
-}
-[data-theme='dark'] .overview-stat-card {
   color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
 }
 
 .osc-main {
@@ -216,11 +194,8 @@ onMounted(() => {
   font-weight: 500;
   letter-spacing: 0.055px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
-  font-family: 'Georgia', monospace;
-}
-[data-theme='dark'] .osc-label {
   color: var(--text-tertiary);
+  font-family: 'Georgia', monospace;
 }
 .osc-amount {
   margin: 6px 0 8px;
@@ -229,14 +204,11 @@ onMounted(() => {
   align-items: baseline;
 }
 .osc-amount :deep(.money-display) {
-  color: #000000;
+  color: var(--text-primary);
   font-size: clamp(28px, 8vw, 36px);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.05;
-}
-[data-theme='dark'] .osc-amount :deep(.money-display) {
-  color: var(--text-primary);
 }
 
 /* Faded upward-growth arrow on the right — beckons the eye toward the trend entry */
@@ -265,15 +237,11 @@ onMounted(() => {
   flex-shrink: 0;
   padding: 4px 8px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   transition: background 0.15s ease;
   position: relative;
   overflow: hidden;
-}
-[data-theme='dark'] .trend-entry {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.12);
 }
 .trend-entry:active {
   transform: scale(0.95);
@@ -285,22 +253,24 @@ onMounted(() => {
   z-index: 1;
 }
 
-/* 扫光效果 — a soft highlight band sweeps across the button left→right, looping */
+/* Shimmer — a soft highlight band sweeps across the button left→right, then rests */
 .trend-entry::after {
   content: '';
   position: absolute;
   top: 0;
-  left: -120%;
-  width: 60%;
+  left: -150%;
+  width: 80%;
   height: 100%;
   background: linear-gradient(
     100deg,
     transparent 0%,
+    rgba(255, 255, 255, 0.18) 30%,
     rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.18) 70%,
     transparent 100%
   );
-  transform: skewX(-18deg);
-  animation: trend-entry-sweep 3.2s ease-in-out infinite;
+  transform: skewX(-20deg);
+  animation: trend-entry-shimmer 3.6s ease-in-out infinite;
   pointer-events: none;
   z-index: 0;
 }
@@ -308,20 +278,22 @@ onMounted(() => {
   background: linear-gradient(
     100deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0.1) 30%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0.1) 70%,
     transparent 100%
   );
 }
 
-@keyframes trend-entry-sweep {
+@keyframes trend-entry-shimmer {
   0% {
-    left: -120%;
+    left: -150%;
   }
-  55% {
-    left: 160%;
+  50% {
+    left: 180%;
   }
   100% {
-    left: 160%;
+    left: 180%;
   }
 }
 
@@ -334,19 +306,13 @@ onMounted(() => {
 .trend-icon {
   width: 16px;
   height: 16px;
-  color: rgba(0, 0, 0, 0.55);
-}
-[data-theme='dark'] .trend-icon {
-  color: rgba(255, 255, 255, 0.60);
+  color: var(--text-secondary);
 }
 
 .trend-text {
   font-size: 12px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.65);
-}
-[data-theme='dark'] .trend-text {
-  color: rgba(255, 255, 255, 0.70);
+  color: var(--text-secondary);
 }
 
 /* Responsive fallback: stack on very narrow screens */
@@ -368,24 +334,16 @@ onMounted(() => {
   font-size: 13px;
 }
 .osc-daily {
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.65);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--color-card-border);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
 }
-[data-theme='dark'] .osc-daily {
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(255, 255, 255, 0.70);
-  border-color: rgba(255, 255, 255, 0.12);
-}
 .osc-count {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.50);
-}
-[data-theme='dark'] .osc-count {
   color: var(--text-tertiary);
 }
 .osc-change.positive {
@@ -407,19 +365,11 @@ onMounted(() => {
 .osc-detail {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
   border-radius: 8px;
   margin-top: 12px;
-  box-shadow: rgba(1, 1, 32, 0.08) 0px 2px 8px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   overflow: hidden;
-}
-[data-theme='dark'] .osc-detail {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: rgba(1, 1, 32, 0.4) 0px 2px 8px;
 }
 
 .osc-item {
@@ -441,31 +391,22 @@ onMounted(() => {
 }
 /* Hairline separators between the 2×2 cells (right column + bottom row). */
 .osc-item:nth-child(odd) {
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: 1px solid var(--separator);
 }
 .osc-item:nth-child(-n + 2) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-[data-theme='dark'] .osc-item:nth-child(odd) {
-  border-right-color: rgba(255, 255, 255, 0.10);
-}
-[data-theme='dark'] .osc-item:nth-child(-n + 2) {
-  border-bottom-color: rgba(255, 255, 255, 0.10);
+  border-bottom: 1px solid var(--separator);
 }
 
 .osc-item-label {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   flex-wrap: wrap;
-}
-[data-theme='dark'] .osc-item-label {
-  color: var(--text-tertiary);
 }
 .osc-item-value {
   min-height: 22px;
@@ -474,13 +415,10 @@ onMounted(() => {
   justify-content: center;
 }
 .osc-item-value :deep(.money-display) {
-  color: #000000;
+  color: var(--text-primary);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.16px;
-}
-[data-theme='dark'] .osc-item-value :deep(.money-display) {
-  color: var(--text-primary);
 }
 
 .osc-estimate-tag {
