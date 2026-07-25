@@ -30,7 +30,7 @@ from apps.backend.app.services.ai_result_parser import (
 )
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
-from apps.backend.app.services.finance_coach_cache import CAPABILITY_TTL
+from apps.backend.app.services.finance_coach_cache import SKILL_TTL
 from packages.core.path_manager import PathManager
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
@@ -46,8 +46,8 @@ class MarkdownResponse(BaseModel):
 
 
 def _latest_report(family_id: str, db: Session) -> AIReport | None:
-    from apps.backend.app.services.finance_coach_cache import latest_by_capability
-    return latest_by_capability(db, family_id, "report")
+    from apps.backend.app.services.finance_coach_cache import latest_by_skill
+    return latest_by_skill(db, family_id, "report")
 
 
 # U4 step 6: report cache TTL. A trigger within this window returns the cached
@@ -56,10 +56,10 @@ def _latest_report(family_id: str, db: Session) -> AIReport | None:
 # path runs schema validation on write, and the frontend DOMPurify is the
 # render-time mitigation; server-side re-validation on cache hit is tracked
 # separately as defense-in-depth.
-# Plan A T7: TTL now lives in the capability-scoped map (CAPABILITY_TTL); keep
+# Plan A T7: TTL now lives in the skill-scoped map (SKILL_TTL); keep
 # REPORT_CACHE_TTL as an alias so the existing `age < REPORT_CACHE_TTL` check
 # in trigger_generate_events preserves identical report behavior.
-REPORT_CACHE_TTL = CAPABILITY_TTL["report"]  # keep existing report behavior
+REPORT_CACHE_TTL = SKILL_TTL["report"]  # keep existing report behavior
 
 
 @router.get("")
@@ -98,7 +98,7 @@ async def _stream_asset_report_sse(
         async with agent_client.stream(
             "POST",
             agent_url,
-            json={"family_id": str(family_id), "user_id": str(user_id)},
+            json={"family_id": str(family_id), "user_id": str(user_id), "language": current_user.language},
         ) as resp:
             if resp.status_code != 200:
                 body = await resp.aread()
@@ -193,7 +193,7 @@ async def trigger_generate_events(
         if any_running:
             task = AITaskService.create_queued_task(
                 family_id=current_user.family_id,
-                capability="report",
+                skill_id="report",
                 session_id=session.id,
                 db=db,
             )
@@ -203,7 +203,7 @@ async def trigger_generate_events(
             )
         task = AITaskService.create_task(
             family_id=current_user.family_id,
-            capability="report",
+            skill_id="report",
             session_id=session.id,
             db=db,
         )

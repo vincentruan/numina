@@ -233,6 +233,7 @@ class AssetReportRunRequest(BaseModel):
 
     family_id: str
     user_id: str | None = None
+    language: str | None = None
     input: dict[str, Any] | None = None
     on_disconnect: str = "cancel"
 
@@ -261,7 +262,7 @@ async def trigger_asset_report_run(
         assistant_id=None,
         input=body.input,
         config=None,
-        metadata={"app": "asset-report"},
+        metadata={"app": "asset-report", "language": body.language},
         on_disconnect=body.on_disconnect,
         multitask_strategy="reject",
     )
