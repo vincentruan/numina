@@ -504,6 +504,7 @@ export default {
     progressTargetYears: 'Target: {years}y',
     progressRemaining: '{days}d left',
     progressRemainingYears: '{years}y left',
+    sortLabel: 'Sort',
     sortByValue: 'By Value',
     sortByDate: 'By Date',
     sortByName: 'By Name',

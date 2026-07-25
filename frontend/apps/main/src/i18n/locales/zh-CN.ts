@@ -769,6 +769,7 @@ export default {
     progressTargetYears: '目标：{years}年',
     progressRemaining: '还剩{days}天',
     progressRemainingYears: '还剩{years}年',
+    sortLabel: '排序',
     sortByValue: '按价值',
     sortByDate: '按日期',
     sortByName: '按名称',

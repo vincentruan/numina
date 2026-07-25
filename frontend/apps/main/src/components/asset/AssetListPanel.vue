@@ -695,6 +695,9 @@ onMounted(() => {
   window.addEventListener('scroll', onScroll, { passive: true })
   // Load category counts for secondary filter nav on initial render
   dashboardStore.fetchCategoryCounts(activeStatus.value || 'in_use')
+  // Load initial asset page — required because van-list is gated by
+  // v-if="filteredByCategoryAssets.length" and never fires @load on empty list.
+  dashboardStore.fetchAssetsPage(activeStatus.value || 'in_use', 1, 20, '')
 })
 
 onUnmounted(() => {
