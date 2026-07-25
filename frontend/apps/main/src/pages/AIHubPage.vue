@@ -6,8 +6,17 @@
     <!-- Actual Content -->
     <template v-else>
     <!-- Header -->
-    <div class="hub-header">
-      <div class="hub-header-blob" aria-hidden="true"></div>
+    <BorderGlow
+      class="hub-header"
+      :edge-sensitivity="25"
+      :glow-color="'240 60 75'"
+      :background-color="glowBg"
+      :border-radius="0"
+      :glow-radius="24"
+      :glow-intensity="0.6"
+      :cone-spread="20"
+      :colors="glowColors"
+    >
       <div class="hub-header-main">
         <div class="hub-greeting">
           <span class="hub-greeting-label">{{ t('aiHub.title') }}</span>
@@ -88,7 +97,7 @@
           </template>
         </div>
       </div>
-    </div>
+    </BorderGlow>
 
     <!-- Report summary card -->
     <div v-if="currentReport" class="report-summary-card" role="button" tabindex="0" :aria-label="t('aiHub.viewFullReport')" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
@@ -289,6 +298,7 @@ import { useReportStream } from '@/composables/useReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
+import BorderGlow from '@/components/common/BorderGlow.vue'
 import IIcon from '@/components/IIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
@@ -298,6 +308,7 @@ import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const NUMINA_AGENT_NAME = 'numina'
 
@@ -308,6 +319,7 @@ const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
 const stream = useReportStream()
+const { increment, decrement } = usePageLoading()
 const isOwner = authStore.user?.role === 'owner'
 
 const currentReport = ref<AIReport | null>(null)
@@ -428,6 +440,15 @@ function submitChatFromInput(payload: SubmitPayload) {
 }
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
+
+// BorderGlow theme-aware props
+const isDark = computed(() => document.documentElement.getAttribute('data-theme') === 'dark')
+const glowBg = computed(() => isDark.value ? '#010120' : '#ffffff')
+const glowColors = computed(() =>
+  isDark.value
+    ? ['#bdbbff', '#a0c3ff', '#ef2cc1']
+    : ['#f472b6', '#bdbbff', '#38bdf8']
+)
 
 const displayScore = computed(() => currentReport.value?.overall_score ?? '?')
 
@@ -552,6 +573,14 @@ async function generateReport() {
 
 async function refreshReport(silent?: boolean) {
   if (reportLoading.value) return // avoid duplicate with scheduler
+  // Save old report so we can restore it on failure (otherwise the user
+  // loses the existing report if the refresh fails).
+  const prevReport = currentReport.value
+  const prevGeneratedAt = reportGeneratedAt.value
+  // Clear old report so the v-if chain falls through to the generating card
+  // (v-if="currentReport" would otherwise keep showing the stale summary).
+  currentReport.value = null
+  reportGeneratedAt.value = null
   if (!silent) reportLoading.value = true
   stream.reset()
   try {
@@ -563,6 +592,9 @@ async function refreshReport(silent?: boolean) {
       reportGeneratedAt.value = stream.generatedAt.value
     }
   } catch {
+    // Restore old report on failure so the user doesn't lose it.
+    currentReport.value = prevReport
+    reportGeneratedAt.value = prevGeneratedAt
     if (!silent) showFailToast(t('toast.refreshFailed'))
   } finally {
     if (!silent) reportLoading.value = false
@@ -616,9 +648,14 @@ function handleAgentEdit(agent: Agent) {
 }
 
 onMounted(async () => {
-  await aiStore.fetchConfig()
-  await agentStore.loadAgents()
-  await loadReport()
+  increment()
+  try {
+    await aiStore.fetchConfig()
+    await agentStore.loadAgents()
+    await loadReport()
+  } finally {
+    decrement()
+  }
   initialLoading.value = false
 })
 
@@ -651,44 +688,15 @@ defineExpose({
   padding-bottom: 140px;
 }
 
-/* ── Header: Pastel Cloud Gradient (mirrors NetWorthCard) ── */
+/* ── Header: BorderGlow wrapper ── */
 .hub-header {
   position: relative;
   padding: 20px 16px 16px;
-  background:
-    linear-gradient(135deg,
-      rgba(239, 44, 193, 0.10) 0%,
-      rgba(189, 187, 255, 0.18) 45%,
-      rgba(160, 195, 255, 0.14) 100%),
-    #ffffff;
   color: #000000;
-  overflow: hidden;
 }
 
 [data-theme='dark'] .hub-header {
-  background:
-    linear-gradient(135deg,
-      rgba(189, 187, 255, 0.08) 0%,
-      rgba(189, 187, 255, 0.04) 50%,
-      transparent 100%),
-    #010120;
   color: #ffffff;
-}
-
-/* Decorative blob */
-.hub-header-blob {
-  position: absolute;
-  top: -40px;
-  right: -30px;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(189, 187, 255, 0.22) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-[data-theme='dark'] .hub-header-blob {
-  background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
 }
 
 /* Main row: greeting + score ring */
