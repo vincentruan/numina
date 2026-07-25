@@ -600,11 +600,23 @@ async def get_artifact(
         # "public/chat/SKILL.md" → builtin/skills/chat/SKILL.md.
         # Try both with and without the first segment (category prefix).
         skills_rel = Path(decoded_filepath)
-        possible_paths.append(builtin_skills_root / skills_rel)
+        candidates = [
+            builtin_skills_root / skills_rel,
+        ]
         if len(skills_rel.parts) > 1:
             # Strip category prefix (public/ or private/)
-            possible_paths.append(builtin_skills_root / Path(*skills_rel.parts[1:]))
-        allowed_dirs.append(builtin_skills_root.resolve())
+            candidates.append(builtin_skills_root / Path(*skills_rel.parts[1:]))
+        # Security: lexical prefix check is sufficient (no .. in decoded path,
+        # path constructed from root + relative). Do NOT use resolve() here
+        # because symlinks inside may point to external volumes, breaking
+        # resolve()-based is_relative_to across mount points.
+        for cand in candidates:
+            if cand.is_relative_to(builtin_skills_root) and cand.exists():
+                artifact_path = cand
+                break
+        if artifact_path is None:
+            logger.warning("artifact not found: session=%s family=%s filepath=%s", session_id, family_id, decoded_filepath)
+            raise AppError(ErrorCode.NOT_FOUND)
     else:
         possible_paths = [
             # Per-thread sandbox outputs (primary — agent writes with thread_id here)
@@ -629,22 +641,23 @@ async def get_artifact(
         if family_threads.exists():
             allowed_dirs.append(family_threads.resolve())
 
-    artifact_path = None
-    for candidate_path in possible_paths:
-        try:
-            resolved = candidate_path.resolve()
-            # Security: resolved path must be within allowed directories
-            if resolved.exists() and any(
-                resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()
-            ):
-                artifact_path = resolved
-                break
-        except (ValueError, OSError):
-            continue
+    if not is_skills_path:
+        artifact_path = None
+        for candidate_path in possible_paths:
+            try:
+                resolved = candidate_path.resolve()
+                # Security: resolved path must be within allowed directories
+                if resolved.exists() and any(
+                    resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()
+                ):
+                    artifact_path = resolved
+                    break
+            except (ValueError, OSError):
+                continue
 
-    if artifact_path is None:
-        logger.warning("artifact not found: session=%s family=%s filepath=%s", session_id, family_id, decoded_filepath)
-        raise AppError(ErrorCode.NOT_FOUND)
+        if artifact_path is None:
+            logger.warning("artifact not found: session=%s family=%s filepath=%s", session_id, family_id, decoded_filepath)
+            raise AppError(ErrorCode.NOT_FOUND)
 
     # Read file content
     try:
