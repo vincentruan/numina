@@ -3,6 +3,8 @@
 Centralizes ID-to-string conversions for JWT payloads, eliminating scattered str() calls.
 """
 
+from typing import Any
+
 from apps.backend.app.models.user import User
 
 

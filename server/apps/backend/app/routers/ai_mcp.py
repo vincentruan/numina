@@ -63,7 +63,7 @@ def _decrypt_env_vars(server: FamilyMCPServer) -> dict[str, str]:
         return {}
     try:
         parsed: dict[str, str] = json.loads(raw)
-    return parsed
+        return parsed
     except Exception:
         return {}
 
