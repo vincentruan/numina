@@ -48,6 +48,12 @@ const router = createRouter({
       meta: { guest: true }
     },
     {
+      path: '/logout',
+      name: 'Logout',
+      component: () => import('@/pages/LogoutPage.vue'),
+      meta: { guest: true }
+    },
+    {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
       children: [
