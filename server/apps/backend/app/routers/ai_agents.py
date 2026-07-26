@@ -72,6 +72,18 @@ def list_agents(
         .order_by(AIAgent.display_order, AIAgent.created_at)
         .all()
     )
+    # Custom agents are gated by is_published: drafts are only visible to
+    # the creator (for debugging) and the family owner. Published custom
+    # agents are visible to any adult in the family.
+    is_owner = current_user.role == "owner"
+    agents = [
+        a
+        for a in agents
+        if a.agent_type == "system"
+        or a.is_published
+        or a.created_by == current_user.id
+        or is_owner
+    ]
     system = [_to_response(a, current_user) for a in agents if a.agent_type == "system"]
     custom = [_to_response(a, current_user) for a in agents if a.agent_type == "custom"]
     return AgentListGroupedResponse(
@@ -195,7 +207,7 @@ def toggle_agent(
         raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体不可禁用")
     if agent.family_id != 0 and agent.family_id != current_user.family_id:
         raise AppError(ErrorCode.NOT_FOUND)
-    agent.is_enabled = enabled
+    agent.is_enabled = enabled  # type: ignore[assignment]
     db.commit()
     db.refresh(agent)
     return _to_response(agent, current_user)

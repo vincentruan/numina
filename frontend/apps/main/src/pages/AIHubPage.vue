@@ -370,8 +370,9 @@ const numinaAgent = computed(() =>
 )
 
 // Agent choices for picker - only actual agents, not apps like Time Machine
+// Built-in agents: only 小鸣 (numina) is suitable for chat; ignore other system agents.
 const agentChoices = computed<Agent[]>(() => [
-  ...agentStore.systemAgents.filter((a) => a.is_enabled),
+  ...agentStore.systemAgents.filter((a) => a.is_enabled && a.agent_name === NUMINA_AGENT_NAME),
   ...agentStore.customAgents.filter((a) => a.is_enabled),
 ])
 

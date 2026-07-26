@@ -13,6 +13,7 @@ export interface Agent {
   tool_groups: string[] | null
   agent_type: 'system' | 'custom'
   is_enabled: boolean
+  is_published: boolean
   display_order: number
   created_by: string | null
   created_at: string
@@ -44,6 +45,7 @@ export interface AgentCreatePayload {
   model?: string
   subagent_enabled?: boolean
   tool_groups?: string[]
+  is_published?: boolean
 }
 
 export interface AgentUpdatePayload {
@@ -57,4 +59,5 @@ export interface AgentUpdatePayload {
   subagent_enabled?: boolean
   tool_groups?: string[]
   display_order?: number
+  is_published?: boolean
 }
