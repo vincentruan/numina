@@ -3,6 +3,7 @@
 import contextlib
 import json
 import logging
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ async def parse_holdings_from_text(text: str, llm) -> dict:
         if cleaned.startswith("```"):
             lines = cleaned.split("\n")
             cleaned = "\n".join(lines[1:-1]) if len(lines) > 2 else cleaned
-        return json.loads(cleaned)
+        return cast("dict[str, Any]", json.loads(cleaned))
 
     logger.warning(f"[import_parse] LLM returned non-JSON: {raw[:200]}")
     return {"source": "", "report_date": None, "items": []}

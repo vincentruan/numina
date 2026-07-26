@@ -103,7 +103,7 @@ def resolve_tool_metadata(tool_name: str) -> tuple[str, str, str, str]:
         suffix = tool_name.rsplit("_", 1)[-1]
         if suffix in _SUFFIX_MATCH_WHITELIST:
             return _TOOL_REGISTRY[suffix]
-    return ("unknown", tool_name, "tool", None)
+    return ("unknown", tool_name, "tool", "")
 
 
 def classify_message(msg: Any) -> str:

@@ -88,9 +88,9 @@ def downgrade() -> None:
         ('sell_fee', sa.FLOAT()),
     ]:
         if not _has_column('assets', col):
-            op.add_column('assets', sa.Column(col, col_type, nullable=True))
+            op.add_column('assets', sa.Column(col, col_type, nullable=True))  # type: ignore[arg-type]
 
-    for col, col_type, kw in [
+    for col, col_type, kw in [  # type: ignore[arg-type]
         ('coin_copper_to_silver', sa.INTEGER(), {'server_default': sa.text('(10)'), 'nullable': False}),
         ('coin_silver_to_gold', sa.INTEGER(), {'server_default': sa.text('(10)'), 'nullable': False}),
         ('ai_model_id', sa.VARCHAR(length=100), {'nullable': True}),
@@ -118,4 +118,4 @@ def downgrade() -> None:
         ('ai_vision_test_success', sa.BOOLEAN(), {'nullable': True}),
     ]:
         if not _has_column('families', col):
-            op.add_column('families', sa.Column(col, col_type, **kw))
+            op.add_column('families', sa.Column(col, col_type, **kw))  # type: ignore[arg-type]

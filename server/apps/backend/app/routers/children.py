@@ -28,7 +28,7 @@ def create_child(
     user: User = Depends(require_adult),
 ):
     _require_owner(user)
-    child = children_service.create_child(db, user.family_id, req)
+    child = children_service.create_child(db, str(user.family_id), req)
     return ChildResponse.model_validate(child)
 
 
@@ -37,50 +37,50 @@ def list_children(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    children = children_service.list_children(db, user.family_id)
+    children = children_service.list_children(db, str(user.family_id))
     return [ChildResponse.model_validate(c) for c in children]
 
 
 @router.patch("/children/{child_id}", response_model=ChildResponse)
 def update_child(
-    child_id: int,
+    child_id: str,
     req: UpdateChildRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
     _require_owner(user)
-    child = children_service.update_child(db, child_id, user.family_id, req)
+    child = children_service.update_child(db, child_id, str(user.family_id), req)
     return ChildResponse.model_validate(child)
 
 
 @router.delete("/children/{child_id}", status_code=204)
 def deactivate_child(
-    child_id: int,
+    child_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
     _require_owner(user)
-    children_service.deactivate_child(db, child_id, user.family_id)
+    children_service.deactivate_child(db, child_id, str(user.family_id))
     return Response(status_code=204)
 
 
 @router.post("/children/{child_id}/unlock")
 def unlock_child_pin(
-    child_id: int,
+    child_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
     _require_owner(user)
-    children_service.unlock_child_pin(db, child_id, user.family_id)
+    children_service.unlock_child_pin(db, child_id, str(user.family_id))
     return {"message": "已解锁"}
 
 
 @router.post("/children/{child_id}/force-logout")
 def force_logout_child(
-    child_id: int,
+    child_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
     _require_owner(user)
-    children_service.force_logout_child(db, child_id, user.family_id)
+    children_service.force_logout_child(db, child_id, str(user.family_id))
     return {"message": "已强制退出"}

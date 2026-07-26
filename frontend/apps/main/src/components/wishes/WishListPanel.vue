@@ -530,7 +530,14 @@ defineExpose({
 }
 
 .card-arrow {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  opacity: 0.6;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.wish-item:active .card-arrow {
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 /* Bottom row: badge + category + desc */

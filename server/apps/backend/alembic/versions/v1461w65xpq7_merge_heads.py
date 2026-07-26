@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'v1461w65xpq7'
-down_revision: Union[str, None] = ('u1350v54wop6', 'w0159x32vnm9')
+down_revision: tuple[str, ...] = ('u1350v54wop6', 'w0159x32vnm9')  # type: ignore[assignment]
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -41,7 +41,7 @@ def _has_table(name: str) -> bool:
 
 def _columns(table: str) -> set[str]:
     bind = op.get_bind()
-    return {c["name"] for c in bind.dialect.get_columns(bind, table)}
+    return {c["name"] for c in bind.dialect.get_columns(bind, table) if c.get("name") is not None}
 
 
 def _index_names(table: str) -> set[str]:

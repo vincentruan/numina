@@ -53,7 +53,7 @@ def revoke_jti_atomic(jti: str, ttl_seconds: float) -> bool:
             {"jti": jti, "revoked_at": now, "expires_at": expires_at},
         )
         db.commit()
-        return result.rowcount == 1
+        return result.rowcount == 1  # type: ignore[no-any-return]
     finally:
         db.close()
 

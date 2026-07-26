@@ -53,7 +53,7 @@ except ImportError:
 try:
     from apps.agent.services.orchestrator import _fire_and_forget, _select_model
 except ImportError:
-    _select_model = None
+    _select_model = None  # type: ignore[assignment]
     _fire_and_forget = None  # type: ignore[assignment]
 
 

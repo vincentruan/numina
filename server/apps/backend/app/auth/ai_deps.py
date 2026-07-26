@@ -92,7 +92,7 @@ def verify_agent_token(
                 detail=f"agent_id={request.state.agent_id} path={request.url.path}",
                 db=db,
             )
-            return jwt_family_id
+            return jwt_family_id  # type: ignore[no-any-return]
     except PyJWTError:
         pass  # Fall through to legacy HMAC check
 

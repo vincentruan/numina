@@ -56,7 +56,7 @@ def get_balance(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    balance = coin_service.get_balance(db, child.id)
+    balance = coin_service.get_balance(db, str(child.id))
     return {"balance": balance}
 
 
@@ -65,7 +65,7 @@ def get_ledger(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    txs = coin_service.list_transactions(db, child.id, child.family_id)
+    txs = coin_service.list_transactions(db, str(child.id), str(child.family_id))
     result = []
     for tx in txs:
         data = CoinTransactionResponse.model_validate(tx)
@@ -110,5 +110,5 @@ def gift_coins(
     child: User = Depends(get_current_child_user),
 ):
     """Send coins to a sibling."""
-    debit, _, recipient_name = coin_service.gift_coins(db, child, req.to_child_id, req.amount, req.emoji_reason)
+    debit, _, recipient_name = coin_service.gift_coins(db, child, str(req.to_child_id), req.amount, req.emoji_reason)
     return {"sent_amount": req.amount, "to_display_name": recipient_name}

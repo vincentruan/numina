@@ -12,6 +12,8 @@ backend 端点验证这两个 header，强制以 family_id 为边界过滤数据
 import logging
 import re
 
+from typing import Any, cast
+
 import httpx
 
 from apps.agent.app.config import settings
@@ -139,7 +141,7 @@ class BackendClient:
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict, _unwrap(resp))
 
     async def get_agent_by_name(self, agent_name: str) -> dict:
         """Fetch an agent config by name (system agent family_id=0 preferred)."""
@@ -150,7 +152,7 @@ class BackendClient:
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict, _unwrap(resp))
 
     async def get_enabled_skills(self) -> list[dict]:
         """Fetch enabled skill registry records for the family."""
@@ -349,9 +351,9 @@ def _make_headers(family_id: str) -> dict[str, str]:
 
 def _unwrap(resp: httpx.Response) -> dict | list:
     """Unwrap the standard backend envelope {"code": "OK", "data": ...}."""
-    body = resp.json()
+    body: dict | list = cast(dict | list, resp.json())
     if isinstance(body, dict) and "data" in body:
-        return body["data"]
+        return cast(dict | list, body["data"])
     return body
 
 
@@ -375,7 +377,7 @@ async def get_dashboard_overview(family_id: str) -> dict:
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(dict, _unwrap(resp))
 
 
 async def get_dashboard_allocation(family_id: str) -> dict:
@@ -398,7 +400,7 @@ async def get_dashboard_allocation(family_id: str) -> dict:
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(dict, _unwrap(resp))
 
 
 async def get_dashboard_trend(family_id: str, period: str = "year") -> dict:
@@ -423,7 +425,7 @@ async def get_dashboard_trend(family_id: str, period: str = "year") -> dict:
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(dict, _unwrap(resp))
 
 
 async def get_dashboard_low_usage(family_id: str) -> list:
@@ -446,7 +448,7 @@ async def get_dashboard_low_usage(family_id: str) -> list:
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(list, _unwrap(resp))
 
 
 async def get_dashboard_daily_cost(family_id: str) -> list:
@@ -469,7 +471,7 @@ async def get_dashboard_daily_cost(family_id: str) -> list:
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(list, _unwrap(resp))
 
 
 async def get_liabilities(family_id: str) -> list:
@@ -492,7 +494,7 @@ async def get_liabilities(family_id: str) -> list:
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(list, _unwrap(resp))
 
 
 async def get_assets_expiring_soon(family_id: str, days_threshold: int = 180) -> list:
@@ -517,7 +519,7 @@ async def get_assets_expiring_soon(family_id: str, days_threshold: int = 180) ->
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(list, _unwrap(resp))
 
 
 async def get_family_ai_config(family_id: str) -> dict:
@@ -545,7 +547,7 @@ async def get_family_ai_config(family_id: str) -> dict:
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict, _unwrap(resp))
 
 
 async def get_ai_enabled_families() -> list[str]:
@@ -569,7 +571,7 @@ async def get_ai_enabled_families() -> list[str]:
             },
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(list[str], _unwrap(resp))
 
 
 async def upsert_session(
@@ -645,7 +647,7 @@ async def persist_report_result(
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()
-    return resp.json()
+    return cast(dict, resp.json())
 
 
 async def update_session(
@@ -708,7 +710,7 @@ async def get_session(family_id: str, session_id: str) -> dict | None:
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
-    return _unwrap(resp)
+    return cast(dict | None, _unwrap(resp))
 
 
 async def delete_session(family_id: str, session_id: str) -> bool:
@@ -761,7 +763,7 @@ async def report_circuit_event(
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict, _unwrap(resp))
 
 
 async def reset_circuit_success(family_id: str, config_id: str) -> dict:
@@ -775,7 +777,7 @@ async def reset_circuit_success(family_id: str, config_id: str) -> dict:
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict, _unwrap(resp))
 
 
 async def get_user(family_id: str, user_id: str) -> dict | None:
@@ -788,7 +790,7 @@ async def get_user(family_id: str, user_id: str) -> dict | None:
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict | None, _unwrap(resp))
     except httpx.HTTPStatusError:
         return None
 
@@ -818,7 +820,7 @@ async def report_half_open_result(
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
-        return _unwrap(resp)
+        return cast(dict, _unwrap(resp))
 
 
 async def report_web_search_circuit(family_id: str, provider_id: int, failure_type: str) -> None:

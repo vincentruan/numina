@@ -8,7 +8,7 @@ import os
 import socket
 import time
 
-from sqlalchemy import text
+from sqlalchemy import Connection, text
 from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
@@ -43,40 +43,41 @@ class PostgresAdvisoryLock(LockProvider):
 
     def __init__(self, engine: Engine):
         self._engine = engine
-        self._conn = None
+        self._conn: Connection | None = None
 
     def _lock_id(self, lock_name: str) -> int:
         return hash(lock_name) & 0x7FFFFFFF
 
     def acquire(self, lock_name: str, timeout: float = LOCK_WAIT_MAX_SECONDS) -> bool:
         lock_id = self._lock_id(lock_name)
-        self._conn = self._engine.connect()
+        conn = self._engine.connect()
+        self._conn = conn
         try:
-            self._conn.execute(
+            conn.execute(
                 text(f"SET lock_timeout = '{int(timeout * 1000)}ms'")
             )
-            self._conn.execute(
+            conn.execute(
                 text("SELECT pg_advisory_lock(:ns, :id)"),
                 {"ns": self._LOCK_NAMESPACE, "id": lock_id},
             )
             return True
         except Exception as e:
             logger.warning(f"Failed to acquire advisory lock '{lock_name}': {e}")
-            if self._conn:
-                self._conn.close()
-                self._conn = None
+            conn.close()
+            self._conn = None
             return False
 
     def release(self, lock_name: str) -> None:
-        if self._conn:
+        conn = self._conn
+        if conn:
             lock_id = self._lock_id(lock_name)
             try:
-                self._conn.execute(
+                conn.execute(
                     text("SELECT pg_advisory_unlock(:ns, :id)"),
                     {"ns": self._LOCK_NAMESPACE, "id": lock_id},
                 )
             finally:
-                self._conn.close()
+                conn.close()
                 self._conn = None
 
     def is_held(self, lock_name: str) -> bool:

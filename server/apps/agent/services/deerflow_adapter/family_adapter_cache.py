@@ -76,7 +76,7 @@ import tempfile
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from deerflow.client import DeerFlowClient
 from deerflow.config.app_config import reload_app_config
@@ -158,7 +158,7 @@ _MAX_CACHE_SIZE = 100
 # Values are either (DeerFlowClient, Path) for a live entry, or None as a
 # placeholder while a new client is being initialised (prevents TOCTOU races
 # where two threads both pass the size check and both insert).
-_adapter_cache: OrderedDict[tuple[str, str, bool, bool, str], tuple[DeerFlowClient, Path] | None] = OrderedDict()
+_adapter_cache: OrderedDict[tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None], tuple[DeerFlowClient, Path] | None] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
 # Per-key init lock: serialises reload_app_config + DeerFlowClient() for the
@@ -168,10 +168,10 @@ _init_lock = threading.Lock()
 
 # Shared checkpointer singleton — created once, reused by all DeerFlowClient instances.
 # Guarded by _checkpointer_lock to prevent double-initialisation under concurrency.
-_shared_checkpointer = None
+_shared_checkpointer: Any = None
 _checkpointer_lock = threading.Lock()
-_checkpointer_ctx = None  # open context manager keeping the SqliteSaver connection alive
-_checkpointer_pool = None  # open psycopg connection pool for PostgresSaver
+_checkpointer_ctx: Any = None  # open context manager keeping the SqliteSaver connection alive
+_checkpointer_pool: Any = None  # open psycopg connection pool for PostgresSaver
 
 
 async def async_init_checkpointer(db_path: str | None = None) -> None:
@@ -224,7 +224,7 @@ async def async_init_checkpointer(db_path: str | None = None) -> None:
                 )
                 await _checkpointer_pool.open()
                 _shared_checkpointer = AsyncPostgresSaver(
-                    conn=_checkpointer_pool,
+                    conn=cast(Any, _checkpointer_pool),
                 )
                 await _shared_checkpointer.setup()
                 logger.info("[deerflow_cache] shared checkpointer: AsyncPostgresSaver(%s)", db_url)

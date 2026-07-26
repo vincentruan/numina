@@ -16,7 +16,7 @@ import traceback
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from apps.agent.schemas.context import RedactedContext
 from apps.agent.services.deerflow_adapter.exceptions import (
@@ -159,6 +159,8 @@ class DeerFlowAdapter:
         self._ai_config = ai_config
         self._mcp_servers = mcp_servers
         self._config_path: str | None = None  # Store config_path for reloading before stream
+        self._client: Any = None
+        self._is_family_mode = False
 
         if family_id and ai_config:
             # 家庭级配置模式：从缓存获取 DeerFlowClient 和 config_path
@@ -204,7 +206,7 @@ class DeerFlowAdapter:
                     ),
                     timeout=self._timeout,
                 )
-                return result
+                return str(result)
             except TimeoutError:
                 raise DeerFlowTimeoutError(
                     f"DeerFlow skill '{skill_name}' timed out after {self._timeout}s"
@@ -275,7 +277,7 @@ class DeerFlowAdapter:
 
             async with _get_semaphore():
                 loop = asyncio.get_running_loop()
-                queue = asyncio.Queue()
+                queue: asyncio.Queue[Any] = asyncio.Queue()
 
                 def _produce() -> None:
                     try:
@@ -732,7 +734,9 @@ def get_global_adapter() -> DeerFlowAdapter | None:
     global _deerflow_adapter_singleton
     if _deerflow_adapter_singleton is _UNINITIALIZED:
         _deerflow_adapter_singleton = _make_adapter()
-    return _deerflow_adapter_singleton
+    if isinstance(_deerflow_adapter_singleton, DeerFlowAdapter):
+        return _deerflow_adapter_singleton
+    return None
 
 
 # 向后兼容的模块属性访问（延迟初始化）

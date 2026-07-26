@@ -41,7 +41,7 @@ def create_liability(
     user: User = Depends(require_adult),
 ):
     liability = liability_service.create_liability(db, user, req)
-    record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", float(liability.original_amount) if liability.original_amount is not None else None)
+    record_activity(db, user, "create", "liability", str(liability.id), f"添加负债「{liability.name}」", float(liability.original_amount) if liability.original_amount is not None else None)
     return liability
 
 
@@ -90,7 +90,7 @@ def simulate_liability(
 
 @router.get("/{liability_id}", response_model=LiabilityDetailResponse)
 def get_liability(
-    liability_id: int,
+    liability_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -105,7 +105,7 @@ def get_liability(
 
 @router.put("/{liability_id}", response_model=LiabilityResponse)
 def update_liability(
-    liability_id: int,
+    liability_id: str,
     req: LiabilityUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -116,7 +116,7 @@ def update_liability(
 
 @router.delete("/{liability_id}")
 def delete_liability(
-    liability_id: int,
+    liability_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -126,7 +126,7 @@ def delete_liability(
 
 @router.put("/{liability_id}/payment", response_model=LiabilityResponse)
 def record_payment(
-    liability_id: int,
+    liability_id: str,
     req: PaymentRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -138,7 +138,7 @@ def record_payment(
 
 @router.get("/{liability_id}/payments", response_model=list[PaymentRecordResponse])
 def get_payments(
-    liability_id: int,
+    liability_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

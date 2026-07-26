@@ -180,9 +180,12 @@ def get_current_user(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
+    if payload_fid is None:
+        raise credentials_exception
+    payload_fid_int = int(payload_fid)
 
     # SECURITY: Minimal existence check + family_id verification
     # Prevents cross-family data access after user removal from family
@@ -217,7 +220,7 @@ def get_current_user(
 
     # SECURITY: Verify payload fid matches current DB family_id
     # This prevents stale tokens from accessing data after family removal
-    if int(payload_fid) != db_family_id:
+    if payload_fid_int != db_family_id:
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult endpoints.
@@ -232,7 +235,7 @@ def get_current_user(
     # Saves ~7 columns compared to full User query (no password_hash, pin fields, etc.)
     user = User(
         id=int(user_id),
-        family_id=int(payload_fid),
+        family_id=payload_fid_int,
         username=username,
         display_name=display_name,
         avatar_color=avatar_color,
@@ -271,9 +274,9 @@ def get_current_user_from_cookie(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
 
     # SECURITY: Minimal existence check + family_id verification
     # Query returns columns needed by UserResponse schema
@@ -396,9 +399,9 @@ def get_current_child_user(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
 
     # SECURITY: Verify payload role is child
     if payload_role != "child":
@@ -515,9 +518,9 @@ def get_current_user_or_child(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
 
     # Minimal existence check + family_id verification
     result = db.query(

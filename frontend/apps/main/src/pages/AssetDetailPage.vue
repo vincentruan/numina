@@ -204,10 +204,10 @@
       <!-- Actions -->
       <div class="actions">
         <template v-if="asset.status === 'in_use' || asset.status === 'idle'">
-          <van-button block type="primary" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" :loading="navigating === 'edit'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/edit`, 'edit')">
             {{ t('assetDetail.btnEdit') }}
           </van-button>
-          <van-button block type="warning" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/sell`)">
+          <van-button block type="warning" plain :loading="navigating === 'sell'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/sell`, 'sell')">
             {{ t('assetDetail.btnSell') }}
           </van-button>
           <van-button block type="default" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onRetire">
@@ -218,12 +218,12 @@
           <van-button block type="success" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onReactivate">
             {{ t('assetDetail.btnReactivate') }}
           </van-button>
-          <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" plain :loading="navigating === 'edit'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/edit`, 'edit')">
             {{ t('assetDetail.btnEdit') }}
           </van-button>
         </template>
         <template v-else-if="asset.status === 'sold'">
-          <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" plain :loading="navigating === 'edit'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/edit`, 'edit')">
             {{ t('assetDetail.btnEdit') }}
           </van-button>
         </template>
@@ -260,6 +260,7 @@ const router = useRouter()
 const assetStore = useAssetStore()
 const deleting = ref(false)
 const acting = ref(false)
+const navigating = ref<'edit' | 'sell' | null>(null)
 const valuations = ref<AssetValuation[]>([])
 const imageError = ref(false)
 const { increment, decrement } = usePageLoading()
@@ -269,6 +270,15 @@ const asset = computed(() => assetStore.currentAsset)
 
 // Check if this asset is currently syncing
 const syncing = computed(() => asset.value ? assetStore.isSyncing(asset.value.id) : false)
+
+async function navigateTo(path: string, action: 'edit' | 'sell') {
+  navigating.value = action
+  try {
+    await router.push(path)
+  } finally {
+    navigating.value = null
+  }
+}
 
 const imageUrl = computed(() => {
   if (!asset.value?.image_url) return ''

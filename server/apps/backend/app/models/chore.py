@@ -81,6 +81,13 @@ class ChoreInstance(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    # Transient (non-persisted) flags set by service layer for response serialization
+    _is_pool_unclaimed: bool = False
+    _milestone_triggered: str | None = None
+    _child_display_name: str | None = None
+    _child_avatar_color: str | None = None
+    _child_user_id: int | None = None
+
     template = relationship("ChoreTemplate", back_populates="instances")
 
     __table_args__ = (

@@ -59,7 +59,7 @@ def generate_registration_challenge(
             COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
         ],
     )
-    return json.loads(options_to_json(options))
+    return json.loads(options_to_json(options))  # type: ignore[no-any-return]
 
 
 def verify_registration(
@@ -108,7 +108,7 @@ def generate_authentication_challenge(
         allow_credentials=descriptors,
         user_verification=UserVerificationRequirement.REQUIRED,
     )
-    return json.loads(options_to_json(options))
+    return json.loads(options_to_json(options))  # type: ignore[no-any-return]
 
 
 def verify_authentication(

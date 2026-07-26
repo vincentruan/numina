@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +199,7 @@ class LLMClient:
     async def _stream_anthropic_text(
         self, prompt: str, max_tokens: int, system: str | None
     ):
+        assert self._anthropic_client is not None
         kwargs: dict = {
             "model": self.model_id,
             "max_tokens": max_tokens,
@@ -209,13 +210,14 @@ class LLMClient:
         async with self._anthropic_client.messages.stream(**kwargs) as stream:
             async for event in stream:
                 if type(event).__name__ == "ContentBlockDeltaEvent":
-                    delta = event.delta
-                    if getattr(delta, "type", None) == "text_delta":
+                    delta = getattr(event, "delta", None)
+                    if delta is not None and getattr(delta, "type", None) == "text_delta":
                         yield delta.text
 
     async def _stream_anthropic_thinking(
         self, prompt: str, max_tokens: int, system: str | None, thinking_budget: int
     ):
+        assert self._anthropic_client is not None
         kwargs: dict = {
             "model": self.model_id,
             "max_tokens": max_tokens,
@@ -228,7 +230,9 @@ class LLMClient:
             async for event in stream:
                 event_type = type(event).__name__
                 if event_type == "ContentBlockDeltaEvent":
-                    delta = event.delta
+                    delta = getattr(event, "delta", None)
+                    if delta is None:
+                        continue
                     delta_type = getattr(delta, "type", None)
                     if delta_type == "thinking_delta":
                         yield ("thinking", delta.thinking)
@@ -262,6 +266,7 @@ class LLMClient:
             "extra_body": {"enable_thinking": enable_thinking},
         }
 
+        assert self._openai_client is not None
         stream = await self._openai_client.chat.completions.create(**kwargs)
 
         # Use dedicated parser class for tag-based thinking extraction
@@ -329,19 +334,22 @@ class LLMClient:
         }
         if system:
             kwargs["system"] = system
+        assert self._anthropic_client is not None
         message = await self._anthropic_client.messages.create(**kwargs)
         # Skip ThinkingBlock entries; find the first TextBlock
         for block in message.content:
-            if hasattr(block, "text"):
-                return block.text
+            text = cast(str, getattr(block, "text", None))
+            if text is not None:
+                return text
         # DeepSeek / non-Anthropic models routed through Anthropic SDK may
         # return only ThinkingBlock when max_tokens is too low to leave
         # budget for a TextBlock (reasoning is intrinsic to the model).
         # Treat thinking content as valid connection proof (see Qwen3
         # enable_thinking empty content pattern).
         for block in message.content:
-            if hasattr(block, "thinking"):
-                return block.thinking
+            thinking = cast(str, getattr(block, "thinking", None))
+            if thinking is not None:
+                return thinking
         # 标准化错误处理：明确告知响应格式问题
         block_types = [type(b).__name__ for b in message.content]
         raise LLMResponseError(
@@ -362,10 +370,11 @@ class LLMClient:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        assert self._openai_client is not None
         response = await self._openai_client.chat.completions.create(
             model=self.model_id,
             max_tokens=max_tokens,
-            messages=messages,
+            messages=cast(Any, messages),
         )
         content = response.choices[0].message.content
         if not content:
@@ -402,21 +411,24 @@ class LLMClient:
         }
         if system:
             kwargs["system"] = system
+        assert self._anthropic_client is not None
         message = await self._anthropic_client.messages.create(**kwargs)
         for block in message.content:
-            if hasattr(block, "text"):
-                return block.text
+            text = cast(str, getattr(block, "text", None))
+            if text is not None:
+                return text
         # Same fallback as _complete_anthropic: DeepSeek / non-Anthropic
         # models may return only ThinkingBlock when max_tokens is too low.
         for block in message.content:
-            if hasattr(block, "thinking"):
-                return block.thinking
+            thinking = cast(str, getattr(block, "thinking", None))
+            if thinking is not None:
+                return thinking
         return ""
 
     async def _complete_openai_vision(
         self, prompt: str, image_data: str, max_tokens: int, system: str | None
     ) -> str:
-        messages = []
+        messages: list[dict[str, Any]] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append(
@@ -431,10 +443,11 @@ class LLMClient:
                 ],
             }
         )
+        assert self._openai_client is not None
         response = await self._openai_client.chat.completions.create(
             model=self.vision_model_id,
             max_tokens=max_tokens,
-            messages=messages,
+            messages=cast(Any, messages),
         )
         return response.choices[0].message.content or ""
 

@@ -13,7 +13,7 @@ class EventStreamBuilder:
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize with no-op."""
-        self._current_event = None
+        self._current_event: dict[str, Any] | None = None
 
     def phase(self, phase_name: str, metadata: dict | None = None) -> "EventStreamBuilder":
         """Create phase event."""
@@ -72,3 +72,10 @@ class EventStreamBuilder:
         event = self._current_event
         self._current_event = None
         return json.dumps(event) + "\n"
+
+    @property
+    def payload(self) -> dict[str, Any]:
+        """Return the current event payload for caller mutation."""
+        if self._current_event is None:
+            self._current_event = {"type": "unknown", "data": {}}
+        return self._current_event

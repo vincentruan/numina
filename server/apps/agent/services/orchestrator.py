@@ -12,6 +12,7 @@ provider-selection / circuit-breaker helpers they share.
 import asyncio
 import logging
 import random
+from collections.abc import Coroutine
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ def _select_provider_with_retry(
     return None
 
 
-def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-arg]
+def _fire_and_forget(coro: Coroutine[Any, Any, Any]) -> None:  # type: ignore[type-arg]
     """Schedule a coroutine as a fire-and-forget task."""
     try:
         loop = asyncio.get_running_loop()

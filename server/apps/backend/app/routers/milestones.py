@@ -28,12 +28,12 @@ def list_my_milestones(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_child_user),
 ):
-    return svc.list_milestones(db, user.id, user.family_id)
+    return svc.list_milestones(db, str(user.id), str(user.family_id))
 
 
 @router.get("/family/children/{child_id}/milestones", response_model=list[MilestoneResponse])
 def list_child_milestones(
-    child_id: int,
+    child_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -45,4 +45,4 @@ def list_child_milestones(
     ).first()
     if not child:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
-    return svc.list_milestones(db, child_id, user.family_id)
+    return svc.list_milestones(db, str(child_id), str(user.family_id))

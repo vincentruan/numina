@@ -159,14 +159,14 @@ def install() -> None:
             return cfg.memory
         return _orig_get_memory_config()
 
-    _memory_config_mod.get_memory_config = _contextual_get_memory_config
+    _memory_config_mod.get_memory_config = _contextual_get_memory_config  # type: ignore[attr-defined]
     for module_path in _MEMORY_CONFIG_IMPORTERS:
         try:
             mod = importlib.import_module(module_path)
         except ImportError:
             continue
         if hasattr(mod, "get_memory_config"):
-            mod.get_memory_config = _contextual_get_memory_config
+            setattr(mod, "get_memory_config", _contextual_get_memory_config)
 
     # 2. Snapshot the family config at enqueue time.
     _orig_add = _queue_mod.MemoryUpdateQueue.add
@@ -187,11 +187,11 @@ def install() -> None:
 
     def _patched_add(self: Any, *args: Any, **kwargs: Any) -> None:
         _snapshot_from_call(args, kwargs)
-        return _orig_add(self, *args, **kwargs)
+        _orig_add(self, *args, **kwargs)
 
     def _patched_add_nowait(self: Any, *args: Any, **kwargs: Any) -> None:
         _snapshot_from_call(args, kwargs)
-        return _orig_add_nowait(self, *args, **kwargs)
+        _orig_add_nowait(self, *args, **kwargs)
 
     _queue_mod.MemoryUpdateQueue.add = _patched_add
     _queue_mod.MemoryUpdateQueue.add_nowait = _patched_add_nowait
@@ -213,7 +213,7 @@ def install() -> None:
         if cfg is None:
             # No snapshot (e.g. a direct call that bypassed the queue) — fall
             # back to whatever the caller's context/global provides.
-            return _orig_do_update(
+            return bool(_orig_do_update(
                 self,
                 messages,
                 thread_id=thread_id,
@@ -222,10 +222,10 @@ def install() -> None:
                 reinforcement_detected=reinforcement_detected,
                 user_id=user_id,
                 trace_id=trace_id,
-            )
+            ))
         push_current_app_config(cfg)
         try:
-            return _orig_do_update(
+            return bool(_orig_do_update(
                 self,
                 messages,
                 thread_id=thread_id,
@@ -234,7 +234,7 @@ def install() -> None:
                 reinforcement_detected=reinforcement_detected,
                 user_id=user_id,
                 trace_id=trace_id,
-            )
+            ))
         finally:
             pop_current_app_config()
 
@@ -246,7 +246,7 @@ def install() -> None:
 
     def _patched_clear(self: Any) -> None:
         clear_stash()
-        return _orig_clear(self)
+        _orig_clear(self)
 
     _queue_mod.MemoryUpdateQueue.clear = _patched_clear
 
