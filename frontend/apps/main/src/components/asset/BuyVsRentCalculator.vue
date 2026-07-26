@@ -1,49 +1,49 @@
 <template>
-  <van-cell-group inset title="买 vs 租 计算器">
+  <van-cell-group inset :title="t('buyVsRent.title')">
     <van-field
       v-model="form.purchase_price"
-      label="购入价格"
+      :label="t('buyVsRent.purchasePrice')"
       type="number"
-      placeholder="请输入购入价格"
+      :placeholder="t('buyVsRent.purchasePricePlaceholder')"
       input-align="right"
     />
     <van-field
       v-model="form.monthly_rent"
-      label="月租金"
+      :label="t('buyVsRent.monthlyRent')"
       type="number"
-      placeholder="请输入月租金"
+      :placeholder="t('buyVsRent.monthlyRentPlaceholder')"
       input-align="right"
     />
     <van-field
       v-model="form.usage_months"
-      label="使用月数"
+      :label="t('buyVsRent.usageMonths')"
       type="number"
-      placeholder="请输入使用月数"
+      :placeholder="t('buyVsRent.usageMonthsPlaceholder')"
       input-align="right"
     />
     <van-field
       v-model="form.annual_maintenance_cost"
-      label="年维护费（可选）"
+      :label="t('buyVsRent.annualMaintenance')"
       type="number"
-      placeholder="请输入年维护费"
+      :placeholder="t('buyVsRent.annualMaintenancePlaceholder')"
       input-align="right"
     />
     <van-cell>
       <template #value>
         <van-button type="primary" size="small" :loading="loading" @click="onCalculate">
-          计算
+          {{ t('buyVsRent.calculate') }}
         </van-button>
       </template>
     </van-cell>
 
     <template v-if="result">
-      <van-cell title="买入总成本" :value="format(Number(result.buy_total))" />
-      <van-cell title="租用总成本" :value="format(Number(result.rent_total))" />
+      <van-cell :title="t('buyVsRent.buyTotal')" :value="format(Number(result.buy_total))" />
+      <van-cell :title="t('buyVsRent.rentTotal')" :value="format(Number(result.rent_total))" />
       <van-cell
-        title="盈亏平衡月数"
-        :value="result.breakeven_months != null ? `${result.breakeven_months} 个月` : '--'"
+        :title="t('buyVsRent.breakevenMonths')"
+        :value="result.breakeven_months != null ? t('buyVsRent.monthsUnit', { n: result.breakeven_months }) : t('buyVsRent.noData')"
       />
-      <van-cell title="建议">
+      <van-cell :title="t('buyVsRent.recommendation')">
         <template #value>
           <span :class="result.buy_advantage_pct >= 0 ? 'positive' : 'negative'">
             {{ result.recommendation }}

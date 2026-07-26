@@ -1674,6 +1674,30 @@ export default {
     RATE_LIMITED: 'Too many requests, please try again later',
     NO_FAMILY_CONTEXT: '未选择家庭，无法执行操作'
   },
+  buyVsRent: {
+    title: 'Buy vs Rent Calculator',
+    purchasePrice: 'Purchase Price',
+    purchasePricePlaceholder: 'Enter purchase price',
+    monthlyRent: 'Monthly Rent',
+    monthlyRentPlaceholder: 'Enter monthly rent',
+    usageMonths: 'Usage Months',
+    usageMonthsPlaceholder: 'Enter usage months',
+    annualMaintenance: 'Annual Maintenance (optional)',
+    annualMaintenancePlaceholder: 'Enter annual maintenance',
+    calculate: 'Calculate',
+    buyTotal: 'Total Buy Cost',
+    rentTotal: 'Total Rent Cost',
+    breakevenMonths: 'Break-even Months',
+    monthsUnit: '{n} months',
+    recommendation: 'Recommendation',
+    noData: '--',
+  },
+  tagSelector: {
+    addTag: '+ Add Tag',
+    selectTag: 'Select Tags',
+    createPlaceholder: 'Enter new tag name, tap + to create',
+    empty: 'No tags yet, enter a name to create one',
+  },
   toast: {
     // Copy
     copied: 'Copied',
