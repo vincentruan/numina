@@ -17,6 +17,7 @@ def seed_single_asset_scenario(db: Session, verbose: bool = False) -> None:
         family_id=0,
         role="owner",
         avatar_color="#3B82F6",
+        flush=False,
     )
 
     if not created:
