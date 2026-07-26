@@ -53,9 +53,7 @@ class PostgresAdvisoryLock(LockProvider):
         conn = self._engine.connect()
         self._conn = conn
         try:
-            conn.execute(
-                text(f"SET lock_timeout = '{int(timeout * 1000)}ms'")
-            )
+            conn.execute(text(f"SET lock_timeout = '{int(timeout * 1000)}ms'"))
             conn.execute(
                 text("SELECT pg_advisory_lock(:ns, :id)"),
                 {"ns": self._LOCK_NAMESPACE, "id": lock_id},
@@ -113,21 +111,25 @@ class TableBasedLock(LockProvider):
             dialect = self._engine.dialect.name
             with self._engine.begin() as conn:
                 if dialect == "sqlite":
-                    conn.execute(text(
-                        f"CREATE TABLE IF NOT EXISTS {LOCK_TABLE} ("
-                        "lock_name TEXT PRIMARY KEY, "
-                        "locked_at REAL NOT NULL, "
-                        "holder TEXT NOT NULL"
-                        ")"
-                    ))
+                    conn.execute(
+                        text(
+                            f"CREATE TABLE IF NOT EXISTS {LOCK_TABLE} ("
+                            "lock_name TEXT PRIMARY KEY, "
+                            "locked_at REAL NOT NULL, "
+                            "holder TEXT NOT NULL"
+                            ")"
+                        )
+                    )
                 else:
-                    conn.execute(text(
-                        f"CREATE TABLE IF NOT EXISTS {LOCK_TABLE} ("
-                        "lock_name VARCHAR(128) PRIMARY KEY, "
-                        "locked_at DOUBLE PRECISION NOT NULL, "
-                        "holder VARCHAR(255) NOT NULL"
-                        ")"
-                    ))
+                    conn.execute(
+                        text(
+                            f"CREATE TABLE IF NOT EXISTS {LOCK_TABLE} ("
+                            "lock_name VARCHAR(128) PRIMARY KEY, "
+                            "locked_at DOUBLE PRECISION NOT NULL, "
+                            "holder VARCHAR(255) NOT NULL"
+                            ")"
+                        )
+                    )
 
     def acquire(self, lock_name: str, timeout: float = LOCK_WAIT_MAX_SECONDS) -> bool:
         deadline = time.time() + timeout
@@ -135,7 +137,9 @@ class TableBasedLock(LockProvider):
         while time.time() < deadline:
             with self._engine.begin() as conn:
                 result = conn.execute(
-                    text(f"SELECT locked_at, holder FROM {LOCK_TABLE} WHERE lock_name = :name"),
+                    text(
+                        f"SELECT locked_at, holder FROM {LOCK_TABLE} WHERE lock_name = :name"
+                    ),
                     {"name": lock_name},
                 )
                 row = result.fetchone()
@@ -174,7 +178,9 @@ class TableBasedLock(LockProvider):
     def release(self, lock_name: str) -> None:
         with self._engine.begin() as conn:
             conn.execute(
-                text(f"DELETE FROM {LOCK_TABLE} WHERE lock_name = :name AND holder = :holder"),
+                text(
+                    f"DELETE FROM {LOCK_TABLE} WHERE lock_name = :name AND holder = :holder"
+                ),
                 {"name": lock_name, "holder": self._holder},
             )
 
@@ -187,7 +193,7 @@ class TableBasedLock(LockProvider):
             row = result.fetchone()
             if row is None:
                 return False
-            return (time.time() - row[0]) <= LOCK_TIMEOUT_SECONDS
+            return bool((time.time() - row[0]) <= LOCK_TIMEOUT_SECONDS)
 
 
 def create_lock_provider(engine: Engine) -> LockProvider:

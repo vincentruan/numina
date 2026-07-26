@@ -39,14 +39,16 @@ logger = logging.getLogger(__name__)
 
 class MarkdownResponse(BaseModel):
     """Markdown report file content response."""
+
     content: str
     filename: str
     generated_at: datetime
     file_size: int
 
 
-def _latest_report(family_id: str, db: Session) -> AIReport | None:
+def _latest_report(family_id: int, db: Session) -> AIReport | None:
     from apps.backend.app.services.finance_coach_cache import latest_by_skill
+
     return latest_by_skill(db, family_id, "report")
 
 
@@ -71,12 +73,15 @@ def get_report(
     report = _latest_report(current_user.family_id, db)
     if not report:
         return {"report": None}
-    return {"report": report.report_json, "generated_at": report.generated_at.isoformat()}
+    return {
+        "report": report.report_json,
+        "generated_at": report.generated_at.isoformat(),
+    }
 
 
 async def _stream_asset_report_sse(
     *,
-    family_id: str,
+    family_id: int,
     user_id: str,
     thread_id: str,
     task_id: str,
@@ -99,15 +104,23 @@ async def _stream_asset_report_sse(
         async with agent_client.stream(
             "POST",
             agent_url,
-            json={"family_id": str(family_id), "user_id": str(user_id), "language": language},
+            json={
+                "family_id": str(family_id),
+                "user_id": str(user_id),
+                "language": language,
+            },
         ) as resp:
             if resp.status_code != 200:
                 body = await resp.aread()
                 logger.warning(
                     "[asset-report] agent stream non-200: status=%s body=%s task=%s",
-                    resp.status_code, body[:200], task_id,
+                    resp.status_code,
+                    body[:200],
+                    task_id,
                 )
-                err = json.dumps({"message": "报告生成服务异常", "name": "AgentError"}).encode()
+                err = json.dumps(
+                    {"message": "报告生成服务异常", "name": "AgentError"}
+                ).encode()
                 yield f"event: error\ndata: {err.decode()}\n\n".encode()
                 return
             async for line in resp.aiter_lines():
@@ -115,8 +128,12 @@ async def _stream_asset_report_sse(
                 # so re-add it. Blank lines separate SSE events.
                 yield (line + "\n").encode()
     except Exception as exc:
-        logger.warning("[asset-report] agent stream failed task=%s err=%s", task_id, exc)
-        err = json.dumps({"message": "报告生成服务中断", "name": type(exc).__name__}).encode()
+        logger.warning(
+            "[asset-report] agent stream failed task=%s err=%s", task_id, exc
+        )
+        err = json.dumps(
+            {"message": "报告生成服务中断", "name": type(exc).__name__}
+        ).encode()
         yield f"event: error\ndata: {err.decode()}\n\n".encode()
 
 
@@ -167,7 +184,8 @@ async def trigger_generate_events(
                     )
                 logger.info(
                     "[trigger_generate_events] cached report failed re-validation, "
-                    "regenerating family=%s", current_user.family_id,
+                    "regenerating family=%s",
+                    current_user.family_id,
                 )
 
     # Check if there's already a running task - resume it instead of 409
@@ -200,7 +218,11 @@ async def trigger_generate_events(
             )
             return JSONResponse(
                 status_code=202,
-                content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
+                content={
+                    "status": "queued",
+                    "task_id": task.id,
+                    "queue_position": task.queue_position,
+                },
             )
         task = AITaskService.create_task(
             family_id=current_user.family_id,
@@ -252,7 +274,9 @@ def get_report_markdown(
     try:
         file_path = pm.tenant_report_file(int(current_user.family_id), filename)
     except Exception as e:
-        logger.warning(f"Invalid markdown file path for family {current_user.family_id}: {e}")
+        logger.warning(
+            f"Invalid markdown file path for family {current_user.family_id}: {e}"
+        )
         raise AppError(ErrorCode.AI_REPORT_MARKDOWN_NOT_FOUND) from None
 
     if not file_path.exists():

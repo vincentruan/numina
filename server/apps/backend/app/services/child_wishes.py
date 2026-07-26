@@ -50,7 +50,9 @@ def _to_child_response(wish: ChildWish, balance: int = 0) -> ChildWishResponse:
     )
 
 
-def _to_parent_response(wish: ChildWish, child_display_name: str, db: Session | None = None) -> ParentWishResponse:
+def _to_parent_response(
+    wish: ChildWish, child_display_name: str, db: Session | None = None
+) -> ParentWishResponse:
     cost_history: list[ChildWishCostHistoryItem] = []
     if db is not None:
         rows = (
@@ -80,18 +82,25 @@ def _to_parent_response(wish: ChildWish, child_display_name: str, db: Session | 
     )
 
 
-def _get_child_name(db: Session, child_user_id: str) -> str:
+def _get_child_name(db: Session, child_user_id: int) -> str:
     child = db.query(User).filter(User.id == child_user_id).first()
     return child.display_name if child else "未知用户"
 
 
-def _get_wish_for_family(db: Session, wish_id: str, family_id: str) -> ChildWish:
-    wish = db.query(ChildWish).filter(
-        ChildWish.id == wish_id,
-        ChildWish.family_id == family_id,
-    ).first()
+def _get_wish_for_family(db: Session, wish_id: str, family_id: int) -> ChildWish:
+    wish = (
+        db.query(ChildWish)
+        .filter(
+            ChildWish.id == wish_id,
+            ChildWish.family_id == family_id,
+        )
+        .first()
+    )
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"},
+        )
     return wish
 
 
@@ -99,7 +108,10 @@ def _get_wish_for_family(db: Session, wish_id: str, family_id: str) -> ChildWish
 # Child endpoints
 # ---------------------------------------------------------------------------
 
-def create_child_wish(db: Session, user: User, req: ChildWishCreate) -> ChildWishResponse:
+
+def create_child_wish(
+    db: Session, user: User, req: ChildWishCreate
+) -> ChildWishResponse:
     wish = ChildWish(
         family_id=user.family_id,
         child_user_id=user.id,
@@ -113,21 +125,28 @@ def create_child_wish(db: Session, user: User, req: ChildWishCreate) -> ChildWis
     db.commit()
     db.refresh(wish)
     balance = get_balance(db, user.id)
-    fire_notification(user.family_id, {
-        "type": "child_wish_submitted",
-        "wish_id": wish.id,
-        "child_name": user.display_name,
-        "wish_name": wish.name,
-        "message": f"{user.display_name} 提交了新心愿：{wish.name}",
-    })
+    fire_notification(
+        user.family_id,
+        {
+            "type": "child_wish_submitted",
+            "wish_id": wish.id,
+            "child_name": user.display_name,
+            "wish_name": wish.name,
+            "message": f"{user.display_name} 提交了新心愿：{wish.name}",
+        },
+    )
     return _to_child_response(wish, balance)
 
 
 def list_child_wishes(db: Session, user: User) -> ChildWishListResponse:
-    wishes = db.query(ChildWish).filter(
-        ChildWish.family_id == user.family_id,
-        ChildWish.child_user_id == user.id,
-    ).all()
+    wishes = (
+        db.query(ChildWish)
+        .filter(
+            ChildWish.family_id == user.family_id,
+            ChildWish.child_user_id == user.id,
+        )
+        .all()
+    )
     balance = get_balance(db, user.id)
 
     result = ChildWishListResponse()
@@ -149,29 +168,46 @@ def list_child_wishes(db: Session, user: User) -> ChildWishListResponse:
 
 
 def get_child_wish(db: Session, user: User, wish_id: str) -> ChildWishResponse:
-    wish = db.query(ChildWish).filter(
-        ChildWish.id == wish_id,
-        ChildWish.family_id == user.family_id,
-        ChildWish.child_user_id == user.id,
-    ).first()
+    wish = (
+        db.query(ChildWish)
+        .filter(
+            ChildWish.id == wish_id,
+            ChildWish.family_id == user.family_id,
+            ChildWish.child_user_id == user.id,
+        )
+        .first()
+    )
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"},
+        )
     balance = get_balance(db, user.id)
     return _to_child_response(wish, balance)
 
 
 def request_redemption(db: Session, user: User, wish_id: str) -> ChildWishResponse:
-    wish = db.query(ChildWish).filter(
-        ChildWish.id == wish_id,
-        ChildWish.family_id == user.family_id,
-        ChildWish.child_user_id == user.id,
-    ).first()
+    wish = (
+        db.query(ChildWish)
+        .filter(
+            ChildWish.id == wish_id,
+            ChildWish.family_id == user.family_id,
+            ChildWish.child_user_id == user.id,
+        )
+        .first()
+    )
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"},
+        )
     if wish.status != "active":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_STATUS_INVALID", "message": "只有进行中的心愿才能发起兑现申请"},
+            detail={
+                "code": "WISH_STATUS_INVALID",
+                "message": "只有进行中的心愿才能发起兑现申请",
+            },
         )
     if wish.star_coin_cost is None:
         raise HTTPException(
@@ -182,7 +218,10 @@ def request_redemption(db: Session, user: User, wish_id: str) -> ChildWishRespon
     if balance < wish.star_coin_cost:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_INSUFFICIENT_COINS", "message": f"积分不足，当前余额 {balance}，需要 {wish.star_coin_cost}"},
+            detail={
+                "code": "WISH_INSUFFICIENT_COINS",
+                "message": f"积分不足，当前余额 {balance}，需要 {wish.star_coin_cost}",
+            },
         )
     wish.status = "redemption_requested"
     db.commit()
@@ -191,13 +230,19 @@ def request_redemption(db: Session, user: User, wish_id: str) -> ChildWishRespon
 
 
 def get_child_stats(db: Session, user: User) -> ChildWishStatsResponse:
-    wishes = db.query(ChildWish).filter(
-        ChildWish.family_id == user.family_id,
-        ChildWish.child_user_id == user.id,
-    ).all()
+    wishes = (
+        db.query(ChildWish)
+        .filter(
+            ChildWish.family_id == user.family_id,
+            ChildWish.child_user_id == user.id,
+        )
+        .all()
+    )
     balance = get_balance(db, user.id)
 
-    active = [w for w in wishes if w.status == "active" and w.star_coin_cost is not None]
+    active = [
+        w for w in wishes if w.status == "active" and w.star_coin_cost is not None
+    ]
     active.sort(key=lambda w: _PRIORITY_ORDER.get(w.priority, 99))
     realized_count = sum(1 for w in wishes if w.status == "realized")
 
@@ -206,20 +251,24 @@ def get_child_stats(db: Session, user: User) -> ChildWishStatsResponse:
     sim: list[ChildWishStatsSimItem] = []
     for w in active:
         cost = w.star_coin_cost
+        if cost is None:
+            continue
         covered = remaining >= cost
         progress = min(remaining / cost, 1.0) if cost > 0 else 1.0
         if covered:
             remaining -= cost
         elif w.priority == "high":
             shortfall = max(shortfall, cost - remaining)
-        sim.append(ChildWishStatsSimItem(
-            wish_id=w.id,
-            name=w.name,
-            priority=w.priority,
-            star_coin_cost=cost,
-            progress=round(progress, 4),
-            covered=covered,
-        ))
+        sim.append(
+            ChildWishStatsSimItem(
+                wish_id=w.id,
+                name=w.name,
+                priority=w.priority,
+                star_coin_cost=cost,
+                progress=round(progress, 4),
+                covered=covered,
+            )
+        )
 
     return ChildWishStatsResponse(
         balance=balance,
@@ -234,21 +283,37 @@ def get_child_stats(db: Session, user: User) -> ChildWishStatsResponse:
 # Parent endpoints
 # ---------------------------------------------------------------------------
 
+
 def list_parent_queue(db: Session, user: User) -> list[ParentWishResponse]:
-    wishes = db.query(ChildWish).filter(
-        ChildWish.family_id == user.family_id,
-        ChildWish.status.in_(["pending_review", "redemption_requested"]),
-    ).all()
-    wishes.sort(key=lambda w: (0 if w.status == "redemption_requested" else 1, w.created_at))
+    wishes = (
+        db.query(ChildWish)
+        .filter(
+            ChildWish.family_id == user.family_id,
+            ChildWish.status.in_(["pending_review", "redemption_requested"]),
+        )
+        .all()
+    )
+    wishes.sort(
+        key=lambda w: (0 if w.status == "redemption_requested" else 1, w.created_at)
+    )
 
     # Batch-load child users to avoid N+1 queries
     child_ids = {w.child_user_id for w in wishes}
-    child_map: dict[str, str] = {}
+    child_map: dict[int, str] = {}
     if child_ids:
         children = db.query(User).filter(User.id.in_(child_ids)).all()
         child_map = {c.id: c.display_name for c in children}
 
-    return [_to_parent_response(w, child_map.get(w.child_user_id, "未知用户"), db) for w in wishes]
+    return [
+        _to_parent_response(
+            w,
+            child_map.get(w.child_user_id, "未知用户")
+            if w.child_user_id
+            else "未知用户",
+            db,
+        )
+        for w in wishes
+    ]
 
 
 def approve_child_wish(
@@ -264,13 +329,16 @@ def approve_child_wish(
     wish.status = "active"
     db.commit()
     db.refresh(wish)
-    fire_notification(wish.family_id, {
-        "type": "child_wish_approved",
-        "wish_id": wish.id,
-        "wish_name": wish.name,
-        "message": f"你的心愿「{wish.name}」已被批准！",
-        "target_user_id": wish.child_user_id,
-    })
+    fire_notification(
+        wish.family_id,
+        {
+            "type": "child_wish_approved",
+            "wish_id": wish.id,
+            "wish_name": wish.name,
+            "message": f"你的心愿「{wish.name}」已被批准！",
+            "target_user_id": wish.child_user_id,
+        },
+    )
     return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
 
 
@@ -281,19 +349,25 @@ def reject_child_wish(
     if wish.status != "pending_review":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_REJECT_PENDING_ONLY", "message": "只有待审核的心愿才能拒绝"},
+            detail={
+                "code": "WISH_REJECT_PENDING_ONLY",
+                "message": "只有待审核的心愿才能拒绝",
+            },
         )
     wish.status = "rejected"
     wish.rejection_reason = req.rejection_reason
     db.commit()
     db.refresh(wish)
-    fire_notification(wish.family_id, {
-        "type": "child_wish_rejected",
-        "wish_id": wish.id,
-        "wish_name": wish.name,
-        "message": f"你的心愿「{wish.name}」未被批准。",
-        "target_user_id": wish.child_user_id,
-    })
+    fire_notification(
+        wish.family_id,
+        {
+            "type": "child_wish_rejected",
+            "wish_id": wish.id,
+            "wish_name": wish.name,
+            "message": f"你的心愿「{wish.name}」未被批准。",
+            "target_user_id": wish.child_user_id,
+        },
+    )
     return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
 
 
@@ -304,12 +378,18 @@ def update_child_wish_cost(
     if wish.status != "active":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_ACTIVE_ONLY", "message": "只有进行中的心愿才能修改积分"},
+            detail={
+                "code": "WISH_ACTIVE_ONLY",
+                "message": "只有进行中的心愿才能修改积分",
+            },
         )
     if wish.star_coin_cost is not None and req.star_coin_cost >= wish.star_coin_cost:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_COST_DECREASE_ONLY", "message": "积分门槛只能降低，不能提高"},
+            detail={
+                "code": "WISH_COST_DECREASE_ONLY",
+                "message": "积分门槛只能降低，不能提高",
+            },
         )
     history_entry = ChildWishCostHistory(
         wish_id=wish.id,
@@ -331,23 +411,34 @@ def realize_child_wish(
     if wish.status != "redemption_requested":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_REDEMPTION_ONLY", "message": "只有申请兑现的心愿才能兑现"},
+            detail={
+                "code": "WISH_REDEMPTION_ONLY",
+                "message": "只有申请兑现的心愿才能兑现",
+            },
         )
 
     balance = get_balance(db, wish.child_user_id)
-    if balance < wish.star_coin_cost:
+    if wish.star_coin_cost is None or balance < wish.star_coin_cost:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_INSUFFICIENT_COINS", "message": f"积分不足，无法兑现（余额 {balance}，需要 {wish.star_coin_cost}）"},
+            detail={
+                "code": "WISH_INSUFFICIENT_COINS",
+                "message": f"积分不足，无法兑现（余额 {balance}，需要 {wish.star_coin_cost}）",
+            },
         )
 
     category_id = req.category_id
     if not category_id:
         from apps.backend.app.models.category import Category
-        default_cat = db.query(Category).filter(
-            Category.asset_type == "physical",
-            Category.family_id.is_(None),
-        ).first()
+
+        default_cat = (
+            db.query(Category)
+            .filter(
+                Category.asset_type == "physical",
+                Category.family_id.is_(None),
+            )
+            .first()
+        )
         if default_cat:
             category_id = default_cat.id
 
@@ -362,7 +453,7 @@ def realize_child_wish(
             family_id=user.family_id,
             child_user_id=wish.child_user_id,
             transaction_type="wish_spend",
-            amount=-wish.star_coin_cost,
+            amount=-(wish.star_coin_cost or 0),
             ref_id=wish.id,
         )
         db.add(tx)
@@ -394,7 +485,10 @@ def realize_child_wish(
 
             from apps.backend.app.models.blind_box_config import BlindBoxConfig
             from apps.backend.app.models.bonus_draw import BonusDraw
-            config = db.query(BlindBoxConfig).filter_by(family_id=user.family_id).first()
+
+            config = (
+                db.query(BlindBoxConfig).filter_by(family_id=user.family_id).first()
+            )
             bonus_prob = config.base_draw_prob if config else 0.30
             if random.random() < bonus_prob:
                 bonus = BonusDraw(
@@ -410,8 +504,11 @@ def realize_child_wish(
 
         # Check milestones after primary transaction — failure never blocks realize
         from apps.backend.app.services.milestones import check_and_record_milestones
+
         milestone = check_and_record_milestones(
-            db, wish.child_user_id, wish.family_id,
+            db,
+            wish.child_user_id,
+            wish.family_id,
             {"wish": wish},
         )
         resp = _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
@@ -427,7 +524,7 @@ def realize_child_wish(
         ) from e
 
 
-def get_child_asset(db: Session, user: User, asset_id: int):
+def get_child_asset(db: Session, user: User, asset_id: str):
     """Fetch a child's own asset by ID, filtering out archived assets.
 
     Args:
@@ -443,12 +540,17 @@ def get_child_asset(db: Session, user: User, asset_id: int):
     """
     from apps.backend.app.models.asset import Asset
     from apps.backend.app.schemas.asset import ChildAssetResponse
-    asset = db.query(Asset).filter(
-        Asset.id == asset_id,
-        Asset.user_id == user.id,
-        Asset.family_id == user.family_id,
-        Asset.is_archived.is_(False),
-    ).first()
+
+    asset = (
+        db.query(Asset)
+        .filter(
+            Asset.id == asset_id,
+            Asset.user_id == user.id,
+            Asset.family_id == user.family_id,
+            Asset.is_archived.is_(False),
+        )
+        .first()
+    )
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -462,7 +564,10 @@ def defer_redemption(db: Session, user: User, wish_id: str) -> ParentWishRespons
     if wish.status != "redemption_requested":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "WISH_HOLD_PENDING_ONLY", "message": "只有申请兑现的心愿才能暂不兑现"},
+            detail={
+                "code": "WISH_HOLD_PENDING_ONLY",
+                "message": "只有申请兑现的心愿才能暂不兑现",
+            },
         )
     wish.status = "active"
     db.commit()

@@ -44,7 +44,8 @@ from apps.agent.services.session_store import AiSessionRepository
 def serialize_channel_values_for_api(values: dict[str, Any]) -> dict[str, Any]:
     """Convert channel values (including LangChain messages) to dicts for API response."""
     from langchain_core.messages import BaseMessage
-    result = {}
+
+    result: dict[str, Any] = {}
     for k, v in values.items():
         if isinstance(v, list):
             result[k] = [m.model_dump() if isinstance(m, BaseMessage) else m for m in v]
@@ -54,73 +55,129 @@ def serialize_channel_values_for_api(values: dict[str, Any]) -> dict[str, Any]:
             result[k] = v
     return result
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 # Metadata keys that the server controls; clients are not allowed to set them.
-_SERVER_RESERVED_METADATA_KEYS: frozenset[str] = frozenset({"owner_id", "user_id", "family_id"})
+_SERVER_RESERVED_METADATA_KEYS: frozenset[str] = frozenset(
+    {"owner_id", "user_id", "family_id"}
+)
+
 
 def _strip_reserved_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     if not metadata:
         return metadata or {}
-    return {k: v for k, v in metadata.items() if k not in _SERVER_RESERVED_METADATA_KEYS}
+    return {
+        k: v for k, v in metadata.items() if k not in _SERVER_RESERVED_METADATA_KEYS
+    }
+
 
 # ---------------------------------------------------------------------------
 # Response / request models
 # ---------------------------------------------------------------------------
 
+
 class ThreadDeleteResponse(BaseModel):
     success: bool
     message: str
+
 
 class ThreadResponse(BaseModel):
     thread_id: str = Field(description="Unique thread identifier")
     status: str = Field(default="idle", description="Thread status")
     created_at: str = Field(default="", description="ISO timestamp")
     updated_at: str = Field(default="", description="ISO timestamp")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Thread metadata")
-    values: dict[str, Any] = Field(default_factory=dict, description="Current state channel values")
-    interrupts: dict[str, Any] = Field(default_factory=dict, description="Pending interrupts")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Thread metadata"
+    )
+    values: dict[str, Any] = Field(
+        default_factory=dict, description="Current state channel values"
+    )
+    interrupts: dict[str, Any] = Field(
+        default_factory=dict, description="Pending interrupts"
+    )
+
 
 class ThreadCreateRequest(BaseModel):
-    thread_id: str | None = Field(default=None, description="Optional thread ID (auto-generated if omitted)")
-    assistant_id: str | None = Field(default=None, description="Associate thread with an assistant")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Initial metadata")
+    thread_id: str | None = Field(
+        default=None, description="Optional thread ID (auto-generated if omitted)"
+    )
+    assistant_id: str | None = Field(
+        default=None, description="Associate thread with an assistant"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Initial metadata"
+    )
 
-    _strip_reserved = field_validator("metadata")(classmethod(lambda cls, v: _strip_reserved_metadata(v)))
+    _strip_reserved = field_validator("metadata")(
+        classmethod(lambda cls, v: _strip_reserved_metadata(v))
+    )
+
 
 class ThreadSearchRequest(BaseModel):
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata filter (exact match)")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Metadata filter (exact match)"
+    )
     limit: int = Field(default=100, ge=1, le=1000, description="Maximum results")
     offset: int = Field(default=0, ge=0, description="Pagination offset")
     sortBy: str | None = Field(default="updated_at", description="Sort column")
     sortOrder: str | None = Field(default="desc", description="Sort order (asc/desc)")
 
+
 class ThreadStateResponse(BaseModel):
-    values: dict[str, Any] = Field(default_factory=dict, description="Current channel values")
+    values: dict[str, Any] = Field(
+        default_factory=dict, description="Current channel values"
+    )
     next: list[str] = Field(default_factory=list, description="Next tasks to execute")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Checkpoint metadata")
-    checkpoint: dict[str, Any] = Field(default_factory=dict, description="Checkpoint info")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Checkpoint metadata"
+    )
+    checkpoint: dict[str, Any] = Field(
+        default_factory=dict, description="Checkpoint info"
+    )
     checkpoint_id: str | None = Field(default=None, description="Current checkpoint ID")
-    parent_checkpoint_id: str | None = Field(default=None, description="Parent checkpoint ID")
+    parent_checkpoint_id: str | None = Field(
+        default=None, description="Parent checkpoint ID"
+    )
     created_at: str | None = Field(default=None, description="Checkpoint timestamp")
-    tasks: list[dict[str, Any]] = Field(default_factory=list, description="Interrupted task details")
+    tasks: list[dict[str, Any]] = Field(
+        default_factory=list, description="Interrupted task details"
+    )
+
 
 class ThreadPatchRequest(BaseModel):
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata to merge")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Metadata to merge"
+    )
     title: str | None = Field(default=None, description="Session title")
     is_pinned: bool | None = Field(default=None, description="Pin/unpin session")
-    _strip_reserved = field_validator("metadata")(classmethod(lambda cls, v: _strip_reserved_metadata(v)))
+    _strip_reserved = field_validator("metadata")(
+        classmethod(lambda cls, v: _strip_reserved_metadata(v))
+    )
+
 
 class ThreadStateUpdateRequest(BaseModel):
-    values: dict[str, Any] | None = Field(default=None, description="Channel values to merge")
-    checkpoint_id: str | None = Field(default=None, description="Checkpoint to branch from")
-    checkpoint: dict[str, Any] | None = Field(default=None, description="Full checkpoint object")
-    as_node: str | None = Field(default=None, description="Node identity for the update")
+    values: dict[str, Any] | None = Field(
+        default=None, description="Channel values to merge"
+    )
+    checkpoint_id: str | None = Field(
+        default=None, description="Checkpoint to branch from"
+    )
+    checkpoint: dict[str, Any] | None = Field(
+        default=None, description="Full checkpoint object"
+    )
+    as_node: str | None = Field(
+        default=None, description="Node identity for the update"
+    )
+
 
 class ThreadGoalRequest(BaseModel):
     """Request body for setting a thread-scoped goal (DeerFlow threads.py:320-329)."""
-    objective: str = Field(..., min_length=1, max_length=4000, description="目标完成条件")
+
+    objective: str = Field(
+        ..., min_length=1, max_length=4000, description="目标完成条件"
+    )
     max_continuations: int = Field(
         default=DEFAULT_MAX_GOAL_CONTINUATIONS,
         ge=0,
@@ -128,15 +185,21 @@ class ThreadGoalRequest(BaseModel):
         description="最大自动延续轮数",
     )
 
+
 class ThreadGoalResponse(BaseModel):
     """Response model for a thread goal (DeerFlow threads.py:332-335)."""
-    goal: dict[str, Any] | None = Field(default=None, description="当前目标状态，无目标时为 null")
+
+    goal: dict[str, Any] | None = Field(
+        default=None, description="当前目标状态，无目标时为 null"
+    )
+
 
 class ThreadCompactRequest(BaseModel):
     """Request body for manual context compaction (DeerFlow threads.py:320)."""
 
     agent_name: str | None = Field(
-        default=None, description="Optional agent name for the summarization LLM context"
+        default=None,
+        description="Optional agent name for the summarization LLM context",
     )
 
 
@@ -149,10 +212,19 @@ class ThreadCompactResponse(BaseModel):
         description="Skip reason when not compacted (e.g. not_enough_messages)",
     )
     removed_count: int = Field(default=0, description="Messages summarized and removed")
-    preserved_count: int = Field(default=0, description="Messages kept in the visible tail")
-    summary_updated: bool = Field(default=False, description="Whether summary_text was updated")
-    checkpoint_id: str | None = Field(default=None, description="New checkpoint ID after compaction")
-    total_tokens: int = Field(default=0, description="Token count of the produced summary")
+    preserved_count: int = Field(
+        default=0, description="Messages kept in the visible tail"
+    )
+    summary_updated: bool = Field(
+        default=False, description="Whether summary_text was updated"
+    )
+    checkpoint_id: str | None = Field(
+        default=None, description="New checkpoint ID after compaction"
+    )
+    total_tokens: int = Field(
+        default=0, description="Token count of the produced summary"
+    )
+
 
 class HistoryEntry(BaseModel):
     checkpoint_id: str
@@ -162,9 +234,11 @@ class HistoryEntry(BaseModel):
     created_at: str | None = None
     next: list[str] = Field(default_factory=list)
 
+
 class ThreadHistoryRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=100, description="Maximum entries")
     before: str | None = Field(default=None, description="Cursor for pagination")
+
 
 # ---------------------------------------------------------------------------
 # Branch models (DeerFlow threads.py:375-388)
@@ -188,8 +262,10 @@ WorkspaceCloneMode = Literal[
     "failed",
 ]
 
+
 class ThreadBranchRequest(BaseModel):
     """Request body for branching a thread from a completed assistant turn."""
+
     message_id: str = Field(description="AI message ID to branch from")
     message_ids: list[str] = Field(
         default_factory=list,
@@ -197,8 +273,10 @@ class ThreadBranchRequest(BaseModel):
     )
     title: str | None = Field(default=None, description="Optional branch title")
 
+
 class ThreadBranchResponse(BaseModel):
     """Response from branch endpoint (DeerFlow threads.py:383-388)."""
+
     thread_id: str
     parent_thread_id: str
     parent_checkpoint_id: str
@@ -210,9 +288,11 @@ class ThreadBranchResponse(BaseModel):
     # above for the value semantics.
     workspace_clone_mode: WorkspaceCloneMode
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _derive_thread_status(checkpoint_tuple) -> str:
     if checkpoint_tuple is None:
@@ -225,6 +305,7 @@ def _derive_thread_status(checkpoint_tuple) -> str:
     if tasks:
         return "interrupted"
     return "idle"
+
 
 def get_checkpointer():
     return _get_shared_checkpointer(None)
@@ -262,9 +343,13 @@ async def _find_branch_checkpoint(
         ):
             messages = _checkpoint_messages(checkpoint_tuple)
             for msg in messages:
-                msg_id = getattr(msg, "id", None) or (msg.get("id") if isinstance(msg, dict) else None)
+                msg_id = getattr(msg, "id", None) or (
+                    msg.get("id") if isinstance(msg, dict) else None
+                )
                 if msg_id and msg_id in target_message_ids:
-                    is_latest_turn = _matches_branch_target(messages, target_message_ids)
+                    is_latest_turn = _matches_branch_target(
+                        messages, target_message_ids
+                    )
                     return checkpoint_tuple, is_latest_turn
     except Exception:
         logger.warning(
@@ -280,14 +365,17 @@ def _checkpoint_id(checkpoint_tuple) -> str | None:
     """Extract checkpoint_id from a CheckpointTuple (DeerFlow threads.py helper)."""
     if checkpoint_tuple is None:
         return None
-    return (
+    checkpoint_id_val = (
         getattr(checkpoint_tuple, "config", {})
         .get("configurable", {})
         .get("checkpoint_id")
     )
+    return str(checkpoint_id_val) if checkpoint_id_val is not None else None
 
 
-def _default_branch_display_name(source_title: str | None, *, source_is_branch: bool = False) -> str | None:
+def _default_branch_display_name(
+    source_title: str | None, *, source_is_branch: bool = False
+) -> str | None:
     """Derive a display name for a branch (DeerFlow threads.py:211-224).
 
     - If the source has no title, return None (caller keeps the source title).
@@ -319,9 +407,8 @@ def _checkpoint_messages(checkpoint_tuple) -> list[Any]:
 
 def _message_id(message: Any) -> str | None:
     """Extract the id from a message that may be a BaseMessage or a dict."""
-    return (
-        getattr(message, "id", None)
-        or (message.get("id") if isinstance(message, dict) else None)
+    return getattr(message, "id", None) or (
+        message.get("id") if isinstance(message, dict) else None
     )
 
 
@@ -354,9 +441,7 @@ def _matches_branch_target(messages: list[Any], target_message_ids: set[str]) ->
     """
     if not target_message_ids:
         return False
-    index_by_id = {
-        _message_id(m): i for i, m in enumerate(messages) if _message_id(m)
-    }
+    index_by_id = {_message_id(m): i for i, m in enumerate(messages) if _message_id(m)}
     if not target_message_ids.issubset(index_by_id.keys()):
         return False
     if any(
@@ -442,9 +527,7 @@ def _copy_branch_sandbox_sync(
         # Fresh branch UUID: a pre-existing target is a stale/partial clone.
         # Clear it so copytree does not merge new over old.
         shutil.rmtree(target, ignore_errors=True)
-    shutil.copytree(
-        source, target, ignore=_ignore_branch_user_data, dirs_exist_ok=True
-    )
+    shutil.copytree(source, target, ignore=_ignore_branch_user_data, dirs_exist_ok=True)
     return "current_thread_best_effort"
 
 
@@ -491,9 +574,11 @@ async def _copy_branch_user_data(
         )
         return "failed"
 
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.delete("/{thread_id}", response_model=ThreadDeleteResponse)
 async def delete_thread(
@@ -507,12 +592,15 @@ async def delete_thread(
     repo = AiSessionRepository(x_family_id)
     deleted = await repo.delete_session(session_id=thread_id, family_id=x_family_id)
     if not deleted:
-        raise HTTPException(status_code=503, detail="Failed to delete thread from database")
+        raise HTTPException(
+            status_code=503, detail="Failed to delete thread from database"
+        )
     checkpointer = get_checkpointer()
     if hasattr(checkpointer, "adelete_thread"):
         with contextlib.suppress(Exception):
             await checkpointer.adelete_thread(thread_id)
     return ThreadDeleteResponse(success=True, message="Thread deleted")
+
 
 @router.post("", response_model=ThreadResponse)
 async def create_thread(
@@ -566,6 +654,7 @@ async def create_thread(
         metadata=body.metadata,
     )
 
+
 @router.post("/search", response_model=list[ThreadResponse])
 async def search_threads(
     body: ThreadSearchRequest,
@@ -605,6 +694,7 @@ async def search_threads(
         for r in sessions
     ]
 
+
 @router.patch("/{thread_id}", response_model=ThreadResponse)
 async def patch_thread(
     thread_id: str,
@@ -619,7 +709,7 @@ async def patch_thread(
             session_id=thread_id,
             family_id=x_family_id,
             summary=None,
-            title=body.metadata["title"]
+            title=body.metadata["title"],
         )
     # Handle top-level title/is_pinned updates
     if body.title is not None or body.is_pinned is not None:
@@ -629,6 +719,7 @@ async def patch_thread(
             is_pinned=body.is_pinned,
         )
     return await get_thread(thread_id, x_family_id)
+
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
 async def get_thread(
@@ -667,12 +758,24 @@ async def get_thread(
             "session_id": thread_id,
             "status": "idle",
             "created_at": coerce_iso(ckpt_meta.get("created_at", "")),
-            "updated_at": coerce_iso(ckpt_meta.get("updated_at", ckpt_meta.get("created_at", ""))),
+            "updated_at": coerce_iso(
+                ckpt_meta.get("updated_at", ckpt_meta.get("created_at", ""))
+            ),
             "metadata": {},
         }
 
-    status = _derive_thread_status(checkpoint_tuple) if checkpoint_tuple is not None else record.get("status", "idle")
-    checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {} if checkpoint_tuple is not None else {}
+    assert record is not None  # guaranteed by the 404 check above
+
+    status = (
+        _derive_thread_status(checkpoint_tuple)
+        if checkpoint_tuple is not None
+        else record.get("status", "idle")
+    )
+    checkpoint = (
+        getattr(checkpoint_tuple, "checkpoint", {}) or {}
+        if checkpoint_tuple is not None
+        else {}
+    )
     channel_values = checkpoint.get("channel_values", {})
 
     # Merge title and is_pinned into metadata for frontend ThreadSession compatibility
@@ -695,6 +798,7 @@ async def get_thread(
         metadata=meta,
         values=serialize_channel_values_for_api(channel_values),
     )
+
 
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
 async def get_thread_state(
@@ -750,26 +854,40 @@ async def get_thread_state(
             raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
     elif str(ckpt_family_id) != str(verified.family_id):
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
-    checkpoint_id = getattr(checkpoint_tuple, "config", {}).get("configurable", {}).get("checkpoint_id")
+    checkpoint_id = (
+        getattr(checkpoint_tuple, "config", {})
+        .get("configurable", {})
+        .get("checkpoint_id")
+    )
     channel_values = checkpoint.get("channel_values", {})
 
     parent_config = getattr(checkpoint_tuple, "parent_config", None)
-    parent_checkpoint_id = parent_config.get("configurable", {}).get("checkpoint_id") if parent_config else None
+    parent_checkpoint_id = (
+        parent_config.get("configurable", {}).get("checkpoint_id")
+        if parent_config
+        else None
+    )
 
     tasks_raw = getattr(checkpoint_tuple, "tasks", []) or []
     next_tasks = [t.name for t in tasks_raw if hasattr(t, "name")]
-    tasks = [{"id": getattr(t, "id", ""), "name": getattr(t, "name", "")} for t in tasks_raw]
+    tasks = [
+        {"id": getattr(t, "id", ""), "name": getattr(t, "name", "")} for t in tasks_raw
+    ]
 
     return ThreadStateResponse(
         values=serialize_channel_values_for_api(channel_values),
         next=next_tasks,
         metadata=metadata,
-        checkpoint={"id": checkpoint_id, "ts": coerce_iso(metadata.get("created_at", ""))},
+        checkpoint={
+            "id": checkpoint_id,
+            "ts": coerce_iso(metadata.get("created_at", "")),
+        },
         checkpoint_id=checkpoint_id,
         parent_checkpoint_id=parent_checkpoint_id,
         created_at=coerce_iso(metadata.get("created_at", "")),
         tasks=tasks,
     )
+
 
 @router.post("/{thread_id}/state", response_model=ThreadStateResponse)
 async def update_thread_state(
@@ -821,12 +939,21 @@ async def update_thread_state(
     write_config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
     new_config = await checkpointer.aput(write_config, checkpoint, metadata, {})
 
-    new_checkpoint_id = new_config.get("configurable", {}).get("checkpoint_id") if isinstance(new_config, dict) else None
+    new_checkpoint_id = (
+        new_config.get("configurable", {}).get("checkpoint_id")
+        if isinstance(new_config, dict)
+        else None
+    )
 
     if body.values and "title" in body.values:
         new_title = body.values["title"]
         if new_title:
-            await repo.update_summary(session_id=thread_id, family_id=x_family_id, summary=None, title=new_title)
+            await repo.update_summary(
+                session_id=thread_id,
+                family_id=x_family_id,
+                summary=None,
+                title=new_title,
+            )
 
     return ThreadStateResponse(
         values=serialize_channel_values_for_api(channel_values),
@@ -835,6 +962,7 @@ async def update_thread_state(
         checkpoint_id=new_checkpoint_id,
         created_at=coerce_iso(metadata.get("created_at", "")),
     )
+
 
 # ---------------------------------------------------------------------------
 # Goal endpoints (DeerFlow threads.py:832-880)
@@ -924,7 +1052,9 @@ async def set_thread_goal(
                 checkpointer, thread_id, goal, as_node="goal", create_if_missing=True
             )
     except GoalWriteConflict:
-        raise HTTPException(status_code=409, detail="目标已被并发修改，请重试") from None
+        raise HTTPException(
+            status_code=409, detail="目标已被并发修改，请重试"
+        ) from None
     except Exception:
         logger.exception("Failed to set goal for thread %s", thread_id)
         raise HTTPException(status_code=500, detail="设置线程目标失败") from None
@@ -947,11 +1077,14 @@ async def clear_thread_goal(
         async with goal_thread_lock(thread_id):
             await write_thread_goal(checkpointer, thread_id, None, as_node="goal")
     except GoalWriteConflict:
-        raise HTTPException(status_code=409, detail="目标已被并发修改，请重试") from None
+        raise HTTPException(
+            status_code=409, detail="目标已被并发修改，请重试"
+        ) from None
     except Exception:
         logger.exception("Failed to clear goal for thread %s", thread_id)
         raise HTTPException(status_code=500, detail="清除线程目标失败") from None
     return ThreadGoalResponse(goal=None)
+
 
 @router.post("/{thread_id}/history", response_model=list[HistoryEntry])
 async def get_thread_history(
@@ -980,7 +1113,11 @@ async def get_thread_history(
         checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
 
         checkpoint_id = ckpt_config.get("configurable", {}).get("checkpoint_id", "")
-        parent_id = parent_config.get("configurable", {}).get("checkpoint_id") if parent_config else None
+        parent_id = (
+            parent_config.get("configurable", {}).get("checkpoint_id")
+            if parent_config
+            else None
+        )
         channel_values = checkpoint.get("channel_values", {})
 
         values = {}
@@ -990,26 +1127,36 @@ async def get_thread_history(
             values["thread_data"] = thread_data
 
         if is_latest_checkpoint and "messages" in channel_values:
-            values["messages"] = serialize_channel_values_for_api({"messages": channel_values["messages"]}).get("messages", [])
+            values["messages"] = serialize_channel_values_for_api(
+                {"messages": channel_values["messages"]}
+            ).get("messages", [])
         is_latest_checkpoint = False
 
         tasks_raw = getattr(checkpoint_tuple, "tasks", []) or []
         next_tasks = [t.name for t in tasks_raw if hasattr(t, "name")]
 
-        user_meta = {k: v for k, v in metadata.items() if k not in ("created_at", "updated_at", "step", "source", "writes", "parents")}
+        user_meta = {
+            k: v
+            for k, v in metadata.items()
+            if k
+            not in ("created_at", "updated_at", "step", "source", "writes", "parents")
+        }
         if "step" in metadata:
             user_meta["step"] = metadata["step"]
 
-        entries.append(HistoryEntry(
-            checkpoint_id=checkpoint_id,
-            parent_checkpoint_id=parent_id,
-            metadata=user_meta,
-            values=values,
-            created_at=coerce_iso(metadata.get("created_at", "")),
-            next=next_tasks,
-        ))
+        entries.append(
+            HistoryEntry(
+                checkpoint_id=checkpoint_id,
+                parent_checkpoint_id=parent_id,
+                metadata=user_meta,
+                values=values,
+                created_at=coerce_iso(metadata.get("created_at", "")),
+                next=next_tasks,
+            )
+        )
 
     return entries
+
 
 @router.get("/{thread_id}/token-usage")
 async def get_thread_token_usage(
@@ -1044,19 +1191,19 @@ async def get_thread_token_usage(
 
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
     messages = checkpoint.get("channel_values", {}).get("messages", [])
-    
+
     prompt_tokens = 0
     completion_tokens = 0
-    
+
     for msg in messages:
         if hasattr(msg, "usage_metadata") and msg.usage_metadata:
             prompt_tokens += msg.usage_metadata.get("input_tokens", 0)
             completion_tokens += msg.usage_metadata.get("output_tokens", 0)
-            
+
     return {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
-        "total_tokens": prompt_tokens + completion_tokens
+        "total_tokens": prompt_tokens + completion_tokens,
     }
 
 
@@ -1100,7 +1247,9 @@ async def branch_thread(
     #    clone decision and the source checkpoint come from one pass with no
     #    TOCTOU window between two scans.
     target_message_ids = {body.message_id, *body.message_ids}
-    branch_checkpoint = await _find_branch_checkpoint(checkpointer, thread_id, target_message_ids)
+    branch_checkpoint = await _find_branch_checkpoint(
+        checkpointer, thread_id, target_message_ids
+    )
 
     if branch_checkpoint is None:
         raise HTTPException(
@@ -1135,13 +1284,15 @@ async def branch_thread(
     checkpoint = copy.deepcopy(getattr(checkpoint_tuple, "checkpoint", {}) or {})
     metadata = copy.deepcopy(getattr(checkpoint_tuple, "metadata", {}) or {})
     checkpoint["id"] = str(uuid6())
-    metadata.update({
-        "source": "branch",
-        "updated_at": now,
-        "created_at": now,
-        "family_id": x_family_id,  # preserve tenant isolation
-        **branch_metadata,
-    })
+    metadata.update(
+        {
+            "source": "branch",
+            "updated_at": now,
+            "created_at": now,
+            "family_id": x_family_id,  # preserve tenant isolation
+            **branch_metadata,
+        }
+    )
 
     # Derive title (DeerFlow threads.py:619-622)
     source_title = source_record.get("title") or ""
@@ -1164,7 +1315,9 @@ async def branch_thread(
     try:
         await checkpointer.aput(write_config, checkpoint, metadata, new_versions)
     except Exception:
-        logger.exception("Failed to write branch checkpoint for thread %s", new_thread_id)
+        logger.exception(
+            "Failed to write branch checkpoint for thread %s", new_thread_id
+        )
         raise HTTPException(status_code=500, detail="Failed to create branch") from None
 
     # 5. Create session row in backend DB (DeerFlow threads.py:646-656)
@@ -1218,7 +1371,7 @@ async def branch_thread(
         parent_thread_id=thread_id,
         parent_checkpoint_id=parent_checkpoint_id,
         branched_from_message_id=body.message_id,
-        workspace_clone_mode=workspace_clone_mode,
+        workspace_clone_mode=workspace_clone_mode,  # type: ignore[arg-type]  # str from _copy_branch_user_data; values match WorkspaceCloneMode Literal
     )
 
 
@@ -1266,7 +1419,9 @@ async def compact_thread_endpoint(
     except ContextCompactionFailed:
         raise HTTPException(status_code=503, detail="压缩对话历史失败") from None
     except LookupError:
-        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found") from None
+        raise HTTPException(
+            status_code=404, detail=f"Thread {thread_id} not found"
+        ) from None
     except HTTPException:
         raise
     except Exception:

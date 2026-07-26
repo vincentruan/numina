@@ -106,7 +106,9 @@ def _deerflow_default_workspace_md(
         # user_id arg is intentionally not used for path resolution — see above.
         _ = user_id
         effective_user = get_effective_user_id()
-        host_workspace = get_paths().host_sandbox_work_dir(thread_id, user_id=effective_user)
+        host_workspace = get_paths().host_sandbox_work_dir(
+            thread_id, user_id=effective_user
+        )
         return Path(host_workspace) / filename
     except Exception:
         return None
@@ -163,7 +165,9 @@ def _copy_asset_report_markdown(
         logger.warning(
             "[_run_asset_report_pipeline] no write_file path or WRITE_FILE "
             "declaration recovered, markdown_file_path not persisted run=%s "
-            "(write_file_paths=%s)", run_id, write_file_paths,
+            "(write_file_paths=%s)",
+            run_id,
+            write_file_paths,
         )
         return None
 
@@ -177,13 +181,17 @@ def _copy_asset_report_markdown(
     # so we cannot rely on write_file_paths alone — resolve the host workspace
     # dir via DeerFlow's paths API + the declared filename.
     declared_filename_str = declared_filename
-    source_path = _deerflow_default_workspace_md(thread_id, user_id, declared_filename_str)
+    source_path = _deerflow_default_workspace_md(
+        thread_id, user_id, declared_filename_str
+    )
     if source_path is None or not source_path.is_file():
         logger.warning(
             "[_run_asset_report_pipeline] sandbox markdown not found at %s "
             "(DeerFlow layout), markdown_file_path not persisted run=%s "
             "(declared_filename=%s)",
-            source_path, run_id, declared_filename_str,
+            source_path,
+            run_id,
+            declared_filename_str,
         )
         return None
 
@@ -200,13 +208,16 @@ def _copy_asset_report_markdown(
         shutil.copyfile(source_path, target_path)
         logger.info(
             "[_run_asset_report_pipeline] persisted markdown %s -> %s run=%s",
-            source_path, target_path, run_id,
+            source_path,
+            target_path,
+            run_id,
         )
         return persisted_filename
     except Exception as exc:
         logger.warning(
             "[_run_asset_report_pipeline] copy markdown failed run=%s err=%s",
-            run_id, type(exc).__name__,
+            run_id,
+            type(exc).__name__,
         )
         return None
 
@@ -235,10 +246,7 @@ async def _resolve_numina_mcp_servers(
                 actual_url = (srv.get("url") or "").rstrip("/")
                 if not actual_url.startswith(expected_prefix):
                     srv["url"] = (
-                        expected_prefix
-                        + "/api/v1/internal/mcp/"
-                        + family_id
-                        + "/sse"
+                        expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
                     )
                 mcp_headers: dict[str, str] = {
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
@@ -252,7 +260,9 @@ async def _resolve_numina_mcp_servers(
     except Exception as exc:
         logger.warning(
             "%s get_enabled_mcp_servers failed family=%s err=%s",
-            label, family_id, type(exc).__name__,
+            label,
+            family_id,
+            type(exc).__name__,
         )
         return []
 
@@ -452,8 +462,11 @@ async def _run_asset_report_pipeline(
         # data (plan U4 Open Question: DeerMem pollution). agent_name is also
         # passed for DeerMem bucket isolation (per (agent_name, user_id)).
         from apps.agent.services.agent_registry import get_agent_registry
+
         agent_meta = await get_agent_registry().get("asset-report", family_id)
-        memory_enabled = bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        memory_enabled = (
+            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        )
 
         adapter = create_family_adapter(
             family_id,
@@ -476,7 +489,7 @@ async def _run_asset_report_pipeline(
         # backend already supplied a user message in graph_input, prefer it.
         # Localize the trigger based on user's language preference so the first
         # user input the LLM sees matches the target language.
-        user_language = (record.metadata or {}).get("language")
+        user_language = (record.metadata or {}).get("language") or "zh"
         user_message = _SYNTHETIC_TRIGGERS_BY_LANG.get("asset-report", {}).get(
             user_language, _SYNTHETIC_ASSET_REPORT_TRIGGER
         )
@@ -508,6 +521,7 @@ async def _run_asset_report_pipeline(
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             set_active_skill,
         )
+
         _skill_token = set_active_skill("asset-report")
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name="asset-report",
@@ -556,7 +570,9 @@ async def _run_asset_report_pipeline(
                                 wf_path = tc_args.get("path")
                                 if isinstance(wf_path, str) and wf_path:
                                     write_file_paths.append(wf_path)
-                            tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                            tool_type, display_name, icon, display_key = (
+                                resolve_tool_metadata(raw_name)
+                            )
                             payload: dict[str, Any] = {
                                 "type": "tool_call",
                                 "tool_call_id": tc.get("id", ""),
@@ -574,12 +590,16 @@ async def _run_asset_report_pipeline(
                     tool_name = data.get("name") or ""
                     content = data.get("content")
                     if tool_call_id:
-                        await bridge.publish(run_id, "custom", {
-                            "type": "tool_result",
-                            "tool_call_id": tool_call_id,
-                            "tool_name": tool_name,
-                            "content": content,
-                        })
+                        await bridge.publish(
+                            run_id,
+                            "custom",
+                            {
+                                "type": "tool_result",
+                                "tool_call_id": tool_call_id,
+                                "tool_name": tool_name,
+                                "content": content,
+                            },
+                        )
 
         # 8. Terminal status.
         if record.abort_event.is_set():
@@ -601,10 +621,14 @@ async def _run_asset_report_pipeline(
             ai_text = "".join(ai_response_parts)
             step2_payload = parse_report_json(ai_text)
             if step2_payload is not None:
-                await bridge.publish(run_id, "custom", {
-                    "type": "report.step2_json",
-                    "payload": step2_payload,
-                })
+                await bridge.publish(
+                    run_id,
+                    "custom",
+                    {
+                        "type": "report.step2_json",
+                        "payload": step2_payload,
+                    },
+                )
                 # R5 path 契约 + Finding 4: persist markdown_file_path by
                 # copying the step-1 sandbox markdown into the tenant reports
                 # dir (server-generated filename with run_id suffix — collision
@@ -633,7 +657,8 @@ async def _run_asset_report_pipeline(
                     # /runs polling see failure.
                     logger.warning(
                         "[_run_asset_report_pipeline] persist_report_result failed run=%s err=%s",
-                        run_id, type(persist_exc).__name__,
+                        run_id,
+                        type(persist_exc).__name__,
                     )
                     completion_status = "error"
                     error_type = type(persist_exc).__name__
@@ -656,7 +681,9 @@ async def _run_asset_report_pipeline(
         raise
     except Exception as exc:
         error_type = type(exc).__name__
-        logger.warning("[_run_asset_report_pipeline] failed run=%s err=%s", run_id, error_type)
+        logger.warning(
+            "[_run_asset_report_pipeline] failed run=%s err=%s", run_id, error_type
+        )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
         await bridge.publish(
             run_id,
@@ -670,6 +697,7 @@ async def _run_asset_report_pipeline(
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
+
             reset_active_skill(_skill_token)
 
         # 10. Audit log (Key Invariant #3)
@@ -688,7 +716,7 @@ async def _run_asset_report_pipeline(
 
         # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow
         # pattern). No suggestions/title (report is not a chat).
-        end_payload = {"status": completion_status}
+        end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:
             end_payload["usage"] = cumulative_usage
         await bridge.publish(run_id, "end", end_payload)
@@ -831,8 +859,11 @@ async def _run_import_parse_agent(
         # import-parse is stateless (memory_enabled=False) — each run parses the
         # injected document fresh, no DeerMem pollution.
         from apps.agent.services.agent_registry import get_agent_registry
+
         agent_meta = await get_agent_registry().get("import-parse", family_id)
-        memory_enabled = bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        memory_enabled = (
+            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        )
 
         adapter = create_family_adapter(
             family_id,
@@ -847,7 +878,10 @@ async def _run_import_parse_agent(
 
         # 5. User message = backend-injected document text (preferred) or the
         # synthetic slash trigger (skill-load fallback).
-        user_message = _extract_import_parse_document(graph_input) or _SYNTHETIC_IMPORT_PARSE_TRIGGER
+        user_message = (
+            _extract_import_parse_document(graph_input)
+            or _SYNTHETIC_IMPORT_PARSE_TRIGGER
+        )
 
         # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)
@@ -859,6 +893,7 @@ async def _run_import_parse_agent(
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             set_active_skill,
         )
+
         _skill_token = set_active_skill("import-parse")
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name="import-parse",
@@ -897,7 +932,9 @@ async def _run_import_parse_agent(
                     if tool_calls:
                         for tc in extract_tool_calls(data):
                             raw_name = tc.get("name", "")
-                            tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                            tool_type, display_name, icon, display_key = (
+                                resolve_tool_metadata(raw_name)
+                            )
                             payload: dict[str, Any] = {
                                 "type": "tool_call",
                                 "tool_call_id": tc.get("id", ""),
@@ -915,12 +952,16 @@ async def _run_import_parse_agent(
                     tool_name = data.get("name") or ""
                     content = data.get("content")
                     if tool_call_id:
-                        await bridge.publish(run_id, "custom", {
-                            "type": "tool_result",
-                            "tool_call_id": tool_call_id,
-                            "tool_name": tool_name,
-                            "content": content,
-                        })
+                        await bridge.publish(
+                            run_id,
+                            "custom",
+                            {
+                                "type": "tool_result",
+                                "tool_call_id": tool_call_id,
+                                "tool_name": tool_name,
+                                "content": content,
+                            },
+                        )
 
         # 8. Terminal status.
         if record.abort_event.is_set():
@@ -939,10 +980,14 @@ async def _run_import_parse_agent(
             ai_text = "".join(ai_response_parts)
             parsed = parse_report_json(ai_text)
             if parsed is not None:
-                await bridge.publish(run_id, "custom", {
-                    "type": "import-parse.result",
-                    "payload": parsed,
-                })
+                await bridge.publish(
+                    run_id,
+                    "custom",
+                    {
+                        "type": "import-parse.result",
+                        "payload": parsed,
+                    },
+                )
 
     except asyncio.CancelledError:
         error_type = "Cancelled"
@@ -950,7 +995,9 @@ async def _run_import_parse_agent(
         raise
     except Exception as exc:
         error_type = type(exc).__name__
-        logger.warning("[_run_import_parse_agent] failed run=%s err=%s", run_id, error_type)
+        logger.warning(
+            "[_run_import_parse_agent] failed run=%s err=%s", run_id, error_type
+        )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
         await bridge.publish(
             run_id,
@@ -964,6 +1011,7 @@ async def _run_import_parse_agent(
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
+
             reset_active_skill(_skill_token)
 
         # 10. Audit log (Key Invariant #3)
@@ -982,7 +1030,7 @@ async def _run_import_parse_agent(
 
         # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow
         # pattern). No suggestions/title (parse is not a chat).
-        end_payload = {"status": completion_status}
+        end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:
             end_payload["usage"] = cumulative_usage
         await bridge.publish(run_id, "end", end_payload)
@@ -1059,8 +1107,11 @@ async def _run_finance_coach_agent(
 
         # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
         from apps.agent.services.agent_registry import get_agent_registry
+
         agent_meta = await get_agent_registry().get("finance-coach", family_id)
-        memory_enabled = bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        memory_enabled = (
+            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        )
 
         adapter = create_family_adapter(
             family_id,
@@ -1076,7 +1127,10 @@ async def _run_finance_coach_agent(
         # 5. User message = backend-injected snapshot (preferred) or synthetic
         # slash trigger (skill-load fallback). The snapshot is JSON the backend
         # posts as the run's user message content (see Task 8 backend trigger).
-        user_message = _extract_finance_coach_snapshot(graph_input) or _SYNTHETIC_FINANCE_COACH_TRIGGER
+        user_message = (
+            _extract_finance_coach_snapshot(graph_input)
+            or _SYNTHETIC_FINANCE_COACH_TRIGGER
+        )
 
         # 6. PII redaction (Key Invariant #1) — defense-in-depth; backend already
         # minimized PII (id+category, no name) per spec §7.1.
@@ -1088,6 +1142,7 @@ async def _run_finance_coach_agent(
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             set_active_skill,
         )
+
         _skill_token = set_active_skill("finance-coach")
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name="finance-coach",
@@ -1126,7 +1181,9 @@ async def _run_finance_coach_agent(
                     if tool_calls:
                         for tc in extract_tool_calls(data):
                             raw_name = tc.get("name", "")
-                            tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                            tool_type, display_name, icon, display_key = (
+                                resolve_tool_metadata(raw_name)
+                            )
                             payload: dict[str, Any] = {
                                 "type": "tool_call",
                                 "tool_call_id": tc.get("id", ""),
@@ -1144,12 +1201,16 @@ async def _run_finance_coach_agent(
                     tool_name = data.get("name") or ""
                     content = data.get("content")
                     if tool_call_id:
-                        await bridge.publish(run_id, "custom", {
-                            "type": "tool_result",
-                            "tool_call_id": tool_call_id,
-                            "tool_name": tool_name,
-                            "content": content,
-                        })
+                        await bridge.publish(
+                            run_id,
+                            "custom",
+                            {
+                                "type": "tool_result",
+                                "tool_call_id": tool_call_id,
+                                "tool_name": tool_name,
+                                "content": content,
+                            },
+                        )
 
         # 8. Terminal status.
         if record.abort_event.is_set():
@@ -1172,10 +1233,14 @@ async def _run_finance_coach_agent(
                 # required fields) runs in Plan B's D2/W4 UI before any enable;
                 # a malformed payload is dropped there, not here (the worker is
                 # transport, not policy).
-                await bridge.publish(run_id, "custom", {
-                    "type": "finance_coach.result",
-                    "payload": parsed,
-                })
+                await bridge.publish(
+                    run_id,
+                    "custom",
+                    {
+                        "type": "finance_coach.result",
+                        "payload": parsed,
+                    },
+                )
 
     except asyncio.CancelledError:
         error_type = "Cancelled"
@@ -1183,7 +1248,9 @@ async def _run_finance_coach_agent(
         raise
     except Exception as exc:
         error_type = type(exc).__name__
-        logger.warning("[_run_finance_coach_agent] failed run=%s err=%s", run_id, error_type)
+        logger.warning(
+            "[_run_finance_coach_agent] failed run=%s err=%s", run_id, error_type
+        )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
         await bridge.publish(
             run_id,
@@ -1197,6 +1264,7 @@ async def _run_finance_coach_agent(
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
+
             reset_active_skill(_skill_token)
 
         # 10. Audit log (Key Invariant #3)
@@ -1333,8 +1401,11 @@ async def _run_wish_advice_agent(
 
         # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
         from apps.agent.services.agent_registry import get_agent_registry
+
         agent_meta = await get_agent_registry().get("wish-advice", family_id)
-        memory_enabled = bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        memory_enabled = (
+            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        )
 
         adapter = create_family_adapter(
             family_id,
@@ -1349,7 +1420,9 @@ async def _run_wish_advice_agent(
 
         # 5. User message = backend-injected wishes snapshot (preferred) or
         # synthetic slash trigger (skill-load fallback).
-        user_message = _extract_wish_advice_input(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
+        user_message = (
+            _extract_wish_advice_input(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
+        )
 
         # 6. PII redaction (Key Invariant #1) — defense-in-depth; the backend
         # already minimized PII per spec §7.1 (wish name is prompt-required for
@@ -1362,6 +1435,7 @@ async def _run_wish_advice_agent(
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             set_active_skill,
         )
+
         _skill_token = set_active_skill("wish-advice")
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name="wish-advice",
@@ -1400,7 +1474,9 @@ async def _run_wish_advice_agent(
                     if tool_calls:
                         for tc in extract_tool_calls(data):
                             raw_name = tc.get("name", "")
-                            tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                            tool_type, display_name, icon, display_key = (
+                                resolve_tool_metadata(raw_name)
+                            )
                             payload: dict[str, Any] = {
                                 "type": "tool_call",
                                 "tool_call_id": tc.get("id", ""),
@@ -1418,12 +1494,16 @@ async def _run_wish_advice_agent(
                     tool_name = data.get("name") or ""
                     content = data.get("content")
                     if tool_call_id:
-                        await bridge.publish(run_id, "custom", {
-                            "type": "tool_result",
-                            "tool_call_id": tool_call_id,
-                            "tool_name": tool_name,
-                            "content": content,
-                        })
+                        await bridge.publish(
+                            run_id,
+                            "custom",
+                            {
+                                "type": "tool_result",
+                                "tool_call_id": tool_call_id,
+                                "tool_name": tool_name,
+                                "content": content,
+                            },
+                        )
 
         # 8. Terminal status.
         if record.abort_event.is_set():
@@ -1446,10 +1526,14 @@ async def _run_wish_advice_agent(
                 # fields) runs in Plan B's W4 UI (WishAdviceCard.validateAdvice)
                 # + backend validate_advice before any enable; a malformed payload
                 # is dropped there, not here (the worker is transport, not policy).
-                await bridge.publish(run_id, "custom", {
-                    "type": "wish_advice.result",
-                    "payload": parsed,
-                })
+                await bridge.publish(
+                    run_id,
+                    "custom",
+                    {
+                        "type": "wish_advice.result",
+                        "payload": parsed,
+                    },
+                )
 
     except asyncio.CancelledError:
         error_type = "Cancelled"
@@ -1457,7 +1541,9 @@ async def _run_wish_advice_agent(
         raise
     except Exception as exc:
         error_type = type(exc).__name__
-        logger.warning("[_run_wish_advice_agent] failed run=%s err=%s", run_id, error_type)
+        logger.warning(
+            "[_run_wish_advice_agent] failed run=%s err=%s", run_id, error_type
+        )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
         await bridge.publish(
             run_id,
@@ -1471,6 +1557,7 @@ async def _run_wish_advice_agent(
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
+
             reset_active_skill(_skill_token)
 
         # 10. Audit log (Key Invariant #3)
@@ -1530,7 +1617,9 @@ def _get_shared_checkpointer_for_goal() -> Any:
 def _goal_checkpoint_id(checkpoint_tuple: Any) -> str | None:
     config = getattr(checkpoint_tuple, "config", {}) or {}
     configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
-    checkpoint_id = configurable.get("checkpoint_id") if isinstance(configurable, dict) else None
+    checkpoint_id = (
+        configurable.get("checkpoint_id") if isinstance(configurable, dict) else None
+    )
     if isinstance(checkpoint_id, str):
         return checkpoint_id
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
@@ -1543,8 +1632,12 @@ def _goal_checkpoint_id(checkpoint_tuple: Any) -> str | None:
 
 def _read_checkpoint_messages(checkpoint_tuple: Any) -> list[Any]:
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-    channel_values = checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
-    messages = channel_values.get("messages", []) if isinstance(channel_values, dict) else []
+    channel_values = (
+        checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
+    )
+    messages = (
+        channel_values.get("messages", []) if isinstance(channel_values, dict) else []
+    )
     return messages if isinstance(messages, list) else []
 
 
@@ -1552,12 +1645,16 @@ def _read_checkpoint_goal(checkpoint_tuple: Any) -> dict[str, Any] | None:
     import copy
 
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-    channel_values = checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
+    channel_values = (
+        checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
+    )
     raw_goal = channel_values.get("goal") if isinstance(channel_values, dict) else None
     return copy.deepcopy(raw_goal) if isinstance(raw_goal, dict) else None
 
 
-def _goal_instance_matches(left: dict[str, Any] | None, right: dict[str, Any] | None) -> bool:
+def _goal_instance_matches(
+    left: dict[str, Any] | None, right: dict[str, Any] | None
+) -> bool:
     if not left or not right:
         return False
     same_status = left.get("status") == right.get("status") == "active"
@@ -1602,7 +1699,9 @@ def _goal_message_text(message: Any) -> str:
         content = message.get("content")
     if isinstance(content, list):
         parts = [
-            item["text"] if isinstance(item, dict) and isinstance(item.get("text"), str) else item
+            item["text"]
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+            else item
             for item in content
         ]
         content = "".join(str(p) for p in parts)
@@ -1630,7 +1729,9 @@ async def _reread_goal_and_checkpoint(
     checkpointer: Any, thread_id: str
 ) -> tuple[dict[str, Any] | None, Any]:
     goal = await read_thread_goal(checkpointer, thread_id)
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(checkpointer, "get_tuple", None)
+    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
+        checkpointer, "get_tuple", None
+    )
     if aget_tuple is None:
         return goal, None
     result = aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
@@ -1676,23 +1777,36 @@ async def _prepare_goal_continuation_input(
     try:
         goal = await read_thread_goal(checkpointer, thread_id)
     except Exception:
-        logger.warning("Could not read goal for thread %s after run %s", thread_id, run_id, exc_info=True)
+        logger.warning(
+            "Could not read goal for thread %s after run %s",
+            thread_id,
+            run_id,
+            exc_info=True,
+        )
         return None
     if not goal or goal.get("status") != "active":
         return None
 
     # Read the checkpoint for messages + a pre-evaluation signature.
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(checkpointer, "get_tuple", None)
+    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
+        checkpointer, "get_tuple", None
+    )
     if aget_tuple is None:
         return None
     try:
         import inspect
 
-        checkpoint_tuple = aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
+        checkpoint_tuple = aget_tuple(
+            {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+        )
         if inspect.isawaitable(checkpoint_tuple):
             checkpoint_tuple = await checkpoint_tuple
     except Exception:
-        logger.warning("Could not read checkpoint for goal eval thread %s", thread_id, exc_info=True)
+        logger.warning(
+            "Could not read checkpoint for goal eval thread %s",
+            thread_id,
+            exc_info=True,
+        )
         return None
     if checkpoint_tuple is None:
         return None
@@ -1709,12 +1823,19 @@ async def _prepare_goal_continuation_input(
             "reason": "No durable assistant end-of-turn receipt was available.",
             "evidence_summary": "",
         }
-        no_progress_count = compute_no_progress_count(goal, evaluation, evidence_signature=evidence_signature)
+        no_progress_count = compute_no_progress_count(
+            goal, evaluation, evidence_signature=evidence_signature
+        )
         await _persist_goal_evaluation(
-            checkpointer=checkpointer, thread_id=thread_id, run_id=run_id,
-            goal=goal, evaluation=evaluation, no_progress_count=no_progress_count,
+            checkpointer=checkpointer,
+            thread_id=thread_id,
+            run_id=run_id,
+            goal=goal,
+            evaluation=evaluation,
+            no_progress_count=no_progress_count,
             stand_down_reason="no_durable_end_of_turn",
-            evidence_signature=evidence_signature, family_ai_config=family_ai_config,
+            evidence_signature=evidence_signature,
+            family_ai_config=family_ai_config,
         )
         return None
 
@@ -1731,46 +1852,79 @@ async def _prepare_goal_continuation_input(
             user_id=user_id,
         )
     except GoalEvaluationError as exc:
-        logger.warning("Goal evaluator failed for thread %s after run %s: %s", thread_id, run_id, exc)
+        logger.warning(
+            "Goal evaluator failed for thread %s after run %s: %s",
+            thread_id,
+            run_id,
+            exc,
+        )
         evaluation = {
             "satisfied": False,
             "blocker": "evaluator_error",
             "reason": str(exc),
             "evidence_summary": "",
         }
-        no_progress_count = compute_no_progress_count(goal, evaluation, evidence_signature=evidence_signature)
+        no_progress_count = compute_no_progress_count(
+            goal, evaluation, evidence_signature=evidence_signature
+        )
         await _persist_goal_evaluation(
-            checkpointer=checkpointer, thread_id=thread_id, run_id=run_id,
-            goal=goal, evaluation=evaluation, no_progress_count=no_progress_count,
+            checkpointer=checkpointer,
+            thread_id=thread_id,
+            run_id=run_id,
+            goal=goal,
+            evaluation=evaluation,
+            no_progress_count=no_progress_count,
             stand_down_reason="blocked:evaluator_error",
-            evidence_signature=evidence_signature, family_ai_config=family_ai_config,
+            evidence_signature=evidence_signature,
+            family_ai_config=family_ai_config,
         )
         return None
 
     if abort_event.is_set():
         return None
 
-    no_progress_count = compute_no_progress_count(goal, evaluation, evidence_signature=evidence_signature)
+    no_progress_count = compute_no_progress_count(
+        goal, evaluation, evidence_signature=evidence_signature
+    )
 
     # Re-check that neither the goal nor the visible conversation changed while
     # the evaluator ran — a user message or /goal clear racing the evaluation wins.
     try:
-        current_goal, current_checkpoint_tuple = await _reread_goal_and_checkpoint(checkpointer, thread_id)
+        current_goal, current_checkpoint_tuple = await _reread_goal_and_checkpoint(
+            checkpointer, thread_id
+        )
     except Exception:
-        logger.warning("Could not re-check goal state for thread %s after evaluation", thread_id, exc_info=True)
+        logger.warning(
+            "Could not re-check goal state for thread %s after evaluation",
+            thread_id,
+            exc_info=True,
+        )
         return None
-    if not _goal_instance_matches(goal, current_goal) or current_checkpoint_tuple is None:
+    if (
+        not _goal_instance_matches(goal, current_goal)
+        or current_checkpoint_tuple is None
+    ):
         return None
-    checkpoint_changed = _goal_checkpoint_id(current_checkpoint_tuple) != checkpoint_id_before
+    checkpoint_changed = (
+        _goal_checkpoint_id(current_checkpoint_tuple) != checkpoint_id_before
+    )
     messages_changed = (
-        visible_conversation_signature(_read_checkpoint_messages(current_checkpoint_tuple)) != conversation_signature_before
+        visible_conversation_signature(
+            _read_checkpoint_messages(current_checkpoint_tuple)
+        )
+        != conversation_signature_before
     )
     if checkpoint_changed or messages_changed:
         await _persist_goal_evaluation(
-            checkpointer=checkpointer, thread_id=thread_id, run_id=run_id,
-            goal=goal, evaluation=evaluation, no_progress_count=no_progress_count,
+            checkpointer=checkpointer,
+            thread_id=thread_id,
+            run_id=run_id,
+            goal=goal,
+            evaluation=evaluation,
+            no_progress_count=no_progress_count,
             stand_down_reason="thread_changed_after_evaluation",
-            evidence_signature=evidence_signature, family_ai_config=family_ai_config,
+            evidence_signature=evidence_signature,
+            family_ai_config=family_ai_config,
         )
         return None
 
@@ -1785,13 +1939,18 @@ async def _prepare_goal_continuation_input(
                 if latest_goal is None or not _goal_instance_matches(goal, latest_goal):
                     return None
                 await write_thread_goal(
-                    checkpointer, thread_id, None, as_node="goal_evaluator",
+                    checkpointer,
+                    thread_id,
+                    None,
+                    as_node="goal_evaluator",
                     expected_checkpoint_id=_goal_checkpoint_id(latest_tuple),
                 )
         except GoalWriteConflict:
             return None
         except Exception:
-            logger.warning("Could not clear satisfied goal for thread %s", thread_id, exc_info=True)
+            logger.warning(
+                "Could not clear satisfied goal for thread %s", thread_id, exc_info=True
+            )
         return None
 
     stand_down_reason = _stand_down_reason(goal, evaluation, no_progress_count)
@@ -1799,48 +1958,75 @@ async def _prepare_goal_continuation_input(
         goal, evaluation, no_progress_count=no_progress_count
     ):
         await _persist_goal_evaluation(
-            checkpointer=checkpointer, thread_id=thread_id, run_id=run_id,
-            goal=goal, evaluation=evaluation, no_progress_count=no_progress_count,
+            checkpointer=checkpointer,
+            thread_id=thread_id,
+            run_id=run_id,
+            goal=goal,
+            evaluation=evaluation,
+            no_progress_count=no_progress_count,
             stand_down_reason=stand_down_reason,
-            evidence_signature=evidence_signature, family_ai_config=family_ai_config,
+            evidence_signature=evidence_signature,
+            family_ai_config=family_ai_config,
         )
         return None
 
     # Bump continuation_count (inside the lock, defensive max against a racing bump).
     next_count = int(goal.get("continuation_count", 0)) + 1
     updated_goal = await _persist_goal_evaluation(
-        checkpointer=checkpointer, thread_id=thread_id, run_id=run_id,
-        goal=goal, evaluation=evaluation, no_progress_count=no_progress_count,
+        checkpointer=checkpointer,
+        thread_id=thread_id,
+        run_id=run_id,
+        goal=goal,
+        evaluation=evaluation,
+        no_progress_count=no_progress_count,
         continuation_count=next_count,
-        evidence_signature=evidence_signature, family_ai_config=family_ai_config,
+        evidence_signature=evidence_signature,
+        family_ai_config=family_ai_config,
     )
     if updated_goal is None:
         return None
 
     # Final guard: verify the visible conversation did not change before queuing.
     try:
-        latest_goal, latest_checkpoint_tuple = await _reread_goal_and_checkpoint(checkpointer, thread_id)
+        latest_goal, latest_checkpoint_tuple = await _reread_goal_and_checkpoint(
+            checkpointer, thread_id
+        )
     except Exception:
-        logger.warning("Could not verify queued goal continuation for thread %s", thread_id, exc_info=True)
-        return None
-    if not _goal_instance_matches(updated_goal, latest_goal) or latest_checkpoint_tuple is None:
+        logger.warning(
+            "Could not verify queued goal continuation for thread %s",
+            thread_id,
+            exc_info=True,
+        )
         return None
     if (
-        visible_conversation_signature(_read_checkpoint_messages(latest_checkpoint_tuple))
+        not _goal_instance_matches(updated_goal, latest_goal)
+        or latest_checkpoint_tuple is None
+    ):
+        return None
+    if (
+        visible_conversation_signature(
+            _read_checkpoint_messages(latest_checkpoint_tuple)
+        )
         != conversation_signature_before
     ):
         assert latest_goal is not None  # _goal_instance_matches guarantees non-None
         await _persist_goal_evaluation(
-            checkpointer=checkpointer, thread_id=thread_id, run_id=run_id,
-            goal=latest_goal, evaluation=evaluation, no_progress_count=no_progress_count,
+            checkpointer=checkpointer,
+            thread_id=thread_id,
+            run_id=run_id,
+            goal=latest_goal,
+            evaluation=evaluation,
+            no_progress_count=no_progress_count,
             stand_down_reason="thread_changed_before_continuation",
-            evidence_signature=evidence_signature, family_ai_config=family_ai_config,
+            evidence_signature=evidence_signature,
+            family_ai_config=family_ai_config,
         )
         return None
 
     logger.info(
         "Run %s continuing thread %s for active goal (%d/%d)",
-        run_id, thread_id,
+        run_id,
+        thread_id,
         updated_goal.get("continuation_count", next_count),
         updated_goal.get("max_continuations", 0),
     )
@@ -1859,7 +2045,9 @@ async def _prepare_goal_continuation_input(
 
 
 async def _reread_checkpoint_tuple(checkpointer: Any, thread_id: str) -> Any:
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(checkpointer, "get_tuple", None)
+    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
+        checkpointer, "get_tuple", None
+    )
     if aget_tuple is None:
         return None
     import inspect
@@ -1917,14 +2105,19 @@ async def _persist_goal_evaluation(
                 ),
             )
             await write_thread_goal(
-                checkpointer, thread_id, updated_goal, as_node="goal_evaluator",
+                checkpointer,
+                thread_id,
+                updated_goal,
+                as_node="goal_evaluator",
                 expected_checkpoint_id=expected_checkpoint_id,
             )
         return updated_goal
     except GoalWriteConflict:
         return None
     except Exception:
-        logger.warning("Could not persist goal evaluation for thread %s", thread_id, exc_info=True)
+        logger.warning(
+            "Could not persist goal evaluation for thread %s", thread_id, exc_info=True
+        )
         return None
 
 
@@ -2022,7 +2215,9 @@ async def _run_numina_agent(
         # per-call plan_mode=True arrives via stream(), this causes unnecessary
         # agent rebuilds on every call and may miss the TodoMiddleware's
         # write_todos tool if the rebuild doesn't fire correctly.
-        configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+        configurable = (
+            config.get("configurable", {}) if isinstance(config, dict) else {}
+        )
         call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
         call_plan_mode = bool(configurable.get("is_plan_mode", False))
         call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
@@ -2033,7 +2228,9 @@ async def _run_numina_agent(
         # to create_family_adapter so DeerFlow's SkillActivationMiddleware enforces
         # the whitelist. Q1 resolution: custom-skills-only (builtin excluded).
         enabled_skills = await client.get_enabled_skills()
-        available_skills = {s["skill_id"] for s in enabled_skills if s.get("skill_type") == "custom"}
+        available_skills = {
+            s["skill_id"] for s in enabled_skills if s.get("skill_type") == "custom"
+        }
 
         # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
         # U7 (D5 TodoList): plan_mode=True makes DeerFlow's build_middlewares
@@ -2072,7 +2269,8 @@ async def _run_numina_agent(
         # Only use chat-search when actual search capability is configured.
         # Otherwise the model is told it can search but has no tools → hallucinated searches.
         has_search_capability = bool(
-            ai_config.get("web_search_providers") or ai_config.get("web_search_mcp_servers")
+            ai_config.get("web_search_providers")
+            or ai_config.get("web_search_mcp_servers")
         )
 
         # 5b. Skill discovery is handled natively by DeerFlow: apply_prompt_template
@@ -2093,7 +2291,11 @@ async def _run_numina_agent(
         # because typed_stream_dispatch yields raw LangGraph `messages` events
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        skill_id = "chat-search" if (call_websearch_enabled and has_search_capability) else "chat"
+        skill_id = (
+            "chat-search"
+            if (call_websearch_enabled and has_search_capability)
+            else "chat"
+        )
         # Set the active skill so sync_tool_patch can filter tools to this skill's
         # declared allowed-tools whitelist (see active_skill_context module docstring).
         #
@@ -2111,7 +2313,10 @@ async def _run_numina_agent(
         # Slash-activated skill: skip set_active_skill, let DeerFlow handle it
         # Non-slash message: use existing chat/chat-search pre-selection
         _skill_token = None if _is_slash_message else set_active_skill(skill_id)
-        async def _stream_once(stream_context: Any, *, is_continuation: bool = False) -> None:
+
+        async def _stream_once(
+            stream_context: Any, *, is_continuation: bool = False
+        ) -> None:
             """Run one DeerFlow stream turn and forward events to the bridge.
 
             Extracted from the inline loop so the U4 goal continuation loop can
@@ -2167,14 +2372,18 @@ async def _run_numina_agent(
                         msg_id = data.get("id")
                         logger.info(
                             "[_run_numina_agent] AI message received: run=%s id=%s content_len=%d has_tool_calls=%s",
-                            run_id, msg_id, len(content) if content else 0, bool(tool_calls),
+                            run_id,
+                            msg_id,
+                            len(content) if content else 0,
+                            bool(tool_calls),
                         )
                         if content:
                             ai_response_parts.append(content)
                         else:
                             logger.warning(
                                 "[_run_numina_agent] AI message with empty content: run=%s data_keys=%s",
-                                run_id, list(data.keys()),
+                                run_id,
+                                list(data.keys()),
                             )
                         tool_calls_raw = tool_calls
                         if tool_calls_raw:
@@ -2186,7 +2395,9 @@ async def _run_numina_agent(
                                 # /ai/chat planning-steps UI shows readable Chinese action
                                 # labels (e.g. "查询资产数据") instead of raw tool names
                                 # (e.g. "Numina Backend MCP_get_assets").
-                                tool_type, display_name, icon, display_key = resolve_tool_metadata(raw_name)
+                                tool_type, display_name, icon, display_key = (
+                                    resolve_tool_metadata(raw_name)
+                                )
                                 payload: dict[str, Any] = {
                                     "type": "tool_call",
                                     "tool_call_id": tc.get("id", ""),
@@ -2208,12 +2419,16 @@ async def _run_numina_agent(
                         tool_name = data.get("name") or ""
                         content = data.get("content")
                         if tool_call_id:
-                            await bridge.publish(run_id, "custom", {
-                                "type": "tool_result",
-                                "tool_call_id": tool_call_id,
-                                "tool_name": tool_name,
-                                "content": content,
-                            })
+                            await bridge.publish(
+                                run_id,
+                                "custom",
+                                {
+                                    "type": "tool_result",
+                                    "tool_call_id": tool_call_id,
+                                    "tool_name": tool_name,
+                                    "content": content,
+                                },
+                            )
 
         # 7a. First (user-visible) stream turn.
         await _stream_once(redacted)
@@ -2246,7 +2461,9 @@ async def _run_numina_agent(
                 break
             logger.info(
                 "[_run_numina_agent] goal continuation run=%s thread=%s count=%s",
-                run_id, thread_id, continuation.get("continuation_count"),
+                run_id,
+                thread_id,
+                continuation.get("continuation_count"),
             )
             await _stream_once(continuation["context"], is_continuation=True)
 
@@ -2283,6 +2500,7 @@ async def _run_numina_agent(
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
+
             reset_active_skill(_skill_token)
 
         # 9. Audit log (Key Invariant #3)
@@ -2310,26 +2528,32 @@ async def _run_numina_agent(
         # envelope leaves every key unset, so the suggestions LLM falls back
         # to a dummy key and silently 401s. Skipped when the run aborted
         # before a provider was selected OR when the run was cancelled/interrupted.
-        if completion_status == 'complete' and selected_provider is not None:
+        if completion_status == "complete" and selected_provider is not None:
             ai_response = "".join(ai_response_parts)
-            suggestions = await generate_suggestions(ai_response, user_message, selected_provider)
+            suggestions = await generate_suggestions(
+                ai_response, user_message, selected_provider
+            )
             if suggestions:
-                await bridge.publish(run_id, "custom", {
-                    "type": "suggestions",
-                    "suggestions": suggestions,
-                })
+                await bridge.publish(
+                    run_id,
+                    "custom",
+                    {
+                        "type": "suggestions",
+                        "suggestions": suggestions,
+                    },
+                )
 
         # Q2: publish a real `end` data frame carrying the completion status
         # so the frontend can distinguish a clean completion from a truncated
         # stream (#19) without guessing from content. publish_end() below only
         # signals the sentinel (data=None), so the data frame must precede it.
         # Include cumulative token usage from DeerFlow when available.
-        end_payload = {"status": completion_status}
+        end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:
             end_payload["usage"] = cumulative_usage
         await bridge.publish(run_id, "end", end_payload)
 
-        if completion_status == 'complete' and selected_provider is not None:
+        if completion_status == "complete" and selected_provider is not None:
             # Sync / generate the thread title. DeerFlow's TitleMiddleware
             # writes to the checkpoint, but Numina's adapter runs the sync
             # ``stream()`` path so only the sync ``after_model`` hook fires -

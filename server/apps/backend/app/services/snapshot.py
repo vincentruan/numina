@@ -25,14 +25,16 @@ def auto_generate_daily_snapshots(db: Session) -> None:
             .first()
         )
         if not existing:
-            generate_snapshots(db, family.id)
+            generate_snapshots(db, str(family.id))
 
 
 def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
     today = date.today()
     snapshots = []
 
-    members = db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+    members = (
+        db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+    )
 
     family_total_assets = 0.0
     family_total_liabilities = 0.0
@@ -45,7 +47,9 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
             .all()
         )
         member_assets = sum(
-            ExchangeRateService.convert(float(a.current_value or 0), a.currency or "CNY", "CNY", db)
+            ExchangeRateService.convert(
+                float(a.current_value or 0), a.currency or "CNY", "CNY", db
+            )
             for a in total_assets
         )
 
@@ -56,7 +60,12 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
             .all()
         )
         member_liabilities = sum(
-            ExchangeRateService.convert(float(l.remaining_amount or 0), getattr(l, "currency", "CNY") or "CNY", "CNY", db)
+            ExchangeRateService.convert(
+                float(l.remaining_amount or 0),
+                getattr(l, "currency", "CNY") or "CNY",
+                "CNY",
+                db,
+            )
             for l in total_liabilities
         )
 

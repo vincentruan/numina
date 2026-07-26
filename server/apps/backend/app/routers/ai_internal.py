@@ -33,7 +33,9 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     """为 agent 调用构造一个代理 User 对象（使用家庭 owner）。"""
     user = (
         db.query(User)
-        .filter(User.family_id == family_id, User.role == "owner", User.is_active == True)  # noqa: E712
+        .filter(
+            User.family_id == family_id, User.role == "owner", User.is_active == True
+        )  # noqa: E712
         .first()
     )
     if not user:
@@ -110,6 +112,7 @@ def internal_get_liabilities(
     db: Session = Depends(get_db),
 ):
     from apps.backend.app.models.liability import Liability
+
     liabilities = (
         db.query(Liability)
         .filter(Liability.family_id == family_id, Liability.is_active == True)  # noqa: E712
@@ -119,9 +122,15 @@ def internal_get_liabilities(
         {
             "id": li.id,
             "category": li.category,
-            "remaining_amount": float(li.remaining_amount) if li.remaining_amount is not None else None,
-            "original_amount": float(li.original_amount) if li.original_amount is not None else None,
-            "monthly_payment": float(li.monthly_payment) if li.monthly_payment is not None else None,
+            "remaining_amount": float(li.remaining_amount)
+            if li.remaining_amount is not None
+            else None,
+            "original_amount": float(li.original_amount)
+            if li.original_amount is not None
+            else None,
+            "monthly_payment": float(li.monthly_payment)
+            if li.monthly_payment is not None
+            else None,
             "interest_rate": li.interest_rate,
             "start_date": li.start_date.isoformat() if li.start_date else None,
             "end_date": li.end_date.isoformat() if li.end_date else None,
@@ -131,7 +140,9 @@ def internal_get_liabilities(
     ]
 
 
-def _check_recovery_schedule_match(recovery_schedule: str | None, now: datetime) -> bool:
+def _check_recovery_schedule_match(
+    recovery_schedule: str | None, now: datetime
+) -> bool:
     """Check if current time matches recovery schedule pattern.
 
     Recovery schedule format: comma-separated time patterns like ":01,:31"
@@ -180,7 +191,10 @@ def internal_get_ai_config(
             AIProviderConfig.is_active == True,  # noqa: E712
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
-        .order_by(AIProviderConfig.display_order.asc().nulls_last(), AIProviderConfig.created_at.asc())
+        .order_by(
+            AIProviderConfig.display_order.asc().nulls_last(),
+            AIProviderConfig.created_at.asc(),
+        )
         .all()
     )
 
@@ -205,13 +219,17 @@ def internal_get_ai_config(
             if provider.api_key_encrypted:
                 api_key = decrypt_api_key(provider.api_key_encrypted)
 
-            web_search_providers.append({
-                "provider_id": provider.id,
-                "provider_name": provider.provider_name,
-                "provider_class": template.get("provider_class") if template else None,
-                "api_key": api_key,
-                "max_results": provider.max_results,
-            })
+            web_search_providers.append(
+                {
+                    "provider_id": provider.id,
+                    "provider_name": provider.provider_name,
+                    "provider_class": template.get("provider_class")
+                    if template
+                    else None,
+                    "api_key": api_key,
+                    "max_results": provider.max_results,
+                }
+            )
 
         websearch_mcp_servers = (
             db.query(FamilyMCPServer)
@@ -294,28 +312,32 @@ def internal_get_ai_config(
             cfg.circuit_open = new_circuit_open
             state_changed = True
 
-        api_key = decrypt_api_key(cfg.api_key_encrypted)
+        api_key = decrypt_api_key(cfg.api_key_encrypted or "")
         if not api_key:
             continue
 
-        providers.append({
-            "config_id": str(cfg.id),
-            "ai_provider": cfg.provider,
-            "api_key": api_key,
-            "ai_base_url": cfg.base_url,
-            "ai_model_id": cfg.model_id,
-            "ai_vision_model_id": cfg.vision_model_id,
-            "model_2_id": cfg.model_2_id,
-            "model_3_id": cfg.model_3_id,
-            "model_1_capabilities": _parse_capabilities(cfg.model_1_capabilities),
-            "model_2_capabilities": _parse_capabilities(cfg.model_2_capabilities),
-            "model_3_capabilities": _parse_capabilities(cfg.model_3_capabilities),
-            "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
-            # Circuit breaker metadata for agent routing decisions
-            "circuit_state": cfg.circuit_state,
-            "circuit_reason": cfg.circuit_reason,
-            "recovery_schedule": cfg.recovery_schedule,
-        })
+        providers.append(
+            {
+                "config_id": str(cfg.id),
+                "ai_provider": cfg.provider,
+                "api_key": api_key,
+                "ai_base_url": cfg.base_url,
+                "ai_model_id": cfg.model_id,
+                "ai_vision_model_id": cfg.vision_model_id,
+                "model_2_id": cfg.model_2_id,
+                "model_3_id": cfg.model_3_id,
+                "model_1_capabilities": _parse_capabilities(cfg.model_1_capabilities),
+                "model_2_capabilities": _parse_capabilities(cfg.model_2_capabilities),
+                "model_3_capabilities": _parse_capabilities(cfg.model_3_capabilities),
+                "timeout_seconds": cfg.timeout_seconds
+                if cfg.timeout_seconds is not None
+                else 60,
+                # Circuit breaker metadata for agent routing decisions
+                "circuit_state": cfg.circuit_state,
+                "circuit_reason": cfg.circuit_reason,
+                "recovery_schedule": cfg.recovery_schedule,
+            }
+        )
 
     # Single commit for all state transitions across all providers
     if state_changed:
@@ -341,13 +363,15 @@ def internal_get_ai_config(
         if provider.api_key_encrypted:
             api_key = decrypt_api_key(provider.api_key_encrypted)
 
-        web_search_providers.append({
-            "provider_id": provider.id,
-            "provider_name": provider.provider_name,
-            "provider_class": template.get("provider_class") if template else None,
-            "api_key": api_key,
-            "max_results": provider.max_results,
-        })
+        web_search_providers.append(
+            {
+                "provider_id": provider.id,
+                "provider_name": provider.provider_name,
+                "provider_class": template.get("provider_class") if template else None,
+                "api_key": api_key,
+                "max_results": provider.max_results,
+            }
+        )
 
     # Query enabled websearch-type MCP servers
     websearch_mcp_servers = (
@@ -381,7 +405,7 @@ def _parse_capabilities(cap_str: str | None) -> list[str]:
     if not cap_str:
         return []
     try:
-        return json.loads(cap_str)
+        return [str(x) for x in json.loads(cap_str)]
     except Exception:
         return []
 
@@ -588,7 +612,9 @@ def internal_half_open_result(
         cfg.circuit_state = "open"
         cfg.circuit_reason = "transient"
         cfg.circuit_open = True
-        cfg.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1)
+        cfg.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(
+            hours=1
+        )
         cfg.half_open_window_start = None
 
     db.commit()
@@ -642,9 +668,7 @@ def get_skill_registry(
     # Convert str to int for database query (Snowflake IDs are passed as strings)
     family_id_int = int(family_id)
     records = (
-        db.query(SkillRegistry)
-        .filter(SkillRegistry.family_id == family_id_int)
-        .all()
+        db.query(SkillRegistry).filter(SkillRegistry.family_id == family_id_int).all()
     )
     return [
         {
@@ -687,19 +711,22 @@ def internal_get_mcp_servers(
                     env_vars = json.loads(raw)
                 except Exception:
                     env_vars = {}
-        result.append({
-            "id": s.id,
-            "name": s.name,
-            "url": s.url,
-            "transport": s.transport,
-            "env_vars": env_vars,
-        })
+        result.append(
+            {
+                "id": s.id,
+                "name": s.name,
+                "url": s.url,
+                "transport": s.transport,
+                "env_vars": env_vars,
+            }
+        )
     return result
 
 
 # ---------------------------------------------------------------------------
 # AI Session CRUD — agent writes session metadata here instead of local SQLite
 # ---------------------------------------------------------------------------
+
 
 class SessionUpsertRequest(BaseModel):
     session_id: str
@@ -793,11 +820,17 @@ def internal_update_session_summary(
     import logging
 
     from apps.backend.app.models.ai_chat_session import AIChatSession
+
     logger = logging.getLogger(__name__)
 
-    logger.info("[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",
-                session_id, repr(body.title), repr(body.summary[:50] if body.summary else None),
-                body.status, repr(body.model))
+    logger.info(
+        "[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",
+        session_id,
+        repr(body.title),
+        repr(body.summary[:50] if body.summary else None),
+        body.status,
+        repr(body.model),
+    )
 
     row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
     if row is None or row.family_id != int(family_id):
@@ -810,7 +843,11 @@ def internal_update_session_summary(
         if row.title and not row.original_title:
             row.original_title = row.title
         row.title = body.title.strip()[:256]
-        logger.info("[backend] updating title for session=%s to %s", session_id, repr(body.title.strip()[:256]))
+        logger.info(
+            "[backend] updating title for session=%s to %s",
+            session_id,
+            repr(body.title.strip()[:256]),
+        )
     row.status = body.status
     if body.model:
         row.last_model = body.model
@@ -818,7 +855,11 @@ def internal_update_session_summary(
         row.is_pinned = body.is_pinned
     row.updated_at = datetime.utcnow()
     db.commit()
-    logger.info("[backend] session updated successfully session=%s title=%s", session_id, repr(row.title))
+    logger.info(
+        "[backend] session updated successfully session=%s title=%s",
+        session_id,
+        repr(row.title),
+    )
     return {"ok": True}
 
 
@@ -898,7 +939,9 @@ def internal_list_sessions(
         "updated_at": AIChatSession.updated_at,
         "created_at": AIChatSession.created_at,
     }.get(sort_by, AIChatSession.updated_at)
-    order_col = sort_column.desc() if sort_order.lower() == "desc" else sort_column.asc()
+    order_col = (
+        sort_column.desc() if sort_order.lower() == "desc" else sort_column.asc()
+    )
 
     rows = (
         q.order_by(AIChatSession.is_pinned.desc(), order_col)
@@ -954,6 +997,7 @@ def internal_get_chat_prompt(
     if family_id_path != str(family_id):
         raise AppError(ErrorCode.FORBIDDEN, "family_id mismatch")
     from apps.backend.app.services import workspace
+
     content = workspace.get_chat_prompt(family_id)
     return {"content": content}
 

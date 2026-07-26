@@ -48,7 +48,7 @@ def _deserialize_capabilities(cap_str: str | None) -> list[str]:
     if not cap_str:
         return []
     try:
-        return json.loads(cap_str)
+        return list(json.loads(cap_str))
     except json.JSONDecodeError:
         return []
 
@@ -575,25 +575,41 @@ def get_tenant_models(
             capabilities = _deserialize_capabilities(capabilities_json)
 
             # Determine capability flags
-            supports_thinking = "deep_thinking" in capabilities or cfg.thinking_supported
-            supports_vision = "vision" in capabilities or "vision_understanding" in capabilities or bool(cfg.vision_model_id)
-            supports_tool_calling = "tool_calling" in capabilities  # Default True if not specified
+            supports_thinking = (
+                "deep_thinking" in capabilities or cfg.thinking_supported
+            )
+            supports_vision = (
+                "vision" in capabilities
+                or "vision_understanding" in capabilities
+                or bool(cfg.vision_model_id)
+            )
+            supports_tool_calling = (
+                "tool_calling" in capabilities
+            )  # Default True if not specified
 
             # Build display name from model_id
             # E.g., "claude-sonnet-4-20250514" -> "Claude Sonnet 4"
-            display_name = _model_id_to_display_name(model_id, cfg.provider_name or cfg.provider)
+            display_name = _model_id_to_display_name(
+                model_id, cfg.provider_name or cfg.provider
+            )
 
-            models.append(ModelInfo(
-                name=model_id,
-                display_name=display_name,
-                provider=cfg.provider,
-                provider_name=cfg.provider_name or cfg.provider.capitalize(),
-                supports_thinking=supports_thinking,
-                supports_vision=supports_vision,
-                supports_tool_calling=supports_tool_calling if supports_tool_calling else True,
-                is_default=is_default and len([m for m in models if m.is_default]) == 0,  # Only first primary is default
-                config_id=str(cfg.id),
-            ))
+            models.append(
+                ModelInfo(
+                    name=model_id,
+                    display_name=display_name,
+                    provider=cfg.provider,
+                    provider_name=cfg.provider_name or cfg.provider.capitalize(),
+                    supports_thinking=supports_thinking,
+                    supports_vision=supports_vision,
+                    supports_tool_calling=supports_tool_calling
+                    if supports_tool_calling
+                    else True,
+                    is_default=is_default
+                    and len([m for m in models if m.is_default])
+                    == 0,  # Only first primary is default
+                    config_id=str(cfg.id),
+                )
+            )
 
     # Check tenant-level feature flags
     family_id_int = int(current_user.family_id)
@@ -610,7 +626,8 @@ def get_tenant_models(
             FamilyWebSearchProvider.family_id == family_id_int,
             FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
         )
-        .count() > 0
+        .count()
+        > 0
     )
 
     return ModelListResponse(

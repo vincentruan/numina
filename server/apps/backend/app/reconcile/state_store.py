@@ -117,11 +117,13 @@ class StateStore:
             if verified_at:
                 row.last_verified_at = verified_at  # type: ignore[assignment]
             if metadata:
-                row.metadata_json = json.dumps(metadata)
+                row.metadata_json = json.dumps(metadata)  # type: ignore[assignment]
 
         self._db.commit()
         return row
 
     def all_states(self) -> list[ReconcileState]:
         self._ensure_table()
-        return self._db.query(ReconcileState).order_by(ReconcileState.resource_name).all()
+        return (
+            self._db.query(ReconcileState).order_by(ReconcileState.resource_name).all()
+        )

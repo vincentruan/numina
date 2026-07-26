@@ -24,11 +24,11 @@ def render_template(reminder_type: str, channel_type: str, variables: dict) -> s
     with open(template_path, encoding="utf-8") as f:
         tmpl = json.load(f)
     if channel_type == "telegram":
-        return tmpl["telegram"]["text"].format_map(variables)
+        return str(tmpl["telegram"]["text"].format_map(variables))
     elif channel_type == "email_subject":
-        return tmpl["email"]["subject"].format_map(variables)
+        return str(tmpl["email"]["subject"].format_map(variables))
     elif channel_type == "email_body":
-        return tmpl["email"]["body"].format_map(variables)
+        return str(tmpl["email"]["body"].format_map(variables))
     raise ValueError(f"Unknown channel_type: {channel_type}")
 
 

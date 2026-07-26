@@ -75,14 +75,20 @@ def _create_default_mcp_server(db: Session, family_id: int) -> None:
     from packages.core.settings import settings
 
     # Check if already exists (idempotent)
-    existing = db.query(FamilyMCPServer).filter_by(
-        family_id=family_id,
-        name="Numina Backend MCP",
-    ).first()
+    existing = (
+        db.query(FamilyMCPServer)
+        .filter_by(
+            family_id=family_id,
+            name="Numina Backend MCP",
+        )
+        .first()
+    )
     if existing:
         return
 
-    mcp_url = f"{settings.BACKEND_BASE_URL.rstrip('/')}/api/v1/internal/mcp/{family_id}/sse"
+    mcp_url = (
+        f"{settings.BACKEND_BASE_URL.rstrip('/')}/api/v1/internal/mcp/{family_id}/sse"
+    )
 
     server = FamilyMCPServer(
         id=_next_id(),
@@ -122,7 +128,7 @@ def _check_refresh_rate_limit(user_id: str) -> None:
         pass
 
 
-def _check_password_change_rate_limit(user_id: str) -> None:
+def _check_password_change_rate_limit(user_id: int | str) -> None:
     """Limit password changes to 3 per hour per user."""
     try:
         from apps.backend.app.services.cache.factory import get_rate_limit_cache
@@ -280,7 +286,10 @@ def _check_rate_limit(username: str) -> None:
                 _log_security_event(
                     SecurityEventType.LOGIN_RATE_LIMITED, username=username
                 )
-                raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, int(lockout_seconds - elapsed))) from None
+                raise AppError(
+                    ErrorCode.AUTH_RATE_LIMITED,
+                    retry_after=max(1, int(lockout_seconds - elapsed)),
+                ) from None
             del _login_attempts[username]
 
 
@@ -368,6 +377,7 @@ def register(
 
     # Generate snowflake IDs explicitly so we can cross-reference family/user
     from apps.backend.app.utils.snowflake import next_id as _next_id
+
     family_id = _next_id()
     user_id = _next_id()
 
@@ -406,12 +416,8 @@ def register(
     )
 
     return TokenResponse(
-        access_token=create_access_token(
-            user_claims(user)
-        ),
-        refresh_token=create_refresh_token(
-            user_claims(user)
-        ),
+        access_token=create_access_token(user_claims(user)),
+        refresh_token=create_refresh_token(user_claims(user)),
     )
 
 
@@ -464,12 +470,8 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         "login_success", "success", user_id=user.id, family_id=user.family_id, db=db
     )
     return TokenResponse(
-        access_token=create_access_token(
-            user_claims(user)
-        ),
-        refresh_token=create_refresh_token(
-            user_claims(user)
-        ),
+        access_token=create_access_token(user_claims(user)),
+        refresh_token=create_refresh_token(user_claims(user)),
     )
 
 
@@ -509,7 +511,9 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     # Atomically revoke the old JTI — if another request already revoked it,
     # this is a concurrent replay; reject immediately to prevent token reuse.
     if old_jti:
-        won_race = revoke_jti_atomic(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+        won_race = revoke_jti_atomic(
+            old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
+        )
         if not won_race:
             _log_security_event(
                 SecurityEventType.TOKEN_REFRESH_FAILED,
@@ -518,9 +522,13 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
             )
             raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
-    new_refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
+    new_refresh_token = create_refresh_token(
+        user_claims(user, token_version=user.token_version)
+    )
     if old_jti:
-        new_payload = jwt.decode(new_refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        new_payload = jwt.decode(
+            new_refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM]
+        )
         new_jti = new_payload.get("jti")
         if new_jti:
             rotate_device_session_jti(db, old_jti=old_jti, new_jti=new_jti)
@@ -555,12 +563,8 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     db.refresh(user)
 
     return TokenResponse(
-        access_token=create_access_token(
-            user_claims(user)
-        ),
-        refresh_token=create_refresh_token(
-            user_claims(user)
-        ),
+        access_token=create_access_token(user_claims(user)),
+        refresh_token=create_refresh_token(user_claims(user)),
     )
 
 
@@ -708,12 +712,14 @@ def child_pin_login(
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, user_id=child.id)
     return TokenResponse(
         access_token=create_access_token(user_claims(child)),
-        refresh_token=create_child_refresh_token(user_claims(child, token_version=child.token_version)),
+        refresh_token=create_child_refresh_token(
+            user_claims(child, token_version=child.token_version)
+        ),
     )
 
 
 # Child PIN failure tracking: {child_id: (fail_count, first_fail_time)}
-_child_pin_attempts: dict[str, tuple[int, float]] = {}
+_child_pin_attempts: dict[int, tuple[int, float]] = {}
 
 
 def _record_child_pin_failure(db: Session, child: User) -> None:
@@ -767,8 +773,6 @@ def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     return TokenResponse(
-        access_token=create_access_token(
-            user_claims(child)
-        ),
+        access_token=create_access_token(user_claims(child)),
         refresh_token=refresh_tok,  # keep same refresh token
     )

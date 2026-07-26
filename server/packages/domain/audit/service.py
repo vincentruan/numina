@@ -17,8 +17,8 @@ logger = get_logger("security.audit")
 def write_audit_log(
     event_type: str,
     outcome: str,
-    user_id: str | None = None,
-    family_id: str | None = None,
+    user_id: int | str | None = None,
+    family_id: int | str | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
     detail: str | None = None,
@@ -77,11 +77,15 @@ def purge_old_audit_logs(retention_days: int = 90) -> int:
         db = SessionLocal()
         count = 0
         try:
-            count = db.query(SecurityAuditLog).filter(
-                SecurityAuditLog.created_at < cutoff
-            ).delete(synchronize_session=False)
+            count = (
+                db.query(SecurityAuditLog)
+                .filter(SecurityAuditLog.created_at < cutoff)
+                .delete(synchronize_session=False)
+            )
             db.commit()
-            logger.info(f"[audit_log] purged {count} entries older than {retention_days} days")
+            logger.info(
+                f"[audit_log] purged {count} entries older than {retention_days} days"
+            )
             write_audit_log(
                 event_type="audit_log_purge",
                 outcome="success",

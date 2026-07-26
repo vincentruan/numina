@@ -76,7 +76,7 @@ def list_models(
     try:
         resp = httpx.get(f"{gateway_url}/models", timeout=10.0)
         resp.raise_for_status()
-        return resp.json()
+        return dict(resp.json())
     except httpx.HTTPStatusError as e:
         logger.error("[gateway] list_models upstream error: %s", e)
         raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
@@ -106,12 +106,16 @@ def update_skill(
     try:
         resp = httpx.put(f"{gateway_url}/skills/{skill_name}", json=body, timeout=10.0)
         resp.raise_for_status()
-        return resp.json()
+        return dict(resp.json())
     except httpx.HTTPStatusError as e:
-        logger.error("[gateway] update_skill upstream error skill=%s: %s", skill_name, e)
+        logger.error(
+            "[gateway] update_skill upstream error skill=%s: %s", skill_name, e
+        )
         raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
     except httpx.RequestError as e:
-        logger.error("[gateway] update_skill request failed skill=%s: %s", skill_name, e)
+        logger.error(
+            "[gateway] update_skill request failed skill=%s: %s", skill_name, e
+        )
         raise HTTPException(status_code=502, detail=f"Gateway unreachable: {e}") from e
 
 
@@ -136,10 +140,14 @@ def delete_thread(
         resp.raise_for_status()
         return {"success": True, "thread_id": thread_id}
     except httpx.HTTPStatusError as e:
-        logger.error("[gateway] delete_thread upstream error thread=%s: %s", thread_id, e)
+        logger.error(
+            "[gateway] delete_thread upstream error thread=%s: %s", thread_id, e
+        )
         raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
     except httpx.RequestError as e:
-        logger.error("[gateway] delete_thread request failed thread=%s: %s", thread_id, e)
+        logger.error(
+            "[gateway] delete_thread request failed thread=%s: %s", thread_id, e
+        )
         raise HTTPException(status_code=502, detail=f"Gateway unreachable: {e}") from e
 
 
@@ -176,7 +184,9 @@ async def skill_dispatch(
             body.family_id,
             e,
         )
-        raise HTTPException(status_code=502, detail=f"Failed to fetch AI config: {e}") from e
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch AI config: {e}"
+        ) from e
 
     # Construct adapter and dispatch
     try:
@@ -191,7 +201,9 @@ async def skill_dispatch(
             body.family_id,
             e,
         )
-        raise HTTPException(status_code=502, detail=f"Adapter creation failed: {e}") from e
+        raise HTTPException(
+            status_code=502, detail=f"Adapter creation failed: {e}"
+        ) from e
 
     context = RedactedContext(
         family_id=body.family_id,
@@ -208,7 +220,9 @@ async def skill_dispatch(
             body.skill_name,
             e,
         )
-        raise HTTPException(status_code=504, detail=f"DeerFlow dispatch timed out: {e}") from e
+        raise HTTPException(
+            status_code=504, detail=f"DeerFlow dispatch timed out: {e}"
+        ) from e
     except Exception as e:
         logger.error(
             "[gateway] skill_dispatch failed family=%s skill=%s: %s",
@@ -216,7 +230,9 @@ async def skill_dispatch(
             body.skill_name,
             e,
         )
-        raise HTTPException(status_code=502, detail=f"DeerFlow dispatch failed: {e}") from e
+        raise HTTPException(
+            status_code=502, detail=f"DeerFlow dispatch failed: {e}"
+        ) from e
 
     return {"content": result}
 

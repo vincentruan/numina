@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -21,10 +22,10 @@ from apps.backend.app.services.finance_coach_cache import invalidate_skill
 def list_assets(
     db: Session,
     user: User,
-    category_id: str | None = None,
+    category_id: int | None = None,
     asset_type: str | None = None,
     asset_status: str | None = None,
-    tag_id: str | None = None,
+    tag_id: int | None = None,
     search: str | None = None,
     sort: str | None = None,
     page: int = 1,
@@ -65,7 +66,7 @@ def list_assets(
     return assets, total
 
 
-def get_asset(db: Session, user: User, asset_id: str) -> Asset:
+def get_asset(db: Session, user: User, asset_id: int) -> Asset:
     asset = (
         db.query(Asset)
         .options(joinedload(Asset.category), joinedload(Asset.tags))
@@ -84,7 +85,9 @@ def compute_daily_cost(asset: Asset) -> float | None:
     if days <= 0:
         return None
     years = days / 365.0
-    total_cost = float(asset.purchase_price) + float(asset.annual_maintenance_cost or 0) * years
+    total_cost = (
+        float(asset.purchase_price) + float(asset.annual_maintenance_cost or 0) * years
+    )
     return round(total_cost / days, 2)
 
 
@@ -144,13 +147,18 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
         image_url=req.image_url,
     )
     if req.tag_ids:
-        tags = db.query(Tag).filter(Tag.id.in_(req.tag_ids), Tag.family_id == user.family_id).all()
+        tags = (
+            db.query(Tag)
+            .filter(Tag.id.in_(req.tag_ids), Tag.family_id == user.family_id)
+            .all()
+        )
         asset.tags = tags
     db.add(asset)
     invalidate_skill(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
+
     try:
         check_on_asset_write(db, asset)
     except Exception:
@@ -158,7 +166,7 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
     return asset
 
 
-def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> Asset:
+def update_asset(db: Session, user: User, asset_id: int, req: AssetUpdate) -> Asset:
     asset = get_asset(db, user, asset_id)
     update_data = req.model_dump(exclude_unset=True)
     tag_ids = update_data.pop("tag_ids", None)
@@ -167,13 +175,18 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
         setattr(asset, key, value)
 
     if tag_ids is not None:
-        tags = db.query(Tag).filter(Tag.id.in_(tag_ids), Tag.family_id == user.family_id).all()
+        tags = (
+            db.query(Tag)
+            .filter(Tag.id.in_(tag_ids), Tag.family_id == user.family_id)
+            .all()
+        )
         asset.tags = tags
 
     invalidate_skill(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
+
     try:
         check_on_asset_write(db, asset)
     except Exception:
@@ -181,7 +194,7 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
     return asset
 
 
-def archive_asset(db: Session, user: User, asset_id: str) -> Asset:
+def archive_asset(db: Session, user: User, asset_id: int) -> Asset:
     asset = get_asset(db, user, asset_id)
     asset.is_archived = True
     invalidate_skill(db, user.family_id, "finance_coach")
@@ -190,10 +203,11 @@ def archive_asset(db: Session, user: User, asset_id: str) -> Asset:
     return asset
 
 
-def update_asset_value(db: Session, user: User, asset_id: str, value: float) -> Asset:
+def update_asset_value(db: Session, user: User, asset_id: int, value: float) -> Asset:
     from apps.backend.app.models.valuation import AssetValuation
+
     asset = get_asset(db, user, asset_id)
-    asset.current_value = value
+    asset.current_value = Decimal(str(value))
     valuation = AssetValuation(asset_id=asset.id, value=value)
     db.add(valuation)
     invalidate_skill(db, user.family_id, "finance_coach")
@@ -202,12 +216,12 @@ def update_asset_value(db: Session, user: User, asset_id: str, value: float) -> 
     return asset
 
 
-def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
+def sell_asset(db: Session, user: User, asset_id: int, req) -> dict:
     asset = get_asset(db, user, asset_id)
-    if asset.status == 'sold':
+    if asset.status == "sold":
         raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
 
-    asset.status = 'sold'
+    asset.status = "sold"
     if req.notes:
         asset.notes = req.notes
 
@@ -247,11 +261,11 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     }
 
 
-def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
+def retire_asset(db: Session, user: User, asset_id: int) -> Asset:
     asset = get_asset(db, user, asset_id)
-    if asset.status == 'sold':
+    if asset.status == "sold":
         raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
-    asset.status = 'retired'
+    asset.status = "retired"
 
     event = AssetLifecycleEvent(
         asset_id=asset.id,
@@ -266,19 +280,20 @@ def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
     return asset
 
 
-def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
+def reactivate_asset(db: Session, user: User, asset_id: int) -> Asset:
     asset = get_asset(db, user, asset_id)
-    if asset.status not in ('retired', 'idle'):
+    if asset.status not in ("retired", "idle"):
         raise AppError(ErrorCode.ASSET_FORBIDDEN)
-    asset.status = 'in_use'
+    asset.status = "in_use"
     invalidate_skill(db, user.family_id, "finance_coach")
     db.commit()
     db.refresh(asset)
     return asset
 
 
-def get_valuations(db: Session, user: User, asset_id: str) -> list:
+def get_valuations(db: Session, user: User, asset_id: int) -> list:
     from apps.backend.app.models.valuation import AssetValuation
+
     get_asset(db, user, asset_id)  # Verify access
     return (
         db.query(AssetValuation)
@@ -288,7 +303,9 @@ def get_valuations(db: Session, user: User, asset_id: str) -> list:
     )
 
 
-def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> BatchOperationResponse:
+def batch_archive_assets(
+    db: Session, user: User, asset_ids: list[int]
+) -> BatchOperationResponse:
     """Batch archive assets. Returns success/failed counts and errors."""
     errors: list[BatchItemError] = []
     success_count = 0
@@ -305,9 +322,17 @@ def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> Batch
             else:
                 error_code = ErrorCode.INTERNAL_ERROR.value
                 message = getattr(e, "detail", "操作失败")
-            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+            errors.append(
+                BatchItemError(id=asset_id, error_code=error_code, message=message)
+            )
         except Exception:
-            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
+            errors.append(
+                BatchItemError(
+                    id=asset_id,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="内部错误",
+                )
+            )
 
     failed_count = len(asset_ids) - success_count
     try:
@@ -317,7 +342,14 @@ def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> Batch
             success_count=0,
             failed_count=len(asset_ids),
             partial=False,
-            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+            errors=[
+                BatchItemError(
+                    id=aid,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="提交失败",
+                )
+                for aid in asset_ids
+            ],
         )
     return BatchOperationResponse(
         success_count=success_count,
@@ -327,7 +359,9 @@ def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> Batch
     )
 
 
-def batch_update_category(db: Session, user: User, asset_ids: list[str], category_id: str) -> BatchOperationResponse:
+def batch_update_category(
+    db: Session, user: User, asset_ids: list[int], category_id: int
+) -> BatchOperationResponse:
     """Batch update asset category. Returns success/failed counts and errors."""
     from apps.backend.app.models.category import Category
 
@@ -353,9 +387,17 @@ def batch_update_category(db: Session, user: User, asset_ids: list[str], categor
             else:
                 error_code = ErrorCode.INTERNAL_ERROR.value
                 message = getattr(e, "detail", "操作失败")
-            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+            errors.append(
+                BatchItemError(id=asset_id, error_code=error_code, message=message)
+            )
         except Exception:
-            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
+            errors.append(
+                BatchItemError(
+                    id=asset_id,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="内部错误",
+                )
+            )
 
     failed_count = len(asset_ids) - success_count
     try:
@@ -365,7 +407,14 @@ def batch_update_category(db: Session, user: User, asset_ids: list[str], categor
             success_count=0,
             failed_count=len(asset_ids),
             partial=False,
-            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+            errors=[
+                BatchItemError(
+                    id=aid,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="提交失败",
+                )
+                for aid in asset_ids
+            ],
         )
     return BatchOperationResponse(
         success_count=success_count,
@@ -375,15 +424,18 @@ def batch_update_category(db: Session, user: User, asset_ids: list[str], categor
     )
 
 
-def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: list[str]) -> BatchOperationResponse:
+def batch_update_tags(
+    db: Session, user: User, asset_ids: list[int], tag_ids: list[int]
+) -> BatchOperationResponse:
     """Batch update asset tags. Returns success/failed counts and errors."""
     # Verify tags exist and belong to user's family
     valid_tags = []
     if tag_ids:
-        valid_tags = db.query(Tag).filter(
-            Tag.id.in_(tag_ids),
-            Tag.family_id == user.family_id
-        ).all()
+        valid_tags = (
+            db.query(Tag)
+            .filter(Tag.id.in_(tag_ids), Tag.family_id == user.family_id)
+            .all()
+        )
 
         if len(valid_tags) != len(tag_ids):
             raise AppError(ErrorCode.TAG_NOT_FOUND)
@@ -403,9 +455,17 @@ def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: li
             else:
                 error_code = ErrorCode.INTERNAL_ERROR.value
                 message = getattr(e, "detail", "操作失败")
-            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+            errors.append(
+                BatchItemError(id=asset_id, error_code=error_code, message=message)
+            )
         except Exception:
-            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
+            errors.append(
+                BatchItemError(
+                    id=asset_id,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="内部错误",
+                )
+            )
 
     failed_count = len(asset_ids) - success_count
     try:
@@ -415,7 +475,14 @@ def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: li
             success_count=0,
             failed_count=len(asset_ids),
             partial=False,
-            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+            errors=[
+                BatchItemError(
+                    id=aid,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="提交失败",
+                )
+                for aid in asset_ids
+            ],
         )
     return BatchOperationResponse(
         success_count=success_count,
@@ -425,13 +492,15 @@ def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: li
     )
 
 
-def batch_update_status(db: Session, user: User, asset_ids: list[str], status: str) -> BatchOperationResponse:
+def batch_update_status(
+    db: Session, user: User, asset_ids: list[int], status: str
+) -> BatchOperationResponse:
     """Batch update asset status. Returns success/failed counts and errors."""
-    valid_statuses = ['active', 'archived']
+    valid_statuses = ["active", "archived"]
     if status not in valid_statuses:
         raise AppError(ErrorCode.VALIDATION_ERROR)
 
-    is_archived = (status == 'archived')
+    is_archived = status == "archived"
     errors: list[BatchItemError] = []
     success_count = 0
 
@@ -447,9 +516,17 @@ def batch_update_status(db: Session, user: User, asset_ids: list[str], status: s
             else:
                 error_code = ErrorCode.INTERNAL_ERROR.value
                 message = getattr(e, "detail", "操作失败")
-            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+            errors.append(
+                BatchItemError(id=asset_id, error_code=error_code, message=message)
+            )
         except Exception:
-            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
+            errors.append(
+                BatchItemError(
+                    id=asset_id,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="内部错误",
+                )
+            )
 
     failed_count = len(asset_ids) - success_count
     try:
@@ -459,7 +536,14 @@ def batch_update_status(db: Session, user: User, asset_ids: list[str], status: s
             success_count=0,
             failed_count=len(asset_ids),
             partial=False,
-            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+            errors=[
+                BatchItemError(
+                    id=aid,
+                    error_code=ErrorCode.INTERNAL_ERROR.value,
+                    message="提交失败",
+                )
+                for aid in asset_ids
+            ],
         )
     return BatchOperationResponse(
         success_count=success_count,
@@ -469,7 +553,7 @@ def batch_update_status(db: Session, user: User, asset_ids: list[str], status: s
     )
 
 
-def batch_export_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
+def batch_export_assets(db: Session, user: User, asset_ids: list[int]) -> dict:
     """Export assets data. Returns list of asset data for export."""
     assets_data = []
     errors = []
@@ -494,7 +578,9 @@ def batch_export_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
                 "purchase_price": asset.purchase_price,
                 "current_value": asset.current_value,
                 "currency": asset.currency,
-                "purchase_date": str(asset.purchase_date) if asset.purchase_date else "",
+                "purchase_date": str(asset.purchase_date)
+                if asset.purchase_date
+                else "",
                 "status": asset.status,
                 "location": asset.location or "",
                 "institution": asset.institution or "",
@@ -523,9 +609,8 @@ def list_assets_for_family(
     """List assets for a family, filtered by category if provided."""
     from apps.backend.app.models.asset import Asset
 
-    q = (
-        db.query(Asset)
-        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
+    q = db.query(Asset).filter(
+        Asset.family_id == family_id, Asset.is_archived.is_(False)
     )
     if category:
         q = q.filter(Asset.category == category)

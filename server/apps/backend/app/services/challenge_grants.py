@@ -43,20 +43,29 @@ def create_challenge(
 
     # Validate child belongs to family and is active
     from apps.backend.app.models.user import User
-    child = db.query(User).filter(
-        User.id == child_id,
-        User.family_id == family_id,
-        User.is_active == True,  # noqa: E712
-        User.role == "child",
-    ).first()
+
+    child = (
+        db.query(User)
+        .filter(
+            User.id == child_id,
+            User.family_id == family_id,
+            User.is_active == True,  # noqa: E712
+            User.role == "child",
+        )
+        .first()
+    )
     if not child:
         raise ValueError("孩子不存在或不属于该家庭")
 
     # Check max 3 active challenges
-    active_count = db.query(ChallengeGrant).filter(
-        ChallengeGrant.child_user_id == child_id,
-        ChallengeGrant.status == "active",
-    ).count()
+    active_count = (
+        db.query(ChallengeGrant)
+        .filter(
+            ChallengeGrant.child_user_id == child_id,
+            ChallengeGrant.status == "active",
+        )
+        .count()
+    )
     if active_count >= 3:
         raise ValueError("该孩子已有3个进行中的挑战")
 
@@ -73,10 +82,15 @@ def create_challenge(
         if not chore_template_id:
             raise ValueError("指定家务类型必须选择家务模板")
         from apps.backend.app.models.chore import ChoreTemplate
-        template = db.query(ChoreTemplate).filter(
-            ChoreTemplate.id == chore_template_id,
-            ChoreTemplate.family_id == family_id,
-        ).first()
+
+        template = (
+            db.query(ChoreTemplate)
+            .filter(
+                ChoreTemplate.id == chore_template_id,
+                ChoreTemplate.family_id == family_id,
+            )
+            .first()
+        )
         if not template:
             raise ValueError("家务模板不存在或不属于该家庭")
 
@@ -86,7 +100,9 @@ def create_challenge(
         child_user_id=child_id,
         target_type=target_type,
         target_value=target_value,
-        chore_template_id=chore_template_id if target_type == "specific_chore" else None,
+        chore_template_id=chore_template_id
+        if target_type == "specific_chore"
+        else None,
         current_progress=0,
         deadline=deadline,
         message=message,
@@ -97,15 +113,19 @@ def create_challenge(
     db.refresh(challenge)
     _audit_logger.info(
         "challenge_created | family=%s child=%s type=%s target=%s deadline=%s",
-        family_id, child_id, target_type, target_value, deadline,
+        family_id,
+        child_id,
+        target_type,
+        target_value,
+        deadline,
     )
     return challenge
 
 
 def check_challenge_progress(
     db: Session,
-    child_user_id: str,
-    family_id: str,
+    child_user_id: int,
+    family_id: int,
     instance,
 ) -> list[ChallengeGrant]:
     """Check and update challenge progress after approval.
@@ -123,39 +143,52 @@ def check_challenge_progress(
     try:
         return _check_challenge_progress_impl(db, child_user_id, family_id, instance)
     except Exception:
-        logger.exception("Challenge progress check failed for child %s — ignoring", child_user_id)
+        logger.exception(
+            "Challenge progress check failed for child %s — ignoring", child_user_id
+        )
         return []
 
 
 def _check_challenge_progress_impl(
     db: Session,
-    child_user_id: str,
-    family_id: str,
+    child_user_id: int,
+    family_id: int,
     instance,
 ) -> list[ChallengeGrant]:
     now = datetime.now(UTC)
 
     # 1. Lazy expiration
-    expired = db.query(ChallengeGrant).filter(
-        ChallengeGrant.child_user_id == child_user_id,
-        ChallengeGrant.status == "active",
-        ChallengeGrant.deadline < now,
-    ).all()
+    expired = (
+        db.query(ChallengeGrant)
+        .filter(
+            ChallengeGrant.child_user_id == child_user_id,
+            ChallengeGrant.status == "active",
+            ChallengeGrant.deadline < now,
+        )
+        .all()
+    )
     for ch in expired:
         ch.status = "expired"
         _audit_logger.info(
             "challenge_expired | family=%s child=%s challenge=%s type=%s",
-            family_id, child_user_id, ch.id, ch.target_type,
+            family_id,
+            child_user_id,
+            ch.id,
+            ch.target_type,
         )
     if expired:
         db.commit()
 
     # 2. Get active challenges
-    active = db.query(ChallengeGrant).filter(
-        ChallengeGrant.child_user_id == child_user_id,
-        ChallengeGrant.family_id == family_id,
-        ChallengeGrant.status == "active",
-    ).all()
+    active = (
+        db.query(ChallengeGrant)
+        .filter(
+            ChallengeGrant.child_user_id == child_user_id,
+            ChallengeGrant.family_id == family_id,
+            ChallengeGrant.status == "active",
+        )
+        .all()
+    )
 
     if not active:
         return []
@@ -163,6 +196,7 @@ def _check_challenge_progress_impl(
     # 3. Update progress and check completion
     completed: list[ChallengeGrant] = []
     from apps.backend.app.models.user import User
+
     child = db.query(User).filter(User.id == child_user_id).first()
 
     for challenge in active:
@@ -185,7 +219,11 @@ def _check_challenge_progress_impl(
             completed.append(challenge)
             _audit_logger.info(
                 "challenge_completed | family=%s child=%s challenge=%s type=%s bonus_id=%s",
-                family_id, child_user_id, challenge.id, challenge.target_type, bonus.id,
+                family_id,
+                child_user_id,
+                challenge.id,
+                challenge.target_type,
+                bonus.id,
             )
 
     if completed:
@@ -207,7 +245,9 @@ def _update_progress_for_type(challenge: ChallengeGrant, instance, child) -> Non
             challenge.current_progress += 1
     elif challenge.target_type == "star_earnings":
         # Sum coin_reward + streak_bonus
-        challenge.current_progress += (instance.coin_reward + getattr(instance, "streak_bonus", 0))
+        challenge.current_progress += instance.coin_reward + getattr(
+            instance, "streak_bonus", 0
+        )
 
 
 def cancel_challenge(
@@ -226,10 +266,14 @@ def cancel_challenge(
     """
     family_id = parent_user.family_id
 
-    challenge = db.query(ChallengeGrant).filter(
-        ChallengeGrant.id == challenge_id,
-        ChallengeGrant.family_id == family_id,
-    ).first()
+    challenge = (
+        db.query(ChallengeGrant)
+        .filter(
+            ChallengeGrant.id == challenge_id,
+            ChallengeGrant.family_id == family_id,
+        )
+        .first()
+    )
     if not challenge:
         raise ValueError("挑战不存在")
 
@@ -241,7 +285,9 @@ def cancel_challenge(
     db.refresh(challenge)
     _audit_logger.info(
         "challenge_cancelled | family=%s challenge=%s child=%s",
-        family_id, challenge_id, challenge.child_user_id,
+        family_id,
+        challenge_id,
+        challenge.child_user_id,
     )
     return challenge
 
@@ -264,8 +310,13 @@ def list_child_active_challenges(
     family_id: str,
 ) -> list[ChallengeGrant]:
     """List active challenges for a child (for child app display)."""
-    return db.query(ChallengeGrant).filter(
-        ChallengeGrant.child_user_id == child_user_id,
-        ChallengeGrant.family_id == family_id,
-        ChallengeGrant.status == "active",
-    ).order_by(ChallengeGrant.deadline.asc()).all()
+    return (
+        db.query(ChallengeGrant)
+        .filter(
+            ChallengeGrant.child_user_id == child_user_id,
+            ChallengeGrant.family_id == family_id,
+            ChallengeGrant.status == "active",
+        )
+        .order_by(ChallengeGrant.deadline.asc())
+        .all()
+    )

@@ -10,7 +10,9 @@ from apps.backend.app.schemas.chore import GrantRequest
 from apps.backend.app.services.notification_bus import fire_notification
 
 
-def get_total_earned(db: Session, child_user_id: str, family_id: str | None = None) -> int:
+def get_total_earned(
+    db: Session, child_user_id: int, family_id: int | None = None
+) -> int:
     """Return total coins ever earned (sum of positive transactions only)."""
     q = db.query(func.sum(CoinTransaction.amount)).filter(
         CoinTransaction.child_user_id == child_user_id,
@@ -22,15 +24,19 @@ def get_total_earned(db: Session, child_user_id: str, family_id: str | None = No
     return result or 0
 
 
-def get_balance(db: Session, child_user_id: str) -> int:
+def get_balance(db: Session, child_user_id: int) -> int:
     """Return current coin balance for a child. Always returns an integer."""
-    result = db.query(func.sum(CoinTransaction.amount)).filter(
-        CoinTransaction.child_user_id == child_user_id
-    ).scalar()
+    result = (
+        db.query(func.sum(CoinTransaction.amount))
+        .filter(CoinTransaction.child_user_id == child_user_id)
+        .scalar()
+    )
     return result or 0
 
 
-def list_transactions(db: Session, child_user_id: str, family_id: str) -> list[CoinTransaction]:
+def list_transactions(
+    db: Session, child_user_id: int, family_id: int
+) -> list[CoinTransaction]:
     """Return all transactions for a child, newest first."""
     return (
         db.query(CoinTransaction)
@@ -58,12 +64,16 @@ def gift_coins(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "赠送数量必须大于0")
 
     # Validate recipient is a child in the same family
-    recipient = db.query(User).filter(
-        User.id == to_child_id,
-        User.family_id == sender.family_id,
-        User.role == "child",
-        User.id != sender.id,
-    ).first()
+    recipient = (
+        db.query(User)
+        .filter(
+            User.id == to_child_id,
+            User.family_id == sender.family_id,
+            User.role == "child",
+            User.id != sender.id,
+        )
+        .first()
+    )
     if not recipient:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "兄弟姐妹不存在或不属于该家庭")
 
@@ -102,24 +112,33 @@ def gift_coins(
     db.commit()
     db.refresh(debit)
     db.refresh(credit)
-    fire_notification(sender.family_id, {
-        "type": "coins_received",
-        "amount": amount,
-        "from_name": sender.display_name,
-        "message": f"收到来自 {sender.display_name} 的 {amount} 颗星币赠送 {narrative}",
-        "target_user_id": to_child_id,
-    })
+    fire_notification(
+        sender.family_id,
+        {
+            "type": "coins_received",
+            "amount": amount,
+            "from_name": sender.display_name,
+            "message": f"收到来自 {sender.display_name} 的 {amount} 颗星币赠送 {narrative}",
+            "target_user_id": to_child_id,
+        },
+    )
     return debit, credit, recipient.display_name
 
 
-def write_parent_grant(db: Session, parent_user: User, req: GrantRequest) -> CoinTransaction:
+def write_parent_grant(
+    db: Session, parent_user: User, req: GrantRequest
+) -> CoinTransaction:
     """Write a parent_grant transaction directly (no approval queue)."""
     # Validate child belongs to same family
-    child = db.query(User).filter(
-        User.id == req.child_user_id,
-        User.family_id == parent_user.family_id,
-        User.role == "child",
-    ).first()
+    child = (
+        db.query(User)
+        .filter(
+            User.id == req.child_user_id,
+            User.family_id == parent_user.family_id,
+            User.role == "child",
+        )
+        .first()
+    )
     if not child:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "孩子不存在或不属于该家庭")
 

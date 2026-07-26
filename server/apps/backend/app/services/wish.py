@@ -31,7 +31,9 @@ def _attach_savings_count(db: Session, wish: Wish) -> Wish:
     return wish
 
 
-def list_wishes(db: Session, user: User, status_filter: str | None = None) -> list[Wish]:
+def list_wishes(
+    db: Session, user: User, status_filter: str | None = None
+) -> list[Wish]:
     query = (
         db.query(Wish)
         .options(joinedload(Wish.category))
@@ -45,7 +47,7 @@ def list_wishes(db: Session, user: User, status_filter: str | None = None) -> li
     return wishes
 
 
-def get_wish(db: Session, user: User, wish_id: str) -> Wish:
+def get_wish(db: Session, user: User, wish_id: int) -> Wish:
     wish = (
         db.query(Wish)
         .options(joinedload(Wish.category))
@@ -74,14 +76,16 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
     )
     db.add(wish)
     invalidate_skill(db, user.family_id, "finance_coach")
-    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(
+        db, user.family_id, "wish_advice"
+    )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
     return wish
 
 
-def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
+def update_wish(db: Session, user: User, wish_id: int, req: WishUpdate) -> Wish:
     wish = get_wish(db, user, wish_id)
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
@@ -90,14 +94,18 @@ def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
     for key, value in update_data.items():
         setattr(wish, key, value)
     invalidate_skill(db, user.family_id, "finance_coach")
-    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(
+        db, user.family_id, "wish_advice"
+    )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
     return wish
 
 
-def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool) -> Wish:
+def set_ignore_debt_warning(
+    db: Session, user: User, wish_id: int, ignore: bool
+) -> Wish:
     """Toggle the wish's ignore_debt_warning flag (W5). Owner-only.
 
     Mirrors update_wish's owner check: only the wish's owner may toggle the
@@ -108,24 +116,30 @@ def set_ignore_debt_warning(db: Session, user: User, wish_id: str, ignore: bool)
         raise AppError(ErrorCode.FORBIDDEN)
     wish.ignore_debt_warning = ignore
     invalidate_skill(db, user.family_id, "finance_coach")
-    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(
+        db, user.family_id, "wish_advice"
+    )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
     return wish
 
 
-def delete_wish(db: Session, user: User, wish_id: str) -> None:
+def delete_wish(db: Session, user: User, wish_id: int) -> None:
     wish = get_wish(db, user, wish_id)
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
     invalidate_skill(db, user.family_id, "finance_coach")
-    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+    invalidate_skill(
+        db, user.family_id, "wish_advice"
+    )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
 
 
-def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest) -> Asset:
+def realize_wish(
+    db: Session, user: User, wish_id: int, req: WishRealizeRequest
+) -> Asset:
     wish = get_wish(db, user, wish_id)
 
     if wish.status == "realized":
@@ -141,9 +155,13 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
 
     # Validate category is physical type (wishes only create physical assets)
     from apps.backend.app.models.category import Category
+
     category = db.query(Category).filter(Category.id == category_id).first()
     if category and category.asset_type != "physical":
-        raise AppError(ErrorCode.VALIDATION_ERROR, details="Category must be physical type for wish realization")
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            details="Category must be physical type for wish realization",
+        )
 
     try:
         # Create asset
@@ -168,7 +186,9 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
         asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
         invalidate_skill(db, user.family_id, "finance_coach")
-        invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): wish change busts advice cache
+        invalidate_skill(
+            db, user.family_id, "wish_advice"
+        )  # W4 (Plan B T7): wish change busts advice cache
         db.commit()
         db.refresh(asset)
         return asset

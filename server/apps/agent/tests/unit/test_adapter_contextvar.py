@@ -101,7 +101,8 @@ def test_run_in_executor_with_context_propagates_family_sandbox_contextvar():
         future = _run_in_executor_with_context(
             loop, _get_executor(), get_family_sandbox_context
         )
-        return await future
+        result = await future
+        return str(result) if result is not None else None
 
     observed = asyncio.run(caller())
     assert observed == sentinel_family, (
@@ -174,7 +175,6 @@ def test_acquire_keys_sandbox_by_family_id():
         provider.reset()
 
 
-
 def test_run_in_executor_with_context_propagates_active_skill_contextvar():
     """Same propagation contract for the ``numina_active_skill_name`` ContextVar.
 
@@ -202,11 +202,13 @@ def test_run_in_executor_with_context_propagates_active_skill_contextvar():
             future = _run_in_executor_with_context(
                 loop, _get_executor(), get_active_skill
             )
-            return await future
+            result = await future
+            return str(result) if result is not None else None
         finally:
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
+
             reset_active_skill(token)
 
     assert asyncio.run(caller()) == skill

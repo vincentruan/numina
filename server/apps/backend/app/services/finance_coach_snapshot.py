@@ -5,6 +5,7 @@ spec §7.1 PII minimization: the snapshot uses entity ``id + category`` (NOT
 link back by id, so name is dropped here. The snapshot is JSON-injected as the
 run's user message; pii_redactor runs again in the worker as defense-in-depth.
 """
+
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -14,7 +15,10 @@ from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.wish import Wish
 
 
-def _money(v: float | None) -> float:
+from decimal import Decimal
+
+
+def _money(v: float | Decimal | None) -> float:
     return float(v) if v is not None else 0.0
 
 
@@ -41,8 +45,14 @@ def build_family_finance_snapshot(db: Session, family_id: str | int) -> dict[str
     """
     fid = int(family_id)
     assets = db.query(Asset).filter(Asset.family_id == fid).all()
-    liabilities = db.query(Liability).filter(Liability.family_id == fid, Liability.is_active.is_(True)).all()
-    wishes = db.query(Wish).filter(Wish.family_id == fid, Wish.status == "pending").all()
+    liabilities = (
+        db.query(Liability)
+        .filter(Liability.family_id == fid, Liability.is_active.is_(True))
+        .all()
+    )
+    wishes = (
+        db.query(Wish).filter(Wish.family_id == fid, Wish.status == "pending").all()
+    )
 
     total_assets = sum(_money(a.current_value) for a in assets)
     total_liabilities = sum(_money(liab.remaining_amount) for liab in liabilities)
@@ -53,15 +63,17 @@ def build_family_finance_snapshot(db: Session, family_id: str | int) -> dict[str
     # and the SKILL prompt identifies severity). monthly_interest = remaining * monthly_rate.
     high_interest_debts = []
     for liab in liabilities:
-        rate = _money(liab.interest_rate) / 100.0 if liab.interest_rate else 0.0
+        rate = float(_money(liab.interest_rate)) / 100.0 if liab.interest_rate else 0.0
         if rate >= 0.10:
             monthly_interest = _money(liab.remaining_amount) * (rate / 12.0)
-            high_interest_debts.append({
-                "id": str(liab.id),
-                "category": liab.category,
-                "rate": _money(liab.interest_rate),
-                "monthly_interest": round(monthly_interest, 2),
-            })
+            high_interest_debts.append(
+                {
+                    "id": str(liab.id),
+                    "category": liab.category,
+                    "rate": _money(liab.interest_rate),
+                    "monthly_interest": round(monthly_interest, 2),
+                }
+            )
 
     # Idle assets: usage_frequency == 'idle' if the column exists; else
     # target_daily_cost>0 low-usage. Asset has ``usage_frequency`` +
@@ -71,15 +83,28 @@ def build_family_finance_snapshot(db: Session, family_id: str | int) -> dict[str
         daily_cost = _money(getattr(a, "target_daily_cost", None))
         usage = getattr(a, "usage_frequency", None)
         if usage == "idle" or (daily_cost > 0 and usage in (None, "rare", "rarely")):
-            idle_assets.append({"id": str(a.id), "category": _asset_category(a), "daily_cost": daily_cost})
+            idle_assets.append(
+                {
+                    "id": str(a.id),
+                    "category": _asset_category(a),
+                    "daily_cost": daily_cost,
+                }
+            )
 
     def _daily_cost_key(entry: dict[str, Any]) -> float:
         return float(entry["daily_cost"])
 
     top_daily_cost_assets = sorted(
-        ({"id": str(a.id), "category": _asset_category(a),
-          "daily_cost": _money(getattr(a, "target_daily_cost", None))} for a in assets),
-        key=_daily_cost_key, reverse=True,
+        (
+            {
+                "id": str(a.id),
+                "category": _asset_category(a),
+                "daily_cost": _money(getattr(a, "target_daily_cost", None)),
+            }
+            for a in assets
+        ),
+        key=_daily_cost_key,
+        reverse=True,
     )[:5]
 
     # Wishes with a savings plan (spec §7.2 product-lens: filter out
@@ -93,13 +118,17 @@ def build_family_finance_snapshot(db: Session, family_id: str | int) -> dict[str
         monthly = _money(getattr(w, "monthly_saving", None))
         if saved == 0 and monthly == 0:
             continue
-        wish_snapshots.append({
-            "id": str(w.id),
-            "price": _money(w.expected_price),
-            "saved": saved,
-            "monthly_saving": monthly,
-            "target_date": str(td) if (td := getattr(w, "target_date", None)) else None,
-        })
+        wish_snapshots.append(
+            {
+                "id": str(w.id),
+                "price": float(_money(w.expected_price)),
+                "saved": saved,
+                "monthly_saving": monthly,
+                "target_date": str(td)
+                if (td := getattr(w, "target_date", None))
+                else None,
+            }
+        )
 
     return {
         "net_worth": round(net_worth, 2),

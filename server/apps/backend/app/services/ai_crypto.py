@@ -11,9 +11,14 @@ def _get_fernet():
     """获取 Fernet 实例，懒加载。"""
     try:
         from cryptography.fernet import Fernet
+
         if not settings.AI_ENCRYPTION_KEY:
             return None
-        return Fernet(settings.AI_ENCRYPTION_KEY.encode() if isinstance(settings.AI_ENCRYPTION_KEY, str) else settings.AI_ENCRYPTION_KEY)
+        return Fernet(
+            settings.AI_ENCRYPTION_KEY.encode()
+            if isinstance(settings.AI_ENCRYPTION_KEY, str)
+            else settings.AI_ENCRYPTION_KEY
+        )
     except Exception as e:
         logger.warning(f"Fernet 初始化失败: {e}")
         return None
@@ -24,7 +29,7 @@ def encrypt_api_key(api_key: str) -> str | None:
     fernet = _get_fernet()
     if not fernet:
         return None
-    return fernet.encrypt(api_key.encode()).decode()
+    return str(fernet.encrypt(api_key.encode()).decode())
 
 
 def decrypt_api_key(encrypted: str) -> str | None:
@@ -33,7 +38,7 @@ def decrypt_api_key(encrypted: str) -> str | None:
     if not fernet or not encrypted:
         return None
     try:
-        return fernet.decrypt(encrypted.encode()).decode()
+        return str(fernet.decrypt(encrypted.encode()).decode())
     except Exception as e:
         logger.error(f"API Key 解密失败: {e}")
         return None

@@ -22,6 +22,7 @@ tables/columns with the new names directly from the updated model definitions,
 so every operation below is guarded by has_table / has_column and is a no-op
 on a freshly-bootstrapped DB.
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -41,12 +42,21 @@ def _has_table(name: str) -> bool:
 
 def _columns(table: str) -> set[str]:
     bind = op.get_bind()
-    return {c["name"] for c in bind.dialect.get_columns(bind, table) if c.get("name") is not None}
+    return {
+        c["name"]
+        for c in bind.dialect.get_columns(bind, table)
+        if c.get("name") is not None
+    }
 
 
 def _index_names(table: str) -> set[str]:
     bind = op.get_bind()
-    return {idx["name"] for idx in bind.dialect.get_indexes(bind, table)}
+    result: set[str] = set()
+    for idx in bind.dialect.get_indexes(bind, table):
+        name = idx.get("name")
+        if name is not None:
+            result.add(str(name))
+    return result
 
 
 def _capability_to_skill_id(
@@ -85,17 +95,23 @@ def _capability_to_skill_id(
         # Copy surviving data from capability, then drop it via raw SQL
         # (see docstring for why not batch_alter_table).
         bind = op.get_bind()
-        bind.execute(sa.text(
-            f"UPDATE {table} SET skill_id = capability "
-            f"WHERE skill_id IS NULL OR skill_id = ''"
-        ))
+        bind.execute(
+            sa.text(
+                f"UPDATE {table} SET skill_id = capability "
+                f"WHERE skill_id IS NULL OR skill_id = ''"
+            )
+        )
         bind.execute(sa.text(f"ALTER TABLE {table} DROP COLUMN capability"))
 
 
 def upgrade() -> None:
     # ── 1. Drop family_skill_configs table ─────────────────────────────────
     if _has_table("family_skill_configs"):
-        op.drop_index("ix_family_skill_configs_family_id", table_name="family_skill_configs", if_exists=True)
+        op.drop_index(
+            "ix_family_skill_configs_family_id",
+            table_name="family_skill_configs",
+            if_exists=True,
+        )
         op.drop_table("family_skill_configs")
 
     # ── 2. Drop ai_skills.custom_prompt column ─────────────────────────────
@@ -108,29 +124,48 @@ def upgrade() -> None:
     if _has_table("ai_reports") and "capability" in _columns("ai_reports"):
         idxs = _index_names("ai_reports")
         if "ix_ai_reports_family_capability_status" in idxs:
-            op.drop_index("ix_ai_reports_family_capability_status", table_name="ai_reports")
+            op.drop_index(
+                "ix_ai_reports_family_capability_status", table_name="ai_reports"
+            )
         _capability_to_skill_id("ai_reports", sa.String(length=32), sa.text("'report'"))
         if "ix_ai_reports_family_skill_status" not in _index_names("ai_reports"):
-            op.create_index("ix_ai_reports_family_skill_status", "ai_reports",
-                            ["family_id", "skill_id", "status"])
+            op.create_index(
+                "ix_ai_reports_family_skill_status",
+                "ai_reports",
+                ["family_id", "skill_id", "status"],
+            )
 
     # ai_extraction_audits
-    if _has_table("ai_extraction_audits") and "capability" in _columns("ai_extraction_audits"):
+    if _has_table("ai_extraction_audits") and "capability" in _columns(
+        "ai_extraction_audits"
+    ):
         idxs = _index_names("ai_extraction_audits")
         if "ix_ai_extraction_audits_family_capability_time" in idxs:
-            op.drop_index("ix_ai_extraction_audits_family_capability_time", table_name="ai_extraction_audits")
+            op.drop_index(
+                "ix_ai_extraction_audits_family_capability_time",
+                table_name="ai_extraction_audits",
+            )
         if "ix_ai_extraction_audits_capability" in idxs:
-            op.drop_index("ix_ai_extraction_audits_capability", table_name="ai_extraction_audits")
+            op.drop_index(
+                "ix_ai_extraction_audits_capability", table_name="ai_extraction_audits"
+            )
         _capability_to_skill_id("ai_extraction_audits", sa.String(length=32))
         idxs = _index_names("ai_extraction_audits")
         if "ix_ai_extraction_audits_skill_id" not in idxs:
-            op.create_index("ix_ai_extraction_audits_skill_id", "ai_extraction_audits", ["skill_id"])
+            op.create_index(
+                "ix_ai_extraction_audits_skill_id", "ai_extraction_audits", ["skill_id"]
+            )
         if "ix_ai_extraction_audits_family_skill_time" not in idxs:
-            op.create_index("ix_ai_extraction_audits_family_skill_time", "ai_extraction_audits",
-                            ["family_id", "skill_id", "extracted_at"])
+            op.create_index(
+                "ix_ai_extraction_audits_family_skill_time",
+                "ai_extraction_audits",
+                ["family_id", "skill_id", "extracted_at"],
+            )
 
     # ai_extraction_circuits
-    if _has_table("ai_extraction_circuits") and "capability" in _columns("ai_extraction_circuits"):
+    if _has_table("ai_extraction_circuits") and "capability" in _columns(
+        "ai_extraction_circuits"
+    ):
         # batch_alter_table recreates the table, dropping capability and the
         # old unique constraint (uq_extraction_circuit_family_capability /
         # sqlite_autoindex) that references it. Re-declare the unique
@@ -138,12 +173,17 @@ def upgrade() -> None:
         # because this table's skill_id has no server_default (no
         # non-constant-default rebuild issue).
         bind = op.get_bind()
-        bind.execute(sa.text(
-            "UPDATE ai_extraction_circuits SET skill_id = capability "
-            "WHERE skill_id IS NULL OR skill_id = ''"
-        ))
+        bind.execute(
+            sa.text(
+                "UPDATE ai_extraction_circuits SET skill_id = capability "
+                "WHERE skill_id IS NULL OR skill_id = ''"
+            )
+        )
         existing_uqs = {
-            uq["name"] for uq in bind.dialect.get_unique_constraints(bind, "ai_extraction_circuits")
+            uq["name"]
+            for uq in bind.dialect.get_unique_constraints(
+                bind, "ai_extraction_circuits"
+            )
         }
         with op.batch_alter_table("ai_extraction_circuits") as batch_op:
             batch_op.drop_column("capability")
@@ -173,34 +213,58 @@ def downgrade() -> None:
         if "ix_ai_tasks_skill_id" in idxs:
             op.drop_index("ix_ai_tasks_skill_id", table_name="ai_tasks")
         with op.batch_alter_table("ai_tasks") as batch_op:
-            batch_op.alter_column("skill_id", new_column_name="capability",
-                                  existing_type=sa.String(length=50),
-                                  existing_nullable=False)
+            batch_op.alter_column(
+                "skill_id",
+                new_column_name="capability",
+                existing_type=sa.String(length=50),
+                existing_nullable=False,
+            )
         op.create_index("ix_ai_tasks_capability", "ai_tasks", ["capability"])
 
     # ai_extraction_circuits
-    if _has_table("ai_extraction_circuits") and "skill_id" in _columns("ai_extraction_circuits"):
+    if _has_table("ai_extraction_circuits") and "skill_id" in _columns(
+        "ai_extraction_circuits"
+    ):
         with op.batch_alter_table("ai_extraction_circuits") as batch_op:
-            batch_op.alter_column("skill_id", new_column_name="capability",
-                                  existing_type=sa.String(length=32),
-                                  existing_nullable=False)
-            batch_op.create_unique_constraint("uq_extraction_circuit_family_capability",
-                                              ["family_id", "capability"])
+            batch_op.alter_column(
+                "skill_id",
+                new_column_name="capability",
+                existing_type=sa.String(length=32),
+                existing_nullable=False,
+            )
+            batch_op.create_unique_constraint(
+                "uq_extraction_circuit_family_capability", ["family_id", "capability"]
+            )
 
     # ai_extraction_audits
-    if _has_table("ai_extraction_audits") and "skill_id" in _columns("ai_extraction_audits"):
+    if _has_table("ai_extraction_audits") and "skill_id" in _columns(
+        "ai_extraction_audits"
+    ):
         idxs = _index_names("ai_extraction_audits")
         if "ix_ai_extraction_audits_family_skill_time" in idxs:
-            op.drop_index("ix_ai_extraction_audits_family_skill_time", table_name="ai_extraction_audits")
+            op.drop_index(
+                "ix_ai_extraction_audits_family_skill_time",
+                table_name="ai_extraction_audits",
+            )
         if "ix_ai_extraction_audits_skill_id" in idxs:
-            op.drop_index("ix_ai_extraction_audits_skill_id", table_name="ai_extraction_audits")
+            op.drop_index(
+                "ix_ai_extraction_audits_skill_id", table_name="ai_extraction_audits"
+            )
         with op.batch_alter_table("ai_extraction_audits") as batch_op:
-            batch_op.alter_column("skill_id", new_column_name="capability",
-                                  existing_type=sa.String(length=32),
-                                  existing_nullable=False)
-        op.create_index("ix_ai_extraction_audits_capability", "ai_extraction_audits", ["capability"])
-        op.create_index("ix_ai_extraction_audits_family_capability_time", "ai_extraction_audits",
-                        ["family_id", "capability", "extracted_at"])
+            batch_op.alter_column(
+                "skill_id",
+                new_column_name="capability",
+                existing_type=sa.String(length=32),
+                existing_nullable=False,
+            )
+        op.create_index(
+            "ix_ai_extraction_audits_capability", "ai_extraction_audits", ["capability"]
+        )
+        op.create_index(
+            "ix_ai_extraction_audits_family_capability_time",
+            "ai_extraction_audits",
+            ["family_id", "capability", "extracted_at"],
+        )
 
     # ai_reports
     if _has_table("ai_reports") and "skill_id" in _columns("ai_reports"):
@@ -208,12 +272,18 @@ def downgrade() -> None:
         if "ix_ai_reports_family_skill_status" in idxs:
             op.drop_index("ix_ai_reports_family_skill_status", table_name="ai_reports")
         with op.batch_alter_table("ai_reports") as batch_op:
-            batch_op.alter_column("skill_id", new_column_name="capability",
-                                  existing_type=sa.String(length=32),
-                                  existing_server_default="report",
-                                  existing_nullable=False)
-        op.create_index("ix_ai_reports_family_capability_status", "ai_reports",
-                        ["family_id", "capability", "status"])
+            batch_op.alter_column(
+                "skill_id",
+                new_column_name="capability",
+                existing_type=sa.String(length=32),
+                existing_server_default="report",
+                existing_nullable=False,
+            )
+        op.create_index(
+            "ix_ai_reports_family_capability_status",
+            "ai_reports",
+            ["family_id", "capability", "status"],
+        )
 
     # ai_skills.custom_prompt
     if _has_table("ai_skills") and "custom_prompt" not in _columns("ai_skills"):
@@ -227,9 +297,13 @@ def downgrade() -> None:
             sa.Column("id", sa.BigInteger(), primary_key=True),
             sa.Column("family_id", sa.BigInteger(), nullable=False),
             sa.Column("capability", sa.String(length=50), nullable=False),
-            sa.Column("is_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "is_enabled", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("custom_prompt", sa.Text(), nullable=True),
             sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now()),
             sa.UniqueConstraint("family_id", "capability", name="uq_family_skill"),
         )
-        op.create_index("ix_family_skill_configs_family_id", "family_skill_configs", ["family_id"])
+        op.create_index(
+            "ix_family_skill_configs_family_id", "family_skill_configs", ["family_id"]
+        )

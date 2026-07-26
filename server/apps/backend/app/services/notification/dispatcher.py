@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.notification_channel import NotificationChannel
-from apps.backend.app.models.notification_channel_config import NotificationChannelConfig
+from apps.backend.app.models.notification_channel_config import (
+    NotificationChannelConfig,
+)
 from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.notification_subscription import NotificationSubscription
 from apps.backend.app.models.reminder import Reminder
@@ -19,7 +21,10 @@ from apps.backend.app.services.notification.rules import (
     check_large_purchase,
     check_maturity,
 )
-from apps.backend.app.services.notification.sender import NotificationSender, render_template
+from apps.backend.app.services.notification.sender import (
+    NotificationSender,
+    render_template,
+)
 from apps.backend.app.services.storage.config_crypto import decrypt_config
 from apps.backend.app.utils.snowflake import next_id
 
@@ -80,7 +85,10 @@ def check_on_asset_write(db: Session, asset: Asset) -> None:
     config = db.query(NotificationConfig).filter_by(family_id=asset.family_id).first()
     if config is None:
         return
-    if config.large_purchase_threshold_fixed is None and config.large_purchase_threshold_multiplier is None:
+    if (
+        config.large_purchase_threshold_fixed is None
+        and config.large_purchase_threshold_multiplier is None
+    ):
         return
 
     avg_monthly = _calc_avg_monthly_spend(db, asset.family_id)
@@ -89,7 +97,7 @@ def check_on_asset_write(db: Session, asset: Asset) -> None:
         family_id=asset.family_id,
         asset_id=asset.id,
         asset_name=asset.name,
-        purchase_price=asset.purchase_price,
+        purchase_price=float(asset.purchase_price),
         threshold_fixed=config.large_purchase_threshold_fixed,
         threshold_multiplier=config.large_purchase_threshold_multiplier,
         avg_monthly_spend=avg_monthly,
@@ -107,6 +115,7 @@ def run_scheduled_checks(db: Session) -> None:
 
 
 # ── 内部辅助 ──────────────────────────────────────────────────────────────────
+
 
 def _calc_avg_monthly_spend(db: Session, family_id: int) -> float | None:
     cutoff = date.today() - timedelta(days=90)
@@ -141,6 +150,8 @@ def _check_expiring_assets(db: Session) -> None:
         .all()
     )
     for asset in assets:
+        if asset.warranty_expiry_date is None:
+            continue
         result = check_expiring_soon(
             family_id=asset.family_id,
             asset_id=asset.id,
@@ -158,12 +169,16 @@ def _check_maturity_assets(db: Session) -> None:
         .all()
     )
     for asset in assets:
+        if asset.maturity_date is None:
+            continue
         result = check_maturity(
             family_id=asset.family_id,
             asset_id=asset.id,
             asset_name=asset.name,
             maturity_date=asset.maturity_date,
-            amount=asset.current_value,
+            amount=float(asset.current_value)
+            if asset.current_value is not None
+            else None,
         )
         if result:
             ensure_reminder(db, result)
@@ -185,11 +200,16 @@ def _get_channel_config(db: Session, channel: NotificationChannel) -> dict:
     return result
 
 
-def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict) -> None:
+def _dispatch_notifications(
+    db: Session, reminder: Reminder, template_vars: dict
+) -> None:
     """向订阅了该 reminder_type 的所有启用渠道发送通知（失败静默）。"""
     channels = (
         db.query(NotificationChannel)
-        .join(NotificationSubscription, NotificationChannel.id == NotificationSubscription.channel_id)
+        .join(
+            NotificationSubscription,
+            NotificationChannel.id == NotificationSubscription.channel_id,
+        )
         .filter(
             NotificationChannel.family_id == reminder.family_id,
             NotificationChannel.is_enabled == True,  # noqa: E712
@@ -199,9 +219,9 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
     )
     already_sent = {
         rn.channel_id
-        for rn in db.query(ReminderNotification).filter_by(
-            reminder_id=reminder.id, status="sent"
-        ).all()
+        for rn in db.query(ReminderNotification)
+        .filter_by(reminder_id=reminder.id, status="sent")
+        .all()
     }
     for channel in channels:
         if channel.id in already_sent:
@@ -218,7 +238,9 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
             except RuntimeError:
                 pass
         elif channel.channel_type == "email":
-            subject = render_template(reminder.reminder_type, "email_subject", template_vars)
+            subject = render_template(
+                reminder.reminder_type, "email_subject", template_vars
+            )
             body = render_template(reminder.reminder_type, "email_body", template_vars)
             success = NotificationSender.send_email(
                 smtp_host=config.get("smtp_host", ""),
@@ -269,9 +291,9 @@ def _retry_failed_notifications(db: Session) -> None:
         # 查新表：已成功通知的渠道
         sent_channel_ids = {
             rn.channel_id
-            for rn in db.query(ReminderNotification).filter_by(
-                reminder_id=reminder.id, status="sent"
-            ).all()
+            for rn in db.query(ReminderNotification)
+            .filter_by(reminder_id=reminder.id, status="sent")
+            .all()
         }
         # 查新表：失败次数
         retry_count = (

@@ -110,9 +110,13 @@ def trust_device(
     response: Response,
     body: DeviceTrustRequest | None = None,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(
+        None, alias=CHILD_REFRESH_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """Trust the current device — issue 30-day refresh token and create/reuse DeviceSession."""
@@ -122,7 +126,9 @@ def trust_device(
     family_id = int(payload["fid"])
     role = payload["role"]
 
-    old_jti = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+    old_jti = _get_refresh_jti_from_cookie(
+        refresh_token_cookie, child_refresh_token_cookie
+    )
 
     claims = {"sub": str(user_id), "fid": str(family_id), "role": role}
     if role == "child":
@@ -150,14 +156,16 @@ def trust_device(
     # Set device_id cookie — not httpOnly so JS can read it for /device/check
     response.set_cookie(
         key="numina_device_id",
-        value=session.device_id,
+        value=session.device_id or "",
         max_age=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600,
         secure=settings.ENVIRONMENT == "production",
         samesite="lax",
         path="/",
     )
 
-    cookie_name = CHILD_REFRESH_TOKEN_COOKIE if role == "child" else REFRESH_TOKEN_COOKIE
+    cookie_name = (
+        CHILD_REFRESH_TOKEN_COOKIE if role == "child" else REFRESH_TOKEN_COOKIE
+    )
     response.set_cookie(
         key=cookie_name,
         value=new_refresh,
@@ -170,17 +178,22 @@ def trust_device(
 
     return DeviceTrustResponse(
         session_id=session.id,
-        device_id=session.device_id,
+        device_id=session.device_id or "",
         device_name=session.device_name,
         expires_at=session.expires_at,
     )
 
 
-@router.post("/device/trust/webauthn/register-options", response_model=DeviceTrustWebAuthnOptionsResponse)
+@router.post(
+    "/device/trust/webauthn/register-options",
+    response_model=DeviceTrustWebAuthnOptionsResponse,
+)
 def device_trust_webauthn_register_options(
     request: Request,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """Generate WebAuthn registration options for the authenticated user."""
@@ -211,7 +224,9 @@ def device_trust_webauthn_register(
     req: DeviceTrustWebAuthnRegisterRequest,
     request: Request,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """Complete WebAuthn registration — store credential on user."""
@@ -249,16 +264,22 @@ def device_trust_webauthn_register(
 def list_devices(
     request: Request,
     refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(
+        None, alias=CHILD_REFRESH_TOKEN_COOKIE
+    ),
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """List trusted devices for the current user."""
     payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
     user_id = int(payload["sub"])
 
-    current_jti = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+    current_jti = _get_refresh_jti_from_cookie(
+        refresh_token_cookie, child_refresh_token_cookie
+    )
 
     sessions = device_service.list_device_sessions(db, user_id=user_id)
     return [
@@ -281,9 +302,13 @@ def revoke_device(
     request: Request,
     response: Response,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(
+        None, alias=CHILD_REFRESH_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """Revoke a specific trusted device session."""
@@ -294,9 +319,13 @@ def revoke_device(
     session = device_service.revoke_device_session(
         db, device_id=int(session_id), user_id=user_id
     )
-    revoke_jti(session.refresh_jti, ttl_seconds=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600)
+    revoke_jti(
+        session.refresh_jti, ttl_seconds=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600
+    )
 
-    current_jti = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+    current_jti = _get_refresh_jti_from_cookie(
+        refresh_token_cookie, child_refresh_token_cookie
+    )
     if current_jti == session.refresh_jti:
         if role == "child":
             clear_child_auth_cookies(response)
@@ -311,7 +340,9 @@ def revoke_all_devices(
     request: Request,
     response: Response,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """Revoke all trusted device sessions for the current user."""
@@ -392,11 +423,7 @@ def check_device(
         return DeviceCheckResponse(trusted=False)
 
     user_ids = [s.user_id for s in sessions]
-    users = (
-        db.query(User)
-        .filter(User.id.in_(user_ids), User.is_active.is_(True))
-        .all()
-    )
+    users = db.query(User).filter(User.id.in_(user_ids), User.is_active.is_(True)).all()
     user_map = {u.id: u for u in users}
 
     items: list[DeviceCheckUserItem] = []
@@ -518,7 +545,9 @@ def select_device(
     return DeviceSelectResponse(second_factor_required=False)
 
 
-@router.post("/device/webauthn/auth-options", response_model=DeviceWebAuthnAuthOptionsResponse)
+@router.post(
+    "/device/webauthn/auth-options", response_model=DeviceWebAuthnAuthOptionsResponse
+)
 def device_webauthn_auth_options(
     req: DeviceWebAuthnAuthOptionsRequest,
     request: Request,
@@ -671,9 +700,13 @@ def device_webauthn_verify(
 def list_family_devices(
     request: Request,
     refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(
+        None, alias=CHILD_REFRESH_TOKEN_COOKIE
+    ),
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ):
     """List active device sessions for all other family members. Owner or admin only."""
@@ -684,7 +717,9 @@ def list_family_devices(
 
     user_id = int(payload["sub"])
     family_id = int(payload["fid"])
-    current_jti = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+    current_jti = _get_refresh_jti_from_cookie(
+        refresh_token_cookie, child_refresh_token_cookie
+    )
 
     rows = device_service.list_family_device_sessions(
         db,
@@ -738,7 +773,9 @@ def device_ping(
             if valid_session:
                 # Return the device_id with ETag header to maintain cache
                 response.headers["ETag"] = f'"{device_id}"'
-                response.headers["Cache-Control"] = "private, max-age=2592000"  # 30 days
+                response.headers["Cache-Control"] = (
+                    "private, max-age=2592000"  # 30 days
+                )
                 return {"device_id": device_id}
 
     # No valid ETag found or device_id not valid

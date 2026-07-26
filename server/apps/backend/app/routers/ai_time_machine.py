@@ -50,7 +50,7 @@ def get_purchasing_power(
 # ---------------------------------------------------------------------------
 
 
-def _load_family_assets(db: Session, family_id: int) -> tuple[list[dict], dict]:
+def _load_family_assets(db: Session, family_id: int) -> tuple[list[dict], set]:
     """Load family assets and category defaults, return (assets_list, asset_id_set)."""
     db_assets = (
         db.query(Asset)
@@ -73,14 +73,16 @@ def _load_family_assets(db: Session, family_id: int) -> tuple[list[dict], dict]:
         # Use asset's own lifespan if available
         if a.expected_lifespan_days and a.expected_lifespan_days > 0:
             dep = 1.0 / (a.expected_lifespan_days / 365.0)
-        assets.append({
-            "id": a.id,
-            "current_value": a.current_value or 0,
-            "asset_type": a.asset_type,
-            "annual_depreciation": dep,
-            "annual_maintenance_cost": a.annual_maintenance_cost or 0,
-            "annual_return": a.interest_rate or ret,
-        })
+        assets.append(
+            {
+                "id": a.id,
+                "current_value": a.current_value or 0,
+                "asset_type": a.asset_type,
+                "annual_depreciation": dep,
+                "annual_maintenance_cost": a.annual_maintenance_cost or 0,
+                "annual_return": a.interest_rate or ret,
+            }
+        )
     return assets, {a["id"] for a in assets}
 
 
@@ -161,13 +163,15 @@ def run_projection(
         y = s.snapshot_date.year
         if y not in seen_years:
             seen_years.add(y)
-            history.append({
-                "year": y,
-                "total_assets": s.total_assets or 0,
-                "total_liabilities": s.total_liabilities or 0,
-                "net_worth": s.net_worth or 0,
-                "real_net_worth": s.net_worth or 0,
-            })
+            history.append(
+                {
+                    "year": y,
+                    "total_assets": s.total_assets or 0,
+                    "total_liabilities": s.total_liabilities or 0,
+                    "net_worth": s.net_worth or 0,
+                    "real_net_worth": s.net_worth or 0,
+                }
+            )
 
     return calculate_projection(
         assets=assets,

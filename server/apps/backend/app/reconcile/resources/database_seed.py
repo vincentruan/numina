@@ -118,7 +118,7 @@ class UpsertSeedResource(DatabaseSeedResource):
 
     def _find_existing(self, db: Session, record: dict[str, Any]):
         """Find an existing record by key fields."""
-        query = db.query(self._model_class)
+        query: Any = db.query(self._model_class)
         for key in self._key_fields:
             query = query.filter(getattr(self._model_class, key) == record[key])
         return query.first()

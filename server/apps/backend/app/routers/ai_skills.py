@@ -70,7 +70,9 @@ def _build_skill_md(name: str, description: str | None, prompt_content: str) -> 
 
 
 def _strip_allowed_tools(content: str) -> str:
-    stripped = re.sub(r"^[ \t]*allowed-tools:.*$(?:\n[ \t]+-.*)*", "", content, flags=re.MULTILINE)
+    stripped = re.sub(
+        r"^[ \t]*allowed-tools:.*$(?:\n[ \t]+-.*)*", "", content, flags=re.MULTILINE
+    )
     return re.sub(r"\n{3,}", "\n\n", stripped)
 
 
@@ -298,7 +300,9 @@ def create_custom_skill_endpoint(
     )
     display_order = max_order + 1
 
-    skill_md_content = _build_skill_md(payload.name, payload.description, payload.prompt_content)
+    skill_md_content = _build_skill_md(
+        payload.name, payload.description, payload.prompt_content
+    )
 
     record = SkillRegistry(
         family_id=family_id,
@@ -324,7 +328,9 @@ def create_custom_skill_endpoint(
     db.refresh(record)
 
     try:
-        workspace.create_custom_skill(str(family_id), payload.skill_id, skill_md_content)
+        workspace.create_custom_skill(
+            str(family_id), payload.skill_id, skill_md_content
+        )
     except Exception:
         db.delete(record)
         db.commit()
@@ -450,7 +456,9 @@ def update_custom_skill_endpoint(
         record.examples = payload.examples
 
     if payload.prompt_content is not None:
-        skill_md_content = _build_skill_md(record.name, record.description, payload.prompt_content)
+        skill_md_content = _build_skill_md(
+            record.name or "", record.description or "", payload.prompt_content
+        )
         workspace.create_custom_skill(str(family_id), skill_id, skill_md_content)
 
     db.commit()
@@ -514,7 +522,9 @@ async def install_skill_endpoint(
             if resp.status_code == 504:
                 raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 安装超时，请稍后重试")
             if resp.status_code >= 400:
-                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 安装失败: {resp.text}")
+                raise AppError(
+                    ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 安装失败: {resp.text}"
+                )
             body = resp.json()
             content = body.get("content")
             if not content:
@@ -541,7 +551,9 @@ async def install_skill_endpoint(
     if not SKILL_ID_PATTERN.match(skill_id):
         raise AppError(ErrorCode.VALIDATION_ERROR, f"非法技能标识符: {skill_id}")
     if skill_id in RESERVED_NAMES or skill_id in INTERNAL_ONLY_SKILLS:
-        raise AppError(ErrorCode.VALIDATION_ERROR, f"技能 ID '{skill_id}' 与内置/保留/内部技能冲突")
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR, f"技能 ID '{skill_id}' 与内置/保留/内部技能冲突"
+        )
 
     # Step 6: Filesystem confinement guard
     skill_dir = workspace.skills_custom_dir(str(family_id)) / skill_id
@@ -594,7 +606,9 @@ async def install_skill_endpoint(
 
     # Step 8: Filesystem write (after DB commit)
     try:
-        workspace.create_custom_skill(str(family_id), skill_id, _strip_allowed_tools(content))
+        workspace.create_custom_skill(
+            str(family_id), skill_id, _strip_allowed_tools(content)
+        )
     except Exception:
         # Compensating transaction: delete the DB row
         db.delete(record)
@@ -638,7 +652,9 @@ async def ai_create_skill_endpoint(
         if resp.status_code == 504:
             raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 生成超时，请稍后重试")
         if resp.status_code >= 400:
-            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 生成失败: {resp.text}")
+            raise AppError(
+                ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 生成失败: {resp.text}"
+            )
         body = resp.json()
         content = body.get("content")
         if not content:
@@ -730,7 +746,9 @@ def save_raw_skill_endpoint(
 
     # Filesystem write after DB commit
     try:
-        workspace.create_custom_skill(str(family_id), payload.skill_id, _strip_allowed_tools(payload.content))
+        workspace.create_custom_skill(
+            str(family_id), payload.skill_id, _strip_allowed_tools(payload.content)
+        )
     except Exception:
         db.delete(record)
         db.commit()

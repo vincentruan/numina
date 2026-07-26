@@ -1,6 +1,7 @@
 """
 内存通知总线 — 管理 WebSocket 连接并广播事件到家庭成员
 """
+
 import asyncio
 import logging
 from collections import defaultdict
@@ -12,15 +13,15 @@ logger = logging.getLogger(__name__)
 class NotificationBus:
     def __init__(self) -> None:
         # family_id -> set of WebSocket connections
-        self._connections: dict[str, set] = defaultdict(set)
+        self._connections: dict[int, set] = defaultdict(set)
 
-    def register(self, family_id: str, ws: Any) -> None:
+    def register(self, family_id: int, ws: Any) -> None:
         self._connections[family_id].add(ws)
 
-    def unregister(self, family_id: str, ws: Any) -> None:
+    def unregister(self, family_id: int, ws: Any) -> None:
         self._connections[family_id].discard(ws)
 
-    async def broadcast(self, family_id: str, event: dict[str, Any]) -> None:
+    async def broadcast(self, family_id: int, event: dict[str, Any]) -> None:
         """广播事件到家庭所有连接"""
         dead: set = set()
         for ws in list(self._connections.get(family_id, [])):
@@ -36,7 +37,7 @@ class NotificationBus:
 notification_bus = NotificationBus()
 
 
-def fire_notification(family_id: str, event: dict[str, Any]) -> None:
+def fire_notification(family_id: int, event: dict[str, Any]) -> None:
     """从同步代码触发异步广播。
 
     使用 asyncio.get_event_loop() 获取运行中的事件循环并创建 task。

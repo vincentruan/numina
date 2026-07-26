@@ -11,6 +11,7 @@ adult may record (shared contribution). DELETE: only log.user_id == caller.id or
 the family owner (mirror wish_service.update_wish owner check, broadened to
 family owner since savings are a shared family resource).
 """
+
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -61,7 +62,9 @@ def record_savings(
     db.add(log)
     wish.saved_amount = (wish.saved_amount or Decimal("0")) + amount
     invalidate_skill(db, user.family_id, "finance_coach")
-    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
+    invalidate_skill(
+        db, user.family_id, "wish_advice"
+    )  # W4 (Plan B T7): savings change the wish fingerprint
     db.commit()
     db.refresh(log)
     db.refresh(wish)
@@ -77,7 +80,7 @@ def list_savings(
 ) -> Sequence[WishSavingsLog]:
     """List a wish's savings logs, newest log_date first (family-scoped)."""
     # Family-scope via get_wish (raises NOT_FOUND if the wish isn't in the family).
-    get_wish(db, user, wish_id)
+    get_wish(db, user, int(wish_id))
     offset = (page - 1) * size
     return (
         db.query(WishSavingsLog)
@@ -124,7 +127,9 @@ def delete_savings(
     db.delete(log)
     wish.saved_amount = (wish.saved_amount or Decimal("0")) - log.amount
     invalidate_skill(db, user.family_id, "finance_coach")
-    invalidate_skill(db, user.family_id, "wish_advice")  # W4 (Plan B T7): savings change the wish fingerprint
+    invalidate_skill(
+        db, user.family_id, "wish_advice"
+    )  # W4 (Plan B T7): savings change the wish fingerprint
     db.commit()
 
 
@@ -136,8 +141,9 @@ def recompute_saved_amount(db: Session, wish_id: int | str) -> Decimal:
     counter in-transaction or call this.
     """
     total = db.execute(
-        select(func.coalesce(func.sum(WishSavingsLog.amount), Decimal("0")))
-        .where(WishSavingsLog.wish_id == int(wish_id))
+        select(func.coalesce(func.sum(WishSavingsLog.amount), Decimal("0"))).where(
+            WishSavingsLog.wish_id == int(wish_id)
+        )
     ).scalar_one()
     wish = db.query(Wish).filter(Wish.id == int(wish_id)).first()
     if wish is not None:

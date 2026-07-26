@@ -39,7 +39,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StreamChunk:
     """Structured event from DeerFlow stream — replaces [THINK]/[TEXT] string prefixes."""
-    type: Literal["thinking", "text", "tool_call", "tool_result", "tool_progress", "plan_update"]
+
+    type: Literal[
+        "thinking", "text", "tool_call", "tool_result", "tool_progress", "plan_update"
+    ]
     content: str
     data: dict[str, Any] | None = None
 
@@ -48,7 +51,9 @@ class StreamChunk:
 # not at import time, to avoid circular imports and allow test overrides.
 _executor: ThreadPoolExecutor | None = None
 _semaphore: asyncio.Semaphore | None = None
-_executor_lock = threading.Lock()  # guards lazy _executor / _semaphore initialization only
+_executor_lock = (
+    threading.Lock()
+)  # guards lazy _executor / _semaphore initialization only
 
 # Separate lock for SQLite checkpointer writes — prevents SQLITE_BUSY under concurrency.
 # The harness uses SqliteSaver (langgraph-checkpoint-sqlite) which does not handle
@@ -62,6 +67,7 @@ def _get_executor() -> ThreadPoolExecutor:
         with _executor_lock:
             if _executor is None:
                 from apps.agent.app.config import settings
+
                 _executor = ThreadPoolExecutor(
                     max_workers=settings.DEERFLOW_CONCURRENCY,
                     thread_name_prefix="deerflow",
@@ -106,6 +112,7 @@ def _get_semaphore() -> asyncio.Semaphore:
         with _executor_lock:
             if _semaphore is None:
                 from apps.agent.app.config import settings
+
                 _semaphore = asyncio.Semaphore(settings.DEERFLOW_CONCURRENCY)
     return _semaphore
 
@@ -158,14 +165,17 @@ class DeerFlowAdapter:
         self._family_id = family_id
         self._ai_config = ai_config
         self._mcp_servers = mcp_servers
-        self._config_path: str | None = None  # Store config_path for reloading before stream
+        self._config_path: str | None = (
+            None  # Store config_path for reloading before stream
+        )
         self._client: Any = None
         self._is_family_mode = False
 
         if family_id and ai_config:
             # 家庭级配置模式：从缓存获取 DeerFlowClient 和 config_path
-            self._client, self._config_path = get_family_adapter(
-                family_id, ai_config,
+            self._client, config_path_obj = get_family_adapter(
+                family_id,
+                ai_config,
                 subagent_enabled=subagent_enabled,
                 plan_mode=plan_mode,
                 mcp_servers=mcp_servers,
@@ -174,18 +184,26 @@ class DeerFlowAdapter:
                 memory_enabled=memory_enabled,
                 available_skills=available_skills,
             )
+            self._config_path = (
+                str(config_path_obj) if config_path_obj is not None else None
+            )
             self._is_family_mode = True
         elif config_path:
             # 全局配置模式：直接初始化（向后兼容）
             from apps.agent.services.deerflow_adapter.client_factory import (
                 get_deerflow_client,
             )
+
             self._client = get_deerflow_client(config_path)
             self._is_family_mode = False
         else:
-            raise ValueError("Either config_path or (family_id + ai_config) must be provided")
+            raise ValueError(
+                "Either config_path or (family_id + ai_config) must be provided"
+            )
 
-    async def dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
+    async def dispatch(
+        self, skill_name: str, context: RedactedContext, thread_id: str
+    ) -> str:
         """Dispatch a skill call and return the full response string.
 
         _CHECKPOINTER_LOCK serializes SqliteSaver writes across concurrent calls,
@@ -216,7 +234,9 @@ class DeerFlowAdapter:
             except DeerFlowError:
                 raise
             except Exception as e:
-                raise DeerFlowError(f"DeerFlow error in skill '{skill_name}': {e}") from e
+                raise DeerFlowError(
+                    f"DeerFlow error in skill '{skill_name}': {e}"
+                ) from e
 
     async def stream_dispatch(
         self,
@@ -242,7 +262,6 @@ class DeerFlowAdapter:
             ):
                 yield chunk
 
-
     async def raw_stream_dispatch(
         self,
         skill_name: str,
@@ -252,9 +271,7 @@ class DeerFlowAdapter:
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
     ) -> AsyncGenerator[Any, None]:
-        """Yield raw LangGraph StreamEvents from DeerFlowClient.stream().
-
-        """
+        """Yield raw LangGraph StreamEvents from DeerFlowClient.stream()."""
         # Set the original user content ContextVar so DeerFlow's
         # SkillActivationMiddleware sees the raw user text (before JSON wrapping).
         # The ContextVar propagates into the executor thread via
@@ -287,6 +304,7 @@ class DeerFlowAdapter:
                                 push_current_app_config,
                                 reload_app_config,
                             )
+
                             family_config = reload_app_config(str(self._config_path))
                             push_current_app_config(family_config)
 
@@ -311,7 +329,11 @@ class DeerFlowAdapter:
                             from apps.agent.services.runtime.sandbox_provider import (
                                 set_extensions_config_path,
                             )
-                            extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+
+                            extensions_path = (
+                                _Path(str(self._config_path)).parent
+                                / "extensions_config.json"
+                            )
                             if extensions_path.exists():
                                 set_extensions_config_path(str(extensions_path))
                                 # Reset MCP cache so DeerFlow picks up the new config
@@ -320,6 +342,7 @@ class DeerFlowAdapter:
                                         reset_extensions_config,
                                     )
                                     from deerflow.mcp.cache import reset_mcp_tools_cache
+
                                     reset_mcp_tools_cache()
                                     reset_extensions_config()
                                 except ImportError:
@@ -327,7 +350,9 @@ class DeerFlowAdapter:
 
                             try:
                                 message = self._build_prompt(skill_name, context)
-                                for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
+                                for event in self._client.stream(
+                                    message, thread_id=thread_id, **stream_kwargs
+                                ):
                                     loop.call_soon_threadsafe(queue.put_nowait, event)
                             finally:
                                 if extensions_path.exists():
@@ -335,8 +360,10 @@ class DeerFlowAdapter:
                                 pop_current_app_config()
                         else:
                             message = self._build_prompt(skill_name, context)
-                            for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
-                                    loop.call_soon_threadsafe(queue.put_nowait, event)
+                            for event in self._client.stream(
+                                message, thread_id=thread_id, **stream_kwargs
+                            ):
+                                loop.call_soon_threadsafe(queue.put_nowait, event)
                     except Exception as e:
                         loop.call_soon_threadsafe(queue.put_nowait, e)
                     finally:
@@ -345,16 +372,21 @@ class DeerFlowAdapter:
                 future = _run_in_executor_with_context(loop, _get_executor(), _produce)
                 try:
                     while True:
-                        item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
+                        item = await asyncio.wait_for(
+                            queue.get(), timeout=self._timeout
+                        )
                         if item is None:
                             break
                         if isinstance(item, BaseException):
-                            raise DeerFlowError(f"DeerFlow stream error: {item}") from item
+                            raise DeerFlowError(
+                                f"DeerFlow stream error: {item}"
+                            ) from item
                         yield item
                 except TimeoutError as e:
                     raise DeerFlowTimeoutError(f"timeout after {self._timeout}s") from e
                 finally:
                     import contextlib
+
                     with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                         await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
         finally:
@@ -391,8 +423,12 @@ class DeerFlowAdapter:
             (sse_event_type, data_dict) tuples ready for ``format_sse()``.
         """
         async for event in self.raw_stream_dispatch(
-            skill_name, context, thread_id, enable_thinking,
-            subagent_enabled=subagent_enabled, plan_mode=plan_mode,
+            skill_name,
+            context,
+            thread_id,
+            enable_thinking,
+            subagent_enabled=subagent_enabled,
+            plan_mode=plan_mode,
         ):
             if isinstance(event, BaseException):
                 yield ("error", {"error": str(event)})
@@ -446,10 +482,7 @@ class DeerFlowAdapter:
                 return
 
             # ── messages-tuple events ────────────────────────────────────────
-            if not (
-                event.type == "messages-tuple"
-                and isinstance(event.data, dict)
-            ):
+            if not (event.type == "messages-tuple" and isinstance(event.data, dict)):
                 return
 
             msg_type = event.data.get("type")
@@ -486,7 +519,9 @@ class DeerFlowAdapter:
             if tool_calls_raw:
                 calls = extract_tool_calls(event.data)
                 for call in calls:
-                    tool_type, display_name, icon, display_key = resolve_tool_metadata(call["name"])
+                    tool_type, display_name, icon, display_key = resolve_tool_metadata(
+                        call["name"]
+                    )
                     is_internal = call["name"] == "write_todos"
                     chunk_data = {
                         "tool_call_id": call["id"],
@@ -507,19 +542,28 @@ class DeerFlowAdapter:
 
             # thinking / text content
             if isinstance(reasoning, str) and reasoning:
-                loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", reasoning))
+                loop.call_soon_threadsafe(
+                    queue.put_nowait, StreamChunk("thinking", reasoning)
+                )
             if isinstance(content, list):
                 text_parts: list[str] = []
                 for block in content:
                     if isinstance(block, dict):
                         if block.get("type") == "thinking" and block.get("thinking"):
-                            loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", block["thinking"]))
+                            loop.call_soon_threadsafe(
+                                queue.put_nowait,
+                                StreamChunk("thinking", block["thinking"]),
+                            )
                         elif block.get("type") == "text" and block.get("text"):
                             text_parts.append(block["text"])
                 if text_parts:
-                    loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", "".join(text_parts)))
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait, StreamChunk("text", "".join(text_parts))
+                    )
             elif isinstance(content, str) and content:
-                loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", content))
+                loop.call_soon_threadsafe(
+                    queue.put_nowait, StreamChunk("text", content)
+                )
 
         def _produce() -> None:
             """Run in thread pool — puts StreamChunk objects into queue, None signals end."""
@@ -534,6 +578,7 @@ class DeerFlowAdapter:
                         push_current_app_config,
                         reload_app_config,
                     )
+
                     family_config = reload_app_config(str(self._config_path))
                     push_current_app_config(family_config)
 
@@ -547,7 +592,10 @@ class DeerFlowAdapter:
                     from apps.agent.services.runtime.sandbox_provider import (
                         set_extensions_config_path,
                     )
-                    extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+
+                    extensions_path = (
+                        _Path(str(self._config_path)).parent / "extensions_config.json"
+                    )
                     if extensions_path.exists():
                         set_extensions_config_path(str(extensions_path))
                         # Reset MCP cache so DeerFlow picks up the new config
@@ -556,6 +604,7 @@ class DeerFlowAdapter:
                                 reset_extensions_config,
                             )
                             from deerflow.mcp.cache import reset_mcp_tools_cache
+
                             reset_mcp_tools_cache()
                             reset_extensions_config()
                         except ImportError:
@@ -563,7 +612,11 @@ class DeerFlowAdapter:
 
                     try:
                         message = self._build_prompt(skill_name, context)
-                        for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                        for event in self._client.stream(
+                            message,
+                            thread_id=thread_id,
+                            thinking_enabled=enable_thinking,
+                        ):
                             _process_event(event)
                     finally:
                         if extensions_path.exists():
@@ -572,10 +625,14 @@ class DeerFlowAdapter:
                 else:
                     # Global config mode — no per-family override needed
                     message = self._build_prompt(skill_name, context)
-                    for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                    for event in self._client.stream(
+                        message, thread_id=thread_id, thinking_enabled=enable_thinking
+                    ):
                         _process_event(event)
             except Exception as e:
-                logger.error("[deerflow] stream_chunks failed: %s\n%s", e, traceback.format_exc())
+                logger.error(
+                    "[deerflow] stream_chunks failed: %s\n%s", e, traceback.format_exc()
+                )
                 loop.call_soon_threadsafe(queue.put_nowait, e)
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
@@ -600,7 +657,9 @@ class DeerFlowAdapter:
             with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                 await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
 
-    def _sync_dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
+    def _sync_dispatch(
+        self, skill_name: str, context: RedactedContext, thread_id: str
+    ) -> str:
         """Synchronous DeerFlow call — runs in thread pool executor."""
         try:
             message = self._build_prompt(skill_name, context)
@@ -612,6 +671,7 @@ class DeerFlowAdapter:
                     push_current_app_config,
                     reload_app_config,
                 )
+
                 family_config = reload_app_config(str(self._config_path))
                 push_current_app_config(family_config)
 
@@ -623,7 +683,10 @@ class DeerFlowAdapter:
                 from apps.agent.services.runtime.sandbox_provider import (
                     set_extensions_config_path,
                 )
-                extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+
+                extensions_path = (
+                    _Path(str(self._config_path)).parent / "extensions_config.json"
+                )
                 if extensions_path.exists():
                     set_extensions_config_path(str(extensions_path))
                     # Reset MCP cache so DeerFlow picks up the new config
@@ -675,7 +738,9 @@ class DeerFlowAdapter:
         except Exception as e:
             err_msg = str(e).lower()
             if "skill" in err_msg and ("not found" in err_msg or "unknown" in err_msg):
-                raise DeerFlowSkillNotFoundError(f"Skill not found: {skill_name}") from e
+                raise DeerFlowSkillNotFoundError(
+                    f"Skill not found: {skill_name}"
+                ) from e
             raise DeerFlowError(str(e)) from e
 
     def _build_prompt(self, skill_name: str, context: RedactedContext) -> str:
@@ -704,7 +769,9 @@ def _make_adapter() -> DeerFlowAdapter | None:
     """
     try:
         # DeerFlowClient expects a config file, not a directory
-        config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
+        config_dir = os.path.join(
+            os.path.dirname(__file__), "..", "..", "deerflow_config"
+        )
         # Use environment-specific config if DEERFLOW_ENV is set, otherwise base
         env = os.getenv("DEERFLOW_ENV", "base")
         config_path = os.path.join(config_dir, env, "config.yaml")
@@ -716,6 +783,7 @@ def _make_adapter() -> DeerFlowAdapter | None:
         return DeerFlowAdapter(config_path=config_path, timeout_seconds=120)
     except Exception as e:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(f"DeerFlow adapter init failed: {e}")
         return None
 
@@ -748,6 +816,7 @@ def __getattr__(name: str) -> Any:
 
 
 # ── 家庭级配置模式的 API ──────────────────────────────────────────────────
+
 
 def create_family_adapter(
     family_id: str,
