@@ -285,10 +285,14 @@ setup-db-postgres:
 	@for i in $$(seq 1 30); do \
 		if $(COMPOSE) exec -T postgres pg_isready -U numina >/dev/null 2>&1; then \
 			echo "✓ PostgreSQL 已就绪"; \
-			echo "  连接字符串: postgresql://numina:numinapass@numina-postgres:5432/numina"; \
+			echo "创建 deerflow 数据库..."; \
+			$(COMPOSE) exec -T postgres psql -U numina -d postgres -c "CREATE DATABASE deerflow;" 2>/dev/null || echo "  deerflow 数据库已存在"; \
 			echo ""; \
 			echo "请将以下内容添加到 .env:"; \
 			echo "  DATABASE_URL=postgresql+psycopg://numina:numinapass@numina-postgres:5432/numina"; \
+			echo ""; \
+			echo "DeerFlow checkpoint 使用独立数据库:"; \
+			echo "  DEERFLOW_DB_URL=postgresql+asyncpg://numina:numinapass@numina-postgres:5432/deerflow"; \
 			exit 0; \
 		fi; \
 		sleep 1; \
@@ -474,6 +478,14 @@ up-prod:
 
 down-prod:
 	@$(COMPOSE) -f docker-compose.production.yml down
+
+# PostgreSQL compose (docker-compose.yml + docker-compose.postgres.yml)
+# Requires --profile postgres to activate the postgres service defined in docker-compose.yml
+up-postgres:
+	@$(COMPOSE) --profile postgres -f docker-compose.yml -f docker-compose.postgres.yml up -d --build
+
+down-postgres:
+	@$(COMPOSE) --profile postgres -f docker-compose.yml -f docker-compose.postgres.yml down
 
 # ══════════════════════════════════════════════════════════
 # 部署
