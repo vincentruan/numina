@@ -551,6 +551,14 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     if not family:
         raise AppError(ErrorCode.AUTH_INVITE_CODE_INVALID)
 
+    # Check family member limit (50 members max)
+    member_count = db.query(User).filter(
+        User.family_id == family.id,
+        User.is_active
+    ).count()
+    if member_count >= 50:
+        raise AppError(ErrorCode.FAMILY_MEMBER_LIMIT_EXCEEDED)
+
     user = User(
         family_id=family.id,
         username=req.username,
