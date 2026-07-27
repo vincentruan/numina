@@ -37,6 +37,7 @@
   "FAMILY_FORBIDDEN": "无权执行此操作",
   "FAMILY_MEMBER_NOT_FOUND": "成员不存在",
   "FAMILY_NO_ACTIVE_MEMBERS": "家庭无活跃成员",
+  "FAMILY_MEMBER_LIMIT_EXCEEDED": "家庭成员人数已达上限（最多50人）",
   "FILE_NOT_FOUND": "文件不存在",
   "FILE_PATH_INVALID": "文件路径异常",
   "FILE_SIZE_EXCEEDED": "文件大小超过限制（最大 5MB）",

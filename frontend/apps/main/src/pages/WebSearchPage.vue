@@ -1,6 +1,6 @@
 <!-- frontend/apps/main/src/pages/WebSearchPage.vue -->
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -12,6 +12,7 @@ import {
   enableWebSearchProvider,
   disableWebSearchProvider,
   updateWebSearchProvider,
+  reorderWebSearchProviders,
 } from '@/api/webSearch'
 import type { WebSearchProvider, WebSearchProviderTemplate } from '@/types/webSearch'
 
@@ -27,18 +28,17 @@ const isReordering = ref(false)
 
 const enabledCount = computed(() => providers.value.filter((p) => p.is_enabled).length)
 
-const enabledProviders = computed({
-  get: () =>
-    providers.value.filter((p) => p.is_enabled).sort((a, b) => a.display_order - b.display_order),
-  set: (newList: WebSearchProvider[]) => {
-    // Sync the reordered enabled list back into the source array,
-    // updating display_order so the getter's sort preserves the new order.
-    const enabledIds = new Set(newList.map((p) => p.id))
-    const disabled = providers.value.filter((p) => !enabledIds.has(p.id))
-    const reordered = newList.map((p, i) => ({ ...p, display_order: i }))
-    providers.value = [...reordered, ...disabled]
+const localEnabledProviders = ref<WebSearchProvider[]>([])
+
+watch(
+  () => providers.value,
+  (newProviders) => {
+    localEnabledProviders.value = [...newProviders]
+      .filter((p) => p.is_enabled)
+      .sort((a, b) => a.display_order - b.display_order)
   },
-})
+  { immediate: true, deep: false },
+)
 
 const disabledProviders = computed(() => providers.value.filter((p) => !p.is_enabled))
 
@@ -105,11 +105,11 @@ async function handleToggle(provider: WebSearchProvider) {
 
 function onDragStart() {
   // Snapshot current order before vuedraggable mutates v-model
-  preDragOrder = enabledProviders.value.map((p) => p.id)
+  preDragOrder = localEnabledProviders.value.map((p) => p.id)
 }
 
 async function onDragEnd() {
-  const newOrder = enabledProviders.value.map((p) => p.id)
+  const newOrder = localEnabledProviders.value.map((p) => p.id)
 
   if (JSON.stringify(newOrder) === JSON.stringify(preDragOrder)) {
     return // No change, skip API calls
@@ -117,11 +117,7 @@ async function onDragEnd() {
 
   isReordering.value = true
   try {
-    // Batch update display_order (index = new order)
-    const updates = enabledProviders.value.map((p, index) =>
-      updateWebSearchProvider(p.id, { display_order: index }),
-    )
-    await Promise.all(updates)
+    await reorderWebSearchProviders(newOrder)
     showToast(t('webSearch.reorderSuccess'))
     await load() // Refresh to confirm
   } catch {
@@ -147,10 +143,10 @@ onMounted(load)
     </div>
 
     <!-- Enabled providers (draggable) -->
-    <van-cell-group v-if="enabledProviders.length > 0" :title="t('webSearch.enabledGroup')">
+    <van-cell-group v-if="localEnabledProviders.length > 0" :title="t('webSearch.enabledGroup')">
       <div class="drag-hint">{{ t('webSearch.dragHint') }}</div>
       <draggable
-        v-model="enabledProviders"
+        v-model="localEnabledProviders"
         :item-key="'id'"
         :disabled="!isOwner"
         handle=".drag-handle"

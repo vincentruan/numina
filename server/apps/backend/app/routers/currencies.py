@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.currency import Currency
 from apps.backend.app.models.exchange_rate import ExchangeRate
+from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.schemas.currency import CurrencyResponse, RateResponse
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
@@ -61,7 +64,7 @@ def list_rates(
     return {
         r.target_currency: RateResponse(
             rate=r.rate,
-            fetched_at=r.fetched_at.isoformat(),
+            fetched_at=ensure_utc(r.fetched_at).isoformat(),
         )
         for r in rows
     }
@@ -76,10 +79,9 @@ def get_rate(
 
     This endpoint is public as exchange rates are reference data, not user-specific.
     """
-    from datetime import datetime
 
     if code.upper() == "CNY":
-        return RateResponse(rate=1.0, fetched_at=datetime.now().isoformat())
+        return RateResponse(rate=1.0, fetched_at=datetime.now(UTC).isoformat())
 
     row = (
         db.query(ExchangeRate)
@@ -89,4 +91,4 @@ def get_rate(
     )
     if row is None:
         raise AppError(ErrorCode.EXCHANGE_RATE_NOT_FOUND)
-    return RateResponse(rate=row.rate, fetched_at=row.fetched_at.isoformat())
+    return RateResponse(rate=row.rate, fetched_at=ensure_utc(row.fetched_at).isoformat())

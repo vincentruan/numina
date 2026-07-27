@@ -67,6 +67,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         name=req.name,
         description=req.description,
         expected_price=req.expected_price,
+        currency=req.currency,
         priority=req.priority,
         category_id=req.category_id,
         converts_to_asset=req.converts_to_asset,

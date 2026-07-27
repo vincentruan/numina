@@ -57,6 +57,7 @@ class ChoreTemplate(Base):
 
 class ChoreInstance(Base):
     __tablename__ = "chore_instances"
+    __allow_unmapped__ = True
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("chore_templates.id"), nullable=False)
