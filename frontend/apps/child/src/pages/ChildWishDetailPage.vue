@@ -66,7 +66,7 @@
       <span v-else-if="wish.status === 'pending_review'" class="status-line">{{ t('wishes.waitingReview') }}</span>
       <div v-else-if="wish.status === 'realized'" class="realized-section">
         <p v-if="wish.fulfilled_at" class="fulfilled-date">
-          {{ t('wishes.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+          {{ t('wishes.fulfilledAt', { date: parseApiDate(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
         </p>
         <router-link v-if="wish.realized_asset_id" :to="{ name: 'ChildAssetDetail', params: { id: wish.realized_asset_id } }" class="link-asset">
           {{ t('wishes.viewAsset') }}
@@ -92,6 +92,7 @@ import {
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { daysEstimate } from '@numina/math'
+import { parseApiDate } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t, locale } = useI18n()

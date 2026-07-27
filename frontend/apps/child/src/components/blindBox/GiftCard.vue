@@ -28,6 +28,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { parseApiDate } from '@/utils/format'
 import type { BlindBoxDraw } from '@/types/blindBox'
 
 const { t, locale } = useI18n()
@@ -38,7 +39,7 @@ const statusText = computed(() =>
 )
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString(locale.value, {
+  return parseApiDate(dateStr).toLocaleDateString(locale.value, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
