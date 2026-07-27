@@ -37,9 +37,9 @@
               <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
               <van-popover
                 :show="activePopover === stat.type"
-                @update:show="(v) => (activePopover = v ? stat.type : null)"
                 placement="bottom"
                 :offset="[0, 8]"
+                @update:show="(v) => (activePopover = v ? stat.type : null)"
               >
                 <div class="stat-popover-content">
                   <div class="stat-popover-header">
@@ -205,6 +205,44 @@
         <div class="agent-section__content" :class="{ collapsed: analysisAppsCollapsed }">
           <!-- Analysis apps list -->
           <div class="app-list">
+            <!-- Trend Analysis app card -->
+            <div
+              class="app-list-item"
+              role="button"
+              tabindex="0"
+              @click="goToAnalytics('trend')"
+              @keydown.enter="goToAnalytics('trend')"
+              @keydown.space.prevent="goToAnalytics('trend')"
+            >
+              <div class="app-list-item__icon">
+                <SvgIcon name="trend" class="icon-svg" />
+              </div>
+              <div class="app-list-item__body">
+                <div class="app-list-item__name">{{ t('aiHub.trendAnalysisCardTitle') }}</div>
+                <div class="app-list-item__desc">{{ t('aiHub.trendAnalysisCardDesc') }}</div>
+              </div>
+              <van-icon name="arrow" class="app-list-item__arrow" />
+            </div>
+
+            <!-- Asset Insights app card -->
+            <div
+              class="app-list-item"
+              role="button"
+              tabindex="0"
+              @click="goToAnalytics('insight')"
+              @keydown.enter="goToAnalytics('insight')"
+              @keydown.space.prevent="goToAnalytics('insight')"
+            >
+              <div class="app-list-item__icon">
+                <SvgIcon name="insight" class="icon-svg" />
+              </div>
+              <div class="app-list-item__body">
+                <div class="app-list-item__name">{{ t('aiHub.insightAnalysisCardTitle') }}</div>
+                <div class="app-list-item__desc">{{ t('aiHub.insightAnalysisCardDesc') }}</div>
+              </div>
+              <van-icon name="arrow" class="app-list-item__arrow" />
+            </div>
+
             <!-- Time Machine app card -->
             <div
               class="app-list-item"
@@ -232,7 +270,7 @@
     <!-- Chat input directly rendered (InputBox handles its own fixed bottom positioning) -->
     <InputBox
       v-model="chatInput"
-      v-model:webSearch="webSearch"
+      v-model:web-search="webSearch"
       :disabled="!selectedAgent"
       :agents="agentChoices"
       :agent-id="selectedAgent?.id"
@@ -280,7 +318,7 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
 import { getSystemDefaultSession } from '@/api/sessions'
@@ -304,11 +342,14 @@ import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
 import { usePageLoading } from '@/composables/usePageLoading'
 
+defineOptions({ name: 'AIHub' })
+
 const NUMINA_AGENT_NAME = 'numina'
 
 const { t } = useI18n()
 
 const router = useRouter()
+const route = useRoute()
 const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
@@ -352,10 +393,20 @@ watch(
   { immediate: true },
 )
 
-// Analysis apps list (currently only Time Machine)
+// Analysis apps list (trend / insight / time-machine)
 const analysisApps = computed(() => [
+  { id: 'trend-analysis', name: t('aiHub.trendAnalysisCardTitle'), desc: t('aiHub.trendAnalysisCardDesc'), route: '/dashboard/analytics', tab: 'trend' },
+  { id: 'insight-analysis', name: t('aiHub.insightAnalysisCardTitle'), desc: t('aiHub.insightAnalysisCardDesc'), route: '/dashboard/analytics', tab: 'insight' },
   { id: 'time-machine', name: t('aiHub.timeMachineCardTitle'), desc: t('aiHub.timeMachineCardDesc'), route: '/ai/time-machine' },
 ])
+
+function goToAnalytics(tab: 'trend' | 'insight') {
+  router.push({
+    path: '/dashboard/analytics',
+    query: { tab },
+    state: { from: route.path },
+  })
+}
 
 function toggleMyAgents() {
   myAgentsCollapsed.value = !myAgentsCollapsed.value
@@ -669,7 +720,13 @@ async function loadPageData() {
 onMounted(loadPageData)
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
-onActivated(loadPageData)
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
+// mount inside <KeepAlive>; onMounted handles initial load.
+let hasActivated = false
+onActivated(() => {
+  if (!hasActivated) { hasActivated = true; return }
+  loadPageData()
+})
 
 // This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
@@ -690,6 +747,7 @@ defineExpose({
   selectedAgent,
   initialLoading,
   selectAgent,
+  goToAnalytics,
 })
 </script>
 

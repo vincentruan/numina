@@ -24,32 +24,66 @@
         <NuminaLogo class="numina-logo" :width="220" />
         <p class="step0-subtitle">{{ t('login.selectAccount') }}</p>
 
-        <van-swipe :loop="false" :width="260" :show-indicators="true" class="account-swipe">
-          <van-swipe-item
-            v-for="user in boundUsers"
-            :key="user.userId"
-            @click="onSelectUser(user)"
+        <!-- Account carousel with prev/next arrows -->
+        <div class="account-carousel-wrapper">
+          <button
+            v-if="boundUsers.length > 1"
+            type="button"
+            class="carousel-arrow carousel-arrow--prev"
+            :class="{ 'carousel-arrow--hidden': carouselIndex === 0 }"
+            :disabled="loading || carouselIndex === 0"
+            :aria-label="t('login.previousAccount')"
+            @click="onCarouselPrev"
           >
-            <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
-              <div class="account-avatar" :style="{ background: user.avatarColor }">
-                {{ user.displayName.charAt(0) }}
-              </div>
-              <p class="account-name">{{ user.displayName }}</p>
-              <span class="account-role">{{ t(`role.${user.role}`) }}</span>
-            </div>
-          </van-swipe-item>
+            <van-icon name="arrow-left" size="20" />
+          </button>
 
-          <van-swipe-item @click="switchToStep1">
-            <div class="account-card account-card--other">
-              <div class="account-avatar account-avatar--add">+</div>
-              <p class="account-name">{{ t('login.otherAccount') }}</p>
-            </div>
-          </van-swipe-item>
-        </van-swipe>
+          <van-swipe
+            ref="accountSwipeRef"
+            :loop="false"
+            :width="260"
+            :show-indicators="true"
+            class="account-swipe"
+            @change="onCarouselChange"
+          >
+            <van-swipe-item
+              v-for="user in boundUsers"
+              :key="user.userId"
+              @click="onSelectUser(user)"
+            >
+              <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
+                <div class="account-avatar" :style="{ background: user.avatarColor }">
+                  {{ user.displayName.charAt(0) }}
+                </div>
+                <p class="account-name">{{ user.displayName }}</p>
+                <span class="account-role">{{ t(`role.${user.role}`) }}</span>
+              </div>
+            </van-swipe-item>
+
+            <van-swipe-item @click="switchToStep1">
+              <div class="account-card account-card--other">
+                <div class="account-avatar account-avatar--add">+</div>
+                <p class="account-name">{{ t('login.otherAccount') }}</p>
+              </div>
+            </van-swipe-item>
+          </van-swipe>
+
+          <button
+            v-if="boundUsers.length > 1"
+            type="button"
+            class="carousel-arrow carousel-arrow--next"
+            :class="{ 'carousel-arrow--hidden': carouselIndex >= boundUsers.length }"
+            :disabled="loading || carouselIndex >= boundUsers.length"
+            :aria-label="t('login.nextAccount')"
+            @click="onCarouselNext"
+          >
+            <van-icon name="arrow-right" size="20" />
+          </button>
+        </div>
 
         <Transition name="step-fade">
           <div v-if="selectedUser && !(selectedUser.hasPasskey && webauthnSupported)" class="select-captcha-area">
-            <p class="captcha-hint">{{ t('login.verifyToContinue') }}</p>
+            <p v-if="selectAltchaRef?.isEnabled?.()" class="captcha-hint">{{ t('login.verifyToContinue') }}</p>
             <AltchaWidget
               ref="selectAltchaRef"
               v-model="selectAltcha"
@@ -230,6 +264,8 @@ const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
 useDeerField(bgCanvasRef, deerCanvasRef)
 
+const accountSwipeRef = ref()
+const carouselIndex = ref(0)
 const step = ref<0 | 1 | 2>(1)
 const tempToken = ref('')
 const secondFactorType = ref('')
@@ -365,6 +401,12 @@ function onSelectUser(user: BoundUser) {
 
   if (user.hasPasskey && webauthnSupported.value) {
     authenticateWithWebAuthn(user)
+    return
+  }
+
+  // When captcha is disabled server-side, treat it as already passed
+  if (selectAltchaRef.value?.isEnabled && !selectAltchaRef.value.isEnabled()) {
+    onSelectAltchaComplete()
   }
 }
 
@@ -421,8 +463,21 @@ function switchToStep1() {
   boundUsers.value = []
 }
 
+// Carousel navigation
+function onCarouselChange(index: number) {
+  carouselIndex.value = index
+}
+
+function onCarouselPrev() {
+  accountSwipeRef.value?.prev?.()
+}
+
+function onCarouselNext() {
+  accountSwipeRef.value?.next?.()
+}
+
 async function onSelectAltchaComplete() {
-  if (!selectedUser.value || !deviceIdRef.value || !selectAltcha.value) return
+  if (!selectedUser.value || !deviceIdRef.value) return
   loading.value = true
   try {
     const { data } = await selectDeviceUser(
@@ -1192,14 +1247,67 @@ async function submitEmojiPin() {
 }
 
 .step0-subtitle {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
   margin-bottom: 24px;
+}
+
+.account-carousel-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 380px;
 }
 
 .account-swipe {
   width: 100%;
   max-width: 340px;
+}
+
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(189, 187, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #bdbbff;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.carousel-arrow:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.9);
+  background: rgba(189, 187, 255, 0.35);
+}
+
+.carousel-arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.carousel-arrow--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.carousel-arrow--prev {
+  left: -8px;
+}
+
+.carousel-arrow--next {
+  right: -8px;
 }
 
 .account-card {
@@ -1252,7 +1360,7 @@ async function submitEmojiPin() {
 }
 
 .account-role {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 12px;
 }
 
@@ -1265,7 +1373,7 @@ async function submitEmojiPin() {
 }
 
 .captcha-hint {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.75);
   font-size: 13px;
 }
 

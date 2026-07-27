@@ -11,6 +11,12 @@ let nprogressStarted: boolean = false
 // This allows increment() to take over without restarting the progress bar
 let routerNprogressActive: boolean = false
 
+// Track if completeGlobalLoading() already ran for the current navigation.
+// When true, increment() knows the router's safety timeout fired first (e.g.
+// because a Transition out-in delay pushed mount past the timeout). In that
+// case increment must NOT restart NProgress — the bar was already completed.
+let routerDone: boolean = false
+
 // Track router's safety timeout ID so increment() can clear it (prevents TOCTOU race)
 let routerTimeoutId: ReturnType<typeof setTimeout> | null = null
 
@@ -46,24 +52,36 @@ export function usePageLoading() {
 
     const instance = pendingInstances.get(instanceId)
     if (!instance || !instance.active) {
-      if (import.meta.env.DEV) {
-        console.warn('[usePageLoading] increment() called on inactive instance')
-      }
-      return
+      // KeepAlive may have evicted and re-activated the component, causing
+      // onUnmounted to mark this instance inactive and remove it from the map.
+      // When onActivated fires again, re-register the instance so the
+      // increment/decrement pair stays balanced.
+      pendingInstances.set(instanceId, { count: 0, active: true })
     }
 
+    const active = pendingInstances.get(instanceId)!
     loadingCount.value++
-    instance.count++
+    active.count++
 
     if (loadingCount.value === 1 && !nprogressStarted) {
       // If router already started NProgress, take over without restarting
       // This prevents the flicker: start→done→start pattern
       if (!routerNprogressActive) {
-        NProgress.start()
+        // If completeGlobalLoading() already fired (e.g. Transition out-in
+        // delay pushed mount past the afterEach timeout), the bar was already
+        // hidden. Don't restart it — just mark started so decrement() can
+        // call done() (harmless no-op) for bookkeeping.
+        if (routerDone) {
+          nprogressStarted = true
+          routerDone = false
+        } else {
+          NProgress.start()
+          nprogressStarted = true
+        }
       } else {
         routerNprogressActive = false
+        nprogressStarted = true
       }
-      nprogressStarted = true
 
       // Start stuck safety timeout
       if (stuckTimeoutId !== null) {
@@ -192,6 +210,10 @@ export function completeGlobalLoading(): void {
   NProgress.done()
   nprogressStarted = false
   routerNprogressActive = false
+  // Signal to increment() that the router timeout already fired. If a page
+  // mounts later (e.g. Transition out-in delay pushed it past the timeout),
+  // increment() will NOT restart NProgress — the bar was already completed.
+  routerDone = true
 }
 
 /**
@@ -218,4 +240,24 @@ export function clearRouterTimeout(): void {
  */
 export function markRouterNprogressActive(): void {
   routerNprogressActive = true
+  routerDone = false
+}
+
+/**
+ * Reset all module-level state. Test only — not part of the public API.
+ */
+export function _resetForTesting(): void {
+  loadingCount.value = 0
+  pendingInstances.clear()
+  nprogressStarted = false
+  routerNprogressActive = false
+  routerDone = false
+  if (stuckTimeoutId !== null) {
+    clearTimeout(stuckTimeoutId)
+    stuckTimeoutId = null
+  }
+  if (routerTimeoutId !== null) {
+    clearTimeout(routerTimeoutId)
+    routerTimeoutId = null
+  }
 }

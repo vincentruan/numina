@@ -54,6 +54,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { getUpcomingPayments } from '@/api/dashboard'
 import type { UpcomingPaymentItem } from '@/api/dashboard'
+
+defineOptions({ name: 'Dashboard' })
 import { usePageLoading } from '@/composables/usePageLoading'
 
 import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
@@ -71,6 +73,9 @@ const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
 const { increment, decrement } = usePageLoading()
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
+// mount inside <KeepAlive>; onMounted handles initial load.
+let hasActivated = false
 const refreshing = ref(false)
 
 // Upcoming payments
@@ -132,6 +137,7 @@ onMounted(async () => {
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
 onActivated(async () => {
+  if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
     await Promise.all([
