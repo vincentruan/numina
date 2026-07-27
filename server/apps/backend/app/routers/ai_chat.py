@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -37,8 +37,10 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.schemas.base import SnowflakeBase
+from apps.backend.app.schemas.file_record import FileRecordResponse
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.chat_session import ChatSessionService
+from apps.backend.app.services.storage.service import StorageService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
 sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
@@ -786,4 +788,53 @@ async def get_artifact(
         content=content,
         media_type=media_type,
         headers=headers,
+    )
+
+
+# ── Chat Attachment Upload ────────────────────────────────────────────────────
+
+# Max 10MB per attachment (matches DeerFlow gateway default)
+_MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
+
+_ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_ALLOWED_FILE_EXTS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".txt", ".csv", ".md", ".json", ".yaml", ".yml",
+} | _ALLOWED_IMAGE_EXTS
+
+
+@router.post("/attachments", response_model=FileRecordResponse, status_code=201)
+async def upload_chat_attachment(
+    file: UploadFile,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> FileRecordResponse:
+    """上传聊天附件（图片/文档）。
+
+    返回 FileRecordResponse（file_id, url, filename, size_bytes），
+    前端将其作为 FileInMessage 加入 SubmitPayload.files。
+    """
+    if not file.filename:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "文件名不能为空")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in _ALLOWED_FILE_EXTS:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            f"不支持的文件类型: {ext}",
+        )
+
+    content = await file.read()
+    if len(content) > _MAX_ATTACHMENT_SIZE:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            f"文件大小超过限制（最大 10MB）",
+        )
+
+    return await StorageService.upload_file(
+        content=content,
+        original_filename=file.filename,
+        ext=ext,
+        user=current_user,
+        db=db,
     )

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from datetime import UTC, datetime
 
 import httpx
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_owner
 from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_provider_config import (
@@ -41,6 +43,47 @@ from apps.backend.app.services.security_log import _log_security_event
 router = APIRouter(prefix="/ai", tags=["ai-config"])
 
 logger = logging.getLogger(__name__)
+
+
+def _invalidate_agent_cache(family_id: int) -> None:
+    """Notify the agent to invalidate its DeerFlowClient cache for this family.
+
+    Provider config changes (create/update/delete/reorder) bake model_id,
+    api_key, and base_url into DeerFlowClient's temp config.yaml at adapter
+    creation time. Without invalidation the agent keeps reusing stale cached
+    clients indefinitely. This is a best-effort fire-and-forget call — a
+    failed invalidation just means the stale cache survives until LRU eviction.
+
+    The call is dispatched in a daemon thread so it never blocks the HTTP
+    response, even when the agent is temporarily unreachable.
+    """
+    family_id_str = str(family_id)
+    agent_url = f"{settings.AGENT_BASE_URL.rstrip('/')}/internal/cache/invalidate/{family_id_str}"
+
+    def _call():
+        try:
+            resp = httpx.post(
+                agent_url,
+                headers={
+                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "Content-Type": "application/json",
+                },
+                timeout=5.0,
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "[ai_config] agent cache invalidation returned %s for family=%s",
+                    resp.status_code,
+                    family_id_str,
+                )
+        except Exception:
+            logger.debug(
+                "[ai_config] agent cache invalidation failed for family=%s",
+                family_id_str,
+                exc_info=True,
+            )
+
+    threading.Thread(target=_call, daemon=True).start()
 
 
 def _deserialize_capabilities(cap_str: str | None) -> list[str]:
@@ -181,7 +224,33 @@ def create_ai_config(
         provider=cfg.provider,
     )
 
+    _invalidate_agent_cache(current_user.family_id)
+
     return _cfg_to_response(cfg, [], None)
+
+
+class _ReorderPayload(BaseModel):
+    order: list[str]  # IDs serialized as strings (Snowflake)
+
+
+@router.put("/config/reorder", response_model=dict)
+def reorder_ai_configs(
+    payload: _ReorderPayload,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict:
+    """按给定顺序更新供应商 display_order（仅 owner）。"""
+    for idx, config_id_str in enumerate(payload.order):
+        config_id = int(config_id_str)  # Snowflake ID (serialized as string)
+        db.query(AIProviderConfig).filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == current_user.family_id,
+        ).update({"display_order": idx})
+    db.commit()
+
+    _invalidate_agent_cache(current_user.family_id)
+
+    return {"ok": True}
 
 
 @router.put("/config/{config_id}", response_model=AIConfigResponse)
@@ -258,6 +327,8 @@ def update_ai_config(
         provider=cfg.provider,
     )
 
+    _invalidate_agent_cache(current_user.family_id)
+
     test_results = db.query(AIProviderTestResult).filter_by(config_id=cfg.id).all()
     api_key_masked = None
     if cfg.api_key_encrypted:
@@ -323,6 +394,8 @@ def delete_ai_config(
     db.delete(cfg)
     db.commit()
 
+    _invalidate_agent_cache(current_user.family_id)
+
 
 @router.post("/config/{config_id}/reset-circuit", response_model=AICircuitResetResponse)
 def reset_circuit_breaker(
@@ -354,27 +427,6 @@ def reset_circuit_breaker(
     cfg.half_open_window_start = None
     db.commit()
     return AICircuitResetResponse(ok=True)
-
-
-class _ReorderPayload(BaseModel):
-    order: list[str]  # IDs serialized as strings (Snowflake)
-
-
-@router.put("/config/reorder", response_model=dict)
-def reorder_ai_configs(
-    payload: _ReorderPayload,
-    current_user: User = Depends(require_owner),
-    db: Session = Depends(get_db),
-) -> dict:
-    """按给定顺序更新供应商 display_order（仅 owner）。"""
-    for idx, config_id_str in enumerate(payload.order):
-        config_id = int(config_id_str)  # Snowflake ID (serialized as string)
-        db.query(AIProviderConfig).filter(
-            AIProviderConfig.id == config_id,
-            AIProviderConfig.family_id == current_user.family_id,
-        ).update({"display_order": idx})
-    db.commit()
-    return {"ok": True}
 
 
 @router.post("/config/{config_id}/test", response_model=AIConfigTestResult)

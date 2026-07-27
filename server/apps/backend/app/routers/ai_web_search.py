@@ -15,6 +15,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.web_search_provider import (
     WebSearchKeyRevealResponse,
     WebSearchProviderCreate,
+    WebSearchProviderReorderRequest,
     WebSearchProviderResponse,
     WebSearchProviderTemplate,
     WebSearchProviderUpdate,
@@ -181,6 +182,23 @@ def create_provider(
     )
 
     return _provider_to_response(provider)
+
+
+@router.put("/reorder", response_model=dict)
+def reorder_providers(
+    payload: WebSearchProviderReorderRequest,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Batch update display_order for enabled web search providers (owner only)."""
+    for idx, provider_id_str in enumerate(payload.order):
+        provider_id = int(provider_id_str)
+        db.query(FamilyWebSearchProvider).filter(
+            FamilyWebSearchProvider.id == provider_id,
+            FamilyWebSearchProvider.family_id == current_user.family_id,
+        ).update({"display_order": idx})
+    db.commit()
+    return {"ok": True}
 
 
 @router.put("/{provider_id}", response_model=WebSearchProviderResponse)

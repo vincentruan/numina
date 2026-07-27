@@ -4,11 +4,13 @@
 并以 X-Family-Id header 中的 family_id 为边界过滤数据。
 """
 
+import hmac
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -1022,3 +1024,179 @@ def internal_get_user(
         "display_name": user.display_name,
         "family_id": str(user.family_id),
     }
+
+
+# ── System-level internal auth (no X-Family-Id) ──────────────────────────────
+
+logger = logging.getLogger(__name__)
+
+
+def verify_system_token(
+    authorization: str = Header(..., alias="Authorization"),
+) -> bool:
+    """验证 system-level service-to-service token (无 X-Family-Id)。
+
+    仅供 scheduler_worker 等系统级调用使用，不涉及特定家庭上下文。
+    仅支持 static HMAC token 格式。
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(  # noqa: allow-http-exception
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid system token",
+        )
+
+    token = authorization[7:]
+
+    from apps.backend.app.config import settings as app_settings  # noqa: PLC0415
+
+    if not app_settings.AGENT_INTERNAL_TOKEN:
+        raise HTTPException(  # noqa: allow-http-exception
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent internal token not configured",
+        )
+
+    if not hmac.compare_digest(token, app_settings.AGENT_INTERNAL_TOKEN):
+        raise HTTPException(  # noqa: allow-http-exception
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid system token",
+        )
+
+    return True
+
+
+@router.post("/ai/auto-generate-reports")
+async def auto_generate_reports(
+    _auth: bool = Depends(verify_system_token),
+    db: Session = Depends(get_db),
+):
+    """定时任务触发：为符合条件的家庭自动生成资产报告。
+
+    条件：
+    1. Family.report_auto_generate_enabled == True
+    2. 有激活的 AIProviderConfig（AI 功能已开启）
+    3. 最近 1 小时内没有已完成的报告
+    4. 没有正在运行中的 AI 任务
+
+    对每个符合条件的家庭，创建 session + task 并触发 agent 生成。
+    """
+    from apps.backend.app.models.ai_provider_config import (
+        AIProviderConfig,  # noqa: PLC0415
+    )
+    from apps.backend.app.models.ai_report import AIReport  # noqa: PLC0415
+    from apps.backend.app.services.agent_client import AgentClient  # noqa: PLC0415
+    from apps.backend.app.services.ai_task_service import AITaskService  # noqa: PLC0415
+    from apps.backend.app.services.chat_session import (
+        ChatSessionService,  # noqa: PLC0415
+    )
+    from apps.backend.app.services.finance_coach_cache import SKILL_TTL  # noqa: PLC0415
+    from packages.db.models.family import Family  # noqa: PLC0415
+
+    report_ttl = SKILL_TTL["report"]
+
+    # 1. 找到 report_auto_generate_enabled=True 的家庭
+    auto_families = (
+        db.query(Family.id)
+        .filter(Family.report_auto_generate_enabled == True)  # noqa: E712
+        .all()
+    )
+    family_ids = [f.id for f in auto_families]
+
+    if not family_ids:
+        return {"triggered": 0, "skipped": 0, "message": "没有开启自动生成的家庭"}
+
+    # 2. 过滤出有激活 AIProviderConfig 的家庭
+    ai_enabled_ids = set(
+        r.family_id
+        for r in db.query(AIProviderConfig.family_id)
+        .filter(
+            AIProviderConfig.family_id.in_(family_ids),
+            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .all()
+    )
+
+    eligible_ids = [fid for fid in family_ids if fid in ai_enabled_ids]
+    if not eligible_ids:
+        return {"triggered": 0, "skipped": 0, "message": "没有 AI 功能开启的家庭"}
+
+    triggered = 0
+    skipped = 0
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # noqa: UP017
+
+    for fid in eligible_ids:
+        # 3. 检查是否有 1 小时内的报告
+        latest_report = (
+            db.query(AIReport)
+            .filter(
+                AIReport.family_id == fid,
+                AIReport.status == "completed",
+            )
+            .order_by(AIReport.generated_at.desc())
+            .first()
+        )
+        if (
+            latest_report is not None
+            and latest_report.generated_at is not None
+            and (now - latest_report.generated_at) < report_ttl
+        ):
+            skipped += 1
+            continue
+
+        # 4. 检查是否有运行中的任务
+        running = AITaskService.get_any_running_task(fid, db)
+        if running:
+            skipped += 1
+            continue
+
+        # 5. 找到家庭 owner 作为执行用户
+        owner = (
+            db.query(User)
+            .filter(User.family_id == fid, User.role == "owner", User.is_active == True)  # noqa: E712
+            .first()
+        )
+        if not owner:
+            skipped += 1
+            continue
+
+        # 6. 创建 session + task 并触发 agent
+        try:
+            session = await ChatSessionService.create_session(
+                family_id=fid,
+                user_id=owner.id,
+                db=db,
+            )
+            task = AITaskService.create_task(
+                family_id=fid,
+                skill_id="report",
+                session_id=session.id,
+                db=db,
+            )
+
+            # Fire-and-forget: 调用 agent 启动 pipeline
+            # on_disconnect="continue" 确保即使 HTTP 连接断开，agent 仍继续运行
+            agent_client = AgentClient(fid, owner.id, timeout=30.0)
+            try:
+                await agent_client.post(
+                    f"/internal/gateway/runs/asset-report/{session.id}",
+                    json={
+                        "family_id": str(fid),
+                        "user_id": str(owner.id),
+                        "language": owner.language,
+                        "on_disconnect": "continue",
+                    },
+                )
+            except Exception as agent_err:
+                logger.warning(
+                    "[auto-report] agent call failed family=%s task=%s err=%s",
+                    fid, task.id, agent_err,
+                )
+                # Agent call 失败但 task 已创建，agent 侧可能有其他触发路径
+
+            triggered += 1
+            logger.info("[auto-report] triggered family=%s task=%s", fid, task.id)
+        except Exception as e:
+            logger.exception(f"[auto-report] failed for family={fid}: {e}")
+            skipped += 1
+
+    return {"triggered": triggered, "skipped": skipped}

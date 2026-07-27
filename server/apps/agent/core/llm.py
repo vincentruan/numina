@@ -377,14 +377,24 @@ class LLMClient:
             messages=cast(Any, messages),
         )
         content = response.choices[0].message.content
-        if not content:
-            # 标准化错误处理：明确告知响应为空
-            raise LLMResponseError(
-                provider="openai",
-                message="Response content is empty",
-                details=f"model={self.model_id}, finish_reason={response.choices[0].finish_reason}",
-            )
-        return content
+        if content:
+            return content
+
+        # DeepSeek / Qwen3 等 reasoning 模型在 max_tokens 较小时可能只输出
+        # reasoning_content 而 content 为空。把 reasoning_content 视为有效响应，
+        # 避免连接测试误报失败。
+        reasoning_content = getattr(
+            response.choices[0].message, "reasoning_content", None
+        )
+        if reasoning_content:
+            return cast(str, reasoning_content)
+
+        # 标准化错误处理：明确告知响应为空
+        raise LLMResponseError(
+            provider="openai",
+            message="Response content is empty",
+            details=f"model={self.model_id}, finish_reason={response.choices[0].finish_reason}",
+        )
 
     async def _complete_anthropic_vision(
         self, prompt: str, image_data: str, max_tokens: int, system: str | None

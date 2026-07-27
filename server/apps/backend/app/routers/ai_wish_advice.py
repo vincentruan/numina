@@ -16,6 +16,7 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
+from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services import wish_advice
 from apps.backend.app.services.finance_coach_cache import (
     is_cache_fresh,
@@ -56,7 +57,7 @@ async def generate_wish_advice(
                 status_code=200,
                 content={
                     "status": "cached",
-                    "generated_at": cached.generated_at.isoformat() if cached.generated_at else None,
+                    "generated_at": ensure_utc(cached.generated_at).isoformat() if cached.generated_at else None,
                     "report": cached.report_json.get("advice"),
                 },
             )

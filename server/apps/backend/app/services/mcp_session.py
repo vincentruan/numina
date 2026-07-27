@@ -299,12 +299,12 @@ class MCPSession:
                     category = arguments.get("category")
                     limit = int(arguments.get("limit", 20))
                     data = asset_service.list_assets_for_family(
-                        db, self._family_id, category=category, limit=limit
+                        db, self._family_id, user=user, category=category, limit=limit
                     )
                 elif name == "get_liabilities":
                     limit = int(arguments.get("limit", 20))
                     data = liability_service.list_liabilities_for_family(
-                        db, self._family_id, limit=limit
+                        db, self._family_id, user=user, limit=limit
                     )
                 elif name == "get_members":
                     data = family_service.list_members(db, int(self._family_id))

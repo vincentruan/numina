@@ -12,6 +12,7 @@ Skill catalog 命名空间约定：
 
 import logging
 import re
+from pathlib import Path
 
 import httpx
 import yaml
@@ -21,6 +22,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult, require_owner
+from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.skill_registry import SkillRegistry
@@ -794,3 +796,133 @@ def delete_custom_skill_endpoint(
     db.commit()
     workspace.delete_custom_skill(str(family_id), skill_id)
     return {"ok": True}
+
+
+# ── Install from Artifact ────────────────────────────────────────────────────────
+
+
+class InstallFromArtifactRequest(BaseModel):
+    session_id: str
+    artifact_path: str
+
+    @field_validator("artifact_path")
+    @classmethod
+    def validate_artifact_path(cls, v: str) -> str:
+        if not v or ".." in v:
+            raise ValueError("非法文件路径")
+        return v
+
+
+@router.post("/install-from-artifact", response_model=SkillDefinitionResponse)
+async def install_from_artifact_endpoint(
+    payload: InstallFromArtifactRequest,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> SkillDefinitionResponse:
+    """从 sandbox 产物文件安装自定义技能。
+
+    读取 ``{WORKSPACE_ROOT}/users/{family_id}/threads/{session_id}/user-data/workspace/{artifact_path}``
+    中的 SKILL.md，解析 frontmatter 后创建 custom skill（DB + workspace 双写）。
+    """
+    family_id = current_user.family_id
+
+    # Resolve workspace path with filesystem confinement
+    workspace_base = (
+        Path(settings.WORKSPACE_ROOT)
+        / "users"
+        / str(family_id)
+        / "threads"
+        / payload.session_id
+        / "user-data"
+        / "workspace"
+    )
+    artifact_file = (workspace_base / payload.artifact_path).resolve()
+    if not artifact_file.is_relative_to(workspace_base.resolve()):
+        raise AppError(ErrorCode.VALIDATION_ERROR, "非法文件路径")
+    if not artifact_file.is_file():
+        raise AppError(ErrorCode.NOT_FOUND, "产物文件不存在")
+
+    # Read and parse
+    content = artifact_file.read_text(encoding="utf-8")
+    frontmatter = parse_skill_frontmatter(content)
+    name = frontmatter["name"]
+    description = frontmatter["description"]
+
+    # Derive skill_id from name
+    raw_name = name or "unnamed-skill"
+    skill_id = re.sub(r"[^a-z0-9_-]", "-", raw_name.lower()).strip("-")
+    if not skill_id or not SKILL_ID_PATTERN.match(skill_id):
+        skill_id = "custom-skill"
+
+    if skill_id in RESERVED_NAMES or skill_id in INTERNAL_ONLY_SKILLS:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR, f"技能 ID '{skill_id}' 与内置/保留/内部技能冲突"
+        )
+
+    # DB write
+    existing = (
+        db.query(SkillRegistry)
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_id == skill_id,
+        )
+        .first()
+    )
+    if existing:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "该技能已存在")
+
+    max_order = (
+        db.query(func.max(SkillRegistry.display_order))
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_type == "custom",
+        )
+        .scalar()
+        or 199
+    )
+
+    record = SkillRegistry(
+        family_id=family_id,
+        skill_id=skill_id,
+        skill_type="custom",
+        name=name or skill_id,
+        description=description,
+        is_enabled=True,
+        display_order=max_order + 1,
+        creation_type="artifact",
+        source_url=None,
+        created_by=current_user.id,
+    )
+    db.add(record)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(record)
+
+    # Filesystem write
+    try:
+        workspace.create_custom_skill(
+            str(family_id), skill_id, _strip_allowed_tools(content)
+        )
+    except Exception:
+        db.delete(record)
+        db.commit()
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败")
+
+    return SkillDefinitionResponse(
+        id=record.skill_id,
+        skill_type="custom",
+        name=record.name,
+        description=record.description,
+        icon=record.icon,
+        color=record.color,
+        input_mode=record.input_mode,
+        examples=record.examples,
+        display_order=record.display_order,
+        is_enabled=record.is_enabled,
+        can_edit=True,
+        can_delete=True,
+    )

@@ -8,11 +8,11 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled, require_owner
@@ -23,6 +23,7 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
+from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_result_parser import (
     _contains_markdown_table,
@@ -44,6 +45,12 @@ class MarkdownResponse(BaseModel):
     filename: str
     generated_at: datetime
     file_size: int
+
+    @field_serializer("generated_at")
+    def _serialize_generated_at(self, v: datetime) -> str:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
+        return v.isoformat()
 
 
 def _latest_report(family_id: int, db: Session) -> AIReport | None:
@@ -75,7 +82,7 @@ def get_report(
         return {"report": None}
     return {
         "report": report.report_json,
-        "generated_at": report.generated_at.isoformat(),
+        "generated_at": ensure_utc(report.generated_at).isoformat(),
     }
 
 
@@ -108,6 +115,10 @@ async def _stream_asset_report_sse(
                 "family_id": str(family_id),
                 "user_id": str(user_id),
                 "language": language,
+                # Background generation: keep the agent pipeline running even if
+                # the user navigates away and the SSE connection drops. The
+                # AITask record remains the source of truth for completion.
+                "on_disconnect": "continue",
             },
         ) as resp:
             if resp.status_code != 200:
@@ -147,9 +158,10 @@ async def trigger_generate_events(
 ):
     """触发体检报告生成（SSE 流式推送三步进度，U4）。
 
-    U4 step 6: 8h 缓存——入口先查最新 completed AIReport，8h 内且无 force
-    直接返回缓存 JSON（200，非流）；force=true 或超 8h 走 stream_run 重新生成。
-    缓存检查在并发检查之前（计划步骤 6）；强制刷新仍受单家庭单任务并发约束。
+    1h 缓存——入口先查最新 completed AIReport，1h 内且无 force
+    直接返回缓存 JSON（200，非流）；force=true 或超 1h 走 stream_run 重新生成。
+    缓存检查在并发检查之前；强制刷新仍受单家庭单任务并发约束。
+    后台生成：SSE 连接断开后 agent pipeline 仍继续运行，用户可切离页面。
     """
     blocked_resp = check_circuit_blocked(current_user.family_id, "report", db)
     if blocked_resp is not None:
@@ -178,7 +190,7 @@ async def trigger_generate_events(
                         status_code=200,
                         content={
                             "status": "cached",
-                            "generated_at": cached.generated_at.isoformat(),
+                            "generated_at": ensure_utc(cached.generated_at).isoformat(),
                             "report": cached_json,
                         },
                     )
@@ -240,14 +252,61 @@ async def trigger_generate_events(
     # internal X-Agent-Token gateway endpoint. The agent worker runs the 3-step
     # pipeline and emits report.step2_json; this endpoint streams it back as SSE
     # (replaces the legacy NDJSON proxy_report_events orchestration).
+    #
+    # Task lifecycle: wrap the SSE stream so that when the agent pipeline
+    # finishes (end frame), the AITask row is transitioned from "running" to
+    # "completed" (or "failed" on error).  Without this the task stays
+    # "running" for 30 min until the timeout auto-kicks in, causing the
+    # frontend to show a stuck "step 1" UI on page revisit.
+    stream_gen = _stream_asset_report_sse(
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=session_id,
+        task_id=task_id,
+        language=current_user.language,
+    )
+
+    async def _task_tracking_stream() -> AsyncGenerator[bytes, None]:
+        task_complete = False
+        try:
+            async for frame in stream_gen:
+                # Detect the terminal end frame to capture completion status.
+                # The agent publishes exactly one end frame in its finally block
+                # (worker.py step 11), so this is reliable.
+                line = frame.decode("utf-8", errors="replace").strip()
+                if line.startswith("data:"):
+                    data_str = line[5:].strip()
+                    if data_str and data_str not in ("[DONE]", "null"):
+                        try:
+                            parsed = json.loads(data_str)
+                            if isinstance(parsed, dict) and parsed.get("status") == "complete":
+                                task_complete = True
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                yield frame
+        finally:
+            try:
+                from apps.backend.app.database import SessionLocal
+
+                local_db = SessionLocal()
+                try:
+                    if task_complete:
+                        AITaskService.complete_task(task_id, local_db)
+                    else:
+                        AITaskService.fail_task(
+                            task_id, "stream ended without completion", local_db
+                        )
+                finally:
+                    local_db.close()
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "[trigger_generate_events] task cleanup failed task=%s err=%s",
+                    task_id,
+                    cleanup_exc,
+                )
+
     return StreamingResponse(
-        _stream_asset_report_sse(
-            family_id=family_id,
-            user_id=user_id,
-            thread_id=session_id,
-            task_id=task_id,
-            language=current_user.language,
-        ),
+        _task_tracking_stream(),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

@@ -553,11 +553,13 @@ async def get_family_ai_config(family_id: str) -> dict:
 async def get_ai_enabled_families() -> list[str]:
     """获取所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。
 
-    注意：此函数目前存在设计缺陷，需要重构。
-    正确做法：定时任务应按家庭维度分别启动，每个家庭使用自己的 AI 配置。
-    当前实现：使用 backend 的 admin endpoint 获取列表（无需 X-Family-Id）。
+    设计说明：此函数通过 admin endpoint 获取已开启 AI 的家庭 ID 列表，
+    供 scheduler_worker 定时任务使用。当前 admin endpoint 不需要 X-Family-Id，
+    因此不违反租户隔离。
 
-    TODO: 重构为按家庭维度调度，避免租户隔离违反。
+    未来演进：当 scheduler_worker 需要按家庭维度分别启动独立调度任务时，
+    应为每个家庭创建独立的 BackendClient（注入对应 family_id 的 X-Family-Id），
+    使每个定时任务在正确的租户上下文中运行。
     """
     # 使用独立 client 以应用快速超时（admin endpoint 无需共享池）
     async with httpx.AsyncClient(
