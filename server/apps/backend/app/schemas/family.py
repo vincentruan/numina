@@ -23,6 +23,7 @@ class FamilySettingsUpdate(BaseModel):
     coin_silver_to_gold: int | None = None
     education_reward_enabled: bool | None = None
     coin_to_yuan_rate: int | None = None
+    report_auto_generate_enabled: bool | None = None
 
     @field_validator("auto_approve_hours")
     @classmethod
@@ -53,6 +54,7 @@ class FamilySettingsResponse(BaseModel):
     coin_silver_to_gold: int
     education_reward_enabled: bool
     coin_to_yuan_rate: int
+    report_auto_generate_enabled: bool
     model_config = ConfigDict(from_attributes=True)
 
 

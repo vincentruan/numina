@@ -50,7 +50,7 @@ def test_invalidate_skill_scoped_to_one_family(db_session):
 def test_capability_ttl_has_report_and_finance_coach_entries():
     assert "report" in SKILL_TTL
     assert "finance_coach" in SKILL_TTL
-    assert SKILL_TTL["report"] == timedelta(hours=8)
+    assert SKILL_TTL["report"] == timedelta(hours=1)
     assert SKILL_TTL["finance_coach"] == timedelta(hours=8)
 
 

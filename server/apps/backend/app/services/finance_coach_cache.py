@@ -22,9 +22,12 @@ from sqlalchemy.orm import Session
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.utils.snowflake import next_id
 
-# Parametric TTL per skill (spec §7.2: non-hardcoded). Initial 8h for all.
+# Parametric TTL per skill (spec §7.2: non-hardcoded).
+# report: 1h — users wanted hourly deduplication; background generation keeps
+# the task alive across page navigation, so the cache window is shortened to
+# avoid stale reports and repeated prompts within the same hour.
 SKILL_TTL: dict[str, timedelta] = {
-    "report": timedelta(hours=8),
+    "report": timedelta(hours=1),
     "finance_coach": timedelta(hours=8),
 }
 

@@ -15,9 +15,10 @@ scheduler = AsyncIOScheduler()
 
 
 def setup_all_jobs() -> None:
-    """Register all 7 scheduled jobs."""
+    """Register all 8 scheduled jobs."""
     from apps.scheduler_worker.jobs import (  # noqa: PLC0415
         audit_log_purge_job,
+        auto_report_job,
         device_session_cleanup_job,
         fetch_rates_job,
         file_sync_job,
@@ -120,3 +121,17 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("快照定时任务已配置（每日 00:05）")
+
+    # Job 8: Auto report generation — daily at 08:35
+    scheduler.add_job(
+        auto_report_job,
+        trigger="cron",
+        hour=8,
+        minute=35,
+        id="auto_report_daily",
+        name="auto_report_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("自动报告生成任务已配置（每日 08:35）")

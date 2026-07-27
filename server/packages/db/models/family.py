@@ -2,7 +2,7 @@ import random
 import string
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
@@ -21,6 +21,9 @@ class Family(Base):
     custom_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
     invite_code: Mapped[str] = mapped_column(String(6), unique=True, default=generate_invite_code)
     created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    report_auto_generate_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

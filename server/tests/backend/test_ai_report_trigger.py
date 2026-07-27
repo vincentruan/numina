@@ -130,21 +130,21 @@ def test_trigger_passes_family_id_as_string_to_agent(client):
 
 
 def _fresh_cached_report():
-    """An AIReport-like object generated < 8h ago (cache hit)."""
+    """An AIReport-like object generated < 1h ago (cache hit)."""
     from datetime import datetime, timedelta, timezone
 
     return type(
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),  # noqa: UP017
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30),  # noqa: UP017
             "report_json": {"overall_score": 65, "indicators": []},
         },
     )()
 
 
 def test_trigger_cache_hit_returns_json_not_stream(client):
-    """Within 8h + no force → 200 JSON {status: cached}, no agent stream call."""
+    """Within 1h + no force → 200 JSON {status: cached}, no agent stream call."""
     with patch(
         "apps.backend.app.routers.ai_report._latest_report",
         return_value=_fresh_cached_report(),
@@ -170,14 +170,14 @@ def test_trigger_force_bypasses_cache(client):
 
 
 def test_trigger_stale_cache_misses(client):
-    """A report older than 8h is a cache miss → stream."""
+    """A report older than 1h is a cache miss → stream."""
     from datetime import datetime, timedelta, timezone
 
     stale = type(
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=10),  # noqa: UP017
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),  # noqa: UP017
             "report_json": {"overall_score": 1},
         },
     )()

@@ -32,6 +32,7 @@ from apps.backend.app.schemas.family import (
 from apps.backend.app.services import coin_transactions as coin_service
 from apps.backend.app.services import family as family_service
 from apps.backend.app.services.snapshot import generate_snapshots
+from packages.db.models.family import Family
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -313,6 +314,13 @@ def update_family_settings(
     db.commit()
     db.refresh(config)
 
+    # Handle report_auto_generate_enabled on Family model
+    if body.report_auto_generate_enabled is not None:
+        family = db.query(Family).filter_by(id=user.family_id).first()
+        if family:
+            family.report_auto_generate_enabled = body.report_auto_generate_enabled
+            db.commit()
+
     from apps.backend.app.models.ai_provider_config import AIProviderConfig
 
     ai_enabled = (
@@ -322,6 +330,8 @@ def update_family_settings(
         is not None
     )
 
+    family_row = db.query(Family).filter_by(id=user.family_id).first()
+
     return FamilySettingsResponse(
         auto_approve_hours=config.auto_approve_hours,
         ai_enabled=ai_enabled,
@@ -329,6 +339,7 @@ def update_family_settings(
         coin_silver_to_gold=config.coin_silver_to_gold,
         education_reward_enabled=config.education_reward_enabled,
         coin_to_yuan_rate=config.coin_to_yuan_rate,
+        report_auto_generate_enabled=family_row.report_auto_generate_enabled if family_row else False,
     )
 
 
@@ -353,6 +364,8 @@ def get_family_settings(
         is not None
     )
 
+    family_row = db.query(Family).filter_by(id=user.family_id).first()
+
     return FamilySettingsResponse(
         auto_approve_hours=config.auto_approve_hours,
         ai_enabled=ai_enabled,
@@ -360,6 +373,7 @@ def get_family_settings(
         coin_silver_to_gold=config.coin_silver_to_gold,
         education_reward_enabled=config.education_reward_enabled,
         coin_to_yuan_rate=config.coin_to_yuan_rate,
+        report_auto_generate_enabled=family_row.report_auto_generate_enabled if family_row else False,
     )
 
 

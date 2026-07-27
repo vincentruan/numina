@@ -227,6 +227,32 @@ def snapshot_job() -> None:
         db.close()
 
 
+# ── Job 8: Auto report generation ─────────────────────────────────────────────
+
+async def auto_report_job() -> None:
+    """Trigger report generation for eligible families (daily 8:35)."""
+    import httpx  # noqa: PLC0415
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
+            resp = await client.post(
+                f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/auto-generate-reports",
+                headers={
+                    "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+                },
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            logger.info(
+                f"自动报告生成完成: 触发 {data.get('triggered', 0)} 个家庭, "
+                f"跳过 {data.get('skipped', 0)} 个"
+            )
+        else:
+            logger.warning(f"自动报告生成请求失败: status={resp.status_code}")
+    except Exception as e:
+        logger.exception(f"自动报告生成任务异常: {e}")
+
+
 def _read_file(local_path: str) -> bytes:
     with open(local_path, "rb") as f:
         return f.read()
