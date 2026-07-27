@@ -1,7 +1,7 @@
 """ExchangeRateService 测试。
 
 覆盖:
-- get_rate: CNY 短路返回 1.0；缓存命中（4h TTL 内）；DB 回退；缺汇率 1:1 回退
+- get_rate: CNY 短路返回 1.0；缓存命中（4h TTL 内）；DB 回退；缺汇率返回 (None, None)
 - convert: 同币种直通；经 CNY 中间换算；JPY 取整；其他保留 2 位小数
 - fetch_and_store_rates: mock httpx.get；写库；跳过 CNY；新增 Currency 行；清缓存；
   httpx 异常返回 False
@@ -92,11 +92,11 @@ def test_get_rate_stale_cache_falls_through_to_db(packages_db):
     assert rate == 8.8  # 来自 DB，而非过期缓存的 8.0
 
 
-def test_get_rate_missing_rate_falls_back_1_to_1(packages_db):
-    """DB 无该币种 → 1:1 回退，返回 (1.0, now)，不写缓存。"""
+def test_get_rate_missing_rate_returns_none(packages_db):
+    """DB 无该币种 → 返回 (None, None)，不写缓存。"""
     rate, fetched_at = ExchangeRateService.get_rate("XXX", packages_db)
-    assert rate == 1.0
-    assert isinstance(fetched_at, datetime)
+    assert rate is None
+    assert fetched_at is None
     assert "XXX" not in ExchangeRateService._cache
 
 
@@ -149,12 +149,12 @@ def test_convert_non_jpy_rounds_to_2dp(packages_db):
     assert result == 23.33
 
 
-def test_convert_missing_rate_uses_1_to_1(packages_db):
-    """源币种缺汇率 → 按 1:1 回退参与换算。"""
+def test_convert_missing_rate_passes_through(packages_db):
+    """源币种缺汇率 → 直接返回原始金额，不做换算。"""
     _add_rate(packages_db, "USD", 2.0)
-    # XXX 缺汇率 → rate_from=1.0; XXX→USD: 50/1.0*2.0 = 100
+    # XXX 缺汇率 → 不做 1:1 回退，直接返回原始金额 50.0
     result = ExchangeRateService.convert(50.0, "XXX", "USD", packages_db)
-    assert result == 100.0
+    assert result == 50.0
 
 
 # ---------------------------------------------------------------------------
