@@ -12,12 +12,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      # Hardcoded (not ${DATABASE_URL}): .env points at the host path
-      # (~/.numina/data/db/numina.db) for local dev, which does not exist inside
-      # the container — SQLite would silently create an empty DB there, so
-      # backend would run migrations on an empty DB and scheduler_worker would
-      # hit "no such table". Containers must use the mounted path.
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -75,12 +70,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      # Hardcoded (not ${DATABASE_URL}): .env points at the host path
-      # (~/.numina/data/db/numina.db) for local dev, which does not exist inside
-      # the container — SQLite would silently create an empty DB there, so
-      # backend would run migrations on an empty DB and scheduler_worker would
-      # hit "no such table". Containers must use the mounted path.
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - ENVIRONMENT=${ENVIRONMENT:-development}
