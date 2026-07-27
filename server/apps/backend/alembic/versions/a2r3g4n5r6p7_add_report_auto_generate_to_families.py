@@ -34,7 +34,7 @@ def upgrade() -> None:
                 "report_auto_generate_enabled",
                 sa.Boolean(),
                 nullable=False,
-                server_default=sa.text("false"),
+                server_default=sa.text("0"),
             ),
         )
 
