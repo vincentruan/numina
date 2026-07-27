@@ -1570,6 +1570,7 @@ export default {
     languageZhCN: '简体中文',
     languageEnUS: 'English',
     defaultCurrency: '默认币种',
+    currencyRateHint: '非人民币币种需在 AI 设置中获取汇率以确保汇总准确',
     defaultView: '默认视图',
     viewCard: '总览卡片视图',
     viewList: '列表视图',
@@ -1592,6 +1593,8 @@ export default {
     enableAI: '启用 AI 助手',
     enableAIDesc: '需至少配置一个模型',
     enableAINoModel: '请先配置至少一个模型',
+    autoReport: '定期生成报告',
+    autoReportDesc: '每天自动为家庭生成资产报告',
     mcpManage: 'MCP 服务管理',
     webSearchManage: '联网搜索管理',
     skillsManage: '技能管理',
@@ -1708,6 +1711,9 @@ export default {
   login: {
     otherAccount: '其他账户登录',
     selectAccount: '选择账户',
+    quickLogin: '登录',
+    previousAccount: '上一个账户',
+    nextAccount: '下一个账户',
     verifyToContinue: '验证后继续',
     username: '用户名',
     usernamePlaceholder: '请输入用户名',
@@ -1784,6 +1790,7 @@ export default {
     error: '验证失败，请重试',
     loadFailed: '验证组件加载失败，请刷新页面重试',
     expired: '验证码已过期，请重新验证',
+    disabled: '验证码已禁用',
   },
   currency: {
     searchPlaceholder: '搜索币种名称或代码',
@@ -2041,6 +2048,8 @@ export default {
     // AI
     aiEnabled: 'AI 助手已启用',
     aiDisabled: 'AI 助手已关闭',
+    autoReportEnabled: '已开启定期生成报告',
+    autoReportDisabled: '已关闭定期生成报告',
     aiConfigSaved: '配置已保存',
     aiTimeoutInvalid: '超时时间须为 10-600 秒之间的整数',
     aiTestFailed: '测试失败，请检查配置',
@@ -2062,6 +2071,10 @@ export default {
     aiChatError: 'AI 服务暂时不可用，请稍后再试',
     fileSelected: '已选择文件: {name}',
     photoSelected: '已选择图片',
+    uploadSuccess: '{name} 已上传',
+    noVisionModel: '当前无可用的图片识别模型，请配置支持多模态的模型',
+    invalidImageType: '不支持的图片格式',
+    invalidFileType: '不支持的文件格式',
     // Network
     networkTimeout: '请求超时，请检查网络后重试',
     networkError: '无法连接服务器，请检查网络',
@@ -2422,6 +2435,8 @@ export default {
     enterPrompt: '请输入自定义提示词',
     resetToDefault: '恢复默认',
     promptReset: '已恢复默认提示词',
+    skillInstalled: '技能安装成功',
+    skillInstallFailed: '技能安装失败',
 
     capability: {
       report: {
@@ -2690,6 +2705,10 @@ export default {
     manageAgents: '前往智能体管理',
     timeMachineCardTitle: '资产时光机',
     timeMachineCardDesc: 'What-if 模拟、财务推演',
+    trendAnalysisCardTitle: '趋势分析',
+    trendAnalysisCardDesc: '资产走势、净值变化与分布',
+    insightAnalysisCardTitle: '资产洞察',
+    insightAnalysisCardDesc: '智能发现、持有结构与效率',
     numinaAgentDesc: '您的家庭资产智能助手，提供全方位的资产分析与建议',
     myAgentsAndApps: '我的智能体以及分析应用',
     lastReportAge: '{age}',
@@ -2715,8 +2734,8 @@ export default {
     noReport: '暂无体检报告',
     startAnalyze: 'AI 将综合分析您的资产配置、负债压力和资产效率',
     generating: '正在生成新报告，完成后将展示最新结果',
-    // U4 step 6/12: 8h cache + force refresh + three-step timeline labels
-    cacheFresh: '报告在 8 小时内已生成，展示缓存结果',
+    // U4 step 6/12: 1h cache + force refresh + three-step timeline labels
+    cacheFresh: '报告在 1 小时内已生成，展示缓存结果',
     forceRegenerate: '强制重新生成',
     step1: '生成报告',
     step1Desc: '采集家庭数据并生成 markdown 审计',
@@ -2738,6 +2757,7 @@ export default {
     viewMarkdownFallback: '查看已生成的报告',
     taskStarted: '报告生成任务已开始，可随时退出页面',
     taskQueued: '报告生成任务已排队，等待其他任务完成',
+    previousReportWhileGenerating: '正在生成新报告，下方显示的是上一份报告',
     scoreUnit: '分',
     overallScore: '综合健康评分',
     generatedAt: '生成时间：{time}',
@@ -2940,6 +2960,9 @@ export default {
     trendCard: '资产趋势',
     allocationCard: '资产分布',
     pieCard: '分类占比',
+    physicalAssetsDistribution: '实物资产分布',
+    financialAssetsDistribution: '金融资产分布',
+    liabilityDistribution: '负债分布',
     dailyCostCard: '日均成本排行',
     lowUsageCard: '低使用率资产',
     netWorthChangeCard: '净值变化',

@@ -81,14 +81,19 @@
           </button>
         </div>
 
+        <!-- Login button — appears below the card when a user is selected -->
         <Transition name="step-fade">
-          <div v-if="selectedUser && !(selectedUser.hasPasskey && webauthnSupported)" class="select-captcha-area">
-            <p v-if="selectAltchaRef?.isEnabled?.()" class="captcha-hint">{{ t('login.verifyToContinue') }}</p>
-            <AltchaWidget
-              ref="selectAltchaRef"
-              v-model="selectAltcha"
-              endpoint="login"
-            />
+          <div v-if="selectedUser" class="quick-login-area">
+            <van-button
+              round
+              block
+              type="primary"
+              :loading="loading"
+              class="quick-login-btn"
+              @click="onQuickLogin"
+            >
+              {{ t('login.quickLogin') }}
+            </van-button>
           </div>
         </Transition>
       </div>
@@ -296,8 +301,6 @@ interface BoundUser {
 const boundUsers = ref<BoundUser[]>([])
 const selectedUser = ref<BoundUser | null>(null)
 const deviceIdRef = ref<string | null>(null)
-const selectAltchaRef = ref()
-const selectAltcha = ref<string | undefined>(undefined)
 const webauthnSupported = ref(false)
 
 // User info from step1 response — shown in step2 header
@@ -397,16 +400,57 @@ async function onStep1Submit() {
 }
 
 function onSelectUser(user: BoundUser) {
+  // Just select — show login button; user clicks it to authenticate
   selectedUser.value = user
+}
+
+async function onQuickLogin() {
+  if (!selectedUser.value || !deviceIdRef.value) return
+  const user = selectedUser.value
 
   if (user.hasPasskey && webauthnSupported.value) {
-    authenticateWithWebAuthn(user)
+    await authenticateWithWebAuthn(user)
     return
   }
 
-  // When captcha is disabled server-side, treat it as already passed
-  if (selectAltchaRef.value?.isEnabled && !selectAltchaRef.value.isEnabled()) {
-    onSelectAltchaComplete()
+  // Device already trusted — no captcha needed, call selectDeviceUser directly
+  loading.value = true
+  try {
+    const { data } = await selectDeviceUser(
+      deviceIdRef.value,
+      user.userId,
+    )
+    if (data.second_factor_required && data.temp_token) {
+      tempToken.value = data.temp_token
+      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
+      trustedUser.value = {
+        displayName: data.display_name ?? user.displayName,
+        avatarColor: data.avatar_color ?? user.avatarColor,
+      }
+      step.value = 2
+    } else {
+      await authStore.fetchMe()
+      showSuccessToast(t('toast.loginSuccess'))
+      authStore.showTrustPrompt = true
+      const authUser = authStore.user
+      if (authUser?.role === 'child') {
+        const childBaseUrl = getChildBaseUrl()
+        window.location.href = childBaseUrl
+        return
+      }
+      router.push('/')
+    }
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { code?: string; message?: string }; status?: number } }
+    const code = axiosError.response?.data?.code
+    if (code) {
+      const i18nKey = `errors.${code}`
+      showFailToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
+    } else {
+      showFailToast(t('toast.loginFailedGeneric'))
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -475,57 +519,6 @@ function onCarouselPrev() {
 function onCarouselNext() {
   accountSwipeRef.value?.next?.()
 }
-
-async function onSelectAltchaComplete() {
-  if (!selectedUser.value || !deviceIdRef.value) return
-  loading.value = true
-  try {
-    const { data } = await selectDeviceUser(
-      deviceIdRef.value,
-      selectedUser.value.userId,
-      selectAltcha.value,
-    )
-    if (data.second_factor_required && data.temp_token) {
-      tempToken.value = data.temp_token
-      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
-      trustedUser.value = {
-        displayName: data.display_name ?? selectedUser.value.displayName,
-        avatarColor: data.avatar_color ?? selectedUser.value.avatarColor,
-      }
-      step.value = 2
-    } else {
-      await authStore.fetchMe()
-      showSuccessToast(t('toast.loginSuccess'))
-      authStore.showTrustPrompt = true
-      const user = authStore.user
-      if (user?.role === 'child') {
-        const childBaseUrl = getChildBaseUrl()
-        window.location.href = childBaseUrl
-        return
-      }
-      router.push('/')
-    }
-  } catch (error: unknown) {
-    const axiosError = error as { response?: { data?: { code?: string; message?: string }; status?: number } }
-    const code = axiosError.response?.data?.code
-    if (code) {
-      const i18nKey = `errors.${code}`
-      showFailToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
-    } else {
-      showFailToast(t('toast.loginFailedGeneric'))
-    }
-    selectAltchaRef.value?.reset()
-    selectAltcha.value = undefined
-  } finally {
-    loading.value = false
-  }
-}
-
-watch(selectAltcha, (val) => {
-  if (val) {
-    onSelectAltchaComplete()
-  }
-})
 
 function onNumpadPress(key: number | string) {
   flashKey.value = key
@@ -1370,6 +1363,23 @@ async function submitEmojiPin() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+}
+
+.quick-login-area {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 260px;
+  padding: 0 16px;
+}
+
+.quick-login-btn {
+  --van-button-primary-background: rgba(189, 187, 255, 0.18);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
+  --van-button-primary-color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
 }
 
 .captcha-hint {
