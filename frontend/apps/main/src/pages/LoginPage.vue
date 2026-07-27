@@ -132,6 +132,12 @@
             {{ t('common.next') }}
           </van-button>
         </div>
+
+        <div class="login-links">
+          <router-link to="/register">{{ t('auth.createNewFamily') }}</router-link>
+          <span class="divider">|</span>
+          <router-link to="/join-family">{{ t('auth.joinFamily') }}</router-link>
+        </div>
       </div>
 
       <!-- Step 2: PIN verification (numeric or emoji based on secondFactorType) -->
