@@ -407,19 +407,6 @@ export interface AssetSuggestResult {
 export const suggestAssetFields = (data: AssetSuggestRequest) =>
   http.post<AssetSuggestResult>('/ai/suggest/asset', data)
 
-// P0-#3: Timeout wrapper for streaming fetch (matches backend 120s timeout)
-const STREAM_TIMEOUT_MS = 120000
-function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(STREAM_TIMEOUT_MS)
-  if (!signal) return timeoutSignal
-  // If both signals exist, create combined abort controller
-  const combinedController = new AbortController()
-  signal.addEventListener('abort', () => combinedController.abort(signal.reason))
-  timeoutSignal.addEventListener('abort', () => combinedController.abort(timeoutSignal.reason))
-  return combinedController.signal
-}
-
-
 
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
@@ -669,6 +656,33 @@ export const aiCreateSkill = (description: string) =>
 
 export const saveRawSkill = (payload: RawSkillSavePayload) =>
   http.post<SkillDefinition>('/ai/skills/custom/raw', payload).then(res => res.data)
+
+// ── Chat Attachment Upload ─────────────────────────────────────────────────────
+
+export interface ChatAttachmentResponse {
+  file_id: string
+  url: string
+  filename: string
+  size_bytes: number
+}
+
+export const uploadChatAttachment = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return http.post<ChatAttachmentResponse>('/ai/chat/attachments', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(res => res.data)
+}
+
+// ── Skill Install from Artifact ────────────────────────────────────────────────
+
+export interface InstallFromArtifactPayload {
+  session_id: string
+  artifact_path: string
+}
+
+export const installSkillFromArtifact = (payload: InstallFromArtifactPayload) =>
+  http.post<SkillDefinition>('/ai/skills/install-from-artifact', payload).then(res => res.data)
 
 // ── finance_coach (D2/A1a dashboard card, Plan B T5) ─────────────────────────
 //

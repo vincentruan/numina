@@ -188,7 +188,7 @@ def _apply_original_user_content_patch() -> None:
 
         _orig_init(self, *args, **kwargs)
 
-    HumanMessage.__init__ = _patched_init
+    HumanMessage.__init__ = _patched_init  # type: ignore[method-assign]
     logger.info("[sync_tool_patch] patched HumanMessage.__init__ to inject ORIGINAL_USER_CONTENT_KEY")
 
 

@@ -7,7 +7,7 @@ import { uploadImage } from '@/api/upload'
 import 'bytemd/dist/index.css'
 import 'highlight.js/styles/github.css'
 
-const props = defineProps<{
+defineProps<{
   modelValue: string
   placeholder?: string
   disabled?: boolean

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 from deerflow.runtime import RunManager
 
@@ -66,7 +66,7 @@ async def reconcile_orphaned_runs(
     versions. Fall back gracefully when the method is missing.
     """
     if hasattr(run_manager, "reconcile_orphaned_inflight_runs"):
-        return await run_manager.reconcile_orphaned_inflight_runs(error=error)
+        return cast("list[dict[str, Any]]", await run_manager.reconcile_orphaned_inflight_runs(error=error))
     logger.debug("reconcile_orphaned_inflight_runs not available in this DeerFlow version (no-op)")
     return []
 

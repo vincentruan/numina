@@ -137,6 +137,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Initialize Snowflake ID generator before any DB operations
     from apps.backend.app.utils.snowflake import init_snowflake
+
     init_snowflake()
 
     # Initialize unified logging configuration
@@ -177,12 +178,14 @@ async def lifespan(app: FastAPI):
         logger.info(f"新增索引: {migration_summary['indexes_added']}")
     if migration_summary.get("errors"):
         logger.warning(f"迁移错误: {migration_summary['errors']}")
-    if not any([
-        migration_summary.get("tables_created"),
-        migration_summary.get("columns_added"),
-        migration_summary.get("indexes_added"),
-        migration_summary.get("errors"),
-    ]):
+    if not any(
+        [
+            migration_summary.get("tables_created"),
+            migration_summary.get("columns_added"),
+            migration_summary.get("indexes_added"),
+            migration_summary.get("errors"),
+        ]
+    ):
         logger.info("数据库结构已完整，无需迁移")
 
     db = SessionLocal()
@@ -261,10 +264,10 @@ app = FastAPI(
     redirect_slashes=False,
 )
 
-app.add_exception_handler(AppError, app_error_handler)
-app.add_exception_handler(RequestValidationError, validation_error_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(StorageError, storage_error_handler)
+app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
+app.add_exception_handler(RequestValidationError, validation_error_handler)  # type: ignore[arg-type]
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(StorageError, storage_error_handler)  # type: ignore[arg-type]
 
 
 # Catch-all exception handler for unhandled errors
@@ -275,12 +278,15 @@ async def catch_all_exception_handler(request: Request, exc: Exception) -> JSONR
     traceback_info = None
     if settings.ENVIRONMENT == "development":
         import traceback
+
         traceback_info = traceback.format_exc()
     return JSONResponse(
         status_code=500,
         content={
             "code": "INTERNAL_ERROR",
-            "message": str(exc) if settings.ENVIRONMENT == "development" else "Internal server error",
+            "message": str(exc)
+            if settings.ENVIRONMENT == "development"
+            else "Internal server error",
             "traceback": traceback_info,
             "data": None,
             "request_id": request_id,
@@ -323,8 +329,15 @@ class SecurityHeadersMiddleware:
                     headers.append((b"X-Content-Type-Options", b"nosniff"))
                     headers.append((b"X-Frame-Options", b"DENY"))
                     headers.append((b"X-XSS-Protection", b"1; mode=block"))
-                    headers.append((b"Referrer-Policy", b"strict-origin-when-cross-origin"))
-                    headers.append((b"Permissions-Policy", b"geolocation=(), microphone=(), camera=()"))
+                    headers.append(
+                        (b"Referrer-Policy", b"strict-origin-when-cross-origin")
+                    )
+                    headers.append(
+                        (
+                            b"Permissions-Policy",
+                            b"geolocation=(), microphone=(), camera=()",
+                        )
+                    )
 
                     # CSP policy
                     connect_src = (
@@ -347,7 +360,12 @@ class SecurityHeadersMiddleware:
 
                     # HSTS in production
                     if settings.ENVIRONMENT == "production":
-                        headers.append((b"Strict-Transport-Security", b"max-age=31536000; includeSubDomains"))
+                        headers.append(
+                            (
+                                b"Strict-Transport-Security",
+                                b"max-age=31536000; includeSubDomains",
+                            )
+                        )
 
                     # Cache-Control for API endpoints (except cacheable ones)
                     # These paths are reference data that changes infrequently and can be cached briefly
@@ -358,7 +376,9 @@ class SecurityHeadersMiddleware:
                         "/api/v1/family",  # Root path for family info (no trailing slash per redirect_slashes=False)
                     }
                     if path.startswith("/api/") and path not in _CACHEABLE_API_PATHS:
-                        headers.append((b"Cache-Control", b"no-store, no-cache, must-revalidate"))
+                        headers.append(
+                            (b"Cache-Control", b"no-store, no-cache, must-revalidate")
+                        )
 
                     message["headers"] = headers
             await send(message)
@@ -366,7 +386,9 @@ class SecurityHeadersMiddleware:
         try:
             await self.app(scope, receive, send_with_headers)
         except Exception as e:
-            logger.exception(f"SecurityHeadersMiddleware error on {scope.get('path', '')}: {e}")
+            logger.exception(
+                f"SecurityHeadersMiddleware error on {scope.get('path', '')}: {e}"
+            )
             raise
 
 

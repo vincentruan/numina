@@ -5,6 +5,7 @@ import { showDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadList } from '@/composables/useThreadList'
+import { parseApiDate } from '@/utils/format'
 import type { ThreadSession } from '@/types/ai-chat/session'
 
 defineOptions({ name: 'ChatHistory' })
@@ -241,32 +242,15 @@ function onExportSelect(action: { key: string }) {
   else if (action.key === 'export-json') handleExport(session.thread_id, 'json')
 }
 
-// Long press to open action sheet
-let longPressTimer: ReturnType<typeof setTimeout> | null = null
-const LONG_PRESS_DURATION = 500
-
-function startLongPress(session: ThreadSession) {
-  cancelLongPress()
-  longPressTimer = setTimeout(() => {
-    handleMore(session)
-  }, LONG_PRESS_DURATION)
-}
-
-function cancelLongPress() {
-  if (longPressTimer) {
-    clearTimeout(longPressTimer)
-    longPressTimer = null
-  }
-}
 
 // Swipe-to-reveal handlers
-function handleTouchStart(e: TouchEvent, sessionId: string) {
+function handleTouchStart(e: TouchEvent, _sessionId: string) {
   swipeStartX.value = e.touches[0].clientX
   swipeCurrentX.value = e.touches[0].clientX
   isSwiping.value = false
 }
 
-function handleTouchMove(e: TouchEvent, sessionId: string) {
+function handleTouchMove(e: TouchEvent, _sessionId: string) {
   const deltaX = swipeStartX.value - e.touches[0].clientX
   if (Math.abs(deltaX) > 10) {
     isSwiping.value = true
@@ -289,12 +273,6 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
   swipeStartX.value = 0
   swipeCurrentX.value = 0
   isSwiping.value = false
-}
-
-function closeSwipe(sessionId: string) {
-  if (swipedSessionId.value === sessionId) {
-    swipedSessionId.value = null
-  }
 }
 </script>
 
@@ -362,10 +340,10 @@ function closeSwipe(sessionId: string) {
               </template>
               <template v-else>
                 <div class="session-title">{{ session.title || t('aiChat.newChat') }}</div>
-                <div class="session-time">{{ new Date(session.updated_at).toLocaleString() }}</div>
+                <div class="session-time">{{ parseApiDate(session.updated_at).toLocaleString() }}</div>
               </template>
             </div>
-            <div class="session-pin-indicator" v-if="session.is_pinned">
+            <div v-if="session.is_pinned" class="session-pin-indicator">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
               </svg>

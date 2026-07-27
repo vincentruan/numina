@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -37,8 +37,10 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.schemas.base import SnowflakeBase
+from apps.backend.app.schemas.file_record import FileRecordResponse
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.chat_session import ChatSessionService
+from apps.backend.app.services.storage.service import StorageService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
 sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
@@ -110,6 +112,7 @@ class ChatStreamRequest(BaseModel):
 
 # ── Session Response Schemas (SnowflakeBase for ID serialization) ────────────
 
+
 class SessionDefaultResponse(SnowflakeBase):
     """Response for get_system_default_session endpoint."""
 
@@ -155,7 +158,7 @@ def _get_session_for_family(
         )
 
 
-def _get_latest_session(family_id: str, db: Session) -> AIChatSession | None:
+def _get_latest_session(family_id: int, db: Session) -> AIChatSession | None:
     """Get the most recent session for a family."""
     return (
         db.query(AIChatSession)
@@ -191,7 +194,9 @@ async def chat(
 
     # Call agent
     try:
-        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        agent_client = AgentClient(
+            current_user.family_id, current_user.id, timeout=45.0
+        )
         resp = await agent_client.post(
             "/chat/ask",
             json={"question": body.question},
@@ -255,7 +260,14 @@ async def chat_stream(
         if use_sse:
             yield f"event: session.start\ndata: {json.dumps(start_event, ensure_ascii=False)}\n\n".encode()
         else:
-            yield json.dumps({"type": "session.start", **start_event}, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+            yield (
+                json.dumps(
+                    {"type": "session.start", **start_event},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode()
+                + b"\n"
+            )
 
         # Route to the runs.py endpoint (LangGraph SSE format).
         # When agent_id is absent, fall back to the 小鸣 system agent (NUMINA_AGENT_ID).
@@ -278,7 +290,9 @@ async def chat_stream(
 
         answer_chunks: list[str] = []
         try:
-            agent_client = AgentClient(current_user.family_id, current_user.id, timeout=130.0)
+            agent_client = AgentClient(
+                current_user.family_id, current_user.id, timeout=130.0
+            )
             async with agent_client.stream(
                 "POST",
                 agent_url,
@@ -305,7 +319,11 @@ async def chat_stream(
                         if event_type == "messages" and data_text:
                             try:
                                 msg_data = json.loads(data_text)
-                                if isinstance(msg_data, dict) and msg_data.get("type") == "ai" and msg_data.get("content"):
+                                if (
+                                    isinstance(msg_data, dict)
+                                    and msg_data.get("type") == "ai"
+                                    and msg_data.get("content")
+                                ):
                                     answer_chunks.append(msg_data["content"])
                             except json.JSONDecodeError:
                                 pass
@@ -315,23 +333,43 @@ async def chat_stream(
                         sse_buffer.append(line)
 
                     if await request.is_disconnected():
-                        logger.info("chat_stream client disconnected session=%s", session_id)
+                        logger.info(
+                            "chat_stream client disconnected session=%s", session_id
+                        )
                         break
 
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
             if use_sse:
-                err_payload = json.dumps({"error": "抱歉，AI 服务暂时不可用。", "code": "backend_proxy_error"}, ensure_ascii=False)
+                err_payload = json.dumps(
+                    {
+                        "error": "抱歉，AI 服务暂时不可用。",
+                        "code": "backend_proxy_error",
+                    },
+                    ensure_ascii=False,
+                )
                 yield f"event: error\ndata: {err_payload}\n\n".encode()
             else:
-                yield json.dumps(
-                    {"type": "capability.error", "error": {"message": "抱歉，AI 服务暂时不可用。", "code": "backend_proxy_error"}},
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ).encode() + b"\n"
+                yield (
+                    json.dumps(
+                        {
+                            "type": "capability.error",
+                            "error": {
+                                "message": "抱歉，AI 服务暂时不可用。",
+                                "code": "backend_proxy_error",
+                            },
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode()
+                    + b"\n"
+                )
+
     return StreamingResponse(
         proxy_stream(),
-        media_type="text/event-stream" if use_sse else "application/x-ndjson; charset=utf-8",
+        media_type="text/event-stream"
+        if use_sse
+        else "application/x-ndjson; charset=utf-8",
         headers=_SSE_HEADERS if use_sse else {},
     )
 
@@ -359,7 +397,7 @@ def get_system_default_session(
         return SessionDefaultWrapper(session=None)
     return SessionDefaultWrapper(
         session=SessionDefaultResponse(
-            session_id=session.id,
+            session_id=str(session.id),
             status=session.status,
             created_at=session.created_at.isoformat() if session.created_at else None,
             updated_at=session.updated_at.isoformat() if session.updated_at else None,
@@ -382,7 +420,9 @@ async def stream_session_events(
 
     async def proxy_events():
         try:
-            agent_client = AgentClient(current_user.family_id, current_user.id, timeout=120.0)
+            agent_client = AgentClient(
+                current_user.family_id, current_user.id, timeout=120.0
+            )
             async with agent_client.stream(
                 "GET",
                 f"/sessions/{session_id}/events",
@@ -390,15 +430,17 @@ async def stream_session_events(
                 async for chunk in resp.aiter_bytes():
                     yield chunk
         except Exception as e:
-            logger.error("session events proxy failed session=%s: %s", session_id, type(e).__name__)
+            logger.error(
+                "session events proxy failed session=%s: %s",
+                session_id,
+                type(e).__name__,
+            )
 
     return StreamingResponse(
         proxy_events(),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )
-
-
 
 
 # ── Message Feedback (点赞/点踩) ─────────────────────────────────────────────
@@ -503,8 +545,6 @@ def get_session_feedback(
     return FeedbackMapResponse(items=items)
 
 
-
-
 # ── Artifacts endpoint (Phase 5: DeerFlow artifact preview) ───────────────────
 
 
@@ -554,25 +594,33 @@ async def get_artifact(
 
     # Security: Reject path traversal patterns in decoded path
     if ".." in decoded_filepath:
-        logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
+        logger.warning(
+            "artifact path traversal attempt: %s -> %s", filepath, decoded_filepath
+        )
         raise AppError(ErrorCode.NOT_FOUND)
 
     # Strip DeerFlow virtual sandbox prefix (/mnt/user-data/outputs/) so the
     # bare filename can be resolved against the tenant reports directory.
-    from packages.core.path_manager import DEERFLOW_SANDBOX_OUTPUT_PREFIX, DEERFLOW_SANDBOX_SKILLS_PREFIX
+    from packages.core.path_manager import (
+        DEERFLOW_SANDBOX_OUTPUT_PREFIX,
+        DEERFLOW_SANDBOX_SKILLS_PREFIX,
+    )
+
     is_skills_path = False
     if decoded_filepath.startswith(DEERFLOW_SANDBOX_SKILLS_PREFIX):
         # /mnt/skills/ paths resolve to the agent's builtin skills directory
         # (read-only, shared across families — no tenant isolation needed for
         # public skill definitions like SKILL.md)
         is_skills_path = True
-        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_SKILLS_PREFIX):]
+        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_SKILLS_PREFIX) :]
     elif decoded_filepath.startswith(DEERFLOW_SANDBOX_OUTPUT_PREFIX):
-        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_OUTPUT_PREFIX):]
+        decoded_filepath = decoded_filepath[len(DEERFLOW_SANDBOX_OUTPUT_PREFIX) :]
 
     # After stripping, reject any remaining absolute paths
     if decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
-        logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
+        logger.warning(
+            "artifact path traversal attempt: %s -> %s", filepath, decoded_filepath
+        )
         raise AppError(ErrorCode.NOT_FOUND)
 
     # Try to find artifact in two locations (search order matters):
@@ -584,7 +632,11 @@ async def get_artifact(
     # 3. Builtin skills directory (read-only, for /mnt/skills/ paths):
     #    workspaces/builtin/skills/ (symlinked from agent/skills/builtin at startup)
     family_id = current_user.family_id
-    data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
+    data_root = (
+        Path(settings.DATA_ROOT).expanduser()
+        if hasattr(settings, "DATA_ROOT")
+        else Path.home() / ".numina" / "data"
+    )
 
     # DeerFlow layout: {DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/user-data/outputs/
     # DEER_FLOW_HOME (agent) = AGENT_DATA_DIR = {DATA_ROOT}/workspaces
@@ -615,14 +667,24 @@ async def get_artifact(
                 artifact_path = cand
                 break
         if artifact_path is None:
-            logger.warning("artifact not found: session=%s family=%s filepath=%s", session_id, family_id, decoded_filepath)
+            logger.warning(
+                "artifact not found: session=%s family=%s filepath=%s",
+                session_id,
+                family_id,
+                decoded_filepath,
+            )
             raise AppError(ErrorCode.NOT_FOUND)
     else:
         possible_paths = [
             # Per-thread sandbox outputs (primary — agent writes with thread_id here)
             family_threads / session_id / "user-data" / "outputs" / decoded_filepath,
             # Tenant reports (backward compat — MCP tools without thread_id)
-            data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
+            data_root
+            / "workspaces"
+            / "tenants"
+            / str(family_id)
+            / "reports"
+            / decoded_filepath,
         ]
         # Fallback: scan all per-thread user-data/outputs dirs for the family. This
         # handles the case where session_id is a Snowflake int (agent writes use a
@@ -635,20 +697,24 @@ async def get_artifact(
 
         allowed_dirs = [
             (family_threads / session_id / "user-data" / "outputs").resolve(),
-            (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
+            (
+                data_root / "workspaces" / "tenants" / str(family_id) / "reports"
+            ).resolve(),
         ]
         # Also allow any resolved thread user-data/outputs dir (for the glob fallback)
         if family_threads.exists():
             allowed_dirs.append(family_threads.resolve())
 
     if not is_skills_path:
-        artifact_path = None
+        artifact_path = None  # type: ignore[assignment,no-redef]
         for candidate_path in possible_paths:
             try:
                 resolved = candidate_path.resolve()
                 # Security: resolved path must be within allowed directories
                 if resolved.exists() and any(
-                    resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()
+                    resolved.is_relative_to(allowed)
+                    for allowed in allowed_dirs
+                    if allowed.exists()
                 ):
                     artifact_path = resolved
                     break
@@ -656,18 +722,28 @@ async def get_artifact(
                 continue
 
         if artifact_path is None:
-            logger.warning("artifact not found: session=%s family=%s filepath=%s", session_id, family_id, decoded_filepath)
+            logger.warning(
+                "artifact not found: session=%s family=%s filepath=%s",
+                session_id,
+                family_id,
+                decoded_filepath,
+            )
             raise AppError(ErrorCode.NOT_FOUND)
 
     # Read file content
     try:
-        content = artifact_path.read_text()
+        content: str | bytes = artifact_path.read_text()
     except UnicodeDecodeError:
         # Binary file - read as bytes
         content = artifact_path.read_bytes()
         media_type = "application/octet-stream"
     except OSError as e:
-        logger.warning("artifact read failed session=%s path=%s: %s", session_id, filepath, type(e).__name__)
+        logger.warning(
+            "artifact read failed session=%s path=%s: %s",
+            session_id,
+            filepath,
+            type(e).__name__,
+        )
         raise AppError(ErrorCode.NOT_FOUND) from None
 
     # Determine media type from extension
@@ -706,10 +782,59 @@ async def get_artifact(
         # Replace any CR/LF characters and quote the filename per RFC 6266
         safe_filename = filename.replace("\r", "").replace("\n", "")
         quoted_filename = urllib.parse.quote(safe_filename)
-        headers["Content-Disposition"] = f"attachment; filename=\"{quoted_filename}\""
+        headers["Content-Disposition"] = f'attachment; filename="{quoted_filename}"'
 
     return Response(
         content=content,
         media_type=media_type,
         headers=headers,
+    )
+
+
+# ── Chat Attachment Upload ────────────────────────────────────────────────────
+
+# Max 10MB per attachment (matches DeerFlow gateway default)
+_MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
+
+_ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_ALLOWED_FILE_EXTS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".txt", ".csv", ".md", ".json", ".yaml", ".yml",
+} | _ALLOWED_IMAGE_EXTS
+
+
+@router.post("/attachments", response_model=FileRecordResponse, status_code=201)
+async def upload_chat_attachment(
+    file: UploadFile,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> FileRecordResponse:
+    """上传聊天附件（图片/文档）。
+
+    返回 FileRecordResponse（file_id, url, filename, size_bytes），
+    前端将其作为 FileInMessage 加入 SubmitPayload.files。
+    """
+    if not file.filename:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "文件名不能为空")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in _ALLOWED_FILE_EXTS:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            f"不支持的文件类型: {ext}",
+        )
+
+    content = await file.read()
+    if len(content) > _MAX_ATTACHMENT_SIZE:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            f"文件大小超过限制（最大 10MB）",
+        )
+
+    return await StorageService.upload_file(
+        content=content,
+        original_filename=file.filename,
+        ext=ext,
+        user=current_user,
+        db=db,
     )

@@ -22,7 +22,6 @@ import {
   extractToolCalls,
 } from '@/utils/ai-chat'
 import { useTokenUsagePrefs } from '@/composables/ai-chat/useTokenUsagePrefs'
-import { formatTokenCount } from '@/utils/ai-chat/token-usage-steps'
 import MarkdownContent from './MarkdownContent.vue'
 import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'
@@ -560,9 +559,11 @@ function getFetchDomain(url: string): string {
               </svg>
               <div class="step-connector" />
             </div>
-            <div class="step-body">
+            <div class="step-body-vertical">
               <div class="step-name">{{ t('aiChat.thinkingLabel') }}</div>
-              <div v-if="step.content" class="thinking-content-inline">{{ step.content }}</div>
+              <div v-if="step.content" class="thinking-content-inline">
+                <MarkdownContent :content="step.content || ''" />
+              </div>
             </div>
           </template>
 
@@ -757,7 +758,7 @@ function getFetchDomain(url: string): string {
       </button>
 
       <div v-if="showThinking" class="thinking-content-expanded">
-        {{ lastReasoningStep.content }}
+        <MarkdownContent :content="lastReasoningStep.content || ''" />
       </div>
     </template>
   </div>
@@ -840,6 +841,21 @@ function getFetchDomain(url: string): string {
   margin-top: 4px;
 }
 
+/* Subdue MarkdownContent inside thinking areas — DeerFlow uses a single
+   `text-muted-foreground` class on ReasoningContent that naturally cascades.
+   Numina's MarkdownContent breaks that cascade with explicit --text-primary
+   on .markdown-content and h1-h4, so we reset at the container root and
+   force inheritance on all descendants. */
+.thinking-content-expanded :deep(.markdown-content),
+.thinking-content-expanded :deep(.markdown-content *) {
+  color: var(--text-secondary);
+}
+
+.thinking-content-expanded :deep(a) {
+  color: var(--van-primary-color);
+  opacity: 0.7;
+}
+
 .chevron {
   transition: transform 0.2s;
 }
@@ -909,6 +925,18 @@ function getFetchDomain(url: string): string {
   color: var(--text-secondary);
   line-height: 1.5;
   padding: 4px 0;
+}
+
+/* Subdue MarkdownContent inside inline thinking — same wildcard cascade
+   approach as .thinking-content-expanded above. */
+.thinking-content-inline :deep(.markdown-content),
+.thinking-content-inline :deep(.markdown-content *) {
+  color: var(--text-secondary);
+}
+
+.thinking-content-inline :deep(a) {
+  color: var(--van-primary-color);
+  opacity: 0.7;
 }
 
 /* DeerFlow 竖直轴线连接：参考 chain-of-thought.tsx ChainOfThoughtStep

@@ -110,5 +110,7 @@ def gift_coins(
     child: User = Depends(get_current_child_user),
 ):
     """Send coins to a sibling."""
-    debit, _, recipient_name = coin_service.gift_coins(db, child, req.to_child_id, req.amount, req.emoji_reason)
+    debit, _, recipient_name = coin_service.gift_coins(
+        db, child, str(req.to_child_id), req.amount, req.emoji_reason
+    )
     return {"sent_amount": req.amount, "to_display_name": recipient_name}

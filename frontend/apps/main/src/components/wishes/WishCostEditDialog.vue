@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { showToast, showSuccessToast } from 'vant'
+import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { updateChildWishCost, type ParentWish } from '@/api/childWishes'
 import { getChildBalance, getChildLedger, type ChildLedgerEntry } from '@/api/family'

@@ -45,6 +45,7 @@ def _get_audit_logger() -> logging.Logger:
     global _audit_logger
     if _audit_logger is None:
         setup_audit_logger()
+    assert _audit_logger is not None
     return _audit_logger
 
 

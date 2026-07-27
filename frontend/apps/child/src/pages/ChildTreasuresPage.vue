@@ -65,6 +65,7 @@ import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTreasuresSkeleton from '@/components/skeletons/ChildTreasuresSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
+import { parseLocalDate } from '@/utils/format'
 import EmptyState from '@/components/EmptyState.vue'
 import noTreasuresSvgRaw from '@/assets/empty-states/no-treasures.svg?raw'
 
@@ -82,7 +83,7 @@ const totalCoins = computed(() =>
 )
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 async function load() {

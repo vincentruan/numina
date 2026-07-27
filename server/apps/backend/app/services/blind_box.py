@@ -10,14 +10,18 @@ def is_special_day(user: Any, today: date) -> bool:
     if user.birthday_is_lunar:
         try:
             from lunardate import LunarDate
+
             lunar_today = LunarDate.fromSolarDate(today.year, today.month, today.day)
             lunar_bday = LunarDate.fromSolarDate(
                 user.birthday.year, user.birthday.month, user.birthday.day
             )
-            return lunar_today.month == lunar_bday.month and lunar_today.day == lunar_bday.day
+            return bool(
+                lunar_today.month == lunar_bday.month
+                and lunar_today.day == lunar_bday.day
+            )
         except Exception:
             return False
-    return today.month == user.birthday.month and today.day == user.birthday.day
+    return bool(today.month == user.birthday.month and today.day == user.birthday.day)
 
 
 def compute_weights(gifts: list[Any], config: Any) -> list[float]:
@@ -26,7 +30,7 @@ def compute_weights(gifts: list[Any], config: Any) -> list[float]:
     低分礼物权重更高，高分礼物更稀有。
     """
     scale = config.weight_scale
-    return [1.0 / (g.value_score ** scale) for g in gifts]
+    return [1.0 / (g.value_score**scale) for g in gifts]
 
 
 def pick_gift(gifts: list[Any], config: Any) -> Any:
@@ -40,7 +44,7 @@ def pick_gift(gifts: list[Any], config: Any) -> Any:
 def should_trigger_free_draw(config: Any, is_special: bool) -> bool:
     """根据概率判断是否触发免费抽奖机会。"""
     prob = config.special_day_prob if is_special else config.base_draw_prob
-    return random.random() < prob
+    return bool(random.random() < prob)
 
 
 def should_upgrade_surprise(config: Any, context: dict) -> bool:
@@ -54,7 +58,7 @@ def should_upgrade_surprise(config: Any, context: dict) -> bool:
         prob = config.surprise_prob_sibling_bday
     else:
         prob = config.surprise_prob_normal
-    return random.random() < prob
+    return bool(random.random() < prob)
 
 
 def blind_box_trigger(db: Any, child: Any) -> Any:
@@ -67,34 +71,45 @@ def blind_box_trigger(db: Any, child: Any) -> Any:
     from apps.backend.app.models.user import User
     from apps.backend.app.utils.snowflake import next_id
 
-    config = db.query(BlindBoxConfig).filter(BlindBoxConfig.family_id == child.family_id).first()
+    config = (
+        db.query(BlindBoxConfig)
+        .filter(BlindBoxConfig.family_id == child.family_id)
+        .first()
+    )
     if not config or not config.enabled:
         return None
 
     today = date_type.today()
     is_child_special = is_special_day(child, today)
 
-    family_members = db.query(User).filter(
-        User.family_id == child.family_id,
-        User.id != child.id,
-    ).all()
+    family_members = (
+        db.query(User)
+        .filter(
+            User.family_id == child.family_id,
+            User.id != child.id,
+        )
+        .all()
+    )
     is_parent_bday = any(
         m.role in ("owner", "adult") and is_special_day(m, today)
         for m in family_members
     )
     is_sibling_bday = any(
-        m.role == "child" and is_special_day(m, today)
-        for m in family_members
+        m.role == "child" and is_special_day(m, today) for m in family_members
     )
 
     is_special = is_child_special or is_parent_bday or is_sibling_bday
     if not should_trigger_free_draw(config, is_special):
         return None
 
-    gifts = db.query(BlindBoxGift).filter(
-        BlindBoxGift.family_id == child.family_id,
-        BlindBoxGift.is_active == True,  # noqa: E712
-    ).all()
+    gifts = (
+        db.query(BlindBoxGift)
+        .filter(
+            BlindBoxGift.family_id == child.family_id,
+            BlindBoxGift.is_active == True,  # noqa: E712
+        )
+        .all()
+    )
     if not gifts:
         return None
 

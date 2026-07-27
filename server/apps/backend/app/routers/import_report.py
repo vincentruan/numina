@@ -7,6 +7,7 @@
 import io
 import logging
 import uuid
+from decimal import Decimal
 from pathlib import Path
 
 import httpx
@@ -143,7 +144,8 @@ async def _call_agent_parse(
         json=payload,
     )
     resp.raise_for_status()
-    return resp.json()
+    result: dict = resp.json()
+    return result
 
 
 def _match_asset(name: str, family_id: str, db: Session) -> Asset | None:
@@ -175,7 +177,7 @@ def _match_asset(name: str, family_id: str, db: Session) -> Asset | None:
 def _resolve_category_id(category_hint: str, db: Session) -> str | None:
     """按 category_hint 查找系统分类 ID。"""
     cat = db.query(Category).filter(Category.name == category_hint).first()
-    return cat.id if cat else None
+    return str(cat.id) if cat else None
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +337,7 @@ def confirm_import(
                 .first()
             )
             if asset:
-                asset.current_value = item.current_value
+                asset.current_value = Decimal(str(item.current_value)) if item.current_value is not None else None
                 if item.currency:
                     asset.currency = item.currency
                 if item.notes:
@@ -396,7 +398,7 @@ async def confirm_import_via_agent(
                     .first()
                 )
                 if asset:
-                    asset.current_value = item.current_value
+                    asset.current_value = Decimal(str(item.current_value)) if item.current_value is not None else None
                     if item.currency:
                         asset.currency = item.currency
                     if item.notes:

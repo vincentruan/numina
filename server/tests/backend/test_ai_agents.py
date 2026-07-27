@@ -281,6 +281,7 @@ def _make_numina_agent():
         display_order=15,
         subagent_enabled=False,
         is_enabled=True,
+        is_published=True,
         created_at=datetime(2026, 5, 27),
         updated_at=datetime(2026, 5, 27),
     )

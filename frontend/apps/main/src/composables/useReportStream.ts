@@ -19,7 +19,7 @@
  * Replicates useThreadChat's SSE reader/decoder pattern (currentEvent + data
  * accumulation) and useAIReportStream's 401-refresh + cookie-refresh auth.
  */
-import { ref, computed, type Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
 import { getAITask } from '@/api/ai'
@@ -56,9 +56,11 @@ export interface UseReportStreamReturn {
   toolCalls: Ref<ToolCallInfo[]>
   toolResults: Ref<ToolResultInfo[]>
   step2Json: Ref<Record<string, unknown> | null>
-  abort: () => void
+  abort: (keepRunning?: boolean) => void
   connect: (force?: boolean) => Promise<void>
   reset: () => void
+  pollTaskUntilComplete: () => Promise<void>
+  startPolling: () => Promise<void>
 }
 
 export function useReportStream(): UseReportStreamReturn {
@@ -116,10 +118,10 @@ export function useReportStream(): UseReportStreamReturn {
     step2Json.value = null
   }
 
-  function abort(): void {
+  function abort(keepRunning = false): void {
     abortController?.abort()
     stopCookieRefresh()
-    if (status.value === 'streaming' || status.value === 'connecting') {
+    if (!keepRunning && (status.value === 'streaming' || status.value === 'connecting')) {
       status.value = 'idle'
     }
   }
@@ -262,7 +264,7 @@ export function useReportStream(): UseReportStreamReturn {
   /** Poll task status until completed/failed (for 202 queued responses). */
   async function pollTaskUntilComplete(): Promise<void> {
     const MAX_POLL_DURATION = 10 * 60 * 1000 // 10 minutes max
-    const POLL_INTERVAL = 3000 // 3 seconds
+    const POLL_INTERVAL = 30_000 // 30 seconds — long polling to reduce request load
     const startTime = Date.now()
 
     while (Date.now() - startTime < MAX_POLL_DURATION) {
@@ -296,6 +298,15 @@ export function useReportStream(): UseReportStreamReturn {
     status.value = 'error'
     errorMessage.value = t('toast.reportTimeout')
     throw new Error('poll_timeout')
+  }
+
+  /** Start polling an already-running background task (used when the user
+   * returns to the page after leaving while generation was in progress). */
+  async function startPolling(): Promise<void> {
+    reset()
+    status.value = 'streaming'
+    progressMessage.value = t('aiHub.reportGenerating')
+    await pollTaskUntilComplete()
   }
 
   async function connect(force = false): Promise<void> {
@@ -445,5 +456,7 @@ export function useReportStream(): UseReportStreamReturn {
     abort,
     connect,
     reset,
+    pollTaskUntilComplete,
+    startPolling,
   }
 }

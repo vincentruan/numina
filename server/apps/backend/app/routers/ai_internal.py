@@ -4,11 +4,13 @@
 并以 X-Family-Id header 中的 family_id 为边界过滤数据。
 """
 
+import hmac
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -33,7 +35,9 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     """为 agent 调用构造一个代理 User 对象（使用家庭 owner）。"""
     user = (
         db.query(User)
-        .filter(User.family_id == family_id, User.role == "owner", User.is_active == True)  # noqa: E712
+        .filter(
+            User.family_id == family_id, User.role == "owner", User.is_active == True
+        )  # noqa: E712
         .first()
     )
     if not user:
@@ -110,6 +114,7 @@ def internal_get_liabilities(
     db: Session = Depends(get_db),
 ):
     from apps.backend.app.models.liability import Liability
+
     liabilities = (
         db.query(Liability)
         .filter(Liability.family_id == family_id, Liability.is_active == True)  # noqa: E712
@@ -119,9 +124,15 @@ def internal_get_liabilities(
         {
             "id": li.id,
             "category": li.category,
-            "remaining_amount": float(li.remaining_amount) if li.remaining_amount is not None else None,
-            "original_amount": float(li.original_amount) if li.original_amount is not None else None,
-            "monthly_payment": float(li.monthly_payment) if li.monthly_payment is not None else None,
+            "remaining_amount": float(li.remaining_amount)
+            if li.remaining_amount is not None
+            else None,
+            "original_amount": float(li.original_amount)
+            if li.original_amount is not None
+            else None,
+            "monthly_payment": float(li.monthly_payment)
+            if li.monthly_payment is not None
+            else None,
             "interest_rate": li.interest_rate,
             "start_date": li.start_date.isoformat() if li.start_date else None,
             "end_date": li.end_date.isoformat() if li.end_date else None,
@@ -131,7 +142,9 @@ def internal_get_liabilities(
     ]
 
 
-def _check_recovery_schedule_match(recovery_schedule: str | None, now: datetime) -> bool:
+def _check_recovery_schedule_match(
+    recovery_schedule: str | None, now: datetime
+) -> bool:
     """Check if current time matches recovery schedule pattern.
 
     Recovery schedule format: comma-separated time patterns like ":01,:31"
@@ -180,7 +193,10 @@ def internal_get_ai_config(
             AIProviderConfig.is_active == True,  # noqa: E712
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
-        .order_by(AIProviderConfig.display_order.asc().nulls_last(), AIProviderConfig.created_at.asc())
+        .order_by(
+            AIProviderConfig.display_order.asc().nulls_last(),
+            AIProviderConfig.created_at.asc(),
+        )
         .all()
     )
 
@@ -205,13 +221,17 @@ def internal_get_ai_config(
             if provider.api_key_encrypted:
                 api_key = decrypt_api_key(provider.api_key_encrypted)
 
-            web_search_providers.append({
-                "provider_id": provider.id,
-                "provider_name": provider.provider_name,
-                "provider_class": template.get("provider_class") if template else None,
-                "api_key": api_key,
-                "max_results": provider.max_results,
-            })
+            web_search_providers.append(
+                {
+                    "provider_id": provider.id,
+                    "provider_name": provider.provider_name,
+                    "provider_class": template.get("provider_class")
+                    if template
+                    else None,
+                    "api_key": api_key,
+                    "max_results": provider.max_results,
+                }
+            )
 
         websearch_mcp_servers = (
             db.query(FamilyMCPServer)
@@ -294,28 +314,32 @@ def internal_get_ai_config(
             cfg.circuit_open = new_circuit_open
             state_changed = True
 
-        api_key = decrypt_api_key(cfg.api_key_encrypted)
+        api_key = decrypt_api_key(cfg.api_key_encrypted or "")
         if not api_key:
             continue
 
-        providers.append({
-            "config_id": str(cfg.id),
-            "ai_provider": cfg.provider,
-            "api_key": api_key,
-            "ai_base_url": cfg.base_url,
-            "ai_model_id": cfg.model_id,
-            "ai_vision_model_id": cfg.vision_model_id,
-            "model_2_id": cfg.model_2_id,
-            "model_3_id": cfg.model_3_id,
-            "model_1_capabilities": _parse_capabilities(cfg.model_1_capabilities),
-            "model_2_capabilities": _parse_capabilities(cfg.model_2_capabilities),
-            "model_3_capabilities": _parse_capabilities(cfg.model_3_capabilities),
-            "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
-            # Circuit breaker metadata for agent routing decisions
-            "circuit_state": cfg.circuit_state,
-            "circuit_reason": cfg.circuit_reason,
-            "recovery_schedule": cfg.recovery_schedule,
-        })
+        providers.append(
+            {
+                "config_id": str(cfg.id),
+                "ai_provider": cfg.provider,
+                "api_key": api_key,
+                "ai_base_url": cfg.base_url,
+                "ai_model_id": cfg.model_id,
+                "ai_vision_model_id": cfg.vision_model_id,
+                "model_2_id": cfg.model_2_id,
+                "model_3_id": cfg.model_3_id,
+                "model_1_capabilities": _parse_capabilities(cfg.model_1_capabilities),
+                "model_2_capabilities": _parse_capabilities(cfg.model_2_capabilities),
+                "model_3_capabilities": _parse_capabilities(cfg.model_3_capabilities),
+                "timeout_seconds": cfg.timeout_seconds
+                if cfg.timeout_seconds is not None
+                else 60,
+                # Circuit breaker metadata for agent routing decisions
+                "circuit_state": cfg.circuit_state,
+                "circuit_reason": cfg.circuit_reason,
+                "recovery_schedule": cfg.recovery_schedule,
+            }
+        )
 
     # Single commit for all state transitions across all providers
     if state_changed:
@@ -341,13 +365,15 @@ def internal_get_ai_config(
         if provider.api_key_encrypted:
             api_key = decrypt_api_key(provider.api_key_encrypted)
 
-        web_search_providers.append({
-            "provider_id": provider.id,
-            "provider_name": provider.provider_name,
-            "provider_class": template.get("provider_class") if template else None,
-            "api_key": api_key,
-            "max_results": provider.max_results,
-        })
+        web_search_providers.append(
+            {
+                "provider_id": provider.id,
+                "provider_name": provider.provider_name,
+                "provider_class": template.get("provider_class") if template else None,
+                "api_key": api_key,
+                "max_results": provider.max_results,
+            }
+        )
 
     # Query enabled websearch-type MCP servers
     websearch_mcp_servers = (
@@ -381,7 +407,7 @@ def _parse_capabilities(cap_str: str | None) -> list[str]:
     if not cap_str:
         return []
     try:
-        return json.loads(cap_str)
+        return [str(x) for x in json.loads(cap_str)]
     except Exception:
         return []
 
@@ -588,7 +614,9 @@ def internal_half_open_result(
         cfg.circuit_state = "open"
         cfg.circuit_reason = "transient"
         cfg.circuit_open = True
-        cfg.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1)
+        cfg.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(
+            hours=1
+        )
         cfg.half_open_window_start = None
 
     db.commit()
@@ -642,9 +670,7 @@ def get_skill_registry(
     # Convert str to int for database query (Snowflake IDs are passed as strings)
     family_id_int = int(family_id)
     records = (
-        db.query(SkillRegistry)
-        .filter(SkillRegistry.family_id == family_id_int)
-        .all()
+        db.query(SkillRegistry).filter(SkillRegistry.family_id == family_id_int).all()
     )
     return [
         {
@@ -687,19 +713,22 @@ def internal_get_mcp_servers(
                     env_vars = json.loads(raw)
                 except Exception:
                     env_vars = {}
-        result.append({
-            "id": s.id,
-            "name": s.name,
-            "url": s.url,
-            "transport": s.transport,
-            "env_vars": env_vars,
-        })
+        result.append(
+            {
+                "id": s.id,
+                "name": s.name,
+                "url": s.url,
+                "transport": s.transport,
+                "env_vars": env_vars,
+            }
+        )
     return result
 
 
 # ---------------------------------------------------------------------------
 # AI Session CRUD — agent writes session metadata here instead of local SQLite
 # ---------------------------------------------------------------------------
+
 
 class SessionUpsertRequest(BaseModel):
     session_id: str
@@ -793,11 +822,17 @@ def internal_update_session_summary(
     import logging
 
     from apps.backend.app.models.ai_chat_session import AIChatSession
+
     logger = logging.getLogger(__name__)
 
-    logger.info("[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",
-                session_id, repr(body.title), repr(body.summary[:50] if body.summary else None),
-                body.status, repr(body.model))
+    logger.info(
+        "[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",
+        session_id,
+        repr(body.title),
+        repr(body.summary[:50] if body.summary else None),
+        body.status,
+        repr(body.model),
+    )
 
     row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
     if row is None or row.family_id != int(family_id):
@@ -810,7 +845,11 @@ def internal_update_session_summary(
         if row.title and not row.original_title:
             row.original_title = row.title
         row.title = body.title.strip()[:256]
-        logger.info("[backend] updating title for session=%s to %s", session_id, repr(body.title.strip()[:256]))
+        logger.info(
+            "[backend] updating title for session=%s to %s",
+            session_id,
+            repr(body.title.strip()[:256]),
+        )
     row.status = body.status
     if body.model:
         row.last_model = body.model
@@ -818,7 +857,11 @@ def internal_update_session_summary(
         row.is_pinned = body.is_pinned
     row.updated_at = datetime.utcnow()
     db.commit()
-    logger.info("[backend] session updated successfully session=%s title=%s", session_id, repr(row.title))
+    logger.info(
+        "[backend] session updated successfully session=%s title=%s",
+        session_id,
+        repr(row.title),
+    )
     return {"ok": True}
 
 
@@ -898,7 +941,9 @@ def internal_list_sessions(
         "updated_at": AIChatSession.updated_at,
         "created_at": AIChatSession.created_at,
     }.get(sort_by, AIChatSession.updated_at)
-    order_col = sort_column.desc() if sort_order.lower() == "desc" else sort_column.asc()
+    order_col = (
+        sort_column.desc() if sort_order.lower() == "desc" else sort_column.asc()
+    )
 
     rows = (
         q.order_by(AIChatSession.is_pinned.desc(), order_col)
@@ -954,6 +999,7 @@ def internal_get_chat_prompt(
     if family_id_path != str(family_id):
         raise AppError(ErrorCode.FORBIDDEN, "family_id mismatch")
     from apps.backend.app.services import workspace
+
     content = workspace.get_chat_prompt(family_id)
     return {"content": content}
 
@@ -978,3 +1024,179 @@ def internal_get_user(
         "display_name": user.display_name,
         "family_id": str(user.family_id),
     }
+
+
+# ── System-level internal auth (no X-Family-Id) ──────────────────────────────
+
+logger = logging.getLogger(__name__)
+
+
+def verify_system_token(
+    authorization: str = Header(..., alias="Authorization"),
+) -> bool:
+    """验证 system-level service-to-service token (无 X-Family-Id)。
+
+    仅供 scheduler_worker 等系统级调用使用，不涉及特定家庭上下文。
+    仅支持 static HMAC token 格式。
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(  # noqa: allow-http-exception
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid system token",
+        )
+
+    token = authorization[7:]
+
+    from apps.backend.app.config import settings as app_settings  # noqa: PLC0415
+
+    if not app_settings.AGENT_INTERNAL_TOKEN:
+        raise HTTPException(  # noqa: allow-http-exception
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent internal token not configured",
+        )
+
+    if not hmac.compare_digest(token, app_settings.AGENT_INTERNAL_TOKEN):
+        raise HTTPException(  # noqa: allow-http-exception
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid system token",
+        )
+
+    return True
+
+
+@router.post("/ai/auto-generate-reports")
+async def auto_generate_reports(
+    _auth: bool = Depends(verify_system_token),
+    db: Session = Depends(get_db),
+):
+    """定时任务触发：为符合条件的家庭自动生成资产报告。
+
+    条件：
+    1. Family.report_auto_generate_enabled == True
+    2. 有激活的 AIProviderConfig（AI 功能已开启）
+    3. 最近 1 小时内没有已完成的报告
+    4. 没有正在运行中的 AI 任务
+
+    对每个符合条件的家庭，创建 session + task 并触发 agent 生成。
+    """
+    from apps.backend.app.models.ai_provider_config import (
+        AIProviderConfig,  # noqa: PLC0415
+    )
+    from apps.backend.app.models.ai_report import AIReport  # noqa: PLC0415
+    from apps.backend.app.services.agent_client import AgentClient  # noqa: PLC0415
+    from apps.backend.app.services.ai_task_service import AITaskService  # noqa: PLC0415
+    from apps.backend.app.services.chat_session import (
+        ChatSessionService,  # noqa: PLC0415
+    )
+    from apps.backend.app.services.finance_coach_cache import SKILL_TTL  # noqa: PLC0415
+    from packages.db.models.family import Family  # noqa: PLC0415
+
+    report_ttl = SKILL_TTL["report"]
+
+    # 1. 找到 report_auto_generate_enabled=True 的家庭
+    auto_families = (
+        db.query(Family.id)
+        .filter(Family.report_auto_generate_enabled == True)  # noqa: E712
+        .all()
+    )
+    family_ids = [f.id for f in auto_families]
+
+    if not family_ids:
+        return {"triggered": 0, "skipped": 0, "message": "没有开启自动生成的家庭"}
+
+    # 2. 过滤出有激活 AIProviderConfig 的家庭
+    ai_enabled_ids = set(
+        r.family_id
+        for r in db.query(AIProviderConfig.family_id)
+        .filter(
+            AIProviderConfig.family_id.in_(family_ids),
+            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .all()
+    )
+
+    eligible_ids = [fid for fid in family_ids if fid in ai_enabled_ids]
+    if not eligible_ids:
+        return {"triggered": 0, "skipped": 0, "message": "没有 AI 功能开启的家庭"}
+
+    triggered = 0
+    skipped = 0
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # noqa: UP017
+
+    for fid in eligible_ids:
+        # 3. 检查是否有 1 小时内的报告
+        latest_report = (
+            db.query(AIReport)
+            .filter(
+                AIReport.family_id == fid,
+                AIReport.status == "completed",
+            )
+            .order_by(AIReport.generated_at.desc())
+            .first()
+        )
+        if (
+            latest_report is not None
+            and latest_report.generated_at is not None
+            and (now - latest_report.generated_at) < report_ttl
+        ):
+            skipped += 1
+            continue
+
+        # 4. 检查是否有运行中的任务
+        running = AITaskService.get_any_running_task(fid, db)
+        if running:
+            skipped += 1
+            continue
+
+        # 5. 找到家庭 owner 作为执行用户
+        owner = (
+            db.query(User)
+            .filter(User.family_id == fid, User.role == "owner", User.is_active == True)  # noqa: E712
+            .first()
+        )
+        if not owner:
+            skipped += 1
+            continue
+
+        # 6. 创建 session + task 并触发 agent
+        try:
+            session = await ChatSessionService.create_session(
+                family_id=fid,
+                user_id=owner.id,
+                db=db,
+            )
+            task = AITaskService.create_task(
+                family_id=fid,
+                skill_id="report",
+                session_id=session.id,
+                db=db,
+            )
+
+            # Fire-and-forget: 调用 agent 启动 pipeline
+            # on_disconnect="continue" 确保即使 HTTP 连接断开，agent 仍继续运行
+            agent_client = AgentClient(fid, owner.id, timeout=30.0)
+            try:
+                await agent_client.post(
+                    f"/internal/gateway/runs/asset-report/{session.id}",
+                    json={
+                        "family_id": str(fid),
+                        "user_id": str(owner.id),
+                        "language": owner.language,
+                        "on_disconnect": "continue",
+                    },
+                )
+            except Exception as agent_err:
+                logger.warning(
+                    "[auto-report] agent call failed family=%s task=%s err=%s",
+                    fid, task.id, agent_err,
+                )
+                # Agent call 失败但 task 已创建，agent 侧可能有其他触发路径
+
+            triggered += 1
+            logger.info("[auto-report] triggered family=%s task=%s", fid, task.id)
+        except Exception as e:
+            logger.exception(f"[auto-report] failed for family={fid}: {e}")
+            skipped += 1
+
+    return {"triggered": triggered, "skipped": skipped}

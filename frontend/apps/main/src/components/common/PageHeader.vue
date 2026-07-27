@@ -24,9 +24,14 @@ withDefaults(defineProps<{
   fixed: true
 })
 
+const emit = defineEmits<{
+  back: []
+}>()
+
 const router = useRouter()
 
 function onBack() {
+  emit('back')
   router.back()
 }
 </script>

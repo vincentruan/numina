@@ -192,6 +192,7 @@ export interface AllocationItem {
   color: string
   amount: number
   percentage: number
+  asset_type?: 'physical' | 'financial'
 }
 
 export interface TrendPoint {
@@ -232,6 +233,20 @@ export interface TopAssetItem {
 
 export interface AllocationResponse {
   items: AllocationItem[]
+  physical_items: AllocationItem[]
+  financial_items: AllocationItem[]
+  total: number
+}
+
+export interface LiabilityAllocationItem {
+  category_name: string
+  amount: number
+  percentage: number
+  color: string
+}
+
+export interface LiabilityAllocationResponse {
+  items: LiabilityAllocationItem[]
   total: number
 }
 

@@ -13,7 +13,7 @@ import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
-import type { AllocationItem } from '@/types'
+import type { AllocationItem, LiabilityAllocationItem } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
 
 use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent])
@@ -21,7 +21,7 @@ use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent])
 const { format } = useCurrency()
 
 const props = defineProps<{
-  data: AllocationItem[]
+  data: AllocationItem[] | LiabilityAllocationItem[]
 }>()
 
 const chartOption = computed(() => ({

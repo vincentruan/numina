@@ -2,7 +2,7 @@
 # Numina E2E Acceptance Test
 # 测试所有 API 端点和边界情况
 
-BASE_URL="${API_BASE:-http://localhost/api/v1}"
+BASE_URL="${API_BASE:-http://localhost:8000/api/v1}"
 PASS=0
 FAIL=0
 TOKEN=""

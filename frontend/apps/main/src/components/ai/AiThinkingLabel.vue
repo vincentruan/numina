@@ -65,13 +65,6 @@ const displayText = computed(() => {
   return t('aiChat.thoughtSeconds', { seconds: String(seconds) })
 })
 
-// Duration display for done state
-const durationDisplay = computed(() => {
-  if (props.isStreaming) return ''
-  const seconds = Math.floor(props.duration)
-  return seconds < 1 ? '<1s' : `${seconds}s`
-})
-
 // Check for reduced motion preference
 const prefersReducedMotion = computed(() => {
   if (typeof window === 'undefined') return false

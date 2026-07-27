@@ -17,8 +17,12 @@ class ExchangeRateService:
     _cache: dict[str, tuple[float, datetime, datetime]] = {}
 
     @classmethod
-    def get_rate(cls, target_currency: str, db: Session) -> tuple[float, datetime]:
-        """Return (rate, fetched_at) for target_currency relative to CNY base."""
+    def get_rate(cls, target_currency: str, db: Session) -> tuple[float | None, datetime | None]:
+        """Return (rate, fetched_at) for target_currency relative to CNY base.
+
+        Returns (None, None) when no rate row exists — callers must handle this
+        instead of silently treating missing rates as 1:1.
+        """
         if target_currency == "CNY":
             return (1.0, datetime.now())
 
@@ -35,8 +39,8 @@ class ExchangeRateService:
             .first()
         )
         if row is None:
-            logger.warning(f"汇率数据不存在: {target_currency}，使用 1:1 回退")
-            return (1.0, datetime.now())
+            logger.warning(f"汇率数据不存在: {target_currency}")
+            return (None, None)
 
         cls._cache[target_currency] = (row.rate, row.fetched_at, datetime.now())
         return (row.rate, row.fetched_at)
@@ -99,12 +103,23 @@ class ExchangeRateService:
         to_currency: str,
         db: Session,
     ) -> float:
-        """Convert amount from from_currency to to_currency via CNY as intermediate."""
+        """Convert amount from from_currency to to_currency via CNY as intermediate.
+
+        Returns the original amount unchanged when either rate is missing — this
+        avoids silently distorting values with a 1:1 fallback.
+        """
         if from_currency == to_currency:
             return amount
 
         rate_from, _ = cls.get_rate(from_currency, db)
         rate_to, _ = cls.get_rate(to_currency, db)
+
+        if rate_from is None or rate_to is None:
+            logger.warning(
+                f"汇率缺失，跳过转换: {from_currency}→{to_currency}，"
+                f"返回原始金额 {amount}"
+            )
+            return amount
 
         amount_in_cny = amount / rate_from
         result = amount_in_cny * rate_to

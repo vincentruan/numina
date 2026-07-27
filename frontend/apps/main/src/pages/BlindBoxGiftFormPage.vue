@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRefs } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 

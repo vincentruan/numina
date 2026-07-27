@@ -3,7 +3,7 @@
  *
  * Feature detection, silence timeout restart, max duration auto-stop.
  */
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList

@@ -14,17 +14,9 @@ import CopyButton from '@/components/ai-chat/CopyButton.vue'
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   sources: CitationSource[]
 }>()
-
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./i, '')
-  } catch {
-    return url
-  }
-}
 
 function citationMarkdown(source: CitationSource) {
   return formatCitationMarkdownReference(source)

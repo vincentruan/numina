@@ -1,6 +1,7 @@
 """Chore template and instance models for the Core Earn Loop."""
 
 from datetime import datetime
+from typing import ClassVar
 
 from sqlalchemy import (
     BigInteger,
@@ -56,6 +57,7 @@ class ChoreTemplate(Base):
 
 class ChoreInstance(Base):
     __tablename__ = "chore_instances"
+    __allow_unmapped__ = True
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("chore_templates.id"), nullable=False)
@@ -80,6 +82,13 @@ class ChoreInstance(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Transient (non-persisted) flags set by service layer for response serialization
+    _is_pool_unclaimed: ClassVar[bool] = False
+    _milestone_triggered: ClassVar[str | None] = None
+    _child_display_name: ClassVar[str | None] = None
+    _child_avatar_color: ClassVar[str | None] = None
+    _child_user_id: ClassVar[int | None] = None
 
     template = relationship("ChoreTemplate", back_populates="instances")
 

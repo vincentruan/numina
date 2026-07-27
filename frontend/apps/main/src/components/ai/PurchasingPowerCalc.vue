@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import { getPurchasingPower, type PurchasingPowerResponse } from '@/api/timeMachine'
 import { useCurrency } from '@/composables/useCurrency'
 

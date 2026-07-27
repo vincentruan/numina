@@ -15,6 +15,8 @@ import logging
 
 from fastapi.responses import StreamingResponse
 
+from sqlalchemy.orm import Session
+
 from apps.backend.app.services.ai_extraction_circuit_service import (
     AIExtractionCircuitService,
 )
@@ -46,7 +48,7 @@ def _error_event(code: str, message: str | None = None) -> bytes:
     return f"event: error\ndata: {payload}\n\n".encode()
 
 
-def check_circuit_blocked(family_id: int, skill_id: str, db: object) -> StreamingResponse | None:
+def check_circuit_blocked(family_id: int, skill_id: str, db: Session) -> StreamingResponse | None:
     """Check if the circuit breaker blocks this skill for the family.
 
     Returns a StreamingResponse with a single SSE ``error`` frame if blocked,

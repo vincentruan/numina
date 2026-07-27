@@ -33,7 +33,7 @@ def _decode_family_id(token: str) -> str | None:
         if padding != 4:
             payload += "=" * padding
         data = json.loads(base64.urlsafe_b64decode(payload))
-        return data.get("fid")
+        return data.get("fid")  # type: ignore[no-any-return]
     except Exception:
         return None
 

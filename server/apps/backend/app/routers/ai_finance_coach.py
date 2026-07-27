@@ -19,6 +19,7 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
+from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.finance_coach_cache import (
     is_cache_fresh,
@@ -144,13 +145,13 @@ async def trigger_finance_coach(
                 status_code=200,
                 content={
                     "status": "cached",
-                    "generated_at": cached.generated_at.isoformat() if cached.generated_at else None,
+                    "generated_at": ensure_utc(cached.generated_at).isoformat() if cached.generated_at else None,
                     "report": cached.report_json,
                 },
             )
 
     # Build the PII-minimized snapshot (spec §7.1) and stream.
-    snapshot = build_family_finance_snapshot(db, current_user.family_id)
+    snapshot = build_family_finance_snapshot(db, current_user)
     thread_id = f"finance-coach-{current_user.family_id}-{uuid.uuid4().hex[:8]}"
 
     return StreamingResponse(

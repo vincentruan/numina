@@ -100,7 +100,11 @@ class NumericPinStrategy:
                 details={"locked_until": locked_until.isoformat()},
             )
 
-        if not bcrypt.checkpw(pin.encode("utf-8"), user.numeric_pin_hash.encode("utf-8")):
+        pin_hash = user.numeric_pin_hash
+        if pin_hash is None:
+            return False
+
+        if not bcrypt.checkpw(pin.encode("utf-8"), pin_hash.encode("utf-8")):
             _record_failure(
                 db, user, _numeric_pin_attempts,
                 "numeric_pin_fail_count", "numeric_pin_locked_until",
@@ -132,8 +136,12 @@ class EmojiPinStrategy:
                 details={"locked_until": locked_until.isoformat()},
             )
 
+        pin_hash = user.pin_hash
+        if pin_hash is None:
+            return False
+
         normalized = unicodedata.normalize("NFC", "".join(pin_sequence))
-        if not bcrypt.checkpw(normalized.encode("utf-8"), user.pin_hash.encode("utf-8")):
+        if not bcrypt.checkpw(normalized.encode("utf-8"), pin_hash.encode("utf-8")):
             _record_failure(
                 db, user, _emoji_pin_attempts,
                 "pin_fail_count", "pin_locked_until",

@@ -41,7 +41,8 @@ def wish_fingerprint(wishes: list[Wish]) -> str:
     parts = []
     for w in sorted(wishes, key=lambda x: x.id):
         parts.append(
-            f"{w.id}:{w.expected_price}:{w.saved_amount}:{w.monthly_saving}:{w.target_date}:{w.priority}"
+            f"{w.id}:{w.expected_price}:{w.saved_amount}:{w.monthly_saving}:"
+            f"{w.target_date}:{w.priority}:{w.currency}"
         )
     raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
@@ -110,21 +111,44 @@ async def generate_advice(db: Session, user: User) -> tuple[dict | None, str]:
     # Build the PII-minimized snapshot injected as the run's user message.
     # wish name IS prompt-required here (the user names wishes and the AI reasons
     # about them by name) — unlike finance_coach's id+category minimization.
+    # Multi-currency: convert to user's default_currency + label original.
+    from packages.domain.exchange_rate.service import ExchangeRateService
+
+    dc = user.default_currency or "CNY"
+    rate_missing = False
+
+    def _conv(amount: float | None, from_cur: str) -> float:
+        nonlocal rate_missing
+        if amount is None:
+            return 0.0
+        if from_cur == dc:
+            return float(amount)
+        rate_from, _ = ExchangeRateService.get_rate(from_cur, db)
+        rate_to, _ = ExchangeRateService.get_rate(dc, db)
+        if rate_from is None or rate_to is None:
+            rate_missing = True
+            return float(amount)
+        return ExchangeRateService.convert(float(amount), from_cur, dc, db)
+
     snapshot: dict[str, Any] = {
         "type": "wish_advice",
+        "currency": dc,
         "wishes": [
             {
                 "id": str(w.id),
                 "name": w.name,
-                "expected_price": float(w.expected_price or 0),
-                "saved_amount": float(w.saved_amount or 0),
-                "monthly_saving": float(w.monthly_saving or 0),
+                "expected_price": round(_conv(w.expected_price, w.currency), 2),
+                "saved_amount": round(_conv(w.saved_amount, w.currency), 2),
+                "monthly_saving": round(_conv(w.monthly_saving, w.currency), 2),
                 "target_date": str(w.target_date) if w.target_date else None,
                 "priority": w.priority,
+                "original_currency": w.currency,
             }
             for w in wishes
         ],
     }
+    if rate_missing:
+        snapshot["rate_missing"] = True
 
     thread_id = f"wish-advice-{user.family_id}-{uuid.uuid4().hex[:8]}"
     agent_url = f"/internal/gateway/runs/wish-advice/{thread_id}"

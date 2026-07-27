@@ -9,9 +9,9 @@ const mockSearchThreads = vi.fn()
 const mockDeleteThread = vi.fn()
 const mockUpdateThread = vi.fn()
 vi.mock('@/api/ai-chat', () => ({
-  searchThreads: (...args: any[]) => mockSearchThreads(...args),
-  deleteThread: (...args: any[]) => mockDeleteThread(...args),
-  updateThread: (...args: any[]) => mockUpdateThread(...args),
+  searchThreads: mockSearchThreads,
+  deleteThread: mockDeleteThread,
+  updateThread: mockUpdateThread,
 }))
 
 describe('useThreadList', () => {
@@ -42,7 +42,7 @@ describe('useThreadList', () => {
     mockSearchThreads.mockResolvedValue({ items: [], total: 0 })
     const { useThreadList } = await import('../useThreadList')
     const list = useThreadList()
-    ;(list as any).sessions.value = [{
+    list.sessions.value = [{
       thread_id: 't1', title: 'x', status: 'idle', is_pinned: false,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }]
@@ -55,7 +55,7 @@ describe('useThreadList', () => {
   it('renameSession calls updateThread', async () => {
     const { useThreadList } = await import('../useThreadList')
     const list = useThreadList()
-    ;(list as any).sessions.value = [{
+    list.sessions.value = [{
       thread_id: 't1', title: 'old', status: 'idle', is_pinned: false,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }]
@@ -68,7 +68,7 @@ describe('useThreadList', () => {
   it('togglePin flips is_pinned', async () => {
     const { useThreadList } = await import('../useThreadList')
     const list = useThreadList()
-    ;(list as any).sessions.value = [{
+    list.sessions.value = [{
       thread_id: 't1', title: 'x', status: 'idle', is_pinned: false,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }]
@@ -81,7 +81,7 @@ describe('useThreadList', () => {
     mockSearchThreads.mockResolvedValue({ items: [], total: 0 })
     const { useThreadList } = await import('../useThreadList')
     const list = useThreadList()
-    ;(list as any).sessions.value = [{ thread_id: 't1', title: 'x', status: 'idle', is_pinned: false,
+    list.sessions.value = [{ thread_id: 't1', title: 'x', status: 'idle', is_pinned: false,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]
     await list.refresh()
     expect(list.sessions.value).toEqual([])

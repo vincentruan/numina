@@ -279,7 +279,7 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
         # user_id (Numina uses family_id as DeerFlow's effective user). When no
         # family context is set (legacy/script paths), defer to caller/default.
         effective_user_id = family_id if family_id is not None else user_id
-        return super().acquire(thread_id, user_id=effective_user_id)
+        return str(super().acquire(thread_id, user_id=effective_user_id))
 
 
 # ---------------------------------------------------------------------------

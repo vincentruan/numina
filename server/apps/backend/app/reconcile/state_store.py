@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.schema import Table
 
 from apps.backend.app.database import Base
 
@@ -50,7 +51,8 @@ class StateStore:
 
         inspector = sa_inspect(self._db.get_bind())
         if "reconcile_state" not in inspector.get_table_names():
-            ReconcileState.__table__.create(self._db.get_bind())
+            table = cast(Table, ReconcileState.__table__)
+            table.create(self._db.get_bind())
             logger.info("Created reconcile_state table")
 
     def get(self, resource_name: str) -> ReconcileState | None:
@@ -101,25 +103,27 @@ class StateStore:
             )
             self._db.add(row)
         else:
-            row.resource_type = resource_type
-            row.desired_version = desired_version
-            row.current_version = current_version
-            row.status = status
-            row.critical = 1 if critical else 0
-            row.error_message = error_message
-            row.remediation_hint = remediation_hint
+            row.resource_type = resource_type  # type: ignore[assignment]
+            row.desired_version = desired_version  # type: ignore[assignment]
+            row.current_version = current_version  # type: ignore[assignment]
+            row.status = status  # type: ignore[assignment]
+            row.critical = 1 if critical else 0  # type: ignore[assignment]
+            row.error_message = error_message  # type: ignore[assignment]
+            row.remediation_hint = remediation_hint  # type: ignore[assignment]
             if checked_at:
-                row.last_checked_at = checked_at
+                row.last_checked_at = checked_at  # type: ignore[assignment]
             if applied_at:
-                row.last_applied_at = applied_at
+                row.last_applied_at = applied_at  # type: ignore[assignment]
             if verified_at:
-                row.last_verified_at = verified_at
+                row.last_verified_at = verified_at  # type: ignore[assignment]
             if metadata:
-                row.metadata_json = json.dumps(metadata)
+                row.metadata_json = json.dumps(metadata)  # type: ignore[assignment]
 
         self._db.commit()
         return row
 
     def all_states(self) -> list[ReconcileState]:
         self._ensure_table()
-        return self._db.query(ReconcileState).order_by(ReconcileState.resource_name).all()
+        return (
+            self._db.query(ReconcileState).order_by(ReconcileState.resource_name).all()
+        )

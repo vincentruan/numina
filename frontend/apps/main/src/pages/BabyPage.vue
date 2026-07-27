@@ -137,7 +137,6 @@
                 </div>
               </template>
 
-              <!-- 待实现 -->
               <template v-if="activeWishes.length > 0">
                 <h4 class="wish-group-title">{{ t('baby.wishGroupActive') }}</h4>
                 <div
@@ -550,7 +549,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'Baby' })
 import { ref, computed, onMounted, onActivated } from 'vue'
-import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
@@ -570,6 +569,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
 import IIcon from '@/components/IIcon.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { parseApiDate } from '@/utils/format'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -577,6 +577,9 @@ const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
 const blindBoxStore = useBlindBoxStore()
 const { increment, decrement } = usePageLoading()
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
+// mount inside <KeepAlive>; onMounted handles initial load.
+let hasActivated = false
 
 const pendingDrawCount = computed(
   () => blindBoxStore.draws.filter((d) => d.status === 'pending_fulfillment').length,
@@ -653,7 +656,7 @@ function sortWishes(wishes: ParentWish[]): ParentWish[] {
   return [...wishes].sort((a, b) => {
     const pDiff = (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9)
     if (pDiff !== 0) return pDiff
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return parseApiDate(a.created_at).getTime() - parseApiDate(b.created_at).getTime()
   })
 }
 
@@ -823,24 +826,24 @@ const filteredChores = computed(() => {
 
 const pendingApprovalChores = computed(() =>
   [...filteredChores.value.filter(c => c.status === 'pending_approval')].sort((a, b) => {
-    const ta = a.submitted_at ? new Date(a.submitted_at).getTime() : 0
-    const tb = b.submitted_at ? new Date(b.submitted_at).getTime() : 0
+    const ta = a.submitted_at ? parseApiDate(a.submitted_at).getTime() : 0
+    const tb = b.submitted_at ? parseApiDate(b.submitted_at).getTime() : 0
     return tb - ta
   }),
 )
 
 const availableChores = computed(() =>
   [...filteredChores.value.filter(c => c.status === 'available')].sort((a, b) => {
-    const ta = a.claimed_at ? new Date(a.claimed_at).getTime() : 0
-    const tb = b.claimed_at ? new Date(b.claimed_at).getTime() : 0
+    const ta = a.claimed_at ? parseApiDate(a.claimed_at).getTime() : 0
+    const tb = b.claimed_at ? parseApiDate(b.claimed_at).getTime() : 0
     return ta - tb
   }),
 )
 
 const completedChores = computed(() =>
   [...filteredChores.value.filter(c => c.status === 'approved')].sort((a, b) => {
-    const ta = a.approved_at ? new Date(a.approved_at).getTime() : 0
-    const tb = b.approved_at ? new Date(b.approved_at).getTime() : 0
+    const ta = a.approved_at ? parseApiDate(a.approved_at).getTime() : 0
+    const tb = b.approved_at ? parseApiDate(b.approved_at).getTime() : 0
     return tb - ta
   }),
 )
@@ -1131,6 +1134,7 @@ onMounted(async () => {
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
 onActivated(async () => {
+  if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
     await familyStore.fetchFamily()

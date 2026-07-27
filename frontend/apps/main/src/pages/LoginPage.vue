@@ -24,37 +24,76 @@
         <NuminaLogo class="numina-logo" :width="220" />
         <p class="step0-subtitle">{{ t('login.selectAccount') }}</p>
 
-        <van-swipe :loop="false" :width="260" :show-indicators="true" class="account-swipe">
-          <van-swipe-item
-            v-for="user in boundUsers"
-            :key="user.userId"
-            @click="onSelectUser(user)"
+        <!-- Account carousel with prev/next arrows -->
+        <div class="account-carousel-wrapper">
+          <button
+            v-if="boundUsers.length > 1"
+            type="button"
+            class="carousel-arrow carousel-arrow--prev"
+            :class="{ 'carousel-arrow--hidden': carouselIndex === 0 }"
+            :disabled="loading || carouselIndex === 0"
+            :aria-label="t('login.previousAccount')"
+            @click="onCarouselPrev"
           >
-            <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
-              <div class="account-avatar" :style="{ background: user.avatarColor }">
-                {{ user.displayName.charAt(0) }}
+            <van-icon name="arrow-left" size="20" />
+          </button>
+
+          <van-swipe
+            ref="accountSwipeRef"
+            :loop="false"
+            :width="260"
+            :show-indicators="true"
+            class="account-swipe"
+            @change="onCarouselChange"
+          >
+            <van-swipe-item
+              v-for="user in boundUsers"
+              :key="user.userId"
+              @click="onSelectUser(user)"
+            >
+              <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
+                <div class="account-avatar" :style="{ background: user.avatarColor }">
+                  {{ user.displayName.charAt(0) }}
+                </div>
+                <p class="account-name">{{ user.displayName }}</p>
+                <span class="account-role">{{ t(`role.${user.role}`) }}</span>
               </div>
-              <p class="account-name">{{ user.displayName }}</p>
-              <span class="account-role">{{ t(`role.${user.role}`) }}</span>
-            </div>
-          </van-swipe-item>
+            </van-swipe-item>
 
-          <van-swipe-item @click="switchToStep1">
-            <div class="account-card account-card--other">
-              <div class="account-avatar account-avatar--add">+</div>
-              <p class="account-name">{{ t('login.otherAccount') }}</p>
-            </div>
-          </van-swipe-item>
-        </van-swipe>
+            <van-swipe-item @click="switchToStep1">
+              <div class="account-card account-card--other">
+                <div class="account-avatar account-avatar--add">+</div>
+                <p class="account-name">{{ t('login.otherAccount') }}</p>
+              </div>
+            </van-swipe-item>
+          </van-swipe>
 
+          <button
+            v-if="boundUsers.length > 1"
+            type="button"
+            class="carousel-arrow carousel-arrow--next"
+            :class="{ 'carousel-arrow--hidden': carouselIndex >= boundUsers.length }"
+            :disabled="loading || carouselIndex >= boundUsers.length"
+            :aria-label="t('login.nextAccount')"
+            @click="onCarouselNext"
+          >
+            <van-icon name="arrow-right" size="20" />
+          </button>
+        </div>
+
+        <!-- Login button — appears below the card when a user is selected -->
         <Transition name="step-fade">
-          <div v-if="selectedUser && !(selectedUser.hasPasskey && webauthnSupported)" class="select-captcha-area">
-            <p class="captcha-hint">{{ t('login.verifyToContinue') }}</p>
-            <AltchaWidget
-              ref="selectAltchaRef"
-              v-model="selectAltcha"
-              endpoint="login"
-            />
+          <div v-if="selectedUser" class="quick-login-area">
+            <van-button
+              round
+              block
+              type="primary"
+              :loading="loading"
+              class="quick-login-btn"
+              @click="onQuickLogin"
+            >
+              {{ t('login.quickLogin') }}
+            </van-button>
           </div>
         </Transition>
       </div>
@@ -204,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
@@ -230,6 +269,8 @@ const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
 useDeerField(bgCanvasRef, deerCanvasRef)
 
+const accountSwipeRef = ref()
+const carouselIndex = ref(0)
 const step = ref<0 | 1 | 2>(1)
 const tempToken = ref('')
 const secondFactorType = ref('')
@@ -260,8 +301,6 @@ interface BoundUser {
 const boundUsers = ref<BoundUser[]>([])
 const selectedUser = ref<BoundUser | null>(null)
 const deviceIdRef = ref<string | null>(null)
-const selectAltchaRef = ref()
-const selectAltcha = ref<string | undefined>(undefined)
 const webauthnSupported = ref(false)
 
 // User info from step1 response — shown in step2 header
@@ -361,10 +400,57 @@ async function onStep1Submit() {
 }
 
 function onSelectUser(user: BoundUser) {
+  // Just select — show login button; user clicks it to authenticate
   selectedUser.value = user
+}
+
+async function onQuickLogin() {
+  if (!selectedUser.value || !deviceIdRef.value) return
+  const user = selectedUser.value
 
   if (user.hasPasskey && webauthnSupported.value) {
-    authenticateWithWebAuthn(user)
+    await authenticateWithWebAuthn(user)
+    return
+  }
+
+  // Device already trusted — no captcha needed, call selectDeviceUser directly
+  loading.value = true
+  try {
+    const { data } = await selectDeviceUser(
+      deviceIdRef.value,
+      user.userId,
+    )
+    if (data.second_factor_required && data.temp_token) {
+      tempToken.value = data.temp_token
+      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
+      trustedUser.value = {
+        displayName: data.display_name ?? user.displayName,
+        avatarColor: data.avatar_color ?? user.avatarColor,
+      }
+      step.value = 2
+    } else {
+      await authStore.fetchMe()
+      showSuccessToast(t('toast.loginSuccess'))
+      authStore.showTrustPrompt = true
+      const authUser = authStore.user
+      if (authUser?.role === 'child') {
+        const childBaseUrl = getChildBaseUrl()
+        window.location.href = childBaseUrl
+        return
+      }
+      router.push('/')
+    }
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { code?: string; message?: string }; status?: number } }
+    const code = axiosError.response?.data?.code
+    if (code) {
+      const i18nKey = `errors.${code}`
+      showFailToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
+    } else {
+      showFailToast(t('toast.loginFailedGeneric'))
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -421,56 +507,18 @@ function switchToStep1() {
   boundUsers.value = []
 }
 
-async function onSelectAltchaComplete() {
-  if (!selectedUser.value || !deviceIdRef.value || !selectAltcha.value) return
-  loading.value = true
-  try {
-    const { data } = await selectDeviceUser(
-      deviceIdRef.value,
-      selectedUser.value.userId,
-      selectAltcha.value,
-    )
-    if (data.second_factor_required && data.temp_token) {
-      tempToken.value = data.temp_token
-      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
-      trustedUser.value = {
-        displayName: data.display_name ?? selectedUser.value.displayName,
-        avatarColor: data.avatar_color ?? selectedUser.value.avatarColor,
-      }
-      step.value = 2
-    } else {
-      await authStore.fetchMe()
-      showSuccessToast(t('toast.loginSuccess'))
-      authStore.showTrustPrompt = true
-      const user = authStore.user
-      if (user?.role === 'child') {
-        const childBaseUrl = getChildBaseUrl()
-        window.location.href = childBaseUrl
-        return
-      }
-      router.push('/')
-    }
-  } catch (error: unknown) {
-    const axiosError = error as { response?: { data?: { code?: string; message?: string }; status?: number } }
-    const code = axiosError.response?.data?.code
-    if (code) {
-      const i18nKey = `errors.${code}`
-      showFailToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
-    } else {
-      showFailToast(t('toast.loginFailedGeneric'))
-    }
-    selectAltchaRef.value?.reset()
-    selectAltcha.value = undefined
-  } finally {
-    loading.value = false
-  }
+// Carousel navigation
+function onCarouselChange(index: number) {
+  carouselIndex.value = index
 }
 
-watch(selectAltcha, (val) => {
-  if (val) {
-    onSelectAltchaComplete()
-  }
-})
+function onCarouselPrev() {
+  accountSwipeRef.value?.prev?.()
+}
+
+function onCarouselNext() {
+  accountSwipeRef.value?.next?.()
+}
 
 function onNumpadPress(key: number | string) {
   flashKey.value = key
@@ -1192,14 +1240,67 @@ async function submitEmojiPin() {
 }
 
 .step0-subtitle {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
   margin-bottom: 24px;
+}
+
+.account-carousel-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 380px;
 }
 
 .account-swipe {
   width: 100%;
   max-width: 340px;
+}
+
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(189, 187, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #bdbbff;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.carousel-arrow:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.9);
+  background: rgba(189, 187, 255, 0.35);
+}
+
+.carousel-arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.carousel-arrow--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.carousel-arrow--prev {
+  left: -8px;
+}
+
+.carousel-arrow--next {
+  right: -8px;
 }
 
 .account-card {
@@ -1252,7 +1353,7 @@ async function submitEmojiPin() {
 }
 
 .account-role {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 12px;
 }
 
@@ -1264,8 +1365,25 @@ async function submitEmojiPin() {
   gap: 12px;
 }
 
+.quick-login-area {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 260px;
+  padding: 0 16px;
+}
+
+.quick-login-btn {
+  --van-button-primary-background: rgba(189, 187, 255, 0.18);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
+  --van-button-primary-color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
+}
+
 .captcha-hint {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.75);
   font-size: 13px;
 }
 

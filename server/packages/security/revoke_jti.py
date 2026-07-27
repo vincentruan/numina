@@ -53,7 +53,7 @@ def revoke_jti_atomic(jti: str, ttl_seconds: float) -> bool:
             {"jti": jti, "revoked_at": now, "expires_at": expires_at},
         )
         db.commit()
-        return result.rowcount == 1
+        return bool(result.rowcount == 1)  # type: ignore[attr-defined]
     finally:
         db.close()
 
@@ -81,10 +81,14 @@ def _is_jti_revoked(jti: str) -> bool:
     db = SessionLocal()
     try:
         now = time.time()
-        record = db.query(RevokedToken).filter(
-            RevokedToken.jti == jti,
-            RevokedToken.expires_at > now,
-        ).first()
+        record = (
+            db.query(RevokedToken)
+            .filter(
+                RevokedToken.jti == jti,
+                RevokedToken.expires_at > now,
+            )
+            .first()
+        )
         return record is not None
     finally:
         db.close()
@@ -95,10 +99,14 @@ def _is_token_revoked_for_user(user_id: str | int, iat: float) -> bool:
     db = SessionLocal()
     try:
         now = time.time()
-        record = db.query(RevokedToken).filter(
-            RevokedToken.user_id == str(user_id),
-            RevokedToken.expires_at > now,
-        ).first()
+        record = (
+            db.query(RevokedToken)
+            .filter(
+                RevokedToken.user_id == str(user_id),
+                RevokedToken.expires_at > now,
+            )
+            .first()
+        )
         if record is None:
             return False
         return iat <= record.revoked_at

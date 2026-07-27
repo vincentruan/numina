@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from typing import Any, cast
 
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.core.desensitize import desensitize_liabilities
@@ -186,4 +187,4 @@ async def generate_health_report(
     # Note: Raw PII data intentionally NOT attached to response per security invariant.
     # Frontend should fetch aggregate data separately via backend APIs if needed.
 
-    return report_data
+    return cast("dict[str, Any]", report_data)

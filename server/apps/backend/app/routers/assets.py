@@ -7,6 +7,7 @@ from apps.backend.app.models.asset_lifecycle_event import AssetLifecycleEvent
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.asset import (
     AssetCreate,
+    AssetLifecycleEventResponse,
     AssetResponse,
     AssetSellRequest,
     AssetSellResponse,
@@ -31,12 +32,15 @@ def _to_response(asset, db: Session) -> AssetResponse:
     resp = AssetResponse.model_validate(asset)
     resp.daily_cost = asset_service.compute_daily_cost(asset)
     resp.return_rate = asset_service.compute_return_rate(asset)
-    resp.lifecycle_events = (
-        db.query(AssetLifecycleEvent)
-        .filter(AssetLifecycleEvent.asset_id == asset.id)
-        .order_by(AssetLifecycleEvent.event_date.desc())
-        .all()
-    )
+    resp.lifecycle_events = [
+        AssetLifecycleEventResponse.model_validate(e)
+        for e in (
+            db.query(AssetLifecycleEvent)
+            .filter(AssetLifecycleEvent.asset_id == asset.id)
+            .order_by(AssetLifecycleEvent.event_date.desc())
+            .all()
+        )
+    ]
     return resp
 
 
@@ -54,7 +58,10 @@ def list_assets(
     user: User = Depends(require_adult),
 ):
     import math
-    assets, total = asset_service.list_assets(db, user, category_id, asset_type, status, tag_id, search, sort, page, page_size)
+
+    assets, total = asset_service.list_assets(
+        db, user, category_id, asset_type, status, tag_id, search, sort, page, page_size
+    )
     total_pages = math.ceil(total / page_size) if total > 0 else 1
     return PaginatedAssetResponse(
         items=[_to_response(a, db) for a in assets],
@@ -74,7 +81,15 @@ def create_asset(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.create_asset(db, user, req)
-    record_activity(db, user, "create", "asset", asset.id, f"添加资产「{asset.name}」", float(asset.purchase_price) if asset.purchase_price is not None else None)
+    record_activity(
+        db,
+        user,
+        "create",
+        "asset",
+        asset.id,
+        f"添加资产「{asset.name}」",
+        float(asset.purchase_price) if asset.purchase_price is not None else None,
+    )
     return _to_response(asset, db)
 
 
@@ -128,7 +143,15 @@ def sell_asset(
     user: User = Depends(require_adult),
 ):
     result = asset_service.sell_asset(db, user, asset_id, req)
-    record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result['name']}」", float(req.sell_price))
+    record_activity(
+        db,
+        user,
+        "sell",
+        "asset",
+        asset_id,
+        f"出售资产「{result['name']}」",
+        float(req.sell_price),
+    )
     return result
 
 
@@ -150,7 +173,9 @@ def reactivate_asset(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.reactivate_asset(db, user, asset_id)
-    record_activity(db, user, "reactivate", "asset", asset_id, f"恢复资产「{asset.name}」")
+    record_activity(
+        db, user, "reactivate", "asset", asset_id, f"恢复资产「{asset.name}」"
+    )
     return _to_response(asset, db)
 
 
@@ -182,7 +207,9 @@ def batch_update_category(
     user: User = Depends(require_adult),
 ):
     """批量修改资产分类"""
-    result = asset_service.batch_update_category(db, user, req.asset_ids, req.category_id)
+    result = asset_service.batch_update_category(
+        db, user, req.asset_ids, req.category_id
+    )
     return result
 
 

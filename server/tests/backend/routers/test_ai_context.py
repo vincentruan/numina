@@ -114,11 +114,15 @@ def test_liability_detail_returns_summary(client, auth_headers, owned_liability_
     body = resp.json()["data"]
     assert body["source"] == "liability_detail"
     assert "summary" in body and isinstance(body["summary"], str)
-    # Structured text format: contains category label + formatted values,
-    # no internal snowflake IDs (AI doesn't need them).
-    assert "【负债详情】" in body["summary"]
-    assert "房贷" in body["summary"]
-    assert "¥" in body["summary"]
+    # Structured JSON format: parse and verify fields.
+    import json
+    data = json.loads(body["summary"])
+    assert data["type"] == "liability_detail"
+    assert data["category"] == "房贷"
+    assert "remaining_amount" in data
+    assert "monthly_payment" in data
+    assert "currency" in data
+    assert data["currency"] == "CNY"
 
 
 def test_wish_detail_returns_summary(client, auth_headers, owned_wish_id):

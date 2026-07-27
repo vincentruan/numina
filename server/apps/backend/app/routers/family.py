@@ -32,6 +32,7 @@ from apps.backend.app.schemas.family import (
 from apps.backend.app.services import coin_transactions as coin_service
 from apps.backend.app.services import family as family_service
 from apps.backend.app.services.snapshot import generate_snapshots
+from packages.db.models.family import Family
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -58,7 +59,11 @@ def get_family(
     response.headers["Cache-Control"] = "private, max-age=300"
     family = family_service.get_family_info(db, user)
     members = family_service.get_family_members(db, user)
-    invitation_record = db.query(FamilyInvitationCode).filter(FamilyInvitationCode.used_by_family_id == family.id).first()
+    invitation_record = (
+        db.query(FamilyInvitationCode)
+        .filter(FamilyInvitationCode.used_by_family_id == family.id)
+        .first()
+    )
     creator_code = invitation_record.code if invitation_record else None
     return FamilyResponse(
         id=family.id,
@@ -70,6 +75,7 @@ def get_family(
         members=[UserResponse.model_validate(m) for m in members],
     )
 
+
 @router.patch("/title", response_model=FamilyResponse)
 def update_family_title(
     body: UpdateFamilyTitleRequest,
@@ -78,7 +84,11 @@ def update_family_title(
 ):
     family = family_service.update_family_title(db, user, body.custom_title)
     members = family_service.get_family_members(db, user)
-    invitation_record = db.query(FamilyInvitationCode).filter(FamilyInvitationCode.used_by_family_id == family.id).first()
+    invitation_record = (
+        db.query(FamilyInvitationCode)
+        .filter(FamilyInvitationCode.used_by_family_id == family.id)
+        .first()
+    )
     creator_code = invitation_record.code if invitation_record else None
     return FamilyResponse(
         id=family.id,
@@ -198,11 +208,15 @@ def update_member_info(
 ):
     if user.role != "owner":
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    member = db.query(User).filter(
-        User.id == member_id,
-        User.family_id == user.family_id,
-        User.role == "child",
-    ).first()
+    member = (
+        db.query(User)
+        .filter(
+            User.id == member_id,
+            User.family_id == user.family_id,
+            User.role == "child",
+        )
+        .first()
+    )
     if not member:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     if body.display_name is not None:
@@ -255,9 +269,10 @@ def regenerate_invite_code(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    if user.role != 'owner':
+    if user.role != "owner":
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     from apps.backend.app.services.auth import _check_invite_code_rate_limit
+
     _check_invite_code_rate_limit(str(user.id))
     family = family_service.regenerate_invite_code(db, user)
     return {"invite_code": family.invite_code}
@@ -268,7 +283,7 @@ def trigger_snapshots(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    snapshots = generate_snapshots(db, user.family_id)
+    snapshots = generate_snapshots(db, str(user.family_id))
     return {"detail": f"已生成 {len(snapshots)} 条快照"}
 
 
@@ -299,10 +314,23 @@ def update_family_settings(
     db.commit()
     db.refresh(config)
 
+    # Handle report_auto_generate_enabled on Family model
+    if body.report_auto_generate_enabled is not None:
+        family = db.query(Family).filter_by(id=user.family_id).first()
+        if family:
+            family.report_auto_generate_enabled = body.report_auto_generate_enabled
+            db.commit()
+
     from apps.backend.app.models.ai_provider_config import AIProviderConfig
-    ai_enabled = db.query(AIProviderConfig).filter_by(
-        family_id=user.family_id, is_active=True
-    ).first() is not None
+
+    ai_enabled = (
+        db.query(AIProviderConfig)
+        .filter_by(family_id=user.family_id, is_active=True)
+        .first()
+        is not None
+    )
+
+    family_row = db.query(Family).filter_by(id=user.family_id).first()
 
     return FamilySettingsResponse(
         auto_approve_hours=config.auto_approve_hours,
@@ -311,6 +339,7 @@ def update_family_settings(
         coin_silver_to_gold=config.coin_silver_to_gold,
         education_reward_enabled=config.education_reward_enabled,
         coin_to_yuan_rate=config.coin_to_yuan_rate,
+        report_auto_generate_enabled=family_row.report_auto_generate_enabled if family_row else False,
     )
 
 
@@ -327,9 +356,15 @@ def get_family_settings(
         db.refresh(config)
 
     from apps.backend.app.models.ai_provider_config import AIProviderConfig
-    ai_enabled = db.query(AIProviderConfig).filter_by(
-        family_id=user.family_id, is_active=True
-    ).first() is not None
+
+    ai_enabled = (
+        db.query(AIProviderConfig)
+        .filter_by(family_id=user.family_id, is_active=True)
+        .first()
+        is not None
+    )
+
+    family_row = db.query(Family).filter_by(id=user.family_id).first()
 
     return FamilySettingsResponse(
         auto_approve_hours=config.auto_approve_hours,
@@ -338,6 +373,7 @@ def get_family_settings(
         coin_silver_to_gold=config.coin_silver_to_gold,
         education_reward_enabled=config.education_reward_enabled,
         coin_to_yuan_rate=config.coin_to_yuan_rate,
+        report_auto_generate_enabled=family_row.report_auto_generate_enabled if family_row else False,
     )
 
 
@@ -414,18 +450,24 @@ def get_child_balance(
     user: User = Depends(require_adult),
 ):
     """Parent queries a specific child's coin balance."""
-    child = db.query(User).filter(
-        User.id == child_id,
-        User.family_id == user.family_id,
-        User.role == "child",
-    ).first()
+    child = (
+        db.query(User)
+        .filter(
+            User.id == child_id,
+            User.family_id == user.family_id,
+            User.role == "child",
+        )
+        .first()
+    )
     if not child:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     balance = coin_service.get_balance(db, child_id)
     return {"balance": balance}
 
 
-@router.get("/children/{child_id}/coins/ledger", response_model=list[ChildLedgerEntryResponse])
+@router.get(
+    "/children/{child_id}/coins/ledger", response_model=list[ChildLedgerEntryResponse]
+)
 def get_child_ledger(
     child_id: int,
     db: Session = Depends(get_db),
@@ -433,11 +475,15 @@ def get_child_ledger(
 ):
     """Parent queries a specific child's coin ledger for trust-contract math
     (days-estimate delta on cost edits, per R14)."""
-    child = db.query(User).filter(
-        User.id == child_id,
-        User.family_id == user.family_id,
-        User.role == "child",
-    ).first()
+    child = (
+        db.query(User)
+        .filter(
+            User.id == child_id,
+            User.family_id == user.family_id,
+            User.role == "child",
+        )
+        .first()
+    )
     if not child:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     txs = coin_service.list_transactions(db, child_id, user.family_id)
@@ -467,11 +513,15 @@ def get_child_earning_rate(
 
     from apps.backend.app.models.coin_transaction import CoinTransaction
 
-    child = db.query(User).filter(
-        User.id == child_id,
-        User.family_id == user.family_id,
-        User.role == "child",
-    ).first()
+    child = (
+        db.query(User)
+        .filter(
+            User.id == child_id,
+            User.family_id == user.family_id,
+            User.role == "child",
+        )
+        .first()
+    )
     if not child:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
 
@@ -540,11 +590,15 @@ def get_all_child_balances(
     from apps.backend.app.models.coin_transaction import CoinTransaction as CT
 
     # Get all child IDs in this family
-    children = db.query(User.id).filter(
-        User.family_id == user.family_id,
-        User.role == "child",
-        User.is_active == True,
-    ).all()
+    children = (
+        db.query(User.id)
+        .filter(
+            User.family_id == user.family_id,
+            User.role == "child",
+            User.is_active == True,
+        )
+        .all()
+    )
     child_ids = [c.id for c in children]
     if not child_ids:
         return {}
@@ -636,11 +690,15 @@ def get_children_chore_stats(
     iso_year, iso_week, _ = today.isocalendar()
     week_bucket = f"{iso_year}-W{iso_week:02d}"
 
-    children = db.query(User.id).filter(
-        User.family_id == user.family_id,
-        User.role == "child",
-        User.is_active == True,
-    ).all()
+    children = (
+        db.query(User.id)
+        .filter(
+            User.family_id == user.family_id,
+            User.role == "child",
+            User.is_active == True,
+        )
+        .all()
+    )
     child_ids = [c.id for c in children]
     if not child_ids:
         return {}
@@ -650,9 +708,9 @@ def get_children_chore_stats(
         db.query(
             ChoreInstance.child_user_id,
             sqlfunc.count(ChoreInstance.id).label("total"),
-            sqlfunc.sum(
-                case((ChoreInstance.status == "approved", 1), else_=0)
-            ).label("completed"),
+            sqlfunc.sum(case((ChoreInstance.status == "approved", 1), else_=0)).label(
+                "completed"
+            ),
         )
         .filter(
             ChoreInstance.family_id == user.family_id,

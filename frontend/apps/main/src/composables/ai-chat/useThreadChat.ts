@@ -15,7 +15,6 @@ import type { GoalState } from '@/api/ai-chat'
 import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
-import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 
 export type { ChatMessage }
@@ -396,7 +395,7 @@ function pruneConfirmedTransientMessages(
 function toToolCallSummaries(
   toolCalls: Array<{ id?: string; name: string; args: string | object }>,
 ): ToolCallSummary[] {
-  return toolCalls.map((tc, i) => ({
+  return toolCalls.map((tc, _i) => ({
     id: tc.id || genId('tc'),
     name: tc.name,
     displayName: tc.name,
@@ -1019,6 +1018,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
      * (DeerFlow pattern: the clarification answer is a new message, not a resume).
      */
     additionalKwargs?: Record<string, unknown>,
+    /** Uploaded file attachments (images/documents) to include in the message. */
+    files?: Array<{ path: string; filename: string; mime_type?: string }>,
   ): Promise<void> {
     // If a previous stream is still marked as loading (e.g. dropped connection
     // that hasn't fully cleaned up, or user clicked retry mid-stream), cancel
@@ -1136,8 +1137,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
           if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
         }
+        const inputMessage: Record<string, unknown> = {
+          role: 'user',
+          content: text,
+        }
+        const mergedKwargs: Record<string, unknown> = { ...additionalKwargs }
+        if (files && files.length > 0) {
+          mergedKwargs.files = files
+        }
+        if (Object.keys(mergedKwargs).length > 0) {
+          inputMessage.additional_kwargs = mergedKwargs
+        }
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
-          input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text, ...(additionalKwargs ? { additional_kwargs: additionalKwargs } : {}) }] },
+          input: hasPriorProgress ? null : { messages: [inputMessage] },
           signal: abortController.signal,
           // #17: drop 'events' — the active backend never emits an 'events' frame
           // and there is no handler branch for it; requesting it advertises an

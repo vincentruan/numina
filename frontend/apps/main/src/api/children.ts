@@ -18,7 +18,7 @@ export interface CreateChildPayload {
 
 export async function createChild(payload: CreateChildPayload): Promise<ChildUser> {
   const res = await http.post('/family/children', payload)
-  return res.data.data
+  return res.data
 }
 
 export async function resetChildPin(childId: string, pin: string[]): Promise<void> {

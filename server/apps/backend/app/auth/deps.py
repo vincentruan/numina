@@ -42,7 +42,6 @@ ALGORITHM = "HS256"
 logger = get_logger(__name__)
 
 
-
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     now = datetime.utcnow()
@@ -61,13 +60,15 @@ def create_refresh_token(data: dict) -> str:
     expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     # Embed token_version (defaults to 0 for backward compat)
     token_version = to_encode.get("token_version", 0)
-    to_encode.update({
-        "exp": expire,
-        "type": "refresh",
-        "jti": str(uuid4()),
-        "iat": now,
-        "token_version": token_version,
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "type": "refresh",
+            "jti": str(uuid4()),
+            "iat": now,
+            "token_version": token_version,
+        }
+    )
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -102,8 +103,8 @@ def _verify_token(token: str, expected_type: str = "access") -> dict | None:
     """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        token_type: str = payload.get("type")
+        user_id: str | None = payload.get("sub")
+        token_type: str | None = payload.get("type")
         jti: str | None = payload.get("jti")
         iat = payload.get("iat")
         if user_id is None or token_type != expected_type:
@@ -114,7 +115,9 @@ def _verify_token(token: str, expected_type: str = "access") -> dict | None:
             return None
         # Extract fid and role with defaults for backward compat
         fid: str | None = payload.get("fid")  # Present for all tokens after refactor
-        role: str = payload.get("role", "member")  # Default for backward compat with old tokens
+        role: str = payload.get(
+            "role", "member"
+        )  # Default for backward compat with old tokens
         return {"sub": user_id, "fid": fid, "role": role}
     except ExpiredSignatureError:
         logger.debug("Token expired")
@@ -180,25 +183,30 @@ def get_current_user(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str | None = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
+    if user_id is None or payload_fid is None:
+        raise credentials_exception
+    payload_fid_int = int(payload_fid)
 
     # SECURITY: Minimal existence check + family_id verification
     # Prevents cross-family data access after user removal from family
     # Query returns columns needed by UserResponse schema, not full User object
-    result = db.query(
-        User.family_id,
-        User.username,
-        User.display_name,
-        User.avatar_color,
-        User.theme,
-        User.language,
-        User.default_currency,
-        User.view_mode,
-    ).filter(
-        User.id == int(user_id), User.is_active.is_(True)
-    ).first()
+    result = (
+        db.query(
+            User.family_id,
+            User.username,
+            User.display_name,
+            User.avatar_color,
+            User.theme,
+            User.language,
+            User.default_currency,
+            User.view_mode,
+        )
+        .filter(User.id == int(user_id), User.is_active.is_(True))
+        .first()
+    )
 
     if result is None:
         # User doesn't exist or is inactive
@@ -217,7 +225,7 @@ def get_current_user(
 
     # SECURITY: Verify payload fid matches current DB family_id
     # This prevents stale tokens from accessing data after family removal
-    if int(payload_fid) != db_family_id:
+    if payload_fid_int != db_family_id:
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult endpoints.
@@ -232,7 +240,7 @@ def get_current_user(
     # Saves ~7 columns compared to full User query (no password_hash, pin fields, etc.)
     user = User(
         id=int(user_id),
-        family_id=int(payload_fid),
+        family_id=payload_fid_int,
         username=username,
         display_name=display_name,
         avatar_color=avatar_color,
@@ -271,24 +279,29 @@ def get_current_user_from_cookie(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str | None = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
+
+    if user_id is None or payload_fid is None:
+        raise credentials_exception
 
     # SECURITY: Minimal existence check + family_id verification
     # Query returns columns needed by UserResponse schema
-    result = db.query(
-        User.family_id,
-        User.username,
-        User.display_name,
-        User.avatar_color,
-        User.theme,
-        User.language,
-        User.default_currency,
-        User.view_mode,
-    ).filter(
-        User.id == int(user_id), User.is_active.is_(True)
-    ).first()
+    result = (
+        db.query(
+            User.family_id,
+            User.username,
+            User.display_name,
+            User.avatar_color,
+            User.theme,
+            User.language,
+            User.default_currency,
+            User.view_mode,
+        )
+        .filter(User.id == int(user_id), User.is_active.is_(True))
+        .first()
+    )
 
     if result is None:
         raise credentials_exception
@@ -396,30 +409,37 @@ def get_current_child_user(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str | None = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
 
     # SECURITY: Verify payload role is child
     if payload_role != "child":
         raise credentials_exception
 
+    if user_id is None or payload_fid is None:
+        raise credentials_exception
+
     # SECURITY: Minimal existence check + role verification + family_id verification
     # Query returns columns needed for child user operations
-    result = db.query(
-        User.family_id,
-        User.username,
-        User.display_name,
-        User.avatar_color,
-        User.theme,
-        User.language,
-        User.default_currency,
-        User.view_mode,
-    ).filter(
-        User.id == int(user_id),
-        User.is_active.is_(True),
-        User.role == "child",
-    ).first()
+    result = (
+        db.query(
+            User.family_id,
+            User.username,
+            User.display_name,
+            User.avatar_color,
+            User.theme,
+            User.language,
+            User.default_currency,
+            User.view_mode,
+        )
+        .filter(
+            User.id == int(user_id),
+            User.is_active.is_(True),
+            User.role == "child",
+        )
+        .first()
+    )
 
     if result is None:
         raise credentials_exception
@@ -484,7 +504,9 @@ def get_current_user_or_child(
     request: Request,
     token: str | None = Depends(oauth2_scheme),
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(
+        None, alias=CHILD_ACCESS_TOKEN_COOKIE
+    ),
     db: Session = Depends(get_db),
 ) -> User:
     """Get current user from Bearer token or Cookie (adult OR child).
@@ -515,23 +537,28 @@ def get_current_user_or_child(
     if payload is None:
         raise credentials_exception
 
-    user_id = payload["sub"]
-    payload_fid = payload["fid"]
-    payload_role = payload["role"]
+    user_id: str | None = payload.get("sub")
+    payload_fid: str | None = payload.get("fid")
+    payload_role: str = payload.get("role", "member")
+
+    if user_id is None or payload_fid is None:
+        raise credentials_exception
 
     # Minimal existence check + family_id verification
-    result = db.query(
-        User.family_id,
-        User.username,
-        User.display_name,
-        User.avatar_color,
-        User.theme,
-        User.language,
-        User.default_currency,
-        User.view_mode,
-    ).filter(
-        User.id == int(user_id), User.is_active.is_(True)
-    ).first()
+    result = (
+        db.query(
+            User.family_id,
+            User.username,
+            User.display_name,
+            User.avatar_color,
+            User.theme,
+            User.language,
+            User.default_currency,
+            User.view_mode,
+        )
+        .filter(User.id == int(user_id), User.is_active.is_(True))
+        .first()
+    )
 
     if result is None:
         raise credentials_exception
@@ -621,7 +648,11 @@ def verify_temp_token(temp_token: str) -> dict:
     try:
         payload = jwt.decode(temp_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") != "temp":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的临时令牌")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的临时令牌"
+            )
         return payload
     except PyJWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="临时令牌已过期或无效")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="临时令牌已过期或无效"
+        )

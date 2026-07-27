@@ -37,7 +37,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import { postProjection, type ProjectionResponse } from '@/api/timeMachine'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'

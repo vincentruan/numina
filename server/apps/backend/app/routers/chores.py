@@ -51,7 +51,7 @@ def list_templates(
 
 @router.patch("/family/chore-templates/{template_id}", response_model=ChoreTemplateResponse)
 def update_template(
-    template_id: int,
+    template_id: str,
     req: ChoreTemplateUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -61,7 +61,7 @@ def update_template(
 
 @router.patch("/family/chore-templates/{template_id}/toggle", response_model=ChoreTemplateResponse)
 def toggle_template(
-    template_id: int,
+    template_id: str,
     is_active: bool = Query(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -71,7 +71,7 @@ def toggle_template(
 
 @router.delete("/family/chore-templates/{template_id}", status_code=204)
 def delete_template(
-    template_id: int,
+    template_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -157,7 +157,7 @@ def list_pending_approvals(
 
 @router.post("/family/chore-approvals/{instance_id}/approve", response_model=ChoreInstanceResponse)
 async def approve_instance(
-    instance_id: int,
+    instance_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_owner),
 ):
@@ -199,7 +199,7 @@ async def approve_instance(
 
 @router.post("/family/chore-approvals/{instance_id}/reject", response_model=ChoreInstanceResponse)
 def reject_instance(
-    instance_id: int,
+    instance_id: str,
     req: RejectRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_owner),
@@ -209,7 +209,7 @@ def reject_instance(
 
 @router.post("/family/chore-instances/{instance_id}/assign", response_model=ChoreInstanceResponse)
 def assign_instance(
-    instance_id: int,
+    instance_id: str,
     req: AssignRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -223,7 +223,7 @@ def assign_instance(
 
 @router.delete("/family/chore-instances/{instance_id}", status_code=204)
 def void_instance(
-    instance_id: int,
+    instance_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -252,7 +252,7 @@ def get_my_chores(
 
 @router.post("/child/chores/{instance_id}/complete", response_model=ChoreInstanceResponse)
 def mark_complete(
-    instance_id: int,
+    instance_id: str,
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
@@ -261,7 +261,7 @@ def mark_complete(
 
 @router.post("/child/chores/{instance_id}/claim", response_model=ChoreInstanceResponse)
 def claim_instance(
-    instance_id: int,
+    instance_id: str,
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
@@ -275,7 +275,7 @@ def claim_instance(
 
 @router.post("/child/chores/{instance_id}/abandon", response_model=ChoreInstanceResponse)
 def abandon_instance(
-    instance_id: int,
+    instance_id: str,
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
@@ -288,7 +288,7 @@ def abandon_instance(
 
 @router.get("/child/chores/{instance_id}/status")
 def get_chore_status(
-    instance_id: int,
+    instance_id: str,
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):

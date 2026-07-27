@@ -5,7 +5,6 @@ import { getTokenUsage } from '@/api/ai-chat'
 import type { UsageMetadata, ChatMessage } from '@/types/ai-chat/message-group'
 import {
   buildTokenDebugStep,
-  buildTokenDebugSteps,
   accumulateUsage,
   formatTokenCount,
   type TokenDebugStep,
@@ -26,11 +25,11 @@ const props = defineProps<{
   /** Whether streaming is in progress (enables polling fallback) */
   isStreaming?: boolean
   /**
-   * The AI message this inline instance belongs to (inline debug mode only).
-   * The message's own usageMetadata + tool_calls are used to build the
-   * per-step debug card.
+   * All messages in the current group/turn (inline mode only).
+   * Used to aggregate usage for per_turn mode and to build debug steps
+   * for all messages in debug mode — matching DeerFlow's per-turn rendering.
    */
-  message?: ChatMessage
+  messages?: ChatMessage[]
   /**
    * Realtime token usage from SSE values events (header mode only).
    * Computed by accumulateUsage(chat.messages) in AIChatBox.vue.
@@ -65,7 +64,31 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
  * For inline mode, usageMetadata prop is used (per-message data).
  */
 const effectiveUsage = computed(() => {
-  // Inline mode: use per-message usageMetadata
+  // Inline per_turn mode: aggregate usage across all messages in the group
+  if (props.mode === 'inline' && preferences.value.inlineMode === 'per_turn') {
+    const msgs = props.messages ?? []
+    if (msgs.length === 0) {
+      // Fallback to single-message usageMetadata
+      if (props.usageMetadata) {
+        return {
+          prompt_tokens: props.usageMetadata.inputTokens,
+          completion_tokens: props.usageMetadata.outputTokens,
+          total_tokens: props.usageMetadata.inputTokens + props.usageMetadata.outputTokens,
+        }
+      }
+      return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+    }
+    const accumulated = accumulateUsage(msgs)
+    if (accumulated) {
+      return {
+        prompt_tokens: accumulated.inputTokens,
+        completion_tokens: accumulated.outputTokens,
+        total_tokens: accumulated.totalTokens,
+      }
+    }
+    return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+  }
+  // Inline step_debug mode: use single-message usageMetadata (legacy compat)
   if (props.mode === 'inline' && props.usageMetadata) {
     return {
       prompt_tokens: props.usageMetadata.inputTokens,
@@ -86,14 +109,19 @@ const effectiveUsage = computed(() => {
 
 const hasUsage = computed(() => effectiveUsage.value.total_tokens > 0)
 
-// Debug step for the current message (inline debug mode only).
-// buildTokenDebugStep derives the per-step label + usage from the message's
-// own usageMetadata and tool_calls.
-const debugStep = computed<TokenDebugStep | null>(() => {
-  if (props.mode !== 'inline') return null
-  if (preferences.value.inlineMode !== 'step_debug') return null
-  if (!props.message) return null
-  return buildTokenDebugStep(props.message, t)
+/**
+ * Debug steps for ALL AI messages in the group (inline debug mode).
+ * Each AI message with usageMetadata produces one step, matching DeerFlow's
+ * MessageTokenUsageDebugList which shows all steps for the turn.
+ */
+const debugSteps = computed<TokenDebugStep[]>(() => {
+  if (props.mode !== 'inline') return []
+  if (preferences.value.inlineMode !== 'step_debug') return []
+  const msgs = props.messages ?? []
+  return msgs
+    .filter(m => m.type === 'ai')
+    .map(m => buildTokenDebugStep(m, t))
+    .filter((s): s is TokenDebugStep => s !== null)
 })
 
 const shouldRenderInline = computed(() => {
@@ -103,10 +131,10 @@ const shouldRenderInline = computed(() => {
   // During streaming (isStreaming=true), the model hasn't finished outputting,
   // so token counts would be incomplete/misleading. Show only when stream ends.
   if (props.isStreaming) return false
-  // per_turn: show summary line when this message has usage AND stream is done
+  // per_turn: show summary line when group has usage AND stream is done
   if (preferences.value.inlineMode === 'per_turn') return hasUsage.value
-  // step_debug: show debug card when this message has a debug step AND stream is done
-  if (preferences.value.inlineMode === 'step_debug') return debugStep.value !== null
+  // step_debug: show debug cards when group has any debug step AND stream is done
+  if (preferences.value.inlineMode === 'step_debug') return debugSteps.value.length > 0
   return false
 })
 
@@ -284,7 +312,9 @@ function onSelectPreset(value: TokenUsageViewPreset) {
     </template>
   </van-popover>
 
-  <!-- Inline mode: per-turn summary (DeerFlow MessageTokenUsageList pattern) -->
+  <!-- Inline mode: per-turn summary (DeerFlow MessageTokenUsageList pattern).
+       Rendered at the turn level with a top-border separator.
+       Token info on one row, actions remain in AssistantMessage footer below. -->
   <div v-else-if="shouldRenderInline && preferences.inlineMode === 'per_turn'" class="token-usage-inline-wrapper">
     <div class="token-usage-summary">
       <span class="token-summary-label">
@@ -305,31 +335,38 @@ function onSelectPreset(value: TokenUsageViewPreset) {
     </div>
   </div>
 
-  <!-- Inline mode: debug step card (DeerFlow MessageTokenUsageDebugList pattern) -->
-  <div v-else-if="shouldRenderInline && preferences.inlineMode === 'step_debug' && debugStep" class="token-debug-wrapper">
-    <div class="token-debug-card-full">
-      <div class="tdc-content">
-        <div class="tdc-label-row">
-          <svg class="tdc-coin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-          <span class="tdc-label">{{ debugStep.label }}</span>
+  <!-- Inline mode: debug step cards (DeerFlow MessageTokenUsageDebugList pattern).
+       All steps for the turn rendered under one separator, matching DeerFlow. -->
+  <div v-else-if="shouldRenderInline && preferences.inlineMode === 'step_debug'" class="token-debug-wrapper">
+    <div class="tdc-step-list">
+      <div
+        v-for="step in debugSteps"
+        :key="step.id"
+        class="tdc-step-card"
+      >
+        <div class="tdc-content">
+          <div class="tdc-label-row">
+            <svg class="tdc-coin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span class="tdc-label">{{ step.label }}</span>
+          </div>
+          <div v-if="step.secondaryLabels.length > 0" class="tdc-badges">
+            <span v-for="(label, i) in step.secondaryLabels" :key="`${step.id}-${i}-${label}`" class="tdc-badge">{{ label }}</span>
+          </div>
+          <div v-if="step.sharedAttribution" class="tdc-shared">{{ t('aiChat.tokenUsageSharedAttribution') }}</div>
+          <div class="tdc-usage-detail">
+            <template v-if="step.usage">
+              {{ t('aiChat.tokensInput') }}: {{ formatTokenCount(step.usage.inputTokens) }}
+              · {{ t('aiChat.tokensOutput') }}: {{ formatTokenCount(step.usage.outputTokens) }}
+            </template>
+            <template v-else>{{ t('aiChat.tokenUsageUnavailableShort') }}</template>
+          </div>
         </div>
-        <div v-if="debugStep.secondaryLabels.length > 0" class="tdc-badges">
-          <span v-for="(label, i) in debugStep.secondaryLabels" :key="`${debugStep.id}-${i}-${label}`" class="tdc-badge">{{ label }}</span>
-        </div>
-        <div v-if="debugStep.sharedAttribution" class="tdc-shared">{{ t('aiChat.tokenUsageSharedAttribution') }}</div>
-        <div class="tdc-usage-detail">
-          <template v-if="debugStep.usage">
-            {{ t('aiChat.tokensInput') }}: {{ formatTokenCount(debugStep.usage.inputTokens) }}
-            · {{ t('aiChat.tokensOutput') }}: {{ formatTokenCount(debugStep.usage.outputTokens) }}
-          </template>
-          <template v-else>{{ t('aiChat.tokenUsageUnavailableShort') }}</template>
-        </div>
+        <span class="tdc-total-badge">
+          {{ step.usage ? `${formatTokenCount(step.usage.totalTokens)} ${t('aiChat.tokenUsageLabel')}` : t('aiChat.tokenUsageUnavailableShort') }}
+        </span>
       </div>
-      <span class="tdc-total-badge">
-        {{ debugStep.usage ? `${formatTokenCount(debugStep.usage.totalTokens)} ${t('aiChat.tokenUsageLabel')}` : t('aiChat.tokenUsageUnavailableShort') }}
-      </span>
     </div>
   </div>
 </template>
@@ -521,10 +558,12 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   border-top: 1px solid var(--van-border-color);
 }
 
-/* Inline per-turn mode (DeerFlow MessageTokenUsageList pattern) */
+/* ── Inline per-turn mode (DeerFlow MessageTokenUsageList pattern) ──
+ * Separator line + token info on one row.
+ * Actions remain in AssistantMessage footer below (no border-top there). */
 .token-usage-inline-wrapper {
   margin-top: 8px;
-  padding-top: 8px;
+  padding: 8px 0 0;
   border-top: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
 }
 
@@ -570,20 +609,28 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Inline debug mode (DeerFlow MessageTokenUsageDebugList pattern) */
+/* ── Inline debug mode (DeerFlow MessageTokenUsageDebugList pattern) ─
+ * Separator line + all step cards listed vertically.
+ * Actions remain in AssistantMessage footer below (no border-top there). */
 .token-debug-wrapper {
   margin-top: 8px;
-  padding-top: 8px;
+  padding: 8px 0 0;
   border-top: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
 }
 
-.token-debug-card-full {
+.tdc-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Per-step card — no individual border; visual grouping via the wrapper separator */
+.tdc-step-card {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.08));
+  padding: 8px 12px;
   border-radius: 8px;
   background: var(--van-background-2, rgba(0, 0, 0, 0.02));
 }

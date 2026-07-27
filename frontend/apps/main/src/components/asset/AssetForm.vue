@@ -286,11 +286,11 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UploaderAfterRead, FormInstance } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
-import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
 import { suggestAssetFields } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
+import { useAuthStore } from '@/stores/auth'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
@@ -311,6 +311,7 @@ const props = withDefaults(defineProps<{
 })
 
 const aiStore = useAIStore()
+const authStore = useAuthStore()
 
 // Form ref for validation
 const formRef = ref<FormInstance>()
@@ -357,7 +358,7 @@ const form = ref<FormState>({
   category_id: '',
   purchase_price: '',
   current_value: '',
-  currency: 'CNY',
+  currency: authStore.user?.default_currency || 'CNY',
   purchase_date: '',
   status: 'in_use',
   location: '',

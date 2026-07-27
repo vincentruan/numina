@@ -2,13 +2,15 @@
 """Admin CLI script for managing family invitation codes.
 
 Commands:
-    generate --count N       Generate N unique invitation codes
-    list [--format csv]      List all codes with status
-    revoke --codes A,B,C     Revoke unused codes
-    link-existing            Create retroactive records for existing families
+    generate --count N          Generate N unique random invitation codes
+    generate --codes A,B,C      Create specific invitation codes (unique, max 20 chars)
+    list [--format csv]         List all codes with status
+    revoke --codes A,B,C        Revoke unused codes
+    link-existing               Create retroactive records for existing families
 
 Usage:
     python scripts/family_invitation_codes.py generate --count 5
+    python scripts/family_invitation_codes.py generate --codes FAMILY01,FAMILY02
     python scripts/family_invitation_codes.py list --format csv --output codes.csv
     python scripts/family_invitation_codes.py revoke --codes ABC123,XYZ789
     python scripts/family_invitation_codes.py link-existing
@@ -25,18 +27,13 @@ from pathlib import Path
 # Add server/ root to path so apps.* and packages.* resolve
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-from apps.backend.app.models.child_bind_token import ChildBindToken  # noqa: F401
-
 from apps.backend.app.database import SessionLocal
-from apps.backend.app.models.asset import Asset  # noqa: F401
-from apps.backend.app.models.category import Category  # noqa: F401
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
-from apps.backend.app.models.liability import Liability  # noqa: F401
-from apps.backend.app.models.snapshot import AssetSnapshot  # noqa: F401
-from apps.backend.app.models.tag import Tag  # noqa: F401
 from apps.backend.app.models.user import User
-from apps.backend.app.models.wish import Wish  # noqa: F401
+
+
+MAX_CODE_LENGTH = 20
 
 
 def generate_code() -> str:
@@ -44,27 +41,56 @@ def generate_code() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 
-def cmd_generate(count: int) -> None:
-    """Generate N unique invitation codes."""
+def cmd_generate(count: int | None, codes: str | None) -> None:
+    """Generate random or create specific invitation codes."""
+    if codes:
+        code_list = [c.strip().upper() for c in codes.split(",") if c.strip()]
+        if not code_list:
+            print("Error: --codes must contain at least one code")
+            sys.exit(1)
+        # Validate length
+        for c in code_list:
+            if len(c) > MAX_CODE_LENGTH:
+                print(f"Error: code '{c}' exceeds max length ({MAX_CODE_LENGTH})")
+                sys.exit(1)
+            if len(c) == 0:
+                print("Error: empty code is not allowed")
+                sys.exit(1)
+        # Check uniqueness among provided codes
+        if len(code_list) != len(set(code_list)):
+            print("Error: duplicate codes in the provided list")
+            sys.exit(1)
+    elif count is not None:
+        code_list = []
+        while len(code_list) < count:
+            code = generate_code()
+            if code not in code_list:
+                code_list.append(code)
+    else:
+        print("Error: specify --count or --codes")
+        sys.exit(1)
+
     db = SessionLocal()
     try:
-        codes = []
-        for _ in range(count):
-            # Ensure uniqueness
-            while True:
-                code = generate_code()
-                existing = db.query(FamilyInvitationCode).filter_by(code=code).first()
-                if existing is None:
-                    break
-
-            invitation_code = FamilyInvitationCode(code=code)
-            db.add(invitation_code)
-            codes.append(code)
+        created = []
+        skipped = []
+        for code in code_list:
+            existing = db.query(FamilyInvitationCode).filter_by(code=code).first()
+            if existing:
+                skipped.append(code)
+                continue
+            db.add(FamilyInvitationCode(code=code))
+            created.append(code)
 
         db.commit()
-        print(f"Generated {count} invitation codes:")
-        for code in codes:
-            print(f"  {code}")
+        if created:
+            print(f"Created {len(created)} invitation codes:")
+            for code in created:
+                print(f"  {code}")
+        if skipped:
+            print(f"Skipped {len(skipped)} already-existing codes:")
+            for code in skipped:
+                print(f"  {code}")
     except Exception as e:
         db.rollback()
         print(f"Error generating codes: {e}")
@@ -248,8 +274,12 @@ def main() -> None:
     gen_parser.add_argument(
         "--count",
         type=int,
-        required=True,
-        help="Number of codes to generate",
+        help="Number of random codes to generate",
+    )
+    gen_parser.add_argument(
+        "--codes",
+        type=str,
+        help="Comma-separated list of specific codes to create (max 20 chars each)",
     )
 
     # List command
@@ -286,7 +316,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "generate":
-        cmd_generate(args.count)
+        cmd_generate(args.count, args.codes)
     elif args.command == "list":
         cmd_list(args.format, args.output)
     elif args.command == "revoke":

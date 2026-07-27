@@ -9,7 +9,7 @@ def record_activity(
     user: User,
     activity_type: str,
     entity_type: str,
-    entity_id: str,
+    entity_id: int | str,
     title: str,
     amount: float | None = None,
 ):

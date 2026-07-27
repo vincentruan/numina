@@ -5,6 +5,7 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.user import User
+from apps.backend.app.schemas.base import ensure_utc
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -30,7 +31,7 @@ def get_recent_activities(
             "entity_id": a.entity_id,
             "title": a.title,
             "amount": a.amount,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "created_at": ensure_utc(a.created_at).isoformat() if a.created_at else None,
         }
         for a in activities
     ]

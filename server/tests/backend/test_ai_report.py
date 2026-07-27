@@ -30,7 +30,10 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
-def _make_sse_streaming_mock(frames: list[tuple[str, dict]] | None = None) -> MagicMock:
+def _make_sse_streaming_mock(
+    frames: list[tuple[str, dict]] | None = None,
+    end_status: str = "complete",
+) -> MagicMock:
     """Build a mock AgentClient for the SSE report passthrough.
 
     ``_stream_asset_report_sse`` is a pure passthrough: it ``await``s
@@ -39,10 +42,8 @@ def _make_sse_streaming_mock(frames: list[tuple[str, dict]] | None = None) -> Ma
     yields the given ``(event, data)`` pairs as ``event:``/``data:`` SSE lines
     (blank line separating events) so the route returns ``text/event-stream``.
 
-    Note: the SSE route does NOT transition the AITask to completed/failed —
-    that lifecycle moved to the agent worker side during the U4 SSE refactor.
-    Backend ``complete_task`` has no report-path caller, so after the stream
-    the task stays ``running``.
+    The terminal ``end`` frame carries ``{"status": end_status}`` so the
+    backend's task-tracking wrapper can transition the AITask row.
     """
     if frames is None:
         frames = [("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]
@@ -53,12 +54,17 @@ def _make_sse_streaming_mock(frames: list[tuple[str, dict]] | None = None) -> Ma
         lines.append(f"data: {json.dumps(data, ensure_ascii=False)}")
         lines.append("")
     lines.append("event: end")
-    lines.append("data: null")
+    lines.append(f"data: {json.dumps({'status': end_status})}")
     lines.append("")
 
     resp = MagicMock()
     resp.status_code = 200
-    resp.aiter_lines = lambda: (_l for _l in lines)
+
+    async def _aiter_lines():
+        for _l in lines:
+            yield _l
+
+    resp.aiter_lines = _aiter_lines
     resp.aread = AsyncMock(return_value=b"")
 
     cm = MagicMock()
@@ -139,12 +145,11 @@ def test_get_report_requires_auth(client):
 # ── POST /ai/report/generate ─────────────────────────────────────────────────────
 
 def test_generate_report_creates_pending_then_completes(client, auth_headers, db):
-    """POST /ai/report/generate/events streams SSE and leaves the task running.
+    """POST /ai/report/generate/events streams SSE and marks task completed.
 
-    U4 SSE refactor: the route is a pure passthrough — it creates the AITask
-    (status=running) and forwards the agent's SSE stream, but task completion
-    is now the agent worker's responsibility (backend ``complete_task`` has no
-    report-path caller). So after the stream the task stays ``running``.
+    The task-tracking wrapper in ``trigger_generate_events`` transitions the
+    AITask from ``running`` to ``completed`` when the agent's SSE stream ends
+    with an ``end`` frame carrying ``status=complete``.
     """
     from apps.backend.app.models.ai_task import AITask
 
@@ -162,7 +167,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
     assert task is not None
-    assert task.status == "running"
+    assert task.status == "completed"
 
 
 def test_generate_report_requires_ai_enabled(client, auth_headers, db):
@@ -225,12 +230,13 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
-    """If agent streaming raises, the route emits an SSE error frame (200) but
-    does NOT transition the AITask — task lifecycle moved to the agent worker
-    in the U4 SSE refactor, so the task stays ``running``.
+    """If agent streaming raises, the route emits an SSE error frame (200) and
+    transitions the AITask to ``failed``.
 
     The passthrough's ``except`` catches the exception and yields a single
     ``event: error`` SSE frame so the frontend gets a graceful close.
+    The task-tracking wrapper's ``finally`` block then marks the AITask as
+    failed since no ``end`` frame with ``status=complete`` was received.
     """
     from apps.backend.app.models.ai_task import AITask
 
@@ -266,11 +272,11 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     # CRITICAL: Consume response to let generator's except/finally block execute
     _ = resp.content
 
-    # Task stays running — backend no longer owns report task completion
+    # Task is marked failed — no completion end frame was received
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
     assert task is not None
-    assert task.status == "running"
+    assert task.status == "failed"
 
 
 # ── Cross-family isolation ──────────────────────────────────────────────────────

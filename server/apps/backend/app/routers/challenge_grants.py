@@ -28,7 +28,7 @@ def list_challenges(
     user: User = Depends(require_adult),
 ):
     """List all family challenges."""
-    items = svc.list_family_challenges(db, user.family_id)
+    items = svc.list_family_challenges(db, str(user.family_id))
     return ChallengeListResponse(items=[ChallengeGrantResponse.model_validate(c) for c in items])
 
 
@@ -76,5 +76,5 @@ def list_active_challenges(
     user: User = Depends(get_current_child_user),
 ):
     """List child's active challenges for progress display."""
-    items = svc.list_child_active_challenges(db, user.id, user.family_id)
+    items = svc.list_child_active_challenges(db, str(user.id), str(user.family_id))
     return ChildChallengeListResponse(items=[ChildChallengeResponse.model_validate(c) for c in items])

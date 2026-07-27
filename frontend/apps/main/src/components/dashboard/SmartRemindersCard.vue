@@ -140,6 +140,7 @@ import { useRemindersStore } from '@/stores/reminders'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem, UpcomingPaymentItem } from '@/api/dashboard'
 import { useCurrency } from '@/composables/useCurrency'
+import { parseLocalDate } from '@/utils/format'
 
 const props = defineProps<{
   idleAssets?: LowUsageItem[]
@@ -228,7 +229,7 @@ function goToLiability(id: string) {
 function daysUntilDue(dueDateStr: string): number {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDateStr)
+  const due = parseLocalDate(dueDateStr)
   due.setHours(0, 0, 0, 0)
   return Math.round((due.getTime() - today.getTime()) / 86_400_000)
 }

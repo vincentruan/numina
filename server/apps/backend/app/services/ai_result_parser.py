@@ -27,24 +27,28 @@ LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1
 LLM_FALLBACK_TIMEOUT_SECONDS = 30.0
 LLM_FALLBACK_MAX_RETRIES = 3  # Maximum retries for LLM fallback extraction
-LLM_FALLBACK_MAX_RETRIES_REPORT = 5  # Maximum retries for report skill (Phase 2 retry loop)
+LLM_FALLBACK_MAX_RETRIES_REPORT = (
+    5  # Maximum retries for report skill (Phase 2 retry loop)
+)
 
 # Pre-compiled regex patterns for markdown table detection (performance optimization)
-_MARKDOWN_TABLE_PATTERN_FULL = re.compile(r'\|[^\n]+\|[^\n]*\|')  # Full table row (at least 2 columns)
-_MARKDOWN_TABLE_PATTERN_PARTIAL = re.compile(r'\|[^\|]+\|[^\|]+')  # Partial table without trailing |
-_MARKDOWN_TABLE_PATTERN_NO_LEADING = re.compile(r'[^\|]*\|[^\|]+\|[^\|]*')  # Table without leading |
+_MARKDOWN_TABLE_PATTERN_FULL = re.compile(
+    r"\|[^\n]+\|[^\n]*\|"
+)  # Full table row (at least 2 columns)
+_MARKDOWN_TABLE_PATTERN_PARTIAL = re.compile(
+    r"\|[^\|]+\|[^\|]+"
+)  # Partial table without trailing |
+_MARKDOWN_TABLE_PATTERN_NO_LEADING = re.compile(
+    r"[^\|]*\|[^\|]+\|[^\|]*"
+)  # Table without leading |
 
 # Regex patterns for structured data extraction (priority order)
 # 1. HTML comment: <!-- STRUCTURED_DATA ... -->
 STRUCTURED_DATA_PATTERN = re.compile(
-    r'<!-- STRUCTURED_DATA\s*\n?(.*?)\n?\s*-->',
-    re.DOTALL
+    r"<!-- STRUCTURED_DATA\s*\n?(.*?)\n?\s*-->", re.DOTALL
 )
 # 2. Markdown JSON fence: ```json ... ```
-JSON_FENCE_PATTERN = re.compile(
-    r'```json\s*\n(.*?)\n\s*```',
-    re.DOTALL
-)
+JSON_FENCE_PATTERN = re.compile(r"```json\s*\n(.*?)\n\s*```", re.DOTALL)
 
 # Expected schemas per skill_id
 # U7: 5 外扩 trigger skill (alerts/disposal/spending_leak/allocation/liability) 全栈删除，
@@ -69,10 +73,7 @@ SKILL_SCHEMAS = {
                         "label": {"type": "string"},
                         "score": {"type": "integer", "minimum": 1, "maximum": 5},
                         "narrative": {"type": "string"},
-                        "suggestions": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
+                        "suggestions": {"type": "array", "items": {"type": "string"}},
                         "data": {"type": "object"},
                     },
                 },
@@ -80,8 +81,6 @@ SKILL_SCHEMAS = {
         },
     },
 }
-
-
 
 
 def _extract_bare_json(answer_text: str) -> str | None:
@@ -96,7 +95,7 @@ def _extract_bare_json(answer_text: str) -> str | None:
 
     best: str | None = None
     for i, ch in enumerate(answer_text):
-        if ch in ('{', '['):
+        if ch in ("{", "["):
             block = _balanced_walk(answer_text, i)
             if block is not None and (best is None or len(block) > len(best)):
                 best = block
@@ -106,7 +105,7 @@ def _extract_bare_json(answer_text: str) -> str | None:
 def _balanced_walk(text: str, start: int) -> str | None:
     """Walk from `start` forward, returning the balanced substring or None."""
     open_ch = text[start]
-    close_ch = ']' if open_ch == '[' else '}'
+    close_ch = "]" if open_ch == "[" else "}"
     depth = 0
     in_string = False
     escape = False
@@ -115,7 +114,7 @@ def _balanced_walk(text: str, start: int) -> str | None:
         if escape:
             escape = False
             continue
-        if ch == '\\' and in_string:
+        if ch == "\\" and in_string:
             escape = True
             continue
         if ch == '"':
@@ -128,7 +127,7 @@ def _balanced_walk(text: str, start: int) -> str | None:
         elif ch == close_ch:
             depth -= 1
             if depth == 0:
-                return text[start:i + 1]
+                return text[start : i + 1]
     return None
 
 
@@ -159,7 +158,9 @@ def _extract_structured_block(answer_text: str) -> tuple[str | None, str]:
     return None, "regex_failed"
 
 
-def _unwrap_agent_envelope(data: dict[str, Any], skill_id: str) -> dict[str, Any] | None:
+def _unwrap_agent_envelope(
+    data: dict[str, Any], skill_id: str
+) -> dict[str, Any] | None:
     """Unwrap agent envelope formats before schema validation.
 
     Some LLMs output JSON wrapped in backend-style envelope:
@@ -184,7 +185,9 @@ def _unwrap_agent_envelope(data: dict[str, Any], skill_id: str) -> dict[str, Any
             if skill_id == "report" and "report" in inner:
                 report_data = inner.get("report")
                 if isinstance(report_data, dict):
-                    logger.info(f"[{skill_id}] unwrapped agent envelope: code={data.get('code')}, data.report")
+                    logger.info(
+                        f"[{skill_id}] unwrapped agent envelope: code={data.get('code')}, data.report"
+                    )
                     return report_data
             # For other skills, data might be directly the result
             # Check if inner has the required fields for the skill
@@ -192,7 +195,9 @@ def _unwrap_agent_envelope(data: dict[str, Any], skill_id: str) -> dict[str, Any
             if schema and schema.get("type") == "object":
                 required = schema.get("required", [])
                 if all(k in inner for k in required):
-                    logger.info(f"[{skill_id}] unwrapped agent envelope: code={data.get('code')}, data direct")
+                    logger.info(
+                        f"[{skill_id}] unwrapped agent envelope: code={data.get('code')}, data direct"
+                    )
                     return inner
     return data
 
@@ -212,7 +217,12 @@ def _validate_json(data: Any, skill_id: str) -> bool:
             return False
         # Check first item has required fields
         if data:
-            required = schema["items"].get("required", [])
+            items_schema = schema["items"]
+            required = (
+                items_schema.get("required", [])
+                if isinstance(items_schema, dict)
+                else []
+            )
             if not all(k in data[0] for k in required):
                 return False
     elif schema["type"] == "object":
@@ -255,35 +265,55 @@ async def parse_skill_result(
             data = repair_json(block, return_objects=True)
             # Type guard: repair_json may return str on partial failure
             if not isinstance(data, (dict, list)):
-                logger.warning(f"[{skill_id}] repair_json returned {type(data).__name__}, expected dict/list")
+                logger.warning(
+                    f"[{skill_id}] repair_json returned {type(data).__name__}, expected dict/list"
+                )
                 data = None
             # Unwrap envelope format before returning
-            unwrapped_data = _unwrap_agent_envelope(data, skill_id) if isinstance(data, dict) else data
+            unwrapped_data = (
+                _unwrap_agent_envelope(data, skill_id)
+                if isinstance(data, dict)
+                else data
+            )
             if unwrapped_data is not None and _validate_json(unwrapped_data, skill_id):
-                logger.info(f"[{skill_id}] regex extraction succeeded via {method}, got {len(unwrapped_data) if isinstance(unwrapped_data, list) else 1} items")
+                logger.info(
+                    f"[{skill_id}] regex extraction succeeded via {method}, got {len(unwrapped_data) if isinstance(unwrapped_data, list) else 1} items"
+                )
                 return unwrapped_data, method, None
             elif data is not None and _validate_json(data, skill_id):
                 # _validate_json already unwrapped internally, return data directly
                 # This path handles cases where envelope was detected but inner structure validates
-                logger.info(f"[{skill_id}] regex extraction succeeded via {method} (fallback), got {len(data) if isinstance(data, list) else 1} items")
+                logger.info(
+                    f"[{skill_id}] regex extraction succeeded via {method} (fallback), got {len(data) if isinstance(data, list) else 1} items"
+                )
                 return data, method, None
             else:
-                logger.warning(f"[{skill_id}] regex extracted JSON via {method} but validation failed")
+                logger.warning(
+                    f"[{skill_id}] regex extracted JSON via {method} but validation failed"
+                )
         except (ValueError, TypeError) as e:
-            logger.warning(f"[{skill_id}] regex found block via {method} but JSON repair failed: {e}")
+            logger.warning(
+                f"[{skill_id}] regex found block via {method} but JSON repair failed: {e}"
+            )
 
     # Step 2: LLM fallback (convert answer text to structured JSON)
-    fallback_data, fallback_error_type = await _llm_fallback_extract(skill_id, answer_text, family_id, db)
+    fallback_data, fallback_error_type = await _llm_fallback_extract(
+        skill_id, answer_text, family_id, db
+    )
     if fallback_data is not None:
         return fallback_data, "llm_fallback_hit", None
 
     # Return specific error type for user messaging
     error_type = fallback_error_type or "extraction_failed"
-    logger.warning(f"[{skill_id}] structured data extraction failed (error_type={error_type}), no results persisted")
+    logger.warning(
+        f"[{skill_id}] structured data extraction failed (error_type={error_type}), no results persisted"
+    )
     return None, "failed", error_type
 
 
-def _build_extraction_prompt(skill_id: str, answer_text: str, retry_count: int = 0) -> str:
+def _build_extraction_prompt(
+    skill_id: str, answer_text: str, retry_count: int = 0
+) -> str:
     """Build extraction prompt for LLM fallback.
 
     For report skill, includes special handling for markdown tables.
@@ -365,7 +395,9 @@ def _build_extraction_prompt_with_feedback(
     repeating the same mistakes on retries.
     """
     # Build the base prompt first
-    base_prompt = _build_extraction_prompt(skill_id, answer_text, retry_count=retry_count)
+    base_prompt = _build_extraction_prompt(
+        skill_id, answer_text, retry_count=retry_count
+    )
 
     # If no failures or first attempt, return base prompt
     if retry_count == 0 or not failure_reasons:
@@ -416,7 +448,9 @@ def _format_failure_reason(reason: str) -> str:
         error_msg = reason.split(": ", 1)[1] if ": " in reason else reason
         return f"JSON 解析失败：{error_msg}"
     elif reason == "markdown_table_in_narrative":
-        return "narrative 字段包含了 markdown 表格格式，这是禁止的！必须使用无序列表格式"
+        return (
+            "narrative 字段包含了 markdown 表格格式，这是禁止的！必须使用无序列表格式"
+        )
     elif reason == "schema_validation_failed":
         return "JSON 结构验证失败，缺少必需字段或字段类型错误"
     else:
@@ -453,17 +487,23 @@ async def _llm_fallback_extract(
     )
 
     if not configs:
-        logger.warning(f"[{skill_id}] LLM fallback: no active provider for family {family_id}")
+        logger.warning(
+            f"[{skill_id}] LLM fallback: no active provider for family {family_id}"
+        )
         return None, "no_provider"
 
     config = configs[0]
-    api_key = decrypt_api_key(config.api_key_encrypted)
+    api_key = decrypt_api_key(config.api_key_encrypted or "")
     if not api_key:
         logger.warning(f"[{skill_id}] LLM fallback: could not decrypt API key")
         return None, "api_key_error"
 
     # Use higher retry count for report skill (Phase 2 retry loop)
-    max_retries = LLM_FALLBACK_MAX_RETRIES_REPORT if skill_id == "report" else LLM_FALLBACK_MAX_RETRIES
+    max_retries = (
+        LLM_FALLBACK_MAX_RETRIES_REPORT
+        if skill_id == "report"
+        else LLM_FALLBACK_MAX_RETRIES
+    )
 
     # Track failure reasons for feedback in retries
     failure_reasons: list[str] = []
@@ -491,21 +531,29 @@ async def _llm_fallback_extract(
             )
         except TimeoutError:
             failure_reasons.append("timeout")
-            logger.warning(f"[{skill_id}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})")
+            logger.warning(
+                f"[{skill_id}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})"
+            )
             continue  # Retry on timeout
         except Exception as e:
             error_str = str(e)
             # Detect quota/throttling errors for specific user messaging
             if _is_quota_error(error_str):
                 last_iteration_quota_error = True
-                logger.warning(f"[{skill_id}] LLM fallback quota error: {e} (retry {retry + 1})")
+                logger.warning(
+                    f"[{skill_id}] LLM fallback quota error: {e} (retry {retry + 1})"
+                )
             failure_reasons.append(f"call_failed: {type(e).__name__}")
-            logger.warning(f"[{skill_id}] LLM fallback call failed: {e} (retry {retry + 1})")
+            logger.warning(
+                f"[{skill_id}] LLM fallback call failed: {e} (retry {retry + 1})"
+            )
             continue  # Retry on error
 
         if not raw:
             failure_reasons.append("empty_response")
-            logger.warning(f"[{skill_id}] LLM fallback returned empty response (retry {retry + 1})")
+            logger.warning(
+                f"[{skill_id}] LLM fallback returned empty response (retry {retry + 1})"
+            )
             continue
 
         cleaned = _strip_markdown_fence(raw)
@@ -516,32 +564,50 @@ async def _llm_fallback_extract(
             # Type guard: repair_json may return str on partial failure
             if not isinstance(data, (dict, list)):
                 failure_reasons.append(f"repair_json_returned_{type(data).__name__}")
-                logger.warning(f"[{skill_id}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list (retry {retry + 1})")
+                logger.warning(
+                    f"[{skill_id}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list (retry {retry + 1})"
+                )
                 continue
         except (ValueError, TypeError) as e:
             failure_reasons.append(f"json_repair_failed: {e}")
-            logger.warning(f"[{skill_id}] LLM fallback JSON repair failed: {e} (retry {retry + 1})")
+            logger.warning(
+                f"[{skill_id}] LLM fallback JSON repair failed: {e} (retry {retry + 1})"
+            )
             continue
 
         # Unwrap envelope format before validation and return
-        unwrapped_data = _unwrap_agent_envelope(data, skill_id) if isinstance(data, dict) else data
+        unwrapped_data = (
+            _unwrap_agent_envelope(data, skill_id) if isinstance(data, dict) else data
+        )
         # Additional validation for report: check narrative fields don't contain markdown tables
         # Apply to unwrapped data if envelope was present
         data_to_check = unwrapped_data if isinstance(unwrapped_data, dict) else data
-        if skill_id == "report" and isinstance(data_to_check, dict) and _contains_markdown_table(data_to_check):
+        if (
+            skill_id == "report"
+            and isinstance(data_to_check, dict)
+            and _contains_markdown_table(data_to_check)
+        ):
             failure_reasons.append("markdown_table_in_narrative")
-            logger.warning(f"[{skill_id}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})")
+            logger.warning(
+                f"[{skill_id}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})"
+            )
             continue
 
         if _validate_json(data, skill_id):
-            logger.info(f"[{skill_id}] LLM fallback extraction succeeded on retry {retry + 1}")
+            logger.info(
+                f"[{skill_id}] LLM fallback extraction succeeded on retry {retry + 1}"
+            )
             # Return unwrapped data if envelope was present
             return unwrapped_data if isinstance(unwrapped_data, dict) else data, None
 
         failure_reasons.append("schema_validation_failed")
-        logger.warning(f"[{skill_id}] LLM fallback JSON validation failed (retry {retry + 1})")
+        logger.warning(
+            f"[{skill_id}] LLM fallback JSON validation failed (retry {retry + 1})"
+        )
 
-    logger.warning(f"[{skill_id}] LLM fallback exhausted {max_retries} retries, giving up")
+    logger.warning(
+        f"[{skill_id}] LLM fallback exhausted {max_retries} retries, giving up"
+    )
     # Return specific error type if the LAST iteration was a quota error
     if last_iteration_quota_error:
         return None, "quota_exceeded"
@@ -557,7 +623,10 @@ def _is_quota_error(error_str: str) -> bool:
 
     # HTTP 429 status - match as standalone status code, not part of other numbers
     # Matches: "429", "status 429", "429 Too Many Requests", "HTTP 429"
-    if re.search(r"(?:^|\D)429(?:\D|$)", error_str) or "too many requests" in error_lower:
+    if (
+        re.search(r"(?:^|\D)429(?:\D|$)", error_str)
+        or "too many requests" in error_lower
+    ):
         return True
 
     # Quota-specific patterns - must be quota context, not general billing
@@ -605,18 +674,27 @@ def _contains_markdown_table(data: dict) -> bool:
                 if narrative:
                     for pattern in table_patterns:
                         if pattern.search(narrative):
-                            logger.debug(f"Found markdown table in indicator[{indicator.get('key', '?')}].narrative")
+                            logger.debug(
+                                f"Found markdown table in indicator[{indicator.get('key', '?')}].narrative"
+                            )
                             return True
 
     # Check legacy sections (old format)
-    sections = ["net_worth_health", "allocation_analysis", "liability_pressure", "asset_efficiency"]
+    sections = [
+        "net_worth_health",
+        "allocation_analysis",
+        "liability_pressure",
+        "asset_efficiency",
+    ]
     for section in sections:
         if section in data and isinstance(data[section], dict):
             narrative = data[section].get("narrative", "")
             if narrative:
                 for pattern in table_patterns:
                     if pattern.search(narrative):
-                        logger.debug(f"Found markdown table in {section}.narrative (pattern: {pattern.pattern})")
+                        logger.debug(
+                            f"Found markdown table in {section}.narrative (pattern: {pattern.pattern})"
+                        )
                         return True
 
     # Also check summary field
@@ -624,7 +702,9 @@ def _contains_markdown_table(data: dict) -> bool:
     if summary:
         for pattern in table_patterns:
             if pattern.search(summary):
-                logger.debug(f"Found markdown table in summary (pattern: {pattern.pattern})")
+                logger.debug(
+                    f"Found markdown table in summary (pattern: {pattern.pattern})"
+                )
                 return True
 
     return False
@@ -649,28 +729,39 @@ async def _call_llm(
 ) -> str | None:
     if provider == "anthropic":
         import anthropic
-        kwargs: dict[str, Any] = {"api_key": api_key, "timeout": LLM_FALLBACK_TIMEOUT_SECONDS}
+
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": LLM_FALLBACK_TIMEOUT_SECONDS,
+        }
         if base_url:
             kwargs["base_url"] = base_url
-        client = anthropic.AsyncAnthropic(**kwargs)
+        anthropic_client = anthropic.AsyncAnthropic(**kwargs)
         try:
-            msg = await client.messages.create(
+            msg = await anthropic_client.messages.create(
                 model=model_id,
                 max_tokens=LLM_FALLBACK_MAX_TOKENS,
                 temperature=LLM_FALLBACK_TEMPERATURE,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return msg.content[0].text if msg.content else None
+            if msg.content:
+                first_block = msg.content[0]
+                return first_block.text if hasattr(first_block, "text") else None
+            return None
         finally:
-            await client.close()
+            await anthropic_client.close()
     else:
         from openai import AsyncOpenAI
-        kwargs = {"api_key": api_key, "timeout": LLM_FALLBACK_TIMEOUT_SECONDS}
+
+        openai_kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": LLM_FALLBACK_TIMEOUT_SECONDS,
+        }
         if base_url:
-            kwargs["base_url"] = base_url
-        client = AsyncOpenAI(**kwargs)
+            openai_kwargs["base_url"] = base_url
+        openai_client = AsyncOpenAI(**openai_kwargs)
         try:
-            resp = await client.chat.completions.create(
+            resp = await openai_client.chat.completions.create(
                 model=model_id,
                 max_tokens=LLM_FALLBACK_MAX_TOKENS,
                 temperature=LLM_FALLBACK_TEMPERATURE,
@@ -678,4 +769,4 @@ async def _call_llm(
             )
             return resp.choices[0].message.content if resp.choices else None
         finally:
-            await client.close()
+            await openai_client.close()

@@ -148,11 +148,12 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset, Liability, LiabilityRequestPayload } from '@/types'
-import { getLiabilityField } from '@/types'
+import { useAuthStore } from '@/stores/auth'
 import { getAssets } from '@/api/assets'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const { t } = useI18n()
+const authStore = useAuthStore()
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Liability>
@@ -188,7 +189,7 @@ const form = ref<FormState>({
   category: 'mortgage',
   original_amount: '',
   remaining_amount: '',
-  currency: 'CNY',
+  currency: authStore.user?.default_currency || 'CNY',
   monthly_payment: '',
   interest_rate: '',
   start_date: '',

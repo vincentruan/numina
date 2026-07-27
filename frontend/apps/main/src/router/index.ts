@@ -3,7 +3,7 @@ import { getUser } from '@/utils/storage'
 import { getChildBaseUrl } from '@/utils/childApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, markRouterNprogressActive } from '@/composables/usePageLoading'
+import { completeGlobalLoading, registerRouterTimeout, markRouterNprogressActive } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 
@@ -45,6 +45,12 @@ const router = createRouter({
       path: '/join-family',
       name: 'JoinFamily',
       component: () => import('@/pages/JoinFamilyPage.vue'),
+      meta: { guest: true }
+    },
+    {
+      path: '/logout',
+      name: 'Logout',
+      component: () => import('@/pages/LogoutPage.vue'),
       meta: { guest: true }
     },
     {
@@ -400,12 +406,16 @@ router.beforeEach((to, _from, next) => {
 
 router.afterEach((_to) => {
   // Unified lifecycle: all pages (including hasSkeleton) go through the same
-  // 200ms timeout. Pages that call increment() within 200ms take over NProgress
+  // timeout. Pages that call increment() before the timeout take over NProgress
   // control; pages without async work auto-complete via this timeout.
   // This prevents the flicker caused by start→done→start across router/page.
+  //
+  // Timeout must exceed the Transition out-in delay (~150ms leave + ~150ms
+  // enter = ~300ms worst case) so increment() always fires before the timeout.
+  // 500ms covers the transition plus a generous GC / scheduler buffer.
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
-  }, 200)
+  }, 500)
   registerRouterTimeout(timeoutId)
 })
 

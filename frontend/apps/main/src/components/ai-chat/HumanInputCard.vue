@@ -36,6 +36,9 @@ const props = withDefaults(defineProps<{
   interruptId: string
 }>(), {
   status: 'pending',
+  options: undefined,
+  context: undefined,
+  answer: undefined,
 })
 
 const emit = defineEmits<{
@@ -97,7 +100,7 @@ function handleCustomKeydown(e: KeyboardEvent) {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="header-icon" aria-hidden="true">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
       </svg>
-      <span class="header-title" :id="`title-${interruptId}`">{{ t('aiChat.clarification.title') }}</span>
+      <span :id="`title-${interruptId}`" class="header-title">{{ t('aiChat.clarification.title') }}</span>
     </div>
 
     <!-- Context (optional background) -->
@@ -106,7 +109,7 @@ function handleCustomKeydown(e: KeyboardEvent) {
     </div>
 
     <!-- Question -->
-    <div class="card-question" :id="`question-${interruptId}`">
+    <div :id="`question-${interruptId}`" class="card-question">
       <MarkdownContent :content="question" />
     </div>
 

@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import type { Asset } from '@/types'
-import { formatCurrency, formatDate } from './format'
+import { formatCurrency, formatDate, parseLocalDate } from './format'
 
 /**
  * HTML escape function for XSS prevention.
@@ -46,7 +46,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
   `
 
   // 计算使用天数
-  const purchaseDate = new Date(asset.purchase_date)
+  const purchaseDate = parseLocalDate(asset.purchase_date)
   const today = new Date()
   const daysUsed = Math.floor((today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24))
 

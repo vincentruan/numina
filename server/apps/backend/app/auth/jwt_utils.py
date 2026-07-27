@@ -3,6 +3,8 @@
 Centralizes ID-to-string conversions for JWT payloads, eliminating scattered str() calls.
 """
 
+from typing import Any
+
 from apps.backend.app.models.user import User
 
 
@@ -31,7 +33,7 @@ def user_claims(user: User, **extra: object) -> dict[str, object]:
     }
 
 
-def id_keyed_dict(items: dict[int, any]) -> dict[str, any]:
+def id_keyed_dict(items: dict[int, Any]) -> dict[str, Any]:
     """Convert integer keys to strings for JSON serialization.
 
     Use when building dicts with Snowflake IDs as keys (e.g., {child_id: balance}).

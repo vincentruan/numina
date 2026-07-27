@@ -48,6 +48,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     tool_groups: null,
     agent_type: 'custom',
     is_enabled: true,
+    is_published: true,
     display_order: 0,
     can_edit: true,
     can_delete: true,

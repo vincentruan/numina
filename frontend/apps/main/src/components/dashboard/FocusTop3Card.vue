@@ -159,6 +159,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
 import { useCurrency } from '@/composables/useCurrency'
+import { parseLocalDate } from '@/utils/format'
 import type { Liability, Wish } from '@/types'
 import { wishProgress } from '@/utils/wishProgress'
 
@@ -235,7 +236,7 @@ function wishRemaining(wish: Wish): number {
 
 function isWishOverdue(wish: Wish): boolean {
   if (!wish.target_date) return false
-  return new Date(wish.target_date).getTime() < Date.now()
+  return parseLocalDate(wish.target_date).getTime() < Date.now()
 }
 
 // Months to reach goal = remaining / monthly_saving. Pure estimate; no date math so it

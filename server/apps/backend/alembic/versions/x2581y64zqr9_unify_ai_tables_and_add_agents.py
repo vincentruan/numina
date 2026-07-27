@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "x2581y64zqr9"
-down_revision: str | None = ("v1461w65xpq7", "u1470x53wpq8")
+down_revision: tuple[str, ...] = ("v1461w65xpq7", "u1470x53wpq8")  # type: ignore[assignment]
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

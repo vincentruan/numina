@@ -57,6 +57,7 @@ import ChildAssetDetailSkeleton from '@/components/skeletons/ChildAssetDetailSke
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { getChildAsset, type ChildAsset } from '@/api/treasures'
+import { parseLocalDate } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t, locale } = useI18n()
@@ -69,7 +70,7 @@ const loading = ref(true)
 const error = ref('')
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 async function load() {

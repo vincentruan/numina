@@ -25,6 +25,7 @@ import ArtifactFileList from './ArtifactFileList.vue'
 import HumanInputCard from './HumanInputCard.vue'
 import type {
   MessageGroup,
+  ChatMessage,
   AssistantProcessingGroup,
   AssistantClarificationGroup,
   AssistantPresentFilesGroup,
@@ -191,6 +192,17 @@ const presentFilesData = computed(() => {
   }
 })
 
+// Assistant group: extract all AI messages for group-level token usage rendering
+const assistantMessages = computed((): ChatMessage[] => {
+  if (props.group.type !== 'assistant') return []
+  return props.group.messages.filter(m => m.type === 'ai')
+})
+
+/** Whether any AI message in this group has usage data (for TokenUsage visibility) */
+const groupHasAiUsage = computed(() =>
+  assistantMessages.value.some(m => m.type === 'ai' && m.usageMetadata)
+)
+
 // Subagent group: extract task IDs
 const subagentTaskIds = computed(() => {
   if (props.group.type !== 'assistant:subagent') return []
@@ -235,24 +247,20 @@ const subagentTaskIds = computed(() => {
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
         @branch="handleBranch"
-      >
-        <!-- Per-message token usage (slotted between content and footer so the
-             order is: content -> token usage -> timestamp/actions -> suggestions).
-             Visibility is controlled by the global token-usage preset inside
-             TokenUsage (off/summary/per_turn/debug). The `message` prop feeds
-             the debug-mode per-step card; per_turn mode only needs
-             usageMetadata. -->
-        <template #token-usage>
-          <TokenUsage
-            v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
-            mode="inline"
-            :thread-id="threadId || null"
-            :usage-metadata="assistantMessage.usageMetadata"
-            :is-streaming="isLoading && isLastAssistant"
-            :message="assistantMessage"
-          />
-        </template>
-      </AssistantMessage>
+      />
+      <!-- Per-turn token usage (DeerFlow pattern: rendered at group level, not
+           per-message). Aggregates usage across all AI messages in the group
+           for per_turn mode; builds debug cards for all messages in debug mode.
+           Visibility is controlled by the global token-usage preset inside
+           TokenUsage (off/per_turn/debug). -->
+      <TokenUsage
+        v-if="assistantMessage.type === 'ai' && groupHasAiUsage"
+        mode="inline"
+        :thread-id="threadId || null"
+        :usage-metadata="assistantMessage.usageMetadata"
+        :is-streaming="isLoading && isLastAssistant"
+        :messages="assistantMessages"
+      />
     </template>
 
     <!-- Processing: ChainOfThought -->

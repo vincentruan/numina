@@ -19,6 +19,7 @@ class AgentCreateRequest(BaseModel):
     model: str | None = None
     subagent_enabled: bool = False
     tool_groups: list[str] | None = None
+    is_published: bool = False
 
     @field_validator("agent_name")
     @classmethod
@@ -39,6 +40,7 @@ class AgentUpdateRequest(BaseModel):
     subagent_enabled: bool | None = None
     tool_groups: list[str] | None = None
     display_order: int | None = None
+    is_published: bool | None = None
 
 
 class AgentResponse(SnowflakeBase):
@@ -56,6 +58,7 @@ class AgentResponse(SnowflakeBase):
     tool_groups: list[str] | None
     agent_type: str  # system | custom
     is_enabled: bool
+    is_published: bool
     display_order: int
     created_by: int | None
     created_at: datetime

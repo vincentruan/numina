@@ -58,7 +58,7 @@ describe('useThreadChat - clarification artifact extraction', () => {
     const { getClient } = await import('@/api/ai-chat')
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: mockRunsStream },
-    } as any)
+    } as unknown as ReturnType<typeof getClient>)
 
     const { useThreadChat } = await import('../useThreadChat')
     const chat = useThreadChat()

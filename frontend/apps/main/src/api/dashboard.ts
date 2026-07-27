@@ -1,5 +1,5 @@
 import http from './index'
-import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary } from '@/types'
+import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse } from '@/types'
 
 export interface ExpiringSoonItem {
   id: string
@@ -146,6 +146,10 @@ export function getInvestmentReturns(limit = 10) {
 
 export function getEducationRewardSummary() {
   return http.get<EducationRewardSummary>('/dashboard/education-reward-summary')
+}
+
+export function getLiabilityAllocation() {
+  return http.get<LiabilityAllocationResponse>('/dashboard/liability-allocation')
 }
 
 export function getRecentActivities(limit = 20) {

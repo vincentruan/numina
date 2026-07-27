@@ -37,9 +37,10 @@
               <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
               <van-popover
                 :show="activePopover === stat.type"
-                @update:show="(v) => (activePopover = v ? stat.type : null)"
-                placement="bottom"
+                :placement="stat.type === 'alerts' ? 'bottom-end' : 'bottom'"
                 :offset="[0, 8]"
+                :teleport="null"
+                @update:show="(v) => (activePopover = v ? stat.type : null)"
               >
                 <div class="stat-popover-content">
                   <div class="stat-popover-header">
@@ -100,6 +101,7 @@
         </svg>
         {{ t('aiHub.latestReport') }}
       </div>
+      <!-- eslint-disable vue/no-v-html -->
       <p class="report-summary-text" v-html="renderedSummary" />
       <div class="report-summary-cta">
         {{ t('aiHub.viewFullReport') }}
@@ -205,6 +207,44 @@
         <div class="agent-section__content" :class="{ collapsed: analysisAppsCollapsed }">
           <!-- Analysis apps list -->
           <div class="app-list">
+            <!-- Trend Analysis app card -->
+            <div
+              class="app-list-item"
+              role="button"
+              tabindex="0"
+              @click="goToAnalytics('trend')"
+              @keydown.enter="goToAnalytics('trend')"
+              @keydown.space.prevent="goToAnalytics('trend')"
+            >
+              <div class="app-list-item__icon">
+                <SvgIcon name="trend" class="icon-svg" />
+              </div>
+              <div class="app-list-item__body">
+                <div class="app-list-item__name">{{ t('aiHub.trendAnalysisCardTitle') }}</div>
+                <div class="app-list-item__desc">{{ t('aiHub.trendAnalysisCardDesc') }}</div>
+              </div>
+              <van-icon name="arrow" class="app-list-item__arrow" />
+            </div>
+
+            <!-- Asset Insights app card -->
+            <div
+              class="app-list-item"
+              role="button"
+              tabindex="0"
+              @click="goToAnalytics('insight')"
+              @keydown.enter="goToAnalytics('insight')"
+              @keydown.space.prevent="goToAnalytics('insight')"
+            >
+              <div class="app-list-item__icon">
+                <SvgIcon name="insight" class="icon-svg" />
+              </div>
+              <div class="app-list-item__body">
+                <div class="app-list-item__name">{{ t('aiHub.insightAnalysisCardTitle') }}</div>
+                <div class="app-list-item__desc">{{ t('aiHub.insightAnalysisCardDesc') }}</div>
+              </div>
+              <van-icon name="arrow" class="app-list-item__arrow" />
+            </div>
+
             <!-- Time Machine app card -->
             <div
               class="app-list-item"
@@ -232,7 +272,7 @@
     <!-- Chat input directly rendered (InputBox handles its own fixed bottom positioning) -->
     <InputBox
       v-model="chatInput"
-      v-model:webSearch="webSearch"
+      v-model:web-search="webSearch"
       :disabled="!selectedAgent"
       :agents="agentChoices"
       :agent-id="selectedAgent?.id"
@@ -280,8 +320,9 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getUser } from '@/utils/storage'
+import { parseApiDate } from '@/utils/format'
 import { getAIReport } from '@/api/ai'
 import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
@@ -304,11 +345,14 @@ import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
 import { usePageLoading } from '@/composables/usePageLoading'
 
+defineOptions({ name: 'AIHub' })
+
 const NUMINA_AGENT_NAME = 'numina'
 
 const { t } = useI18n()
 
 const router = useRouter()
+const route = useRoute()
 const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
@@ -352,10 +396,20 @@ watch(
   { immediate: true },
 )
 
-// Analysis apps list (currently only Time Machine)
+// Analysis apps list (trend / insight / time-machine)
 const analysisApps = computed(() => [
+  { id: 'trend-analysis', name: t('aiHub.trendAnalysisCardTitle'), desc: t('aiHub.trendAnalysisCardDesc'), route: '/dashboard/analytics', tab: 'trend' },
+  { id: 'insight-analysis', name: t('aiHub.insightAnalysisCardTitle'), desc: t('aiHub.insightAnalysisCardDesc'), route: '/dashboard/analytics', tab: 'insight' },
   { id: 'time-machine', name: t('aiHub.timeMachineCardTitle'), desc: t('aiHub.timeMachineCardDesc'), route: '/ai/time-machine' },
 ])
+
+function goToAnalytics(tab: 'trend' | 'insight') {
+  router.push({
+    path: '/dashboard/analytics',
+    query: { tab },
+    state: { from: route.path },
+  })
+}
 
 function toggleMyAgents() {
   myAgentsCollapsed.value = !myAgentsCollapsed.value
@@ -370,16 +424,11 @@ const numinaAgent = computed(() =>
 )
 
 // Agent choices for picker - only actual agents, not apps like Time Machine
+// Built-in agents: only 小鸣 (numina) is suitable for chat; ignore other system agents.
 const agentChoices = computed<Agent[]>(() => [
-  ...agentStore.systemAgents.filter((a) => a.is_enabled),
+  ...agentStore.systemAgents.filter((a) => a.is_enabled && a.agent_name === NUMINA_AGENT_NAME),
   ...agentStore.customAgents.filter((a) => a.is_enabled),
 ])
-
-// Dynamic placeholder based on selected agent
-const chatPlaceholder = computed(() => {
-  if (!selectedAgent.value) return t('aiHub.chatPlaceholderNoAgent')
-  return t('aiHub.chatPlaceholderWithAgent', { name: selectedAgent.value.display_name })
-})
 
 // Default selected agent to 小鸣 once loaded
 watch(
@@ -433,10 +482,6 @@ function submitChatFromInput(payload: SubmitPayload) {
   submitChat()
 }
 
-const PURIFY_CONFIG = {
-  USE_PROFILES: { html: true },
-  ALLOW_DATA_ATTR: false,
-} as const
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
@@ -468,7 +513,7 @@ const renderedSummary = computed(() => {
 
 const reportAge = computed(() => {
   if (!reportGeneratedAt.value) return ''
-  const diff = Date.now() - new Date(reportGeneratedAt.value).getTime()
+  const diff = Date.now() - parseApiDate(reportGeneratedAt.value).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return t('aiHub.justNow')
   if (mins < 60) return t('aiHub.minutesAgo', { minutes: mins })
@@ -571,7 +616,7 @@ async function refreshReport(silent?: boolean) {
 
   // 1-hour cooldown: prevent unnecessary regenerations if report is fresh
   if (reportGeneratedAt.value && !silent) {
-    const ageMs = Date.now() - new Date(reportGeneratedAt.value).getTime()
+    const ageMs = Date.now() - parseApiDate(reportGeneratedAt.value).getTime()
     const oneHourMs = 60 * 60 * 1000
     if (ageMs < oneHourMs) {
       showFailToast(t('toast.reportTooFrequent'))
@@ -668,7 +713,13 @@ async function loadPageData() {
 onMounted(loadPageData)
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
-onActivated(loadPageData)
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
+// mount inside <KeepAlive>; onMounted handles initial load.
+let hasActivated = false
+onActivated(() => {
+  if (!hasActivated) { hasActivated = true; return }
+  loadPageData()
+})
 
 // This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
@@ -689,6 +740,7 @@ defineExpose({
   selectedAgent,
   initialLoading,
   selectAgent,
+  goToAnalytics,
 })
 </script>
 
@@ -880,8 +932,13 @@ defineExpose({
 
 .stat-popover-content {
   padding: 12px 14px;
-  max-width: 220px;
+  max-width: min(220px, calc(100vw - 32px));
+  width: max-content;
   box-sizing: border-box;
+}
+
+.stat-popover-desc {
+  word-break: break-word;
 }
 
 .stat-popover-header {

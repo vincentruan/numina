@@ -8,6 +8,7 @@ Tenant + caller isolation via __slots__:
 import json
 import logging
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from mcp.server import Server
@@ -56,19 +57,26 @@ def _import_assets_batch(
         name = raw.get("name")
         if not name:
             skipped += 1
-            results.append({
-                "temp_id": temp_id, "name": "",
-                "status": "skipped", "reason": "缺少 name 字段",
-            })
+            results.append(
+                {
+                    "temp_id": temp_id,
+                    "name": "",
+                    "status": "skipped",
+                    "reason": "缺少 name 字段",
+                }
+            )
             continue
         cat = db.query(Category).filter(Category.name == hint).first() if hint else None
         if not cat:
             skipped += 1
-            results.append({
-                "temp_id": temp_id, "name": name,
-                "status": "skipped",
-                "reason": f"未知分类: {hint}",
-            })
+            results.append(
+                {
+                    "temp_id": temp_id,
+                    "name": name,
+                    "status": "skipped",
+                    "reason": f"未知分类: {hint}",
+                }
+            )
             continue
         try:
             req = AssetCreate(
@@ -83,21 +91,33 @@ def _import_assets_batch(
             )
             asset = asset_service.create_asset(db, user, req)
             created += 1
-            results.append({
-                "temp_id": temp_id, "id": str(asset.id), "name": asset.name,
-                "status": "created",
-            })
+            results.append(
+                {
+                    "temp_id": temp_id,
+                    "id": str(asset.id),
+                    "name": asset.name,
+                    "status": "created",
+                }
+            )
         except Exception as e:
             skipped += 1
-            results.append({
-                "temp_id": temp_id, "name": raw.get("name", ""),
-                "status": "error", "reason": str(e),
-            })
+            results.append(
+                {
+                    "temp_id": temp_id,
+                    "name": raw.get("name", ""),
+                    "status": "error",
+                    "reason": str(e),
+                }
+            )
     return {"created": created, "skipped": skipped, "items": results}
 
 
 def _import_liabilities_batch(
-    db: Session, user: User, items: list[dict[str, Any]], *, category_override: str | None = None
+    db: Session,
+    user: User,
+    items: list[dict[str, Any]],
+    *,
+    category_override: str | None = None,
 ) -> dict[str, Any]:
     """Batch-create liabilities via ``liability.create_liability``.
 
@@ -117,8 +137,8 @@ def _import_liabilities_batch(
             req = LiabilityCreate(
                 category=category_override or raw.get("category", "other"),
                 name=raw["name"],
-                original_amount=float(raw["original_amount"]),
-                remaining_amount=float(raw["remaining_amount"]),
+                original_amount=Decimal(str(raw["original_amount"])),
+                remaining_amount=Decimal(str(raw["remaining_amount"])),
                 monthly_payment=raw.get("monthly_payment"),
                 interest_rate=raw.get("interest_rate"),
                 start_date=_parse_date(raw.get("start_date")),
@@ -129,26 +149,30 @@ def _import_liabilities_batch(
             )
             liability = liability_service.create_liability(db, user, req)
             created += 1
-            results.append({
-                "temp_id": temp_id, "id": str(liability.id), "name": liability.name,
-                "status": "created",
-            })
+            results.append(
+                {
+                    "temp_id": temp_id,
+                    "id": str(liability.id),
+                    "name": liability.name,
+                    "status": "created",
+                }
+            )
         except Exception as e:
             skipped += 1
-            results.append({
-                "temp_id": temp_id, "name": raw.get("name", ""),
-                "status": "error", "reason": str(e),
-            })
+            results.append(
+                {
+                    "temp_id": temp_id,
+                    "name": raw.get("name", ""),
+                    "status": "error",
+                    "reason": str(e),
+                }
+            )
     return {"created": created, "skipped": skipped, "items": results}
 
 
 def _get_caller_user(family_id: str, caller_user_id: str, db: Session) -> User:
     """Return the caller user, validating family membership and active status."""
-    user = (
-        db.query(User)
-        .filter(User.id == caller_user_id)
-        .first()
-    )
+    user = db.query(User).filter(User.id == caller_user_id).first()
     if not user or not user.is_active or str(user.family_id) != str(family_id):
         raise RuntimeError(
             f"caller invalid: user_id={caller_user_id} family={family_id}"
@@ -166,7 +190,13 @@ class MCPSession:
     - Tool handlers NEVER read these from tool args — only from self
     """
 
-    __slots__ = ("_family_id", "_caller_user_id", "_caller_role", "_thread_id", "_server")
+    __slots__ = (
+        "_family_id",
+        "_caller_user_id",
+        "_caller_role",
+        "_thread_id",
+        "_server",
+    )
 
     def __init__(
         self,
@@ -227,7 +257,9 @@ class MCPSession:
             for meta in list_tools_for_role(self._caller_role)
         ]
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any]
+    ) -> list[TextContent]:
         # SECURITY: ignore any family_id/caller_user_id/role in arguments — slots are the only truth
         from apps.backend.app.services import asset as asset_service
         from apps.backend.app.services import dashboard as dashboard_service
@@ -262,34 +294,34 @@ class MCPSession:
             user = _get_caller_user(self._family_id, self._caller_user_id, db)
             try:
                 if name == "get_family_overview":
-                    data = dashboard_service.get_overview(db, user)
+                    data: Any = dashboard_service.get_overview(db, user)
                 elif name == "get_assets":
                     category = arguments.get("category")
                     limit = int(arguments.get("limit", 20))
                     data = asset_service.list_assets_for_family(
-                        db, self._family_id, category=category, limit=limit
+                        db, self._family_id, user=user, category=category, limit=limit
                     )
                 elif name == "get_liabilities":
                     limit = int(arguments.get("limit", 20))
                     data = liability_service.list_liabilities_for_family(
-                        db, self._family_id, limit=limit
+                        db, self._family_id, user=user, limit=limit
                     )
                 elif name == "get_members":
-                    data = family_service.list_members(db, self._family_id)
+                    data = family_service.list_members(db, int(self._family_id))
                 elif name == "get_recent_alerts":
                     limit = int(arguments.get("limit", 10))
                     data = dashboard_service.get_recent_alerts(db, user, limit=limit)
                 elif name == "import_assets_batch":
-                    data = _import_assets_batch(
-                        db, user, arguments.get("items") or []
-                    )
+                    data = _import_assets_batch(db, user, arguments.get("items") or [])
                 elif name == "import_liabilities_batch":
                     data = _import_liabilities_batch(
                         db, user, arguments.get("items") or []
                     )
                 elif name == "import_credit_cards_batch":
                     data = _import_liabilities_batch(
-                        db, user, arguments.get("items") or [],
+                        db,
+                        user,
+                        arguments.get("items") or [],
                         category_override="credit_card",
                     )
                 else:
@@ -303,7 +335,12 @@ class MCPSession:
                     name,
                     arguments,
                 )
-                return [TextContent(type="text", text=json.dumps(data, ensure_ascii=False, default=str))]
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(data, ensure_ascii=False, default=str),
+                    )
+                ]
             except Exception as e:
                 logger.error(
                     "[mcp_session] family=%s caller_user_id=%s caller_role=%s tool=%s failed: %s",
@@ -313,5 +350,11 @@ class MCPSession:
                     name,
                     e,
                 )
-                return [TextContent(type="text", text=json.dumps({"error": "查询失败，请稍后重试"}, ensure_ascii=False))]
-
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(
+                            {"error": "查询失败，请稍后重试"}, ensure_ascii=False
+                        ),
+                    )
+                ]

@@ -27,7 +27,7 @@ class FamilyInvitationCode(Base):
         BigInteger, primary_key=True, default=next_id
     )
     code: Mapped[str] = mapped_column(
-        String(6), unique=True, nullable=False, index=True
+        String(20), unique=True, nullable=False, index=True
     )
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

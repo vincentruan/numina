@@ -1,17 +1,18 @@
 <template>
   <van-popup
     :show="visible"
-    @update:show="onUpdateShow"
     position="bottom"
     :style="{ height: '80%', borderRadius: '16px 16px 0 0' }"
     closeable
     close-icon-position="top-right"
+    @update:show="onUpdateShow"
   >
     <div class="markdown-preview">
       <div class="preview-header">
         <h3 class="preview-title">{{ t('aiReport.markdownPreview') }}</h3>
         <span class="preview-meta">{{ filename }} · {{ formatSize(fileSize) }}</span>
       </div>
+      <!-- eslint-disable vue/no-v-html -->
       <div class="preview-content" v-html="renderedContent" />
       <div class="preview-footer">
         <van-button type="primary" size="small" @click="onDownload">

@@ -1,37 +1,37 @@
 """Tests for family_adapter_cache module."""
 
 import os
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+    _adapter_cache,
     _generate_temp_config,
     _get_shared_checkpointer,
-    get_family_adapter,
-    invalidate_family_adapter,
-    invalidate_family_adapter_cache,
     clear_cache,
     close_shared_checkpointer,
     get_cache_stats,
-    _adapter_cache,
+    get_family_adapter,
+    invalidate_family_adapter,
+    invalidate_family_adapter_cache,
 )
 
 
 def _cache_key(family_id: str, config_id: str) -> tuple:
-    """Build the full 8-element cache key for a default get_family_adapter() call.
+    """Build the full 9-element cache key for a default get_family_adapter() call.
 
     The production cache key is
     ``(family_id, config_id, subagent_enabled, plan_mode, mcp_key, agent_name,
-    middlewares_key, memory_enabled)``. Tests that call ``get_family_adapter``
-    without agent_name/middlewares/memory_enabled get the defaults
-    ``agent_name=""``, ``middlewares_key=()``, ``memory_enabled=True`` and an
-    empty ``mcp_key``.
+    middlewares_key, memory_enabled, available_skills_key)``. Tests that call
+    ``get_family_adapter`` without agent_name/middlewares/memory_enabled/
+    available_skills get the defaults ``agent_name=""``, ``middlewares_key=()``,
+    ``memory_enabled=True``, ``available_skills_key=None`` and an empty ``mcp_key``.
     """
-    return (family_id, config_id, False, False, "", "", (), True)
+    return (family_id, config_id, False, False, "", "", (), True, None)
 
 
 @pytest.fixture
@@ -148,10 +148,8 @@ class TestCheckpointerInjection:
 
         captured_kwargs: dict = {}
 
-        original_client_cls = None
         try:
-            import deerflow.client as df_client_mod
-            original_client_cls = df_client_mod.DeerFlowClient
+            import deerflow.client as df_client_mod  # noqa: F401
         except ImportError:
             pytest.skip("deerflow not available")
 
@@ -185,7 +183,7 @@ class TestCheckpointerInjection:
         cache_mod._checkpointer_ctx = None
 
         try:
-            cp1 = _get_shared_checkpointer(base_config_dir)
+            _get_shared_checkpointer(base_config_dir)
             await close_shared_checkpointer()
             assert cache_mod._shared_checkpointer is None
         finally:
@@ -620,9 +618,9 @@ class TestCacheFixes:
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=RuntimeError("init failed")),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+            pytest.raises(RuntimeError, match="Failed to initialize"),
         ):
-            with pytest.raises(RuntimeError, match="Failed to initialize"):
-                get_family_adapter("fam-fail", ai_config, base_config_dir)
+            get_family_adapter("fam-fail", ai_config, base_config_dir)
 
         # Placeholder must be cleaned up — not left as a permanent None entry
         assert ("fam-fail", ai_config["config_id"]) not in _adapter_cache
@@ -630,7 +628,6 @@ class TestCacheFixes:
 
     def test_atexit_handler_registered(self):
         """_atexit_cleanup must be registered with atexit so temp dirs are cleaned on exit."""
-        import atexit as _atexit
         import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
 
         # atexit._atexit_callbacks is CPython internal; use the public interface instead
@@ -669,9 +666,13 @@ class TestMCPServersInjection:
 
     def test_temp_config_includes_mcp_servers_when_provided(self, tmp_path):
         """_generate_temp_config writes mcp_servers list into config YAML when provided."""
-        import yaml
         from pathlib import Path
-        from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+
+        import yaml
+
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _generate_temp_config,
+        )
 
         base_config_dir = str(Path(__file__).resolve().parents[3] / "apps" / "agent" / "deerflow_config")
         ai_config = {
@@ -699,9 +700,13 @@ class TestMCPServersInjection:
 
     def test_temp_config_omits_mcp_servers_when_not_provided(self, tmp_path):
         """_generate_temp_config doesn't add mcp_servers key when None/empty."""
-        import yaml
         from pathlib import Path
-        from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+
+        import yaml
+
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _generate_temp_config,
+        )
 
         base_config_dir = str(Path(__file__).resolve().parents[3] / "apps" / "agent" / "deerflow_config")
         ai_config = {

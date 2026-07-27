@@ -39,8 +39,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import http from '@/api'
+import { parseApiDate } from '@/utils/format'
 
 interface CircuitRow {
   family_id: string
@@ -91,7 +92,7 @@ async function onReset(c: CircuitRow) {
 
 function formatTime(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString()
+  return parseApiDate(iso).toLocaleString()
 }
 
 onMounted(loadCircuits)

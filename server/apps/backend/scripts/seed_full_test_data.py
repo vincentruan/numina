@@ -2,6 +2,7 @@
 
 Run from server/ directory: uv run python apps/backend/scripts/seed_full_test_data.py
 """
+
 import random
 import sys
 from datetime import date
@@ -76,9 +77,15 @@ def seed_test_users(db):
         existing_user = db.query(User).filter_by(username=user_data["username"]).first()
         if existing_user:
             existing_user.password_hash = hash_password(user_data["password"])
-            print(f"User {user_data['username']} already exists (family_id={existing_user.family_id}); password resynced")
+            print(
+                f"User {user_data['username']} already exists (family_id={existing_user.family_id}); password resynced"
+            )
             # Link invitation code for existing user
-            code_record = db.query(FamilyInvitationCode).filter_by(code=user_data["invitation_code"]).first()
+            code_record = (
+                db.query(FamilyInvitationCode)
+                .filter_by(code=user_data["invitation_code"])
+                .first()
+            )
             if code_record:
                 code_record.is_used = True
                 code_record.used_at = code_record.used_at or datetime.utcnow()
@@ -114,14 +121,20 @@ def seed_test_users(db):
         family.created_by = user.id
 
         # Link invitation code
-        code_record = db.query(FamilyInvitationCode).filter_by(code=user_data["invitation_code"]).first()
+        code_record = (
+            db.query(FamilyInvitationCode)
+            .filter_by(code=user_data["invitation_code"])
+            .first()
+        )
         if code_record:
             code_record.is_used = True
             code_record.used_at = datetime.utcnow()
             code_record.used_by_family_id = family.id
             code_record.used_by_username = user.username
 
-        print(f"Created user: {user_data['username']} (id={user.id}, family_id={family.id})")
+        print(
+            f"Created user: {user_data['username']} (id={user.id}, family_id={family.id})"
+        )
 
     db.commit()
 
@@ -139,10 +152,11 @@ def seed_tags(db, user: User):
 
     created_tags = []
     for tag_data in tags_data:
-        existing = db.query(Tag).filter_by(
-            family_id=user.family_id,
-            name=tag_data["name"]
-        ).first()
+        existing = (
+            db.query(Tag)
+            .filter_by(family_id=user.family_id, name=tag_data["name"])
+            .first()
+        )
         if existing:
             created_tags.append(existing)
             continue
@@ -533,10 +547,9 @@ def seed_assets(db, user: User, tags: list[Tag]):
 
     for asset_data in all_assets_data:
         # Check if asset exists by name and user
-        existing = db.query(Asset).filter_by(
-            user_id=user.id,
-            name=asset_data["name"]
-        ).first()
+        existing = (
+            db.query(Asset).filter_by(user_id=user.id, name=asset_data["name"]).first()
+        )
         if existing:
             created_assets.append(existing)
             continue
@@ -544,7 +557,9 @@ def seed_assets(db, user: User, tags: list[Tag]):
         cat_name = asset_data["category"]
         category = cat_map.get(cat_name)
         if not category:
-            print(f"WARNING: Category '{cat_name}' not found, skipping asset '{asset_data['name']}'")
+            print(
+                f"WARNING: Category '{cat_name}' not found, skipping asset '{asset_data['name']}'"
+            )
             continue
 
         asset = Asset(
@@ -643,17 +658,19 @@ def seed_liabilities(db, user: User, assets: list[Asset]):
 
     created_liabilities = []
     for liab_data in liabilities_data:
-        existing = db.query(Liability).filter_by(
-            user_id=user.id,
-            name=liab_data["name"]
-        ).first()
+        existing = (
+            db.query(Liability)
+            .filter_by(user_id=user.id, name=liab_data["name"])
+            .first()
+        )
         if existing:
             created_liabilities.append(existing)
             continue
 
         linked_asset = None
-        if liab_data.get("linked_asset_name"):
-            linked_asset = asset_map.get(liab_data["linked_asset_name"])
+        linked_name = liab_data.get("linked_asset_name")
+        if linked_name:
+            linked_asset = asset_map.get(str(linked_name))
 
         liability = Liability(
             id=next_id(),
@@ -730,10 +747,9 @@ def seed_wishes(db, user: User):
 
     created_wishes = []
     for wish_data in wishes_data:
-        existing = db.query(Wish).filter_by(
-            user_id=user.id,
-            name=wish_data["name"]
-        ).first()
+        existing = (
+            db.query(Wish).filter_by(user_id=user.id, name=wish_data["name"]).first()
+        )
         if existing:
             created_wishes.append(existing)
             continue
@@ -760,14 +776,19 @@ def seed_wishes(db, user: User):
 def seed_ai_config(db, user: User):
     """Create AI provider config for test family."""
     import os
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("WARNING: ANTHROPIC_API_KEY not set, skipping AI config")
         return None
 
-    existing_config = db.query(AIProviderConfig).filter_by(family_id=user.family_id).first()
+    existing_config = (
+        db.query(AIProviderConfig).filter_by(family_id=user.family_id).first()
+    )
     if existing_config:
-        print(f"AI config already exists for family {user.family_id}: provider={existing_config.provider}, model={existing_config.model_id}")
+        print(
+            f"AI config already exists for family {user.family_id}: provider={existing_config.provider}, model={existing_config.model_id}"
+        )
         return existing_config
 
     encrypted_key = encrypt_api_key(api_key)
@@ -785,7 +806,9 @@ def seed_ai_config(db, user: User):
     db.add(config)
     db.commit()
 
-    print(f"Created AI config for family {user.family_id}: provider={config.provider}, model={config.model_id}")
+    print(
+        f"Created AI config for family {user.family_id}: provider={config.provider}, model={config.model_id}"
+    )
     return config
 
 
@@ -799,12 +822,15 @@ def seed_mcp_servers(db, user: User):
     # MCP SSE endpoint URL format: {backend_url}/api/v1/internal/mcp/{family_id}/sse
     mcp_url = f"{backend_url}/api/v1/internal/mcp/{user.family_id}/sse"
 
-    existing_server = db.query(FamilyMCPServer).filter_by(
-        family_id=user.family_id,
-        name="Numina Backend MCP"
-    ).first()
+    existing_server = (
+        db.query(FamilyMCPServer)
+        .filter_by(family_id=user.family_id, name="Numina Backend MCP")
+        .first()
+    )
     if existing_server:
-        print(f"MCP server already exists for family {user.family_id}: url={existing_server.url}")
+        print(
+            f"MCP server already exists for family {user.family_id}: url={existing_server.url}"
+        )
         return existing_server
 
     server = FamilyMCPServer(

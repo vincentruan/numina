@@ -49,6 +49,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showConfirmDialog } from 'vant'
 import { listFamilyChallenges, cancelChallenge as apiCancelChallenge, type ChallengeGrant } from '@/api/challengeGrant'
+import { parseApiDate } from '@/utils/format'
 import { listChildren, type ChildResponse } from '@/api/children'
 
 const { t } = useI18n()
@@ -98,7 +99,7 @@ function progressPercent(ch: ChallengeGrant): number {
 }
 
 function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString('zh-CN')
+  return parseApiDate(date).toLocaleDateString('zh-CN')
 }
 
 async function cancelChallenge(ch: ChallengeGrant) {

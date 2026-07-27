@@ -59,10 +59,10 @@ def test_cache_hit_no_db_query(db):
 
 
 def test_fallback_when_no_rates(db):
-    """Returns (1.0, now()) when no rate data exists in DB."""
+    """Returns (None, None) when no rate data exists in DB — callers must not assume 1:1."""
     rate, fetched_at = ExchangeRateService.get_rate("XYZ", db)
-    assert rate == 1.0
-    assert isinstance(fetched_at, datetime)
+    assert rate is None
+    assert fetched_at is None
 
 
 def test_fetch_and_store_rates_success(db):

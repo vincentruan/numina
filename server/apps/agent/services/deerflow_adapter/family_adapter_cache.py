@@ -76,7 +76,7 @@ import tempfile
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from deerflow.client import DeerFlowClient
 from deerflow.config.app_config import reload_app_config
@@ -158,7 +158,7 @@ _MAX_CACHE_SIZE = 100
 # Values are either (DeerFlowClient, Path) for a live entry, or None as a
 # placeholder while a new client is being initialised (prevents TOCTOU races
 # where two threads both pass the size check and both insert).
-_adapter_cache: OrderedDict[tuple[str, str, bool, bool, str], tuple[DeerFlowClient, Path] | None] = OrderedDict()
+_adapter_cache: OrderedDict[tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None], tuple[DeerFlowClient, Path] | None] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
 # Per-key init lock: serialises reload_app_config + DeerFlowClient() for the
@@ -168,48 +168,87 @@ _init_lock = threading.Lock()
 
 # Shared checkpointer singleton — created once, reused by all DeerFlowClient instances.
 # Guarded by _checkpointer_lock to prevent double-initialisation under concurrency.
-_shared_checkpointer = None
+_shared_checkpointer: Any = None
 _checkpointer_lock = threading.Lock()
-_checkpointer_ctx = None  # open context manager keeping the SqliteSaver connection alive
+_checkpointer_ctx: Any = None  # open context manager keeping the SqliteSaver connection alive
+_checkpointer_pool: Any = None  # open psycopg connection pool for PostgresSaver
 
 
 async def async_init_checkpointer(db_path: str | None = None) -> None:
-    """Initialize the shared AsyncSqliteSaver checkpointer at startup.
+    """Initialize the shared LangGraph checkpointer at startup.
+
+    Supports two backends selected by the DEERFLOW_DB_URL env var:
+    - ``postgres://…`` / ``postgresql://…`` → AsyncPostgresSaver (cluster deployments)
+    - unset or ``sqlite://…``              → AsyncSqliteSaver (local dev)
 
     Must be called from an async context (FastAPI lifespan). This properly
     enters the async context manager so checkpoint state persists across
     restarts.
 
     Args:
-        db_path: Optional override for the checkpointer DB path. If not
-            provided, reads from settings.DEERFLOW_DB_PATH.
+        db_path: Optional override for the SQLite checkpointer DB path. If not
+            provided, reads from settings.DEERFLOW_DB_PATH. Ignored when
+            DEERFLOW_DB_URL points at a Postgres backend.
     """
-    global _shared_checkpointer, _checkpointer_ctx
+    global _shared_checkpointer, _checkpointer_ctx, _checkpointer_pool
 
-    if db_path is None:
-        from apps.agent.app.config import settings
-        db_path = settings.DEERFLOW_DB_PATH
+    import os as _os
+    import re as _re
+
+    db_url = _os.environ.get("DEERFLOW_DB_URL")
 
     with _checkpointer_lock:
         if _shared_checkpointer is not None:
             return
 
         try:
-            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+            if db_url and db_url.startswith("postgres"):
+                # ── Postgres backend (AsyncPostgresSaver) ──────────────
+                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+                from psycopg_pool import AsyncConnectionPool
 
-            os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
+                # psycopg_pool expects a raw PostgreSQL URL, not a SQLAlchemy
+                # dialect URL like ``postgresql+asyncpg://...``. Strip the
+                # ``+<driver>`` suffix if present.
+                pg_conninfo = _re.sub(
+                    r"^postgresql\+\w+://",
+                    "postgresql://",
+                    db_url,
+                )
 
-            # Enter the async context manager properly
-            _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
-            _shared_checkpointer = await _checkpointer_ctx.__aenter__()
-            logger.info("[deerflow_cache] shared checkpointer: AsyncSqliteSaver(%s)", db_path)
-        except ImportError:
+                _checkpointer_pool = AsyncConnectionPool(
+                    conninfo=pg_conninfo,
+                    kwargs={"autocommit": True},
+                    min_size=2,
+                    max_size=10,
+                )
+                await _checkpointer_pool.open()
+                _shared_checkpointer = AsyncPostgresSaver(
+                    conn=cast(Any, _checkpointer_pool),
+                )
+                await _shared_checkpointer.setup()
+                logger.info("[deerflow_cache] shared checkpointer: AsyncPostgresSaver(%s)", db_url)
+            else:
+                # ── SQLite backend (AsyncSqliteSaver) ─────────────────
+                from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+                if db_path is None:
+                    from apps.agent.app.config import settings
+                    db_path = settings.DEERFLOW_DB_PATH
+
+                _os.makedirs(_os.path.dirname(db_path) if _os.path.dirname(db_path) else ".", exist_ok=True)
+
+                _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
+                _shared_checkpointer = await _checkpointer_ctx.__aenter__()
+                logger.info("[deerflow_cache] shared checkpointer: AsyncSqliteSaver(%s)", db_path)
+        except ImportError as _ie:
             from langgraph.checkpoint.memory import InMemorySaver
 
             _shared_checkpointer = InMemorySaver()
             logger.warning(
-                "[deerflow_cache] langgraph-checkpoint-sqlite[aio] not installed; "
-                "using InMemorySaver — multi-turn memory will not survive restarts"
+                "[deerflow_cache] checkpoint backend not installed (%s); "
+                "using InMemorySaver — multi-turn memory will not survive restarts",
+                _ie,
             )
         except Exception as e:
             from langgraph.checkpoint.memory import InMemorySaver
@@ -257,12 +296,16 @@ def _read_checkpointer_path(base_config_dir: str) -> str:
 
 async def close_shared_checkpointer() -> None:
     """Close the shared checkpointer connection. Call at process shutdown."""
-    global _shared_checkpointer, _checkpointer_ctx
+    global _shared_checkpointer, _checkpointer_ctx, _checkpointer_pool
     with _checkpointer_lock:
         if _checkpointer_ctx is not None:
             with contextlib.suppress(Exception):
                 await _checkpointer_ctx.__aexit__(None, None, None)
             _checkpointer_ctx = None
+        if _checkpointer_pool is not None:
+            with contextlib.suppress(Exception):
+                await _checkpointer_pool.close()
+            _checkpointer_pool = None
         _shared_checkpointer = None
 
 

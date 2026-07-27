@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { searchThreads, deleteThread, updateThread, getThreadState } from '@/api/ai-chat'
+import { parseApiDate } from '@/utils/format'
 import type { ThreadSession, DateGroup, DateGroupLabel } from '@/types/ai-chat/session'
 
 const PAGE_SIZE = 20
@@ -68,7 +69,7 @@ export function useThreadList() {
     const earlier: ThreadSession[] = []
 
     for (const s of unpinned) {
-      const label = getDateLabel(new Date(s.updated_at))
+      const label = getDateLabel(parseApiDate(s.updated_at))
       if (label === 'today') today.push(s)
       else if (label === 'yesterday') yesterday.push(s)
       else earlier.push(s)

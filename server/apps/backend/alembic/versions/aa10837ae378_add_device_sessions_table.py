@@ -366,7 +366,7 @@ def downgrade() -> None:
                existing_type=sa.BigInteger(),
                type_=sa.VARCHAR(length=36),
                existing_nullable=False)
-    op.create_index(op.f('ix_users_username_unique'), 'users', ['username'], unique=1, sqlite_where=sa.text('username IS NOT NULL'))
+    op.create_index(op.f('ix_users_username_unique'), 'users', ['username'], unique=True, sqlite_where=sa.text('username IS NOT NULL'))
     op.alter_column('users', 'view_mode',
                existing_type=sa.VARCHAR(length=20),
                nullable=True,
@@ -540,7 +540,7 @@ def downgrade() -> None:
     )
     op.create_index(op.f('ix_revoked_tokens_user_id'), 'revoked_tokens', ['user_id'], unique=False)
     op.create_index(op.f('ix_revoked_tokens_user_expires'), 'revoked_tokens', ['user_id', 'expires_at'], unique=False)
-    op.create_index(op.f('ix_revoked_tokens_jti'), 'revoked_tokens', ['jti'], unique=1)
+    op.create_index(op.f('ix_revoked_tokens_jti'), 'revoked_tokens', ['jti'], unique=True)
     op.create_index(op.f('ix_revoked_tokens_expires_at'), 'revoked_tokens', ['expires_at'], unique=False)
     op.create_table('blind_box_gifts',
     sa.Column('id', sa.BIGINT(), nullable=False),
@@ -767,7 +767,7 @@ def downgrade() -> None:
     sa.ForeignKeyConstraint(['family_id'], ['families.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_ai_allocation_targets_family_id'), 'ai_allocation_targets', ['family_id'], unique=1)
+    op.create_index(op.f('ix_ai_allocation_targets_family_id'), 'ai_allocation_targets', ['family_id'], unique=True)
     op.create_table('exchange_rates',
     sa.Column('id', sa.BIGINT(), nullable=False),
     sa.Column('base_currency', sa.VARCHAR(length=10), nullable=False),

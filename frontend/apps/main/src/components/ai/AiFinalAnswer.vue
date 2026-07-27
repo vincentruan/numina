@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import AiArtifactLink from './AiArtifactLink.vue'

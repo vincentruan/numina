@@ -301,6 +301,9 @@ const { t } = useI18n()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const { increment, decrement } = usePageLoading()
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
+// mount inside <KeepAlive>; onMounted handles initial load.
+let hasActivated = false
 const refreshing = ref(false)
 
 // Child dashboard data
@@ -649,6 +652,7 @@ onMounted(async () => {
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
 onActivated(async () => {
+  if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
     await familyStore.fetchFamily()

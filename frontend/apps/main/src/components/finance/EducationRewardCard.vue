@@ -72,6 +72,7 @@ import { useI18n } from 'vue-i18n'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { getRecentActivities } from '@/api/dashboard'
+import { parseApiDate } from '@/utils/format'
 import type { ActivityItem } from '@/api/dashboard'
 
 defineOptions({ name: 'EducationRewardCard' })
@@ -106,7 +107,7 @@ async function openDetail() {
 
 function formatTime(iso: string | null): string {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseApiDate(iso)
   if (Number.isNaN(d.getTime())) return iso
   // Locale-aware date+time; follows user language without hard-coding a format.
   return d.toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {

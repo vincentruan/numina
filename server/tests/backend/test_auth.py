@@ -131,3 +131,45 @@ def test_register_short_password(client):
         "family_invitation_code": "AUTO-SHORT"
     })
     assert response.status_code == 422
+
+
+def test_join_family_member_limit_exceeded(client, auth_headers, db_session):
+    """Test joining family fails when member limit (50) is reached."""
+    from apps.backend.app.models.user import User
+    from apps.backend.app.services.auth import hash_password
+
+    # Get the invite code from the first user's family
+    family_response = client.get("/api/v1/family", headers=auth_headers)
+    family_id = int(family_response.json()["data"]["id"])
+    invite_code = family_response.json()["data"]["invite_code"]
+
+    # Add 48 more members to reach the limit (1 already exists from auth_headers + 48 = 49)
+    for i in range(48):
+        user = User(
+            family_id=family_id,
+            username=f"member{i}",
+            display_name=f"Member {i}",
+            password_hash=hash_password("Password123"),
+            role="member",
+        )
+        db_session.add(user)
+    db_session.commit()
+
+    # Now try to add the 50th member (should succeed)
+    response = client.post("/api/v1/auth/family/join", json={
+        "username": "member49",
+        "display_name": "Member 49",
+        "password": "Password123",
+        "invite_code": invite_code
+    })
+    assert response.status_code == 200
+
+    # Try to add the 51st member (should fail with FAMILY_MEMBER_LIMIT_EXCEEDED)
+    response = client.post("/api/v1/auth/family/join", json={
+        "username": "member50",
+        "display_name": "Member 50",
+        "password": "Password123",
+        "invite_code": invite_code
+    })
+    assert response.status_code == 400
+    assert response.json()["code"] == "FAMILY_MEMBER_LIMIT_EXCEEDED"

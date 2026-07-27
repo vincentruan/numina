@@ -46,9 +46,7 @@ class SkillDownloader:
     - Content validation via validate_skill_content()
     """
 
-    def _build_candidates(
-        self, parse_result: ParseResult
-    ) -> list[tuple[str, str]]:
+    def _build_candidates(self, parse_result: ParseResult) -> list[tuple[str, str]]:
         """Build candidate (fetch_url, source_url) pairs to try sequentially.
 
         For GitHub: tries 'main' then 'master' branch.
@@ -84,9 +82,7 @@ class SkillDownloader:
         if host not in _ALLOWED_HOSTS:
             raise SkillDownloadError(f"Host '{host}' not in allowlist")
 
-    async def _safe_get(
-        self, client: httpx.AsyncClient, url: str
-    ) -> str | None:
+    async def _safe_get(self, client: httpx.AsyncClient, url: str) -> str | None:
         """Fetch a single URL with security checks.
 
         Returns the response text on success, None for 404.
@@ -108,9 +104,7 @@ class SkillDownloader:
             return None
 
         if response.status_code != 200:
-            raise SkillDownloadError(
-                f"HTTP {response.status_code} fetching {url}"
-            )
+            raise SkillDownloadError(f"HTTP {response.status_code} fetching {url}")
 
         # Size check via Content-Length header
         content_length = response.headers.get("content-length")
@@ -141,12 +135,13 @@ class SkillDownloader:
         For skills.sh, fetches directly.
         """
         if parse_result.match_type == "unmatched":
-            raise SkillDownloadError(
-                "Cannot download for unmatched parse result"
-            )
+            raise SkillDownloadError("Cannot download for unmatched parse result")
 
         candidates = self._build_candidates(parse_result)
-        skill_id = parse_result.skill_name.replace(" ", "-")
+        raw_skill_name = parse_result.skill_name
+        if raw_skill_name is None:
+            raise SkillDownloadError("parse_result.skill_name is None")
+        skill_id = raw_skill_name.replace(" ", "-")
 
         last_error: SkillDownloadError | None = None
 
@@ -168,9 +163,7 @@ class SkillDownloader:
 
                 if content is None:
                     # 404 -- try next candidate (e.g. master branch fallback)
-                    last_error = SkillDownloadError(
-                        f"HTTP 404 fetching {fetch_url}"
-                    )
+                    last_error = SkillDownloadError(f"HTTP 404 fetching {fetch_url}")
                     continue
 
                 # Validate downloaded content

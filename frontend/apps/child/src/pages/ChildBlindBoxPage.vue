@@ -78,6 +78,7 @@ import { onMounted, ref, toRefs } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
+import { parseLocalDate } from '@/utils/format'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
 
@@ -142,7 +143,7 @@ async function onRefresh() {
 }
 
 function formatExpiry(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString(locale.value, { month: 'short', day: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString(locale.value, { month: 'short', day: 'numeric' })
 }
 </script>
 

@@ -11,19 +11,19 @@
       >
         {{ tag.name }}
       </van-tag>
-      <van-tag plain type="primary" @click="showPopup = true">+ 添加标签</van-tag>
+      <van-tag plain type="primary" @click="showPopup = true">{{ t('tagSelector.addTag') }}</van-tag>
     </div>
 
     <van-popup v-model:show="showPopup" position="bottom" round :style="{ height: '60%' }">
       <div class="popup-header">
-        <span class="popup-title">选择标签</span>
+        <span class="popup-title">{{ t('tagSelector.selectTag') }}</span>
         <van-icon name="cross" @click="showPopup = false" />
       </div>
 
       <div class="popup-create">
         <van-field
           v-model="newTagName"
-          placeholder="输入新标签名称，点击 + 创建"
+          :placeholder="t('tagSelector.createPlaceholder')"
           clearable
         >
           <template #right-icon>
@@ -48,7 +48,7 @@
           <span>{{ tag.name }}</span>
           <van-icon v-if="modelValue.includes(tag.id)" name="success" />
         </div>
-        <div v-if="!tags.length" class="tag-empty">暂无标签，输入名称创建第一个</div>
+        <div v-if="!tags.length" class="tag-empty">{{ t('tagSelector.empty') }}</div>
       </div>
     </van-popup>
   </div>
@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { showToast, showSuccessToast } from 'vant'
+import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { createTag as apiCreateTag } from '@/api/tags'
 import type { Tag } from '@/types'

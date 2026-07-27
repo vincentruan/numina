@@ -11,6 +11,7 @@ import {
   type FamilyDevice,
 } from '@/api/device'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiDate } from '@/utils/format'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { clearAuth } from '@numina/auth'
 import { useRouter } from 'vue-router'
@@ -114,7 +115,7 @@ function onTabChange(tab: 'my' | 'family') {
 }
 
 function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
+  const diff = Date.now() - parseApiDate(dateStr).getTime()
   const hours = Math.floor(diff / 3600000)
   if (hours < 1) return t('common.timeJustNow')
   if (hours < 24) return t('common.timeHoursAgo', { hours })

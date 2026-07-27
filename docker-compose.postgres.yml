@@ -1,0 +1,35 @@
+# PostgreSQL override for docker-compose.yml
+# Usage: docker compose --profile postgres -f docker-compose.yml -f docker-compose.postgres.yml up -d --build
+#
+# This override:
+# - Switches backend/worker DATABASE_URL to PostgreSQL
+# - Switches agent DEERFLOW_DB_URL to PostgreSQL (for DeerFlow checkpoints)
+# - Adds depends_on postgres for backend/worker/agent
+#
+# Prerequisites:
+# - Set POSTGRES_PASSWORD in .env (or use default: numinapass)
+# - Run: make setup-db-postgres (starts postgres container + runs migrations)
+
+services:
+  backend:
+    environment:
+      - DATABASE_URL=postgresql+psycopg://numina:${POSTGRES_PASSWORD:-numinapass}@numina-postgres:5432/numina
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scheduler_worker:
+    environment:
+      - DATABASE_URL=postgresql+psycopg://numina:${POSTGRES_PASSWORD:-numinapass}@numina-postgres:5432/numina
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  agent:
+    environment:
+      # DeerFlow checkpoint storage (AsyncPostgresSaver) — separate DB to avoid
+      # table name conflicts with numina backend (both have 'users' etc.)
+      - DEERFLOW_DB_URL=postgresql+asyncpg://numina:${POSTGRES_PASSWORD:-numinapass}@numina-postgres:5432/deerflow
+    depends_on:
+      postgres:
+        condition: service_healthy

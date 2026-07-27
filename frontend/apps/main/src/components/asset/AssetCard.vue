@@ -71,7 +71,7 @@
       <div class="card-row-bottom">
         <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
           <van-icon name="clock-o" size="12" aria-hidden="true" />
-          {{ t('assetCard.dailyCost', { cost: currency.format(asset.daily_cost) }) }}
+          {{ t('assetCard.dailyCost', { cost: formatCurrency(asset.daily_cost, asset.currency) }) }}
         </span>
         <span v-else class="card-daily-cost-placeholder" />
       </div>
@@ -83,7 +83,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
-import { useCurrency } from '@/composables/useCurrency'
+import { formatCurrency, parseLocalDate } from '@/utils/format'
 import { useAssetStore } from '@/stores/asset'
 import { getIconId } from '@/utils/icon'
 
@@ -100,7 +100,6 @@ const emit = defineEmits<{
 }>()
 
 const assetStore = useAssetStore()
-const currency = useCurrency()
 const { t } = useI18n()
 const imageError = ref(false)
 
@@ -159,7 +158,7 @@ function onImageError() {
 
 const daysUsed = computed(() => {
   if (!props.asset.purchase_date) return 0
-  const purchase = new Date(props.asset.purchase_date)
+  const purchase = parseLocalDate(props.asset.purchase_date)
   const now = new Date()
   const diff = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
   return diff > 0 ? diff : 0
@@ -167,7 +166,7 @@ const daysUsed = computed(() => {
 
 function formatPrice(price: number | string | null | undefined): string {
   if (price == null) return '-'
-  return currency.format(price)
+  return formatCurrency(price, props.asset.currency)
 }
 
 const statusMap = computed<

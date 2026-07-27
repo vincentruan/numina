@@ -15,7 +15,7 @@
  * - Panel: rounded-t-xl, border, backdrop-blur, slide-up animation
  * - Scrollable list with max-height
  */
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PlanStep } from '@/types/agent-stream'
 
@@ -24,17 +24,12 @@ interface Props {
   source?: 'explicit' | 'inferred' | null
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
 const { t } = useI18n()
 
 // DeerFlow: collapsed by default
 const isExpanded = ref(false)
-
-// Count completed steps
-const completedCount = computed(() =>
-  props.steps.filter((s) => s.status === 'done').length
-)
 
 function toggleExpanded() {
   isExpanded.value = !isExpanded.value

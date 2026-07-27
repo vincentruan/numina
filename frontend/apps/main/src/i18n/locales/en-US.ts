@@ -1360,6 +1360,7 @@ export default {
     languageZhCN: '简体中文',
     languageEnUS: 'English',
     defaultCurrency: 'Default Currency',
+    currencyRateHint: 'Non-CNY currencies require exchange rate fetch for accurate totals',
     defaultView: 'Default View',
     viewCard: 'Overview Card View',
     viewList: 'List View',
@@ -1387,6 +1388,8 @@ export default {
     enableAI: 'Enable AI Assistant',
     enableAIDesc: 'Requires at least one model configured',
     enableAINoModel: 'Please configure at least one model first',
+    autoReport: 'Auto-generate Reports',
+    autoReportDesc: 'Automatically generate family asset reports daily',
     coinRate: 'Star Coin Exchange Rate',
     coinRateValue: 'Bronze→Silver {c2s}, Silver→Gold {s2g}',
     coinCopperToSilver: 'Bronze→Silver',
@@ -1498,6 +1501,9 @@ export default {
   login: {
     otherAccount: 'Other Account',
     selectAccount: 'Select Account',
+    quickLogin: 'Log In',
+    previousAccount: 'Previous Account',
+    nextAccount: 'Next Account',
     verifyToContinue: 'Verify to continue',
     username: 'Username',
     usernamePlaceholder: 'Enter your username',
@@ -1674,6 +1680,30 @@ export default {
     RATE_LIMITED: 'Too many requests, please try again later',
     NO_FAMILY_CONTEXT: '未选择家庭，无法执行操作'
   },
+  buyVsRent: {
+    title: 'Buy vs Rent Calculator',
+    purchasePrice: 'Purchase Price',
+    purchasePricePlaceholder: 'Enter purchase price',
+    monthlyRent: 'Monthly Rent',
+    monthlyRentPlaceholder: 'Enter monthly rent',
+    usageMonths: 'Usage Months',
+    usageMonthsPlaceholder: 'Enter usage months',
+    annualMaintenance: 'Annual Maintenance (optional)',
+    annualMaintenancePlaceholder: 'Enter annual maintenance',
+    calculate: 'Calculate',
+    buyTotal: 'Total Buy Cost',
+    rentTotal: 'Total Rent Cost',
+    breakevenMonths: 'Break-even Months',
+    monthsUnit: '{n} months',
+    recommendation: 'Recommendation',
+    noData: '--',
+  },
+  tagSelector: {
+    addTag: '+ Add Tag',
+    selectTag: 'Select Tags',
+    createPlaceholder: 'Enter new tag name, tap + to create',
+    empty: 'No tags yet, enter a name to create one',
+  },
   toast: {
     // Copy
     copied: 'Copied',
@@ -1799,6 +1829,8 @@ export default {
     // AI
     aiEnabled: 'AI assistant enabled',
     aiDisabled: 'AI assistant disabled',
+    autoReportEnabled: 'Auto report generation enabled',
+    autoReportDisabled: 'Auto report generation disabled',
     aiConfigSaved: 'Configuration saved',
     aiTimeoutInvalid: 'Timeout must be an integer between 10 and 600 seconds',
     aiTestFailed: 'Test failed, please check your configuration',
@@ -1820,6 +1852,10 @@ export default {
     aiChatError: 'AI service temporarily unavailable, please try again later',
     fileSelected: '📄 File selected: {name}',
     photoSelected: '📷 Photo selected',
+    uploadSuccess: '{name} uploaded',
+    noVisionModel: 'No vision-capable model available. Please configure a multimodal model.',
+    invalidImageType: 'Unsupported image format',
+    invalidFileType: 'Unsupported file format',
     // Network
     networkTimeout: 'Request timed out, please check your connection',
     networkError: 'Cannot connect to server, please check your network',
@@ -2240,6 +2276,8 @@ export default {
     enterPrompt: 'Enter custom prompt',
     resetToDefault: 'Reset to default',
     promptReset: 'Prompt reset to default',
+    skillInstalled: 'Skill installed successfully',
+    skillInstallFailed: 'Skill installation failed',
 
     capability: {
       report: {
@@ -2344,6 +2382,10 @@ export default {
       deleteSuccess: 'Agent deleted',
       systemAgentBanner: 'System agent — read-only configuration',
       noEnabledSkills: 'No skills enabled',
+      isPublished: 'Publish',
+      publishedHint: 'Visible to other family members; drafts are only visible to the creator',
+      draft: 'Draft',
+      published: 'Published',
     },
     templateFinanceAdvisor: 'Finance Advisor Template',
     templateBudgetTracker: 'Budget Tracker Template',
@@ -2390,6 +2432,10 @@ export default {
     manageAgents: 'Manage agents',
     timeMachineCardTitle: 'Time Machine',
     timeMachineCardDesc: 'What-if simulation, financial projection',
+    trendAnalysisCardTitle: 'Trend Analysis',
+    trendAnalysisCardDesc: 'Asset trend, net worth change and allocation',
+    insightAnalysisCardTitle: 'Asset Insights',
+    insightAnalysisCardDesc: 'Smart discovery, holding structure and efficiency',
     numinaAgentDesc: 'Your family asset intelligent assistant, providing comprehensive analysis and advice',
     myAgentsAndApps: 'My Agents & Analysis Apps',
     lastReportAge: '{age}',
@@ -2415,8 +2461,8 @@ export default {
     noReport: 'No report yet',
     startAnalyze: 'AI will comprehensively analyze your asset allocation, liability pressure, and asset efficiency',
     generating: 'A new report is being generated; the latest result will be shown when complete',
-    // U4 step 6/12: 8h cache + force refresh + three-step timeline labels
-    cacheFresh: 'The report was generated within the last 8 hours; showing the cached result',
+    // U4 step 6/12: 1h cache + force refresh + three-step timeline labels
+    cacheFresh: 'The report was generated within the last hour; showing the cached result',
     forceRegenerate: 'Force regenerate',
     step1: 'Generate report',
     step1Desc: 'Collect family data and generate a markdown audit',
@@ -2438,6 +2484,7 @@ export default {
     viewMarkdownFallback: 'View the generated report',
     taskStarted: 'Report generation has started; you may leave the page at any time',
     taskQueued: 'Report generation is queued, waiting for other tasks to finish',
+    previousReportWhileGenerating: 'Generating new report; showing the previous report below',
     scoreUnit: 'pts',
     overallScore: 'Overall Health Score',
     generatedAt: 'Generated: {time}',
@@ -2902,7 +2949,8 @@ export default {
     labelLoading: '加载中...',
     error: '验证失败，请重试',
     loadFailed: '验证组件加载失败，请刷新页面重试',
-    expired: '验证码已过期，请重新验证'
+    expired: '验证码已过期，请重新验证',
+    disabled: 'Captcha disabled',
   },
   admin: {
     extractionCircuit: {

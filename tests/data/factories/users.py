@@ -60,12 +60,18 @@ class UserFactory:
         family_id: int,
         role: str = "owner",
         avatar_color: str = "#4F46E5",
+        flush: bool = True,
     ) -> tuple[User, bool]:
         """Returns (user, created). created=False means it already existed.
 
         On re-seed (existing user), password is re-hashed to keep it consistent
         with the seed definition.  This avoids stale credentials when the DB
         persists across container rebuilds (e.g. bind-mounted SQLite).
+
+        `flush=False` is useful when creating the first owner of a new family:
+        the family must be created after the user (to know the user id) but the
+        user's family_id can only be set after the family exists.  Callers must
+        flush the session themselves once both objects are wired together.
         """
         existing = db.query(User).filter(User.username == username).first()
         if existing:
@@ -81,7 +87,8 @@ class UserFactory:
             avatar_color=avatar_color,
         )
         db.add(user)
-        db.flush()
+        if flush:
+            db.flush()
         return user, True
 
     @staticmethod

@@ -26,6 +26,10 @@ export function updateWebSearchProvider(
   return api.put(`/ai/web-search/${id}`, payload).then((r) => r.data)
 }
 
+export function reorderWebSearchProviders(order: string[]): Promise<{ ok: boolean }> {
+  return api.put('/ai/web-search/reorder', { order }).then((r) => r.data)
+}
+
 export function deleteWebSearchProvider(id: string): Promise<void> {
   return api.delete(`/ai/web-search/${id}`)
 }

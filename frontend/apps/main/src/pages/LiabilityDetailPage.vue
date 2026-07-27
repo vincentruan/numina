@@ -6,9 +6,9 @@
       <!-- Value Card -->
       <div class="value-card">
         <div class="value-label">{{ t('liability.detailRemainingPrincipal') }}</div>
-        <MoneyDisplay :amount="Number(liability.remaining_amount)" size="large" />
+        <MoneyDisplay :amount="Number(liability.remaining_amount)" size="large" :source-currency="liability.currency" />
         <div class="progress-info">
-          {{ t('liability.detailPaidAmount') }} {{ currency.format(paidAmount) }} / {{ t('liability.detailTotalAmount') }} {{ currency.format(Number(liability.original_amount)) }}
+          {{ t('liability.detailPaidAmount') }} {{ currency.formatIn(paidAmount, liability.currency) }} / {{ t('liability.detailTotalAmount') }} {{ currency.formatIn(Number(liability.original_amount), liability.currency) }}
         </div>
         <van-progress
           :percentage="paidPercent"
@@ -53,10 +53,10 @@
           </template>
         </van-cell>
         <van-cell :title="t('liability.detailFieldOriginalAmount')">
-          <template #value><MoneyDisplay :amount="Number(liability.original_amount)" /></template>
+          <template #value><MoneyDisplay :amount="Number(liability.original_amount)" :source-currency="liability.currency" /></template>
         </van-cell>
         <van-cell v-if="liability.monthly_payment" :title="t('liability.detailFieldMonthlyPayment')">
-          <template #value><MoneyDisplay :amount="Number(liability.monthly_payment)" /></template>
+          <template #value><MoneyDisplay :amount="Number(liability.monthly_payment)" :source-currency="liability.currency" /></template>
         </van-cell>
         <van-cell v-if="liability.interest_rate" :title="t('liability.detailFieldAnnualRate')" :value="`${liability.interest_rate}%`" />
       </van-cell-group>
@@ -74,12 +74,12 @@
         <div class="collateral-row">
           <div class="collateral-col">
             <div class="collateral-label">{{ t('liability.collateralCurrentValue') }}</div>
-            <div class="collateral-value">{{ currency.format(Number(liability.linked_asset.current_value)) }}</div>
+            <div class="collateral-value">{{ currency.formatIn(Number(liability.linked_asset.current_value), liability.currency) }}</div>
           </div>
           <div class="collateral-vs">vs</div>
           <div class="collateral-col">
             <div class="collateral-label">{{ t('liability.collateralRemainingLoan') }}</div>
-            <div class="collateral-value">{{ currency.format(Number(liability.remaining_amount)) }}</div>
+            <div class="collateral-value">{{ currency.formatIn(Number(liability.remaining_amount), liability.currency) }}</div>
           </div>
         </div>
         <div class="collateral-coverage">

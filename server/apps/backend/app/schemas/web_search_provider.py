@@ -34,6 +34,11 @@ class WebSearchProviderUpdate(BaseModel):
     display_order: int | None = None
 
 
+class WebSearchProviderReorderRequest(BaseModel):
+    """Batch reorder request for enabled web search providers."""
+    order: list[str]
+
+
 class WebSearchProviderResponse(SnowflakeBase):
     """Response schema for a family web search provider."""
     id: int

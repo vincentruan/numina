@@ -273,7 +273,6 @@ const selectedAgent = computed(() =>
   props.agents?.find((a) => a.id === props.selectedAgentId) ?? props.agents?.[0] ?? null,
 )
 const agentIcon = computed(() => selectedAgent.value?.icon || null)
-const agentLabel = computed(() => selectedAgent.value?.display_name ?? t('aiHub.selectAgent'))
 
 function toggleMode() {
   mode.value = mode.value === 'normal' ? 'smart' : 'normal'

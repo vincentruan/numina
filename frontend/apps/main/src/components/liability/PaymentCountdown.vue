@@ -9,6 +9,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getDaysUntilPayment } from '@/utils/date'
+import { parseLocalDate } from '@/utils/format'
 
 const props = defineProps<{
   // Derived from liability.start_date's day-of-month; assumes start_date day == billing day
@@ -23,8 +24,7 @@ const daysUntil = computed(() => getDaysUntilPayment(props.nextPaymentDate))
 
 const isEndDatePast = computed(() => {
   if (!props.endDate) return false
-  const end = new Date(props.endDate)
-  end.setHours(0, 0, 0, 0)
+  const end = parseLocalDate(props.endDate)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return end < today

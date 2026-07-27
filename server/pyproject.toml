@@ -20,6 +20,10 @@ dependencies = [
     "apscheduler>=3.11.2",
     "json-repair>=0.59.10",
     "filelock>=3.29.0",
+    "webauthn>=2.7.1",
+    "bcrypt>=5.0.0",
+    "altcha>=1.0.0",
+    "pymupdf>=1.28.0",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +48,8 @@ backend = [
     # image-based (chars/page < threshold) so the agent's vision model can read
     # them via view_image.
     "pymupdf>=1.24",
+    # Postgres driver (psycopg v3) — needed when DATABASE_URL uses postgresql+psycopg://
+    "psycopg[binary]>=3.2.0",
     # Cache
     "redis>=5.0.0",
     # MCP (Model Context Protocol) server
@@ -62,6 +68,11 @@ agent = [
     "langgraph-runtime-inmem>=0.27.0",
     # Async sqlite checkpoint for LangGraph astream
     "aiosqlite>=0.20.0",
+    # Async postgres checkpoint for LangGraph (used when DEERFLOW_DB_URL is postgres)
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "psycopg[binary,pool]>=3.2.0",
+    # AsyncPG for DeerFlow engine postgres backend
+    "asyncpg>=0.29.0",
     # Crypto
     "cryptography>=42.0.0",
     # Config
@@ -72,6 +83,8 @@ agent = [
 worker = [
     # Crypto for scheduler
     "cryptography>=44.0.0",
+    # Postgres driver for DATABASE_URL
+    "psycopg[binary]>=3.2.0",
 ]
 
 [dependency-groups]

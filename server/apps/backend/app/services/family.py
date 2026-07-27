@@ -7,6 +7,8 @@ from apps.backend.app.models.user import User
 
 def get_family_info(db: Session, user: User) -> Family:
     family = db.query(Family).filter(Family.id == user.family_id).first()
+    if not family:
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     return family
 
 
@@ -25,7 +27,7 @@ def is_root(db: Session, user: User) -> bool:
 def can_manage(db: Session, operator: User, target: User) -> bool:
     """判断 operator 是否有权管理 target（禁用/启用、移除、重置密码）。
     角色变更需单独校验 is_root(db, operator)。"""
-    if operator.role != 'owner':
+    if operator.role != "owner":
         return False
     if target.family_id != operator.family_id:
         return False
@@ -34,13 +36,15 @@ def can_manage(db: Session, operator: User, target: User) -> bool:
         return False
     if target.id == family.created_by:
         return False
-    return not (operator.id != family.created_by and target.role == 'owner')
+    return not (operator.id != family.created_by and target.role == "owner")
 
 
 def update_family_title(db: Session, owner: User, custom_title: str | None) -> Family:
-    if owner.role != 'owner':
+    if owner.role != "owner":
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     family = db.query(Family).filter(Family.id == owner.family_id).first()
+    if not family:
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     family.custom_title = custom_title
     db.commit()
     db.refresh(family)
@@ -49,21 +53,27 @@ def update_family_title(db: Session, owner: User, custom_title: str | None) -> F
 
 def regenerate_invite_code(db: Session, user: User) -> Family:
     family = db.query(Family).filter(Family.id == user.family_id).first()
+    if not family:
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     family.invite_code = generate_invite_code()
     db.commit()
     db.refresh(family)
     return family
 
 
-def update_member_role(db: Session, owner: User, member_id: str, new_role: str) -> User:
+def update_member_role(db: Session, owner: User, member_id: int, new_role: str) -> User:
     if not is_root(db, owner):
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    member = db.query(User).filter(User.id == member_id, User.family_id == owner.family_id).first()
+    member = (
+        db.query(User)
+        .filter(User.id == member_id, User.family_id == owner.family_id)
+        .first()
+    )
     if not member:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     if member.id == owner.id:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    if new_role not in ('owner', 'member'):
+    if new_role not in ("owner", "member"):
         raise AppError(ErrorCode.VALIDATION_ERROR)
     member.role = new_role
     db.commit()
@@ -71,10 +81,14 @@ def update_member_role(db: Session, owner: User, member_id: str, new_role: str) 
     return member
 
 
-def remove_member(db: Session, owner: User, member_id: str) -> None:
+def remove_member(db: Session, owner: User, member_id: int) -> None:
     if owner.id == member_id:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    member = db.query(User).filter(User.id == member_id, User.family_id == owner.family_id).first()
+    member = (
+        db.query(User)
+        .filter(User.id == member_id, User.family_id == owner.family_id)
+        .first()
+    )
     if not member:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     if not can_manage(db, owner, member):
@@ -83,7 +97,9 @@ def remove_member(db: Session, owner: User, member_id: str) -> None:
     db.commit()
 
 
-def reset_member_password(db: Session, operator: User, member_id: str, new_password: str) -> None:
+def reset_member_password(
+    db: Session, operator: User, member_id: int, new_password: str
+) -> None:
     """管理员为成员重置密码。"""
     from apps.backend.app.auth.revoke_jti import revoke_all_user_tokens
     from apps.backend.app.services.auth import (
@@ -91,7 +107,11 @@ def reset_member_password(db: Session, operator: User, member_id: str, new_passw
         hash_password,
     )
 
-    member = db.query(User).filter(User.id == member_id, User.family_id == operator.family_id).first()
+    member = (
+        db.query(User)
+        .filter(User.id == member_id, User.family_id == operator.family_id)
+        .first()
+    )
     if not member:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     if not can_manage(db, operator, member):
@@ -104,11 +124,17 @@ def reset_member_password(db: Session, operator: User, member_id: str, new_passw
     revoke_all_user_tokens(member.id)
 
 
-def update_member_status(db: Session, operator: User, member_id: str, is_active: bool) -> User:
+def update_member_status(
+    db: Session, operator: User, member_id: int, is_active: bool
+) -> User:
     """管理员禁用/启用成员账户。"""
     from apps.backend.app.auth.revoke_jti import revoke_all_user_tokens
 
-    member = db.query(User).filter(User.id == member_id, User.family_id == operator.family_id).first()
+    member = (
+        db.query(User)
+        .filter(User.id == member_id, User.family_id == operator.family_id)
+        .first()
+    )
     if not member:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     if not can_manage(db, operator, member):
@@ -121,9 +147,11 @@ def update_member_status(db: Session, operator: User, member_id: str, is_active:
     return member
 
 
-def list_members(db: Session, family_id: str) -> list[dict]:
+def list_members(db: Session, family_id: int) -> list[dict]:
     """List members for a family."""
-    rows = db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+    rows = (
+        db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+    )
     return [
         {
             "id": str(u.id),

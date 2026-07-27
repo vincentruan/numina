@@ -47,6 +47,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useCurrency } from '@/composables/useCurrency'
+import { parseApiDate } from '@/utils/format'
 import { useExchangeRate } from '@/composables/useExchangeRate'
 
 const props = withDefaults(defineProps<{
@@ -118,8 +119,12 @@ const CURRENCY_LOCALES: Record<string, string> = {
   HKD: 'zh-HK',
 }
 
-const currencySymbol = computed(() => CURRENCY_SYMBOLS[currency.value] || currency.value)
-const locale = computed(() => CURRENCY_LOCALES[currency.value] || 'zh-CN')
+// Display currency: use sourceCurrency when explicitly provided (the amount is
+// in its native currency), otherwise fall back to user's default_currency (the
+// amount was already converted server-side, e.g. dashboard aggregates).
+const displayCurrency = computed(() => props.sourceCurrency || currency.value)
+const currencySymbol = computed(() => CURRENCY_SYMBOLS[displayCurrency.value] || displayCurrency.value)
+const locale = computed(() => CURRENCY_LOCALES[displayCurrency.value] || 'zh-CN')
 
 // Show conversion info only when actual currency conversion is happening
 const showConversionInfo = computed(() => {
@@ -155,7 +160,7 @@ const rateDisplay = computed(() => {
 // Format fetch time - compact format
 const formattedFetchTime = computed(() => {
   if (!rateInfo.value?.fetched_at) return '-'
-  const date = new Date(rateInfo.value.fetched_at)
+  const date = parseApiDate(rateInfo.value.fetched_at)
   const month = date.getMonth() + 1
   const day = date.getDate()
   const hour = date.getHours().toString().padStart(2, '0')
@@ -167,7 +172,7 @@ const displayValue = computed(() => {
   const abs = Math.abs(numAmount.value)
 
   // CNY使用万/亿单位
-  if (currency.value === 'CNY') {
+  if (displayCurrency.value === 'CNY') {
     if (abs >= 100000000) {
       return `${(abs / 100000000).toFixed(2)}亿`
     } else if (abs >= 10000) {

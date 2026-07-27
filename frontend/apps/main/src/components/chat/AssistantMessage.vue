@@ -13,7 +13,7 @@
  * - Main content area with markdown rendering
  * - Actions: copy, regenerate, feedback (thumbs up/down)
  */
-import { computed, ref, nextTick, onMounted, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 import type { CitationSource } from '@/utils/ai-chat/citations'
@@ -45,6 +45,15 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   phase: 'done',
+  processSteps: undefined,
+  planSteps: undefined,
+  planSource: undefined,
+  processElapsedMs: undefined,
+  reasoningStartTime: undefined,
+  renderedContent: undefined,
+  suggestions: undefined,
+  feedback: undefined,
+  artifacts: undefined,
   canBranch: false,
   isBranching: false,
 })
@@ -294,12 +303,8 @@ watch(
       {{ t('aiChat.generationStopped') }}
     </div>
 
-    <!-- Inline token usage (DeerFlow pattern: separate block with separator,
-         between content and footer — NOT mixed into the footer row).
-         Visibility is controlled by TokenUsage (off/per_turn/debug). -->
-    <slot name="token-usage" />
-
-    <!-- Footer: timestamp + actions (DeerFlow: actions on hover toolbar) -->
+    <!-- Footer: timestamp + actions (DeerFlow: actions on hover toolbar).
+         No border-top here — TokenUsage component above provides the separator. -->
     <div v-if="phase === 'done' || phase === 'interrupted' || phase === 'error'" class="message-footer">
       <span class="message-time">{{ displayTime }}</span>
       <div class="message-footer-spacer" />
@@ -547,13 +552,12 @@ watch(
   opacity: 0.8;
 }
 
-/* Footer */
+/* Footer — no border-top (TokenUsage above provides the separator) */
 .message-footer {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  padding-top: 8px;
 }
 
 /* Spacer pushes actions to the right */

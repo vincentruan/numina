@@ -2,6 +2,7 @@
 安全监控服务 - 实时检测和告警异常行为
 使用进程内存存储，无需Redis依赖（单机部署优化）
 """
+
 import logging
 import threading
 import time
@@ -9,12 +10,14 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
+from typing import Any, Callable
 
 logger = logging.getLogger("security")
 
 
 class ThreatLevel(Enum):
     """威胁等级"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -23,6 +26,7 @@ class ThreatLevel(Enum):
 
 class ThreatType(Enum):
     """威胁类型"""
+
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
     SUSPICIOUS_LOGIN = "suspicious_login"
     BOT_DETECTED = "bot_detected"
@@ -35,6 +39,7 @@ class ThreatType(Enum):
 @dataclass
 class SecurityEvent:
     """安全事件"""
+
     timestamp: datetime
     threat_type: ThreatType
     threat_level: ThreatLevel
@@ -50,6 +55,7 @@ class InMemorySecurityStore:
     进程内存安全存储
     替代Redis的轻量级单机实现
     """
+
     _instance = None
     _lock = threading.Lock()
 
@@ -84,8 +90,7 @@ class InMemorySecurityStore:
         with self._store_lock:
             # 清理过期计数器
             expired_keys = [
-                k for k, (_, expiry) in self._counters.items()
-                if expiry < now
+                k for k, (_, expiry) in self._counters.items() if expiry < now
             ]
             for k in expired_keys:
                 del self._counters[k]
@@ -94,8 +99,7 @@ class InMemorySecurityStore:
             cutoff = now - 86400
             for event_type in list(self._events.keys()):
                 self._events[event_type] = [
-                    (ts, data) for ts, data in self._events[event_type]
-                    if ts > cutoff
+                    (ts, data) for ts, data in self._events[event_type] if ts > cutoff
                 ]
                 if not self._events[event_type]:
                     del self._events[event_type]
@@ -108,7 +112,9 @@ class InMemorySecurityStore:
         with self._store_lock:
             self._events[event_type].append((timestamp, event_data))
 
-    def get_event_count(self, event_type: str, start_time: float, end_time: float) -> int:
+    def get_event_count(
+        self, event_type: str, start_time: float, end_time: float
+    ) -> int:
         """获取事件数量"""
         with self._store_lock:
             events = self._events.get(event_type, [])
@@ -124,7 +130,7 @@ class InMemorySecurityStore:
             else:
                 count = 1
             self._counters[key] = (count, now + expiry)
-            return count
+            return int(count)
 
     def add_suspicious_ip(self, ip: str):
         """添加可疑IP"""
@@ -139,15 +145,17 @@ class InMemorySecurityStore:
     def get_stats(self, start_time: float, end_time: float) -> dict:
         """获取统计信息"""
         with self._store_lock:
-            stats = {
+            stats: dict[str, Any] = {
                 "events_by_type": {},
                 "suspicious_ip_count": len(self._suspicious_ips),
                 "active_counters": len(self._counters),
             }
+            events_by_type: dict[str, int] = {}
             for event_type, events in self._events.items():
                 count = sum(1 for ts, _ in events if start_time <= ts <= end_time)
                 if count > 0:
-                    stats["events_by_type"][event_type] = count
+                    events_by_type[event_type] = count
+            stats["events_by_type"] = events_by_type
             return stats
 
 
@@ -167,31 +175,27 @@ class SecurityMonitor:
         "rate_limit_violations": {
             "count": 10,
             "window": 300,  # 5分钟
-            "level": ThreatLevel.MEDIUM
+            "level": ThreatLevel.MEDIUM,
         },
-        "suspicious_requests": {
-            "count": 50,
-            "window": 300,
-            "level": ThreatLevel.HIGH
-        },
+        "suspicious_requests": {"count": 50, "window": 300, "level": ThreatLevel.HIGH},
         "unique_ips": {
             "count": 100,
-            "window": 60,   # 1分钟
-            "level": ThreatLevel.CRITICAL
+            "window": 60,  # 1分钟
+            "level": ThreatLevel.CRITICAL,
         },
         "data_volume": {
             "bytes": 100_000_000,  # 100MB
             "window": 300,
-            "level": ThreatLevel.HIGH
-        }
+            "level": ThreatLevel.HIGH,
+        },
     }
 
     def __init__(self):
         self._store = InMemorySecurityStore()
         self.event_buffer: list[SecurityEvent] = []
-        self.alert_handlers: list[callable] = []
+        self.alert_handlers: list[Callable[[dict], Any]] = []
 
-    def register_alert_handler(self, handler: callable):
+    def register_alert_handler(self, handler: Callable[[dict], Any]):
         """注册告警处理器"""
         self.alert_handlers.append(handler)
 
@@ -219,13 +223,11 @@ class SecurityMonitor:
             "level": event.threat_level.value,
             "ip": event.client_ip,
             "path": event.path,
-            "details": event.details
+            "details": event.details,
         }
 
         self._store.add_event(
-            event.threat_type.value,
-            event_data,
-            event.timestamp.timestamp()
+            event.threat_type.value, event_data, event.timestamp.timestamp()
         )
 
     async def _check_threat(self, event: SecurityEvent):
@@ -269,7 +271,7 @@ class SecurityMonitor:
         alert_data = {
             "timestamp": datetime.utcnow().isoformat(),
             "event": asdict(event),
-            "recommendation": self._get_recommendation(event)
+            "recommendation": self._get_recommendation(event),
         }
 
         # 调用所有告警处理器
@@ -288,33 +290,25 @@ class SecurityMonitor:
             ThreatType.API_ABUSE: "Review and tighten rate limits",
             ThreatType.SUSPICIOUS_LOGIN: "Require MFA verification",
             ThreatType.REPLAY_ATTACK: "Check nonce validation",
-            ThreatType.INVALID_SIGNATURE: "Review client integrity"
+            ThreatType.INVALID_SIGNATURE: "Review client integrity",
         }
-        return recommendations.get(
-            event.threat_type,
-            "Monitor and investigate"
-        )
+        return recommendations.get(event.threat_type, "Monitor and investigate")
 
     async def get_security_stats(
-        self,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None
+        self, start_time: datetime | None = None, end_time: datetime | None = None
     ) -> dict:
         """获取安全统计信息"""
         start_time = start_time or datetime.utcnow() - timedelta(hours=24)
         end_time = end_time or datetime.utcnow()
 
-        stats = self._store.get_stats(
-            start_time.timestamp(),
-            end_time.timestamp()
-        )
+        stats = self._store.get_stats(start_time.timestamp(), end_time.timestamp())
 
         return {
             "time_range": {
                 "start": start_time.isoformat(),
-                "end": end_time.isoformat()
+                "end": end_time.isoformat(),
             },
-            **stats
+            **stats,
         }
 
 

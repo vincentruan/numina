@@ -14,7 +14,7 @@
  */
 import { computed, useId } from 'vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     width?: number
   }>(),

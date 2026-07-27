@@ -47,7 +47,13 @@
           <LanguageIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" is-link @click="showCurrencyPicker = true">
+      <van-cell
+        :title="t('settings.defaultCurrency')"
+        :value="authStore.user?.default_currency || 'CNY'"
+        :label="authStore.user?.default_currency && authStore.user.default_currency !== 'CNY' ? t('settings.currencyRateHint') : undefined"
+        is-link
+        @click="showCurrencyPicker = true"
+      >
         <template #icon>
           <CurrencyIcon :size="16" class="cell-icon" />
         </template>
@@ -107,6 +113,24 @@
             :disabled="!hasAnyModel || togglingAI"
             size="22px"
             @update:model-value="onToggleAI"
+          />
+        </template>
+      </van-cell>
+      <van-cell
+        v-if="authStore.user?.role === 'owner' && aiEnabled"
+        center
+        :title="t('settings.autoReport')"
+        :label="t('settings.autoReportDesc')"
+      >
+        <template #icon>
+          <SvgIcon name="documentation" :size="16" class="cell-icon" />
+        </template>
+        <template #value>
+          <van-switch
+            :model-value="reportAutoGenerate"
+            :disabled="togglingReportAuto"
+            size="22px"
+            @update:model-value="onToggleReportAuto"
           />
         </template>
       </van-cell>
@@ -260,6 +284,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
 import { updateSettings } from '@/api/auth'
+import { getFamilySettings, updateFamilySettings } from '@/api/family'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
@@ -278,6 +303,10 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const aiStore = useAIStore()
 const { increment, decrement } = usePageLoading()
+// Track first KeepAlive activation to avoid duplicate loading:
+// Vue 3 fires both onMounted and onActivated on first mount inside <KeepAlive>.
+// onMounted handles initial load; onActivated only refreshes on reactivation.
+let hasActivated = false
 
 onMounted(async () => {
   // Restart loading indicator for async data loading (router will auto-complete after 100ms)
@@ -289,6 +318,7 @@ onMounted(async () => {
     await authStore.fetchMe()
     if (authStore.user?.role === 'owner') {
       await aiStore.fetchConfigs()
+      await loadReportAutoSetting()
     }
   } catch (err) {
     // API error (e.g., AUTH_TOKEN_EXPIRED) — axios interceptor handles redirect to /login
@@ -309,6 +339,7 @@ onMounted(async () => {
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
 onActivated(async () => {
+  if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
     if (!familyStore.family) {
@@ -361,6 +392,32 @@ async function onToggleAI(val: boolean) {
     showFailToast(t('toast.operationFailed2'))
   } finally {
     togglingAI.value = false
+  }
+}
+
+// Report auto-generate toggle
+const reportAutoGenerate = ref(false)
+const togglingReportAuto = ref(false)
+
+async function loadReportAutoSetting() {
+  try {
+    const res = await getFamilySettings()
+    reportAutoGenerate.value = res.data.report_auto_generate_enabled
+  } catch {
+    // silent
+  }
+}
+
+async function onToggleReportAuto(val: boolean) {
+  togglingReportAuto.value = true
+  try {
+    await updateFamilySettings({ reportAutoGenerateEnabled: val })
+    reportAutoGenerate.value = val
+    showSuccessToast(val ? t('toast.autoReportEnabled') : t('toast.autoReportDisabled'))
+  } catch {
+    showFailToast(t('toast.operationFailed2'))
+  } finally {
+    togglingReportAuto.value = false
   }
 }
 

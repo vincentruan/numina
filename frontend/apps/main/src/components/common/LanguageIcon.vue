@@ -4,7 +4,7 @@
  *
  * A globe icon representing language/locale settings.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     size?: number
   }>(),

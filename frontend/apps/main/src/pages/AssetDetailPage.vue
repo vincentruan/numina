@@ -31,7 +31,6 @@
             :amount="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)"
             size="large"
             :source-currency="asset.currency"
-            :original-value="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)"
           />
           </div>
           <div class="hero-value-item">
@@ -39,19 +38,18 @@
             <MoneyDisplay
               :amount="asset.purchase_price || 0"
               :source-currency="asset.currency"
-              :original-value="asset.purchase_price || 0"
             />
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
             <div class="hero-value-label">{{ t('asset.dailyCostLabel') }}</div>
-            <div class="hero-daily-cost">{{ currency.format(asset.daily_cost) }}</div>
+            <div class="hero-daily-cost">{{ currency.formatIn(asset.daily_cost, asset.currency) }}</div>
           </div>
         </div>
         <div v-if="asset.status !== 'sold'" class="hero-change" :class="returnClass">
           {{ returnText }}
         </div>
         <div v-if="asset.status === 'sold'" class="sell-summary">
-          {{ t('assetDetail.netRecovery', { amount: (Number(asset.sell_price!) - Number(asset.sell_fee || 0)).toLocaleString() }) }}
+          {{ t('assetDetail.netRecovery', { amount: currency.formatIn(Number(asset.sell_price!) - Number(asset.sell_fee || 0), asset.currency) }) }}
           <span v-if="asset.sell_date"> · {{ asset.sell_date }}</span>
         </div>
       </div>
@@ -62,6 +60,7 @@
         :purchase-price="Number(asset.purchase_price)"
         :purchase-date="asset.purchase_date"
         :target-daily-cost="asset.target_daily_cost != null ? Number(asset.target_daily_cost) : null"
+        :source-currency="asset.currency"
       />
 
       <!-- Basic Info -->
@@ -78,7 +77,6 @@
             <MoneyDisplay
               :amount="asset.purchase_price || 0"
               :source-currency="asset.currency"
-              :original-value="asset.purchase_price || 0"
             />
           </template>
         </van-cell>
@@ -100,17 +98,17 @@
         <van-cell v-if="asset.location" :title="t('assetDetail.fieldLocation')" :value="asset.location" />
         <van-cell v-if="asset.expected_lifespan_days" :title="t('assetDetail.fieldExpectedLifespan')" :value="t('assetDetail.lifespanDays', { days: asset.expected_lifespan_days })" />
         <van-cell v-if="asset.annual_maintenance_cost" :title="t('assetDetail.fieldAnnualMaintenance')">
-          <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost || 0" /></template>
+          <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost || 0" :source-currency="asset.currency" /></template>
         </van-cell>
         <van-cell v-if="asset.usage_frequency" :title="t('assetDetail.fieldUsageFrequency')" :value="usageText" />
         <van-cell v-if="asset.daily_cost" :title="t('assetDetail.fieldDailyCost')">
           <template #value>
-            <span class="daily-cost">{{ currency.format(asset.daily_cost) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="daily-cost">{{ currency.formatIn(asset.daily_cost, asset.currency) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
         <van-cell v-if="asset.target_daily_cost" :title="t('assetDetail.fieldTargetDailyCost')">
           <template #value>
-            <span class="target-cost">{{ currency.format(Number(asset.target_daily_cost)) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="target-cost">{{ currency.formatIn(Number(asset.target_daily_cost), asset.currency) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
       </van-cell-group>
@@ -132,10 +130,10 @@
       <!-- Sell Info (when sold) -->
       <van-cell-group v-if="asset.status === 'sold'" inset :title="t('assetDetail.sectionSellInfo')">
         <van-cell :title="t('assetDetail.fieldSellPrice')">
-          <template #value><MoneyDisplay :amount="asset.sell_price || 0" /></template>
+          <template #value><MoneyDisplay :amount="asset.sell_price || 0" :source-currency="asset.currency" /></template>
         </van-cell>
         <van-cell v-if="asset.sell_fee" :title="t('assetDetail.fieldSellFee')">
-          <template #value><MoneyDisplay :amount="asset.sell_fee || 0" /></template>
+          <template #value><MoneyDisplay :amount="asset.sell_fee || 0" :source-currency="asset.currency" /></template>
         </van-cell>
         <van-cell v-if="asset.sell_channel" :title="t('assetDetail.fieldSellChannel')" :value="asset.sell_channel" />
         <van-cell v-if="asset.sell_date" :title="t('assetDetail.fieldSellDate')" :value="asset.sell_date" />
@@ -190,7 +188,7 @@
         <van-cell
           v-for="v in valuations"
           :key="v.id"
-          :title="currency.format(Number(v.value))"
+          :title="currency.formatIn(Number(v.value), asset.currency)"
           :value="v.valued_at.slice(0, 10)"
         />
       </van-cell-group>
@@ -204,10 +202,10 @@
       <!-- Actions -->
       <div class="actions">
         <template v-if="asset.status === 'in_use' || asset.status === 'idle'">
-          <van-button block type="primary" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" :loading="navigating === 'edit'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/edit`, 'edit')">
             {{ t('assetDetail.btnEdit') }}
           </van-button>
-          <van-button block type="warning" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/sell`)">
+          <van-button block type="warning" plain :loading="navigating === 'sell'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/sell`, 'sell')">
             {{ t('assetDetail.btnSell') }}
           </van-button>
           <van-button block type="default" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onRetire">
@@ -218,12 +216,12 @@
           <van-button block type="success" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onReactivate">
             {{ t('assetDetail.btnReactivate') }}
           </van-button>
-          <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" plain :loading="navigating === 'edit'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/edit`, 'edit')">
             {{ t('assetDetail.btnEdit') }}
           </van-button>
         </template>
         <template v-else-if="asset.status === 'sold'">
-          <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" plain :loading="navigating === 'edit'" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : navigateTo(`/assets/${asset.id}/edit`, 'edit')">
             {{ t('assetDetail.btnEdit') }}
           </van-button>
         </template>
@@ -252,6 +250,7 @@ import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getIconId } from '@/utils/icon'
 import { useCurrency } from '@/composables/useCurrency'
+import { parseApiDate, parseLocalDate } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -260,6 +259,7 @@ const router = useRouter()
 const assetStore = useAssetStore()
 const deleting = ref(false)
 const acting = ref(false)
+const navigating = ref<'edit' | 'sell' | null>(null)
 const valuations = ref<AssetValuation[]>([])
 const imageError = ref(false)
 const { increment, decrement } = usePageLoading()
@@ -269,6 +269,15 @@ const asset = computed(() => assetStore.currentAsset)
 
 // Check if this asset is currently syncing
 const syncing = computed(() => asset.value ? assetStore.isSyncing(asset.value.id) : false)
+
+async function navigateTo(path: string, action: 'edit' | 'sell') {
+  navigating.value = action
+  try {
+    await router.push(path)
+  } finally {
+    navigating.value = null
+  }
+}
 
 const imageUrl = computed(() => {
   if (!asset.value?.image_url) return ''
@@ -284,7 +293,7 @@ function onImageError() {
 
 const daysUsed = computed(() => {
   if (!asset.value?.purchase_date) return 0
-  const purchase = new Date(asset.value.purchase_date)
+  const purchase = parseLocalDate(asset.value.purchase_date)
   const now = new Date()
   const diff = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
   return diff > 0 ? diff : 0
@@ -338,7 +347,7 @@ const returnText = computed(() => {
   if (!asset.value?.purchase_price || !asset.value?.current_value) return ''
   const diff = Number(asset.value.current_value) - Number(asset.value.purchase_price)
   const sign = diff >= 0 ? '+' : ''
-  return `${sign}${currency.format(diff)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
+  return `${sign}${currency.formatIn(diff, asset.value.currency)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
 })
 
 // D8: interval return rate (preset intervals vs current_value).
@@ -369,7 +378,7 @@ const intervalReturn = computed<IntervalReturn | null>(() => {
   const days = INTERVAL_DAYS[key]
   const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000)
   // valuations are newest-first; first point at/before cutoff is the closest from below.
-  const start = valuations.value.find((v) => new Date(v.valued_at) <= cutoff)
+  const start = valuations.value.find((v) => parseApiDate(v.valued_at) <= cutoff)
   if (!start) return null
   const startValue = Number(start.value)
   if (startValue === 0) return null
@@ -389,8 +398,8 @@ const intervalReturnText = computed(() => {
   const sign = r.rate >= 0 ? '+' : '-'
   return t('assetDetail.intervalReturnDetail', {
     date: r.startDate,
-    start: currency.format(r.startValue),
-    end: currency.format(r.endValue),
+    start: currency.formatIn(r.startValue, asset.value!.currency),
+    end: currency.formatIn(r.endValue, asset.value!.currency),
     rate: `${sign}${Math.abs(r.rate).toFixed(2)}%`,
   })
 })

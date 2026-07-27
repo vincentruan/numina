@@ -46,6 +46,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getActiveChildChallenges } from '@/api/challengeGrant'
+import { parseApiDate } from '@/utils/format'
 import type { ChildChallenge } from '@/types/challengeGrant'
 
 const { t } = useI18n()
@@ -91,7 +92,7 @@ function progressPercent(ch: ChildChallenge): number {
 }
 
 function daysLeft(deadline: string): number {
-  const diff = new Date(deadline).getTime() - Date.now()
+  const diff = parseApiDate(deadline).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)))
 }
 

@@ -49,7 +49,7 @@ def get_challenge(endpoint: str | None = None):
             - "join-family": Higher difficulty (100000) for abuse prevention
             - None or unrecognized: Default difficulty (50000)
     """
-    max_number = DIFFICULTY_MAP.get(endpoint, DEFAULT_DIFFICULTY)
+    max_number = DIFFICULTY_MAP.get(endpoint or "", DEFAULT_DIFFICULTY)
     challenge = create_challenge(ChallengeOptions(
         hmac_key=settings.ALTCHA_HMAC_KEY,
         max_number=max_number,

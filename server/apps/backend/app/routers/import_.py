@@ -44,7 +44,7 @@ def import_json(
         (Category.family_id == family_id) | (Category.family_id == None)
     ).all()
     for c in existing_cats:
-        category_map[c.name] = c.id
+        category_map[c.name] = str(c.id)
 
     for cat_data in data.get("categories", []):
         if cat_data["name"] not in category_map:
@@ -57,14 +57,14 @@ def import_json(
             )
             db.add(cat)
             db.flush()
-            category_map[cat.name] = cat.id
+            category_map[cat.name] = str(cat.id)
             stats["categories"] += 1
 
     # Import tags
     tag_map: dict[str, str] = {}  # name -> id
     existing_tags = db.query(Tag).filter(Tag.family_id == family_id).all()
     for t in existing_tags:
-        tag_map[t.name] = t.id
+        tag_map[t.name] = str(t.id)
 
     for tag_data in data.get("tags", []):
         if tag_data["name"] not in tag_map:
@@ -75,7 +75,7 @@ def import_json(
             )
             db.add(tag)
             db.flush()
-            tag_map[tag.name] = tag.id
+            tag_map[tag.name] = str(tag.id)
             stats["tags"] += 1
 
     # Import assets

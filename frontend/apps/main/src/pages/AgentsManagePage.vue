@@ -144,6 +144,12 @@ async function handleDelete(agent: Agent) {
           is-link
           @click="router.push({ name: 'AgentEdit', params: { id: agent.id } })"
         >
+          <template #title>
+            <span>{{ agent.display_name }}</span>
+            <van-tag v-if="agent.agent_type === 'custom' && !agent.is_published" plain type="warning" size="medium" class="publish-tag">
+              {{ t('agents.form.draft') }}
+            </van-tag>
+          </template>
           <template #icon>
             <span
               class="agent-icon-wrapper"
@@ -266,6 +272,10 @@ async function handleDelete(agent: Agent) {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.publish-tag {
+  margin-left: 6px;
 }
 
 .bottom-bar {

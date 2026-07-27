@@ -12,7 +12,7 @@ import logging
 import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -60,7 +60,7 @@ class ChatAdapter:
             data = resp.json()
             # Backend uses envelope response: {code, data: {content: ...}, message}
             inner = data.get("data", data)
-            return inner.get("content")
+            return cast("str | None", inner.get("content"))
 
     async def _resolve_prompt(self, family_id: str) -> str:
         """Load family override → default fallback."""

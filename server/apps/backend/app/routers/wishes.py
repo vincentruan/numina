@@ -29,22 +29,33 @@ def list_wishes(
 
 
 @router.post("", response_model=WishResponse, status_code=201)
-def create_wish(req: WishCreate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def create_wish(
+    req: WishCreate, db: Session = Depends(get_db), user: User = Depends(require_adult)
+):
     return wish_service.create_wish(db, user, req)
 
 
 @router.get("/{wish_id}", response_model=WishResponse)
-def get_wish(wish_id: int, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def get_wish(
+    wish_id: int, db: Session = Depends(get_db), user: User = Depends(require_adult)
+):
     return wish_service.get_wish(db, user, wish_id)
 
 
 @router.put("/{wish_id}", response_model=WishResponse)
-def update_wish(wish_id: int, req: WishUpdate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def update_wish(
+    wish_id: int,
+    req: WishUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
     return wish_service.update_wish(db, user, wish_id, req)
 
 
 @router.delete("/{wish_id}")
-def delete_wish(wish_id: int, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def delete_wish(
+    wish_id: int, db: Session = Depends(get_db), user: User = Depends(require_adult)
+):
     wish_service.delete_wish(db, user, wish_id)
     return {"detail": "已删除"}
 
@@ -59,6 +70,7 @@ def realize_wish(
     asset = wish_service.realize_wish(db, user, wish_id, req)
     # Return asset response with computed fields
     from apps.backend.app.services import asset as asset_service
+
     resp = AssetResponse.model_validate(asset)
     resp.daily_cost = asset_service.compute_daily_cost(asset)
     resp.return_rate = asset_service.compute_return_rate(asset)
@@ -73,7 +85,9 @@ def record_savings(
     user: User = Depends(require_adult),
 ):
     """Record a savings deposit/withdrawal for a wish (W1)."""
-    return wish_savings.record_savings(db, user, str(wish_id), req.amount, req.log_date, req.note)
+    return wish_savings.record_savings(
+        db, user, str(wish_id), req.amount, req.log_date, req.note
+    )
 
 
 @router.get("/{wish_id}/savings", response_model=list[SavingsLogResponse])
@@ -108,4 +122,4 @@ def set_ignore_debt_warning(
     user: User = Depends(require_adult),
 ):
     """Toggle the wish's debt-warning override flag (W5)."""
-    return wish_service.set_ignore_debt_warning(db, user, str(wish_id), req.ignore)
+    return wish_service.set_ignore_debt_warning(db, user, wish_id, req.ignore)

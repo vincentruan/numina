@@ -22,6 +22,8 @@ from pathlib import Path
 # 添加当前目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent))
 
+from sqlalchemy import inspect, text
+
 from db import Base, init_engine, init_session_factory, get_db_session
 from safety import safety_check
 
@@ -140,8 +142,8 @@ def _sync_seed_credentials(db) -> None:
 
 
 def _reset_seed_accounts(db) -> None:
-    """删除所有 seed 账号及其家庭数据，允许场景重新创建。"""
-    from sqlalchemy import text
+    """删除所有 seed 账号及其关联数据，允许场景重新创建。"""
+    from sqlalchemy import inspect as sa_inspect
 
     print("【Reset】清空 seed 账号数据...\n")
 
@@ -153,45 +155,120 @@ def _reset_seed_accounts(db) -> None:
     family_ids = list({u.family_id for u in users if u.family_id})
     user_ids = [u.id for u in users]
 
-    def _del(table: str, col: str, vals: list) -> None:
-        if not vals:
-            return
-        placeholders = ",".join(str(v) for v in vals)
-        db.execute(text(f"DELETE FROM {table} WHERE {col} IN ({placeholders})"))
-
     if not user_ids or not family_ids:
         print("  (无 seed 账号，跳过 reset)")
         return
 
-    uid_list = ",".join(str(v) for v in user_ids)
-    fid_list = ",".join(str(v) for v in family_ids)
-
-    # Join tables — delete via subquery (no direct family_id/user_id column)
-    db.execute(text(
-        f"DELETE FROM asset_tags WHERE asset_id IN "
-        f"(SELECT id FROM assets WHERE user_id IN ({uid_list}))"
-    ))
-    db.execute(text(
-        f"DELETE FROM chore_template_assignees WHERE template_id IN "
-        f"(SELECT id FROM chore_templates WHERE family_id IN ({fid_list}))"
-    ))
-
-    # Tables with family_id
-    for table in ["coin_transactions", "chore_instances", "chore_templates",
-                  "child_wishes", "blind_box_gifts", "blind_box_config", "bonus_draws"]:
-        db.execute(text(f"DELETE FROM {table} WHERE family_id IN ({fid_list})"))
-
-    # Tables with user_id
-    for table in ["wishes", "liabilities", "assets"]:
-        db.execute(text(f"DELETE FROM {table} WHERE user_id IN ({uid_list})"))
-
-    # Child users in these families
-    db.execute(text(f"DELETE FROM users WHERE family_id IN ({fid_list}) AND role = 'child'"))
-
-    # Seed users and their families
+    uid_text_list = ",".join(f"'{v}'" for v in user_ids)
+    fid_text_list = ",".join(f"'{v}'" for v in family_ids)
     name_list = ",".join(f"'{n}'" for n in SEED_USERNAMES)
-    db.execute(text(f"DELETE FROM users WHERE username IN ({name_list})"))
-    db.execute(text(f"DELETE FROM families WHERE id IN ({fid_list})"))
+
+    engine = db.get_bind()
+    inspector = sa_inspect(engine)
+    all_tables = set(inspector.get_table_names())
+    db_url = str(engine.url)
+
+    # 收集每个表的列，用于生成 DELETE 语句
+    table_columns: dict[str, set[str]] = {}
+    for table in all_tables:
+        table_columns[table] = {c["name"] for c in inspector.get_columns(table)}
+
+    # 先处理没有直接 family_id/user_id 列、但引用 assets/wishes/users 的关联表
+    join_cleanup = [
+        ("asset_tags", "asset_id", "assets", "user_id", uid_text_list),
+        ("chore_template_assignees", "template_id", "chore_templates", "family_id", fid_text_list),
+        ("wish_savings_logs", "wish_id", "wishes", "user_id", uid_text_list),
+    ]
+    for table, col, parent_table, parent_filter_col, parent_filter_list in join_cleanup:
+        if table not in all_tables or parent_table not in all_tables:
+            continue
+        db.execute(text(
+            f"DELETE FROM {table} WHERE CAST({col} AS TEXT) IN "
+            f"(SELECT CAST(id AS TEXT) FROM {parent_table} WHERE CAST({parent_filter_col} AS TEXT) IN ({parent_filter_list}))"
+        ))
+
+    def _delete_by_seed_ids() -> None:
+        """删除所有带 family_id / user_id / child_user_id 的 seed 相关行。"""
+        for table, cols in table_columns.items():
+            if table in ("users", "families"):
+                continue
+            if "family_id" in cols:
+                db.execute(text(
+                    f"DELETE FROM {table} WHERE CAST(family_id AS TEXT) IN ({fid_text_list})"
+                ))
+            elif "user_id" in cols:
+                db.execute(text(
+                    f"DELETE FROM {table} WHERE CAST(user_id AS TEXT) IN ({uid_text_list})"
+                ))
+            elif "child_user_id" in cols:
+                db.execute(text(
+                    f"DELETE FROM {table} WHERE CAST(child_user_id AS TEXT) IN "
+                    f"(SELECT CAST(id AS TEXT) FROM users WHERE family_id IN ({fid_text_list}) AND role = 'child')"
+                ))
+
+    if db_url.startswith("postgresql"):
+        # Postgres: 临时禁用触发器和 FK 检查，直接按 id 清理，避免复杂拓扑排序
+        db.execute(text("SET session_replication_role = replica"))
+        try:
+            _delete_by_seed_ids()
+            db.execute(text(f"DELETE FROM users WHERE family_id IN ({fid_text_list}) AND role = 'child'"))
+            db.execute(text(f"DELETE FROM users WHERE username IN ({name_list})"))
+            db.execute(text(f"DELETE FROM families WHERE id IN ({fid_text_list})"))
+        finally:
+            db.execute(text("SET session_replication_role = DEFAULT"))
+    else:
+        # SQLite / other: 使用外键拓扑排序清理
+        target_tables: list[str] = []
+        for table, cols in table_columns.items():
+            if table in ("users", "families"):
+                continue
+            if cols & {"family_id", "user_id", "child_user_id"}:
+                target_tables.append(table)
+
+        dependencies: dict[str, set[str]] = {t: set() for t in all_tables}
+        for table in all_tables:
+            for fk in inspector.get_foreign_keys(table):
+                ref_table = fk.get("referred_table")
+                if ref_table and table in all_tables and ref_table in all_tables:
+                    dependencies[table].add(ref_table)
+
+        target_set = set(target_tables)
+        visited: set[str] = set()
+        dfs_order: list[str] = []
+
+        def visit(t: str) -> None:
+            if t in visited or t not in target_set:
+                return
+            visited.add(t)
+            for dep in dependencies.get(t, set()):
+                if dep in target_set:
+                    visit(dep)
+            dfs_order.append(t)
+
+        for t in sorted(target_tables):
+            visit(t)
+
+        ordered = list(reversed(dfs_order))
+
+        for table in ordered:
+            cols = table_columns[table]
+            if "family_id" in cols:
+                db.execute(text(
+                    f"DELETE FROM {table} WHERE CAST(family_id AS TEXT) IN ({fid_text_list})"
+                ))
+            elif "user_id" in cols:
+                db.execute(text(
+                    f"DELETE FROM {table} WHERE CAST(user_id AS TEXT) IN ({uid_text_list})"
+                ))
+            elif "child_user_id" in cols:
+                db.execute(text(
+                    f"DELETE FROM {table} WHERE CAST(child_user_id AS TEXT) IN "
+                    f"(SELECT CAST(id AS TEXT) FROM users WHERE family_id IN ({fid_text_list}) AND role = 'child')"
+                ))
+
+        db.execute(text(f"DELETE FROM users WHERE family_id IN ({fid_text_list}) AND role = 'child'"))
+        db.execute(text(f"DELETE FROM users WHERE username IN ({name_list})"))
+        db.execute(text(f"DELETE FROM families WHERE id IN ({fid_text_list})"))
 
     db.flush()
     print(f"  [ok] 已清空 {len(users)} 个 seed 账号及关联数据\n")
@@ -240,21 +317,33 @@ def main():
         if not args.reset:
             _sync_seed_credentials(db)
 
-        # Part 1: 固定测试账号
-        print("【Part 1】固定测试账号\n")
+        # Postgres 下场景创建第一个 owner 时存在 users/families 循环外键：
+        # user.family_id 指向 family，family.created_by 指向 user。
+        # 场景先用 family_id=0 占位创建 user，再创建 family，最后修正 family_id。
+        # 临时禁用触发器/FK 检查，等所有场景跑完再恢复，避免插入 family_id=0 时报错。
+        postgres_mode = db_url.startswith("postgresql")
+        if postgres_mode:
+            db.execute(text("SET session_replication_role = replica"))
 
-        seed_empty_scenario(db, verbose=args.verbose)
-        seed_single_asset_scenario(db, verbose=args.verbose)
-        seed_full_scenario(db, verbose=args.verbose)
-        
-        # Part 2: demouser（可选）
-        if not args.skip_demo:
-            print("\n" + "-"*50)
-            print("\n【Part 2】demouser 完整仿真数据\n")
-            seed_demo_scenario(db, verbose=args.verbose)
-        else:
-            print("\n【Part 2】跳过 demouser (--skip-demo)")
-        
+        try:
+            # Part 1: 固定测试账号
+            print("【Part 1】固定测试账号\n")
+
+            seed_empty_scenario(db, verbose=args.verbose)
+            seed_single_asset_scenario(db, verbose=args.verbose)
+            seed_full_scenario(db, verbose=args.verbose)
+
+            # Part 2: demouser（可选）
+            if not args.skip_demo:
+                print("\n" + "-"*50)
+                print("\n【Part 2】demouser 完整仿真数据\n")
+                seed_demo_scenario(db, verbose=args.verbose)
+            else:
+                print("\n【Part 2】跳过 demouser (--skip-demo)")
+        finally:
+            if postgres_mode:
+                db.execute(text("SET session_replication_role = DEFAULT"))
+
         # 提交事务
         db.commit()
         

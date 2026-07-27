@@ -96,6 +96,9 @@ const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
 const currency = useCurrency()
 const { increment, decrement } = usePageLoading()
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
+// mount inside <KeepAlive>; onMounted handles initial load.
+let hasActivated = false
 
 const overview = computed(() => dashboardStore.overview)
 const liabilities = computed(() => liabilityStore.liabilities)
@@ -193,6 +196,7 @@ onMounted(async () => {
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
 onActivated(async () => {
+  if (!hasActivated) { hasActivated = true; return }
   applyQueryTab()
   increment()
   try {

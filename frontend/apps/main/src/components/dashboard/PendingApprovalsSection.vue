@@ -78,6 +78,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChoreStore } from '@/stores/chore'
+import { parseApiDate } from '@/utils/format'
 
 const props = defineProps<{
   childId?: string | null
@@ -96,7 +97,7 @@ const filteredApprovals = computed(() => {
 
 function formatRelativeTime(isoStr: string | null): string {
   if (!isoStr) return ''
-  const ts = new Date(isoStr).getTime()
+  const ts = parseApiDate(isoStr).getTime()
   if (Number.isNaN(ts)) return ''
   const diff = Date.now() - ts
   const mins = Math.floor(diff / 60000)
@@ -106,7 +107,7 @@ function formatRelativeTime(isoStr: string | null): string {
   if (hours < 24) return t('pendingApprovals.hoursAgo', { hours })
   const days = Math.floor(hours / 24)
   if (days < 7) return t('pendingApprovals.daysAgo', { days })
-  const d = new Date(isoStr)
+  const d = parseApiDate(isoStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 

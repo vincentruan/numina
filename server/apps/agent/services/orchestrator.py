@@ -12,6 +12,8 @@ provider-selection / circuit-breaker helpers they share.
 import asyncio
 import logging
 import random
+from collections.abc import Coroutine
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -158,16 +160,20 @@ def _select_provider_with_retry(
     return None
 
 
-def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-arg]
+def _fire_and_forget(coro: Coroutine[Any, Any, Any]) -> None:
     """Schedule a coroutine as a fire-and-forget task."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
     task = loop.create_task(coro)
-    task.add_done_callback(
-        lambda t: t.exception() and logger.warning("fire-and-forget task failed: %s", t.exception())
-    )
+
+    def _log_exception(t: asyncio.Task) -> None:
+        exc = t.exception()
+        if exc:
+            logger.warning("fire-and-forget task failed: %s", exc)
+
+    task.add_done_callback(_log_exception)
 
 
 # Module-level adapter factory — exposed for patching in tests
@@ -182,4 +188,3 @@ _deerflow_adapter = None
 # ``_select_provider_with_retry`` / ``_is_transient_error`` /
 # ``_should_route_to_half_open``) are retained because ``agent_dispatch.py``
 # imports ``_fire_and_forget`` + ``_select_model`` (with try/except fallback).
-

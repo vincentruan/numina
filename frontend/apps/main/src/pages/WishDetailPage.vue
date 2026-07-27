@@ -36,7 +36,7 @@
           <div class="hero-value-item">
             <div class="hero-value-label">{{ t('wish.expectedPrice') }}</div>
             <div class="hero-value-num">
-              <span v-if="wish.expected_price">{{ currency.format(wish.expected_price) }}</span>
+              <span v-if="wish.expected_price">{{ currency.formatIn(wish.expected_price, wish.currency) }}</span>
               <span v-else class="hero-value-unset">{{ t('wish.unset') }}</span>
             </div>
           </div>
@@ -52,7 +52,7 @@
 
         <div v-if="wish.realized_asset_id" class="hero-realized-info">
           <p v-if="wish.fulfilled_at" class="fulfilled-date">
-            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+            {{ t('wish.fulfilledAt', { date: parseApiDate(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
           </p>
           <router-link :to="`/assets/${wish.realized_asset_id}`">
             {{ t('wish.realizedAsset') }} →
@@ -82,7 +82,7 @@
         </van-cell>
         <van-cell :title="t('wish.expectedPrice')">
           <template #value>
-            <span v-if="wish.expected_price">{{ currency.format(wish.expected_price) }}</span>
+            <span v-if="wish.expected_price">{{ currency.formatIn(wish.expected_price, wish.currency) }}</span>
             <span v-else class="unset">{{ t('wish.unset') }}</span>
           </template>
         </van-cell>
@@ -227,6 +227,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useWishStore } from '@/stores/wish'
+import { parseApiDate } from '@/utils/format'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { getCategories } from '@/api/categories'
@@ -325,7 +326,7 @@ const selectedCategoryName = computed(() => {
 })
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  return parseApiDate(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 function onDateConfirm(date: Date) {

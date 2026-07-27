@@ -56,7 +56,7 @@
             @click="selectedSiblingId = s.id"
           >
             <span class="sibling-avatar" :style="{ background: s.avatar_color || 'var(--color-brand-ochre)' }">
-              {{ s.display_name[0] }}
+              {{ (s.display_name || '?')[0] }}
             </span>
             <span class="sibling-name">{{ s.display_name }}</span>
           </div>

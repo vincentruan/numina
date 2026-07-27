@@ -283,7 +283,8 @@ describe('AgentFormPage custom agent create/edit optimization', () => {
     expect(hasModelField).toBe(false)
 
     const switches = wrapper.findAll('.van-switch')
-    expect(switches.length).toBe(0)
+    // Only the publish toggle is rendered for custom agents (model/subagent fields hidden)
+    expect(switches.length).toBe(1)
   })
 })
 

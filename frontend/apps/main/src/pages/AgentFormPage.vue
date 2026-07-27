@@ -33,6 +33,7 @@ const form = ref<AgentCreatePayload>({
   skills: [],
   model: undefined,
   subagent_enabled: false,
+  is_published: false,
 })
 
 // U13: agent_type drives the read-only mode for system agents (numina,
@@ -86,6 +87,7 @@ onMounted(async () => {
       skills: agent.skills || [],
       model: agent.model || undefined,
       subagent_enabled: agent.subagent_enabled,
+      is_published: agent.is_published,
     }
   }
 })
@@ -107,6 +109,7 @@ async function handleSubmit() {
       payload.skills = form.value.skills
       payload.model = form.value.model
       payload.subagent_enabled = form.value.subagent_enabled
+      payload.is_published = form.value.is_published
       await agentStore.editAgent(agentId.value, payload)
       showToast(t('agents.form.updateSuccess'))
     } else {
@@ -259,6 +262,14 @@ function getSkillIcon(skill: SkillDefinition): string {
           </template>
         </van-cell>
       </template>
+    </van-cell-group>
+
+    <van-cell-group v-if="!isSystemAgent" inset>
+      <van-cell center :title="t('agents.form.isPublished')" :label="t('agents.form.publishedHint')">
+        <template #right-icon>
+          <van-switch v-model="form.is_published" size="22px" />
+        </template>
+      </van-cell>
     </van-cell-group>
 
     <!-- Save button: removed from DOM (not just disabled) for system agents. -->

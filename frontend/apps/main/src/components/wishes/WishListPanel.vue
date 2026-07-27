@@ -80,7 +80,7 @@
                 <span class="wish-name">{{ wish.name }}</span>
                 <div class="wish-right">
                   <span v-if="wish.expected_price" class="wish-price">
-                    {{ currency.format(wish.expected_price) }}
+                    {{ formatCurrency(wish.expected_price, wish.currency) }}
                   </span>
                   <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
                   <van-icon name="arrow" size="12" class="card-arrow" />
@@ -195,7 +195,7 @@ import { useWishStore } from '@/stores/wish'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { useAffordBar } from '@/composables/useAffordBar'
-import { useCurrency } from '@/composables/useCurrency'
+import { formatCurrency } from '@/utils/format'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
@@ -203,7 +203,6 @@ import SvgIcon from '@/components/SvgIcon.vue'
 
 const { t } = useI18n()
 const router = useRouter()
-const currency = useCurrency()
 const dashboardStore = useDashboardStore()
 const wishStore = useWishStore()
 const liabilityStore = useLiabilityStore()
@@ -530,7 +529,14 @@ defineExpose({
 }
 
 .card-arrow {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  opacity: 0.6;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.wish-item:active .card-arrow {
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 /* Bottom row: badge + category + desc */

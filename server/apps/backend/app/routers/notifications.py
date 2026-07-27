@@ -76,11 +76,13 @@ async def notifications_ws(
     _purge_expired_tickets()
     ticket_data = _tickets.pop(ticket, None)
     if ticket_data is None or ticket_data["expires_at"] < datetime.utcnow():
-        await websocket.send_json({"type": "error", "message": "鉴权失败或 ticket 已过期"})
+        await websocket.send_json(
+            {"type": "error", "message": "鉴权失败或 ticket 已过期"}
+        )
         await websocket.close(code=4001)
         return
 
-    family_id: str = ticket_data["family_id"]
+    family_id: int = ticket_data["family_id"]
     notification_bus.register(family_id, websocket)
 
     try:

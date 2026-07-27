@@ -148,7 +148,7 @@ def _decode_jwt_user_id(token: str) -> str | None:
         decoded = base64.urlsafe_b64decode(payload)
         data = json.loads(decoded)
 
-        return data.get("sub")  # user_id is in 'sub' claim
+        return data.get("sub")  # type: ignore[no-any-return]
     except Exception:
         return None
 
@@ -169,6 +169,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     # Paths that don't count towards rate limit
     STATIC_PREFIXES = ("/uploads/", "/static/")
+
+    _rate_store: dict[str, tuple[int, float]] = {}
 
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting entirely in development/CI
@@ -225,9 +227,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         import time
 
         # Use module-level storage for rate limiting
-        if not hasattr(RateLimitMiddleware, "_rate_store"):
-            RateLimitMiddleware._rate_store: dict[str, tuple[int, float]] = {}
-
         store = RateLimitMiddleware._rate_store
         current_time = time.time()
         window_start = current_time - 60  # 1 minute window

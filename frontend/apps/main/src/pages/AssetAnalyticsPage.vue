@@ -1,6 +1,6 @@
 <template>
   <div class="analytics-page">
-    <PageHeader :title="t('analyticsPage.title')" />
+    <PageHeader :title="t('analyticsPage.title')" @back="goBack" />
 
     <van-tabs
       v-model:active="activeTab"
@@ -150,9 +150,36 @@
               <span class="card-title">{{ t('analyticsPage.pieCard') }}</span>
             </div>
             <div class="card-content pie-content">
+              <div class="sub-section">
+                <div class="sub-section-title">{{ t('analyticsPage.physicalAssetsDistribution') }}</div>
+                <AllocationPieChart
+                  v-if="physicalItems.length"
+                  :data="physicalItems"
+                  class="pie-chart-embedded"
+                />
+                <van-empty v-else :description="t('common.noData')" image-size="60" />
+              </div>
+              <div class="sub-section">
+                <div class="sub-section-title">{{ t('analyticsPage.financialAssetsDistribution') }}</div>
+                <AllocationPieChart
+                  v-if="financialItems.length"
+                  :data="financialItems"
+                  class="pie-chart-embedded"
+                />
+                <van-empty v-else :description="t('common.noData')" image-size="60" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 6: 负债分布 -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.liabilityDistribution') }}</span>
+            </div>
+            <div class="card-content pie-content">
               <AllocationPieChart
-                v-if="dashboardStore.allocation.length"
-                :data="dashboardStore.allocation"
+                v-if="liabilityItems.length"
+                :data="liabilityItems"
                 class="pie-chart-embedded"
               />
               <van-empty v-else :description="t('common.noData')" image-size="60" />
@@ -198,17 +225,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import PageHeader from '@/components/common/PageHeader.vue'
 import TrendLineChartSimple from '@/components/charts/TrendLineChartSimple.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import InsightsTab from '@/components/insights/InsightsTab.vue'
 import { useCurrency } from '@/composables/useCurrency'
+import { parseApiDate } from '@/utils/format'
 import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const dashboardStore = useDashboardStore()
 const { format } = useCurrency()
 
@@ -219,10 +248,24 @@ const isDarkMode = ref(document.documentElement.getAttribute('data-theme') === '
 
 let _themeObserver: MutationObserver | null = null
 
-const monthOverMonthChange = computed(() => dashboardStore.overview?.month_over_month_change ?? null)
-const lowUsageAssets = computed(() =>
-  dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle'),
+// Deep-link from AI Hub / overview: switch to requested tab and remember where we came from.
+const returnTo = ref<string | undefined>(
+  typeof history.state?.from === 'string' ? history.state.from : undefined,
 )
+
+function goBack() {
+  if (returnTo.value && returnTo.value !== route.path) {
+    void router.push(returnTo.value)
+  } else {
+    void router.back()
+  }
+}
+
+const monthOverMonthChange = computed(() => dashboardStore.overview?.month_over_month_change ?? null)
+const lowUsageAssets = computed(() => dashboardStore.lowUsageAssets)
+const physicalItems = computed(() => dashboardStore.physicalAllocation)
+const financialItems = computed(() => dashboardStore.financialAllocation)
+const liabilityItems = computed(() => dashboardStore.liabilityAllocation)
 
 const changeClass = computed(() => {
   const val = monthOverMonthChange.value
@@ -244,12 +287,14 @@ const changeLabel = computed(() => {
 
 function daysAgo(isoDate: string): string {
   if (!isoDate) return ''
-  const days = Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000)
+  const days = Math.floor((Date.now() - parseApiDate(isoDate).getTime()) / 86400000)
   return t('analyticsPage.daysAgo', { n: days })
 }
 
 function usageLabel(frequency: string): string {
-  return frequency === 'idle' ? t('statusGrid.idle') : frequency
+  if (frequency === 'idle') return t('statusGrid.idle')
+  if (frequency === 'rarely') return t('statusGrid.rarely')
+  return frequency
 }
 
 function rankClass(index: number): string {
@@ -266,6 +311,16 @@ function onPeriodChange(period: 'month' | 'quarter' | 'year') {
 }
 
 onMounted(async () => {
+  const requestedTab = route.query.tab
+  if (requestedTab === 'trend' || requestedTab === 'insight') {
+    activeTab.value = requestedTab
+  }
+  // Capture the source page once on mount so the back button returns there even
+  // if the user switches tabs inside this page.
+  if (!returnTo.value && typeof history.state?.from === 'string') {
+    returnTo.value = history.state.from
+  }
+
   _themeObserver = new MutationObserver(() => {
     isDarkMode.value = document.documentElement.getAttribute('data-theme') === 'dark'
   })
@@ -274,6 +329,7 @@ onMounted(async () => {
   await dashboardStore.fetchAll()
   dashboardStore.fetchDailyCostRanking()
   dashboardStore.fetchNewAssets(trendPeriod.value)
+  dashboardStore.fetchLiabilityAllocation()
 })
 
 onUnmounted(() => {
@@ -349,6 +405,20 @@ const tabActiveColor = computed(() =>
 .pie-content .pie-chart-embedded :deep(.allocation-chart) {
   padding: 0;
   margin: 0;
+}
+
+.sub-section {
+  margin-bottom: 16px;
+}
+.sub-section:last-child {
+  margin-bottom: 0;
+}
+.sub-section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding: 0 4px;
 }
 
 /* Period card-tabs inside card header */

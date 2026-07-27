@@ -4,7 +4,7 @@
  *
  * A person silhouette icon for user-related settings entries.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     size?: number
   }>(),

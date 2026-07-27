@@ -5,7 +5,7 @@ import LiveTimer from '../LiveTimer.vue'
 // Mock vue-i18n
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
+    t: (key: string, _params?: Record<string, unknown>) => {
       if (key === 'aiChat.reasoning.thinking') return '思考中'
       if (key === 'aiChat.reasoning.thought') return '已思考'
       return key
@@ -114,7 +114,7 @@ describe('LiveTimer', () => {
 
     expect(wrapper.text()).toContain('已思考')
 
-    const clearIntervalSpy = vi.spyOn(global, 'clearInterval')
+    vi.spyOn(global, 'clearInterval')
 
     // Advance time — no further updates should happen
     await vi.advanceTimersByTimeAsync(3000)

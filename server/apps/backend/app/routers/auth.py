@@ -239,7 +239,9 @@ async def reset_password(
     import string
 
     from apps.backend.app.models.notification_channel import NotificationChannel
-    from apps.backend.app.models.notification_channel_config import NotificationChannelConfig
+    from apps.backend.app.models.notification_channel_config import (
+        NotificationChannelConfig,
+    )
     from apps.backend.app.services.notification.sender import NotificationSender
 
     # Check notification channels exist
@@ -263,6 +265,8 @@ async def reset_password(
 
     rounds = getattr(app_settings, "BCRYPT_ROUNDS", 12)
     user_db = db.query(User).filter(User.id == user.id).first()
+    if user_db is None:
+        raise AppError(ErrorCode.NOT_FOUND, "用户不存在")
     user_db.password_hash = bcrypt.hashpw(
         temp_password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
     ).decode("utf-8")
@@ -271,12 +275,8 @@ async def reset_password(
 
     # Send via first available channel
     channel = channels[0]
-    configs = (
-        db.query(NotificationChannelConfig)
-        .filter_by(channel_id=channel.id)
-        .all()
-    )
-    cfg = {c.config_key: c.config_value for c in configs}
+    configs = db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).all()
+    cfg = {c.key: c.value_encrypted for c in configs}
 
     message = f"【Numina】您的临时密码为：{temp_password}\n请登录后立即修改密码。"
     if channel.channel_type == "telegram":
@@ -303,7 +303,6 @@ async def reset_password(
 # ---------------------------------------------------------------------------
 # Child authentication endpoints
 # ---------------------------------------------------------------------------
-
 
 
 @router.get("/child/me", response_model=UserResponse)
@@ -382,7 +381,7 @@ def child_webauthn_register_options(
 
     existing_creds = json.loads(child.webauthn_credentials or "[]")
     options = webauthn_helper.generate_registration_challenge(
-        user_id=child.id,
+        user_id=str(child.id),
         display_name=child.display_name,
         existing_credentials=existing_creds,
     )
@@ -412,7 +411,9 @@ def child_webauthn_register(
             expected_challenge=expected_challenge,
         )
     except Exception as e:
-        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)) from e
+        raise AppError(
+            ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)
+        ) from e
 
     existing_creds = json.loads(child.webauthn_credentials or "[]")
     existing_creds.append(verified_cred)
@@ -422,7 +423,9 @@ def child_webauthn_register(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to store credential") from e
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR, details="Failed to store credential"
+        ) from e
 
     return {"message": "passkey registered"}
 
@@ -488,7 +491,9 @@ def child_webauthn_login(
             credential_current_sign_count=stored_cred["sign_count"],
         )
     except Exception as e:
-        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)) from e
+        raise AppError(
+            ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)
+        ) from e
 
     stored_cred["sign_count"] = verification["new_sign_count"]
     child.webauthn_credentials = json.dumps(credentials)
@@ -497,7 +502,9 @@ def child_webauthn_login(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to update credential") from e
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR, details="Failed to update credential"
+        ) from e
 
     from apps.backend.app.auth.deps import create_access_token, create_refresh_token
     from apps.backend.app.auth.jwt_utils import user_claims
@@ -529,10 +536,14 @@ def login_step1(
     from apps.backend.app.auth.jwt_utils import user_claims
 
     # Find user (adult or child)
-    user = db.query(User).filter(
-        User.username == req.username.lower(),
-        User.is_active.is_(True),
-    ).first()
+    user = (
+        db.query(User)
+        .filter(
+            User.username == req.username.lower(),
+            User.is_active.is_(True),
+        )
+        .first()
+    )
 
     # Timing attack protection — always run bcrypt even on failure
     if not user or not user.password_hash:
@@ -540,7 +551,9 @@ def login_step1(
         bcrypt.checkpw(b"dummy", dummy.encode("utf-8"))
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    if not bcrypt.checkpw(req.password.encode("utf-8"), user.password_hash.encode("utf-8")):
+    if not bcrypt.checkpw(
+        req.password.encode("utf-8"), user.password_hash.encode("utf-8")
+    ):
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # Determine second factor: children with pin_hash use emoji_pin; adults use their configured type
@@ -554,8 +567,11 @@ def login_step1(
     # No second factor — issue tokens directly
     if second_factor_type is None:
         from apps.backend.app.auth.deps import create_access_token, create_refresh_token
+
         access_token = create_access_token(user_claims(user))
-        refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
+        refresh_token = create_refresh_token(
+            user_claims(user, token_version=user.token_version)
+        )
         if user.role == "child":
             set_child_auth_cookies(response, access_token, refresh_token)
         else:
@@ -603,8 +619,11 @@ def login_step2(
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     from apps.backend.app.auth.deps import create_access_token, create_refresh_token
+
     access_token = create_access_token(user_claims(user))
-    refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
+    refresh_token = create_refresh_token(
+        user_claims(user, token_version=user.token_version)
+    )
 
     if user.role == "child":
         set_child_auth_cookies(response, access_token, refresh_token)
@@ -700,11 +719,15 @@ def set_child_password(
 
     from apps.backend.app.config import settings as app_settings
 
-    child = db.query(User).filter(
-        User.id == child_id,
-        User.role == "child",
-        User.is_active.is_(True),
-    ).first()
+    child = (
+        db.query(User)
+        .filter(
+            User.id == child_id,
+            User.role == "child",
+            User.is_active.is_(True),
+        )
+        .first()
+    )
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 

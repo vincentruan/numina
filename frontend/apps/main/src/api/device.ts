@@ -27,7 +27,7 @@ export interface DeviceSelectResponse {
   avatar_color?: string
 }
 
-export function selectDeviceUser(deviceId: string, userId: string, altcha: string) {
+export function selectDeviceUser(deviceId: string, userId: string, altcha?: string) {
   return http.post<DeviceSelectResponse>('/auth/device/select', {
     device_id: deviceId,
     user_id: userId,

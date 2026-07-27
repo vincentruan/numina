@@ -8,6 +8,7 @@ export interface FamilySettings {
   coin_silver_to_gold: number
   education_reward_enabled: boolean
   coin_to_yuan_rate: number
+  report_auto_generate_enabled: boolean
 }
 
 export function getFamily() {
@@ -45,6 +46,7 @@ export function updateFamilySettings(settings: {
   coinSilverToGold?: number
   educationRewardEnabled?: boolean
   coinToYuanRate?: number
+  reportAutoGenerateEnabled?: boolean
 }) {
   const body: Record<string, unknown> = {}
   if (settings.autoApproveHours !== undefined) body.auto_approve_hours = settings.autoApproveHours
@@ -53,6 +55,7 @@ export function updateFamilySettings(settings: {
   if (settings.coinSilverToGold !== undefined) body.coin_silver_to_gold = settings.coinSilverToGold
   if (settings.educationRewardEnabled !== undefined) body.education_reward_enabled = settings.educationRewardEnabled
   if (settings.coinToYuanRate !== undefined) body.coin_to_yuan_rate = settings.coinToYuanRate
+  if (settings.reportAutoGenerateEnabled !== undefined) body.report_auto_generate_enabled = settings.reportAutoGenerateEnabled
   return http.patch<FamilySettings>('/family/settings', body)
 }
 

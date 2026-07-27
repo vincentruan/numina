@@ -3,7 +3,7 @@ import {
   createNormalizationState,
   normalizeAgentEvent,
 } from '@/utils/aiEventNormalizer'
-import type { AgentEvent, NormalizationState } from '@/types/agent-stream'
+import type { AgentEvent } from '@/types/agent-stream'
 
 // Helper to create a plan.update event
 function makePlanUpdate(

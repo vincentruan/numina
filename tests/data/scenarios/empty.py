@@ -14,6 +14,7 @@ def seed_empty_scenario(db: Session, verbose: bool = False) -> None:
         family_id=0,  # placeholder, replaced below
         role="owner",
         avatar_color="#6366F1",
+        flush=False,
     )
 
     if not created:

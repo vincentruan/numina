@@ -45,7 +45,7 @@ class DeviceCheckResponse(BaseModel):
 class DeviceSelectRequest(BaseModel):
     device_id: str
     user_id: str
-    altcha: str
+    altcha: str | None = None  # Optional; only verified in production
 
     @field_validator("user_id")
     @classmethod

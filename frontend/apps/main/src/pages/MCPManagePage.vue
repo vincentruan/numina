@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {

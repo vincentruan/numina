@@ -17,7 +17,6 @@ from apps.agent.services.message_classifier import (
     resolve_tool_metadata,
 )
 
-
 # ── Helpers: lightweight message stubs ──────────────────────────────────────
 
 
@@ -302,7 +301,7 @@ def test_resolve_tool_metadata_unknown_tool_fallback():
     assert ttype == "unknown"
     assert display == "some_custom_tool"
     assert icon == "tool"
-    assert i18n_key is None
+    assert i18n_key == ""
 
 
 def test_resolve_tool_metadata_tavily_search():

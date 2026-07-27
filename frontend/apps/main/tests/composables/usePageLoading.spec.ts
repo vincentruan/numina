@@ -4,7 +4,7 @@ import NProgress from 'nprogress'
 describe('usePageLoading fix verification', () => {
   beforeEach(async () => {
     const source = await vi.importActual<any>('../../src/composables/usePageLoading')
-    source.completeGlobalLoading()
+    source._resetForTesting()
     vi.clearAllMocks()
   })
 
