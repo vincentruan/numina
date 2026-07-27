@@ -40,6 +40,8 @@ NUMINA_DB ?= sqlite
 NUMINA_DOMAIN ?= localhost
 # 邀请码数量
 INVITATION_CODE_COUNT ?= 20
+# 指定邀请码 (逗号分隔, 优先级高于 INVITATION_CODE_COUNT)
+INVITATION_CODES ?=
 
 .PHONY: help check install \
         setup setup-keys setup-env setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
@@ -70,7 +72,9 @@ help:
 	@echo "  make setup-db      - 初始化数据库 (默认 SQLite; 可选 NUMINA_DB=mysql|postgres)"
 	@echo "  make setup-db-mysql     - 启动 MySQL 容器并初始化"
 	@echo "  make setup-db-postgres  - 启动 PostgreSQL 容器并初始化"
-	@echo "  make setup-invitation-codes - 生成家庭邀请码 (首次部署后运行)"
+	@echo "  make setup-invitation-codes              - 生成家庭邀请码 (默认随机20个)"
+	@echo "    INVITATION_CODES=A,B,C make setup-invitation-codes  - 指定邀请码"
+	@echo "    INVITATION_CODE_COUNT=5 make setup-invitation-codes - 指定随机数量"
 	@echo ""
 	@echo "本地开发 (热重载，阻塞终端，手动运行):"
 	@echo "  make dev-backend   - 后端 API  :8000"
@@ -301,10 +305,15 @@ setup-db-postgres:
 	@exit 1
 
 setup-invitation-codes:
-	@echo "生成家庭邀请码..."
-	@$(COMPOSE) exec -T backend $(UV) run --no-dev python scripts/family_invitation_codes.py generate --count $(INVITATION_CODE_COUNT)
+	@if [ -n "$(INVITATION_CODES)" ]; then \
+		echo "创建指定邀请码: $(INVITATION_CODES)"; \
+		$(COMPOSE) exec -T backend $(UV) run --no-dev python scripts/family_invitation_codes.py generate --codes "$(INVITATION_CODES)"; \
+	else \
+		echo "随机生成 $(INVITATION_CODE_COUNT) 个邀请码..."; \
+		$(COMPOSE) exec -T backend $(UV) run --no-dev python scripts/family_invitation_codes.py generate --count $(INVITATION_CODE_COUNT); \
+	fi
 	@echo ""
-	@echo "已生成的邀请码:"
+	@echo "当前邀请码列表:"
 	@$(COMPOSE) exec -T backend $(UV) run --no-dev python scripts/family_invitation_codes.py list
 	@echo ""
 	@echo "✓ 邀请码已生成 (新用户注册时需要)"
