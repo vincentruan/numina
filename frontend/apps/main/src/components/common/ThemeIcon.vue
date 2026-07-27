@@ -4,7 +4,7 @@
  *
  * A sun/moon hybrid icon representing theme mode settings.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     size?: number
   }>(),

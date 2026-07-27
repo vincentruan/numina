@@ -36,6 +36,9 @@ const props = withDefaults(defineProps<{
   interruptId: string
 }>(), {
   status: 'pending',
+  options: undefined,
+  context: undefined,
+  answer: undefined,
 })
 
 const emit = defineEmits<{

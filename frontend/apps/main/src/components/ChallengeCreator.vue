@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { listChildren, type ChildResponse } from '@/api/children'
 import { listChoreTemplates, type ChoreTemplate } from '@/api/chores'
 import { createChallenge, type ChallengeCreateRequest } from '@/api/challengeGrant'

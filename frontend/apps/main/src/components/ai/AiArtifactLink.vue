@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import type { Artifact } from '@/types/agent-stream'
 
 const props = defineProps<{

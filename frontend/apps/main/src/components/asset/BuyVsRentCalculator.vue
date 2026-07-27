@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { calculateBuyVsRent, type BuyVsRentResult } from '@/api/assetsAnalysis'
 import { useCurrency } from '@/composables/useCurrency'

@@ -4,7 +4,7 @@
  *
  * A coin/currency symbol for default currency settings.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     size?: number
   }>(),

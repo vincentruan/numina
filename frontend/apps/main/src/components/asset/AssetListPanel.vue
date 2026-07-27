@@ -333,7 +333,6 @@ import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import AssetGroupHeader from '@/components/asset/AssetGroupHeader.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
-import { useCurrency } from '@/composables/useCurrency'
 import type { Asset, Category } from '@/types'
 
 const { t } = useI18n()
@@ -431,7 +430,6 @@ interface AssetGroup {
   subtotal: number
 }
 
-const currency = useCurrency()
 
 const groupedByCategory = computed<AssetGroup[]>(() => {
   const assets = filteredByCategoryAssets.value

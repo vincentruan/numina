@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import i18n from '@/i18n'
 import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationItem } from '@/types'
 import * as dashboardApi from '@/api/dashboard'

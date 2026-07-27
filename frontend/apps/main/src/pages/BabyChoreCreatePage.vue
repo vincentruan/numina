@@ -92,7 +92,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { createChoreTemplate } from '@/api/chores'

@@ -629,7 +629,7 @@ function onVoiceResult(text: string) {
     : text
 }
 
-function onVoiceError(message: string) {
+function onVoiceError(_message: string) {
   showToast(t('aiChat.voiceErrorPermission'))
 }
 

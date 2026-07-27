@@ -1,5 +1,5 @@
 import http from './index'
-import type { SessionsResponse, SystemDefaultSessionResponse, SessionSummary } from '@/types/session'
+import type { SystemDefaultSessionResponse } from '@/types/session'
 
 // Partial session for search results (backend /threads/search doesn't return all fields)
 export interface PartialSessionSummary {

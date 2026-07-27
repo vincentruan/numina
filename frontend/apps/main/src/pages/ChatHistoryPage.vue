@@ -242,32 +242,15 @@ function onExportSelect(action: { key: string }) {
   else if (action.key === 'export-json') handleExport(session.thread_id, 'json')
 }
 
-// Long press to open action sheet
-let longPressTimer: ReturnType<typeof setTimeout> | null = null
-const LONG_PRESS_DURATION = 500
-
-function startLongPress(session: ThreadSession) {
-  cancelLongPress()
-  longPressTimer = setTimeout(() => {
-    handleMore(session)
-  }, LONG_PRESS_DURATION)
-}
-
-function cancelLongPress() {
-  if (longPressTimer) {
-    clearTimeout(longPressTimer)
-    longPressTimer = null
-  }
-}
 
 // Swipe-to-reveal handlers
-function handleTouchStart(e: TouchEvent, sessionId: string) {
+function handleTouchStart(e: TouchEvent, _sessionId: string) {
   swipeStartX.value = e.touches[0].clientX
   swipeCurrentX.value = e.touches[0].clientX
   isSwiping.value = false
 }
 
-function handleTouchMove(e: TouchEvent, sessionId: string) {
+function handleTouchMove(e: TouchEvent, _sessionId: string) {
   const deltaX = swipeStartX.value - e.touches[0].clientX
   if (Math.abs(deltaX) > 10) {
     isSwiping.value = true
@@ -290,12 +273,6 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
   swipeStartX.value = 0
   swipeCurrentX.value = 0
   isSwiping.value = false
-}
-
-function closeSwipe(sessionId: string) {
-  if (swipedSessionId.value === sessionId) {
-    swipedSessionId.value = null
-  }
 }
 </script>
 

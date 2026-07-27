@@ -15,7 +15,6 @@ import type { GoalState } from '@/api/ai-chat'
 import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
-import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 
 export type { ChatMessage }
@@ -396,7 +395,7 @@ function pruneConfirmedTransientMessages(
 function toToolCallSummaries(
   toolCalls: Array<{ id?: string; name: string; args: string | object }>,
 ): ToolCallSummary[] {
-  return toolCalls.map((tc, i) => ({
+  return toolCalls.map((tc, _i) => ({
     id: tc.id || genId('tc'),
     name: tc.name,
     displayName: tc.name,

@@ -160,6 +160,24 @@ const props = withDefaults(defineProps<{
   autoCollapseSignal: false,
   showDetail: false,
   isLast: false,
+  content: undefined,
+  name: undefined,
+  displayName: undefined,
+  icon: undefined,
+  toolType: undefined,
+  args: undefined,
+  resultSummary: undefined,
+  error: undefined,
+  result: undefined,
+  elapsedMs: undefined,
+  progressMessage: undefined,
+  title: undefined,
+  description: undefined,
+  taskId: undefined,
+  url: undefined,
+  path: undefined,
+  kind: undefined,
+  summaryText: undefined,
 })
 
 const { t } = useI18n()
@@ -214,11 +232,9 @@ const filteredContent = computed(() => {
 const tickMs = ref(0)
 let tickInterval: ReturnType<typeof setInterval> | null = null
 // Track when the step became active, for elapsed calculation
-let activeStartMs = 0
 
 function startTick() {
   if (tickInterval) return
-  activeStartMs = Date.now()
   tickMs.value = Date.now()
   tickInterval = setInterval(() => {
     tickMs.value = Date.now()
@@ -248,13 +264,6 @@ onUnmounted(() => {
   stopTick()
 })
 
-// Duration display
-const computedElapsedMs = computed(() => {
-  if (props.elapsedMs) return props.elapsedMs
-  if (isActive.value) return tickMs.value - (props.elapsedMs || 0)
-  return 0
-})
-
 // Live status text for running tool_call steps - dynamic generation using displayName
 // CR-4 fix: Use i18n with action interpolation instead of hardcoded Chinese
 const statusText = computed(() => {
@@ -275,19 +284,6 @@ const formattedDuration = computed(() => {
   return `${s}s`
 })
 
-// Status icon
-const statusIcon = computed(() => {
-  switch (props.status) {
-    case 'pending': return '○'
-    case 'streaming': return '💭'
-    case 'running': return '⚙'
-    case 'done': return '✓'
-    case 'error':
-    case 'failed': return '✗'
-    default: return '○'
-  }
-})
-
 // Header title
 const headerTitle = computed(() => {
   if (props.type === 'reasoning') return t('aiProcess.stepReasoning')
@@ -305,21 +301,6 @@ const headerTitle = computed(() => {
   if (props.type === 'progress') return props.title || ''
   return ''
 })
-
-// Summary extraction for reasoning
-const summary = computed(() => {
-  if (props.type !== 'reasoning' || !props.content) return ''
-  const text = props.content.trim()
-  // Extract first sentence, truncate to ~40 chars for CJK, ~60 for Latin
-  const firstSentence = text.split(/[.!?\n]/)[0] || text.slice(0, 60)
-  const maxChars = /[一-鿿]/.test(firstSentence) ? 40 : 60
-  if (firstSentence.length > maxChars) {
-    return firstSentence.slice(0, maxChars) + '…'
-  }
-  return firstSentence !== text ? firstSentence + '…' : firstSentence
-})
-
-const showSummary = computed(() => props.type === 'reasoning' && props.status === 'done')
 
 // Tool call specifics
 const toolDisplayInfo = computed(() =>

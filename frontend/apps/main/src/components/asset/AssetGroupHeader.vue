@@ -50,6 +50,7 @@ const props = withDefaults(defineProps<{
   selectionMode?: boolean
   selectedCount?: number
 }>(), {
+  category: undefined,
   selectionMode: false,
   selectedCount: 0,
 })

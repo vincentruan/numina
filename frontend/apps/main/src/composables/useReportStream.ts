@@ -19,7 +19,7 @@
  * Replicates useThreadChat's SSE reader/decoder pattern (currentEvent + data
  * accumulation) and useAIReportStream's 401-refresh + cookie-refresh auth.
  */
-import { ref, computed, type Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
 import { getAITask } from '@/api/ai'

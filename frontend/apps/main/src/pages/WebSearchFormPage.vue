@@ -1,6 +1,6 @@
 <!-- frontend/apps/main/src/pages/WebSearchFormPage.vue -->
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'

@@ -16,7 +16,6 @@ const SPRITE_DPR_MAX = 2
 
 const FAR_RATIO = 0.50
 const MID_RATIO = 0.35
-const NEAR_RATIO = 0.15
 
 const FAR_RADIUS_MIN = 0.6
 const FAR_RADIUS_MAX = 1.5
@@ -62,11 +61,9 @@ const STELLAR_COLORS: Array<{ core: [number, number, number]; halo: [number, num
 ]
 
 const INTENSITY_LEVELS = ['soft', 'medium', 'bright'] as const
-type IntensityLevel = typeof INTENSITY_LEVELS[number]
 
 const PARTICLE_COUNT_BASE = 180
 const REFERENCE_AREA = 375 * 668
-const PARTICLE_COUNT_MIN = 90
 const PARTICLE_COUNT_MAX = 420
 
 const ANIMAL_SVGS = ['bomb.svg', 'bomb2.svg', 'bomb3.svg', 'deer.svg', 'horse.svg', 'king_pig.svg', 'mario.svg', 'pig.svg', 'snake.svg']
@@ -161,7 +158,6 @@ function drawGrid(ctx: CanvasRenderingContext2D, grid: Grid) {
 
 // ── Sprite generation helpers ───────────────────────────────────────────────
 
-const SPRITE_INTERNAL_SIZE = SPRITE_SIZE * SPRITE_DPR_MAX
 
 function simpleNoise2D(x: number, y: number): number {
   const v1 = Math.sin(x * 0.01) * Math.cos(y * 0.01)

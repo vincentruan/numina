@@ -11,7 +11,6 @@ import {
   getWebSearchProviders,
   enableWebSearchProvider,
   disableWebSearchProvider,
-  updateWebSearchProvider,
   reorderWebSearchProviders,
 } from '@/api/webSearch'
 import type { WebSearchProvider, WebSearchProviderTemplate } from '@/types/webSearch'

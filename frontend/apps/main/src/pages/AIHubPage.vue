@@ -101,6 +101,7 @@
         </svg>
         {{ t('aiHub.latestReport') }}
       </div>
+      <!-- eslint-disable vue/no-v-html -->
       <p class="report-summary-text" v-html="renderedSummary" />
       <div class="report-summary-cta">
         {{ t('aiHub.viewFullReport') }}
@@ -429,12 +430,6 @@ const agentChoices = computed<Agent[]>(() => [
   ...agentStore.customAgents.filter((a) => a.is_enabled),
 ])
 
-// Dynamic placeholder based on selected agent
-const chatPlaceholder = computed(() => {
-  if (!selectedAgent.value) return t('aiHub.chatPlaceholderNoAgent')
-  return t('aiHub.chatPlaceholderWithAgent', { name: selectedAgent.value.display_name })
-})
-
 // Default selected agent to 小鸣 once loaded
 watch(
   () => agentStore.systemAgents,
@@ -487,10 +482,6 @@ function submitChatFromInput(payload: SubmitPayload) {
   submitChat()
 }
 
-const PURIFY_CONFIG = {
-  USE_PROFILES: { html: true },
-  ALLOW_DATA_ATTR: false,
-} as const
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 

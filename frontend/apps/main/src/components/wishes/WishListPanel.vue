@@ -195,7 +195,6 @@ import { useWishStore } from '@/stores/wish'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { useAffordBar } from '@/composables/useAffordBar'
-import { useCurrency } from '@/composables/useCurrency'
 import { formatCurrency } from '@/utils/format'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
@@ -204,7 +203,6 @@ import SvgIcon from '@/components/SvgIcon.vue'
 
 const { t } = useI18n()
 const router = useRouter()
-const currency = useCurrency()
 const dashboardStore = useDashboardStore()
 const wishStore = useWishStore()
 const liabilityStore = useLiabilityStore()

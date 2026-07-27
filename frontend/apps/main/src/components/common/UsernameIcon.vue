@@ -4,7 +4,7 @@
  *
  * An ID card with user silhouette for username settings entry.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     size?: number
   }>(),

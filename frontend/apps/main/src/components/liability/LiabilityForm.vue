@@ -149,7 +149,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset, Liability, LiabilityRequestPayload } from '@/types'
 import { useAuthStore } from '@/stores/auth'
-import { getLiabilityField } from '@/types'
 import { getAssets } from '@/api/assets'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 

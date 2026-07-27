@@ -83,7 +83,6 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
-import { useCurrency } from '@/composables/useCurrency'
 import { formatCurrency, parseLocalDate } from '@/utils/format'
 import { getIconId } from '@/utils/icon'
 
@@ -99,7 +98,6 @@ const emit = defineEmits<{
   longpress: []
 }>()
 
-const currency = useCurrency()
 const { t } = useI18n()
 
 const imageError = ref(false)

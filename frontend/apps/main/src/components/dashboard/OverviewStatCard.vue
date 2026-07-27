@@ -133,7 +133,7 @@ const changeText = computed(() => {
 })
 
 // --- Monthly payment total + estimate tag ---
-const { activeLiabilities, monthlyPaymentTotal, monthlyPaymentIsEstimate } = useMonthlyPaymentTotal(() => liabilities.value)
+const { monthlyPaymentTotal, monthlyPaymentIsEstimate } = useMonthlyPaymentTotal(() => liabilities.value)
 
 // --- Wish progress (ported from FinanceHubPage): sum(saved)/sum(expected), cap 100 ---
 const wishCount = computed(() => (wishes.value || []).length)

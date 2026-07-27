@@ -20,7 +20,7 @@ import { Dialog, Button } from 'vant'
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   show: boolean
   currentInput: string
   suggestion: string

@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, watch, toRefs } from 'vue'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { usePageLoading } from '@/composables/usePageLoading'

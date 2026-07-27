@@ -13,7 +13,7 @@
  * - Main content area with markdown rendering
  * - Actions: copy, regenerate, feedback (thumbs up/down)
  */
-import { computed, ref, nextTick, onMounted, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 import type { CitationSource } from '@/utils/ai-chat/citations'
@@ -45,6 +45,15 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   phase: 'done',
+  processSteps: undefined,
+  planSteps: undefined,
+  planSource: undefined,
+  processElapsedMs: undefined,
+  reasoningStartTime: undefined,
+  renderedContent: undefined,
+  suggestions: undefined,
+  feedback: undefined,
+  artifacts: undefined,
   canBranch: false,
   isBranching: false,
 })

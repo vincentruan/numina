@@ -12,6 +12,7 @@
         <h3 class="preview-title">{{ t('aiReport.markdownPreview') }}</h3>
         <span class="preview-meta">{{ filename }} · {{ formatSize(fileSize) }}</span>
       </div>
+      <!-- eslint-disable vue/no-v-html -->
       <div class="preview-content" v-html="renderedContent" />
       <div class="preview-footer">
         <van-button type="primary" size="small" @click="onDownload">

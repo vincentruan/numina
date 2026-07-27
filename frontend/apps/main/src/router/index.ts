@@ -3,7 +3,7 @@ import { getUser } from '@/utils/storage'
 import { getChildBaseUrl } from '@/utils/childApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, markRouterNprogressActive } from '@/composables/usePageLoading'
+import { completeGlobalLoading, registerRouterTimeout, markRouterNprogressActive } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 

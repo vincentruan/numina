@@ -95,7 +95,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import { postWhatIf, type WhatIfAction, type WhatIfResponse } from '@/api/timeMachine'
 import { useCurrency } from '@/composables/useCurrency'
 import * as echarts from 'echarts/core'

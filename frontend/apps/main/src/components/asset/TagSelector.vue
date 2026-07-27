@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { showToast, showSuccessToast } from 'vant'
+import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { createTag as apiCreateTag } from '@/api/tags'
 import type { Tag } from '@/types'

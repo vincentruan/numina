@@ -5,7 +5,7 @@
  * A service bell icon representing the "管家" (butler/housekeeper) concept
  * for the AI assistant settings entry.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     size?: number
   }>(),

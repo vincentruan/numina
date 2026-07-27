@@ -44,7 +44,7 @@
       <template v-else>
         <p class="failed-text">{{ stream.errorMessage.value || t('toast.aiGenerateFailed') }}</p>
       </template>
-      <van-button plain size="small" :loading="false" @click="onGenerate()" style="margin-top: 8px">
+      <van-button plain size="small" :loading="false" style="margin-top: 8px" @click="onGenerate()">
         {{ t('aiTask.retry') }}
       </van-button>
     </div>
@@ -86,6 +86,7 @@
           </div>
           <div class="overall-label">{{ t('aiReport.overallScore') }}</div>
         </div>
+        <!-- eslint-disable vue/no-v-html -->
         <p class="overall-summary" v-html="renderedSummary" />
         <div class="report-meta">
           <span>{{ t('aiReport.generatedAt', { time: formatDate(reportGeneratedAt) }) }}</span>
@@ -133,6 +134,7 @@
               </div>
             </div>
             <!-- Narrative markdown -->
+            <!-- eslint-disable vue/no-v-html -->
             <div class="indicator-narrative" v-html="indicator.narrativeHtml" />
             <!-- Suggestions list -->
             <div v-if="indicator.suggestions?.length" class="indicator-suggestions">

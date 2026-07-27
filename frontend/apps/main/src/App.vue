@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
-import { showToast, showSuccessToast } from 'vant'
+import { showSuccessToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'

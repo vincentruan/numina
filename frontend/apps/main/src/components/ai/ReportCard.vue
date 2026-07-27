@@ -7,6 +7,7 @@
       </div>
       <ReportScoreBadge :score="score" :max="5" />
     </div>
+    <!-- eslint-disable vue/no-v-html -->
     <div class="card-narrative" v-html="renderedNarrative" />
     <div v-if="suggestions?.length" class="card-suggestions">
       <div class="suggestions-header">

@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import http from '@/api'
 import { parseApiDate } from '@/utils/format'
 

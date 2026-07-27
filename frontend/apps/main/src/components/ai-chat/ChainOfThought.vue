@@ -22,7 +22,6 @@ import {
   extractToolCalls,
 } from '@/utils/ai-chat'
 import { useTokenUsagePrefs } from '@/composables/ai-chat/useTokenUsagePrefs'
-import { formatTokenCount } from '@/utils/ai-chat/token-usage-steps'
 import MarkdownContent from './MarkdownContent.vue'
 import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'

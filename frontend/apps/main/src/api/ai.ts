@@ -407,19 +407,6 @@ export interface AssetSuggestResult {
 export const suggestAssetFields = (data: AssetSuggestRequest) =>
   http.post<AssetSuggestResult>('/ai/suggest/asset', data)
 
-// P0-#3: Timeout wrapper for streaming fetch (matches backend 120s timeout)
-const STREAM_TIMEOUT_MS = 120000
-function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(STREAM_TIMEOUT_MS)
-  if (!signal) return timeoutSignal
-  // If both signals exist, create combined abort controller
-  const combinedController = new AbortController()
-  signal.addEventListener('abort', () => combinedController.abort(signal.reason))
-  timeoutSignal.addEventListener('abort', () => combinedController.abort(timeoutSignal.reason))
-  return combinedController.signal
-}
-
-
 
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
