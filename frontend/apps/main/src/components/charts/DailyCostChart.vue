@@ -2,7 +2,7 @@
   <div class="daily-cost-chart">
     <div class="chart-header">
       <span class="chart-title">日均成本趋势</span>
-      <span class="chart-current">当前 {{ currency.format(currentDailyCost) }}/天</span>
+      <span class="chart-current">当前 {{ formatCurrency(currentDailyCost, fmtCurrency) }}/天</span>
     </div>
     <div v-if="hasData" class="chart-wrapper">
       <v-chart class="chart" :option="chartOption" autoresize />
@@ -21,6 +21,7 @@ import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/comp
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import { useCurrency } from '@/composables/useCurrency'
+import { formatCurrency, parseLocalDate } from '@/utils/format'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, MarkLineComponent])
 
@@ -31,11 +32,12 @@ const props = defineProps<{
   purchasePrice: number
   purchaseDate: string
   targetDailyCost?: number | null
+  sourceCurrency?: string
 }>()
 
 const hasData = computed(() => {
   if (!props.purchasePrice || !props.purchaseDate) return false
-  const purchase = new Date(props.purchaseDate)
+  const purchase = parseLocalDate(props.purchaseDate)
   const now = new Date()
   const days = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
   return days > 0
@@ -43,16 +45,19 @@ const hasData = computed(() => {
 
 const currentDailyCost = computed(() => {
   if (!props.purchasePrice || !props.purchaseDate) return 0
-  const purchase = new Date(props.purchaseDate)
+  const purchase = parseLocalDate(props.purchaseDate)
   const now = new Date()
   const days = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
   return days > 0 ? props.purchasePrice / days : props.purchasePrice
 })
 
+// Use the asset's own currency for formatting, falling back to user's default.
+const fmtCurrency = computed(() => props.sourceCurrency || currency.currency.value)
+
 const chartOption = computed(() => {
   if (!props.purchasePrice || !props.purchaseDate) return {}
 
-  const purchase = new Date(props.purchaseDate)
+  const purchase = parseLocalDate(props.purchaseDate)
   const now = new Date()
   const totalDays = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -111,7 +116,7 @@ const chartOption = computed(() => {
     const target = props.targetDailyCost
     markLines.push({
       yAxis: target,
-      label: { formatter: () => `目标 ${currency.format(target)}`, position: 'end', fontSize: 10 },
+      label: { formatter: () => `目标 ${formatCurrency(target, fmtCurrency.value)}`, position: 'end', fontSize: 10 },
       lineStyle: { color: '#07c160', type: 'dashed' }
     })
   }
@@ -121,7 +126,7 @@ const chartOption = computed(() => {
       trigger: 'axis',
       formatter: (params: CallbackDataParams[]) => {
         const p = params[0] as CallbackDataParams & { axisValue: string }
-        return `${p.axisValue}<br/>日均 ${currency.format(Number(p.value))}`
+        return `${p.axisValue}<br/>日均 ${formatCurrency(Number(p.value), fmtCurrency.value)}`
       }
     },
     grid: {
@@ -141,7 +146,7 @@ const chartOption = computed(() => {
       type: 'value',
       axisLabel: {
         fontSize: 10,
-        formatter: (val: number) => currency.format(val)
+        formatter: (val: number) => formatCurrency(val, fmtCurrency.value)
       },
       splitLine: { lineStyle: { type: 'dashed' } }
     },

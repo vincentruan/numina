@@ -10,7 +10,12 @@
       <div class="osc-label">{{ t('dashboard.netWorth') }}</div>
       <div class="osc-amount">
         <MoneyDisplay :amount="overview?.net_worth ?? 0" size="large" />
-        <router-link to="/dashboard/analytics" class="trend-entry" data-test="trend-entry" :aria-label="t('analyticsPage.trendEntry')">
+        <router-link
+          :to="{ path: '/dashboard/analytics', query: { tab: 'trend' }, state: { from: route.path } }"
+          class="trend-entry"
+          data-test="trend-entry"
+          :aria-label="t('analyticsPage.trendEntry')"
+        >
           <svg class="trend-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 12L5.5 8.5L8 11L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M10 4H14V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -87,6 +92,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import { useCurrency } from '@/composables/useCurrency'
 import { useMonthlyPaymentTotal } from '@/composables/useMonthlyPaymentTotal'
@@ -96,6 +102,7 @@ import { useWishStore } from '@/stores/wish'
 
 const { t } = useI18n()
 const currency = useCurrency()
+const route = useRoute()
 const dashboardStore = useDashboardStore()
 const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()

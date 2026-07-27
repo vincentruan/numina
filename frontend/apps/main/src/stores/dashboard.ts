@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import i18n from '@/i18n'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationItem } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
@@ -18,6 +18,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const overview = ref<DashboardOverview | null>(null)
   const allocation = ref<AllocationItem[]>([])
   const allocationTotal = ref(0)
+  const physicalAllocation = ref<AllocationItem[]>([])
+  const financialAllocation = ref<AllocationItem[]>([])
   const trend = ref<TrendPoint[]>([])
   const topAssets = ref<TopAssetItem[]>([])
   const dailyCostRanking = ref<DailyCostItem[]>([])
@@ -28,6 +30,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const statesSummary = ref<StatesSummaryResponse | null>(null)
   const newAssets = ref<NewAssetsResponse | null>(null)
   const educationRewardSummary = ref<EducationRewardSummary | null>(null)
+  const liabilityAllocation = ref<LiabilityAllocationItem[]>([])
   const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
 
@@ -72,6 +75,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const res = await dashboardApi.getAllocation()
     allocation.value = res.data.items
     allocationTotal.value = res.data.total
+    physicalAllocation.value = res.data.physical_items ?? []
+    financialAllocation.value = res.data.financial_items ?? []
   }
 
   async function fetchTrend(period: 'month' | 'quarter' | 'year' = 'month') {
@@ -108,6 +113,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
     try {
       const res = await dashboardApi.getEducationRewardSummary()
       educationRewardSummary.value = res.data
+    } catch {
+      // non-critical
+    }
+  }
+
+  async function fetchLiabilityAllocation() {
+    try {
+      const res = await dashboardApi.getLiabilityAllocation()
+      liabilityAllocation.value = res.data.items
     } catch {
       // non-critical
     }
@@ -161,6 +175,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchExpiringSoonAssets(),
         fetchHomeAssets(),
         fetchEducationRewardSummary(),
+        fetchLiabilityAllocation(),
       ]).catch(() => {
         // Phase 2 failures are non-critical; individual fetch functions
         // do not throw by default, so this is a safety net only
@@ -351,6 +366,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     overview.value = null
     allocation.value = []
     allocationTotal.value = 0
+    physicalAllocation.value = []
+    financialAllocation.value = []
     trend.value = []
     topAssets.value = []
     dailyCostRanking.value = []
@@ -361,21 +378,23 @@ export const useDashboardStore = defineStore('dashboard', () => {
     statesSummary.value = null
     newAssets.value = null
     educationRewardSummary.value = null
+    liabilityAllocation.value = []
     homeAssets.value = {}
     resetAssetPagination()
   }
 
   return {
-    overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
+    overview, allocation, allocationTotal, physicalAllocation, financialAllocation, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, newAssets, homeAssets, loading,
     educationRewardSummary,
+    liabilityAllocation,
     displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
     assetPagesCache, assetPageInfo, activeAssetStatus, activeAssetCategoryId, categoryCounts,
     assetSearch, assetSortBy, assetSortOrder, activeAssetType,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchNewAssets, fetchHomeAssets, fetchAll,
-    fetchEducationRewardSummary,
+    fetchEducationRewardSummary, fetchLiabilityAllocation,
     fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets, applyAssetFilters,
     fetchCategoryCounts, invalidateDashboard,
   }

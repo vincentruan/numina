@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -35,6 +36,7 @@ def create_liability(db: Session, user: User, req: LiabilityCreate) -> Liability
         name=req.name,
         original_amount=req.original_amount,
         remaining_amount=req.remaining_amount,
+        currency=req.currency,
         monthly_payment=req.monthly_payment,
         interest_rate=req.interest_rate,
         start_date=req.start_date,
@@ -96,10 +98,17 @@ def get_payments(db: Session, user: User, liability_id: str) -> list:
 def list_liabilities_for_family(
     db: Session,
     family_id: str,
+    user: User | None = None,
     limit: int = 20,
 ) -> list[dict]:
-    """List liabilities for a family."""
+    """List liabilities for a family.
+
+    Multi-currency: when *user* is provided, ``remaining_amount`` is converted
+    to the user's ``default_currency`` and the original currency is preserved
+    in ``original_currency``.
+    """
     from apps.backend.app.models.liability import Liability
+    from packages.domain.exchange_rate.service import ExchangeRateService
 
     rows = (
         db.query(Liability)
@@ -107,12 +116,28 @@ def list_liabilities_for_family(
         .limit(limit)
         .all()
     )
-    return [
-        {
-            "id": str(l.id),
-            "name": l.name,
-            "category": l.category,
-            "remaining_amount": str(l.remaining_amount or Decimal("0")),
+
+    dc = (user.default_currency or "CNY") if user else None
+
+    result = []
+    for liab in rows:
+        raw_amount = str(liab.remaining_amount or Decimal("0"))
+        entry: dict[str, Any] = {
+            "id": str(liab.id),
+            "name": liab.name,
+            "category": liab.category,
+            "remaining_amount": raw_amount,
+            "currency": liab.currency,
         }
-        for l in rows
-    ]
+        if dc and liab.currency != dc:
+            rate_from, _ = ExchangeRateService.get_rate(liab.currency, db)
+            rate_to, _ = ExchangeRateService.get_rate(dc, db)
+            if rate_from is not None and rate_to is not None:
+                converted = ExchangeRateService.convert(
+                    float(liab.remaining_amount or 0), liab.currency, dc, db
+                )
+                entry["remaining_amount"] = str(converted)
+                entry["original_currency"] = liab.currency
+                entry["currency"] = dc
+        result.append(entry)
+    return result

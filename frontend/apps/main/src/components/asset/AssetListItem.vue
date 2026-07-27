@@ -3,7 +3,7 @@
     class="asset-list-item"
     :class="{ 'selection-mode': selectable, selected: selected }"
     role="listitem"
-    :aria-label="`${asset.name}, ${statusText}, ${currency.format(asset.purchase_price || 0)}购入`"
+    :aria-label="`${asset.name}, ${statusText}, ${formatCurrency(asset.purchase_price || 0, asset.currency)}购入`"
     :aria-selected="selected"
     tabindex="0"
     @click="$emit('click')"
@@ -17,9 +17,23 @@
     <div class="item-main">
       <div
         class="item-icon"
-        :style="{ background: asset.category?.color || 'var(--color-primary)' }"
+        :class="{ 'has-image': asset.image_url && !imageError }"
+        :style="
+          asset.image_url && !imageError
+            ? undefined
+            : { background: asset.category?.color || 'var(--color-primary)' }
+        "
       >
-        <SvgIcon :name="getIconId(asset.category?.icon)" class="icon-svg" />
+        <template v-if="asset.image_url && !imageError">
+          <img
+            :src="imageUrl"
+            :alt="asset.name"
+            class="icon-img"
+            @error="onImageError"
+          />
+          <span class="icon-label">{{ asset.name }}</span>
+        </template>
+        <SvgIcon v-else :name="getIconId(asset.category?.icon)" class="icon-svg" />
       </div>
       <div class="item-info">
         <div class="item-header">
@@ -30,12 +44,12 @@
         </div>
         <div class="item-meta">
           <span class="item-price-days"
-            >{{ currency.format(asset.purchase_price || 0) }} | {{ daysUsed }}天</span
+            >{{ formatCurrency(asset.purchase_price || 0, asset.currency) }} | {{ daysUsed }}天</span
           >
         </div>
         <div class="item-cost">
           <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="item-daily">
-            {{ currency.format(asset.daily_cost) }}/天
+            {{ formatCurrency(asset.daily_cost, asset.currency) }}/天
           </span>
         </div>
 
@@ -66,10 +80,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
+import { formatCurrency, parseLocalDate } from '@/utils/format'
 import { getIconId } from '@/utils/icon'
 
 const props = defineProps<{
@@ -86,6 +101,20 @@ const emit = defineEmits<{
 
 const currency = useCurrency()
 const { t } = useI18n()
+
+const imageError = ref(false)
+
+const imageUrl = computed(() => {
+  if (!props.asset.image_url) return ''
+  if (props.asset.image_url.startsWith('/')) {
+    return `/api/v1${props.asset.image_url}`
+  }
+  return props.asset.image_url
+})
+
+function onImageError() {
+  imageError.value = true
+}
 
 // Long press detection
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
@@ -150,7 +179,7 @@ const statusText = computed(() => {
 
 const daysUsed = computed(() => {
   if (!props.asset.purchase_date) return 0
-  const purchase = new Date(props.asset.purchase_date)
+  const purchase = parseLocalDate(props.asset.purchase_date)
   const now = new Date()
   return Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
 })
@@ -250,6 +279,37 @@ const remainingLabel = computed(() =>
   height: 20px;
   fill: white;
   color: white;
+}
+.icon-img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.icon-label {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(0, 0, 0, 0.28);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.item-icon.has-image::before {
+  display: none;
 }
 @keyframes icon-shimmer {
   0% {

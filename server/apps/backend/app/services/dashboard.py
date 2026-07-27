@@ -23,6 +23,8 @@ from apps.backend.app.schemas.dashboard import (
     InsightsResponse,
     InvestmentReturnItem,
     InvestmentReturnSummary,
+    LiabilityAllocationItem,
+    LiabilityAllocationResponse,
     LongestHeldStat,
     LowUsageItem,
     NewAssetItem,
@@ -138,6 +140,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         mom_change = round((current_net - snapshot_net) / abs(snapshot_net) * 100, 2)
 
     return OverviewResponse(
+        currency=default_currency,
         total_assets=round(total_assets_val, 2),
         total_liabilities=round(total_liabilities_val, 2),
         net_worth=round(current_net, 2),
@@ -178,12 +181,14 @@ def get_allocation(db: Session, user: User) -> AllocationResponse:
                 "icon": a.category.icon if a.category else "",
                 "color": a.category.color if a.category else "",
                 "amount": 0.0,
+                "asset_type": a.category.asset_type if a.category else a.asset_type,
             }
         category_totals[cat_id]["amount"] += converted
 
     total = sum(c["amount"] for c in category_totals.values()) or 1
-    items = [
-        AllocationItem(
+
+    def build_item(c: dict) -> AllocationItem:
+        return AllocationItem(
             category_id=c["id"],
             category_name=c["name"],
             icon=c["icon"],
@@ -191,9 +196,65 @@ def get_allocation(db: Session, user: User) -> AllocationResponse:
             amount=round(c["amount"], 2),
             percentage=round(c["amount"] / total * 100, 2),
         )
-        for c in category_totals.values()
+
+    items = [build_item(c) for c in category_totals.values()]
+    physical_items = [build_item(c) for c in category_totals.values() if c.get("asset_type") == "physical"]
+    financial_items = [build_item(c) for c in category_totals.values() if c.get("asset_type") == "financial"]
+
+    return AllocationResponse(
+        items=items,
+        physical_items=physical_items,
+        financial_items=financial_items,
+        total=round(total, 2),
+    )
+
+
+def get_liability_allocation(db: Session, user: User) -> LiabilityAllocationResponse:
+    """Return active liabilities grouped by category, converted to default currency."""
+    family_id = user.family_id
+    default_currency = user.default_currency or "CNY"
+
+    liabilities = (
+        db.query(Liability)
+        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .all()
+    )
+
+    category_colors = {
+        "mortgage": "#EF4444",
+        "car_loan": "#F97316",
+        "credit_card": "#6366F1",
+        "personal_loan": "#8B5CF6",
+        "other": "#64748B",
+    }
+
+    category_totals: dict[str, float] = {}
+    for liability in liabilities:
+        if liability.remaining_amount is None:
+            continue
+        liability_currency = getattr(liability, "currency", "CNY") or "CNY"
+        converted = ExchangeRateService.convert(
+            float(liability.remaining_amount), liability_currency, default_currency, db
+        )
+        category = liability.category or "other"
+        category_totals[category] = category_totals.get(category, 0.0) + converted
+
+    total = sum(category_totals.values()) or 0.0
+    denominator = total if total > 0 else 1
+
+    items = [
+        LiabilityAllocationItem(
+            category_name=category,
+            amount=round(amount, 2),
+            percentage=round(amount / denominator * 100, 2),
+            color=category_colors.get(category, "#64748B"),
+        )
+        for category, amount in sorted(
+            category_totals.items(), key=lambda x: x[1], reverse=True
+        )
     ]
-    return AllocationResponse(items=items, total=round(total, 2))
+
+    return LiabilityAllocationResponse(items=items, total=round(total, 2))
 
 
 def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:

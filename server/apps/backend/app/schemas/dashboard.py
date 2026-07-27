@@ -4,6 +4,7 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 
 class OverviewResponse(BaseModel):
+    currency: str = "CNY"
     total_assets: float
     total_liabilities: float
     net_worth: float
@@ -24,6 +25,20 @@ class AllocationItem(SnowflakeBase):
 
 class AllocationResponse(BaseModel):
     items: list[AllocationItem]
+    physical_items: list[AllocationItem] = []
+    financial_items: list[AllocationItem] = []
+    total: float
+
+
+class LiabilityAllocationItem(BaseModel):
+    category_name: str
+    amount: float
+    percentage: float
+    color: str
+
+
+class LiabilityAllocationResponse(BaseModel):
+    items: list[LiabilityAllocationItem]
     total: float
 
 

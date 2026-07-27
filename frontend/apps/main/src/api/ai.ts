@@ -670,6 +670,33 @@ export const aiCreateSkill = (description: string) =>
 export const saveRawSkill = (payload: RawSkillSavePayload) =>
   http.post<SkillDefinition>('/ai/skills/custom/raw', payload).then(res => res.data)
 
+// ── Chat Attachment Upload ─────────────────────────────────────────────────────
+
+export interface ChatAttachmentResponse {
+  file_id: string
+  url: string
+  filename: string
+  size_bytes: number
+}
+
+export const uploadChatAttachment = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return http.post<ChatAttachmentResponse>('/ai/chat/attachments', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(res => res.data)
+}
+
+// ── Skill Install from Artifact ────────────────────────────────────────────────
+
+export interface InstallFromArtifactPayload {
+  session_id: string
+  artifact_path: string
+}
+
+export const installSkillFromArtifact = (payload: InstallFromArtifactPayload) =>
+  http.post<SkillDefinition>('/ai/skills/install-from-artifact', payload).then(res => res.data)
+
 // ── finance_coach (D2/A1a dashboard card, Plan B T5) ─────────────────────────
 //
 // The backend /ai/finance-coach/generate endpoint returns either:

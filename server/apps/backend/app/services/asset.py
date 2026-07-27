@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -603,11 +604,19 @@ def batch_export_assets(db: Session, user: User, asset_ids: list[int]) -> dict:
 def list_assets_for_family(
     db: Session,
     family_id: str,
+    user: User | None = None,
     category: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
-    """List assets for a family, filtered by category if provided."""
+    """List assets for a family, filtered by category if provided.
+
+    Multi-currency: when *user* is provided, ``current_value`` is converted to
+    the user's ``default_currency`` and the original currency is preserved in
+    ``original_currency``.  When *user* is None (legacy callers) the raw value
+    is returned without conversion.
+    """
     from apps.backend.app.models.asset import Asset
+    from packages.domain.exchange_rate.service import ExchangeRateService
 
     q = db.query(Asset).filter(
         Asset.family_id == family_id, Asset.is_archived.is_(False)
@@ -615,12 +624,27 @@ def list_assets_for_family(
     if category:
         q = q.filter(Asset.category == category)
     rows = q.limit(limit).all()
-    return [
-        {
+
+    dc = (user.default_currency or "CNY") if user else None
+
+    result = []
+    for a in rows:
+        raw_value = float(a.current_value or 0)
+        entry: dict[str, Any] = {
             "id": str(a.id),
             "name": a.name,
             "category": a.category,
-            "current_value": float(a.current_value or 0),
+            "current_value": raw_value,
+            "currency": a.currency,
         }
-        for a in rows
-    ]
+        if dc and a.currency != dc:
+            rate_from, _ = ExchangeRateService.get_rate(a.currency, db)
+            rate_to, _ = ExchangeRateService.get_rate(dc, db)
+            if rate_from is not None and rate_to is not None:
+                entry["current_value"] = ExchangeRateService.convert(
+                    raw_value, a.currency, dc, db
+                )
+                entry["original_currency"] = a.currency
+                entry["currency"] = dc
+        result.append(entry)
+    return result
