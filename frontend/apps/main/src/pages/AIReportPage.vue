@@ -20,8 +20,19 @@
       @view-markdown="loadFallbackMarkdown"
     />
 
-    <!-- Failed state (show regardless of whether there's an existing report) -->
-    <div v-if="stream.status.value === 'error'" class="failed-placeholder">
+    <!-- Notice bar when generating new report while previous exists -->
+    <div v-if="isGenerating && currentReport && !stream.cached.value" class="previous-report-banner">
+      <van-notice-bar
+        mode="closeable"
+        left-icon="info-o"
+        :text="t('aiReport.previousReportWhileGenerating')"
+        background="#e8f4ff"
+        color="#1890ff"
+      />
+    </div>
+
+    <!-- Failed state (show only when error and no report) -->
+    <div v-if="stream.status.value === 'error' && !currentReport" class="failed-placeholder">
       <van-icon name="warning-o" size="48" class="failed-icon" />
       <!-- Elastic fallback: step1 markdown 落盘 succeeded but step2/3 failed -->
       <template v-if="hasMarkdownFallback">
@@ -38,7 +49,7 @@
       </van-button>
     </div>
 
-    <!-- No report yet (only show when not failed/generating) -->
+    <!-- No report yet (only show when not failed/generating and no report) -->
     <div v-else-if="!currentReport && !isGenerating" class="empty-state">
       <EmptyState image="search" :description="t('aiReport.noReport')" />
       <div class="empty-actions">
@@ -49,8 +60,8 @@
       </div>
     </div>
 
-    <!-- Report content (show when report exists and not generating) -->
-    <template v-else-if="currentReport && !isGenerating">
+    <!-- Report content (show when report exists, whether generating or not) -->
+    <template v-if="currentReport">
       <div ref="reportContentRef">
       <!-- Overall score -->
       <div class="overall-section">
@@ -178,10 +189,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast, showFailToast, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { useCurrency } from '@/composables/useCurrency'
 import { marked } from 'marked'
+import { parseApiDate } from '@/utils/format'
 import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
-import { getAIReport, getAIReportMarkdown } from '@/api/ai'
+import { useAuthStore } from '@/stores/auth'
+import { getAIReport, getAIReportMarkdown, getAITask } from '@/api/ai'
 import type { AIReport, AIReportIndicator } from '@/types'
 import { useReportStream } from '@/composables/useReportStream'
 import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
@@ -195,9 +209,11 @@ const SUMMARY_PURIFY_CONFIG = {
   ALLOW_DATA_ATTR: false,
 } as const
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const { formatIn } = useCurrency()
 
 const aiStore = useAIStore()
+const authStore = useAuthStore()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
@@ -340,7 +356,8 @@ const renderedSummary = computed(() => {
 
 function formatMoney(val: number | null | undefined): string {
   if (val == null) return '-'
-  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(val)
+  const currency = authStore.user?.default_currency || 'CNY'
+  return formatIn(val, currency)
 }
 
 function formatValue(key: string, val: number): string {
@@ -371,13 +388,17 @@ function getDataLabel(key: string): string {
   if (DATA_LABEL_KEYS.has(key)) {
     return t(`aiReport.dataLabel_${key}`)
   }
-  // Humanize fallback: "some_field_name" → "Some field name"
-  return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+  // Unknown keys: humanize for English locale, keep raw for non-English
+  if (locale.value === 'en-US') {
+    return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+  }
+  return key
 }
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const loc = locale.value === 'en-US' ? 'en-US' : 'zh-CN'
+  return parseApiDate(iso).toLocaleString(loc, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 async function onGenerate(force = false) {
@@ -386,8 +407,35 @@ async function onGenerate(force = false) {
     return
   }
   stream.reset()
+  let registered = false
+  async function registerBgTask() {
+    if (registered) return
+    try {
+      const task = await getAITask('report')
+      if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        aiStore.registerBackgroundTask({
+          capability: 'report',
+          taskId: task.task_id,
+          sessionId: task.session_id || '',
+          startedAt: task.started_at || new Date().toISOString(),
+          status: task.status,
+        })
+        registered = true
+      }
+    } catch {
+      // best-effort; task polling on return will catch up
+    }
+  }
+
   try {
-    await stream.connect(force)
+    const connectPromise = stream.connect(force)
+    // Register the background task as soon as possible so navigation away
+    // does not lose track of the running run.
+    await registerBgTask()
+    if (!registered) {
+      setTimeout(registerBgTask, 500)
+    }
+    await connectPromise
     // Cache hit → stream.report holds the cached report.
     if (stream.cached.value && stream.report.value) {
       currentReport.value = stream.report.value as unknown as AIReport
@@ -445,11 +493,35 @@ async function onExportPdf() {
 onMounted(async () => {
   await aiStore.fetchConfig()
   await loadExistingReport()
+
+  // If a report task is still running (possibly from a previous session or
+  // after the user navigated away), resume polling and load the result when
+  // it completes.
+  try {
+    const task = await getAITask('report')
+    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+      aiStore.registerBackgroundTask({
+        capability: 'report',
+        taskId: task.task_id,
+        sessionId: task.session_id || '',
+        startedAt: task.started_at || new Date().toISOString(),
+        status: task.status,
+      })
+      await stream.startPolling()
+      await loadExistingReport()
+      aiStore.clearBackgroundTask('report')
+    } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
+      aiStore.clearBackgroundTask('report')
+    }
+  } catch {
+    // ignore status fetch errors; page already loaded existing report
+  }
 })
 
 onUnmounted(() => {
-  // Abort any in-flight stream when leaving the page.
-  stream.abort()
+  // Close the frontend SSE reader but keep the agent pipeline running in the
+  // background. The user can leave the page and the task will still complete.
+  stream.abort(true)
 })
 </script>
 
@@ -537,6 +609,7 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--text-primary);
   line-height: 1.6;
+  text-align: left;
   margin: 0 0 10px;
   :deep(p) {
     margin: 0 0 6px;
@@ -861,5 +934,18 @@ onUnmounted(() => {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--separator);
+}
+/* Previous report banner while generating */
+.previous-report-banner {
+  padding: 0 16px;
+  margin-top: 12px;
+}
+.previous-report-banner :deep(.van-notice-bar) {
+  border-radius: 8px;
+  font-size: 13px;
+}
+/* Report content container */
+.previous-report-content {
+  margin-top: 12px;
 }
 </style>

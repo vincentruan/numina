@@ -1,11 +1,11 @@
 <template>
   <van-popup
     :show="visible"
-    @update:show="onUpdateShow"
     position="bottom"
     :style="{ height: '80%', borderRadius: '16px 16px 0 0' }"
     closeable
     close-icon-position="top-right"
+    @update:show="onUpdateShow"
   >
     <div class="markdown-preview">
       <div class="preview-header">

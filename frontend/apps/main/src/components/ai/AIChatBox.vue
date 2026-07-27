@@ -30,6 +30,12 @@ import { useAiContext } from '@/composables/useAiContext'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 import { usePageLoading } from '@/composables/usePageLoading'
 
+interface ChatAttachment {
+  type: 'file' | 'image'
+  name: string
+  path?: string
+}
+
 const NUMINA_AGENT_NAME = 'numina'
 const DEFAULT_MODEL = 'default'
 
@@ -44,6 +50,17 @@ const familyStore = useFamilyStore()
 // loadContext fetches the entity context to inject as the first user turn.
 const { loadContext, contextLabel, clearContext } = useAiContext()
 const { increment, decrement } = usePageLoading()
+
+// ── Chat attachments ──
+const chatAttachments = ref<ChatAttachment[]>([])
+
+function onAddAttachment(attachment: ChatAttachment) {
+  chatAttachments.value.push(attachment)
+}
+
+function onRemoveAttachment(index: number) {
+  chatAttachments.value.splice(index, 1)
+}
 
 // Active agent for ChatHeader
 const activeAgent = computed(() => {
@@ -465,7 +482,9 @@ async function handleSendMessage(payload: SubmitPayload) {
     subagent_enabled: payload.subagent_enabled,
     reasoning_effort: payload.reasoning_effort,
     websearch_enabled: payload.websearch_enabled,
-  })
+  }, undefined, undefined, payload.files)
+  // Clear attachments after successful send
+  chatAttachments.value = []
 }
 
 function handleStopStream() {
@@ -672,9 +691,12 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         :agents="activeAgent ? [{ id: activeAgent.id, display_name: activeAgent.display_name, agent_name: activeAgent.agent_name, icon: activeAgent.icon, color: activeAgent.color, description: activeAgent.description }] : []"
         :agent-icon="activeAgent?.icon"
         :agent-label="activeAgent?.display_name"
+        :attachments="chatAttachments"
         @submit="handleSendMessage"
         @stop="handleStop"
         @context-change="handleContextChange"
+        @add-attachment="onAddAttachment"
+        @remove-attachment="onRemoveAttachment"
       />
     </template>
 

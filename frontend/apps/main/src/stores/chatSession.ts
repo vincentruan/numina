@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { parseApiDate } from '@/utils/format'
 import type { ThreadSession } from '@/types/ai-chat/session'
 
 export interface PendingMessage {
@@ -74,7 +75,7 @@ export const useChatSessionStore = defineStore('chatSession', () => {
   function setSessions(list: ThreadSession[]) {
     sessions.value = [...list].sort((a, b) => {
       if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      return parseApiDate(b.updated_at).getTime() - parseApiDate(a.updated_at).getTime()
     })
   }
 

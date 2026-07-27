@@ -16,7 +16,7 @@
  * - Tenant resource isolation (useTenantAiResources)
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
 import VoiceInputButton from './VoiceInputButton.vue'
@@ -30,6 +30,7 @@ import type { SlashCommand } from '@/composables/ai-chat/useSlashCommands'
 import { useSlashSkills } from '@/composables/ai-chat/useSlashSkills'
 import { getWebSearchStatus } from '@/api/webSearch'
 import { polishInputDraft } from '@/api/ai-chat'
+import { uploadChatAttachment } from '@/api/ai'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -77,6 +78,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   'update:webSearch': [value: boolean]
   selectAgent: []
+  addAttachment: [attachment: Attachment]
   removeAttachment: [index: number]
   contextChange: [context: InputContext]
 }>()
@@ -103,6 +105,16 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const cameraInputRef = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+// ── Vision model detection ──
+// When the user uploads an image, we need a model that supports vision.
+// If the currently selected model doesn't support vision, we'll auto-switch
+// to the first vision-capable model for this session.
+const visionModel = computed(() =>
+  models.value.find(m => m.supports_vision) ?? null,
+)
+const hasVisionModel = computed(() => visionModel.value !== null)
 
 // ── Input polish (D3 DeerFlow sync) ──
 // Stateless single-LLM-call draft rewrite. Abortable + staleness-guarded so a
@@ -410,11 +422,20 @@ function onSubmit() {
     return
   }
 
+  const files = (props.attachments ?? [])
+    .filter(a => a.path)
+    .map(a => ({
+      path: a.path!,
+      filename: a.name,
+      mime_type: _guessMime(a.name),
+    }))
+
   emit('submit', {
     text,
     model_name: context.value.model_name,
     mode: context.value.mode,
     websearch_enabled: webSearchEnabled.value,
+    ...(files.length > 0 ? { files } : {}),
     ...finalPayload.value,
     thread_id: props.threadId,
   })
@@ -500,30 +521,82 @@ function onPanelItem(action: 'file' | 'image' | 'camera') {
   }
 }
 
+// ── File / Image / Camera upload handlers ──
+const _ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+const _ALLOWED_FILE_EXTS = [
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.txt', '.csv', '.md', '.json', '.yaml', '.yml',
+  ..._ALLOWED_IMAGE_EXTS,
+]
+
+function _guessMime(filename: string): string {
+  const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase()
+  const map: Record<string, string> = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+    '.webp': 'image/webp', '.gif': 'image/gif',
+    '.pdf': 'application/pdf', '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.txt': 'text/plain', '.csv': 'text/csv', '.md': 'text/markdown',
+    '.json': 'application/json', '.yaml': 'text/yaml', '.yml': 'text/yaml',
+  }
+  return map[ext] || 'application/octet-stream'
+}
+
+async function _handleUpload(file: File, isImage: boolean) {
+  const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+
+  if (isImage && !hasVisionModel.value) {
+    showFailToast(t('toast.noVisionModel'))
+    return
+  }
+
+  if (isImage && !_ALLOWED_IMAGE_EXTS.includes(ext)) {
+    showFailToast(t('toast.invalidImageType'))
+    return
+  }
+  if (!isImage && !_ALLOWED_FILE_EXTS.includes(ext)) {
+    showFailToast(t('toast.invalidFileType'))
+    return
+  }
+
+  uploading.value = true
+  try {
+    const result = await uploadChatAttachment(file)
+    emit('addAttachment', {
+      type: isImage ? 'image' : 'file',
+      name: result.filename,
+      path: result.url,
+    })
+    // Auto-switch to vision-capable model when an image is uploaded
+    // and the current model doesn't support vision.
+    if (isImage && visionModel.value && !selectedModel.value?.supports_vision) {
+      context.value.model_name = visionModel.value.name
+    }
+    showSuccessToast(t('toast.uploadSuccess', { name: file.name }))
+  } catch {
+    showFailToast(t('toast.uploadFailed'))
+  } finally {
+    uploading.value = false
+  }
+}
+
 function handleFileSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.fileSelected', { name: file.name }))
-    // TODO: implement file upload to chat
-  }
+  if (file) _handleUpload(file, false)
   ;(e.target as HTMLInputElement).value = ''
 }
 
 function handleImageSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.photoSelected'))
-    // TODO: implement photo upload to chat
-  }
+  if (file) _handleUpload(file, true)
   ;(e.target as HTMLInputElement).value = ''
 }
 
 function handleCameraSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    showToast(t('toast.photoSelected'))
-    // TODO: implement photo upload to chat
-  }
+  if (file) _handleUpload(file, true)
   ;(e.target as HTMLInputElement).value = ''
 }
 

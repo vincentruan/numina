@@ -10,8 +10,13 @@ export function useCurrency() {
   // Money is str on the wire (money-as-str); formatCurrency coerces. Accept both.
   const format = (amount: number | string) => formatCurrency(amount, currency.value)
 
+  // Format an amount in a specific currency (e.g. an asset's own currency),
+  // independent of the user's default_currency.
+  const formatIn = (amount: number | string, currencyCode: string) => formatCurrency(amount, currencyCode)
+
   return {
     format,
+    formatIn,
     formatPercent,
     currency
   }

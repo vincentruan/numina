@@ -14,7 +14,7 @@ export type ShikiHighlighter = Awaited<ReturnType<ShikiModule['createHighlighter
 const GLOBAL_KEY = '__numina_shiki_highlighter__' as const
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __numina_shiki_highlighter__: Promise<ShikiHighlighter> | undefined
 }
 

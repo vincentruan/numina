@@ -10,11 +10,13 @@
  * - 点击触发全屏预览
  * - Skill 文件安装按钮
  */
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button } from 'vant'
+import { Button, showSuccessToast, showFailToast } from 'vant'
 import IIcon from '@/components/IIcon.vue'
 import { getFileName, getFileIcon, isSkillFile } from '@/utils/ai-chat/fileType'
 import { artifactDownloadUrl } from '@/utils/ai-chat/artifactUrl'
+import { installSkillFromArtifact } from '@/api/ai'
 import type { Artifact } from '@/types/agent-stream'
 
 const { t } = useI18n()
@@ -33,10 +35,22 @@ function handleClick(artifact: Artifact) {
   emit('select', artifact)
 }
 
-// Skill 文件安装（DeerFlow 特殊处理）
-function handleInstallSkill(filepath: string) {
-  // TODO: 实现 skill installation
-  console.log('Install skill:', filepath)
+// Skill 文件安装（从 sandbox 产物安装）
+const installingSkill = ref(false)
+async function handleInstallSkill(filepath: string) {
+  if (installingSkill.value) return
+  installingSkill.value = true
+  try {
+    await installSkillFromArtifact({
+      session_id: props.sessionId,
+      artifact_path: filepath,
+    })
+    showSuccessToast(t('aiChat.skillInstalled'))
+  } catch {
+    showFailToast(t('aiChat.skillInstallFailed'))
+  } finally {
+    installingSkill.value = false
+  }
 }
 
 // 下载链接

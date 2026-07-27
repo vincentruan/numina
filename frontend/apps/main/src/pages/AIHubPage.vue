@@ -37,8 +37,9 @@
               <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
               <van-popover
                 :show="activePopover === stat.type"
-                placement="bottom"
+                :placement="stat.type === 'alerts' ? 'bottom-end' : 'bottom'"
                 :offset="[0, 8]"
+                :teleport="null"
                 @update:show="(v) => (activePopover = v ? stat.type : null)"
               >
                 <div class="stat-popover-content">
@@ -320,6 +321,7 @@ import DOMPurify from 'dompurify'
 import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getUser } from '@/utils/storage'
+import { parseApiDate } from '@/utils/format'
 import { getAIReport } from '@/api/ai'
 import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
@@ -520,7 +522,7 @@ const renderedSummary = computed(() => {
 
 const reportAge = computed(() => {
   if (!reportGeneratedAt.value) return ''
-  const diff = Date.now() - new Date(reportGeneratedAt.value).getTime()
+  const diff = Date.now() - parseApiDate(reportGeneratedAt.value).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return t('aiHub.justNow')
   if (mins < 60) return t('aiHub.minutesAgo', { minutes: mins })
@@ -623,7 +625,7 @@ async function refreshReport(silent?: boolean) {
 
   // 1-hour cooldown: prevent unnecessary regenerations if report is fresh
   if (reportGeneratedAt.value && !silent) {
-    const ageMs = Date.now() - new Date(reportGeneratedAt.value).getTime()
+    const ageMs = Date.now() - parseApiDate(reportGeneratedAt.value).getTime()
     const oneHourMs = 60 * 60 * 1000
     if (ageMs < oneHourMs) {
       showFailToast(t('toast.reportTooFrequent'))
@@ -939,8 +941,13 @@ defineExpose({
 
 .stat-popover-content {
   padding: 12px 14px;
-  max-width: 220px;
+  max-width: min(220px, calc(100vw - 32px));
+  width: max-content;
   box-sizing: border-box;
+}
+
+.stat-popover-desc {
+  word-break: break-word;
 }
 
 .stat-popover-header {

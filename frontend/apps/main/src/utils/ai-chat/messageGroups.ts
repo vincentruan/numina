@@ -275,7 +275,7 @@ export function extractPresentFilesFromGroup(group: AssistantPresentFilesGroup):
   if (presentFilesCall?.args) {
     // Guard JSON.parse: malformed args (truncated SSE, partial stream) must not
     // crash the Vue render. Fall through to the artifacts fallback below.
-    let args: Record<string, unknown> | null = null
+    let args: Record<string, unknown> | null
     try {
       args = typeof presentFilesCall.args === 'string'
         ? JSON.parse(presentFilesCall.args) as Record<string, unknown>
