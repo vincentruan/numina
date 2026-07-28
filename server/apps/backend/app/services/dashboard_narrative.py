@@ -89,18 +89,19 @@ def _separate_narrative_and_thinking(raw: str) -> tuple[str, str]:
     if not cleaned:
         return "", ""
 
-    # 2. Find Chinese sentences — split on terminators keeping delimiters
-    sentences_with_delims = re.split(r"([。！？])", cleaned)
+    # 2. Split into sentences on Chinese terminators AND Latin periods
+    #    (Latin period not surrounded by digits, to avoid splitting decimals).
+    #    Use finditer instead of re.split to avoid None-group interleaving.
     all_sentences: list[str] = []
-    for i in range(0, len(sentences_with_delims) - 1, 2):
-        sentence = sentences_with_delims[i].strip()
-        delim = sentences_with_delims[i + 1]
-        if sentence:
-            all_sentences.append(sentence + delim)
-    if len(sentences_with_delims) % 2 == 1:
-        trailing = sentences_with_delims[-1].strip()
-        if trailing:
-            all_sentences.append(trailing)
+    prev = 0
+    for m in re.finditer(r"[。！？]|(?<!\d)\.(?!\d)", cleaned):
+        seg = cleaned[prev : m.end()].strip()
+        if seg:
+            all_sentences.append(seg)
+        prev = m.end()
+    trailing = cleaned[prev:].strip()
+    if trailing:
+        all_sentences.append(trailing)
 
     # Filter to Chinese-dominant sentences (≥5 Chinese chars)
     chinese_sentences: list[tuple[int, str]] = []
@@ -126,8 +127,14 @@ def _separate_narrative_and_thinking(raw: str) -> tuple[str, str]:
         narrative_first_idx = chinese_sentences[-take][0]
         thinking_parts = [all_sentences[i] for i in range(narrative_first_idx)]
         thinking = "".join(thinking_parts).strip()
+    elif len(chinese_sentences) == 1:
+        # Single Chinese sentence at the end — it's the narrative, rest is thinking
+        _, narrative = chinese_sentences[0]
+        narrative_first_idx = chinese_sentences[0][0]
+        thinking_parts = [all_sentences[i] for i in range(narrative_first_idx)]
+        thinking = "".join(thinking_parts).strip()
     else:
-        # Not enough Chinese sentences — entire text is narrative
+        # No Chinese-dominant sentences — entire text is narrative
         narrative = cleaned
         thinking = ""
 
