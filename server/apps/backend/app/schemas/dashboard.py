@@ -275,6 +275,14 @@ class InsightsResponse(BaseModel):
     investment_returns: InvestmentReturnSummary | None = None
 
 
+class NarrativeResponse(BaseModel):
+    """Dashboard narrative card response (仪表盘叙事卡片)."""
+
+    narrative: str | None = None
+    first_sentence: str = ""
+    generated_at: str | None = None
+
+
 # ═══════════════════════════════════════
 # Upcoming Payments (Track A)
 # ═══════════════════════════════════════

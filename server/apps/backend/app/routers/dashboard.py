@@ -16,6 +16,7 @@ from apps.backend.app.schemas.dashboard import (
     InvestmentReturnItem,
     LiabilityAllocationResponse,
     LowUsageItem,
+    NarrativeResponse,
     NewAssetsResponse,
     OverviewResponse,
     TopAssetItem,
@@ -196,6 +197,24 @@ def get_insights(
     Returns S0-S5 all sections in one API call for efficiency.
     """
     return dashboard_service.get_insights(db, user)
+
+
+@router.get("/narrative", response_model=NarrativeResponse)
+async def get_narrative(
+    force: bool = Query(False),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Dashboard narrative — AI-generated monthly financial story (R1-R5).
+
+    Returns cached or freshly-generated narrative text. 4h TTL; threshold gate
+    (asset_count >= 5, history >= 3 months). Silent degradation on agent failure.
+    ``?force=true`` bypasses cache and regenerates.
+    """
+    from apps.backend.app.services.dashboard_narrative import generate_narrative
+
+    result = await generate_narrative(db, user, force=force)
+    return NarrativeResponse(**result)
 
 
 @router.get("/upcoming-payments", response_model=UpcomingPaymentsResponse)
