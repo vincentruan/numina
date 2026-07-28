@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-from packages.db.session import SessionLocal, engine
+from packages.db.session import SessionLocal
 from sqlalchemy import text
 from datetime import datetime, timezone
 import os

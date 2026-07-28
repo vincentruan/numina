@@ -5,7 +5,6 @@ set_active_skill, so DeerFlow's SkillToolPolicyMiddleware owns tool filtering fo
 Non-slash messages keep the existing chat/chat-search pre-selection.
 """
 
-import pytest
 from deerflow.skills.slash import parse_slash_skill_reference
 
 

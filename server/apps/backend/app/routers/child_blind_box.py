@@ -180,8 +180,8 @@ def get_latest_auto_draw(
         db.query(BlindBoxDraw)
         .filter(
             BlindBoxDraw.child_user_id == child.id,
-            BlindBoxDraw.is_auto_triggered == True,  # noqa: E712
-            BlindBoxDraw.shown_to_child == False,  # noqa: E712
+            BlindBoxDraw.is_auto_triggered == True,
+            BlindBoxDraw.shown_to_child == False,
         )
         .order_by(BlindBoxDraw.draw_at.desc())
         .with_for_update()

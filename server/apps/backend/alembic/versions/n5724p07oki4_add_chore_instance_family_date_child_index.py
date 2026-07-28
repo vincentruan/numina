@@ -15,7 +15,6 @@ WHERE family_id = X AND (child_user_id IN (...) OR child_user_id = family_id)
 Index: (family_id, date_bucket, child_user_id)
 """
 
-import sqlalchemy as sa
 from alembic import op
 
 revision = 'n5724p07oki4'

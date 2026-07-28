@@ -1,6 +1,5 @@
 """数据脱敏管道：发送给 LLM 前剥离 PII。"""
 
-from typing import Any
 
 
 def desensitize_assets(assets: list[dict]) -> list[dict]:

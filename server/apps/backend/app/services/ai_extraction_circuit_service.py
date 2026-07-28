@@ -8,7 +8,7 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_extraction_audit import AIExtractionAudit

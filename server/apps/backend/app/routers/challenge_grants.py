@@ -46,7 +46,7 @@ def create_challenge(
         )
         return ChallengeGrantResponse.model_validate(challenge)
     except ValueError as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from None  # noqa: allow-http-exception
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from None  # allow-http-exception
 
 
 @router.post("/{challenge_id}/cancel", response_model=ChallengeGrantResponse)
@@ -60,7 +60,7 @@ def cancel_challenge(
         challenge = svc.cancel_challenge(db, user, challenge_id)
         return ChallengeGrantResponse.model_validate(challenge)
     except ValueError as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from None  # noqa: allow-http-exception
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from None  # allow-http-exception
 
 
 # ---------------------------------------------------------------------------

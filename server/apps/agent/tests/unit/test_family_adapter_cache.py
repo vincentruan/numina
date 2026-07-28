@@ -37,7 +37,6 @@ def test_get_family_adapter_cache_key_includes_available_skills():
     """get_family_adapter cache key incorporates available_skills (U3)."""
     from apps.agent.services.deerflow_adapter.family_adapter_cache import (
         get_family_adapter,
-        _adapter_cache,
     )
 
     # Verify the cache key structure includes available_skills

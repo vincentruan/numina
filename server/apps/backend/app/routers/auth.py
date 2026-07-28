@@ -30,7 +30,6 @@ from apps.backend.app.auth.deps import (
     get_current_user_from_cookie,
     get_current_user_or_child,
     get_refresh_token_from_cookie,
-    require_owner,
     verify_temp_token,
 )
 from apps.backend.app.database import get_db

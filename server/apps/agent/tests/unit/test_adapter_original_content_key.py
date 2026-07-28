@@ -131,7 +131,6 @@ class TestRoundTripWithDeerFlow:
     def test_get_original_user_content_text_reads_injected_key(self):
         """get_original_user_content_text returns the injected ORIGINAL_USER_CONTENT_KEY."""
         from deerflow.utils.messages import (
-            ORIGINAL_USER_CONTENT_KEY,
             get_original_user_content_text,
         )
 

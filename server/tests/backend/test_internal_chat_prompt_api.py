@@ -1,6 +1,4 @@
 """Integration test for GET /internal/prompts/{family_id}/chat."""
-import os
-import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from apps.backend.app.config import settings
-from apps.backend.app.database import Base, get_db
+from apps.backend.app.database import get_db
 from apps.backend.app.main import app
 from apps.backend.app.models.family import Family
 from apps.backend.app.services import workspace

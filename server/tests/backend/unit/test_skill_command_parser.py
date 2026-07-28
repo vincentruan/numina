@@ -3,7 +3,6 @@
 import pytest
 
 from apps.backend.app.services.skill_command_parser import (
-    ParseResult,
     SkillCommandParser,
 )
 

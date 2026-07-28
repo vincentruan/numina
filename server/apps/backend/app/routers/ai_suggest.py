@@ -8,7 +8,6 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient

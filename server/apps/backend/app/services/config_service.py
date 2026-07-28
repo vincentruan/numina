@@ -181,7 +181,7 @@ def _cache_bucket() -> int:
 
 
 @lru_cache(maxsize=512)
-def _cached_family_setting_raw(family_id: int, key: str, bucket: int) -> Any:  # noqa: ARG001
+def _cached_family_setting_raw(family_id: int, key: str, bucket: int) -> Any:
     """LRU-cached DB read. The bucket param invalidates every 5 minutes."""
     from apps.backend.app.database import SessionLocal
 
@@ -202,6 +202,6 @@ def get_family_setting_cached(family_id: int, key: str) -> Any:
     return _cached_family_setting_raw(family_id, key, _cache_bucket())
 
 
-def _invalidate_family_cache(family_id: int) -> None:  # noqa: ARG001
+def _invalidate_family_cache(family_id: int) -> None:
     """Clear all cached entries. family_id accepted for future per-family invalidation."""
     _cached_family_setting_raw.cache_clear()

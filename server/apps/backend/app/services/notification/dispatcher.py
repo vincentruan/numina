@@ -123,7 +123,7 @@ def _calc_avg_monthly_spend(db: Session, family_id: int) -> float | None:
         db.query(func.sum(Asset.purchase_price))
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,  # noqa: E712
+            Asset.is_archived == False,
             Asset.purchase_date >= cutoff,
         )
         .scalar()
@@ -146,7 +146,7 @@ def _resolve_expired_large_purchase(db: Session) -> None:
 def _check_expiring_assets(db: Session) -> None:
     assets = (
         db.query(Asset)
-        .filter(Asset.is_archived == False, Asset.warranty_expiry_date.isnot(None))  # noqa: E712
+        .filter(Asset.is_archived == False, Asset.warranty_expiry_date.isnot(None))
         .all()
     )
     for asset in assets:
@@ -165,7 +165,7 @@ def _check_expiring_assets(db: Session) -> None:
 def _check_maturity_assets(db: Session) -> None:
     assets = (
         db.query(Asset)
-        .filter(Asset.is_archived == False, Asset.maturity_date.isnot(None))  # noqa: E712
+        .filter(Asset.is_archived == False, Asset.maturity_date.isnot(None))
         .all()
     )
     for asset in assets:
@@ -212,7 +212,7 @@ def _dispatch_notifications(
         )
         .filter(
             NotificationChannel.family_id == reminder.family_id,
-            NotificationChannel.is_enabled == True,  # noqa: E712
+            NotificationChannel.is_enabled == True,
             NotificationSubscription.reminder_type == reminder.reminder_type,
         )
         .all()
@@ -312,7 +312,7 @@ def _retry_failed_notifications(db: Session) -> None:
             )
             .filter(
                 NotificationChannel.family_id == reminder.family_id,
-                NotificationChannel.is_enabled == True,  # noqa: E712
+                NotificationChannel.is_enabled == True,
                 NotificationSubscription.reminder_type == reminder.reminder_type,
             )
             .all()

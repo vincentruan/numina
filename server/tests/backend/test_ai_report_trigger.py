@@ -137,7 +137,7 @@ def _fresh_cached_report():
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30),  # noqa: UP017
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30),
             "report_json": {"overall_score": 65, "indicators": []},
         },
     )()
@@ -177,7 +177,7 @@ def test_trigger_stale_cache_misses(client):
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),  # noqa: UP017
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),
             "report_json": {"overall_score": 1},
         },
     )()
@@ -198,7 +198,7 @@ def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),  # noqa: UP017
+            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),
             # Missing required ``indicators`` → _validate_json(report) is False.
             "report_json": {"overall_score": 65},
         },

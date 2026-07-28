@@ -37,7 +37,7 @@ class DeviceSession(Base):
             "uq_device_sessions_user_device_active",
             "user_id", "device_id",
             unique=True,
-            postgresql_where=(is_revoked == False),  # noqa: E712
-            sqlite_where=(is_revoked == False),  # noqa: E712
+            postgresql_where=(is_revoked == False),
+            sqlite_where=(is_revoked == False),
         ),
     )

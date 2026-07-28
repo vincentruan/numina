@@ -1,5 +1,4 @@
 """Test that contextvars are properly propagated through the patched sync wrapper."""
-import asyncio
 import contextvars
 from concurrent.futures import ThreadPoolExecutor
 

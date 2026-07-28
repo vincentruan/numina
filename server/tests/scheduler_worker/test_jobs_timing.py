@@ -1,6 +1,5 @@
 """Scheduler Worker tests — Mock-based job invocation tests."""
 
-import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest

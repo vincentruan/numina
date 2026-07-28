@@ -37,14 +37,14 @@ def _get_mock_user(family_id: str, db: Session) -> User:
         db.query(User)
         .filter(
             User.family_id == family_id, User.role == "owner", User.is_active == True
-        )  # noqa: E712
+        )
         .first()
     )
     if not user:
         # fallback: 取任意活跃成员
         user = (
             db.query(User)
-            .filter(User.family_id == family_id, User.is_active == True)  # noqa: E712
+            .filter(User.family_id == family_id, User.is_active == True)
             .first()
         )
     if not user:
@@ -123,7 +123,7 @@ def internal_get_liabilities(
 
     liabilities = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)  # noqa: E712
+        .filter(Liability.family_id == family_id, Liability.is_active == True)
         .all()
     )
     return [
@@ -196,7 +196,7 @@ def internal_get_ai_config(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active == True,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .order_by(
@@ -213,7 +213,7 @@ def internal_get_ai_config(
             db.query(FamilyWebSearchProvider)
             .filter(
                 FamilyWebSearchProvider.family_id == family_id_int,
-                FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+                FamilyWebSearchProvider.is_enabled == True,
                 FamilyWebSearchProvider.circuit_state != "open",
             )
             .order_by(FamilyWebSearchProvider.display_order.asc())
@@ -243,7 +243,7 @@ def internal_get_ai_config(
             db.query(FamilyMCPServer)
             .filter(
                 FamilyMCPServer.family_id == family_id_int,
-                FamilyMCPServer.is_enabled == True,  # noqa: E712
+                FamilyMCPServer.is_enabled == True,
                 FamilyMCPServer.mcp_type == "websearch",
             )
             .all()
@@ -357,7 +357,7 @@ def internal_get_ai_config(
         db.query(FamilyWebSearchProvider)
         .filter(
             FamilyWebSearchProvider.family_id == family_id_int,
-            FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+            FamilyWebSearchProvider.is_enabled == True,
             FamilyWebSearchProvider.circuit_state != "open",
         )
         .order_by(FamilyWebSearchProvider.display_order.asc())
@@ -386,7 +386,7 @@ def internal_get_ai_config(
         db.query(FamilyMCPServer)
         .filter(
             FamilyMCPServer.family_id == family_id_int,
-            FamilyMCPServer.is_enabled == True,  # noqa: E712
+            FamilyMCPServer.is_enabled == True,
             FamilyMCPServer.mcp_type == "websearch",
         )
         .all()
@@ -649,7 +649,7 @@ def internal_get_enabled_families(
     rows = (
         db.query(AIProviderConfig.family_id)
         .filter(
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active == True,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .distinct()
@@ -1046,23 +1046,23 @@ def verify_system_token(
     仅支持 static HMAC token 格式。
     """
     if not authorization.startswith("Bearer "):
-        raise HTTPException(  # noqa: allow-http-exception
+        raise HTTPException(  # allow-http-exception
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid system token",
         )
 
     token = authorization[7:]
 
-    from apps.backend.app.config import settings as app_settings  # noqa: PLC0415
+    from apps.backend.app.config import settings as app_settings
 
     if not app_settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(  # noqa: allow-http-exception
+        raise HTTPException(  # allow-http-exception
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Agent internal token not configured",
         )
 
     if not hmac.compare_digest(token, app_settings.AGENT_INTERNAL_TOKEN):
-        raise HTTPException(  # noqa: allow-http-exception
+        raise HTTPException(  # allow-http-exception
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid system token",
         )
@@ -1086,23 +1086,23 @@ async def auto_generate_reports(
     对每个符合条件的家庭，创建 session + task 并触发 agent 生成。
     """
     from apps.backend.app.models.ai_provider_config import (
-        AIProviderConfig,  # noqa: PLC0415
+        AIProviderConfig,
     )
-    from apps.backend.app.models.ai_report import AIReport  # noqa: PLC0415
-    from apps.backend.app.services.agent_client import AgentClient  # noqa: PLC0415
-    from apps.backend.app.services.ai_task_service import AITaskService  # noqa: PLC0415
+    from apps.backend.app.models.ai_report import AIReport
+    from apps.backend.app.services.agent_client import AgentClient
+    from apps.backend.app.services.ai_task_service import AITaskService
     from apps.backend.app.services.chat_session import (
-        ChatSessionService,  # noqa: PLC0415
+        ChatSessionService,
     )
-    from apps.backend.app.services.finance_coach_cache import SKILL_TTL  # noqa: PLC0415
-    from packages.db.models.family import Family  # noqa: PLC0415
+    from apps.backend.app.services.finance_coach_cache import SKILL_TTL
+    from packages.db.models.family import Family
 
     report_ttl = SKILL_TTL["report"]
 
     # 1. 找到 report_auto_generate_enabled=True 的家庭
     auto_families = (
         db.query(Family.id)
-        .filter(Family.report_auto_generate_enabled == True)  # noqa: E712
+        .filter(Family.report_auto_generate_enabled == True)
         .all()
     )
     family_ids = [f.id for f in auto_families]
@@ -1116,7 +1116,7 @@ async def auto_generate_reports(
         for r in db.query(AIProviderConfig.family_id)
         .filter(
             AIProviderConfig.family_id.in_(family_ids),
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active == True,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .all()
@@ -1128,7 +1128,7 @@ async def auto_generate_reports(
 
     triggered = 0
     skipped = 0
-    now = datetime.now(timezone.utc).replace(tzinfo=None)  # noqa: UP017
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for fid in eligible_ids:
         # 3. 检查是否有 1 小时内的报告
@@ -1158,7 +1158,7 @@ async def auto_generate_reports(
         # 5. 找到家庭 owner 作为执行用户
         owner = (
             db.query(User)
-            .filter(User.family_id == fid, User.role == "owner", User.is_active == True)  # noqa: E712
+            .filter(User.family_id == fid, User.role == "owner", User.is_active == True)
             .first()
         )
         if not owner:

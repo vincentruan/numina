@@ -8,7 +8,6 @@ Merges the circuit breaker enhancement branch with the extraction audit branch.
 """
 from typing import Sequence, Union
 
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'v1461w65xpq7'

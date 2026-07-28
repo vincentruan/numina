@@ -40,7 +40,7 @@ from packages.db.session import Base
 # like Family/User declare string relationships to them (Family.categories →
 # "Category"), so the full backend model registry must be imported for
 # configure_mappers() to resolve. Import the backend models package wholesale.
-import apps.backend.app.models  # noqa: F401  — registers every model on shared Base
+import apps.backend.app.models
 
 _engine = create_engine(
     "sqlite:///:memory:",

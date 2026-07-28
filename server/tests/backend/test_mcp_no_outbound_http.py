@@ -5,7 +5,6 @@ Dynamic checks: patching httpx ensures no outbound calls during tool execution.
 """
 
 import ast
-import importlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

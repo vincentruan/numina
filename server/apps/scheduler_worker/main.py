@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     )
     logger.info("scheduler_worker starting up")
 
-    from apps.scheduler_worker.scheduler import scheduler, setup_all_jobs  # noqa: PLC0415
+    from apps.scheduler_worker.scheduler import scheduler, setup_all_jobs
 
     setup_all_jobs()
     scheduler.start()
@@ -50,7 +50,7 @@ app = FastAPI(
 @app.get("/health")
 def health(response: Response) -> dict:
     """Docker healthcheck endpoint."""
-    from apps.scheduler_worker.scheduler import scheduler  # noqa: PLC0415
+    from apps.scheduler_worker.scheduler import scheduler
 
     jobs = scheduler.get_jobs()
     if not scheduler.running:

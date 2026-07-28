@@ -599,7 +599,7 @@ def get_tenant_models(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active == True,
             AIProviderConfig.api_key_encrypted.isnot(None),
             AIProviderConfig.circuit_state != "open",
         )
@@ -676,7 +676,7 @@ def get_tenant_models(
         db.query(FamilyWebSearchProvider)
         .filter(
             FamilyWebSearchProvider.family_id == family_id_int,
-            FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+            FamilyWebSearchProvider.is_enabled == True,
         )
         .count()
         > 0

@@ -1,5 +1,4 @@
 """Tests for seed_storage_backends — env-var driven storage backend seeding."""
-import pytest
 
 from apps.backend.app.models.storage_backend import StorageBackend
 from apps.backend.app.seed.storage_backends import seed_storage_backends

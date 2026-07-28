@@ -1,8 +1,6 @@
 # server/tests/backend/test_ai_web_search_router.py
 import pytest
-from fastapi.testclient import TestClient
 
-from apps.backend.app.main import app
 
 
 # NOTE: Do NOT define a local `client` fixture here.

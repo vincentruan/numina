@@ -176,7 +176,6 @@ def test_void_available_instance(client, db, auth_headers, pool_instance):
 
 def test_void_then_recreate_instance(client, db, auth_headers, child_user, pool_instance, pool_template):
     """After voiding, calling the child chores endpoint creates a fresh instance."""
-    from apps.backend.app.models.chore import ChoreInstance
 
     instance_id = pool_instance["id"]
 

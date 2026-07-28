@@ -330,7 +330,7 @@ def db_session_for_scenario(scenario: LiteracyScenario) -> Session:
 class _NullSession:
     """Fallback when the scenario is detached — query returns None silently."""
 
-    def query(self, *args, **kwargs):  # noqa: D401
+    def query(self, *args, **kwargs):
         class _Q:
             def filter(self, *a, **k):
                 return self

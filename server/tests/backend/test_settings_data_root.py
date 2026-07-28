@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 
 def _make_settings(**overrides):
@@ -107,7 +106,6 @@ class TestExplicitOverrides:
 class TestChatDirValidation:
     def test_chat_dir_strictly_under_upload_dir_raises(self):
         """CHAT_DIR being a strict subdirectory of UPLOAD_DIR is forbidden."""
-        from packages.core.settings import Settings
 
         s = _make_settings(
             DATA_ROOT="/tmp/test-numina",

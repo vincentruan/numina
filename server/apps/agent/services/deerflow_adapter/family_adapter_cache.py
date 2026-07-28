@@ -316,7 +316,7 @@ def _mcp_cache_key(mcp_servers: list[dict[str, Any]] | None) -> str:
     import hashlib
     import json
     blob = json.dumps(mcp_servers, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]  # noqa: S324 — non-crypto use
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]
 
 
 def _generate_temp_config(

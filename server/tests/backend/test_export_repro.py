@@ -1,4 +1,3 @@
-import json
 def test_export_json_with_liability(client, auth_headers):
     r = client.post("/api/v1/liabilities", headers=auth_headers, json={
         "name": "车贷", "category": "car_loan",

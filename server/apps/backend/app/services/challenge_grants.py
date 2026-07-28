@@ -49,7 +49,7 @@ def create_challenge(
         .filter(
             User.id == child_id,
             User.family_id == family_id,
-            User.is_active == True,  # noqa: E712
+            User.is_active == True,
             User.role == "child",
         )
         .first()

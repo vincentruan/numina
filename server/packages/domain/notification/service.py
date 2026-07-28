@@ -17,7 +17,7 @@ def run_scheduled_checks(db: Session) -> None:
     # PHASE2_COUPLING: imports backend internals. Remove in Phase 3 when
     # notification logic is fully migrated to packages/domain/notification/.
     try:
-        from apps.backend.app.services.notification.dispatcher import (  # noqa: PLC0415
+        from apps.backend.app.services.notification.dispatcher import (
             run_scheduled_checks as _run,
         )
     except ImportError as exc:

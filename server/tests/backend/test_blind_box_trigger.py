@@ -1,6 +1,5 @@
 from unittest.mock import patch
 
-import pytest
 
 from apps.backend.app.models.blind_box_config import BlindBoxConfig
 from apps.backend.app.models.blind_box_gift import BlindBoxGift

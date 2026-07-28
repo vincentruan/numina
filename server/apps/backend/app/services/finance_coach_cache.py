@@ -81,7 +81,7 @@ def is_cache_fresh(
             ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
     else:
         ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
-    age = datetime.now(timezone.utc).replace(tzinfo=None) - row.generated_at  # noqa: UP017
+    age = datetime.now(timezone.utc).replace(tzinfo=None) - row.generated_at
     return bool(age < ttl)
 
 
@@ -103,7 +103,7 @@ def upsert_skill_result(
         report_json=payload,
         status="completed",
         skill_id=skill_id,
-        generated_at=datetime.now(timezone.utc).replace(tzinfo=None),  # noqa: UP017
+        generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(row)
     db.flush()  # get the id without committing (caller commits)

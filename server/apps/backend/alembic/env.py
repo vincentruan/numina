@@ -12,7 +12,7 @@ from apps.backend.app.models.ai_provider_config import (
     AIProviderConfig,
     AIProviderTestResult,
 )
-# ruff: noqa: F401  # Alembic env imports models for SQLAlchemy registration, not direct use
+# Alembic env imports models for SQLAlchemy registration, not direct use
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.asset_lifecycle_event import (
     AssetLifecycleEvent,

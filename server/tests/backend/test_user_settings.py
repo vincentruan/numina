@@ -1,7 +1,5 @@
 """Tests for PUT /auth/me/settings theme_color persistence (S1)."""
 
-from tests.backend.conftest import auth_headers  # noqa: F401  (fixture wiring)
-
 
 def test_update_theme_color_valid(client, auth_headers):
     """PUT /auth/me/settings with a valid hex persists theme_color."""

@@ -1,4 +1,4 @@
-# ruff: noqa: F401  # re-exporting models for convenience imports + SQLAlchemy registration
+# re-exporting models for convenience imports + SQLAlchemy registration
 from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.ai_agent import AIAgent
 from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback

@@ -16,7 +16,7 @@ import traceback
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from apps.agent.schemas.context import RedactedContext
 from apps.agent.services.deerflow_adapter.exceptions import (

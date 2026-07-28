@@ -473,7 +473,7 @@ def _create_milestone_draw(
             db.query(BlindBoxGift)
             .filter(
                 BlindBoxGift.family_id == family_id,
-                BlindBoxGift.is_active == True,  # noqa: E712
+                BlindBoxGift.is_active == True,
             )
             .all()
         )

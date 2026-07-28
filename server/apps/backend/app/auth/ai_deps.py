@@ -14,7 +14,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.services.audit_log import write_audit_log
-from packages.security.service_auth.agent_jwt import create_agent_token  # noqa: F401
+from packages.security.service_auth.agent_jwt import create_agent_token
 
 
 def require_owner(current_user: User = Depends(get_current_user)) -> User:
@@ -35,7 +35,7 @@ def require_ai_enabled(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active == True,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .first()

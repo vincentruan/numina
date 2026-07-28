@@ -189,7 +189,7 @@ def test_update_replays_family_config_on_background_thread():
                     agent_name=None,
                     user_id=None,
                 )
-        except Exception as exc:  # noqa: BLE001 — re-raised on the main thread
+        except Exception as exc:
             run_error["exc"] = exc
 
     t = threading.Thread(target=_run)
@@ -227,7 +227,7 @@ def test_update_without_snapshot_falls_back_gracefully():
                     agent_name=None,
                     user_id=None,
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             run_error["exc"] = exc
 
     t = threading.Thread(target=_run)

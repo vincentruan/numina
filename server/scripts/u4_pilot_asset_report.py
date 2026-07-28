@@ -42,18 +42,18 @@ from typing import Any
 # Ensure server/ is on the path when run as a module.
 sys.path.insert(0, ".")
 
-from apps.agent.app.config import settings  # noqa: E402
-from apps.agent.core.backend_client import BackendClient  # noqa: E402
-from apps.agent.schemas.context import FamilyContext  # noqa: E402
+from apps.agent.app.config import settings
+from apps.agent.core.backend_client import BackendClient
+from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.deerflow_adapter.active_skill_context import (
-    set_active_skill,  # noqa: E402
+    set_active_skill,
 )
 from apps.agent.services.deerflow_adapter.adapter import (
-    create_family_adapter,  # noqa: E402
+    create_family_adapter,
 )
-from apps.agent.services.pii_redactor import pii_redactor  # noqa: E402
+from apps.agent.services.pii_redactor import pii_redactor
 from apps.agent.services.runtime.sandbox_provider import (
-    set_family_sandbox_context,  # noqa: E402
+    set_family_sandbox_context,
 )
 
 _SYNTHETIC_TRIGGER = "/asset-report 生成家庭资产报告"

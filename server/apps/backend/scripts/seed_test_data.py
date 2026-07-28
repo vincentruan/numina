@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-import apps.backend.app.models  # noqa: F401 — registers all ORM models
+import apps.backend.app.models
 from apps.backend.app.database import SessionLocal
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode

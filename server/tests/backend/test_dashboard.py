@@ -228,7 +228,6 @@ def test_dashboard_new_assets_requires_auth(client):
 
 def test_dashboard_new_assets_excludes_old_assets(client, auth_headers):
     """Assets created outside the period window are not counted"""
-    from datetime import datetime, timedelta
 
     # Get categories for asset creation
     cat_response = client.get("/api/v1/categories", headers=auth_headers)

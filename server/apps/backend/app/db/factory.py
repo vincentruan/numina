@@ -1,6 +1,6 @@
 # Re-export shim — engine factory moved to packages/db/engine.py
 # create_backend / get_session_factory remain here for backend-internal use.
-from packages.db.engine import get_engine  # noqa: F401
+from packages.db.engine import get_engine
 from sqlalchemy import Engine
 from sqlalchemy.engine.url import make_url
 

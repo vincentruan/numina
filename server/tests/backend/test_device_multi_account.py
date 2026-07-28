@@ -8,7 +8,6 @@ Covers:
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-import pytest
 
 from apps.backend.app.models.device_session import DeviceSession
 from apps.backend.app.models.family import Family

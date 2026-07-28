@@ -1281,7 +1281,7 @@ def get_upcoming_payments(
         db.query(Liability)
         .filter(
             Liability.family_id == user.family_id,
-            Liability.is_active == True,  # noqa: E712
+            Liability.is_active == True,
             Liability.start_date.isnot(None),
         )
         .all()
