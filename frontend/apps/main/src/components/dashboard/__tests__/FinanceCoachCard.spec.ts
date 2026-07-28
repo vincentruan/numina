@@ -27,6 +27,18 @@ vi.mock('vant', () => ({
   showFailToast: vi.fn(),
 }))
 
+vi.mock('@/stores/ai', () => ({
+  useAIStore: () => ({
+    aiEnabled: true,
+  }),
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    user: { role: 'owner' },
+  }),
+}))
+
 // Spy the API client. The component imports getFinanceCoach from '@/api/ai'.
 import * as aiApi from '@/api/ai'
 

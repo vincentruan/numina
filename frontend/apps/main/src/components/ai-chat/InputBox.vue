@@ -418,7 +418,11 @@ function onSubmit() {
   // appear broken. Toast so the user knows to wait, and keep their text
   // intact so they can retry once models resolve.
   if (!context.value.model_name) {
-    showToast(t('aiChat.modelsLoading'))
+    if (_resourcesLoading.value) {
+      showToast(t('aiChat.modelsLoading'))
+    } else {
+      showToast(t('aiChat.aiNotEnabled'))
+    }
     return
   }
 

@@ -119,25 +119,9 @@
     </div>
 
     <!-- AI disabled state: shown when family has not enabled AI -->
-    <div v-else-if="!aiStore.aiEnabled" class="ai-disabled-card" role="status" :aria-label="t('aiHub.disabledTitle')">
-      <div class="ai-disabled-icon" aria-hidden="true">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
-          <path d="M9 21h6"/>
-          <line x1="2" y1="2" x2="22" y2="22" stroke-width="1.8"/>
-        </svg>
-      </div>
-      <p class="ai-disabled-title">{{ t('aiHub.disabledTitle') }}</p>
-      <p class="ai-disabled-desc">{{ t('aiHub.disabledDesc') }}</p>
-      <button class="ai-disabled-action" @click="$router.push('/settings/ai')">
-        {{ t('aiHub.disabledAction') }}
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </button>
-    </div>
+    <AiGatedCard v-else-if="!aiStore.aiEnabled" :is-owner="isOwner" />
 
-    <div v-else class="report-empty-card" role="button" tabindex="0" :aria-label="t('aiHub.generateFirstReport')" @click="generateReport">
+    <div v-else class="report-empty-card" role="button" tabindex="0" :aria-label="t('aiHub.generateFirstReport')" @click="generateReport" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
       <div class="report-empty-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -339,6 +323,7 @@ import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
+import AiGatedCard from '@/components/ai/AiGatedCard.vue'
 import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'

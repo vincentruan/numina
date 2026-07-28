@@ -33,11 +33,24 @@ vi.mock('vant', () => ({
   showSuccessToast: vi.fn(),
   showFailToast: vi.fn(),
   showDialog: vi.fn(() => Promise.resolve()),
+  showToast: vi.fn(),
 }))
 
 const fetchWishesMock = vi.fn(() => Promise.resolve())
 vi.mock('@/stores/wish', () => ({
   useWishStore: () => ({ fetchWishes: fetchWishesMock }),
+}))
+
+vi.mock('@/stores/ai', () => ({
+  useAIStore: () => ({
+    aiEnabled: true,
+  }),
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    user: { role: 'owner' },
+  }),
 }))
 
 // useCurrency → useAuthStore needs an active Pinia; stub to a plain formatter

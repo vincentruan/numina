@@ -37,6 +37,14 @@ export default {
     capabilityVision: '视觉',
     capabilityToolCalling: '工具',
   },
+  aiGated: {
+    inlineAriaLabel: 'AI 功能未启用',
+    inlineTitle: 'AI 智能建议',
+    inlineDescOwner: '启用 AI 助手后，这里将显示智能分析与建议',
+    inlineDescMember: '请联系家庭管理员在设置中启用 AI 助手',
+    inlineAction: '去启用',
+    fullDescOwner: '启用 AI 助手后，即可使用智能分析、资产报告与对话问答',
+  },
   mode: {
     flash: {
       label: '闪速',
@@ -188,6 +196,15 @@ export default {
       thinkingElapsed: '正在思考（{seconds} 秒）',
       thinkingDone: '已思考（用时 {seconds} 秒）',
       ariaLabel: '财务叙事卡片',
+      error: {
+        auth_expired: '认证已过期',
+        connect_failed: '连接失败',
+        request_failed: '请求失败',
+        parse_failed: '解析响应失败',
+        stream_unavailable: '流式响应不可用',
+        generation_failed: '生成失败',
+        connection_interrupted: '连接中断',
+      },
     },
   },
   ai: {
@@ -434,6 +451,9 @@ export default {
     // Shown when the user submits before /ai/models has loaded (welcome mode).
     // Replaces a silent no-op that made the send button appear broken.
     modelsLoading: '模型加载中，请稍候再发送',
+    // Shown when the user tries to send a message but no models are available
+    // (AI assistant not enabled for the family tenant).
+    aiNotEnabled: 'AI 助手未启用，请先在设置中配置',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     // DeerFlow InputBox keys
@@ -949,6 +969,7 @@ export default {
       adoptBySort: '按此策略排序',
       adoptSnowball: '按雪球法排序',
       askAi: '问 AI 详细规划',
+      askAiDisabledHint: 'AI 未启用',
       saveEstimate: '雪崩法比雪球法预计省 {amount}（估算）',
       saveByAvalanche: '选择雪崩法可节省 {amount} 利息',
       currentStrategy: '当前策略',

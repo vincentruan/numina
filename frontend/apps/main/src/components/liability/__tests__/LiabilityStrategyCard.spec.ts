@@ -1,5 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { computed } from 'vue'
 import type { Liability } from '@/types'
 
 vi.mock('vue-i18n', () => ({
@@ -24,6 +25,13 @@ vi.mock('vant', () => ({
   showSuccessToast: vi.fn(),
   showFailToast: vi.fn(),
   showConfirmDialog: vi.fn(() => Promise.resolve()),
+}))
+
+const aiEnabledMock = { value: true }
+vi.mock('@/stores/ai', () => ({
+  useAIStore: () => ({
+    aiEnabled: computed(() => aiEnabledMock.value),
+  }),
 }))
 
 vi.mock('@/composables/useCurrency', () => ({

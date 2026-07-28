@@ -131,6 +131,15 @@ export default {
       thinkingElapsed: 'Thinking ({seconds}s)',
       thinkingDone: 'Thought for {seconds}s',
       ariaLabel: 'Financial narrative card',
+      error: {
+        auth_expired: 'Authentication expired',
+        connect_failed: 'Connection failed',
+        request_failed: 'Request failed',
+        parse_failed: 'Failed to parse response',
+        stream_unavailable: 'Stream response unavailable',
+        generation_failed: 'Generation failed',
+        connection_interrupted: 'Connection interrupted',
+      },
     },
     selectAll: '全选',
     selectedCount: '已选 {count} 项',
@@ -437,6 +446,7 @@ export default {
     tenantLoadFailed: '加载租户资源失败',
     tenantUltraDisabled: '当前家庭资源不支持旗舰模式',
     modelsLoading: '模型加载中，请稍候再发送',
+    aiNotEnabled: 'AI assistant not enabled. Please configure it in Settings',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     selectModel: '选择模型',
@@ -921,6 +931,7 @@ export default {
       adoptBySort: 'Sort by this',
       adoptSnowball: 'Sort by Snowball',
       askAi: 'Ask AI for details',
+      askAiDisabledHint: 'AI disabled',
       saveEstimate: 'Avalanche saves ~{amount} vs Snowball (est.)',
       saveByAvalanche: 'Choose Avalanche to save {amount} in interest',
       currentStrategy: 'Current strategy',
@@ -2858,6 +2869,14 @@ export default {
     capabilityThinking: '思考',
     capabilityVision: '视觉',
     capabilityToolCalling: '工具'
+  },
+  aiGated: {
+    inlineAriaLabel: 'AI feature not enabled',
+    inlineTitle: 'AI Smart Suggestions',
+    inlineDescOwner: 'Enable AI assistant to see smart analysis and suggestions here',
+    inlineDescMember: 'Please ask your family admin to enable the AI assistant in Settings',
+    inlineAction: 'Enable',
+    fullDescOwner: 'Enable AI assistant to use smart analysis, asset reports and chat'
   },
   mode: {
     flash: {
