@@ -19,3 +19,8 @@ FINANCE_COACH_AGENT_ID: int = 100000000000008
 # with stale wish state. soul_md is a minimal persona (the real advice contract
 # lives in skills/builtin/public/wish-advice/SKILL.md).
 WISH_ADVICE_AGENT_ID: int = 100000000000009
+# Dashboard narrative system agent (仪表盘月度财务叙事). Stateless stream_run
+# agent — each run builds a fresh context from overview + insights; DeerMem would
+# pollute narrative with stale data. soul_md is minimal (the narrative contract
+# lives in skills/builtin/public/dashboard-narrative/SKILL.md).
+DASHBOARD_NARRATIVE_AGENT_ID: int = 100000000000010

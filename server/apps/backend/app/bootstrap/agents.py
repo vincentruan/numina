@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.constants.system_ids import (
     ASSET_REPORT_AGENT_ID,
+    DASHBOARD_NARRATIVE_AGENT_ID,
     FINANCE_COACH_AGENT_ID,
     IMPORT_PARSE_AGENT_ID,
     NUMINA_AGENT_ID,
@@ -222,6 +223,28 @@ _WISH_ADVICE_AGENT = {
 }
 
 
+# System agent dedicated to dashboard-narrative (仪表盘月度财务叙事).
+# A 6th stream_run agent (app="dashboard-narrative"). Stateless — each run builds
+# a fresh context from overview + insights; DeerMem would pollute narrative with
+# stale data. soul_md is minimal (the narrative contract lives in
+# skills/builtin/public/dashboard-narrative/SKILL.md). Output is plain text
+# (2-3 sentences), NOT structured JSON like finance-coach's suggestions[].
+_DASHBOARD_NARRATIVE_AGENT = {
+    "id": DASHBOARD_NARRATIVE_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "dashboard-narrative",
+    "display_name": "财务叙事",
+    "description": "仪表盘月度财务叙事智能体。根据家庭财务数据生成 2-3 句自然语言叙事，解释财务变化的原因与含义。",
+    "icon": "📖",
+    "color": "#8b5cf6",
+    "soul_md": "你是家庭财务叙事助手。根据提供的家庭财务数据，生成 2-3 句自然语言叙事，只描述和解释，不建议行动。",
+    "skills": ["dashboard-narrative"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 60,
+}
+
+
 def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     """Insert or update a builtin system agent from its spec dict."""
     from apps.backend.app.models.ai_agent import AIAgent
@@ -260,4 +283,5 @@ def bootstrap_agents(db: Session) -> None:
     _upsert_builtin_agent(db, _IMPORT_PARSE_AGENT)
     _upsert_builtin_agent(db, _FINANCE_COACH_AGENT)
     _upsert_builtin_agent(db, _WISH_ADVICE_AGENT)
+    _upsert_builtin_agent(db, _DASHBOARD_NARRATIVE_AGENT)
     db.commit()

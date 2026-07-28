@@ -216,12 +216,19 @@ async def start_run(
             app=app,
             reason="心愿储蓄建议须经由后端 /ai/wish-advice/generate 端点，请勿直连 /runs/stream",
         )
+    if not internal and app == "dashboard-narrative":
+        raise _app_rejected_error(
+            status_code=409,
+            app=app,
+            reason="财务叙事须经由后端 /dashboard/narrative 端点，请勿直连 /runs/stream",
+        )
     if (
         app != "numina"
         and app != "asset-report"
         and app != "import-parse"
         and app != "finance-coach"
         and app != "wish-advice"
+        and app != "dashboard-narrative"
     ):
         raise _app_rejected_error(status_code=400, app=app, reason="未知的 app 值")
 
