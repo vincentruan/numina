@@ -30,7 +30,7 @@ SKILL_TTL[SKILL_ID] = timedelta(hours=4)
 
 # Threshold defaults (R5). Configurable via module-level constants.
 MIN_ASSET_COUNT = 5
-MIN_HISTORY_MONTHS = 3
+MIN_HISTORY_MONTHS = 1  # TODO: raise back to 3 once snapshot data matures
 
 
 def _extract_first_sentence(text: str) -> str:
