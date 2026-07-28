@@ -102,11 +102,16 @@ onMounted(() => {
         <template v-else-if="narrative">
           <!-- Narrative text -->
           <p class="narrative-card__text">{{ narrative }}</p>
+        </template>
 
-          <!-- Thinking indicator: clickable row below narrative, expands thinking -->
-          <button v-if="thinking" class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
+        <!-- Thinking indicator: always visible when loading or has thinking data -->
+        <template v-if="(loading || thinking) && !dismissed">
+          <button class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
             <van-icon name="thinking-o" size="14" class="narrative-card__thinking-icon" />
-            <span>{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</span>
+            <span class="narrative-card__thinking-status">
+              <template v-if="loading">{{ t('dashboard.narrative.thinking') }}</template>
+              <template v-else>{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</template>
+            </span>
             <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
           </button>
           <div v-show="thinkingExpanded" class="narrative-card__thinking-content">
@@ -259,6 +264,7 @@ onMounted(() => {
 .narrative-card__thinking-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 4px;
   font-size: 12px;
   color: var(--text-secondary, #969799);
@@ -266,11 +272,15 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   padding: 6px 0;
-  white-space: nowrap;
+  width: 100%;
 }
 
 .narrative-card__thinking-icon {
   color: var(--van-primary-color, #1989fa);
+}
+
+.narrative-card__thinking-status {
+  flex: 1;
 }
 
 .narrative-card__thinking-content {
