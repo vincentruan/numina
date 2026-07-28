@@ -284,6 +284,16 @@ const router = createRouter({
           component: () => import('@/pages/CoinRatesPage.vue'),
         },
         {
+          path: 'settings/family/config',
+          name: 'FamilyConfig',
+          component: () => import('@/pages/FamilyConfigPage.vue'),
+        },
+        {
+          path: 'settings/user/config',
+          name: 'UserConfig',
+          component: () => import('@/pages/UserConfigPage.vue'),
+        },
+        {
           path: 'ai/report',
           name: 'AIReport',
           component: () => import('@/pages/AIReportPage.vue')

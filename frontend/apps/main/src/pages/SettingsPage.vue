@@ -58,9 +58,13 @@
           <CurrencyIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
+      <van-cell
+        :title="t('settings.userAdvancedConfig')"
+        icon="setting-o"
+        is-link
+        to="/settings/user/config"
+      />
     </van-cell-group>
-
-    <!-- 家庭管理 -->
     <van-cell-group
       v-if="authStore.user?.role === 'owner' || authStore.user?.role === 'member'"
       inset
@@ -75,6 +79,13 @@
         icon="star-o"
         is-link
         to="/settings/family/coin-rates"
+      />
+      <van-cell
+        v-if="authStore.user?.role === 'owner'"
+        :title="t('settings.familyAdvancedConfig')"
+        icon="setting-o"
+        is-link
+        to="/settings/family/config"
       />
     </van-cell-group>
 
