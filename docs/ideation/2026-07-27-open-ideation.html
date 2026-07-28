@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideation: Numina 下一代功能方向</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #fff;
+    --text: #1c1917;
+    --text-secondary: #57534e;
+    --text-muted: #78716c;
+    --border: #e7e5e4;
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --accent-text: #1e40af;
+    --green-soft: #f0fdf4;
+    --green-text: #166534;
+    --amber-soft: #fffbeb;
+    --amber-text: #92400e;
+    --rose-soft: #fff1f2;
+    --rose-text: #9f1239;
+    --violet-soft: #f5f3ff;
+    --violet-text: #5b21b6;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1917;
+      --surface: #292524;
+      --text: #fafaf9;
+      --text-secondary: #d6d3d1;
+      --text-muted: #a8a29e;
+      --border: #44403c;
+      --accent: #60a5fa;
+      --accent-soft: #1e3a5f;
+      --accent-text: #93c5fd;
+      --green-soft: #14532d;
+      --green-text: #86efac;
+      --amber-soft: #451a03;
+      --amber-text: #fcd34d;
+      --rose-soft: #4c0519;
+      --rose-text: #fda4af;
+      --violet-soft: #2e1065;
+      --violet-text: #c4b5fd;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    max-width: 920px;
+    margin-inline: auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  /* Header */
+  header { margin-bottom: 2.5rem; }
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.75rem;
+  }
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .meta-chip {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 100px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  /* Stats */
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+  /* Sections */
+  section { margin-bottom: 2.5rem; }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  p { max-width: 72ch; margin-bottom: 0.75rem; }
+  /* Prose measure */
+  .prose { max-width: 72ch; }
+  /* Grounding */
+  .grounding-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 640px) { .grounding-grid { grid-template-columns: 1fr; } }
+  .grounding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .grounding-card h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .grounding-card ul {
+    list-style: none;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+  .grounding-card li {
+    padding: 0.15rem 0;
+    padding-left: 1rem;
+    position: relative;
+  }
+  .grounding-card li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+  /* Axes */
+  .axes-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .axis-tag {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius);
+    font-weight: 500;
+  }
+  .axis-1 { background: var(--accent-soft); color: var(--accent-text); }
+  .axis-2 { background: var(--green-soft); color: var(--green-text); }
+  .axis-3 { background: var(--amber-soft); color: var(--amber-text); }
+  .axis-4 { background: var(--violet-soft); color: var(--violet-text); }
+  /* Jump list */
+  .jump-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .jump-list a {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--accent-soft);
+    transition: opacity 0.15s;
+  }
+  .jump-list a:hover { opacity: 0.7; }
+  /* Idea cards */
+  .idea-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .idea-card .idea-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .idea-rank {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 1.5rem;
+  }
+  .idea-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .idea-fields {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.3rem 0.75rem;
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+  }
+  .idea-fields dt {
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .idea-fields dd { color: var(--text-secondary); }
+  .confidence-high { color: var(--green-text); font-weight: 600; }
+  .confidence-med { color: var(--amber-text); font-weight: 600; }
+  .complexity-chip {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .cx-low { background: var(--green-soft); color: var(--green-text); }
+  .cx-med { background: var(--amber-soft); color: var(--amber-text); }
+  .cx-high { background: var(--rose-soft); color: var(--rose-text); }
+  /* Diagram */
+  .idea-diagram {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .idea-diagram svg { display: block; margin: 0 auto; }
+  /* Rejection table */
+  .rejection-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .rejection-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .rejection-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .rejection-table tr:last-child td { border-bottom: none; }
+  /* Synthesis callout */
+  .synthesis-card {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-top: 1.5rem;
+  }
+  .synthesis-card h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-text);
+    margin-bottom: 0.5rem;
+  }
+  .synthesis-card p {
+    font-size: 0.85rem;
+    color: var(--accent-text);
+    margin-bottom: 0;
+  }
+  /* Footer */
+  footer.composition-signal {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  footer code {
+    font-size: 0.7rem;
+    background: var(--surface);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="eyebrow">Ideation Artifact</div>
+  <h1>Numina 下一代功能方向</h1>
+  <p class="prose" style="color:var(--text-secondary);font-size:0.9rem;">从项目现有 spec/plan 文档、代码库结构和行业趋势中发掘的高价值未完成方向。surprise-me 模式 — 由 agent 从证据中发现主题。</p>
+  <div class="meta-strip">
+    <span class="meta-chip">2026-07-27</span>
+    <span class="meta-chip">repo-grounded</span>
+    <span class="meta-chip">surprise-me</span>
+    <span class="meta-chip">4 axes</span>
+  </div>
+</header>
+
+<div class="stats-strip">
+  <div class="stat-card">
+    <div class="stat-value">44</div>
+    <div class="stat-label">原始候选</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">6</div>
+    <div class="stat-label">思维框架</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">10</div>
+    <div class="stat-label">存活方向</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">7</div>
+    <div class="stat-label">淘汰</div>
+  </div>
+</div>
+
+<!-- ===== Grounding Context ===== -->
+<section id="grounding">
+  <h2>Codebase Context</h2>
+  <div class="grounding-grid">
+    <div class="grounding-card">
+      <h4>后端基础设施</h4>
+      <ul>
+        <li>FastAPI + SQLAlchemy + 59 表 + Alembic</li>
+        <li>多币种引擎 (ExchangeRateService)</li>
+        <li>通知系统 (channels, subscriptions, reminders)</li>
+        <li>Scheduler worker — 已配置但零任务注册</li>
+        <li>AI context builder — 注入家庭数据到 prompt</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>AI / Agent 层</h4>
+      <ul>
+        <li>DeerFlow adapter + 多 provider 断路器</li>
+        <li>6+ 内置 skill (finance_coach, wish_advice...)</li>
+        <li>8 MCP 数据工具 (get_assets, get_liabilities...)</li>
+        <li>Sandbox 文件系统 (per-family 隔离)</li>
+        <li>Vision model (PDF→页面图像 98%)</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>前端 (Main App)</h4>
+      <ul>
+        <li>Dashboard: 纯 stat cards — 零图表</li>
+        <li>Finance Hub: 3-tab 列表 — 零图表</li>
+        <li>Treemap 组件已实现但未被任何页面消费</li>
+        <li>Finance Hub Redesign plan (2026-07-22, 5 天前)</li>
+        <li>PDF/Image 导出基础设施成熟 (jsPDF + html2canvas)</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>儿童 App</h4>
+      <ul>
+        <li>星币经济: earn (chores) → spend (wishes)</li>
+        <li>Template→Instance 模式 + 家长审批</li>
+        <li>Celebration v2: Bezier 星飞行 + 触觉反馈</li>
+        <li>机会成本 peek (plan 已写，未实现)</li>
+        <li>教育奖励 (feature-flagged, 不扣真实资产)</li>
+      </ul>
+    </div>
+  </div>
+  <p class="prose" style="margin-top:1rem;font-size:0.85rem;color:var(--text-muted);">已扫描 25+ spec/plan/design 文件 (docs/plans/, docs/design/, docs/archive/)，交叉验证代码库实现状态。关键发现：CapabilityRegistry 在 commit eb0c7851 (2026-07-25) 中被删除；scheduler_worker 配置完整但无任务注册；Dashboard 和 Finance Hub 均无图表。</p>
+</section>
+
+<!-- ===== Topic Axes ===== -->
+<section id="axes">
+  <h2>Topic Axes</h2>
+  <p class="prose" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;">Decomposition skipped — surprise-me mode. Axes discovered post-hoc from evidence:</p>
+  <div class="axes-list">
+    <span class="axis-tag axis-1">AI 交互与能力</span>
+    <span class="axis-tag axis-2">儿童财商与游戏化</span>
+    <span class="axis-tag axis-3">财务管理与可视化</span>
+    <span class="axis-tag axis-4">UX 质量与设计</span>
+  </div>
+</section>
+
+<!-- ===== Ranked Ideas ===== -->
+<section id="ranked-ideas">
+  <h2>Ranked Ideas</h2>
+
+  <ul class="jump-list">
+    <li><a href="#i1">1. Finance Hub + 叙事仪表盘</a></li>
+    <li><a href="#i2">2. 主动财务体检</a></li>
+    <li><a href="#i3">3. 能力网格 2.0</a></li>
+    <li><a href="#i4">4. 家庭知识图谱</a></li>
+    <li><a href="#i5">5. 现金流引擎 + Sankey</a></li>
+    <li><a href="#i6">6. 儿童财商生态</a></li>
+    <li><a href="#i7">7. 首次体验闭环</a></li>
+    <li><a href="#i8">8. 财务健康度评分</a></li>
+    <li><a href="#i9">9. 零触碰家务验证</a></li>
+    <li><a href="#i10">10. 环境财务推送</a></li>
+  </ul>
+
+  <!-- Idea 1 -->
+  <article class="idea-card" id="i1">
+    <div class="idea-header">
+      <span class="idea-rank">1.</span>
+      <span class="idea-title">Finance Hub Redesign + Dashboard 叙事化</span>
+    </div>
+    <p class="prose">执行已有 plan (2026-07-22)，将 Dashboard 从纯 stat cards 升级为"金融叙事仪表盘"：添加趋势注解（"你的净资产本月增长 12%，主要来自…"）、上下文提示条（"应急金可覆盖 2.3 个月支出，低于建议的 3-6 个月"）、接入闲置的 Treemap 组件。Finance Hub 成为完整列表入口，删除独立的 /assets、/liabilities、/wishes 页面。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-3">财务管理</span> <span class="axis-tag axis-4">UX 设计</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> Plan 已完成 (2026-07-22, 5天前)，implementation-ready；Dashboard 零图表；Treemap 组件已实现但 orphaned；当前分支 <code>feat/main-app-ux-optimization</code></dd>
+      <dt>Rationale</dt><dd>这是最"新鲜"且可立即执行的方向。Plan 已设计好 Dashboard 作为 instrument panel + Finance Hub 作为列表入口的架构。在此基础上叠加叙事层（AI 生成的上下文注解），将 Dashboard 从"数据展示"提升为"财务顾问"。</dd>
+      <dt>Downsides</dt><dd>大范围 UX 重构影响现有用户习惯；叙事层需要可靠的 AI 生成质量，低质量注解比无注解更糟。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-high">90%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-med">Medium</span></dd>
+    </dl>
+    <div class="idea-diagram">
+      <svg width="680" height="200" viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:11px;">
+        <!-- Before -->
+        <rect x="10" y="10" width="300" height="180" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5"/>
+        <text x="160" y="32" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-weight="600">BEFORE: 纯数字仪表盘</text>
+        <rect x="25" y="45" width="130" height="50" rx="4" fill="var(--surface)" stroke="var(--border)"/>
+        <text x="90" y="65" text-anchor="middle" fill="var(--text-muted)" font-size="9">净资产</text>
+        <text x="90" y="82" text-anchor="middle" fill="var(--text)" font-size="14" font-weight="700">¥1,234,567</text>
+        <rect x="165" y="45" width="130" height="50" rx="4" fill="var(--surface)" stroke="var(--border)"/>
+        <text x="230" y="65" text-anchor="middle" fill="var(--text-muted)" font-size="9">日支出</text>
+        <text x="230" y="82" text-anchor="middle" fill="var(--text)" font-size="14" font-weight="700">¥328</text>
+        <rect x="25" y="105" width="270" height="35" rx="4" fill="var(--surface)" stroke="var(--border)"/>
+        <text x="160" y="127" text-anchor="middle" fill="var(--text-muted)" font-size="9">Smart Reminders (列表)</text>
+        <rect x="25" y="148" width="270" height="35" rx="4" fill="var(--surface)" stroke="var(--border)"/>
+        <text x="160" y="170" text-anchor="middle" fill="var(--text-muted)" font-size="9">Focus Top-3 (列表)</text>
+        <!-- Arrow -->
+        <text x="340" y="105" text-anchor="middle" fill="var(--accent)" font-size="22">→</text>
+        <!-- After -->
+        <rect x="370" y="10" width="300" height="180" rx="8" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="520" y="32" text-anchor="middle" fill="var(--accent)" font-size="10" font-weight="600">AFTER: 叙事仪表盘</text>
+        <rect x="385" y="45" width="130" height="50" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="450" y="62" text-anchor="middle" fill="var(--accent-text)" font-size="9">净资产</text>
+        <text x="450" y="80" text-anchor="middle" fill="var(--accent-text)" font-size="14" font-weight="700">¥1,234,567</text>
+        <text x="450" y="92" text-anchor="middle" fill="var(--green-text)" font-size="8">↑12% 本月</text>
+        <rect x="525" y="45" width="130" height="50" rx="4" fill="var(--surface)" stroke="var(--border)"/>
+        <text x="590" y="62" text-anchor="middle" fill="var(--text-muted)" font-size="9">应急金</text>
+        <text x="590" y="80" text-anchor="middle" fill="var(--amber-text)" font-size="12" font-weight="600">2.3 个月</text>
+        <text x="590" y="92" text-anchor="middle" fill="var(--amber-text)" font-size="8">⚠ 建议 3-6 个月</text>
+        <rect x="385" y="105" width="270" height="35" rx="4" fill="var(--green-soft)" stroke="var(--green-text)" stroke-dasharray="3,3"/>
+        <text x="520" y="120" text-anchor="middle" fill="var(--green-text)" font-size="9">📊 AI 叙事: "本月增长主要由房产增值驱动…"</text>
+        <rect x="385" y="148" width="270" height="35" rx="4" fill="var(--surface)" stroke="var(--border)"/>
+        <text x="520" y="165" text-anchor="middle" fill="var(--text-muted)" font-size="9">Treemap 配置分布 + Focus Top-3</text>
+      </svg>
+    </div>
+  </article>
+
+  <!-- Idea 2 -->
+  <article class="idea-card" id="i2">
+    <div class="idea-header">
+      <span class="idea-rank">2.</span>
+      <span class="idea-title">Proactive Weekly Finance Checkup (主动财务体检)</span>
+    </div>
+    <p class="prose">激活闲置的 scheduler_worker，每周自动生成"家庭财务体检报告"：应急金充足度、负债率、支出偏离、投资组合漂移。通过通知中心 + AI 聊天推送。用户从"有问题才问 AI"变成"AI 每周主动告诉你发现了什么"。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-1">AI 交互</span> <span class="axis-tag axis-3">财务管理</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> scheduler.py 已配置但零任务注册；multi-currency engine + AI skill system + 通知系统全部就绪，只需"接通"。finance_coach skill 已能生成叙事分析。</dd>
+      <dt>Rationale</dt><dd>每个新激活的用户每周产生一次 AI 触达 → 提高留存 → 更多数据录入 → 下次报告更准确。这是时间维度的飞轮：数据积累使 AI 洞察从"通用建议"进化为"家庭专属诊断"。Copilot Money 的 proactive spending summaries 是竞品验证信号。</dd>
+      <dt>Downsides</dt><dd>需要可靠的调度基础设施（Redis-backed）；低质量报告比无报告更糟；用户可能对推送感到疲劳。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-high">85%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-med">Medium</span></dd>
+    </dl>
+    <div class="idea-diagram">
+      <svg width="600" height="140" viewBox="0 0 600 140" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:11px;">
+        <!-- Flywheel -->
+        <circle cx="300" cy="70" r="55" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <text x="300" y="45" text-anchor="middle" fill="var(--accent-text)" font-size="9" font-weight="600">数据飞轮</text>
+        <text x="300" y="60" text-anchor="middle" fill="var(--text)" font-size="9">更多数据</text>
+        <text x="300" y="95" text-anchor="middle" fill="var(--text)" font-size="9">更精准报告</text>
+        <text x="255" y="73" text-anchor="middle" fill="var(--text)" font-size="9">更高留存</text>
+        <text x="345" y="73" text-anchor="middle" fill="var(--text)" font-size="9">更主动触达</text>
+        <!-- Arrows around flywheel -->
+        <path d="M300,12 L310,20 L290,20 Z" fill="var(--accent)"/>
+        <path d="M358,70 L350,60 L350,80 Z" fill="var(--accent)"/>
+        <path d="M300,128 L290,120 L310,120 Z" fill="var(--accent)"/>
+        <path d="M242,70 L250,80 L250,60 Z" fill="var(--accent)"/>
+        <!-- Labels -->
+        <text x="80" y="30" fill="var(--text-muted)" font-size="10">闲置的</text>
+        <text x="80" y="45" fill="var(--text)" font-size="12" font-weight="600">scheduler_worker</text>
+        <line x1="160" y1="40" x2="240" y2="55" stroke="var(--border)" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <text x="460" y="30" fill="var(--text-muted)" font-size="10">产出</text>
+        <text x="460" y="45" fill="var(--text)" font-size="12" font-weight="600">周度体检报告</text>
+        <line x1="440" y1="40" x2="365" y2="55" stroke="var(--border)" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <defs><marker id="arrowhead" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="var(--text-muted)"/></marker></defs>
+      </svg>
+    </div>
+  </article>
+
+  <!-- Idea 3 -->
+  <article class="idea-card" id="i3">
+    <div class="idea-header">
+      <span class="idea-rank">3.</span>
+      <span class="idea-title">Capability Grid 2.0 — 能力即入口 (SkillRegistry-based)</span>
+    </div>
+    <p class="prose">将 AI 交互从 input-box-centric 转变为 capability-discovery-centric。用户通过能力网格发现和进入 AI 功能（财务体检、资产报告、愿望建议），每个能力有专属输入模式（结构化表单、资产选择器、确认对话框）。基于 SkillRegistry（CapabilityRegistry 的后继者，因 CapabilityRegistry 在 commit eb0c7851 中被删除）。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-1">AI 交互</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> CapabilityRegistry backend 已设计 (296行) 但在 commit eb0c7851 中被删除；SkillRegistry 是后继者。Dynamic input modes (structured, asset_selector, confirm_dialog) 从未实现。⚠️ 需基于 SkillRegistry 重新设计。</dd>
+      <dt>Rationale</dt><dd>从根本上改变用户发现 AI 价值的方式。不再是"我该问什么？"而是"我激活哪个能力？"。降低认知负荷，提高 AI 采用率。</dd>
+      <dt>Downsides</dt><dd>需要重建能力发现机制（前一个方案已被删除）；动态输入模式增加了前端复杂度。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">75%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-med">Medium</span></dd>
+    </dl>
+  </article>
+
+  <!-- Idea 4 -->
+  <article class="idea-card" id="i4">
+    <div class="idea-header">
+      <span class="idea-rank">4.</span>
+      <span class="idea-title">Family Knowledge Graph (跨会话知识沉淀)</span>
+    </div>
+    <p class="prose">从每次 AI 对话中提取结构化知识（"应急金应覆盖 3-6 个月支出"、"房贷月供不应超过收入 30%"）自动抽取为带引用的知识卡片，存储在家庭级 RAG 索引中。AI 回答时优先引用家庭知识库，形成"越用越懂你家"的效果。实现 deferred 的 citation chips 和 cross-session artifact registry。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-1">AI 交互</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> AI context builder 已存在，新数据领域只需新 builder 函数；cross-session artifacts + citation chips 均为 HIGH interestingness deferred 项。<strong>external:</strong> Securo 的 per-agent RAG knowledge base。</dd>
+      <dt>Rationale</dt><dd>家庭知识库是 Numina 独有的、不可迁移的资产，形成真正的 lock-in。每个对话产物成为未来对话的 context → 减少重复解释 → 回答更精准 → 用户更愿意深度提问 → 产出更多知识。知识维度上的飞轮。</dd>
+      <dt>Downsides</dt><dd>需要 RAG 基础设施（向量索引）；知识提取质量不确定；存储成本随对话量增长。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">70%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-high">High</span></dd>
+    </dl>
+  </article>
+
+  <!-- Idea 5 -->
+  <article class="idea-card" id="i5">
+    <div class="idea-header">
+      <span class="idea-rank">5.</span>
+      <span class="idea-title">Cash Flow Engine + Sankey 可视化</span>
+    </div>
+    <p class="prose">构建缺失的现金流基础设施：周期性交易模板（月薪、房租、订阅费）、基于规则的自动分类（参考 Firefly III）、Sankey 图可视化（收入 → 类别 → 支出）。这是预算、预测、异常检测、AI 支出建议、投资组合再平衡的共同底层基建。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-3">财务管理</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> evidence-learnings 明确标注 "no budget/spending plan feature" + "no recurring transaction tracking" 是核心 gap。Dashboard/FinanceHub 零图表。<strong>external:</strong> Firefly III rules engine；D3 d3-sankey plugin。</dd>
+      <dt>Rationale</dt><dd>现金流引擎是功能维度的飞轮：一旦有时序收支数据 → AI 可做支出预测（Copilot Money）→ 可做预算建议 → 可做异常检测。Sankey 图一个组件可用于多个场景（现金流、资产配置、负债偿还路径）。</dd>
+      <dt>Downsides</dt><dd>工程量最大的方向之一；需要新的数据模型（recurring transactions）；Sankey 在移动端可能过小。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">75%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-high">High</span></dd>
+    </dl>
+    <div class="idea-diagram">
+      <svg width="500" height="120" viewBox="0 0 500 120" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:10px;">
+        <!-- Sankey-like flow -->
+        <rect x="10" y="30" width="60" height="60" rx="4" fill="var(--green-soft)" stroke="var(--green-text)"/>
+        <text x="40" y="55" text-anchor="middle" fill="var(--green-text)" font-size="9" font-weight="600">收入</text>
+        <text x="40" y="70" text-anchor="middle" fill="var(--green-text)" font-size="8">¥25,000</text>
+        <!-- Flows -->
+        <path d="M70,45 C120,45 120,25 170,25" fill="none" stroke="var(--rose-text)" stroke-width="8" opacity="0.3"/>
+        <path d="M70,55 C120,55 120,55 170,55" fill="none" stroke="var(--amber-text)" stroke-width="12" opacity="0.3"/>
+        <path d="M70,70 C120,70 120,85 170,85" fill="none" stroke="var(--accent)" stroke-width="5" opacity="0.3"/>
+        <path d="M70,80 C120,80 120,105 170,105" fill="none" stroke="var(--green-text)" stroke-width="3" opacity="0.3"/>
+        <!-- Category boxes -->
+        <rect x="170" y="12" width="80" height="26" rx="4" fill="var(--rose-soft)" stroke="var(--rose-text)"/>
+        <text x="210" y="30" text-anchor="middle" fill="var(--rose-text)" font-size="9">住房 35%</text>
+        <rect x="170" y="42" width="80" height="26" rx="4" fill="var(--amber-soft)" stroke="var(--amber-text)"/>
+        <text x="210" y="60" text-anchor="middle" fill="var(--amber-text)" font-size="9">生活 40%</text>
+        <rect x="170" y="72" width="80" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="210" y="90" text-anchor="middle" fill="var(--accent-text)" font-size="9">教育 15%</text>
+        <rect x="170" y="102" width="80" height="16" rx="4" fill="var(--green-soft)" stroke="var(--green-text)"/>
+        <text x="210" y="113" text-anchor="middle" fill="var(--green-text)" font-size="8">储蓄 10%</text>
+        <!-- Foundation label -->
+        <text x="350" y="50" fill="var(--text-muted)" font-size="10">← 一个引擎，多个场景</text>
+        <text x="350" y="68" fill="var(--text-secondary)" font-size="9">预算 · 预测 · 异常检测</text>
+        <text x="350" y="83" fill="var(--text-secondary)" font-size="9">AI 支出建议 · 再平衡</text>
+      </svg>
+    </div>
+  </article>
+
+  <!-- Idea 6 -->
+  <article class="idea-card" id="i6">
+    <div class="idea-header">
+      <span class="idea-rank">6.</span>
+      <span class="idea-title">儿童财商生态 (Progression + Opportunity-Cost + Teacher Mode + Governance)</span>
+    </div>
+    <p class="prose">四个儿童方向的合方向：(1) 渐进式财商等级 Lv1记账→Lv2储蓄→Lv3预算→Lv4投资→Lv5决策；(2) 机会成本 peek — 长按愿望看"如果花在这里，其他愿望推迟N天"；(3) 孩子当老师 — 孩子的财务推理生成家长可见的"素养周报"；(4) 渐进式治理 — 孩子从¥200晚餐选择升级到¥2000家庭储蓄分配。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-2">儿童财商</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> 儿童系统已有深度但碎片化的 gamification 基础设施 (star coins, chores, wishes, celebration v2)。Cross-wish bundle plan 含 opportunity-cost peek。<strong>external:</strong> Greenlight/Step progressive missions 是儿童金融 app 核心留存机制；Vygotsky ZPD 理论支持"教学即学习"。</dd>
+      <dt>Rationale</dt><dd>等级系统是内容维度的飞轮：孩子升级 → 解锁新能力 → 家长看到成长 → 更愿意设置新任务。同时是基础设施：Lv4 家庭银行需要利息引擎（可复用于 D8 区间收益率）；Lv3 预算需要收支预测（可复用于成人预算）。解决"孩子长大就不用了"的留存问题。</dd>
+      <dt>Downsides</dt><dd>渐进式治理涉及真实财务权限委托，需要仔细的安全设计；素养周报的 AI 生成质量需保证。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">75%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-high">High</span></dd>
+    </dl>
+  </article>
+
+  <!-- Idea 7 -->
+  <article class="idea-card" id="i7">
+    <div class="idea-header">
+      <span class="idea-rank">7.</span>
+      <span class="idea-title">New User "First Value Moment" 交互式激活</span>
+    </div>
+    <p class="prose">替代当前 3-step spotlight onboarding，构建交互式激活：第一步引导录入第一笔资产（视觉优先的 asset form，参考 archived asset-form-brainstorming）→ 第二步立即展示 net worth dashboard → 第三步引导问 AI 第一个问题。整个流程 &lt;60 秒，让用户在第一次访问就体验"记录 → 可视化 → AI 洞察"完整价值循环。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-4">UX 设计</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> Mobile UX onboarding plan (Part B: 3-step spotlight) 是 PLANNED/not started；archived asset-form-brainstorming 含丰富的 visual-first 设计思考。</dd>
+      <dt>Rationale</dt><dd>激活流程是用户维度的飞轮：第一次就体验到完整价值循环 → 更高 activation rate → 更高留存 → 更多数据 → dashboard 更丰富 → AI 更精准。</dd>
+      <dt>Downsides</dt><dd>仅对真正的新用户有价值（一次性投入）；依赖 asset form 的 UX 质量。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">70%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-low">Low</span></dd>
+    </dl>
+  </article>
+
+  <!-- Idea 8 -->
+  <article class="idea-card" id="i8">
+    <div class="idea-header">
+      <span class="idea-rank">8.</span>
+      <span class="idea-title">Financial Health Scorecard (财务健康度评分)</span>
+    </div>
+    <p class="prose">多维度评分系统：应急金充足度、负债健康度、投资多元化、储蓄率、保险覆盖度，各 0-100 分。加权综合得分 + letter grades (A/B/C/D) + 同龄对比（"你的应急金充足度超过 78% 的同龄家庭"）。Dashboard 首页展示 scorecard。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-3">财务管理</span> <span class="axis-tag axis-4">UX 设计</span></dd>
+      <dt>Basis</dt><dd><strong>external:</strong> PortfolioPilot report cards 是 2025-2026 dashboard 创新趋势。Multi-currency engine 可处理跨币种资产。<strong>reasoned:</strong> 评分系统将模糊的"我财务情况怎么样"量化为可操作数字。</dd>
+      <dt>Rationale</dt><dd>游戏化财务改善：用户看到低分项 → 采取行动（录入更多数据、调整资产结构）→ 得分提升 → 形成 engagement flywheel。Scorecard 本身也是 AI 建议的自然入口。</dd>
+      <dt>Downsides</dt><dd>评分模型需要领域专家校准；同龄对比需要数据基础（C23 Family Census 被否决后可用匿名统计替代）。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">70%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-med">Medium</span></dd>
+    </dl>
+  </article>
+
+  <!-- Idea 9 -->
+  <article class="idea-card" id="i9">
+    <div class="idea-header">
+      <span class="idea-rank">9.</span>
+      <span class="idea-title">Zero-Touch Chore Verification (零触碰家务验证)</span>
+    </div>
+    <p class="prose">利用现有 vision model 基础设施 (U11 vision PDF, 98% 准确率) 自动验证家务完成。孩子拍摄清洁后的房间照片 → vision model 确认 → 星币自动到账。消除家长审批瓶颈。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-2">儿童财商</span> <span class="axis-tag axis-1">AI 交互</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> U11 vision model 已处理扫描 PDF (98% 准确率)；vision-test stub 存在。家长审批流程已建。</dd>
+      <dt>Rationale</dt><dd>移除家长作为审批瓶颈，增加孩子自主性，减少家长疲劳。将 vision 基础设施从"报告生成"扩展到"行为验证"，开辟新的 AI 应用场景。</dd>
+      <dt>Downsides</dt><dd>Vision 模型判断"房间是否干净"的主观性；误判可能引发亲子冲突；需要 fallback 到家长审批。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">65%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-low">Low</span></dd>
+    </dl>
+  </article>
+
+  <!-- Idea 10 -->
+  <article class="idea-card" id="i10">
+    <div class="idea-header">
+      <span class="idea-rank">10.</span>
+      <span class="idea-title">Ambient Finance + Per-Asset AI Advocates (环境财务 + 资产守护者)</span>
+    </div>
+    <p class="prose">两个互补方向的合并：(1) 无屏幕财务推送 — 晨间通知("本周净资产 +2.3%")、阈值提醒、月度 AI 语音摘要。Dashboard 仅作为 deep-dive escape hatch。(2) 每个重要资产有专属监控 agent — 房产追踪市场比较、车辆追踪折旧、投资组合追踪漂移。Dashboard 变为"家庭议会"视图。</p>
+    <dl class="idea-fields">
+      <dt>Axis</dt><dd><span class="axis-tag axis-1">AI 交互</span> <span class="axis-tag axis-3">财务管理</span></dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> 通知系统 (channels, subscriptions, reminders) 完全确认；FinanceCoachCard 已能生成叙事摘要。<strong>reasoned:</strong> Push-based inverts activation energy — 用户不必主动打开 app。Per-asset agents 将"你可以问资产"变为"你的资产被守护着"。</dd>
+      <dt>Rationale</dt><dd>最大的留存风险不是功能缺失，而是用户不参与。Push-based 环境层以 1% 注意力成本传递 80% 仪表盘价值。Per-asset agents 创造主动监控的全新价值主张。</dd>
+      <dt>Downsides</dt><dd>推送频率和内容的平衡困难；per-asset agents 需要大量计算资源；需要外部数据源才能真正有价值（市场数据、房产估值）。</dd>
+      <dt>Confidence</dt><dd><span class="confidence-med">60%</span></dd>
+      <dt>Complexity</dt><dd><span class="complexity-chip cx-high">High</span></dd>
+    </dl>
+    <div class="synthesis-card">
+      <h4>Cross-Cutting Synthesis</h4>
+      <p>这个方向与 #2 Proactive Checkup 形成"主动 AI 顾问"系统 (Synthesis S1)：scheduler 运行周度扫描 + per-asset agents 运行持续监控 + push 层负责交付。三者合一是 Numina 从"资产追踪器"到"家庭财务顾问"的核心转型路径。</p>
+    </div>
+  </article>
+
+</section>
+
+<!-- ===== Rejection Summary ===== -->
+<section id="rejections">
+  <h2>Rejection Summary</h2>
+  <table class="rejection-table">
+    <thead>
+      <tr><th>#</th><th>Candidate</th><th>Reason Rejected</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>C10</td><td>Family Collaboration Wall</td><td>Honeydue 仿品；无需求信号支持家庭内 in-app chat</td></tr>
+      <tr><td>C11</td><td>Phantom Valuations</td><td>被 C24 Zero-Entry 覆盖；外部数据源超出 privacy-first 范围</td></tr>
+      <tr><td>C12</td><td>MCP Data Domain Expansion</td><td>纯基础设施，无直接用户价值</td></tr>
+      <tr><td>C14</td><td>Recurring Pattern Detection</td><td>是 C5 Cash Flow Engine 的自然结果，非独立方向</td></tr>
+      <tr><td>C20</td><td>Asset Parliament</td><td>过于投机；无用户研究验证对抗式 AI 协商的需求</td></tr>
+      <tr><td>C23</td><td>Family Finance Census</td><td>与 privacy-first 定位根本冲突</td></tr>
+      <tr><td>C16</td><td>Game-Feel Choreography</td><td>已有详细 plan (2026-05-24-001)；是执行而非创意</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer class="composition-signal">
+  Composed 2026-07-27 by ce-ideate (surprise-me, repo-grounded).
+  44 raw candidates from 6 frames (pain & friction, inversion, assumption-breaking, leverage, cross-domain analogy, constraint-flipping).
+  Grounding: 25+ spec/plan files scanned, codebase verification, web research dossier.
+</footer>
+
+</div>
+</body>
+</html>
