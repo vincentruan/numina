@@ -54,11 +54,33 @@ def latest_by_skill(
     )
 
 
-def is_cache_fresh(row: AIReport | None, skill_id: str) -> bool:
-    """True if the row exists and is younger than the skill_id's TTL."""
+def is_cache_fresh(
+    row: AIReport | None,
+    skill_id: str,
+    family_id: str | int | None = None,
+) -> bool:
+    """True if the row exists and is younger than the skill_id's TTL.
+
+    When family_id is provided, reads TTL from family_settings (with 5-min cache).
+    Falls back to hardcoded SKILL_TTL when family_id is None.
+    """
     if row is None or row.generated_at is None:
         return False
-    ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
+    if family_id is not None:
+        from apps.backend.app.services.config_registry import FAMILY_SETTING_DEFINITIONS
+        from apps.backend.app.services.config_service import get_family_setting_cached
+
+        config_key = f"ai_cache_ttl_{skill_id.replace('-', '_')}"
+        if config_key in FAMILY_SETTING_DEFINITIONS:
+            try:
+                ttl_minutes = get_family_setting_cached(int(family_id), config_key)
+                ttl = timedelta(minutes=ttl_minutes)
+            except Exception:
+                ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
+        else:
+            ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
+    else:
+        ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
     age = datetime.now(timezone.utc).replace(tzinfo=None) - row.generated_at  # noqa: UP017
     return bool(age < ttl)
 

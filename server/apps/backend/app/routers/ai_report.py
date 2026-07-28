@@ -5,10 +5,11 @@
 - POST /api/v1/ai/report/generate/events — 触发生成（SSE 流式推送三步进度，U4）
 """
 
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -173,8 +174,25 @@ async def trigger_generate_events(
     if not force:
         cached = _latest_report(current_user.family_id, db)
         if cached is not None and cached.generated_at is not None:
+            # Dynamic TTL from family settings, fallback to REPORT_CACHE_TTL
+            from apps.backend.app.services.config_registry import (
+                FAMILY_SETTING_DEFINITIONS,
+            )
+            from apps.backend.app.services.config_service import (
+                get_family_setting_cached,
+            )
+
+            _report_ttl = REPORT_CACHE_TTL
+            if "ai_cache_ttl_report" in FAMILY_SETTING_DEFINITIONS:
+                with contextlib.suppress(Exception):
+                    _report_ttl = timedelta(
+                        minutes=get_family_setting_cached(
+                            int(current_user.family_id), "ai_cache_ttl_report"
+                        )
+                    )
+
             age = datetime.now(timezone.utc).replace(tzinfo=None) - cached.generated_at  # noqa: UP017
-            if age < REPORT_CACHE_TTL:
+            if age < _report_ttl:
                 # security-lens Open Question #22 (P2, defense-in-depth): the
                 # cached report_json was validated on first write, but re-serving
                 # it bypasses fresh-generation output sanitization. Re-validate

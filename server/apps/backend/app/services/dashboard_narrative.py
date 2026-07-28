@@ -7,11 +7,16 @@ finance_coach_cache.py (latest_by_skill / is_cache_fresh / upsert_skill_result).
 4h TTL; CRUD invalidation via invalidate_skill() at asset/liability/wish write
 sites (mirrors finance_coach invalidation). Threshold gate: asset_count >= 5
 AND snapshot history >= 3 months. Silent degradation on agent failure.
+
+Supports SSE streaming: ``stream_narrative_sse()`` proxies the agent's SSE
+events (reasoning_delta, messages, custom, end) to the frontend and persists
+the result to cache after the stream completes.
 """
 import json
 import logging
 import re
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
 from apps.backend.app.models.user import User
@@ -141,15 +146,18 @@ def _separate_narrative_and_thinking(raw: str) -> tuple[str, str]:
     return narrative, thinking
 
 
-def _check_history_threshold(family_id_int: int, db_session_factory) -> bool:
-    """Return True if the family has >= MIN_HISTORY_MONTHS distinct snapshot months.
+def _check_history_threshold(family_id_int: int, db_session_factory, min_months: int | None = None) -> bool:
+    """Return True if the family has >= min_months distinct snapshot months.
 
     Uses SQL COUNT(DISTINCT) — no row fetch into Python (P2 fix).
     Called with a short-lived session to avoid holding the request-scoped one.
+    min_months defaults to MIN_HISTORY_MONTHS if not provided.
     """
     from sqlalchemy import func
 
     from apps.backend.app.models.snapshot import AssetSnapshot
+
+    threshold = min_months if min_months is not None else MIN_HISTORY_MONTHS
 
     with db_session_factory() as db:
         # Cross-DB compatible: extract year-month as string, count distinct.
@@ -160,7 +168,7 @@ def _check_history_threshold(family_id_int: int, db_session_factory) -> bool:
             .filter(AssetSnapshot.family_id == family_id_int)
             .scalar()
         )
-    return (month_count or 0) >= MIN_HISTORY_MONTHS
+    return (month_count or 0) >= threshold
 
 
 def _build_narrative_context(overview, insights) -> dict:
@@ -329,3 +337,112 @@ async def _dispatch_narrative_agent(
 def _make_thread_id(family_id: str) -> str:
     """Generate a unique thread_id for the narrative agent run."""
     return f"dashboard-narrative-{family_id}-{uuid.uuid4().hex[:8]}"
+
+
+async def stream_narrative_sse(
+    *, family_id: str, user_id: str, context: dict
+) -> AsyncGenerator[bytes, None]:
+    """Proxy the agent's dashboard-narrative SSE stream to the frontend.
+
+    Mirrors ``_stream_finance_coach_sse``: calls the agent gateway, forwards
+    raw SSE lines, and persists the result to cache after the stream ends.
+
+    The agent emits:
+    - ``custom`` events with ``type: "reasoning_delta"`` (thinking chunks)
+    - ``messages`` events with ``type: "ai"`` (narrative text chunks)
+    - ``custom`` event with ``type: "dashboard_narrative.result"`` (final result)
+    - ``end`` event (stream complete)
+    """
+    agent_client = AgentClient(family_id, user_id, timeout=120.0)
+    thread_id = _make_thread_id(family_id)
+    agent_url = f"/internal/gateway/runs/dashboard-narrative/{thread_id}"
+
+    try:
+        async with agent_client.stream(
+            "POST",
+            agent_url,
+            json={
+                "family_id": family_id,
+                "user_id": user_id,
+                "input": {
+                    "messages": [
+                        {"role": "user", "content": json.dumps(context, ensure_ascii=False)}
+                    ]
+                },
+            },
+        ) as resp:
+            if resp.status_code != 200:
+                body = await resp.aread()
+                logger.warning(
+                    "[dashboard-narrative] agent stream non-200: status=%s body=%s",
+                    resp.status_code,
+                    body[:200],
+                )
+                err = json.dumps(
+                    {"message": "叙事生成服务异常", "name": "AgentError"}
+                ).encode()
+                yield f"event: error\ndata: {err.decode()}\n\n".encode()
+                return
+
+            collected = b""
+            async for line in resp.aiter_lines():
+                yield (line + "\n").encode()
+                collected += (line + "\n").encode()
+
+            # Persist the result to cache after stream ends
+            _persist_narrative_result(family_id, collected)
+    except Exception as exc:
+        logger.warning(
+            "[dashboard-narrative] agent stream failed err=%s", type(exc).__name__
+        )
+        err = json.dumps(
+            {"message": "叙事生成服务中断", "name": type(exc).__name__}
+        ).encode()
+        yield f"event: error\ndata: {err.decode()}\n\n".encode()
+
+
+def _persist_narrative_result(family_id: str, collected_sse: bytes) -> None:
+    """Extract the dashboard_narrative.result payload and cache it.
+
+    Called after a successful stream. Opens a short-lived session to write
+    the result row. Silently no-ops if the result frame is missing.
+    """
+    try:
+        text = collected_sse.decode("utf-8", errors="replace")
+        payload = None
+        for block in text.split("\n\n"):
+            if "dashboard_narrative.result" not in block:
+                continue
+            for line in block.split("\n"):
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[len("data: "):])
+                        if data.get("type") == "dashboard_narrative.result":
+                            payload = data.get("payload")
+                    except json.JSONDecodeError:
+                        continue
+        if payload is None:
+            logger.info(
+                "[dashboard-narrative] no result frame in stream — not caching"
+            )
+            return
+
+        narrative_text = payload.get("narrative", "")
+        thinking_text = payload.get("thinking", "")
+        if not narrative_text:
+            return
+
+        first_sentence = _extract_first_sentence(narrative_text)
+        full_payload = {
+            "narrative": narrative_text,
+            "first_sentence": first_sentence,
+            "thinking": thinking_text,
+        }
+
+        from apps.backend.app.database import SessionLocal
+
+        with SessionLocal() as db:
+            upsert_skill_result(db, family_id, SKILL_ID, full_payload)
+            db.commit()
+    except Exception as exc:
+        logger.warning("[dashboard-narrative] persist result failed err=%s", exc)

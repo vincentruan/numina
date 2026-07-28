@@ -1,6 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
@@ -16,7 +17,6 @@ from apps.backend.app.schemas.dashboard import (
     InvestmentReturnItem,
     LiabilityAllocationResponse,
     LowUsageItem,
-    NarrativeResponse,
     NewAssetsResponse,
     OverviewResponse,
     TopAssetItem,
@@ -199,7 +199,7 @@ def get_insights(
     return dashboard_service.get_insights(db, user)
 
 
-@router.get("/narrative", response_model=NarrativeResponse)
+@router.get("/narrative")
 async def get_narrative(
     force: bool = Query(False),
     db: Session = Depends(get_db),
@@ -207,21 +207,19 @@ async def get_narrative(
 ):
     """Dashboard narrative — AI-generated monthly financial story (R1-R5).
 
-    Returns cached or freshly-generated narrative text. 4h TTL; threshold gate
-    (asset_count >= 5, history >= 3 months). Silent degradation on agent failure.
-    ``?force=true`` bypasses cache and regenerates.
+    Cache hit → JSON ``NarrativeResponse`` (no streaming).
+    Cache miss / force → SSE stream (``text/event-stream``) proxying the agent's
+    reasoning + narrative events. The stream is persisted to cache after completion.
 
-    DB session is released before agent dispatch (P0 fix): all DB work (cache
-    check, threshold, context building) happens here; generate_narrative only
-    dispatches the agent and persists via its own short-lived session.
+    ``?force=true`` bypasses cache and regenerates.
+    Threshold gate (asset_count >= 5, history >= 1 month) → empty JSON on miss.
     """
     from apps.backend.app.database import SessionLocal
     from apps.backend.app.services.dashboard_narrative import (
-        MIN_ASSET_COUNT,
         SKILL_ID,
         _build_narrative_context,
         _check_history_threshold,
-        generate_narrative,
+        stream_narrative_sse,
     )
     from apps.backend.app.services.finance_coach_cache import (
         is_cache_fresh,
@@ -230,35 +228,53 @@ async def get_narrative(
 
     family_id = user.family_id
 
+    # Dynamic thresholds from family settings, fallback to module defaults
+    from apps.backend.app.services.config_service import get_family_setting
+
+    _min_asset_count = get_family_setting(db, int(family_id), "dashboard_min_asset_count")
+    _min_history_months = get_family_setting(db, int(family_id), "dashboard_min_history_months")
+
     # 1. Cache check (R4) — uses request-scoped db
     if not force:
         cached = latest_by_skill(db, family_id, SKILL_ID)
-        if is_cache_fresh(cached, SKILL_ID) and cached is not None:
+        if is_cache_fresh(cached, SKILL_ID, family_id=family_id) and cached is not None:
             report = cached.report_json or {}
             narrative = report.get("narrative", "")
             from apps.backend.app.services.dashboard_narrative import (
                 _extract_first_sentence,
             )
-            return NarrativeResponse(
-                narrative=narrative or None,
-                first_sentence=report.get(
-                    "first_sentence", _extract_first_sentence(narrative)
-                ),
-                thinking=report.get("thinking", ""),
-                generated_at=cached.generated_at.isoformat()
-                if cached.generated_at
-                else None,
+            return JSONResponse(
+                content={
+                    "narrative": narrative or None,
+                    "first_sentence": report.get(
+                        "first_sentence", _extract_first_sentence(narrative)
+                    ),
+                    "thinking": report.get("thinking", ""),
+                    "generated_at": cached.generated_at.isoformat()
+                    if cached.generated_at
+                    else None,
+                }
             )
 
     # 2. Threshold check (R5) — uses request-scoped db for overview,
     #    then releases it before the history check (which opens its own session).
     overview = dashboard_service.get_overview(db, user)
-    if overview.asset_count < MIN_ASSET_COUNT:
-        return NarrativeResponse()
+    if overview.asset_count < _min_asset_count:
+        return JSONResponse(content={
+            "narrative": None,
+            "first_sentence": "",
+            "thinking": "",
+            "generated_at": None,
+        })
 
     # History check uses a short-lived session (P0 fix — don't hold request db)
-    if not _check_history_threshold(int(family_id), SessionLocal):
-        return NarrativeResponse()
+    if not _check_history_threshold(int(family_id), SessionLocal, min_months=_min_history_months):
+        return JSONResponse(content={
+            "narrative": None,
+            "first_sentence": "",
+            "thinking": "",
+            "generated_at": None,
+        })
 
     # 3. Build context — uses request-scoped db for insights
     try:
@@ -267,9 +283,20 @@ async def get_narrative(
         insights = None
     context = _build_narrative_context(overview, insights)
 
-    # 4. Agent dispatch — no DB session held (P0 fix)
-    result = await generate_narrative(user, context)
-    return NarrativeResponse(**result)
+    # 4. Stream via agent (SSE) — no DB session held
+    return StreamingResponse(
+        stream_narrative_sse(
+            family_id=str(family_id),
+            user_id=str(user.id),
+            context=context,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/upcoming-payments", response_model=UpcomingPaymentsResponse)

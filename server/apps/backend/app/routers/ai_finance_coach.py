@@ -140,7 +140,7 @@ async def trigger_finance_coach(
     # 8h skill-cache check (before streaming). force=true regenerates.
     if not force:
         cached = latest_by_skill(db, current_user.family_id, "finance_coach")
-        if is_cache_fresh(cached, "finance_coach") and cached is not None:
+        if is_cache_fresh(cached, "finance_coach", family_id=current_user.family_id) and cached is not None:
             return JSONResponse(
                 status_code=200,
                 content={

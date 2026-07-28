@@ -100,11 +100,17 @@ def internal_get_daily_cost(
 
 @router.get("/dashboard/expiring-soon")
 def internal_get_expiring_soon(
-    days_threshold: int = Query(180),
+    days_threshold: int | None = Query(None),
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
     user = _get_mock_user(family_id, db)
+    if days_threshold is None:
+        from apps.backend.app.services.config_service import get_family_setting
+
+        days_threshold = get_family_setting(
+            db, int(family_id), "dashboard_expiring_days_threshold"
+        )
     return dashboard_service.get_expiring_soon_assets(db, user, days_threshold)
 
 
