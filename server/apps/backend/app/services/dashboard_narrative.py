@@ -66,69 +66,70 @@ def _clean_narrative_text(raw: str) -> str:
 def _separate_narrative_and_thinking(raw: str) -> tuple[str, str]:
     """Separate LLM output into (clean_narrative, thinking_process).
 
-    The LLM outputs reasoning/analysis first, then the final narrative paragraph.
-    This function identifies the narrative paragraph (last primarily-Chinese
-    paragraph < 200 chars) and returns everything before it as "thinking".
+    Strategy: strip markdown, find the last 2-3 Chinese sentences as narrative,
+    everything before that point is thinking. Preserves all content —
+    no paragraph-boundary dependency.
     """
     text = raw.strip()
     if not text:
         return "", ""
 
-    # 1. Strip markdown formatting
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.+?)\*", r"\1", text)
-    text = re.sub(r"`(.+?)`", r"\1", text)
-    text = re.sub(r"```[\s\S]*?```", "", text)
-    # Strip bullet list markers
-    text = re.sub(r"^[\-\*]\s+", "", text, flags=re.MULTILINE)
+    # 1. Strip markdown formatting (preserve content)
+    cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", text)  # bold
+    cleaned = re.sub(r"\*(.+?)\*", r"\1", text)  # italic
+    cleaned = re.sub(r"`(.+?)`", r"\1", text)  # inline code
+    cleaned = re.sub(r"```[\s\S]*?```", "", cleaned)  # code blocks
+    # Normalize bullet markers but keep content
+    cleaned = re.sub(r"^[\-\*]\s+", "• ", cleaned, flags=re.MULTILINE)
+    # Normalize whitespace but preserve paragraph breaks
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = cleaned.strip()
 
-    # 2. Split into paragraphs
-    paragraphs = re.split(r"\n{2,}", text)
-    paragraphs = [p.strip() for p in paragraphs if p.strip()]
-    if not paragraphs:
+    if not cleaned:
         return "", ""
 
-    # 3. Find the narrative: last paragraph that is primarily Chinese sentences
-    #    and reasonably short (< 200 chars, > 10 Chinese chars)
-    narrative_idx = -1
-    for i in range(len(paragraphs) - 1, -1, -1):
-        p = paragraphs[i]
-        chinese_chars = len(re.findall(r"[一-鿿]", p))
-        english_chars = len(re.findall(r"[A-Za-z]", p))
-        if chinese_chars > english_chars and len(p) < 200 and chinese_chars > 10:
-            narrative_idx = i
-            break
+    # 2. Find Chinese sentences — split on terminators keeping delimiters
+    sentences_with_delims = re.split(r"([。！？])", cleaned)
+    all_sentences: list[str] = []
+    for i in range(0, len(sentences_with_delims) - 1, 2):
+        sentence = sentences_with_delims[i].strip()
+        delim = sentences_with_delims[i + 1]
+        if sentence:
+            all_sentences.append(sentence + delim)
+    if len(sentences_with_delims) % 2 == 1:
+        trailing = sentences_with_delims[-1].strip()
+        if trailing:
+            all_sentences.append(trailing)
 
-    if narrative_idx >= 0:
-        narrative = paragraphs[narrative_idx]
-        thinking = "\n".join(paragraphs[:narrative_idx]).strip()
+    # Filter to Chinese-dominant sentences (≥5 Chinese chars)
+    chinese_sentences: list[tuple[int, str]] = []
+    for idx, s in enumerate(all_sentences):
+        cn = len(re.findall(r"[一-鿿]", s))
+        en = len(re.findall(r"[A-Za-z]", s))
+        if cn > en and cn >= 5:
+            chinese_sentences.append((idx, s))
+
+    # 3. Narrative = last 2-3 Chinese sentences (capped at 150 chars)
+    if len(chinese_sentences) >= 2:
+        take = min(3, len(chinese_sentences))
+        narrative_sentences = [s for _, s in chinese_sentences[-take:]]
+        narrative = "".join(narrative_sentences)
+        # Cap at 150 chars — drop earliest sentence if too long
+        while len(narrative) > 150 and len(narrative_sentences) > 1:
+            narrative_sentences.pop(0)
+            narrative = "".join(narrative_sentences)
+        if len(narrative) > 150:
+            narrative = narrative[:150] + "…"
+
+        # 4. Thinking = everything before the narrative's first sentence
+        narrative_first_idx = chinese_sentences[-take][0]
+        thinking_parts = [all_sentences[i] for i in range(narrative_first_idx)]
+        thinking = "".join(thinking_parts).strip()
     else:
-        # No clean narrative found — take last 2-3 Chinese sentences
-        sentences = re.split(r"[。！？]", text)
-        sentences = [s.strip() for s in sentences if s.strip()]
-        chinese_sentences = [
-            s for s in sentences
-            if len(re.findall(r"[一-鿿]", s)) > len(re.findall(r"[A-Za-z]", s))
-        ]
-        if len(chinese_sentences) >= 2:
-            narrative = "。".join(chinese_sentences[-3:]) + "。"
-            # Thinking = everything before the narrative sentences
-            narrative_start = text.rfind(chinese_sentences[-3])
-            thinking = text[:narrative_start].strip() if narrative_start > 0 else ""
-        else:
-            narrative = text
-            thinking = ""
-
-    # 4. Length cap on narrative (R1: ≤ 150 chars)
-    if len(narrative) > 150:
-        parts = re.split(r"([。！？])", narrative)
-        result = ""
-        for i in range(0, len(parts) - 1, 2):
-            candidate = result + parts[i] + parts[i + 1]
-            if len(candidate) > 150:
-                break
-            result = candidate
-        narrative = result or narrative[:150] + "…"
+        # Not enough Chinese sentences — entire text is narrative
+        narrative = cleaned
+        thinking = ""
 
     return narrative, thinking
 

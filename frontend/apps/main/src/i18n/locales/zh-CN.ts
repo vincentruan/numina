@@ -185,6 +185,7 @@ export default {
       expand: '展开',
       collapse: '收起',
       thinking: '思考过程',
+      thinkingDone: '已思考（用时 {seconds} 秒）',
       ariaLabel: '财务叙事卡片',
     },
   },

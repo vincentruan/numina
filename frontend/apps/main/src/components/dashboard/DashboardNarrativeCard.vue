@@ -3,11 +3,14 @@ import { ref, onMounted } from 'vue'
 import { getNarrative } from '@/api/dashboard'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 
 const loading = ref(true)
+const loadStart = ref(0)
+const loadDuration = ref(0)
 const narrative = ref<string | null>(null)
 const firstSentence = ref('')
 const thinking = ref('')
@@ -26,9 +29,11 @@ async function load() {
     return
   }
 
+  loadStart.value = Date.now()
   try {
     const resp = await getNarrative()
     const data = resp.data
+    loadDuration.value = Math.round((Date.now() - loadStart.value) / 1000)
     if (data.narrative) {
       narrative.value = data.narrative
       firstSentence.value = data.first_sentence || data.narrative
@@ -60,142 +65,137 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- Loading: title + spinner -->
-  <div
-    v-if="loading && !dismissed"
-    class="narrative-card narrative-card--loading"
-    data-test="narrative-loading"
-  >
-    <span class="narrative-card__label">
-      <van-loading size="14px" type="spinner" color="var(--color-primary, #646cff)" />
-      {{ t('dashboard.narrative.title') }}
-    </span>
-  </div>
-
-  <!-- Narrative card -->
-  <div
-    v-else-if="narrative && !dismissed"
-    class="narrative-card"
-    :class="{ 'narrative-card--expanded': expanded }"
-    :aria-label="t('dashboard.narrative.ariaLabel')"
-    data-test="narrative-card"
-  >
-    <!-- Header row -->
-    <div class="narrative-card__header">
-      <span class="narrative-card__label">{{ t('dashboard.narrative.title') }}</span>
-      <div class="narrative-card__actions">
-        <button class="narrative-card__toggle" @click="toggleExpand">
-          <van-icon :name="expanded ? 'arrow-up' : 'arrow-down'" size="12" />
-          {{ expanded ? t('dashboard.narrative.collapse') : t('dashboard.narrative.expand') }}
-        </button>
-        <button class="narrative-card__close" :aria-label="t('common.close')" @click="onDismiss">
-          <van-icon name="cross" size="14" />
-        </button>
+  <van-cell-group inset class="narrative-card" data-test="narrative-card">
+    <!-- Loading state: header + shimmer thinking -->
+    <template v-if="loading && !dismissed">
+      <div class="narrative-card__header">
+        <span class="narrative-card__title">
+          <span class="narrative-card__icon">
+            <van-loading size="16px" type="spinner" color="var(--van-primary-color, #1989fa)" />
+          </span>
+          <span class="narrative-card__title-text">{{ t('dashboard.narrative.title') }}</span>
+        </span>
+        <span class="narrative-card__status narrative-card__status--loading">
+          <van-loading size="12px" type="spinner" />
+        </span>
       </div>
-    </div>
-
-    <!-- Collapsed preview -->
-    <div v-show="!expanded" class="narrative-card__preview">
-      <p class="narrative-card__text narrative-card__text--clamp">{{ firstSentence }}</p>
-    </div>
-
-    <!-- Expanded content -->
-    <div v-show="expanded" class="narrative-card__content">
-      <!-- Narrative text -->
-      <p class="narrative-card__text">{{ narrative }}</p>
-
-      <!-- Thinking section (only if there is thinking content) -->
-      <div v-if="thinking" class="narrative-card__thinking">
-        <button class="narrative-card__thinking-toggle" @click="toggleThinking">
-          <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
-          {{ thinkingExpanded ? t('dashboard.narrative.collapse') : t('dashboard.narrative.expand') }}
-          {{ t('dashboard.narrative.thinking', '思考过程') }}
-        </button>
-        <div
-          v-show="thinkingExpanded"
-          class="narrative-card__thinking-content"
-        >
-          <p class="narrative-card__thinking-text">{{ thinking }}</p>
-        </div>
-        <div
-          v-show="!thinkingExpanded"
-          class="narrative-card__thinking-preview"
-        >
-          <p class="narrative-card__thinking-text narrative-card__text--clamp">{{ thinking }}</p>
-        </div>
+      <!-- Shimmer thinking placeholder -->
+      <div class="narrative-card__thinking-shimmer">
+        <div class="shimmer-line shimmer-line--long" />
+        <div class="shimmer-line shimmer-line--short" />
       </div>
-    </div>
-  </div>
+    </template>
+
+    <!-- Loaded narrative -->
+    <van-collapse v-else-if="narrative && !dismissed" v-model="expanded as any" class="narrative-collapse">
+      <van-collapse-item name="narrative">
+        <template #title>
+          <div class="narrative-card__header">
+            <span class="narrative-card__title">
+              <span class="narrative-card__icon">
+                <IIcon :icon="'lucide:sparkles'" size="18" class="narrative-card__icon-svg" />
+              </span>
+              <span class="narrative-card__title-text">{{ t('dashboard.narrative.title') }}</span>
+            </span>
+            <span v-if="thinking" class="narrative-card__status">
+              {{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}
+            </span>
+            <button class="narrative-card__close" :aria-label="t('common.close')" @click.stop="onDismiss">
+              <van-icon name="cross" size="14" />
+            </button>
+          </div>
+        </template>
+
+        <!-- Narrative text -->
+        <p class="narrative-card__text">{{ narrative }}</p>
+
+        <!-- Thinking section -->
+        <div v-if="thinking" class="narrative-card__thinking">
+          <button class="narrative-card__thinking-toggle" @click="toggleThinking">
+            <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
+            {{ thinkingExpanded ? t('dashboard.narrative.collapse') : t('dashboard.narrative.expand') }}
+            {{ t('dashboard.narrative.thinking', '思考过程') }}
+          </button>
+          <div v-show="thinkingExpanded" class="narrative-card__thinking-content">
+            <p class="narrative-card__thinking-text">{{ thinking }}</p>
+          </div>
+          <div v-show="!thinkingExpanded" class="narrative-card__thinking-preview">
+            <p class="narrative-card__thinking-text narrative-card__text--clamp">{{ thinking }}</p>
+          </div>
+        </div>
+      </van-collapse-item>
+    </van-collapse>
+  </van-cell-group>
 </template>
 
 <style scoped>
 .narrative-card {
+  margin: 8px 0;
+}
+
+.narrative-card :deep(.van-cell) {
   background: var(--card-bg);
-  border-radius: 12px;
-  margin: 8px 12px;
-  padding: 12px 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  transition: all 0.25s ease-in-out;
 }
 
-[data-theme='dark'] .narrative-card {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+.narrative-collapse :deep(.van-collapse-item__title) {
+  justify-content: flex-start;
 }
 
-/* Loading state */
-.narrative-card--loading {
-  min-height: 40px;
+.narrative-collapse :deep(.van-cell__title) {
+  flex: 1;
   display: flex;
-  align-items: center;
+  min-width: 0;
 }
 
-/* Header row */
+.narrative-collapse :deep(.van-cell__value) {
+  flex: none;
+  width: 0;
+}
+
+/* Header row: icon+title on left, status+close on right */
 .narrative-card__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 24px;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
 }
 
-.narrative-card__label {
-  font-size: 12px;
-  color: var(--color-primary, #646cff);
-  font-weight: 500;
+.narrative-card__title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
-/* Action buttons grouped on the right */
-.narrative-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* Toggle button */
-.narrative-card__toggle {
+.narrative-card__icon {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  width: 1.4em;
+  height: 1.4em;
+  flex-shrink: 0;
+}
+
+.narrative-card__icon-svg {
+  color: #1989fa;
+}
+
+.narrative-card__title-text {
+  font-weight: 600;
+}
+
+.narrative-card__status {
+  margin-left: 8px;
   font-size: 12px;
-  color: var(--text-secondary, #969799);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 6px;
+  color: var(--van-text-color-2);
   white-space: nowrap;
-  min-height: 28px;
-  border-radius: 4px;
 }
 
-.narrative-card__toggle:active {
-  color: var(--color-primary, #646cff);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-[data-theme='dark'] .narrative-card__toggle:active {
-  background: rgba(255, 255, 255, 0.06);
+.narrative-card__status--loading {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Close button */
@@ -212,6 +212,7 @@ onMounted(() => {
   border-radius: 50%;
   padding: 0;
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .narrative-card__close:active {
@@ -222,28 +223,12 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Preview (collapsed) */
-.narrative-card__preview {
-  margin-top: 8px;
-}
-
-/* Content (expanded) */
-.narrative-card__content {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--van-border-color, #f2f3f5);
-}
-
-[data-theme='dark'] .narrative-card__content {
-  border-top-color: rgba(255, 255, 255, 0.08);
-}
-
 /* Narrative text */
 .narrative-card__text {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-primary, #323233);
-  margin: 0;
+  margin: 0 0 8px;
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -254,6 +239,38 @@ onMounted(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Shimmer loading placeholder */
+.narrative-card__thinking-shimmer {
+  padding: 12px 16px 4px;
+}
+
+.shimmer-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--van-skeleton-row-background, #f2f3f5) 25%,
+    var(--van-active-color, #f2f3f5) 50%,
+    var(--van-skeleton-row-background, #f2f3f5) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  margin-bottom: 8px;
+}
+
+.shimmer-line--long {
+  width: 90%;
+}
+
+.shimmer-line--short {
+  width: 60%;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* Thinking section */
@@ -296,13 +313,5 @@ onMounted(() => {
   margin: 0;
   word-break: break-word;
   white-space: pre-wrap;
-}
-
-/* Responsive */
-@media (max-width: 428px) {
-  .narrative-card {
-    margin: 8px 0;
-    border-radius: 0;
-  }
 }
 </style>

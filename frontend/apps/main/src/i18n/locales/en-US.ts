@@ -128,6 +128,7 @@ export default {
       expand: 'Expand',
       collapse: 'Collapse',
       thinking: 'Thinking process',
+      thinkingDone: 'Thought for {seconds}s',
       ariaLabel: 'Financial narrative card',
     },
     selectAll: '全选',
