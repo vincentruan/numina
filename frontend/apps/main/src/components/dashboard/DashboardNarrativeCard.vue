@@ -111,7 +111,10 @@ onMounted(() => {
           <!-- Thinking indicator: clickable row, toggles thinking content -->
           <button v-if="thinking" class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
             <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
-            <span class="narrative-card__thinking-status">{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</span>
+            <span class="narrative-card__thinking-status">
+              <template v-if="loadDuration > 0">{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</template>
+              <template v-else>{{ t('dashboard.narrative.thinking') }}</template>
+            </span>
             <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
           </button>
         </template>
