@@ -19,6 +19,9 @@
           <OverviewStatCard />
         </div>
 
+        <!-- Dashboard narrative card (AI-generated monthly insights, R1-R16) -->
+        <DashboardNarrativeCard />
+
         <!-- D2/A1a: finance_coach proactive suggestions card (Plan B T5) -->
         <FinanceCoachCard />
 
@@ -62,6 +65,7 @@ import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
+import DashboardNarrativeCard from '@/components/dashboard/DashboardNarrativeCard.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'

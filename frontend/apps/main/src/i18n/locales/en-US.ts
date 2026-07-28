@@ -123,6 +123,12 @@ export default {
       count: '{count} suggestions',
       empty: 'No suggestions',
     },
+    narrative: {
+      title: 'Monthly Insights',
+      expand: 'Expand',
+      collapse: 'Collapse',
+      ariaLabel: 'Financial narrative card',
+    },
     selectAll: '全选',
     selectedCount: '已选 {count} 项',
     selectionDone: '完成',

@@ -180,6 +180,12 @@ export default {
       count: '{count} 条建议',
       empty: '暂无建议',
     },
+    narrative: {
+      title: '本月洞察',
+      expand: '展开',
+      collapse: '收起',
+      ariaLabel: '财务叙事卡片',
+    },
   },
   ai: {
     systemAgents: '系统智能体',

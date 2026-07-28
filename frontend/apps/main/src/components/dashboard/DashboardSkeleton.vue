@@ -11,6 +11,11 @@
       </div>
     </div>
 
+    <!-- Narrative Card skeleton (short bar, ~40px, R16) — between stat and coach -->
+    <div class="skeleton-narrative">
+      <van-skeleton :row="1" row-width="70%" animate />
+    </div>
+
     <!-- Finance Coach Card (collapsed header) -->
     <div class="skeleton-card">
       <div class="skeleton-card-header">
@@ -99,6 +104,22 @@ const authStore = useAuthStore()
 }
 .skeleton-detail :deep(.van-skeleton) {
   flex: 1;
+}
+
+/* ── Narrative skeleton (short bar between stat and coach, ~40px) ── */
+.skeleton-narrative {
+  background: var(--card-bg);
+  border-radius: 12px;
+  margin: 8px 12px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--color-primary, #646cff);
+  opacity: 0.6;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+.skeleton-narrative :deep(.van-skeleton) {
+  padding: 0;
 }
 
 /* ── Shared card skeleton ── */

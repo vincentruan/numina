@@ -203,6 +203,19 @@ export function getInsights() {
   return http.get<InsightsResponse>('/dashboard/insights')
 }
 
+// ── Narrative (仪表盘叙事卡片) ──────────────────────────────────────────────
+export interface NarrativeResponse {
+  narrative: string | null
+  first_sentence: string
+  generated_at: string | null
+}
+
+export function getNarrative(force = false) {
+  return http.get<NarrativeResponse>('/dashboard/narrative', {
+    params: { force },
+  })
+}
+
 export interface ActivityItem {
   id: string
   type: string
