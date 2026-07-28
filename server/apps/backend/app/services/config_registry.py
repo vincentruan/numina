@@ -112,7 +112,9 @@ def validate_value(
 
     # Type coercion
     if defn.type == "int":
-        if not isinstance(raw_value, int) or isinstance(raw_value, bool):
+        if isinstance(raw_value, bool):
+            raise ValueError(f"'{key}' must be an integer")
+        if not isinstance(raw_value, int):
             try:
                 raw_value = int(raw_value)
             except (TypeError, ValueError):

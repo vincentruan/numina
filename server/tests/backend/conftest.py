@@ -38,6 +38,7 @@ from apps.backend.app.models.device_session import DeviceSession  # noqa: F401
 from apps.backend.app.models.family import Family  # noqa: F401
 from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds  # noqa: F401
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401from apps.backend.app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
+from apps.backend.app.models.family_setting import FamilySetting  # noqa: F401
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider  # noqa: F401
 from apps.backend.app.models.notification_channel import NotificationChannel  # noqa: F401
 from apps.backend.app.models.notification_config import NotificationConfig  # noqa: F401
@@ -49,6 +50,7 @@ from apps.backend.app.models.revoked_token import RevokedToken  # noqa: F401
 # Import all models to ensure they're registered with Base.metadata
 # This is required for Base.metadata.create_all() to create all tables
 from apps.backend.app.models.user import User  # noqa: F401
+from apps.backend.app.models.user_setting import UserSetting  # noqa: F401
 from apps.backend.app.seed.categories import seed_categories
 from apps.backend.app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
 
