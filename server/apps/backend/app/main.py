@@ -124,6 +124,7 @@ from apps.backend.app.routers import coins as coins_router
 from apps.backend.app.routers import currencies as currencies_router
 from apps.backend.app.routers import device as device_router
 from apps.backend.app.routers import export as export_router
+from apps.backend.app.routers import family_config as family_config_router
 from apps.backend.app.routers import files as files_router
 from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
@@ -138,6 +139,7 @@ from apps.backend.app.routers import notification_config as notification_config_
 from apps.backend.app.routers import notifications as notifications_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import treasures as treasures_router
+from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
@@ -479,6 +481,8 @@ app.include_router(ai_agents_router.router, prefix="/api/v1")
 app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
 app.include_router(ai_web_search_router.router, prefix="/api/v1")
 app.include_router(ai_wish_advice_router.router, prefix="/api/v1")
+app.include_router(family_config_router.router, prefix="/api/v1")
+app.include_router(user_config_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 # Serve uploaded files — mount only the uploads subtree, not the entire workspace
