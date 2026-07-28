@@ -57,10 +57,10 @@ def test_wish_create_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.wish.invalidate_skill") as inv:
         wish_service.create_wish(db_session, user, req)
 
-    # W4 (Plan B T7): wish writes bust both finance_coach and wish_advice caches.
-    assert inv.call_count == 2
+    # W4 (Plan B T7): wish writes bust finance_coach, wish_advice, and dashboard-narrative caches.
+    assert inv.call_count == 3
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "wish_advice"}
+    assert caps == {"finance_coach", "wish_advice", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -76,9 +76,9 @@ def test_wish_update_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.wish.invalidate_skill") as inv:
         wish_service.update_wish(db_session, user, str(wish.id), req)
 
-    assert inv.call_count == 2
+    assert inv.call_count == 3
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "wish_advice"}
+    assert caps == {"finance_coach", "wish_advice", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -93,9 +93,9 @@ def test_wish_delete_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.wish.invalidate_skill") as inv:
         wish_service.delete_wish(db_session, user, str(wish.id))
 
-    assert inv.call_count == 2
+    assert inv.call_count == 3
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "wish_advice"}
+    assert caps == {"finance_coach", "wish_advice", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -113,10 +113,12 @@ def test_liability_write_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.liability.invalidate_skill") as inv:
         liability_service.create_liability(db_session, user, req)
 
-    inv.assert_called_once()
-    args, _ = inv.call_args
-    assert str(args[1]) == str(user.family_id)
-    assert args[2] == "finance_coach"
+    # Dashboard narrative cache is also invalidated on liability writes.
+    assert inv.call_count == 2
+    caps = {call.args[2] for call in inv.call_args_list}
+    assert caps == {"finance_coach", "dashboard-narrative"}
+    for call in inv.call_args_list:
+        assert str(call.args[1]) == str(user.family_id)
 
 
 def test_asset_write_invalidates_finance_coach_cache(db_session):
@@ -139,7 +141,9 @@ def test_asset_write_invalidates_finance_coach_cache(db_session):
     with patch("apps.backend.app.services.asset.invalidate_skill") as inv:
         asset_service.create_asset(db_session, user, req)
 
-    inv.assert_called_once()
-    args, _ = inv.call_args
-    assert str(args[1]) == str(user.family_id)
-    assert args[2] == "finance_coach"
+    # Dashboard narrative cache is also invalidated on asset writes.
+    assert inv.call_count == 2
+    caps = {call.args[2] for call in inv.call_args_list}
+    assert caps == {"finance_coach", "dashboard-narrative"}
+    for call in inv.call_args_list:
+        assert str(call.args[1]) == str(user.family_id)

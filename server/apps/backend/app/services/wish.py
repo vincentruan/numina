@@ -77,6 +77,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
     )
     db.add(wish)
     invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
         db, user.family_id, "wish_advice"
     )  # W4 (Plan B T7): wish change busts advice cache
@@ -95,6 +96,7 @@ def update_wish(db: Session, user: User, wish_id: int, req: WishUpdate) -> Wish:
     for key, value in update_data.items():
         setattr(wish, key, value)
     invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
         db, user.family_id, "wish_advice"
     )  # W4 (Plan B T7): wish change busts advice cache
@@ -117,6 +119,7 @@ def set_ignore_debt_warning(
         raise AppError(ErrorCode.FORBIDDEN)
     wish.ignore_debt_warning = ignore
     invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
         db, user.family_id, "wish_advice"
     )  # W4 (Plan B T7): wish change busts advice cache
@@ -132,6 +135,7 @@ def delete_wish(db: Session, user: User, wish_id: int) -> None:
         raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
     invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
         db, user.family_id, "wish_advice"
     )  # W4 (Plan B T7): wish change busts advice cache
@@ -187,6 +191,7 @@ def realize_wish(
         asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
         invalidate_skill(db, user.family_id, "finance_coach")
+        invalidate_skill(db, user.family_id, "dashboard-narrative")
         invalidate_skill(
             db, user.family_id, "wish_advice"
         )  # W4 (Plan B T7): wish change busts advice cache
