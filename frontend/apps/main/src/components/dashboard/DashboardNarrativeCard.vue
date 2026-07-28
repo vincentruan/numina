@@ -107,7 +107,7 @@ onMounted(() => {
         <!-- Thinking indicator: always visible when loading or has thinking data -->
         <template v-if="(loading || thinking) && !dismissed">
           <button class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
-            <van-icon name="thinking-o" size="14" class="narrative-card__thinking-icon" />
+            <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
             <span class="narrative-card__thinking-status">
               <template v-if="loading">{{ t('dashboard.narrative.thinking') }}</template>
               <template v-else>{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</template>
