@@ -169,25 +169,11 @@ def _db_seed_resources() -> list[Resource]:
         return None
 
     def _check_skills(db: Session) -> ResourceResult | None:
-        from apps.backend.app.models.skill_registry import SkillRegistry
-        count = db.query(SkillRegistry).filter(
-            SkillRegistry.family_id == 0,
-            SkillRegistry.skill_type == "builtin",
-        ).count()
-        if count >= 4:
-            return None
-        return ResourceResult(
-            resource_name="seed_skills",
-            resource_type=ResourceType.DATABASE_SEED,
-            desired_version="1",
-            status=ResourceStatus.DRIFTED,
-            current_version=f"count={count}",
-            critical=True,
-        )
+        # bootstrap_skills() is a permanent no-op (file-system skills replaced DB
+        # registry rows in U5). Desired state = 0 rows — always satisfied.
+        return None
 
     def _apply_skills(db: Session) -> ResourceResult | None:
-        from apps.backend.app.bootstrap.skills import bootstrap_skills
-        bootstrap_skills(db)
         return None
 
     return [
