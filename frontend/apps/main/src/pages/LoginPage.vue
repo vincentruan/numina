@@ -307,6 +307,7 @@ interface BoundUser {
 const boundUsers = ref<BoundUser[]>([])
 const selectedUser = ref<BoundUser | null>(null)
 const deviceIdRef = ref<string | null>(null)
+const deviceAlreadyTrusted = ref(false)
 const webauthnSupported = ref(false)
 
 // User info from step1 response — shown in step2 header
@@ -331,6 +332,7 @@ onMounted(async () => {
     const { data } = await checkDevice(deviceId)
 
     if (data.trusted && data.users.length > 0) {
+      deviceAlreadyTrusted.value = true
       boundUsers.value = data.users.map((u: DeviceCheckUser) => ({
         userId: String(u.user_id),
         displayName: u.display_name,
@@ -368,7 +370,7 @@ async function onStep1Submit() {
       await authStore.fetchMe()
       // fetchMe() succeeded — safe to show success and navigate
       showSuccessToast(t('toast.loginSuccess'))
-      authStore.showTrustPrompt = true
+      if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
         const childBaseUrl = getChildBaseUrl()
@@ -437,7 +439,7 @@ async function onQuickLogin() {
     } else {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
-      authStore.showTrustPrompt = true
+      if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
       const authUser = authStore.user
       if (authUser?.role === 'child') {
         const childBaseUrl = getChildBaseUrl()
@@ -489,7 +491,7 @@ async function authenticateWithWebAuthn(user: BoundUser) {
     } else {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
-      authStore.showTrustPrompt = true
+      if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
       const authUser = authStore.user
       if (authUser?.role === 'child') {
         const childBaseUrl = getChildBaseUrl()
