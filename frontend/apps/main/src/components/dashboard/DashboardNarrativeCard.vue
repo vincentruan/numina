@@ -13,7 +13,7 @@ const loadStart = ref(0)
 const loadDuration = ref(0)
 const narrative = ref<string | null>(null)
 const thinking = ref('')
-const expanded = ref<string[]>([])
+const expanded = ref<string[]>(['narrative'])
 const thinkingExpanded = ref(false)
 const dismissed = ref(false)
 
@@ -104,7 +104,7 @@ onMounted(() => {
           <p class="narrative-card__text">{{ narrative }}</p>
         </template>
 
-        <!-- Thinking indicator: always visible when loading or has thinking data -->
+        <!-- Thinking indicator: show during loading, or when thinking content exists -->
         <template v-if="(loading || thinking) && !dismissed">
           <button class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
             <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
@@ -264,7 +264,7 @@ onMounted(() => {
 .narrative-card__thinking-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 4px;
   font-size: 12px;
   color: var(--text-secondary, #969799);
@@ -272,7 +272,6 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   padding: 6px 0;
-  width: 100%;
 }
 
 .narrative-card__thinking-icon {
@@ -280,7 +279,7 @@ onMounted(() => {
 }
 
 .narrative-card__thinking-status {
-  flex: 1;
+  /* left-aligned, no flex stretch */
 }
 
 .narrative-card__thinking-content {
