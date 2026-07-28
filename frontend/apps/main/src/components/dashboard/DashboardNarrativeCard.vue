@@ -100,23 +100,20 @@ onMounted(() => {
 
         <!-- Loaded narrative -->
         <template v-else-if="narrative">
-          <!-- Narrative text -->
-          <p class="narrative-card__text">{{ narrative }}</p>
-        </template>
-
-        <!-- Thinking indicator: show during loading, or when thinking content exists -->
-        <template v-if="(loading || thinking) && !dismissed">
-          <button class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
-            <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
-            <span class="narrative-card__thinking-status">
-              <template v-if="loading">{{ t('dashboard.narrative.thinking') }}</template>
-              <template v-else>{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</template>
-            </span>
-            <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
-          </button>
-          <div v-show="thinkingExpanded" class="narrative-card__thinking-content">
+          <!-- Thinking content: shown above narrative when expanded -->
+          <div v-if="thinkingExpanded && thinking" class="narrative-card__thinking-content">
             <p class="narrative-card__thinking-text">{{ thinking }}</p>
           </div>
+
+          <!-- Narrative text: clamped 2 lines by default, full when thinking expanded -->
+          <p :class="['narrative-card__text', { 'narrative-card__text--clamp': !thinkingExpanded }]">{{ narrative }}</p>
+
+          <!-- Thinking indicator: clickable row, toggles thinking content -->
+          <button v-if="thinking" class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
+            <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
+            <span class="narrative-card__thinking-status">{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</span>
+            <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
+          </button>
         </template>
       </van-collapse-item>
     </van-collapse>
@@ -226,6 +223,15 @@ onMounted(() => {
   margin: 0 0 8px;
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+/* Clamp narrative to 2 lines when thinking is collapsed */
+.narrative-card__text--clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
 }
 
 /* Shimmer loading placeholder */
