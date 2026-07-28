@@ -46,10 +46,20 @@ from apps.backend.app.models.coin_transaction import CoinTransaction
 from apps.backend.app.models.currency import Currency
 from apps.backend.app.models.exchange_rate import ExchangeRate
 from apps.backend.app.models.family import Family
+from apps.backend.app.models.family_setting import FamilySetting
 from apps.backend.app.models.file_remote_location import (
     FileRemoteLocation,
 )
 from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.literacy_badge import (
+    LiteracyBadge,
+    LiteracyBadgeDefinition,
+)
+from apps.backend.app.models.literacy_report import LiteracyWeeklyReport
+from apps.backend.app.models.literacy_scenario import (
+    LiteracyScenario,
+    LiteracyScenarioTemplate,
+)
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
@@ -66,6 +76,7 @@ from apps.backend.app.models.storage_backend import StorageBackend
 from apps.backend.app.models.sync_event import SyncEvent
 from apps.backend.app.models.tag import Tag
 from apps.backend.app.models.user import User
+from apps.backend.app.models.user_setting import UserSetting
 from apps.backend.app.models.valuation import AssetValuation
 from apps.backend.app.models.wish import Wish
 from apps.backend.app.responses import EnvelopeResponse
@@ -77,11 +88,11 @@ from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_ro
 from apps.backend.app.routers import ai_chat as ai_chat_router
 from apps.backend.app.routers import ai_config as ai_config_router
 from apps.backend.app.routers import ai_context as ai_context_router
-from apps.backend.app.routers import ai_internal as ai_internal_router
 from apps.backend.app.routers import ai_finance_coach as ai_finance_coach_router
+from apps.backend.app.routers import ai_input_polish as ai_input_polish_router
+from apps.backend.app.routers import ai_internal as ai_internal_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
 from apps.backend.app.routers import ai_report as ai_report_router
-from apps.backend.app.routers import ai_input_polish as ai_input_polish_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
@@ -116,6 +127,8 @@ from apps.backend.app.routers import export as export_router
 from apps.backend.app.routers import files as files_router
 from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
+from apps.backend.app.routers import literacy_child as literacy_child_router
+from apps.backend.app.routers import literacy_parent as literacy_parent_router
 from apps.backend.app.routers import mcp_internal as mcp_internal_router
 from apps.backend.app.routers import milestones as milestones_router
 from apps.backend.app.routers import (
@@ -449,6 +462,8 @@ app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(blind_box_router.router, prefix="/api/v1")
 app.include_router(child_blind_box_router.router, prefix="/api/v1")
+app.include_router(literacy_child_router.router, prefix="/api/v1")
+app.include_router(literacy_parent_router.router, prefix="/api/v1")
 app.include_router(challenge_grants_router.router, prefix="/api/v1")
 app.include_router(challenge_grants_router.child_router, prefix="/api/v1")
 app.include_router(device_router.router, prefix="/api/v1")

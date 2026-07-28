@@ -18,5 +18,8 @@ A coroutine-scoped ContextVar carrying the tenant family id that scopes every ag
 
 ## API serialization
 
+### 素养徽章 (Literacy Badge)
+Financial literacy badges in the child ecosystem, organized in 4 dimensions: 赚钱 (earning — labor creates value), 选择 (choosing — understanding opportunity cost), 等待 (waiting — delayed gratification), 关心 (caring — family financial participation). Each dimension has multiple levels; higher-level badges replace lower ones in display but remain in history as "超越" (surpassed). Unlock conditions are determined by AI analysis of passive behavioral signals (wish choices, chore streaks, opportunity-cost peek usage, star coin patterns) and active scenario game choices. Badge unlocks trigger the existing celebration system and optionally grant bonus star coins. Distinct from chore streaks and wish progress — badges measure financial *understanding*, not task completion.
+
 ### SnowflakeBase
 The base Pydantic response model every API response schema inherits from. At JSON serialization it converts `int` fields named `id` or ending in `_id` to `str` (the bigint-on-wire-as-string convention — JS doubles lose precision beyond 2^53). It is the mechanism that enforces the ID half of the money/bigint-as-strings wire convention; the money half is enforced per-schema by typing money fields `str` with a quantizing `field_validator`.

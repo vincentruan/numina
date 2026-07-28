@@ -86,6 +86,18 @@
     <!-- Active challenges -->
     <ChallengeCard ref="challengeCard" />
 
+    <!-- Badge wall entry -->
+    <router-link to="/badges" class="badge-entry-card">
+      <div class="badge-entry-info">
+        <span class="badge-entry-icon">🏅</span>
+        <div>
+          <p class="badge-entry-title">{{ t('badges.entryTitle') }}</p>
+          <p class="badge-entry-sub">{{ t('badges.entryEmpty') }}</p>
+        </div>
+      </div>
+      <van-icon name="arrow" size="16" color="var(--color-muted-soft)" />
+    </router-link>
+
     <!-- Top active wish progress -->
     <router-link v-if="topWish" to="/wishes" class="wish-preview">
       <div class="wish-preview-header">
@@ -432,6 +444,40 @@ onMounted(async () => {
 .wish-ready {
   color: var(--color-brand-ochre);
   font-weight: 600;
+}
+
+/* ── Badge wall entry card ── */
+.badge-entry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+  text-decoration: none;
+  border: 1px solid var(--color-hairline);
+  transition: transform 0.15s;
+}
+.badge-entry-card:active { transform: scale(0.98); }
+.badge-entry-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.badge-entry-icon { font-size: 28px; flex-shrink: 0; }
+.badge-entry-title {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 2px;
+}
+.badge-entry-sub {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-muted-soft);
+  margin: 0;
 }
 
 /* ── Settings entry — top-right gear, floats above the hero ── */

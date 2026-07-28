@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, UniqueConstraint, func, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Integer,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.backend.app.database import Base
@@ -22,6 +30,13 @@ class ChildEconomyConfig(Base):
     )
     coin_to_yuan_rate: Mapped[int] = mapped_column(
         Integer, default=1, server_default="1", nullable=False
+    )
+    # 素养徽章联动：family 级 opt-in 开关 + 解锁奖励星币数量
+    literacy_badge_coin_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    literacy_badge_coin_amount: Mapped[int] = mapped_column(
+        Integer, default=50, server_default="50", nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

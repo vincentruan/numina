@@ -82,6 +82,8 @@
   "BLIND_BOX_BONUS_EXPIRED": "Bonus draw has expired",
   "BLIND_BOX_GIFT_NOT_FOUND": "Gift not found",
   "BLIND_BOX_WISH_CONFLICT": "This wish has already been added to the gift pool",
+  "LITERACY_SCENARIO_COMPLETED": "This week's scenario has already been completed",
+  "LITERACY_REPORT_NOT_FOUND": "Weekly report not found",
   "CALENDAR_DATE_INVALID": "Invalid date format, please use YYYY-MM-DD",
   "CHILD_NOT_FOUND": "Child not found",
   "AI_SPENDING_LEAK_NOT_FOUND": "Spending leak record not found",

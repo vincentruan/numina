@@ -21,7 +21,9 @@ logger = get_logger(__name__)
 
 def fetch_rates_job() -> None:
     """Fetch and store latest exchange rates from exchangerate-api.com."""
-    from packages.domain.exchange_rate.service import ExchangeRateService  # noqa: PLC0415
+    from packages.domain.exchange_rate.service import (
+        ExchangeRateService,  # noqa: PLC0415
+    )
 
     db = SessionLocal()
     try:
@@ -39,8 +41,12 @@ def fetch_rates_job() -> None:
 async def file_sync_job() -> None:
     """Sync pending file_remote_locations to the default remote backend."""
     from packages.db.models.cached_file import CachedFile  # noqa: PLC0415
-    from packages.db.models.file_remote_location import FileRemoteLocation  # noqa: PLC0415
-    from packages.db.models.storage_backend import StorageBackend as StorageBackendModel  # noqa: PLC0415
+    from packages.db.models.file_remote_location import (
+        FileRemoteLocation,  # noqa: PLC0415
+    )
+    from packages.db.models.storage_backend import (
+        StorageBackend as StorageBackendModel,  # noqa: PLC0415
+    )
     from packages.storage.base import StorageError  # noqa: PLC0415
     from packages.storage.config_crypto import decrypt_config  # noqa: PLC0415
     from packages.storage.factory import get_backend_for_type  # noqa: PLC0415
@@ -161,7 +167,9 @@ def audit_log_purge_job() -> None:
 
 def revoked_token_cleanup_job() -> None:
     """Purge expired revoked token records."""
-    from packages.security.revoke_jti import cleanup_expired_revoked_tokens  # noqa: PLC0415
+    from packages.security.revoke_jti import (
+        cleanup_expired_revoked_tokens,  # noqa: PLC0415
+    )
 
     db = SessionLocal()
     try:
@@ -199,7 +207,9 @@ def device_session_cleanup_job() -> None:
 
 def reminder_job() -> None:
     """Run daily notification/reminder checks."""
-    from packages.domain.notification.service import run_scheduled_checks  # noqa: PLC0415
+    from packages.domain.notification.service import (
+        run_scheduled_checks,  # noqa: PLC0415
+    )
 
     db = SessionLocal()
     try:
@@ -215,7 +225,9 @@ def reminder_job() -> None:
 
 def snapshot_job() -> None:
     """Generate daily asset snapshots for all families."""
-    from packages.domain.snapshot.service import auto_generate_daily_snapshots  # noqa: PLC0415
+    from packages.domain.snapshot.service import (
+        auto_generate_daily_snapshots,  # noqa: PLC0415
+    )
 
     db = SessionLocal()
     try:
@@ -256,3 +268,55 @@ async def auto_report_job() -> None:
 def _read_file(local_path: str) -> bytes:
     with open(local_path, "rb") as f:
         return f.read()
+
+
+# ── Job 9: Weekly literacy report generation ──────────────────────────────
+
+def literacy_report_weekly_job() -> None:
+    """Generate weekly literacy reports for all children in all families."""
+    from datetime import date, timedelta  # noqa: PLC0415
+
+    from packages.db.models.user import User  # noqa: PLC0415
+
+    db = SessionLocal()
+    try:
+        # Compute last Sunday (start of current week)
+        today = date.today()
+        days_since_sunday = (today.weekday() + 1) % 7
+        week_start = today - timedelta(days=days_since_sunday)
+
+        children = (
+            db.query(User)
+            .filter(User.role == "child", User.is_active.is_(True))
+            .all()
+        )
+
+        if not children:
+            logger.info("识字周报: 无活跃儿童用户")
+            return
+
+        # Lazy import the async service — run via asyncio
+        import asyncio  # noqa: PLC0415
+
+        from apps.backend.app.services.literacy_report import (  # noqa: PLC0415
+            generate_weekly_report,
+        )
+
+        async def _generate_all():
+            count = 0
+            for child in children:
+                try:
+                    await generate_weekly_report(db, child, week_start)
+                    count += 1
+                except Exception as e:
+                    logger.warning(
+                        f"识字周报生成失败 (child_id={child.id}): {e}"
+                    )
+            return count
+
+        count = asyncio.run(_generate_all())
+        logger.info(f"识字周报生成完成: {count}/{len(children)} 位儿童")
+    except Exception as e:
+        logger.exception(f"识字周报定时任务异常: {e}")
+    finally:
+        db.close()

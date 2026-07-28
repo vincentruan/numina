@@ -3137,5 +3137,23 @@ export default {
     statusCompleted: '已完成',
     statusExpired: '已过期',
     statusCancelled: '已取消'
+  },
+  literacyReport: {
+    title: 'Weekly Literacy Report',
+    loading: 'Loading...',
+    noReport: 'Waiting for this week\'s report',
+    noChildren: 'No children yet',
+    badgeStatus: 'Badge Status',
+    newUnlocks: 'New Unlocks',
+    progress: 'In Progress',
+    behavioralHighlights: 'Behavioral Highlights',
+    scenarioAnalysis: 'Scenario Analysis',
+    childChoice: 'Child\'s Choice',
+    interpretation: 'Interpretation',
+    familyActivity: 'Family Activity Suggestion',
+    selectChild: 'Select Child',
+    history: 'Report History',
+    loadFailed: 'Failed to load, please retry',
+    retry: 'Retry',
   }
 }

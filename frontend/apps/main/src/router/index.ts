@@ -334,6 +334,11 @@ const router = createRouter({
           path: 'baby/chore-templates/:id/edit',
           name: 'ChoreTemplateEdit',
           component: () => import('@/pages/BabyChoreTemplateEditPage.vue')
+        },
+        {
+          path: 'baby/literacy-report',
+          name: 'LiteracyReport',
+          component: () => import('@/pages/LiteracyReportPage.vue')
         }
       ]
     },

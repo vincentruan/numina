@@ -77,6 +77,16 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
+          path: 'scenario',
+          name: 'ChildScenario',
+          component: () => import('@/pages/ChildScenarioPage.vue'),
+        },
+        {
+          path: 'badges',
+          name: 'ChildBadges',
+          component: () => import('@/pages/ChildBadgesPage.vue'),
+        },
+        {
           path: 'settings',
           name: 'ChildSettings',
           component: () => import('@/pages/ChildSettingsPage.vue'),

@@ -22,6 +22,7 @@ def setup_all_jobs() -> None:
         device_session_cleanup_job,
         fetch_rates_job,
         file_sync_job,
+        literacy_report_weekly_job,
         reminder_job,
         revoked_token_cleanup_job,
         snapshot_job,
@@ -135,3 +136,18 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("自动报告生成任务已配置（每日 08:35）")
+
+    # Job 9: Weekly literacy report — Sunday at 02:00
+    scheduler.add_job(
+        literacy_report_weekly_job,
+        trigger="cron",
+        day_of_week="sun",
+        hour=2,
+        minute=0,
+        id="literacy_report_weekly",
+        name="literacy_report_weekly_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("识字周报生成任务已配置（每周日 02:00）")

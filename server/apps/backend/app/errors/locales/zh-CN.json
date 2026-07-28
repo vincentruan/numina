@@ -82,6 +82,8 @@
   "BLIND_BOX_BONUS_EXPIRED": "免费抽奖机会已过期",
   "BLIND_BOX_GIFT_NOT_FOUND": "礼物不存在",
   "BLIND_BOX_WISH_CONFLICT": "该心愿已转入礼物池",
+  "LITERACY_SCENARIO_COMPLETED": "本周场景已完成",
+  "LITERACY_REPORT_NOT_FOUND": "未找到该周报",
   "CALENDAR_DATE_INVALID": "日期格式无效，请使用 YYYY-MM-DD",
   "CHILD_NOT_FOUND": "孩子不存在",
   "AI_SPENDING_LEAK_NOT_FOUND": "消费漏洞记录不存在",
