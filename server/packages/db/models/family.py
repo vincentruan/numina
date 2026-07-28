@@ -22,7 +22,7 @@ class Family(Base):
     invite_code: Mapped[str] = mapped_column(String(6), unique=True, default=generate_invite_code)
     created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
     report_auto_generate_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default=text("0"), nullable=False
+        Boolean, default=False, server_default=text("false"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

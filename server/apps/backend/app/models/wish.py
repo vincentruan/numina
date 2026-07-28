@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,8 +41,8 @@ class Wish(Base):
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     monthly_saving: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0"), server_default="0")
     # Plan B W5: per-wish opt-out of the high-interest-debt linkage hint.
-    ignore_debt_warning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
-    converts_to_asset: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    ignore_debt_warning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    converts_to_asset: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
     fulfilled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

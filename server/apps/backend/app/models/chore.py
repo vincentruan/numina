@@ -14,6 +14,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,7 +47,7 @@ class ChoreTemplate(Base):
     # family-level education_reward_enabled switch is ON. Queried at approval time
     # (not snapshotted) so editing a template never retroactively changes approvals.
     real_reward_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default="1", nullable=False
+        Boolean, default=True, server_default=text("true"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

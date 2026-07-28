@@ -73,18 +73,8 @@ def _db_seed_resources() -> list[Resource]:
     from apps.backend.app.reconcile.types import ResourceResult, ResourceType
 
     def _check_categories(db: Session) -> ResourceResult | None:
-        from apps.backend.app.models.category import Category
-        count = db.query(Category).filter(Category.is_system.is_(True)).count()
-        if count >= 23:
-            return None  # verified (default)
-        return ResourceResult(
-            resource_name="seed_categories",
-            resource_type=ResourceType.DATABASE_SEED,
-            desired_version="1",
-            status=ResourceStatus.DRIFTED,
-            current_version=f"count={count}",
-            critical=True,
-        )
+        # SKIP: user business seed data — not required for system operation
+        return None
 
     def _apply_categories(db: Session) -> ResourceResult | None:
         from apps.backend.app.bootstrap.categories import bootstrap_categories
@@ -92,18 +82,8 @@ def _db_seed_resources() -> list[Resource]:
         return None
 
     def _check_currencies(db: Session) -> ResourceResult | None:
-        from apps.backend.app.models.currency import Currency
-        count = db.query(Currency).filter(Currency.is_favorite.is_(True)).count()
-        if count >= 13:
-            return None
-        return ResourceResult(
-            resource_name="seed_currencies",
-            resource_type=ResourceType.DATABASE_SEED,
-            desired_version="1",
-            status=ResourceStatus.DRIFTED,
-            current_version=f"count={count}",
-            critical=True,
-        )
+        # SKIP: user business seed data — not required for system operation
+        return None
 
     def _apply_currencies(db: Session) -> ResourceResult | None:
         from apps.backend.app.bootstrap.currencies import bootstrap_currencies
@@ -126,20 +106,8 @@ def _db_seed_resources() -> list[Resource]:
         return None
 
     def _check_category_financial_defaults(db: Session) -> ResourceResult | None:
-        from apps.backend.app.models.category_financial_default import (
-            CategoryFinancialDefault,
-        )
-        count = db.query(CategoryFinancialDefault).count()
-        if count >= 20:
-            return None
-        return ResourceResult(
-            resource_name="seed_category_financial_defaults",
-            resource_type=ResourceType.DATABASE_SEED,
-            desired_version="1",
-            status=ResourceStatus.DRIFTED,
-            current_version=f"count={count}",
-            critical=False,
-        )
+        # SKIP: user business seed data — not required for system operation
+        return None
 
     def _apply_category_financial_defaults(db: Session) -> ResourceResult | None:
         from apps.backend.app.bootstrap.category_financial_defaults import (
