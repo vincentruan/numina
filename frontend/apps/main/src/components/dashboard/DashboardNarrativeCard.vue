@@ -13,7 +13,7 @@ const loadStart = ref(0)
 const loadDuration = ref(0)
 const narrative = ref<string | null>(null)
 const thinking = ref('')
-const expanded = ref(false)
+const expanded = ref<string[]>([])
 const thinkingExpanded = ref(false)
 const dismissed = ref(false)
 
@@ -65,7 +65,7 @@ onMounted(() => {
     class="narrative-card"
     data-test="narrative-card"
   >
-    <van-collapse v-model="expanded as any" class="narrative-collapse">
+    <van-collapse v-model="expanded" class="narrative-collapse">
       <van-collapse-item name="narrative">
         <template #title>
           <div class="narrative-card__header">
