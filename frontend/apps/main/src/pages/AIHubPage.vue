@@ -254,7 +254,9 @@
     </div>
 
     <!-- Chat input directly rendered (InputBox handles its own fixed bottom positioning) -->
+    <!-- Hidden when AI assistant is not enabled — the AiGatedCard above explains why. -->
     <InputBox
+      v-if="aiStore.aiEnabled"
       v-model="chatInput"
       v-model:web-search="webSearch"
       :disabled="!selectedAgent"
