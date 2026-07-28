@@ -14,8 +14,8 @@ trigger_phrases:
 # 聚合后注入用户消息（R3: 复用现有数据端点，不新建聚合管道）。
 allowed-tools: []
 
-thinking: false
-max_tokens: 500
+thinking: true
+max_tokens: 1024
 ---
 
 ## 角色
