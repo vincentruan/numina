@@ -67,7 +67,7 @@ def _check_history_threshold(family_id_int: int, db_session_factory) -> bool:
         # Cross-DB compatible: extract year-month as string, count distinct.
         month_count = (
             db.query(
-                func.count(func.distinct(func.strftime("%Y-%m", AssetSnapshot.valued_at)))
+                func.count(func.distinct(func.strftime("%Y-%m", AssetSnapshot.snapshot_date)))
             )
             .filter(AssetSnapshot.family_id == family_id_int)
             .scalar()
