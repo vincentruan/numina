@@ -244,6 +244,7 @@ async def get_narrative(
                 first_sentence=report.get(
                     "first_sentence", _extract_first_sentence(narrative)
                 ),
+                thinking=report.get("thinking", ""),
                 generated_at=cached.generated_at.isoformat()
                 if cached.generated_at
                 else None,

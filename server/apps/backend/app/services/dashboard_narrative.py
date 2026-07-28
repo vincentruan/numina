@@ -54,89 +54,83 @@ def _extract_first_sentence(text: str) -> str:
 
 
 def _clean_narrative_text(raw: str) -> str:
-    """Strip LLM reasoning/thinking artifacts and return only the narrative.
+    """Strip LLM reasoning artifacts and return only the clean narrative.
 
-    The LLM often outputs its chain-of-thought before the final narrative:
-    "Let me load the skill...", "**Key data points:**", numbered analysis,
-    self-reflection about length, markdown formatting, etc. This function
-    extracts only the final Chinese narrative sentences.
+    Delegates to _separate_narrative_and_thinking and returns the narrative.
+    Kept for backward compatibility.
+    """
+    narrative, _ = _separate_narrative_and_thinking(raw)
+    return narrative
+
+
+def _separate_narrative_and_thinking(raw: str) -> tuple[str, str]:
+    """Separate LLM output into (clean_narrative, thinking_process).
+
+    The LLM outputs reasoning/analysis first, then the final narrative paragraph.
+    This function identifies the narrative paragraph (last primarily-Chinese
+    paragraph < 200 chars) and returns everything before it as "thinking".
     """
     text = raw.strip()
     if not text:
-        return ""
+        return "", ""
 
-    # 1. Remove markdown formatting
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)  # bold
-    text = re.sub(r"\*(.+?)\*", r"\1", text)  # italic
-    text = re.sub(r"`(.+?)`", r"\1", text)  # inline code
-    text = re.sub(r"```[\s\S]*?```", "", text)  # code blocks
+    # 1. Strip markdown formatting
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    # Strip bullet list markers
+    text = re.sub(r"^[\-\*]\s+", "", text, flags=re.MULTILINE)
 
-    # 2. Remove lines that are clearly reasoning/thinking (not narrative)
-    lines = text.split("\n")
-    narrative_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        # Skip empty lines
-        if not stripped:
-            continue
-        # Skip lines that are reasoning markers
-        if re.match(
-            r"^(Let me |Now I |I need to |I should |Let me check |"
-            r"I'll |First, |Second, |Next, |Finally, |"
-            r"This is about |The data shows |Based on |"
-            r"Key data|Analysis:|Summary:|Step \d|第 \d 步|"
-            r"由于|我需要|让我|首先|其次|最后|由于没有|"
-            r"Let me analyze|Let me construct|Let me refine)",
-            stripped,
-            re.IGNORECASE,
-        ):
-            continue
-        # Skip numbered list items that are analysis (1. 2. 3.)
-        if re.match(r"^\d+[\.\、\)]\s", stripped):
-            continue
-        # Skip lines that are mostly English reasoning
-        english_chars = len(re.findall(r"[A-Za-z]", stripped))
-        chinese_chars = len(re.findall(r"[一-鿿]", stripped))
-        if english_chars > chinese_chars and english_chars > 10:
-            # Mostly English — likely reasoning, not Chinese narrative
-            continue
-        narrative_lines.append(stripped)
+    # 2. Split into paragraphs
+    paragraphs = re.split(r"\n{2,}", text)
+    paragraphs = [p.strip() for p in paragraphs if p.strip()]
+    if not paragraphs:
+        return "", ""
 
-    cleaned = "\n".join(narrative_lines).strip()
+    # 3. Find the narrative: last paragraph that is primarily Chinese sentences
+    #    and reasonably short (< 200 chars, > 10 Chinese chars)
+    narrative_idx = -1
+    for i in range(len(paragraphs) - 1, -1, -1):
+        p = paragraphs[i]
+        chinese_chars = len(re.findall(r"[一-鿿]", p))
+        english_chars = len(re.findall(r"[A-Za-z]", p))
+        if chinese_chars > english_chars and len(p) < 200 and chinese_chars > 10:
+            narrative_idx = i
+            break
 
-    # 3. If still empty after filtering, fall back to original (stripped)
-    if not cleaned:
-        cleaned = text
-
-    # 4. Extract only the final 2-3 sentences if text is too long (>200 chars)
-    #    This handles cases where the LLM outputs analysis before the narrative.
-    if len(cleaned) > 200:
-        # Find the last Chinese paragraph (consecutive Chinese sentences)
-        parts = re.split(r"\n{2,}", cleaned)
-        if len(parts) > 1:
-            cleaned = parts[-1].strip()
-        # If still too long, take last 3 Chinese sentences
-        sentences = re.split(r"[。！？]", cleaned)
+    if narrative_idx >= 0:
+        narrative = paragraphs[narrative_idx]
+        thinking = "\n".join(paragraphs[:narrative_idx]).strip()
+    else:
+        # No clean narrative found — take last 2-3 Chinese sentences
+        sentences = re.split(r"[。！？]", text)
         sentences = [s.strip() for s in sentences if s.strip()]
-        if len(sentences) > 3:
-            sentences = sentences[-3:]
-        cleaned = "。".join(sentences)
-        if cleaned and not cleaned.endswith(("。", "！", "？")):
-            cleaned += "。"
+        chinese_sentences = [
+            s for s in sentences
+            if len(re.findall(r"[一-鿿]", s)) > len(re.findall(r"[A-Za-z]", s))
+        ]
+        if len(chinese_sentences) >= 2:
+            narrative = "。".join(chinese_sentences[-3:]) + "。"
+            # Thinking = everything before the narrative sentences
+            narrative_start = text.rfind(chinese_sentences[-3])
+            thinking = text[:narrative_start].strip() if narrative_start > 0 else ""
+        else:
+            narrative = text
+            thinking = ""
 
-    # 5. Final length cap at 150 chars (R1)
-    if len(cleaned) > 150:
-        # Truncate at last sentence boundary
-        parts = re.split(r"([。！？])", cleaned)
+    # 4. Length cap on narrative (R1: ≤ 150 chars)
+    if len(narrative) > 150:
+        parts = re.split(r"([。！？])", narrative)
         result = ""
         for i in range(0, len(parts) - 1, 2):
             candidate = result + parts[i] + parts[i + 1]
             if len(candidate) > 150:
                 break
             result = candidate
-        cleaned = result or cleaned[:150] + "…"
+        narrative = result or narrative[:150] + "…"
 
-    return cleaned.strip()
+    return narrative, thinking
 
 
 def _check_history_threshold(family_id_int: int, db_session_factory) -> bool:
@@ -217,7 +211,7 @@ async def generate_narrative(user: User, context: dict) -> dict:
     Caller is responsible for cache check, threshold gate, and context building.
 
     Returns dict matching NarrativeResponse schema:
-    {narrative: str|None, first_sentence: str, generated_at: str|None}
+    {narrative: str|None, first_sentence: str, thinking: str, generated_at: str|None}
     """
     family_id = user.family_id
 
@@ -231,19 +225,23 @@ async def generate_narrative(user: User, context: dict) -> dict:
     except Exception as exc:
         logger.warning("[dashboard-narrative] agent dispatch failed: %s", type(exc).__name__)
         # Graceful degradation (R2/F3): return empty, not 500
-        return {"narrative": None, "first_sentence": "", "generated_at": None}
+        return {"narrative": None, "first_sentence": "", "thinking": "", "generated_at": None}
 
     if not narrative_text:
-        return {"narrative": None, "first_sentence": "", "generated_at": None}
+        return {"narrative": None, "first_sentence": "", "thinking": "", "generated_at": None}
 
-    # Clean LLM reasoning artifacts (chain-of-thought, markdown, etc.)
-    narrative_text = _clean_narrative_text(narrative_text)
+    # Separate narrative from thinking/reasoning
+    narrative_text, thinking_text = _separate_narrative_and_thinking(narrative_text)
     if not narrative_text:
-        return {"narrative": None, "first_sentence": "", "generated_at": None}
+        return {"narrative": None, "first_sentence": "", "thinking": "", "generated_at": None}
 
     # Persist to cache (uses its own short-lived session)
     first_sentence = _extract_first_sentence(narrative_text)
-    payload = {"narrative": narrative_text, "first_sentence": first_sentence}
+    payload = {
+        "narrative": narrative_text,
+        "first_sentence": first_sentence,
+        "thinking": thinking_text,
+    }
     generated_at: str | None = None
     try:
         from apps.backend.app.database import SessionLocal
@@ -262,6 +260,7 @@ async def generate_narrative(user: User, context: dict) -> dict:
     return {
         "narrative": narrative_text,
         "first_sentence": first_sentence,
+        "thinking": thinking_text,
         "generated_at": generated_at,  # P2 fix: actual timestamp
     }
 

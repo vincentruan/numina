@@ -280,6 +280,7 @@ class NarrativeResponse(BaseModel):
 
     narrative: str | None = None
     first_sentence: str = ""
+    thinking: str = ""
     generated_at: str | None = None
 
 

@@ -207,6 +207,7 @@ export function getInsights() {
 export interface NarrativeResponse {
   narrative: string | null
   first_sentence: string
+  thinking: string
   generated_at: string | null
 }
 
