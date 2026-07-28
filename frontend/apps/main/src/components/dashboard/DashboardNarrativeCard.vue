@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getNarrative } from '@/api/dashboard'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { streamNarrative, type NarrativeStreamHandle } from '@/api/dashboard'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import IIcon from '@/components/IIcon.vue'
@@ -8,39 +8,61 @@ import IIcon from '@/components/IIcon.vue'
 const { t } = useI18n()
 const authStore = useAuthStore()
 
-const loading = ref(true)
-const loadStart = ref(0)
-const loadDuration = ref(0)
-const narrative = ref<string | null>(null)
-const thinking = ref('')
-const expanded = ref<string[]>(['narrative'])
+type Phase = 'idle' | 'streaming' | 'complete' | 'cached'
+
+const phase = ref<Phase>('idle')
+const streamingThinking = ref('')
+const streamingNarrative = ref('')
+const cachedNarrative = ref('')
+const cachedThinking = ref('')
 const thinkingExpanded = ref(false)
+const expanded = ref<string[]>(['narrative'])
 const dismissed = ref(false)
+const thinkingElapsed = ref(0)
+
+let streamHandle: NarrativeStreamHandle | null = null
+let elapsedTimer: ReturnType<typeof setInterval> | null = null
+let thinkingStartMs = 0
+let autoCollapseTimer: ReturnType<typeof setTimeout> | null = null
+
+const hasThinking = computed(() => {
+  if (phase.value === 'cached') return cachedThinking.value.length > 0
+  return streamingThinking.value.length > 0
+})
+
+const displayNarrative = computed(() => {
+  if (phase.value === 'cached') return cachedNarrative.value
+  return streamingNarrative.value
+})
+
+const displayThinking = computed(() => {
+  if (phase.value === 'cached') return cachedThinking.value
+  return streamingThinking.value
+})
+
+/** Whether narrative should be clamped to 2 lines */
+const narrativeClamped = computed(() => {
+  if (phase.value === 'streaming') return false
+  // complete / cached: clamp when thinking is collapsed
+  return !thinkingExpanded.value
+})
 
 function dismissKey(): string {
   return `narrative_dismissed_${authStore.user?.family_id ?? 'unknown'}`
 }
 
-async function load() {
-  if (sessionStorage.getItem(dismissKey()) === '1') {
-    dismissed.value = true
-    loading.value = false
-    return
-  }
+function startElapsedTimer() {
+  thinkingStartMs = Date.now()
+  thinkingElapsed.value = 0
+  elapsedTimer = setInterval(() => {
+    thinkingElapsed.value = Math.round((Date.now() - thinkingStartMs) / 1000)
+  }, 1000)
+}
 
-  loadStart.value = Date.now()
-  try {
-    const resp = await getNarrative()
-    const data = resp.data
-    loadDuration.value = Math.round((Date.now() - loadStart.value) / 1000)
-    if (data.narrative) {
-      narrative.value = data.narrative
-      thinking.value = data.thinking || ''
-    }
-  } catch {
-    narrative.value = null
-  } finally {
-    loading.value = false
+function stopElapsedTimer() {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = null
   }
 }
 
@@ -53,14 +75,80 @@ function onDismiss() {
   sessionStorage.setItem(dismissKey(), '1')
 }
 
+async function load() {
+  if (sessionStorage.getItem(dismissKey()) === '1') {
+    dismissed.value = true
+    return
+  }
+
+  phase.value = 'idle'
+
+  await streamNarrative({
+    onReasoningDelta: (content) => {
+      if (phase.value === 'idle') {
+        phase.value = 'streaming'
+        expanded.value = ['narrative']
+        thinkingExpanded.value = true
+        startElapsedTimer()
+      }
+      streamingThinking.value += content
+    },
+    onNarrativeDelta: (content) => {
+      if (phase.value === 'idle') {
+        // Narrative without prior reasoning → streaming without thinking
+        phase.value = 'streaming'
+        expanded.value = ['narrative']
+        thinkingExpanded.value = false
+      }
+      streamingNarrative.value += content
+    },
+    onDone: (result) => {
+      stopElapsedTimer()
+      streamHandle = null
+
+      if (phase.value === 'idle') {
+        // JSON response (cached or threshold-miss)
+        if (result.narrative) {
+          cachedNarrative.value = result.narrative
+          cachedThinking.value = result.thinking || ''
+          thinkingExpanded.value = false
+          phase.value = 'cached'
+          expanded.value = ['narrative']
+        }
+        return
+      }
+
+      // Streaming complete → finalize
+      if (result.narrative) streamingNarrative.value = result.narrative
+      if (result.thinking) streamingThinking.value = result.thinking
+
+      phase.value = 'complete'
+      // Auto-collapse thinking after a brief moment
+      autoCollapseTimer = setTimeout(() => {
+        thinkingExpanded.value = false
+      }, 1500)
+    },
+    onError: () => {
+      stopElapsedTimer()
+      streamHandle = null
+    },
+  })
+}
+
 onMounted(() => {
-  load()
+  void load()
+})
+
+onUnmounted(() => {
+  streamHandle?.abort()
+  stopElapsedTimer()
+  if (autoCollapseTimer) clearTimeout(autoCollapseTimer)
 })
 </script>
 
 <template>
   <van-cell-group
-    v-if="!dismissed && (loading || narrative)"
+    v-if="!dismissed && phase !== 'idle'"
     inset
     class="narrative-card"
     data-test="narrative-card"
@@ -72,7 +160,7 @@ onMounted(() => {
             <span class="narrative-card__title">
               <span class="narrative-card__icon">
                 <van-loading
-                  v-if="loading"
+                  v-if="phase === 'streaming'"
                   size="16px"
                   type="spinner"
                   color="var(--van-primary-color, #1989fa)"
@@ -81,42 +169,68 @@ onMounted(() => {
               </span>
               <span class="narrative-card__title-text">{{ t('dashboard.narrative.title') }}</span>
             </span>
-            <span v-if="loading" class="narrative-card__status narrative-card__status--loading">
-              <van-loading size="12px" type="spinner" />
-            </span>
             <button class="narrative-card__close" :aria-label="t('common.close')" @click.stop="onDismiss">
               <van-icon name="cross" size="14" />
             </button>
           </div>
         </template>
 
-        <!-- Loading skeleton inside expanded area -->
-        <template v-if="loading">
-          <div class="narrative-card__thinking-shimmer">
-            <div class="shimmer-line shimmer-line--long" />
-            <div class="shimmer-line shimmer-line--short" />
-          </div>
-        </template>
-
-        <!-- Loaded narrative -->
-        <template v-else-if="narrative">
-          <!-- Thinking content: shown above narrative when expanded -->
-          <div v-if="thinkingExpanded && thinking" class="narrative-card__thinking-content">
-            <p class="narrative-card__thinking-text">{{ thinking }}</p>
-          </div>
-
-          <!-- Narrative text: clamped 2 lines by default, full when thinking expanded -->
-          <p :class="['narrative-card__text', { 'narrative-card__text--clamp': !thinkingExpanded }]">{{ narrative }}</p>
-
-          <!-- Thinking indicator: clickable row, toggles thinking content -->
-          <button v-if="thinking" class="narrative-card__thinking-toggle" @click.stop="toggleThinking">
+        <!-- ── Streaming layout: thinking first, then narrative ── -->
+        <template v-if="phase === 'streaming'">
+          <!-- Thinking indicator -->
+          <button
+            v-if="hasThinking"
+            class="narrative-card__thinking-toggle"
+            @click.stop="toggleThinking"
+          >
             <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
             <span class="narrative-card__thinking-status">
-              <template v-if="loadDuration > 0">{{ t('dashboard.narrative.thinkingDone', { seconds: loadDuration }) }}</template>
-              <template v-else>{{ t('dashboard.narrative.thinking') }}</template>
+              {{ t('dashboard.narrative.thinkingElapsed', { seconds: thinkingElapsed }) }}
             </span>
             <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
           </button>
+
+          <!-- Thinking content -->
+          <transition name="thinking-fade">
+            <div v-if="thinkingExpanded && displayThinking" class="narrative-card__thinking-content">
+              <p class="narrative-card__thinking-text">
+                {{ displayThinking }}<span class="narrative-card__cursor" />
+              </p>
+            </div>
+          </transition>
+
+          <!-- Narrative text (grows as it streams) -->
+          <p class="narrative-card__text">
+            {{ displayNarrative }}<span v-if="displayNarrative" class="narrative-card__cursor" />
+          </p>
+        </template>
+
+        <!-- ── Complete / Cached layout: narrative first, then thinking ── -->
+        <template v-else>
+          <!-- Narrative text (clamped to 2 lines when thinking collapsed) -->
+          <p :class="['narrative-card__text', { 'narrative-card__text--clamp': narrativeClamped }]">
+            {{ displayNarrative }}
+          </p>
+
+          <!-- Thinking indicator (collapsed by default) -->
+          <button
+            v-if="hasThinking"
+            class="narrative-card__thinking-toggle"
+            @click.stop="toggleThinking"
+          >
+            <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
+            <span class="narrative-card__thinking-status">
+              {{ t('dashboard.narrative.thinkingDone', { seconds: thinkingElapsed }) }}
+            </span>
+            <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
+          </button>
+
+          <!-- Thinking content (expandable) -->
+          <transition name="thinking-fade">
+            <div v-if="thinkingExpanded && displayThinking" class="narrative-card__thinking-content">
+              <p class="narrative-card__thinking-text">{{ displayThinking }}</p>
+            </div>
+          </transition>
         </template>
       </van-collapse-item>
     </van-collapse>
@@ -147,7 +261,7 @@ onMounted(() => {
   width: 0;
 }
 
-/* Header row: icon+title on left, status+close on right */
+/* Header row */
 .narrative-card__header {
   display: flex;
   align-items: center;
@@ -179,18 +293,6 @@ onMounted(() => {
 
 .narrative-card__title-text {
   font-weight: 600;
-}
-
-.narrative-card__status {
-  margin-left: 8px;
-  font-size: 12px;
-  color: var(--van-text-color-2);
-  white-space: nowrap;
-}
-
-.narrative-card__status--loading {
-  display: inline-flex;
-  align-items: center;
 }
 
 /* Close button */
@@ -228,7 +330,6 @@ onMounted(() => {
   white-space: pre-wrap;
 }
 
-/* Clamp narrative to 2 lines when thinking is collapsed */
 .narrative-card__text--clamp {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -237,36 +338,20 @@ onMounted(() => {
   margin: 0;
 }
 
-/* Shimmer loading placeholder */
-.narrative-card__thinking-shimmer {
-  padding: 12px 0 4px;
+/* Streaming cursor */
+.narrative-card__cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--van-primary-color, #1989fa);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
 }
 
-.shimmer-line {
-  height: 12px;
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    var(--van-skeleton-row-background, #f2f3f5) 25%,
-    var(--van-active-color, #f2f3f5) 50%,
-    var(--van-skeleton-row-background, #f2f3f5) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  margin-bottom: 8px;
-}
-
-.shimmer-line--long {
-  width: 90%;
-}
-
-.shimmer-line--short {
-  width: 60%;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 /* Thinking indicator */
@@ -287,10 +372,6 @@ onMounted(() => {
   color: var(--van-primary-color, #1989fa);
 }
 
-.narrative-card__thinking-status {
-  /* left-aligned, no flex stretch */
-}
-
 .narrative-card__thinking-content {
   margin-top: 0;
   padding: 8px 12px;
@@ -309,5 +390,24 @@ onMounted(() => {
   margin: 0;
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+/* Thinking expand/collapse transition */
+.thinking-fade-enter-active,
+.thinking-fade-leave-active {
+  transition: opacity 0.25s ease, max-height 0.3s ease;
+  overflow: hidden;
+}
+
+.thinking-fade-enter-from,
+.thinking-fade-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.thinking-fade-enter-to,
+.thinking-fade-leave-from {
+  opacity: 1;
+  max-height: 500px;
 }
 </style>

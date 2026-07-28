@@ -1,4 +1,4 @@
-import http from './index'
+import http, { refreshTokenIfNeeded } from './index'
 import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse } from '@/types'
 
 export interface ExpiringSoonItem {
@@ -215,6 +215,182 @@ export function getNarrative(force = false) {
   return http.get<NarrativeResponse>('/dashboard/narrative', {
     params: { force },
   })
+}
+
+// ── Narrative SSE streaming ─────────────────────────────────────────────────
+
+export interface NarrativeStreamCallbacks {
+  onReasoningDelta: (content: string) => void
+  onNarrativeDelta: (content: string) => void
+  onDone: (result: { narrative: string; thinking: string }) => void
+  onError: (message: string) => void
+}
+
+export interface NarrativeStreamHandle {
+  abort: () => void
+}
+
+/**
+ * Consume the narrative SSE stream.
+ *
+ * Returns JSON (cached / threshold-miss) or streams SSE events:
+ * - custom { type: "reasoning_delta", content } → thinking chunk
+ * - messages { type: "ai", content }             → narrative text chunk
+ * - custom { type: "dashboard_narrative.result" }→ final result
+ * - end                                          → stream complete
+ * - error                                        → error
+ */
+export async function streamNarrative(
+  callbacks: NarrativeStreamCallbacks,
+): Promise<NarrativeStreamHandle> {
+  const controller = new AbortController()
+
+  // fire-and-forget: kick off the stream, return handle immediately
+  void runNarrativeStream(controller, callbacks)
+
+  return { abort: () => controller.abort() }
+}
+
+async function runNarrativeStream(
+  controller: AbortController,
+  callbacks: NarrativeStreamCallbacks,
+): Promise<void> {
+  const url = '/api/v1/dashboard/narrative'
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    })
+    if (res.status === 401) {
+      try {
+        await refreshTokenIfNeeded()
+      } catch {
+        callbacks.onError('认证已过期')
+        return
+      }
+      res = await fetch(url, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+        signal: controller.signal,
+      })
+    }
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('连接失败')
+    }
+    return
+  }
+
+  if (!res.ok) {
+    callbacks.onError(`请求失败 (${res.status})`)
+    return
+  }
+
+  // JSON response: cache hit or threshold miss
+  const contentType = res.headers.get('Content-Type') || ''
+  if (contentType.includes('application/json')) {
+    try {
+      const data = (await res.json()) as NarrativeResponse
+      callbacks.onDone({
+        narrative: data.narrative || '',
+        thinking: data.thinking || '',
+      })
+    } catch {
+      callbacks.onError('解析响应失败')
+    }
+    return
+  }
+
+  // SSE stream
+  if (!res.body) {
+    callbacks.onError('流式响应不可用')
+    return
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let currentEvent = ''
+  let narrativeBuffer = ''
+  let thinkingBuffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim()
+          continue
+        }
+        if (!line.startsWith('data:')) continue
+        const dataStr = line.slice(5).trim()
+        if (!dataStr || dataStr === '[DONE]') {
+          currentEvent = ''
+          continue
+        }
+
+        try {
+          const parsed = JSON.parse(dataStr)
+          const event = currentEvent || 'message'
+          currentEvent = ''
+
+          if (event === 'custom' && parsed.type === 'reasoning_delta') {
+            const content = parsed.content || ''
+            thinkingBuffer += content
+            callbacks.onReasoningDelta(content)
+          } else if (event === 'messages' && parsed.type === 'ai') {
+            const content = parsed.content || ''
+            narrativeBuffer += content
+            callbacks.onNarrativeDelta(content)
+          } else if (event === 'custom' && parsed.type === 'dashboard_narrative.result') {
+            const payload = parsed.payload || {}
+            callbacks.onDone({
+              narrative: payload.narrative || narrativeBuffer,
+              thinking: payload.thinking || thinkingBuffer,
+            })
+          } else if (event === 'error') {
+            callbacks.onError(parsed.message || '生成失败')
+            return
+          } else if (event === 'end') {
+            // stream ended without explicit result — use buffers
+            callbacks.onDone({
+              narrative: narrativeBuffer,
+              thinking: thinkingBuffer,
+            })
+          }
+        } catch {
+          // non-JSON data line; skip
+        }
+        currentEvent = ''
+      }
+    }
+
+    // Stream ended naturally (no explicit end frame)
+    if (narrativeBuffer || thinkingBuffer) {
+      callbacks.onDone({
+        narrative: narrativeBuffer,
+        thinking: thinkingBuffer,
+      })
+    }
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('连接中断')
+    }
+  }
 }
 
 export interface ActivityItem {
