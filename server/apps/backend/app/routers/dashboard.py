@@ -210,10 +210,64 @@ async def get_narrative(
     Returns cached or freshly-generated narrative text. 4h TTL; threshold gate
     (asset_count >= 5, history >= 3 months). Silent degradation on agent failure.
     ``?force=true`` bypasses cache and regenerates.
-    """
-    from apps.backend.app.services.dashboard_narrative import generate_narrative
 
-    result = await generate_narrative(db, user, force=force)
+    DB session is released before agent dispatch (P0 fix): all DB work (cache
+    check, threshold, context building) happens here; generate_narrative only
+    dispatches the agent and persists via its own short-lived session.
+    """
+    from apps.backend.app.database import SessionLocal
+    from apps.backend.app.services.dashboard_narrative import (
+        MIN_ASSET_COUNT,
+        SKILL_ID,
+        _build_narrative_context,
+        _check_history_threshold,
+        generate_narrative,
+    )
+    from apps.backend.app.services.finance_coach_cache import (
+        is_cache_fresh,
+        latest_by_skill,
+    )
+
+    family_id = user.family_id
+
+    # 1. Cache check (R4) — uses request-scoped db
+    if not force:
+        cached = latest_by_skill(db, family_id, SKILL_ID)
+        if is_cache_fresh(cached, SKILL_ID) and cached is not None:
+            report = cached.report_json or {}
+            narrative = report.get("narrative", "")
+            from apps.backend.app.services.dashboard_narrative import (
+                _extract_first_sentence,
+            )
+            return NarrativeResponse(
+                narrative=narrative or None,
+                first_sentence=report.get(
+                    "first_sentence", _extract_first_sentence(narrative)
+                ),
+                generated_at=cached.generated_at.isoformat()
+                if cached.generated_at
+                else None,
+            )
+
+    # 2. Threshold check (R5) — uses request-scoped db for overview,
+    #    then releases it before the history check (which opens its own session).
+    overview = dashboard_service.get_overview(db, user)
+    if overview.asset_count < MIN_ASSET_COUNT:
+        return NarrativeResponse()
+
+    # History check uses a short-lived session (P0 fix — don't hold request db)
+    if not _check_history_threshold(int(family_id), SessionLocal):
+        return NarrativeResponse()
+
+    # 3. Build context — uses request-scoped db for insights
+    try:
+        insights = dashboard_service.get_insights(db, user)
+    except Exception:
+        insights = None
+    context = _build_narrative_context(overview, insights)
+
+    # 4. Agent dispatch — no DB session held (P0 fix)
+    result = await generate_narrative(user, context)
     return NarrativeResponse(**result)
 
 

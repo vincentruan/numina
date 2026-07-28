@@ -12,17 +12,12 @@ import json
 import logging
 import re
 import uuid
-from datetime import timedelta
-
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime, timedelta
 
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
-from apps.backend.app.services.dashboard import get_insights, get_overview
 from apps.backend.app.services.finance_coach_cache import (
     SKILL_TTL,
-    is_cache_fresh,
-    latest_by_skill,
     upsert_skill_result,
 )
 
@@ -41,13 +36,14 @@ MIN_HISTORY_MONTHS = 3
 def _extract_first_sentence(text: str) -> str:
     """Extract the first sentence from narrative text.
 
-    Splits on Chinese sentence terminators (。！？) or Latin period.
-    Falls back to truncation at 50 chars + ellipsis.
+    Splits on Chinese sentence terminators (。！？) or Latin period (not inside
+    decimal numbers). Falls back to truncation at 50 chars + ellipsis.
     """
     text = text.strip()
     if not text:
         return ""
-    parts = re.split(r"[。！？.]", text)
+    # Split on 。！？ or a Latin period NOT surrounded by digits (P3 fix)
+    parts = re.split(r"[。！？]|(?<!\d)\.(?!\d)", text)
     first = next((p.strip() for p in parts if p.strip()), "")
     if first:
         return first + ("。" if not first.endswith(("。", "！", "？", ".")) else "")
@@ -57,42 +53,26 @@ def _extract_first_sentence(text: str) -> str:
     return text
 
 
-def _check_threshold(db: Session, user: User) -> bool:
-    """Return True if the family has enough data for a meaningful narrative (R5).
+def _check_history_threshold(family_id_int: int, db_session_factory) -> bool:
+    """Return True if the family has >= MIN_HISTORY_MONTHS distinct snapshot months.
 
-    asset_count >= MIN_ASSET_COUNT AND snapshot history >= MIN_HISTORY_MONTHS.
+    Uses SQL COUNT(DISTINCT) — no row fetch into Python (P2 fix).
+    Called with a short-lived session to avoid holding the request-scoped one.
     """
-    overview = get_overview(db, user)
-    if overview.asset_count < MIN_ASSET_COUNT:
-        return False
+    from sqlalchemy import func
 
-    # Check snapshot history: need >= MIN_HISTORY_MONTHS distinct months.
     from apps.backend.app.models.snapshot import AssetSnapshot
 
-    family_id_int = int(user.family_id)
-    snapshot_months = (
-        db.query(AssetSnapshot.valued_at)
-        .filter(AssetSnapshot.family_id == family_id_int)
-        .order_by(AssetSnapshot.valued_at.desc())
-        .limit(100)
-        .all()
-    )
-    if len(snapshot_months) < MIN_HISTORY_MONTHS:
-        return False
-    # Check distinct months
-    from datetime import datetime
-
-    months = set()
-    for (ts,) in snapshot_months:
-        if isinstance(ts, datetime):
-            months.add((ts.year, ts.month))
-        elif ts is not None:
-            try:
-                dt = datetime.fromisoformat(str(ts))
-                months.add((dt.year, dt.month))
-            except (ValueError, TypeError):
-                pass
-    return len(months) >= MIN_HISTORY_MONTHS
+    with db_session_factory() as db:
+        # Cross-DB compatible: extract year-month as string, count distinct.
+        month_count = (
+            db.query(
+                func.count(func.distinct(func.strftime("%Y-%m", AssetSnapshot.valued_at)))
+            )
+            .filter(AssetSnapshot.family_id == family_id_int)
+            .scalar()
+        )
+    return (month_count or 0) >= MIN_HISTORY_MONTHS
 
 
 def _build_narrative_context(overview, insights) -> dict:
@@ -144,41 +124,18 @@ def _build_narrative_context(overview, insights) -> dict:
     return ctx
 
 
-async def generate_narrative(db: Session, user: User, force: bool = False) -> dict:
-    """Generate or retrieve cached narrative for the family.
+async def generate_narrative(user: User, context: dict) -> dict:
+    """Dispatch agent to generate narrative and persist result.
+
+    Does NOT hold a DB session during the agent dispatch (P0 fix).
+    Caller is responsible for cache check, threshold gate, and context building.
 
     Returns dict matching NarrativeResponse schema:
     {narrative: str|None, first_sentence: str, generated_at: str|None}
     """
     family_id = user.family_id
 
-    # 1. Check cache (R4)
-    if not force:
-        cached = latest_by_skill(db, family_id, SKILL_ID)
-        if is_cache_fresh(cached, SKILL_ID) and cached is not None:
-            report = cached.report_json or {}
-            narrative = report.get("narrative", "")
-            return {
-                "narrative": narrative or None,
-                "first_sentence": report.get("first_sentence", _extract_first_sentence(narrative)),
-                "generated_at": cached.generated_at.isoformat() if cached.generated_at else None,
-            }
-
-    # 2. Threshold check (R5)
-    if not _check_threshold(db, user):
-        return {"narrative": None, "first_sentence": "", "generated_at": None}
-
-    # 3. Build context from existing endpoints (R3 — no new aggregation pipeline)
-    try:
-        overview = get_overview(db, user)
-        insights = get_insights(db, user)
-    except Exception as exc:
-        logger.warning("[dashboard-narrative] context build failed: %s", exc)
-        return {"narrative": None, "first_sentence": "", "generated_at": None}
-
-    context = _build_narrative_context(overview, insights)
-
-    # 4. Dispatch to agent (KTD2 — full agent dispatch via worker.run_agent)
+    # Dispatch to agent (KTD2 — full agent dispatch via worker.run_agent)
     try:
         narrative_text = await _dispatch_narrative_agent(
             family_id=str(family_id),
@@ -193,22 +150,28 @@ async def generate_narrative(db: Session, user: User, force: bool = False) -> di
     if not narrative_text:
         return {"narrative": None, "first_sentence": "", "generated_at": None}
 
-    # 5. Persist to cache
+    # Persist to cache (uses its own short-lived session)
     first_sentence = _extract_first_sentence(narrative_text)
     payload = {"narrative": narrative_text, "first_sentence": first_sentence}
+    generated_at: str | None = None
     try:
         from apps.backend.app.database import SessionLocal
 
         with SessionLocal() as write_db:
-            upsert_skill_result(write_db, family_id, SKILL_ID, payload)
+            row = upsert_skill_result(write_db, family_id, SKILL_ID, payload)
             write_db.commit()
+            generated_at = (
+                row.generated_at.isoformat() if row.generated_at else None
+            )
     except Exception as exc:
         logger.warning("[dashboard-narrative] cache persist failed: %s", exc)
+        # Still return the narrative even if persist failed
+        generated_at = datetime.now(UTC).replace(tzinfo=None).isoformat()
 
     return {
         "narrative": narrative_text,
         "first_sentence": first_sentence,
-        "generated_at": None,  # caller can re-read from DB if needed
+        "generated_at": generated_at,  # P2 fix: actual timestamp
     }
 
 

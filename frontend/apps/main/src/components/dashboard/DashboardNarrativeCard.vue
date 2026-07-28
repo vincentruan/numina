@@ -3,8 +3,10 @@ import { ref, onMounted } from 'vue'
 import { getNarrative } from '@/api/dashboard'
 import type { NarrativeResponse } from '@/api/dashboard'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const narrative = ref<string | null>(null)
@@ -12,19 +14,24 @@ const firstSentence = ref('')
 const expanded = ref(false)
 const dismissed = ref(false)
 
+function dismissKey(): string {
+  return `narrative_dismissed_${authStore.user?.family_id ?? 'unknown'}`
+}
+
 async function load() {
-  // Check sessionStorage for dismiss state (R15)
-  if (sessionStorage.getItem('narrative_dismissed') === '1') {
+  // Check sessionStorage for dismiss state (R15) — scoped per family (P1 fix)
+  if (sessionStorage.getItem(dismissKey()) === '1') {
     dismissed.value = true
     loading.value = false
     return
   }
 
   try {
-    const resp = await getNarrative() as unknown as NarrativeResponse
-    if (resp.narrative) {
-      narrative.value = resp.narrative
-      firstSentence.value = resp.first_sentence || resp.narrative
+    const resp = await getNarrative()
+    const data = resp.data
+    if (data.narrative) {
+      narrative.value = data.narrative
+      firstSentence.value = data.first_sentence || data.narrative
     }
   } catch {
     // Silent degradation (R2/F3): hide card on failure
@@ -40,7 +47,7 @@ function toggleExpand() {
 
 function onDismiss() {
   dismissed.value = true
-  sessionStorage.setItem('narrative_dismissed', '1')
+  sessionStorage.setItem(dismissKey(), '1')
 }
 
 onMounted(() => {
