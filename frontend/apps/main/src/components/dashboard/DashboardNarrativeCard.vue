@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getNarrative } from '@/api/dashboard'
-import type { NarrativeResponse } from '@/api/dashboard'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 
@@ -19,7 +18,6 @@ function dismissKey(): string {
 }
 
 async function load() {
-  // Check sessionStorage for dismiss state (R15) — scoped per family (P1 fix)
   if (sessionStorage.getItem(dismissKey()) === '1') {
     dismissed.value = true
     loading.value = false
@@ -34,7 +32,6 @@ async function load() {
       firstSentence.value = data.first_sentence || data.narrative
     }
   } catch {
-    // Silent degradation (R2/F3): hide card on failure
     narrative.value = null
   } finally {
     loading.value = false
@@ -51,20 +48,26 @@ function onDismiss() {
 }
 
 onMounted(() => {
-  // Independent async load — does not block the page (KTD4)
   load()
 })
 </script>
 
 <template>
-  <!-- Skeleton while loading (R12/R16) -->
-  <div v-if="loading && !dismissed" class="narrative-card narrative-card--skeleton" data-test="narrative-skeleton">
-    <div class="narrative-card__inner">
-      <van-skeleton :row="1" row-width="80%" animate />
+  <!-- Loading: title + spinner row (matches collapsed height ~40px) -->
+  <div
+    v-if="loading && !dismissed"
+    class="narrative-card narrative-card--loading"
+    data-test="narrative-loading"
+  >
+    <div class="narrative-card__header">
+      <span class="narrative-card__label">
+        <van-loading size="14px" type="spinner" color="var(--color-primary, #646cff)" />
+        {{ t('dashboard.narrative.title') }}
+      </span>
     </div>
   </div>
 
-  <!-- Narrative card (R1/R8/R9/R13) -->
+  <!-- Narrative card -->
   <div
     v-else-if="narrative && !dismissed"
     class="narrative-card"
@@ -72,26 +75,28 @@ onMounted(() => {
     :aria-label="t('dashboard.narrative.ariaLabel')"
     data-test="narrative-card"
   >
-    <!-- Close button (R15) -->
+    <!-- Close button -->
     <button class="narrative-card__close" :aria-label="t('common.close')" @click="onDismiss">
       <van-icon name="cross" size="14" />
     </button>
 
-    <div class="narrative-card__inner">
-      <!-- Label (R9) -->
-      <div class="narrative-card__label">{{ t('dashboard.narrative.title') }}</div>
+    <!-- Header row: label + toggle -->
+    <div class="narrative-card__header">
+      <span class="narrative-card__label">{{ t('dashboard.narrative.title') }}</span>
+      <button class="narrative-card__toggle" @click="toggleExpand">
+        <van-icon :name="expanded ? 'arrow-up' : 'arrow-down'" size="12" />
+        {{ expanded ? t('dashboard.narrative.collapse') : t('dashboard.narrative.expand') }}
+      </button>
+    </div>
 
-      <!-- Text content (R1/R13) -->
-      <div class="narrative-card__body">
-        <div v-if="expanded" class="narrative-card__text">{{ narrative }}</div>
-        <div v-else class="narrative-card__text narrative-card__text--collapsed">
-          {{ firstSentence }}
-        </div>
-        <button class="narrative-card__toggle" @click="toggleExpand">
-          {{ expanded ? t('dashboard.narrative.collapse') : t('dashboard.narrative.expand') }}
-          <van-icon :name="expanded ? 'arrow-up' : 'arrow-down'" size="12" />
-        </button>
-      </div>
+    <!-- Content -->
+    <div v-show="expanded" class="narrative-card__content">
+      <p class="narrative-card__text">{{ narrative }}</p>
+    </div>
+
+    <!-- Collapsed preview: first sentence only -->
+    <div v-show="!expanded" class="narrative-card__preview">
+      <p class="narrative-card__text narrative-card__text--clamp">{{ firstSentence }}</p>
     </div>
   </div>
 </template>
@@ -106,31 +111,43 @@ onMounted(() => {
   border-left: 3px solid var(--color-primary, #646cff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   transition: all 0.25s ease-in-out;
-  overflow: hidden;
 }
 
 [data-theme='dark'] .narrative-card {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
-.narrative-card--skeleton {
-  border-left: 3px solid var(--color-primary, #646cff);
-  opacity: 0.6;
+/* Loading state: same footprint as collapsed header */
+.narrative-card--loading {
   min-height: 40px;
   display: flex;
   align-items: center;
 }
 
-.narrative-card--skeleton :deep(.van-skeleton) {
-  padding: 0;
+/* Header row: label on left, toggle on right */
+.narrative-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
 }
 
+.narrative-card__label {
+  font-size: 12px;
+  color: var(--color-primary, #646cff);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Close button: top-right corner */
 .narrative-card__close {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,68 +157,84 @@ onMounted(() => {
   cursor: pointer;
   border-radius: 50%;
   padding: 0;
-  z-index: 1;
 }
 
-.narrative-card__close:hover {
-  background: rgba(0, 0, 0, 0.05);
+.narrative-card__close:active {
+  background: rgba(0, 0, 0, 0.06);
 }
 
-[data-theme='dark'] .narrative-card__close:hover {
+[data-theme='dark'] .narrative-card__close:active {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.narrative-card__inner {
-  padding-right: 20px;
-}
-
-.narrative-card__label {
+/* Toggle button */
+.narrative-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 12px;
+  color: var(--text-secondary, #969799);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-height: 28px;
+}
+
+.narrative-card__toggle:active {
   color: var(--color-primary, #646cff);
-  font-weight: 500;
-  margin-bottom: 4px;
 }
 
-.narrative-card__body {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+/* Content area */
+.narrative-card__content {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--van-border-color, #f2f3f5);
 }
 
+[data-theme='dark'] .narrative-card__content {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Narrative text typography */
 .narrative-card__text {
-  flex: 1;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text-primary, #323233);
+  margin: 0;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
-.narrative-card__text--collapsed {
+/* Collapsed preview: clamp to 2 lines */
+.narrative-card__preview {
+  margin-top: 8px;
+}
+
+.narrative-card__text--clamp {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.narrative-card__toggle {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--color-primary, #646cff);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 0;
-  white-space: nowrap;
-}
-
-/* Responsive (R10) */
+/* Responsive */
 @media (max-width: 428px) {
   .narrative-card {
     margin: 8px 0;
     border-radius: 0;
   }
+}
+
+/* Smooth expand/collapse transition */
+.narrative-card__content,
+.narrative-card__preview {
+  transition: opacity 0.2s ease;
+}
+
+.narrative-card--expanded .narrative-card__content {
+  opacity: 1;
 }
 </style>
