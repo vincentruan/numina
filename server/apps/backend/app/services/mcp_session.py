@@ -326,15 +326,15 @@ class MCPSession:
                         category_override="credit_card",
                     )
                 elif name == "get_child_literacy_profile":
+                    from apps.backend.app.models.literacy_report import (
+                        LiteracyWeeklyReport,
+                    )
                     from apps.backend.app.services.literacy_report import _get_age_group
                     from packages.db.models.literacy_badge import (
                         LiteracyBadge,
                         LiteracyBadgeDefinition,
                     )
                     from packages.db.models.literacy_scenario import LiteracyScenario
-                    from apps.backend.app.models.literacy_report import (
-                        LiteracyWeeklyReport,
-                    )
 
                     query = db.query(User).filter(
                         User.family_id == int(self._family_id),
@@ -395,7 +395,7 @@ class MCPSession:
                         )
                     data = {"children": result_children}
                 elif name == "get_literacy_weekly_data":
-                    from datetime import timedelta, date as date_type
+                    from datetime import timedelta
 
                     from apps.backend.app.services.literacy_report import (
                         _aggregate_signals,
@@ -403,33 +403,43 @@ class MCPSession:
                     )
 
                     child_id_lit = int(arguments["child_id"])
-                    week_start_arg = arguments.get("week_start")
-                    week_start = (
-                        date_type.fromisoformat(week_start_arg)
-                        if week_start_arg
-                        else _sunday_of(date_type.today())
-                    )
 
-                    signals = _aggregate_signals(db, child_id_lit, week_start)
-                    prev_week = week_start - timedelta(days=7)
-                    prev_signals = _aggregate_signals(db, child_id_lit, prev_week)
+                    # Validate child belongs to caller's family
+                    child_in_family = db.query(User.id).filter(
+                        User.id == child_id_lit,
+                        User.family_id == int(self._family_id),
+                        User.role == "child",
+                    ).first()
+                    if not child_in_family:
+                        data = {"error": "孩子不属于当前家庭", "child_id": str(child_id_lit)}
+                    else:
+                        week_start_arg = arguments.get("week_start")
+                        week_start = (
+                            date.fromisoformat(week_start_arg)
+                            if week_start_arg
+                            else _sunday_of(date.today())
+                        )
 
-                    data = {
-                        "child_id": str(child_id_lit),
-                        "week_start": week_start.isoformat(),
-                        **signals,
-                        "trend": {
-                            "chores_delta": (
-                                signals["chores_approved"] - prev_signals["chores_approved"]
-                            ),
-                            "coins_delta": (
-                                signals["coin_earned"] - prev_signals["coin_earned"]
-                            ),
-                            "scenario_was_completed_prev": prev_signals[
-                                "scenario_completed"
-                            ],
-                        },
-                    }
+                        signals = _aggregate_signals(db, child_id_lit, week_start)
+                        prev_week = week_start - timedelta(days=7)
+                        prev_signals = _aggregate_signals(db, child_id_lit, prev_week)
+
+                        data = {
+                            "child_id": str(child_id_lit),
+                            "week_start": week_start.isoformat(),
+                            **signals,
+                            "trend": {
+                                "chores_delta": (
+                                    signals["chores_approved"] - prev_signals["chores_approved"]
+                                ),
+                                "coins_delta": (
+                                    signals["coin_earned"] - prev_signals["coin_earned"]
+                                ),
+                                "scenario_was_completed_prev": prev_signals[
+                                    "scenario_completed"
+                                ],
+                            },
+                        }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

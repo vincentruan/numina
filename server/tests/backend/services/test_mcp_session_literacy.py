@@ -1,6 +1,6 @@
 """Tests for literacy MCP tool handlers in MCPSession.call_tool."""
 import json
-from datetime import date, timedelta
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -163,3 +163,31 @@ async def test_get_literacy_weekly_data_returns_signals_and_trend(mock_db):
     assert payload["trend"]["chores_delta"] == 4   # 8 - 4
     assert payload["trend"]["coins_delta"] == 30    # 50 - 20
     assert payload["trend"]["scenario_was_completed_prev"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_literacy_weekly_data_rejects_child_from_other_family(mock_db):
+    """get_literacy_weekly_data rejects child_id from a different family."""
+    session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
+
+    # Mock the child-in-family validation query to return None (child not in family)
+    mock_child_query = MagicMock()
+    mock_child_query.filter.return_value = mock_child_query
+    mock_child_query.first.return_value = None
+    mock_db.query.return_value = mock_child_query
+
+    sl_patch, gu_patch = _patch_session(mock_db)
+    with sl_patch as mock_sl, gu_patch as mock_gu:
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+        mock_gu.return_value = MagicMock(id="u1", family_id="100")
+
+        result = await session.call_tool(
+            "get_literacy_weekly_data",
+            {"child_id": "999", "week_start": "2026-07-26"},
+        )
+
+    payload = json.loads(result[0].text)
+    assert "error" in payload
+    assert payload["error"] == "孩子不属于当前家庭"
+    assert payload["child_id"] == "999"
