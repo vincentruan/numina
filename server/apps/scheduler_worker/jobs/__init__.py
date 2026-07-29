@@ -298,7 +298,7 @@ def literacy_report_weekly_job() -> None:
         # Lazy import the async service — run via asyncio
         import asyncio
 
-        from apps.backend.app.services.literacy_report import (
+        from packages.domain.literacy.service import (
             generate_weekly_report,
         )
 
