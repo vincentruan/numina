@@ -214,13 +214,13 @@ onMounted(async () => {
 }
 .card-date {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 0 0 4px;
 }
 .card-coins {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-brand-ochre);
   margin: 0;

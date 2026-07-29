@@ -95,7 +95,7 @@ const badgeLevel = computed(() => 'level' in props.badge ? props.badge.level : 0
   background: var(--color-brand-coral);
   color: var(--color-on-dark);
   font-family: Inter, sans-serif;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 600;
   padding: 2px 28px;
   transform: rotate(35deg);
@@ -165,7 +165,7 @@ const badgeLevel = computed(() => 'level' in props.badge ? props.badge.level : 0
 
 .badge-level {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 0;
   font-weight: 500;
@@ -176,18 +176,18 @@ const badgeLevel = computed(() => 'level' in props.badge ? props.badge.level : 0
 }
 
 .star {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .level-label {
   margin-left: 4px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted);
 }
 
 .badge-desc {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-body);
   margin: 2px 0 0;
   line-height: 1.4;
@@ -195,7 +195,7 @@ const badgeLevel = computed(() => 'level' in props.badge ? props.badge.level : 0
 
 .badge-criteria {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 2px 0 0;
   line-height: 1.4;

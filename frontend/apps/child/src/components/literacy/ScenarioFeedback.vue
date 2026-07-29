@@ -103,7 +103,7 @@ function onClose() {
 
 .dimension-label {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-body);
 }
 
@@ -141,7 +141,7 @@ function onClose() {
   color: var(--color-on-primary);
   border-radius: var(--radius-md);
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 

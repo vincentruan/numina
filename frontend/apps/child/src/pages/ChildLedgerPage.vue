@@ -251,7 +251,7 @@ onMounted(async () => {
 }
 .tx-time {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 2px 0 0;
 }
@@ -306,7 +306,7 @@ onMounted(async () => {
 }
 .sibling-name {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-body-strong);
 }
 .sheet-field {
@@ -320,7 +320,7 @@ onMounted(async () => {
 .gift-preview {
   margin: 8px 4px 0;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-brand-mint);
   line-height: 1.4;

@@ -276,7 +276,7 @@ function goBackToList() {
   border-radius: var(--radius-pill);
   background: var(--color-surface-soft);
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-body);
   cursor: pointer;

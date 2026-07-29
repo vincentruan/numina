@@ -734,7 +734,7 @@ onUnmounted(() => {
 
 .today-badge {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;
@@ -821,7 +821,7 @@ onUnmounted(() => {
 }
 .chore-reward {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;
@@ -830,14 +830,14 @@ onUnmounted(() => {
 .streak-badge {
   display: inline-block;
   margin-left: 6px;
-  font-size: 12px;
+  font-size: 14px;
   background: var(--color-brand-peach);
   color: var(--color-ink);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
   font-weight: 600;
 }
-.streak-badge.flame-tier-7 { font-size: 13px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
+.streak-badge.flame-tier-7 { font-size: 14px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
 .streak-badge.flame-tier-14 { font-size: 14px; animation: flame-pulse 500ms ease-in-out infinite; }
 .streak-badge.flame-tier-30 { font-size: 15px; animation: flame-pulse 600ms ease-in-out infinite; }
 .streak-badge.reduced-motion { animation: none; }
@@ -849,14 +849,14 @@ onUnmounted(() => {
 
 .days-to-bonus {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 2px 0 0;
 }
 
 .claim-disabled-hint {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 8px 0 0;
   padding-left: 40px;
@@ -889,7 +889,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   padding: 0 12px;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   height: 44px;
@@ -903,7 +903,7 @@ onUnmounted(() => {
 /* ── Status badges ── */
 .status-badge {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   white-space: nowrap;
@@ -981,7 +981,7 @@ onUnmounted(() => {
 
 .abandon-sheet-reward {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;
@@ -989,7 +989,7 @@ onUnmounted(() => {
 
 .abandon-sheet-hint {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0 0 20px;
   text-align: center;

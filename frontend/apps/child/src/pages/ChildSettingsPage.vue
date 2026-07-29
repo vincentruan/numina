@@ -118,7 +118,7 @@ async function handleLogout() {
 }
 .settings-label {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -143,7 +143,7 @@ async function handleLogout() {
   border: 1px solid var(--color-hairline);
   background: var(--color-surface-soft);
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-muted);
   cursor: pointer;

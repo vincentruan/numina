@@ -211,7 +211,7 @@ function formatExpiry(dateStr: string) {
 
 .bonus-divider-label {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -239,7 +239,7 @@ function formatExpiry(dateStr: string) {
 
 .bonus-text {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-body);
 }
 
@@ -252,7 +252,7 @@ function formatExpiry(dateStr: string) {
   padding: 0 16px;
   height: 44px;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;

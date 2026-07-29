@@ -83,7 +83,7 @@ defineEmits<{
 
 .tap-hint, .loading-hint {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   font-weight: 500;
 }
@@ -111,7 +111,7 @@ defineEmits<{
   padding: 4px 14px;
   border-radius: var(--radius-pill);
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 .bonus-badge {
@@ -120,7 +120,7 @@ defineEmits<{
   padding: 4px 14px;
   border-radius: var(--radius-pill);
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 

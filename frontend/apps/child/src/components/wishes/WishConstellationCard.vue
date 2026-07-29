@@ -254,7 +254,7 @@ onUnmounted(() => {
   background: var(--color-error);
   color: var(--color-on-dark, var(--color-on-primary));
   font-family: Inter, sans-serif;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
@@ -270,7 +270,7 @@ onUnmounted(() => {
   background: var(--color-success);
   color: var(--color-on-dark, var(--color-on-primary));
   font-family: Inter, sans-serif;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -280,7 +280,7 @@ onUnmounted(() => {
 
 .wish-name {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-ink);
   margin: 0;
@@ -293,7 +293,7 @@ onUnmounted(() => {
 
 .days-line {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0;
   text-align: center;
@@ -301,6 +301,6 @@ onUnmounted(() => {
 }
 .days-line.is-placeholder {
   color: var(--color-muted-soft);
-  font-size: 10px;
+  font-size: 14px;
 }
 </style>

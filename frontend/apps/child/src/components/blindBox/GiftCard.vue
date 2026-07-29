@@ -84,11 +84,11 @@ function formatDate(dateStr: string) {
   gap: 6px;
 }
 .coins-spent {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--van-text-color-2);
 }
 .badge {
-  font-size: 11px;
+  font-size: 14px;
   padding: 1px 6px;
   border-radius: 10px;
 }
@@ -101,7 +101,7 @@ function formatDate(dateStr: string) {
   color: var(--color-badge-bonus-text);
 }
 .gift-card-date {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--van-text-color-3);
 }
 </style>

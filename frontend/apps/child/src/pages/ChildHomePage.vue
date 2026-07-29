@@ -19,7 +19,7 @@
       </router-link>
       <!-- Greeting (home-only) -->
       <HackerGreeting
-        :name="childAuthStore.childUser?.display_name ?? ''"
+        :name="authStore.user?.display_name ?? ''"
         :balance="balance"
         class="hero-greeting"
       />
@@ -100,6 +100,18 @@
 
     <!-- Active challenges -->
     <ChallengeCard ref="challengeCard" />
+
+    <!-- Literacy scenario entry -->
+    <router-link to="/scenario" class="badge-entry-card">
+      <div class="badge-entry-info">
+        <span class="badge-entry-icon">📖</span>
+        <div>
+          <p class="badge-entry-title">{{ t('home.scenarioEntry') }}</p>
+          <p class="badge-entry-sub">{{ t('home.scenarioEntrySub') }}</p>
+        </div>
+      </div>
+      <van-icon name="arrow" size="16" color="var(--color-muted-soft)" />
+    </router-link>
 
     <!-- Badge wall entry -->
     <router-link to="/badges" class="badge-entry-card">
@@ -213,13 +225,14 @@ import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
-import { useChildAuthStore } from '@numina/auth'
+import { useAuthStore, useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 const { increment, decrement } = usePageLoading()
 const childAuthStore = useChildAuthStore()
+const authStore = useAuthStore()
 
 // Balance polling via composable (singleton auto-refreshes; no manual refresh needed)
 const { balance } = useBalancePolling()
@@ -425,7 +438,7 @@ watch(todayChores, (next) => {
 }
 .section-title {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   margin: 0;
@@ -435,7 +448,7 @@ watch(todayChores, (next) => {
   align-items: center;
   gap: 2px;
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-brand-ochre);
   text-decoration: none;
@@ -479,7 +492,7 @@ watch(todayChores, (next) => {
 }
 .chore-reward {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 2px 0 0;
   font-weight: 500;
@@ -489,14 +502,14 @@ watch(todayChores, (next) => {
 .streak-badge {
   display: inline-block;
   margin-left: 6px;
-  font-size: 12px;
+  font-size: 14px;
   background: var(--color-brand-peach);
   color: var(--color-ink);
   border-radius: var(--radius-pill);
   padding: 1px 6px;
   font-weight: 600;
 }
-.streak-badge.flame-tier-7 { font-size: 13px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
+.streak-badge.flame-tier-7 { font-size: 14px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
 .streak-badge.flame-tier-14 { font-size: 14px; animation: flame-pulse 500ms ease-in-out infinite; }
 .streak-badge.flame-tier-30 { font-size: 15px; animation: flame-pulse 600ms ease-in-out infinite; }
 .streak-badge.reduced-motion { animation: none; }
@@ -512,7 +525,7 @@ watch(todayChores, (next) => {
   align-items: center;
   gap: 4px;
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   padding: 4px 10px;
@@ -562,7 +575,7 @@ watch(todayChores, (next) => {
 }
 .wish-preview-sub {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 0;
 }
@@ -582,7 +595,7 @@ watch(todayChores, (next) => {
 }
 .wish-preview-pct {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0;
   font-weight: 500;
@@ -621,7 +634,7 @@ watch(todayChores, (next) => {
 }
 .badge-entry-sub {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 0;
 }
@@ -653,7 +666,7 @@ watch(todayChores, (next) => {
   border-radius: var(--radius-md);
   padding: 0 14px;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   height: 36px;
@@ -671,7 +684,7 @@ watch(todayChores, (next) => {
   border-radius: var(--radius-md);
   padding: 0 14px;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   height: 36px;
@@ -710,7 +723,7 @@ watch(todayChores, (next) => {
 }
 .complete-sheet-reward {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;

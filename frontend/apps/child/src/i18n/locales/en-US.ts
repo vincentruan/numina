@@ -140,6 +140,8 @@ export default {
     noTasks: 'No tasks today, enjoy your rest!',
     myWishes: 'My Wishes',
     myCalendar: '📅 My Calendar',
+    scenarioEntry: '📖 Weekly Scenario',
+    scenarioEntrySub: 'Make a choice, unlock badges',
     quickWishes: 'My Wishes',
     quickTreasures: 'My Treasures',
     quickTasks: 'All Tasks',

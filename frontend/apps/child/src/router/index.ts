@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore, setUser } from '@numina/auth'
+import { useAuthStore, useChildAuthStore, setUser } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
@@ -126,9 +126,17 @@ async function verifyChildSession(): Promise<boolean> {
   verificationInProgress = true
   try {
     const authStore = useAuthStore()
-    await authStore.fetchMe()
-    const user = authStore.user
+    const childAuthStore = useChildAuthStore()
+    const user = await authStore.fetchChildMe()
     if (user?.role === 'child') {
+      // Populate childAuthStore so child components can access childUser
+      childAuthStore.childUser = {
+        id: String(user.id),
+        username: user.username,
+        display_name: user.display_name,
+        avatar_color: user.avatar_color,
+        is_active: true,
+      }
       // Cache user in child app's localStorage for subsequent checks
       setUser(user)
       childSessionVerified = true

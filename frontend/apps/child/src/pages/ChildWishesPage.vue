@@ -369,7 +369,7 @@ onMounted(async () => {
 }
 .stats-label {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted);
 }
 .stats-divider {
@@ -382,7 +382,7 @@ onMounted(async () => {
 .section { margin-bottom: var(--space-lg); }
 .section-title {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   margin: 0 0 12px;
@@ -440,7 +440,7 @@ onMounted(async () => {
 /* Want-level badges */
 .priority-badge {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
   display: inline-block;
@@ -503,18 +503,18 @@ onMounted(async () => {
 }
 .progress-pct {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted-soft);
   min-width: 36px;
 }
 .progress-pct.pct-full { color: var(--color-brand-ochre); }
-.progress-hint { font-family: Inter, sans-serif; font-size: 12px; }
+.progress-hint { font-family: Inter, sans-serif; font-size: 14px; }
 .hint-full  { color: var(--color-brand-ochre); font-weight: 600; }
 .hint-days  { color: var(--color-brand-mint); font-weight: 500; }
 .progress-pending {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin-bottom: 4px;
 }
@@ -555,7 +555,7 @@ onMounted(async () => {
 /* Status badges */
 .status-badge {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
   display: inline-block;
@@ -568,7 +568,7 @@ onMounted(async () => {
 
 .rejection-reason {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 4px 0 0;
 }
