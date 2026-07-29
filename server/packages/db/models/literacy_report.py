@@ -1,6 +1,14 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
