@@ -1,4 +1,5 @@
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -356,7 +357,12 @@ class SecurityHeadersMiddleware:
                         )
                     )
 
-                    # CSP policy
+                    # CSP policy with per-request nonce for script-src
+                    nonce = secrets.token_urlsafe(16)
+                    # Store nonce on request state for downstream handlers
+                    if "state" in scope:
+                        scope["state"]["csp_nonce"] = nonce
+                    nonce_b = nonce.encode()
                     connect_src = (
                         b"'self' http://localhost:8000 http://127.0.0.1:8000"
                         if settings.ENVIRONMENT == "development"
@@ -364,7 +370,7 @@ class SecurityHeadersMiddleware:
                     )
                     csp = (
                         b"default-src 'self'; "
-                        b"script-src 'self' 'unsafe-inline'; "
+                        b"script-src 'self' 'nonce-" + nonce_b + b"'; "
                         b"style-src 'self' 'unsafe-inline'; "
                         b"img-src 'self' data: https:; "
                         b"font-src 'self'; "
