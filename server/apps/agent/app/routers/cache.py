@@ -5,10 +5,10 @@
 
 import logging
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends
 
-from apps.agent.app.config import settings
 from apps.agent.services.deerflow_adapter.adapter import invalidate_family_adapter_cache
+from packages.security.service_auth.agent_token_verify import verify_service_token
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/internal/cache", tags=["internal"])
 @router.post("/invalidate/{family_id}")
 def invalidate_cache(
     family_id: str,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _token_family: str = Depends(verify_service_token),
 ) -> dict:
     """清理家庭的 DeerFlowAdapter 缓存。
 
@@ -34,9 +34,6 @@ def invalidate_cache(
     Returns:
         {"success": True, "family_id": "..."}
     """
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(status_code=401, detail="invalid token")
-
     invalidate_family_adapter_cache(family_id)
     logger.info(f"[agent/cache] invalidated adapter cache for family={family_id}")
     return {"success": True, "family_id": family_id}

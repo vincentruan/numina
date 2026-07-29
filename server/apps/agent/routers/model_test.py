@@ -1,12 +1,10 @@
 """POST /test/model — stateless model capability test endpoint."""
 
 import asyncio
-import hmac
 import logging
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends
 
-from apps.agent.app.config import settings
 from apps.agent.schemas.model_test import ModelTestRequest, ModelTestResult
 from apps.agent.services.model_tester import (
     test_connection,
@@ -14,6 +12,7 @@ from apps.agent.services.model_tester import (
     test_vision,
     test_vision_ocr,
 )
+from packages.security.service_auth.agent_token_verify import verify_service_token
 
 router = APIRouter(prefix="/test", tags=["model-test"])
 logger = logging.getLogger(__name__)
@@ -22,15 +21,9 @@ logger = logging.getLogger(__name__)
 @router.post("/model", response_model=ModelTestResult)
 async def run_model_test(
     req: ModelTestRequest,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _token_family: str = Depends(verify_service_token),
 ) -> ModelTestResult:
     """Run model capability tests with provided credentials (called by backend)."""
-    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
-        x_agent_token, settings.AGENT_INTERNAL_TOKEN
-    ):
-        logger.warning("model-test: auth rejected")
-        raise HTTPException(status_code=401, detail="invalid token")
-
     vision_model = req.vision_model_id or req.model_id
 
     # connection always runs first — it gates the thinking test
