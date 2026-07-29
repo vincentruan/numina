@@ -2874,6 +2874,7 @@ async def _run_literacy_weekly_report_agent(
     error_type: str | None = None
     completion_status = "error"
     ai_response_parts: list[str] = []
+    thinking_parts: list[str] = []
     cumulative_usage: dict[str, int] | None = None
 
     try:
@@ -2927,7 +2928,7 @@ async def _run_literacy_weekly_report_agent(
         context = FamilyContext(family_id=family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
 
-        # 7. Stream via typed_stream_dispatch
+        # 7. Stream via typed_stream_dispatch (enable_thinking=True to match SKILL.md)
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             set_active_skill,
         )
@@ -2937,7 +2938,7 @@ async def _run_literacy_weekly_report_agent(
             skill_name="literacy-weekly-report",
             context=redacted,
             thread_id=thread_id,
-            enable_thinking=False,
+            enable_thinking=True,
         ):
             if record.abort_event.is_set():
                 break
@@ -2955,15 +2956,32 @@ async def _run_literacy_weekly_report_agent(
                 await bridge.publish(run_id, "error", data)
                 break
 
-            # Forward canonical frames
-            await bridge.publish(run_id, sse_type, data)
-
+            # Extract reasoning from AI messages and emit as reasoning_delta
             if sse_type == "messages" and isinstance(data, dict):
                 msg_type = data.get("type")
                 if msg_type == "ai":
+                    additional_kwargs = data.get("additional_kwargs") or {}
+                    reasoning = additional_kwargs.get("reasoning_content")
+                    if isinstance(reasoning, str) and reasoning:
+                        thinking_parts.append(reasoning)
+                        await bridge.publish(
+                            run_id,
+                            "custom",
+                            {"type": "reasoning_delta", "content": reasoning},
+                        )
+                    # Forward message without reasoning_content to avoid duplication
                     content = data.get("content")
                     if content:
                         ai_response_parts.append(content)
+                        await bridge.publish(
+                            run_id,
+                            "messages",
+                            {"type": "ai", "content": content},
+                        )
+                    continue
+
+            # Forward other canonical frames (values, etc.)
+            await bridge.publish(run_id, sse_type, data)
 
         # 8. Terminal status
         if record.abort_event.is_set():
@@ -2973,6 +2991,24 @@ async def _run_literacy_weekly_report_agent(
             await run_manager.set_status(run_id, RunStatus.success)
             completion_status = "complete"
             success = record.status == RunStatus.success
+
+        # 9. Emit literacy_weekly_report.result custom event (with thinking)
+        if completion_status == "complete":
+            report_text = "".join(ai_response_parts).strip()
+            thinking_text = "".join(thinking_parts).strip()
+
+            if report_text:
+                await bridge.publish(
+                    run_id,
+                    "custom",
+                    {
+                        "type": "literacy_weekly_report.result",
+                        "payload": {
+                            "report": report_text,
+                            "thinking": thinking_text,
+                        },
+                    },
+                )
 
     except asyncio.CancelledError:
         error_type = "Cancelled"
