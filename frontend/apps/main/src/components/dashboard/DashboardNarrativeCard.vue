@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { streamNarrative, type NarrativeStreamHandle } from '@/api/dashboard'
 import { useI18n } from 'vue-i18n'
+import { showFailToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import IIcon from '@/components/IIcon.vue'
@@ -86,7 +87,7 @@ function toggleCachedNarrative() {
 async function load() {
   phase.value = 'idle'
 
-  await streamNarrative({
+  streamHandle = await streamNarrative({
     onReasoningDelta: (content) => {
       if (phase.value === 'idle') {
         phase.value = 'streaming'
@@ -131,9 +132,10 @@ async function load() {
         thinkingExpanded.value = false
       }, 1500)
     },
-    onError: () => {
+    onError: (msg) => {
       stopElapsedTimer()
       streamHandle = null
+      showFailToast(t(msg))
     },
   })
 }

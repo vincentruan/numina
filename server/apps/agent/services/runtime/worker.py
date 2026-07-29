@@ -2278,6 +2278,7 @@ async def _run_dashboard_narrative_agent(
                     # Forward message without reasoning_content to avoid duplication
                     content = data.get("content")
                     if content:
+                        ai_response_parts.append(content)
                         await bridge.publish(
                             run_id,
                             "messages",

@@ -262,6 +262,7 @@ async function runNarrativeStream(
 
   let res: Response
   try {
+    // SSE: axios lacks native EventSource/SSE support — bare fetch required.
     res = await fetch(url, {
       method: 'GET',
       headers,
@@ -272,9 +273,10 @@ async function runNarrativeStream(
       try {
         await refreshTokenIfNeeded()
       } catch {
-        callbacks.onError('认证已过期')
+        callbacks.onError('dashboard.narrative.error.auth_expired')
         return
       }
+      // SSE: axios lacks native EventSource/SSE support — bare fetch required.
       res = await fetch(url, {
         method: 'GET',
         headers,
@@ -284,13 +286,13 @@ async function runNarrativeStream(
     }
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
-      callbacks.onError('连接失败')
+      callbacks.onError('dashboard.narrative.error.connect_failed')
     }
     return
   }
 
   if (!res.ok) {
-    callbacks.onError(`请求失败 (${res.status})`)
+    callbacks.onError(`dashboard.narrative.error.request_failed:${res.status}`)
     return
   }
 
@@ -304,14 +306,14 @@ async function runNarrativeStream(
         thinking: data.thinking || '',
       })
     } catch {
-      callbacks.onError('解析响应失败')
+      callbacks.onError('dashboard.narrative.error.parse_failed')
     }
     return
   }
 
   // SSE stream
   if (!res.body) {
-    callbacks.onError('流式响应不可用')
+    callbacks.onError('dashboard.narrative.error.stream_unavailable')
     return
   }
 
@@ -363,7 +365,7 @@ async function runNarrativeStream(
               thinking: payload.thinking || thinkingBuffer,
             })
           } else if (event === 'error') {
-            callbacks.onError(parsed.message || '生成失败')
+            callbacks.onError(parsed.message || 'dashboard.narrative.error.generation_failed')
             return
           } else if (event === 'end') {
             // stream ended without explicit result — use buffers
@@ -388,7 +390,7 @@ async function runNarrativeStream(
     }
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
-      callbacks.onError('连接中断')
+      callbacks.onError('dashboard.narrative.error.connection_interrupted')
     }
   }
 }

@@ -26,7 +26,7 @@ from packages.db.models.user import User
 
 logger = logging.getLogger(__name__)
 
-ALL_DIMENSIONS = ["earning", "saving", "investing", "giving"]
+ALL_DIMENSIONS = ["earning", "choosing", "waiting", "caring"]
 
 # Fallback content used when no template is available or the LLM call fails.
 _FALLBACK_CONTENT: dict[str, Any] = {
@@ -34,10 +34,10 @@ _FALLBACK_CONTENT: dict[str, Any] = {
     "可以存起来、花掉、分享给别人，或者想一个办法让它变多。"
     "想一想，然后告诉爸爸妈妈你的想法吧！",
     "choices": [
-        {"label": "我会把钱存起来，等需要的时候再用。", "feedback": "储蓄是一种很棒的习惯！"},
-        {"label": "我会买一点喜欢的东西。", "feedback": "合理的消费也是一种选择。"},
-        {"label": "我会分享给需要帮助的人。", "feedback": "分享让快乐变得更多。"},
-        {"label": "我会想办法让它变多。", "feedback": "思考如何让钱增值是很棒的投资思维！"},
+        {"text": "我会把钱存起来，等需要的时候再用。", "feedback": "储蓄是一种很棒的习惯！"},
+        {"text": "我会买一点喜欢的东西。", "feedback": "合理的消费也是一种选择。"},
+        {"text": "我会分享给需要帮助的人。", "feedback": "分享让快乐变得更多。"},
+        {"text": "我会想办法让它变多。", "feedback": "思考如何让钱增值是很棒的投资思维！"},
     ],
 }
 
@@ -174,7 +174,7 @@ async def _enrich_with_llm(
         "输出一个更生动、更适合这个年龄段孩子的故事，并给出 2-4 个选择项和每个选择的反馈。\n\n"
         f"模板故事：\n{template.story_template}\n\n"
         f"模板选择项（参考，可改写）：\n{template.choices_json}\n\n"
-        "请用 JSON 输出，格式：{\"story\": \"...\", \"choices\": [{\"label\": \"...\", \"feedback\": \"...\"}]}。"
+        "请用 JSON 输出，格式：{\"story\": \"...\", \"choices\": [{\"text\": \"...\", \"feedback\": \"...\"}]}。"
         "只输出 JSON，不要附加解释。"
     )
 
@@ -257,12 +257,10 @@ async def generate_weekly_scenario(
     if template is None:
         # No eligible template → generic fallback.
         content = _build_fallback_content()
-        # Use a sentinel template_id of 0 to indicate fallback (no FK row).
         scenario = LiteracyScenario(
-            id=0,  # overridden by default=next_id on flush
             child_id=child.id,
             week_start=week_start,
-            template_id=0,
+            template_id=None,
             content_json=json.dumps(content, ensure_ascii=False),
         )
         db.add(scenario)

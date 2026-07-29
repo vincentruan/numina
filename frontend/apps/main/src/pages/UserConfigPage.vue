@@ -16,6 +16,7 @@
           :label="t('userConfig.trendPeriod')"
           readonly
           is-link
+          class="wide-label-field"
           @click="showTrendPicker = true"
         />
       </van-cell-group>
@@ -29,7 +30,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('userConfig.activityPageSizeDesc') }}</span>
-            <van-slider v-model="form.activity_feed_page_size" :min="5" :max="50" :step="5" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.activity_feed_page_size" :min="5" :max="50" :step="5" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>5</span><span>25</span><span>50</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -47,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getUserConfig, updateUserConfig } from '@/api/config'
@@ -79,6 +83,10 @@ const trendPeriodLabel = computed(() => {
 })
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+onUnmounted(() => {
+  if (saveTimer) clearTimeout(saveTimer)
+})
 
 function onSave() {
   if (saveTimer) clearTimeout(saveTimer)
@@ -125,6 +133,23 @@ onMounted(async () => {
   margin-top: 4px;
   color: var(--van-text-color-2, #969799);
   font-size: 12px;
+}
+.wide-label-field :deep(.van-field__label) {
+  flex: 0 0 120px;
+}
+.wide-label-field :deep(.van-field__control) {
+  text-align: right;
+}
+.slider-track {
+  padding: 8px 16px;
+}
+.slider-scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--van-text-color-3, #c8c9cc);
+  margin-top: 2px;
 }
 .skeleton {
   padding: 16px;

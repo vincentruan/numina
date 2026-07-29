@@ -7,11 +7,11 @@ a child user (``get_current_child_user``).
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import get_current_child_user
@@ -187,17 +187,17 @@ async def post_scenario_choose(
 
 
 def _badge_names_from_ids(db: Session, badges: list) -> list[str]:
-    """Best-effort: look up definition names for badges lacking a loaded relationship."""
-    names: list[str] = []
-    for b in badges:
-        defn = (
-            db.query(LiteracyBadgeDefinition.name)
-            .filter(LiteracyBadgeDefinition.id == b.definition_id)
-            .scalar()
-        )
-        if defn:
-            names.append(defn)
-    return names
+    """Look up definition names for badges lacking a loaded relationship."""
+    if not badges:
+        return []
+    ids = [b.definition_id for b in badges]
+    rows = (
+        db.query(LiteracyBadgeDefinition.id, LiteracyBadgeDefinition.name)
+        .filter(LiteracyBadgeDefinition.id.in_(ids))
+        .all()
+    )
+    name_map = {row[0]: row[1] for row in rows}
+    return [name_map[did] for did in ids if did in name_map]
 
 
 # ---------------------------------------------------------------------------
@@ -211,28 +211,47 @@ def get_badges(
     db: Session = Depends(get_db),
 ):
     """Return the badge wall: current + history + next for each dimension."""
-    dimensions: list[BadgeDimensionResponse] = []
-
-    for dimension in ALL_DIMENSIONS:
-        # Current badge: highest non-superseded in this dimension.
-        current_row = (
-            db.query(LiteracyBadge, LiteracyBadgeDefinition)
-            .join(
-                LiteracyBadgeDefinition,
-                LiteracyBadge.definition_id == LiteracyBadgeDefinition.id,
-            )
-            .filter(
-                LiteracyBadge.child_id == current_user.id,
-                LiteracyBadgeDefinition.dimension == dimension,
-                LiteracyBadge.superseded_at.is_(None),
-            )
-            .order_by(desc(LiteracyBadgeDefinition.level))
-            .first()
+    # Query 1: All badges for this child joined with definitions.
+    all_badge_rows = (
+        db.query(LiteracyBadge, LiteracyBadgeDefinition)
+        .join(
+            LiteracyBadgeDefinition,
+            LiteracyBadge.definition_id == LiteracyBadgeDefinition.id,
         )
+        .filter(LiteracyBadge.child_id == current_user.id)
+        .all()
+    )
+
+    # Query 2: All definitions (for "next badge" lookups).
+    all_definitions = db.query(LiteracyBadgeDefinition).all()
+    defn_by_dim_level: dict[tuple[str, int], LiteracyBadgeDefinition] = {
+        (d.dimension, d.level): d for d in all_definitions
+    }
+
+    # Group badges by dimension in Python.
+    current_by_dim: dict[str, tuple[LiteracyBadge, LiteracyBadgeDefinition]] = {}
+    history_by_dim: dict[str, list[tuple[LiteracyBadge, LiteracyBadgeDefinition]]] = defaultdict(list)
+
+    for badge, defn in all_badge_rows:
+        if badge.superseded_at is None:
+            # Keep highest-level non-superseded per dimension.
+            existing = current_by_dim.get(defn.dimension)
+            if existing is None or defn.level > existing[1].level:
+                current_by_dim[defn.dimension] = (badge, defn)
+        else:
+            history_by_dim[defn.dimension].append((badge, defn))
+
+    # Sort history by earned_at descending.
+    for dim_rows in history_by_dim.values():
+        dim_rows.sort(key=lambda pair: pair[0].earned_at, reverse=True)
+
+    dimensions: list[BadgeDimensionResponse] = []
+    for dimension in ALL_DIMENSIONS:
+        # Current badge.
         current_badge: BadgeInfo | None = None
         current_level = 0
-        if current_row is not None:
-            badge, defn = current_row
+        if dimension in current_by_dim:
+            badge, defn = current_by_dim[dimension]
             current_level = defn.level
             current_badge = BadgeInfo(
                 id=badge.id,
@@ -242,21 +261,7 @@ def get_badges(
                 earned_at=badge.earned_at,
             )
 
-        # History: superseded badges, newest first.
-        history_rows = (
-            db.query(LiteracyBadge, LiteracyBadgeDefinition)
-            .join(
-                LiteracyBadgeDefinition,
-                LiteracyBadge.definition_id == LiteracyBadgeDefinition.id,
-            )
-            .filter(
-                LiteracyBadge.child_id == current_user.id,
-                LiteracyBadgeDefinition.dimension == dimension,
-                LiteracyBadge.superseded_at.is_not(None),
-            )
-            .order_by(desc(LiteracyBadge.earned_at))
-            .all()
-        )
+        # History.
         history = [
             BadgeInfo(
                 id=badge.id,
@@ -265,21 +270,14 @@ def get_badges(
                 earned_at=badge.earned_at,
                 superseded_at=badge.superseded_at,
             )
-            for badge, defn in history_rows
+            for badge, defn in history_by_dim.get(dimension, [])
         ]
 
-        # Next badge: level = current_level + 1 (or level 1 if none).
+        # Next badge.
         next_level = current_level + 1
         next_badge: BadgeDefinitionInfo | None = None
         if next_level <= MAX_LEVEL:
-            next_defn = (
-                db.query(LiteracyBadgeDefinition)
-                .filter(
-                    LiteracyBadgeDefinition.dimension == dimension,
-                    LiteracyBadgeDefinition.level == next_level,
-                )
-                .first()
-            )
+            next_defn = defn_by_dim_level.get((dimension, next_level))
             if next_defn is not None:
                 next_badge = BadgeDefinitionInfo(
                     id=next_defn.id,

@@ -1,5 +1,6 @@
 <template>
   <div class="badges-page">
+    <PageHeader :title="t('badges.title')" />
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -15,7 +16,7 @@
       </div>
 
       <!-- Empty state -->
-      <p v-else-if="!hasAnyData" class="badges-empty">{{ t('badges.empty') }}</p>
+      <EmptyState v-else-if="!hasAnyData" :illustration="noRecordsSvg" :text="t('badges.empty')" />
 
       <!-- Badge wall -->
       <BadgeWall v-else :dimensions="dimensions" />
@@ -31,6 +32,8 @@ import { useI18n } from 'vue-i18n'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getBadges, type BadgeDimensionData } from '@/api/literacy'
 import BadgeWall from '@/components/literacy/BadgeWall.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import noRecordsSvg from '@/assets/empty-states/no-records.svg?raw'
 
 const { t } = useI18n()
 const { increment, decrement } = usePageLoading()

@@ -78,7 +78,10 @@ def get_report(
 
     If ``week_start`` is omitted, return the latest report for the child.
     """
-    cid = int(child_id)
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(ErrorCode.VALIDATION_ERROR, details=f"无效的 child_id: {child_id}") from None
     _validate_child_in_family(db, cid, current_user.family_id)
 
     if week_start:
@@ -174,7 +177,10 @@ def get_history(
     db: Session = Depends(get_db),
 ):
     """Return available report weeks for a child (most recent first)."""
-    cid = int(child_id)
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(ErrorCode.VALIDATION_ERROR, details=f"无效的 child_id: {child_id}") from None
     _validate_child_in_family(db, cid, current_user.family_id)
 
     # Collect existing report weeks for this child

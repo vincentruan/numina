@@ -72,7 +72,7 @@
         :key="chore.id"
         :ref="(el) => setChoreCardRef(chore.id, el as HTMLElement | null)"
         class="chore-card"
-        :class="chore.status"
+        :class="[chore.status, { 'highlight-flash': highlightedChoreId === chore.id }]"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <CandleFlame
@@ -233,7 +233,8 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildTasks' })
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
@@ -265,7 +266,35 @@ const allDoneSvg = allDoneSvgRaw
 
 const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
+const route = useRoute()
+const router = useRouter()
 const { increment, decrement } = usePageLoading()
+
+// Highlight scroll-into-view from homepage task click
+const highlightedChoreId = ref<string | null>(null)
+let lastHandledHighlight = ''
+
+function scrollToHighlight() {
+  const id = route.query.highlight as string | undefined
+  if (!id || id === lastHandledHighlight) return
+  if (!chores.value.find(c => c.id === id)) return
+  lastHandledHighlight = id
+  highlightedChoreId.value = id
+  nextTick(() => {
+    const el = choreCardRefs.value.get(id)
+    if (el) {
+      el.scrollIntoView({ behavior: reducedMotion.value ? 'auto' : 'smooth', block: 'center' })
+    }
+    // Clear the query param silently
+    const query = { ...route.query }
+    delete query.highlight
+    router.replace({ query })
+    // Clear highlight after animation
+    setTimeout(() => {
+      highlightedChoreId.value = null
+    }, 1500)
+  })
+}
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -602,9 +631,16 @@ onMounted(async () => {
 
     // Check for pending celebrations after data loads
     checkAndTriggerCelebration(chores.value)
+    // Scroll to highlighted chore from homepage
+    scrollToHighlight()
   } finally {
     decrement()
   }
+})
+
+// KeepAlive: re-check highlight query param on re-activation
+onActivated(() => {
+  scrollToHighlight()
 })
 
 // Drive candle state transitions when chore status changes after polling.
@@ -756,6 +792,22 @@ onUnmounted(() => {
 .chore-card.available:active { transform: scale(0.98); }
 .chore-card.approved { opacity: 0.55; }
 .chore-card.rejected { opacity: 0.45; }
+
+/* Highlight flash when scrolling to a specific chore from homepage */
+.chore-card.highlight-flash {
+  animation: chore-highlight 1.5s ease-out forwards;
+}
+
+@keyframes chore-highlight {
+  0%, 15% {
+    box-shadow: 0 0 10px rgba(255, 183, 77, 0.5);
+    border-color: var(--color-brand-ochre);
+  }
+  100% {
+    box-shadow: none;
+    border-color: var(--color-hairline);
+  }
+}
 
 .chore-emoji { font-size: 28px; }
 

@@ -1,5 +1,6 @@
 <template>
   <div class="scenario-page">
+    <PageHeader :title="t('scenario.title')" />
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -8,11 +9,7 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
-      <h2 class="page-title">{{ t('scenario.title') }}</h2>
-
-      <div v-if="loading && !refreshing && !scenario" class="loading-state">
-        {{ t('scenario.loading') }}
-      </div>
+      <van-skeleton v-if="loading && !refreshing && !scenario" title :row="3" :row-width="['100%', '80%', '60%']" />
 
       <div v-else-if="error && !scenario" class="error-msg">
         {{ error }}
@@ -120,15 +117,6 @@ onMounted(async () => {
   padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
-}
-
-.page-title {
-  font-family: Inter, sans-serif;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin: 0 0 var(--space-lg);
-  text-align: center;
 }
 
 .loading-state {

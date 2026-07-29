@@ -72,13 +72,13 @@ def upgrade() -> None:
     result = bind.execute(existing_count)
     count = result.scalar() if result else 0
     if count == 0:
-        for dim, lvl, name, desc, criteria in BADGE_SEEDS:
+        for idx, (dim, lvl, name, desc, criteria) in enumerate(BADGE_SEEDS):
             bind.execute(
                 sa.text(
-                    "INSERT INTO literacy_badge_definitions (dimension, level, name, description, criteria_summary) "
-                    "VALUES (:dim, :lvl, :name, :desc, :criteria)"
+                    "INSERT INTO literacy_badge_definitions (id, dimension, level, name, description, criteria_summary) "
+                    "VALUES (:id, :dim, :lvl, :name, :desc, :criteria)"
                 ),
-                {"dim": dim, "lvl": lvl, "name": name, "desc": desc, "criteria": criteria},
+                {"id": 1000001 + idx, "dim": dim, "lvl": lvl, "name": name, "desc": desc, "criteria": criteria},
             )
 
     # Scenario template seeds: 4 dimensions × 3 age groups = 12 templates
@@ -245,21 +245,6 @@ def upgrade() -> None:
         ),
     ]
 
-    # Seed scenario templates (idempotent — keyed by dimension+age_group)
-    for dim, age, story, choices in TEMPLATE_SEEDS:
-        existing = bind.execute(
-            sa.text("SELECT COUNT(*) FROM literacy_scenario_templates WHERE dimension = :dim AND age_group = :age"),
-            {"dim": dim, "age": age},
-        ).scalar()
-        if existing == 0:
-            bind.execute(
-                sa.text(
-                    "INSERT INTO literacy_scenario_templates (dimension, age_group, story_template, choices_json, is_active) "
-                    "VALUES (:dim, :age, :story, :choices, :active)"
-                ),
-                {"dim": dim, "age": age, "story": story, "choices": choices, "active": True},
-            )
-
     # 2. literacy_badges
     if not _has_table("literacy_badges"):
         op.create_table(
@@ -290,6 +275,21 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
         )
         op.create_index("ix_literacy_scenario_templates_dimension", "literacy_scenario_templates", ["dimension"], unique=False)
+
+    # Seed scenario templates (idempotent — keyed by dimension+age_group)
+    for idx, (dim, age, story, choices) in enumerate(TEMPLATE_SEEDS):
+        existing = bind.execute(
+            sa.text("SELECT COUNT(*) FROM literacy_scenario_templates WHERE dimension = :dim AND age_group = :age"),
+            {"dim": dim, "age": age},
+        ).scalar()
+        if existing == 0:
+            bind.execute(
+                sa.text(
+                    "INSERT INTO literacy_scenario_templates (id, dimension, age_group, story_template, choices_json, is_active) "
+                    "VALUES (:id, :dim, :age, :story, :choices, :active)"
+                ),
+                {"id": 2000001 + idx, "dim": dim, "age": age, "story": story, "choices": choices, "active": True},
+            )
 
     # 4. literacy_scenarios
     if not _has_table("literacy_scenarios"):

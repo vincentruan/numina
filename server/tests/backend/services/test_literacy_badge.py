@@ -13,6 +13,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.services.literacy_badge import (
     _credit_badge_coins,
     _evaluate_with_llm,
+    _extract_text,
     _get_current_badge,
     _get_next_definition,
     _parse_unlock,
@@ -597,3 +598,34 @@ class TestEvaluateWithLlm:
                 context={},
             )
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# _extract_text
+# ---------------------------------------------------------------------------
+
+
+class TestExtractText:
+    def test_string_input_returns_as_is(self):
+        assert _extract_text("hello") == "hello"
+
+    def test_dict_with_content_key(self):
+        assert _extract_text({"content": "result"}) == "result"
+
+    def test_dict_with_text_key(self):
+        assert _extract_text({"text": "hello"}) == "hello"
+
+    def test_dict_with_data_key_recurses(self):
+        assert _extract_text({"data": {"content": "nested"}}) == "nested"
+
+    def test_dict_with_data_key_string(self):
+        assert _extract_text({"data": "direct"}) == "direct"
+
+    def test_non_string_non_dict_falls_back(self):
+        result = _extract_text(42)
+        assert "42" in result
+
+    def test_dict_no_matching_keys_falls_back(self):
+        result = _extract_text({"unknown_key": "val"})
+        # No recognized key -> json.dumps fallback
+        assert "unknown_key" in result

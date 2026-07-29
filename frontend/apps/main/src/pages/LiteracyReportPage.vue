@@ -186,6 +186,7 @@ function formatWeekStart(weekStart: string): string {
 }
 
 watch(selectedChildId, () => {
+  if (skipNextWatch) { skipNextWatch = false; return }
   loadReport()
 })
 
@@ -194,6 +195,8 @@ watch(currentWeekStart, (val, oldVal) => {
     loadReport()
   }
 })
+
+let skipNextWatch = true
 
 onMounted(() => {
   init().then(() => {

@@ -1,13 +1,6 @@
 <template>
   <div class="create-page">
-    <!-- Nav bar -->
-    <div class="nav-bar">
-      <button class="nav-back" :aria-label="t('common.back')" @click="router.replace('/wishes')">
-        <van-icon name="arrow-left" size="20" />
-      </button>
-      <span class="nav-title">{{ t('wishes.createPageTitle') }}</span>
-      <span class="nav-spacer" />
-    </div>
+    <PageHeader :title="t('wishes.createPageTitle')" />
 
     <div class="form-body">
       <!-- Wish name -->
@@ -196,43 +189,6 @@ function goBackToList() {
   display: flex;
   flex-direction: column;
 }
-
-/* ── Nav bar ── */
-.nav-bar {
-  display: flex;
-  align-items: center;
-  height: 56px;
-  padding: 0 var(--space-md);
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-hairline);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.nav-back {
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: transparent;
-  color: var(--color-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.nav-back:active { background: var(--color-surface-soft); }
-.nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: Inter, sans-serif;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--color-ink);
-  letter-spacing: -0.3px;
-}
-.nav-spacer { width: 40px; flex-shrink: 0; }
 
 /* ── Form body ── */
 .form-body {

@@ -24,8 +24,10 @@
         class="hero-greeting"
       />
 
-      <!-- Balance hero — shared component -->
-      <BalanceHero :amount="balance" variant="home" coin-tiers-mode="collapsible" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+      <!-- Balance hero — shared component (wrapper hosts star-flight target ref) -->
+      <div ref="balanceCardRef">
+        <BalanceHero :amount="balance" variant="home" coin-tiers-mode="collapsible" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" animate-changes :reacting="balanceReactMode" />
+      </div>
 
       <!-- Progress ring — own row below the hero -->
       <ProgressRing
@@ -53,12 +55,13 @@
         :text="t('empty.noTasks')"
       />
       <div v-else class="chore-list">
-        <router-link
+        <div
           v-for="c in todayChores"
           :key="c.id"
-          to="/tasks"
+          :ref="(el) => setChoreCardRef(c.id, el as HTMLElement | null)"
           class="chore-card"
           :class="c.status"
+          @click="navigateToTask(c.id)"
         >
           <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
           <div class="chore-info">
@@ -72,14 +75,26 @@
               >🔥{{ c.streak_count }}</span>
             </p>
           </div>
-          <span class="chore-status-badge" :class="c.status">
+          <button
+            v-if="c.status === 'available' && !c.is_pool_unclaimed"
+            class="btn-complete-home"
+            :disabled="submittingId === c.id"
+            @click.stop="showCompleteConfirm(c)"
+          >{{ t('chore.complete') }}</button>
+          <button
+            v-else-if="c.status === 'available' && c.is_pool_unclaimed"
+            class="btn-claim-home"
+            :disabled="claimingId === c.id || submittingId === c.id"
+            @click.stop="claim(c.id)"
+          >{{ claimingId === c.id ? t('chore.claiming') : t('chore.claim') }}</button>
+          <span v-else class="chore-status-badge" :class="c.status">
             <van-icon v-if="c.status === 'approved'" name="success" size="14" />
             <van-icon v-else-if="c.status === 'rejected'" name="warning-o" size="14" />
             <van-icon v-else-if="c.status === 'pending_approval'" name="clock-o" size="14" />
             <van-icon v-else name="arrow" size="14" />
             <span class="chore-status-text">{{ statusLabel(c.status) }}</span>
           </span>
-        </router-link>
+        </div>
       </div>
     </div>
 
@@ -125,12 +140,46 @@
     </div>
     </van-pull-refresh>
 
+    <!-- Complete confirmation sheet -->
+    <van-popup
+      v-model:show="completeSheetVisible"
+      position="bottom"
+      round
+      :style="{ padding: '24px 20px 40px' }"
+    >
+      <p class="complete-sheet-title">{{ t('chore.completeTitle') }}</p>
+      <div v-if="completeTarget" class="complete-sheet-chore">
+        <span class="complete-sheet-emoji">{{ completeTarget.chore_emoji || '📋' }}</span>
+        <div>
+          <p class="complete-sheet-name">{{ completeTarget.chore_name }}</p>
+          <p class="complete-sheet-reward">+{{ completeTarget.coin_reward }} ⭐</p>
+        </div>
+      </div>
+      <button
+        class="btn-keep-going seal-btn"
+        :data-spinning="sealSpinning"
+        @click="doComplete"
+      >
+        <span class="seal-icon">🔒</span>
+        {{ t('celebration.sealTreasureChest') }}
+      </button>
+      <button class="btn-sheet-cancel" @click="completeSheetVisible = false; completeTarget = null">
+        {{ t('chore.completeCancel') }}
+      </button>
+    </van-popup>
+
     <!-- Celebration animation -->
     <CelebrationAnimation
       :visible="celebrationVisible"
       :task-count="celebrationTaskCount"
       :stars-earned="celebrationStarsEarned"
-      @dismiss="onCelebrationDismiss"
+      :streak-tier="celebrationStreakTier"
+      :task-refs="choreCardRefs"
+      :balance-ref="balanceCardRef"
+      :task-ids="celebrationTaskIds"
+      @dismiss="onCelebrationDismissWrapped"
+      @balance-react="onBalanceReact"
+      @balance-react-end="onBalanceReactEnd"
     />
     </template>
   </div>
@@ -138,13 +187,14 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildHome' })
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ProgressRing from '@/components/ProgressRing.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useRouter } from 'vue-router'
-import { getMyChores, type ChoreInstance } from '@/api/chores'
+import { getMyChores, markChoreComplete, claimChore, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import { getCoinBalance } from '@/api/coins'
@@ -161,6 +211,8 @@ const noTasksSvg = noTasksSvgRaw
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
+import { tryVibrate } from '@/composables/useHaptic'
+import { MOTION } from '@/utils/motionTokens'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
@@ -187,9 +239,96 @@ const {
   celebrationVisible,
   celebrationTaskCount,
   celebrationStarsEarned,
+  celebrationTaskIds,
+  celebrationStreakTier,
   onCelebrationDismiss,
   checkAndTriggerCelebration,
 } = useCelebration()
+
+// Star-flight position refs
+const choreCardRefs = ref<Map<string, HTMLElement>>(new Map())
+const balanceCardRef = ref<HTMLElement | null>(null)
+function setChoreCardRef(id: string, el: HTMLElement | null): void {
+  if (el) {
+    choreCardRefs.value.set(id, el)
+  } else {
+    choreCardRefs.value.delete(id)
+  }
+}
+
+// Completion state
+const completeSheetVisible = ref(false)
+const completeTarget = ref<ChoreInstance | null>(null)
+const submittingId = ref<string | null>(null)
+const claimingId = ref<string | null>(null)
+const sealSpinning = ref(false)
+const balanceReactMode = ref<'pop' | 'invert' | null>(null)
+
+function onBalanceReact(mode: 'pop' | 'invert'): void {
+  balanceReactMode.value = mode
+}
+function onBalanceReactEnd(): void {
+  balanceReactMode.value = null
+}
+function onCelebrationDismissWrapped(): void {
+  onCelebrationDismiss()
+  balanceReactMode.value = null
+}
+
+function navigateToTask(id: string) {
+  router.push({ path: '/tasks', query: { highlight: id } })
+}
+
+function showCompleteConfirm(chore: ChoreInstance) {
+  completeTarget.value = chore
+  completeSheetVisible.value = true
+}
+
+async function doComplete() {
+  if (!completeTarget.value) return
+  const instanceId = completeTarget.value.id
+  sealSpinning.value = true
+  setTimeout(() => { sealSpinning.value = false }, 350)
+  completeSheetVisible.value = false
+  completeTarget.value = null
+  await complete(instanceId)
+}
+
+async function complete(instanceId: string) {
+  submittingId.value = instanceId
+  try {
+    const updated = await markChoreComplete(instanceId)
+    const idx = todayChores.value.findIndex(c => c.id === instanceId)
+    if (idx !== -1) todayChores.value[idx] = updated
+    tryVibrate(MOTION.haptic.rewardPulse)
+    if (topWish.value) {
+      const chore = todayChores.value.find(c => c.id === instanceId)
+      const stars = chore?.coin_reward ?? 0
+      showSuccessToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
+    }
+  } catch {
+    showFailToast(t('toast.submitFailed'))
+  } finally {
+    submittingId.value = null
+  }
+}
+
+async function claim(instanceId: string) {
+  const target = todayChores.value.find(c => c.id === instanceId)
+  if (!target || target.status !== 'available' || !target.is_pool_unclaimed) return
+  claimingId.value = instanceId
+  const idx = todayChores.value.findIndex(c => c.id === instanceId)
+  if (idx !== -1) todayChores.value[idx] = { ...todayChores.value[idx], is_pool_unclaimed: false }
+  try {
+    const updated = await claimChore(instanceId)
+    if (idx !== -1) todayChores.value[idx] = updated
+  } catch {
+    if (idx !== -1) todayChores.value[idx] = { ...todayChores.value[idx], is_pool_unclaimed: true }
+    showFailToast(t('chore.claimFailed'))
+  } finally {
+    claimingId.value = null
+  }
+}
 
 // Streak tier helper: returns threshold value (7, 14, 30) or '0' for below 7
 function streakTier(count: number): string {
@@ -249,6 +388,11 @@ onMounted(async () => {
     decrement()
   }
 })
+
+// Trigger celebration when chores change (e.g., after completion)
+watch(todayChores, (next) => {
+  checkAndTriggerCelebration(next)
+})
 </script>
 
 <style scoped>
@@ -303,7 +447,7 @@ onMounted(async () => {
   padding: 16px 0;
 }
 
-/* ── Chore preview cards — tap to manage on Tasks page ── */
+/* ── Chore preview cards — tap to navigate; button to act ── */
 .chore-list { display: flex; flex-direction: column; gap: 8px; }
 .chore-card {
   display: flex;
@@ -316,9 +460,11 @@ onMounted(async () => {
   min-height: 56px;
   text-decoration: none;
   transition: transform 0.1s;
+  cursor: pointer;
 }
 .chore-card:active { transform: scale(0.98); }
 .chore-card.approved { opacity: 0.55; }
+.chore-card.rejected { opacity: 0.45; }
 .chore-emoji { font-size: 24px; flex-shrink: 0; }
 .chore-info { flex: 1; min-width: 0; }
 .chore-name {
@@ -498,4 +644,135 @@ onMounted(async () => {
   transition: background 0.15s, color 0.15s;
 }
 .home-settings-link:active { transform: scale(0.92); color: var(--color-ink); }
+
+/* ── Inline action buttons on chore cards ── */
+.btn-complete-home {
+  background: var(--color-brand-pink);
+  color: var(--color-on-dark);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  height: 36px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-complete-home:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-complete-home:active:not(:disabled) { transform: scale(0.96); }
+
+.btn-claim-home {
+  background: var(--color-brand-mint);
+  color: var(--color-ink);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  height: 36px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-claim-home:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-claim-home:active:not(:disabled) { transform: scale(0.96); }
+
+/* ── Complete confirmation sheet ── */
+.complete-sheet-title {
+  font-family: Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 16px;
+  text-align: center;
+}
+.complete-sheet-chore {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.complete-sheet-emoji { font-size: 32px; }
+.complete-sheet-name {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+.complete-sheet-reward {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-brand-ochre);
+  margin: 4px 0 0;
+  font-weight: 500;
+}
+.btn-keep-going {
+  width: 100%;
+  background: var(--color-brand-pink);
+  color: var(--color-on-dark);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  transition: transform 0.1s;
+}
+.btn-keep-going:active { transform: scale(0.96); }
+.seal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.seal-btn .seal-icon {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+  transform-origin: center;
+  transition: transform 100ms ease-out;
+}
+.seal-btn[data-spinning='true'] {
+  animation: seal-press 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.seal-btn[data-spinning='true'] .seal-icon {
+  animation: seal-spin 300ms ease-out;
+}
+@keyframes seal-spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+@keyframes seal-press {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.95); }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.btn-sheet-cancel {
+  width: 100%;
+  background: var(--color-surface-soft);
+  color: var(--color-muted);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+  margin-top: 8px;
+  transition: transform 0.1s;
+}
+.btn-sheet-cancel:active { transform: scale(0.96); }
 </style>

@@ -1,13 +1,6 @@
 <template>
   <div class="settings-page">
-    <!-- Nav bar -->
-    <div class="nav-bar">
-      <button class="nav-back" :aria-label="t('common.back')" @click="router.back()">
-        <van-icon name="arrow-left" size="20" />
-      </button>
-      <span class="nav-title">{{ t('home.settings') }}</span>
-      <span class="nav-spacer" />
-    </div>
+    <PageHeader :title="t('home.settings')" />
 
     <div class="settings-body">
       <!-- Theme -->
@@ -28,7 +21,10 @@
 
       <!-- Language -->
       <div class="field-group">
-        <p class="settings-label">{{ t('home.settingsLanguage') }}</p>
+        <p class="settings-label">
+          <span class="label-icon" aria-hidden="true">🌐</span>
+          {{ t('home.settingsLanguage') }}
+        </p>
         <div class="theme-options">
           <button
             v-for="opt in languageOptions"
@@ -37,6 +33,7 @@
             :class="{ active: currentLocale === opt.value }"
             @click="setLocale(opt.value)"
           >
+            <span class="btn-flag" aria-hidden="true">{{ opt.flag }}</span>
             {{ opt.label }}
           </button>
         </div>
@@ -54,7 +51,6 @@
 defineOptions({ name: 'ChildSettings' })
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
@@ -62,7 +58,6 @@ import { useChildAuthStore } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
 
 const { t } = useI18n()
-const router = useRouter()
 const { themeMode, setMode } = useDarkMode()
 const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
@@ -74,8 +69,8 @@ const themeOptions = computed(() => [
 ])
 
 const languageOptions = computed(() => [
-  { value: 'zh-CN' as const, label: t('home.langZhCN') },
-  { value: 'en-US' as const, label: t('home.langEnUS') },
+  { value: 'zh-CN' as const, label: t('home.langZhCN'), flag: '🇨🇳' },
+  { value: 'en-US' as const, label: t('home.langEnUS'), flag: '🇺🇸' },
 ])
 
 async function handleLogout() {
@@ -107,43 +102,6 @@ async function handleLogout() {
   flex-direction: column;
 }
 
-/* ── Nav bar ── */
-.nav-bar {
-  display: flex;
-  align-items: center;
-  height: 56px;
-  padding: 0 var(--space-md);
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-hairline);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.nav-back {
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: transparent;
-  color: var(--color-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.nav-back:active { background: var(--color-surface-soft); }
-.nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: Inter, sans-serif;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--color-ink);
-  letter-spacing: -0.3px;
-}
-.nav-spacer { width: 40px; flex-shrink: 0; }
-
 /* ── Body ── */
 .settings-body {
   flex: 1;
@@ -166,6 +124,13 @@ async function handleLogout() {
   text-transform: uppercase;
   color: var(--color-muted);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.label-icon {
+  font-size: 14px;
+  line-height: 1;
 }
 .theme-options {
   display: flex;
@@ -190,6 +155,11 @@ async function handleLogout() {
   border-color: var(--color-brand-ochre);
   color: var(--color-ink);
   font-weight: 600;
+}
+.btn-flag {
+  font-size: 16px;
+  line-height: 1;
+  margin-right: 4px;
 }
 .theme-btn:active { transform: scale(0.96); }
 
