@@ -17,13 +17,6 @@ from apps.backend.app.services.audit_log import write_audit_log
 from packages.security.service_auth.agent_jwt import create_agent_token
 
 
-def require_owner(current_user: User = Depends(get_current_user)) -> User:
-    """要求当前用户为家庭 owner。"""
-    if current_user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    return current_user
-
-
 def require_ai_enabled(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

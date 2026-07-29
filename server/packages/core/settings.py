@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./data/numina.db"
     SECRET_KEY: str = _DEFAULT_SECRET
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (was 15 min — too short for dev/testing)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     DEVICE_TRUST_EXPIRE_DAYS: int = 30  # Device trust expiry (days since last login)
     # WebAuthn settings

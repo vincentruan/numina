@@ -709,10 +709,10 @@ def list_family_devices(
     ),
     db: Session = Depends(get_db),
 ):
-    """List active device sessions for all other family members. Owner or admin only."""
+    """List active device sessions for all other family members. Owner only."""
     payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
     role = payload["role"]
-    if role not in ("owner", "admin"):
+    if role != "owner":
         raise AppError(ErrorCode.FORBIDDEN)
 
     user_id = int(payload["sub"])

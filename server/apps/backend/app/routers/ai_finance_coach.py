@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_ai_enabled, require_owner
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.ai_deps import require_ai_enabled
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked

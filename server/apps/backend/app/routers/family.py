@@ -4,7 +4,7 @@ from sqlalchemy import case
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.auth.jwt_utils import id_keyed_dict
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
@@ -193,7 +193,7 @@ def update_member_role(
     member_id: int,
     body: UpdateRoleRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     member = family_service.update_member_role(db, user, member_id, body.role)
     return UserResponse.model_validate(member)
@@ -204,10 +204,8 @@ def update_member_info(
     member_id: int,
     body: UpdateMemberInfoRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
-    if user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     member = (
         db.query(User)
         .filter(
@@ -236,7 +234,7 @@ def update_member_info(
 def remove_member(
     member_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     family_service.remove_member(db, user, member_id)
     return {"detail": "已移除"}
@@ -247,7 +245,7 @@ def reset_member_password(
     member_id: int,
     body: ResetPasswordRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     family_service.reset_member_password(db, user, member_id, body.new_password)
     return {"detail": "✅ 密码已重置"}
@@ -258,7 +256,7 @@ def update_member_status(
     member_id: int,
     body: UpdateStatusRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     member = family_service.update_member_status(db, user, member_id, body.is_active)
     return UserResponse.model_validate(member)
@@ -267,10 +265,8 @@ def update_member_status(
 @router.post("/invite-code")
 def regenerate_invite_code(
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
-    if user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     from apps.backend.app.services.auth import _check_invite_code_rate_limit
 
     _check_invite_code_rate_limit(str(user.id))
@@ -643,11 +639,9 @@ def get_economy_config(
 def update_economy_config(
     body: ChildEconomyConfigUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ) -> ChildEconomyConfigResponse:
     """更新子经济配置（仅 owner）。"""
-    if user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     from apps.backend.app.models.child_economy_config import ChildEconomyConfig
 

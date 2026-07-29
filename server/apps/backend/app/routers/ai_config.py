@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_owner
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode

@@ -70,8 +70,8 @@ def client(monkeypatch):
         mock_agent_cls.return_value.stream = _fake_agent_sse_stream(
             [("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]
         )
-        from apps.backend.app.auth.ai_deps import require_ai_enabled, require_owner
-        from apps.backend.app.auth.deps import require_adult
+        from apps.backend.app.auth.ai_deps import require_ai_enabled
+        from apps.backend.app.auth.deps import require_adult, require_owner
         from apps.backend.app.main import app
 
         _fake_user = type("U", (), {"id": 1, "family_id": "family-1", "role": "owner", "language": "zh-CN"})()

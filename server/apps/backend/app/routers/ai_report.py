@@ -16,8 +16,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_serializer
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_ai_enabled, require_owner
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.ai_deps import require_ai_enabled
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession

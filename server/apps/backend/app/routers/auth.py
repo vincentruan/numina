@@ -613,6 +613,9 @@ def login_step2(
     if not user:
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
+    # Force re-read from DB to avoid stale connection pool cache
+    db.expire(user)
+
     strategy = get_strategy(req.factor_type)
     if not strategy.verify(db, user, req.payload):
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)

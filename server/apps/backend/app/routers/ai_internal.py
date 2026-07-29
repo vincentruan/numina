@@ -1046,26 +1046,17 @@ def verify_system_token(
     仅支持 static HMAC token 格式。
     """
     if not authorization.startswith("Bearer "):
-        raise HTTPException(  # noqa: allow-http-exception
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid system token",
-        )
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token format")
 
     token = authorization[7:]
 
     from apps.backend.app.config import settings as app_settings
 
     if not app_settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(  # noqa: allow-http-exception
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Agent internal token not configured",
-        )
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details="Agent internal token not configured")
 
     if not hmac.compare_digest(token, app_settings.AGENT_INTERNAL_TOKEN):
-        raise HTTPException(  # noqa: allow-http-exception
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid system token",
-        )
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token")
 
     return True
 
