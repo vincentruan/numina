@@ -847,3 +847,54 @@ async def report_web_search_circuit(family_id: str, provider_id: int, failure_ty
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
+
+
+# ---------------------------------------------------------------------------
+# Literacy weekly report — scheduler support
+# ---------------------------------------------------------------------------
+
+_REPORT_TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
+
+
+async def get_literacy_children(family_id: str) -> list[dict]:
+    """Get children in a family for literacy report generation.
+
+    Args:
+        family_id: Family ID
+
+    Returns:
+        List of dicts with 'child_id' and 'display_name' keys.
+    """
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_REPORT_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
+    ) as client:
+        resp = await client.get(
+            "/api/v1/internal/literacy-reports/children",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return cast(list[dict], _unwrap(resp))
+
+
+async def generate_literacy_report(family_id: str, child_id: str) -> dict:
+    """Trigger literacy report generation for a child via internal endpoint.
+
+    Args:
+        family_id: Family ID
+        child_id: Child user ID
+
+    Returns:
+        Report status dict with 'status', 'week_start', etc.
+    """
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_REPORT_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
+    ) as client:
+        resp = await client.post(
+            "/api/v1/internal/literacy-report/generate",
+            params={"child_id": child_id, "force": "true"},
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return cast(dict, _unwrap(resp))

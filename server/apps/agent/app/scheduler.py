@@ -82,21 +82,80 @@
 #       raise TimeoutError(f"approval timed out: {request_id}")
 """
 
+import asyncio
 import logging
+import random
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from apps.agent.core import backend_client
 
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
 
 
+# ---------------------------------------------------------------------------
+# Weekly literacy report generation
+# ---------------------------------------------------------------------------
+
+
+async def generate_weekly_literacy_reports() -> None:
+    """Weekly cron: generate literacy reports for all AI-enabled families.
+
+    Follows scheduler contract: enumerate families, per-family jitter,
+    skip-and-log on failure.
+    """
+    families = await backend_client.get_ai_enabled_families()
+    logger.info("[scheduler] generating literacy reports for %d families", len(families))
+
+    for family_id in families:
+        # Jitter per family (scheduler contract: random.uniform(0, 300) for cron jobs)
+        await asyncio.sleep(random.uniform(0, 300))
+
+        try:
+            children = await backend_client.get_literacy_children(family_id)
+        except Exception:
+            logger.warning(
+                "[scheduler] failed to get children for family %s",
+                family_id,
+                exc_info=True,
+            )
+            continue
+
+        for child_info in children:
+            child_id = child_info.get("child_id")
+            if not child_id:
+                continue
+            # Per-child delay
+            await asyncio.sleep(random.uniform(2, 8))
+            try:
+                await backend_client.generate_literacy_report(family_id, child_id)
+            except Exception:
+                logger.warning(
+                    "[scheduler] report trigger failed family=%s child=%s",
+                    family_id,
+                    child_id,
+                    exc_info=True,
+                )
+
+    logger.info("[scheduler] literacy report generation complete")
+
+
+# ---------------------------------------------------------------------------
+# Schedule registration
+# ---------------------------------------------------------------------------
+
+
 def setup_schedules() -> None:
-    """注册所有定时任务。Phase 1+ 功能实现后逐步添加。"""
-    # Phase 1: 月度体检报告（每月 1 日 08:00，随机偏移在任务内部处理）
-    # scheduler.add_job(generate_monthly_reports, "cron", day=1, hour=8, minute=0, id="monthly_health_report")
-
-    # Phase 2: 每周预警扫描（每周一 08:00）
-    # scheduler.add_job(weekly_alert_scan, "cron", day_of_week="mon", hour=8, minute=0, id="weekly_alert_scan")
-
-    logger.info("定时任务已配置（Phase 0：暂无活跃任务，Phase 1+ 功能实现后启用）")
+    """注册所有定时任务。"""
+    # 每周 literacy 周报（周日上午 8:00）
+    scheduler.add_job(
+        generate_weekly_literacy_reports,
+        "cron",
+        day_of_week="sun",
+        hour=8,
+        minute=0,
+        id="weekly_literacy_report",
+    )
+    logger.info("定时任务已配置")

@@ -1206,3 +1206,102 @@ async def auto_generate_reports(
             skipped += 1
 
     return {"triggered": triggered, "skipped": skipped}
+
+
+# ---------------------------------------------------------------------------
+# Literacy weekly report — internal endpoints for agent scheduler
+# ---------------------------------------------------------------------------
+
+
+@router.get("/literacy-reports/children")
+def internal_get_literacy_children(
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Return children in the family for literacy report generation.
+
+    Called by agent scheduler cron job. Uses X-Family-Id from verify_agent_token.
+    """
+    children = (
+        db.query(User)
+        .filter(
+            User.family_id == int(family_id),
+            User.role == "child",
+            User.is_active == True,  # noqa: E712
+        )
+        .all()
+    )
+    return [
+        {"child_id": str(c.id), "display_name": c.display_name}
+        for c in children
+    ]
+
+
+@router.post("/literacy-report/generate")
+async def internal_generate_literacy_report(
+    child_id: str = Query(..., description="Child user ID"),
+    force: bool = Query(True),
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Generate literacy report for a child — internal scheduler trigger.
+
+    Mirrors /ai/literacy-report/generate but uses verify_agent_token instead of JWT.
+    """
+    from datetime import date
+
+    from apps.backend.app.services.literacy_report import _sunday_of
+    from apps.backend.app.services.literacy_report_service import (
+        generate_literacy_report,
+    )
+
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            details=f"无效的 child_id: {child_id}",
+        ) from None
+
+    child = (
+        db.query(User)
+        .filter(
+            User.id == cid,
+            User.family_id == int(family_id),
+            User.role == "child",
+        )
+        .first()
+    )
+    if child is None:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Find family owner for user_id context
+    owner = (
+        db.query(User)
+        .filter(
+            User.family_id == int(family_id),
+            User.role == "owner",
+            User.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if owner is None:
+        raise AppError(ErrorCode.FAMILY_NO_ACTIVE_MEMBERS)
+
+    week_start = _sunday_of(date.today())
+    report = await generate_literacy_report(
+        db,
+        family_id=int(family_id),
+        child_id=cid,
+        week_start=week_start,
+        user_id=owner.id,
+    )
+
+    if report is None:
+        return {"status": "error", "week_start": week_start.isoformat()}
+
+    return {
+        "status": "ready",
+        "week_start": report.week_start.isoformat() if report.week_start else week_start.isoformat(),
+        "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+    }
