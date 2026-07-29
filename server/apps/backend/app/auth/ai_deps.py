@@ -55,9 +55,16 @@ def verify_agent_token(
 
     token = authorization[7:]
 
+    # Try JWT verification first (production path)
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     except PyJWTError:
+        # Development/test fallback: accept AGENT_INTERNAL_TOKEN when explicitly
+        # configured. Default is empty string (inactive in production).
+        if settings.AGENT_INTERNAL_TOKEN and token == settings.AGENT_INTERNAL_TOKEN:
+            request.state.agent_id = "dev-static"
+            _validate_family_exists(db, x_family_id)
+            return x_family_id
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid agent token",
