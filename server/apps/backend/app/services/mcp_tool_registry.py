@@ -214,6 +214,48 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
     ),
+    "get_child_literacy_profile": MCPToolMeta(
+        name="get_child_literacy_profile",
+        description=(
+            "获取家庭中孩子的财商启蒙档案：昵称、年龄段、当前徽章等级、"
+            "累计场景完成数、本周周报状态。支持按 child_id 过滤。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "child_id": {
+                    "type": "string",
+                    "description": "孩子的 user ID（可选，不传则返回所有孩子）",
+                },
+            },
+            "required": [],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
+    "get_literacy_weekly_data": MCPToolMeta(
+        name="get_literacy_weekly_data",
+        description=(
+            "获取指定孩子某周的财商启蒙数据：家务完成率、星星币收支、"
+            "场景完成情况、徽章变化、与上周的趋势对比。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "child_id": {
+                    "type": "string",
+                    "description": "孩子的 user ID",
+                },
+                "week_start": {
+                    "type": "string",
+                    "description": "周起始日 ISO 格式（Sunday），不传则返回最近一周",
+                },
+            },
+            "required": ["child_id"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
 }
 
 
