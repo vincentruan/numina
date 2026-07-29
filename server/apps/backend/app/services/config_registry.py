@@ -76,6 +76,22 @@ FAMILY_SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
         label_key="familyConfig.weeklyScanHour",
         description_key="familyConfig.weeklyScanHourDesc",
     ),
+    # --- Literacy weekly report ---
+    "literacy_report_day": SettingDefinition(
+        type="int", default=0, min=0, max=6, step=1,
+        label_key="familyConfig.literacyReportDay",
+        description_key="familyConfig.literacyReportDayDesc",
+    ),
+    "literacy_report_hour": SettingDefinition(
+        type="int", default=8, min=0, max=23, step=1,
+        label_key="familyConfig.literacyReportHour",
+        description_key="familyConfig.literacyReportHourDesc",
+    ),
+    "ai_cache_ttl_literacy_weekly_report": SettingDefinition(
+        type="int", default=10080, min=1440, max=20160, step=1440,
+        label_key="familyConfig.aiCacheTtlLiteracyReport",
+        description_key="familyConfig.aiCacheTtlLiteracyReportDesc",
+    ),
 }
 
 USER_SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
