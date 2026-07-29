@@ -23,10 +23,11 @@ from apps.backend.app.auth.revoke_jti import (
     _is_jti_revoked,
     _is_token_revoked_for_user,
 )
-from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.config import settings
+from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
+from packages.core.roles import UserRole
 
 # Cookie names
 ACCESS_TOKEN_COOKIE = "access_token"
@@ -116,7 +117,7 @@ def _verify_token(token: str, expected_type: str = "access") -> dict | None:
         # Extract fid and role with defaults for backward compat
         fid: str | None = payload.get("fid")  # Present for all tokens after refactor
         role: str = payload.get(
-            "role", "member"
+            "role", UserRole.MEMBER
         )  # Default for backward compat with old tokens
         return {"sub": user_id, "fid": fid, "role": role}
     except ExpiredSignatureError:
@@ -132,7 +133,7 @@ def _assert_not_child(user: User) -> None:
     Called from get_current_user and get_current_user_from_cookie to block
     child tokens on all adult endpoints at the authentication layer.
     """
-    if user.role == "child":
+    if user.role == UserRole.CHILD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="儿童账户无法访问此端点",
@@ -185,7 +186,7 @@ def get_current_user(
 
     user_id: str | None = payload.get("sub")
     payload_fid: str | None = payload.get("fid")
-    payload_role: str = payload.get("role", "member")
+    payload_role: str = payload.get("role", UserRole.MEMBER)
     if user_id is None or payload_fid is None:
         raise credentials_exception
     payload_fid_int = int(payload_fid)
@@ -230,7 +231,7 @@ def get_current_user(
 
     # SECURITY: child tokens must not be accepted on adult endpoints.
     # Endpoints that need child access use get_current_child_user instead.
-    if payload_role == "child":
+    if payload_role == UserRole.CHILD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="儿童账户无法访问此端点",
@@ -281,7 +282,7 @@ def get_current_user_from_cookie(
 
     user_id: str | None = payload.get("sub")
     payload_fid: str | None = payload.get("fid")
-    payload_role: str = payload.get("role", "member")
+    payload_role: str = payload.get("role", UserRole.MEMBER)
 
     if user_id is None or payload_fid is None:
         raise credentials_exception
@@ -322,7 +323,7 @@ def get_current_user_from_cookie(
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult-only cookie endpoints.
-    if payload_role == "child":
+    if payload_role == UserRole.CHILD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="儿童账户无法访问此端点",
@@ -411,10 +412,10 @@ def get_current_child_user(
 
     user_id: str | None = payload.get("sub")
     payload_fid: str | None = payload.get("fid")
-    payload_role: str = payload.get("role", "member")
+    payload_role: str = payload.get("role", UserRole.MEMBER)
 
     # SECURITY: Verify payload role is child
-    if payload_role != "child":
+    if payload_role != UserRole.CHILD:
         raise credentials_exception
 
     if user_id is None or payload_fid is None:
@@ -436,7 +437,7 @@ def get_current_child_user(
         .filter(
             User.id == int(user_id),
             User.is_active.is_(True),
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -466,7 +467,7 @@ def get_current_child_user(
         username=username,
         display_name=display_name,
         avatar_color=avatar_color,
-        role="child",
+        role=UserRole.CHILD,
         is_active=True,
         theme=theme,
         language=language,
@@ -539,7 +540,7 @@ def get_current_user_or_child(
 
     user_id: str | None = payload.get("sub")
     payload_fid: str | None = payload.get("fid")
-    payload_role: str = payload.get("role", "member")
+    payload_role: str = payload.get("role", UserRole.MEMBER)
 
     if user_id is None or payload_fid is None:
         raise credentials_exception
@@ -616,7 +617,7 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
     """
     from apps.backend.app.errors import AppError, ErrorCode
 
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.AUTH_OWNER_ONLY)
     return user
 

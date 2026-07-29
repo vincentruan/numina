@@ -11,12 +11,13 @@ from apps.backend.app.schemas.children import (
     UpdateChildRequest,
 )
 from apps.backend.app.services import children as children_service
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/family", tags=["children"])
 
 
 def _require_owner(user: User) -> User:
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     return user
 

@@ -828,7 +828,7 @@ async def upload_chat_attachment(
     if len(content) > _MAX_ATTACHMENT_SIZE:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
-            f"文件大小超过限制（最大 10MB）",
+            "文件大小超过限制（最大 10MB）",
         )
 
     return await StorageService.upload_file(

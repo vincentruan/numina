@@ -7,6 +7,7 @@ from starlette.responses import Response
 from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.mcp_session import MCPSession
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/internal/mcp", tags=["internal-mcp"])
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ async def mcp_sse(
                 family_id, x_caller_user_id, user.family_id,
             )
             raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
-        if user.role == "child":
+        if user.role == UserRole.CHILD:
             logger.warning(
                 "[mcp_sse] child caller rejected: family=%s caller_user_id=%s",
                 family_id, x_caller_user_id,

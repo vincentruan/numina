@@ -32,6 +32,7 @@ from apps.backend.app.schemas.family import (
 from apps.backend.app.services import coin_transactions as coin_service
 from apps.backend.app.services import family as family_service
 from apps.backend.app.services.snapshot import generate_snapshots
+from packages.core.roles import UserRole
 from packages.db.models.family import Family
 
 router = APIRouter(prefix="/family", tags=["family"])
@@ -211,7 +212,7 @@ def update_member_info(
         .filter(
             User.id == member_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -289,7 +290,7 @@ def update_family_settings(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     config = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
@@ -426,7 +427,7 @@ def put_debt_thresholds(
 ):
     """W5: update debt-interest thresholds. Owner-only — a non-owner could
     suppress/unsuppress the whole family's high-interest warnings."""
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     cfg = _get_or_create_debt_thresholds(db, user.family_id)
@@ -451,7 +452,7 @@ def get_child_balance(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -476,7 +477,7 @@ def get_child_ledger(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -514,7 +515,7 @@ def get_child_earning_rate(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -590,7 +591,7 @@ def get_all_child_balances(
         db.query(User.id)
         .filter(
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
             User.is_active == True,
         )
         .all()
@@ -688,7 +689,7 @@ def get_children_chore_stats(
         db.query(User.id)
         .filter(
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
             User.is_active == True,
         )
         .all()

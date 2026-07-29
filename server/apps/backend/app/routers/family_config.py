@@ -24,6 +24,7 @@ from apps.backend.app.services.config_service import (
     get_all_family_settings,
     update_family_settings,
 )
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/family/config", tags=["family-config"])
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ def update_config(
     user: User = Depends(require_adult),
 ):
     """Update family settings. Owner only."""
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     return update_family_settings(db, user.family_id, req.settings)
 

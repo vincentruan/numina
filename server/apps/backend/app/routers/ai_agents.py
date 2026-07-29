@@ -15,6 +15,7 @@ from apps.backend.app.schemas.ai_agent import (
     AgentResponse,
     AgentUpdateRequest,
 )
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/ai/agents", tags=["ai-agents"])
 
@@ -35,7 +36,7 @@ def _parse_json_field(value):
 
 
 def _to_response(agent: AIAgent, user: User) -> AgentResponse:
-    is_owner = user.role == "owner"
+    is_owner = user.role == UserRole.OWNER
     data = {col.name: getattr(agent, col.name) for col in agent.__table__.columns}
     # Parse JSON fields that may be stored as strings in SQLite
     data["skills"] = _parse_json_field(data.get("skills"))
@@ -75,7 +76,7 @@ def list_agents(
     # Custom agents are gated by is_published: drafts are only visible to
     # the creator (for debugging) and the family owner. Published custom
     # agents are visible to any adult in the family.
-    is_owner = current_user.role == "owner"
+    is_owner = current_user.role == UserRole.OWNER
     agents = [
         a
         for a in agents

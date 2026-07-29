@@ -25,6 +25,7 @@ from apps.backend.app.schemas.literacy_report import (
     WeeklyReportResponse,
 )
 from apps.backend.app.services.literacy_report_service import get_report_status
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/literacy-reports", tags=["literacy-parent"])
 
@@ -52,7 +53,7 @@ def _validate_child_in_family(db: Session, child_id: int, family_id: int) -> Use
             select(User).where(
                 User.id == child_id,
                 User.family_id == family_id,
-                User.role == "child",
+                User.role == UserRole.CHILD,
                 User.is_active.is_(True),
             )
         )
@@ -159,7 +160,7 @@ def get_children(
         db.execute(
             select(User).where(
                 User.family_id == current_user.family_id,
-                User.role == "child",
+                User.role == UserRole.CHILD,
                 User.is_active.is_(True),
             )
         )

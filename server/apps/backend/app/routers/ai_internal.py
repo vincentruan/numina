@@ -7,10 +7,10 @@
 import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
 from apps.backend.app.services.web_search_provider_registry import get_provider_template
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/internal", tags=["internal-agent"])
 
@@ -36,7 +37,7 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     user = (
         db.query(User)
         .filter(
-            User.family_id == family_id, User.role == "owner", User.is_active == True
+            User.family_id == family_id, User.role == UserRole.OWNER, User.is_active == True
         )
         .first()
     )
@@ -1119,7 +1120,7 @@ async def auto_generate_reports(
 
     triggered = 0
     skipped = 0
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     for fid in eligible_ids:
         # 3. 检查是否有 1 小时内的报告
@@ -1149,7 +1150,7 @@ async def auto_generate_reports(
         # 5. 找到家庭 owner 作为执行用户
         owner = (
             db.query(User)
-            .filter(User.family_id == fid, User.role == "owner", User.is_active == True)
+            .filter(User.family_id == fid, User.role == UserRole.OWNER, User.is_active == True)
             .first()
         )
         if not owner:
@@ -1217,7 +1218,7 @@ def internal_get_literacy_children(
         db.query(User)
         .filter(
             User.family_id == int(family_id),
-            User.role == "child",
+            User.role == UserRole.CHILD,
             User.is_active == True,  # noqa: E712
         )
         .all()
@@ -1259,7 +1260,7 @@ async def internal_generate_literacy_report(
         .filter(
             User.id == cid,
             User.family_id == int(family_id),
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -1271,7 +1272,7 @@ async def internal_generate_literacy_report(
         db.query(User)
         .filter(
             User.family_id == int(family_id),
-            User.role == "owner",
+            User.role == UserRole.OWNER,
             User.is_active == True,  # noqa: E712
         )
         .first()

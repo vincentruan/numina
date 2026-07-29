@@ -13,6 +13,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.user import User
 from apps.backend.app.services.ai_crypto import decrypt_api_key, encrypt_api_key
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/ai/mcp", tags=["ai-mcp"])
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ def list_mcp_servers(
         .order_by(FamilyMCPServer.id)
         .all()
     )
-    is_owner = current_user.role == "owner"
+    is_owner = current_user.role == UserRole.OWNER
     return [_to_response(s, include_env=is_owner) for s in servers]
 
 

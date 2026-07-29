@@ -18,6 +18,7 @@ from apps.backend.app.services.literacy_report_service import (
     generate_literacy_report,
     get_report_status,
 )
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/ai/literacy-report", tags=["ai-literacy-report"])
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ async def trigger_generate(
         .filter(
             User.id == cid,
             User.family_id == current_user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )

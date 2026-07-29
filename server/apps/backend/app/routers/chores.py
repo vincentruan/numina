@@ -24,6 +24,7 @@ from apps.backend.app.schemas.chore import (
 )
 from apps.backend.app.services import chores as chore_service
 from apps.backend.app.services.blind_box import blind_box_trigger
+from packages.core.roles import UserRole
 
 router = APIRouter(tags=["chores"])
 
@@ -103,7 +104,7 @@ def list_children_chores(
 
     children = db.query(User.id).filter(
         User.family_id == user.family_id,
-        User.role == "child",
+        User.role == UserRole.CHILD,
         User.is_active.is_(True),
     ).all()
     child_ids = [c.id for c in children]

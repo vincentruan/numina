@@ -12,7 +12,11 @@ from apps.backend.app.models.bonus_draw import BonusDraw
 from apps.backend.app.models.chore import ChoreInstance
 from apps.backend.app.models.user import User
 from apps.backend.app.routers.blind_box import _draw_to_response, _get_or_create_config
-from apps.backend.app.schemas.blind_box import BlindBoxDrawResponse, BonusDrawResponse, DrawRequest
+from apps.backend.app.schemas.blind_box import (
+    BlindBoxDrawResponse,
+    BonusDrawResponse,
+    DrawRequest,
+)
 from apps.backend.app.services.blind_box import pick_gift, should_upgrade_surprise
 
 router = APIRouter(prefix="/child/blind-box", tags=["child-blind-box"])

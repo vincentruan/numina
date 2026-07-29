@@ -9,7 +9,7 @@ import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -191,7 +191,7 @@ async def trigger_generate_events(
                         )
                     )
 
-            age = datetime.now(timezone.utc).replace(tzinfo=None) - cached.generated_at
+            age = datetime.now(UTC).replace(tzinfo=None) - cached.generated_at
             if age < _report_ttl:
                 # security-lens Open Question #22 (P2, defense-in-depth): the
                 # cached report_json was validated on first write, but re-serving
