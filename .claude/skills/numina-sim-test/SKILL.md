@@ -149,12 +149,12 @@ export BASE=http://localhost:5173/ CHILD_BASE=http://localhost:5174/child/ API_B
 - **Child accounts** (under demouser family):
   - Display_names are **discovered at gate time** (Phase 1.5) via
     `/family/members` where `role=="child"` — not hard-coded.
-  - Docker seed default: 小宝 (`xiaobao`), 大宝 (`dabao`), PIN `🐰🥕🌈⭐`.
+  - Docker seed default: 小宝 (`xiaobao`), 大宝 (`dabao`), PIN `🐱🌟🌈`.
   - Dev/other deployments may differ (e.g. `demochild`, 小明). See
     [`test-cases/_common.md`](./test-cases/_common.md) for the convention.
 - **Regression test accounts**:
   - `test_rich` / `TestRich123!` — full data (assets + liabilities + wishes + children)
-  - `test_child`: `testchild`, PIN `🐱🐶🐸🦊` (under test_rich family)
+  - `test_child`: `testchild`, PIN `🐱🌟` (under test_rich family)
 - **Frontend**: Vue 3 + TypeScript + Vant 4 + ECharts, mobile-first (375×812)
 - **UI language**: 简体中文
 - **Output paths** (gitignored — local only):
@@ -736,7 +736,7 @@ bsk session stop "$SID"
 # demouser family: child display_names DISCOVERED at gate time (Phase 1.5)
 #   docker seed default: 小宝 / 大宝  (PIN per test-cases/_common.md)
 #   dev/other deployments may differ (e.g. demochild, 小明) — gate reads actual names
-# test_rich family: test_child (testchild / 🐱🐶🐸🦊)
+# test_rich family: test_child (testchild / 🐱🌈)
 ```
 
 ## Test Case Index
