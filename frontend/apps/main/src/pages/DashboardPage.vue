@@ -25,6 +25,9 @@
         <!-- D2/A1a: finance_coach proactive suggestions card (Plan B T5) -->
         <FinanceCoachCard />
 
+        <!-- Literacy weekly report status (per-child) -->
+        <LiteracyStatusCard ref="literacyStatusRef" />
+
         <!-- Smart Reminders (includes expiring soon + upcoming payments + idle + AI reminders) -->
         <SmartRemindersCard
           :idle-assets="dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle')"
@@ -69,6 +72,7 @@ import DashboardNarrativeCard from '@/components/dashboard/DashboardNarrativeCar
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
+import LiteracyStatusCard from '@/components/dashboard/LiteracyStatusCard.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -81,6 +85,7 @@ const { increment, decrement } = usePageLoading()
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false
 const refreshing = ref(false)
+const literacyStatusRef = ref<InstanceType<typeof LiteracyStatusCard> | null>(null)
 
 // Upcoming payments
 const upcomingPayments = ref<UpcomingPaymentItem[]>([])
@@ -115,6 +120,7 @@ async function onRefresh() {
   if (authStore.user?.role === 'owner') {
     await choreStore.fetchPendingApprovals()
   }
+  await literacyStatusRef.value?.loadStatuses()
   refreshing.value = false
 }
 

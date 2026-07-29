@@ -15,6 +15,7 @@ import uuid
 from datetime import date, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.services.agent_client import AgentClient
@@ -37,6 +38,32 @@ logger = logging.getLogger(__name__)
 def _make_thread_id(family_id: int, child_id: int) -> str:
     """Generate a unique thread ID for the literacy report agent run."""
     return f"literacy-report-{family_id}-{child_id}-{uuid.uuid4().hex[:8]}"
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+
+def _validate_child_in_family(
+    db: Session, *, child_id: int, family_id: int
+) -> None:
+    """Verify child_id belongs to family_id. Raises ValueError if not.
+
+    Defense-in-depth: callers should already validate, but the service layer
+    must not trust upstream validation blindly.
+    """
+    exists = db.execute(
+        select(User.id).where(
+            User.id == child_id,
+            User.family_id == family_id,
+            User.role == "child",
+        )
+    ).scalar_one_or_none()
+    if exists is None:
+        raise ValueError(
+            f"child {child_id} not found in family {family_id}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +116,9 @@ def get_report_status(
 
     ``narrative`` is truncated to the first 80 chars for the card preview.
     """
+    # Defense-in-depth: verify child belongs to caller's family
+    _validate_child_in_family(db, child_id=child_id, family_id=family_id)
+
     today = date.today()
     week_start = _sunday_of(today)
 
@@ -230,7 +260,25 @@ def _persist_report_result(
         thread_id=thread_id,
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # TOCTOU: another caller inserted the same (child_id, week_start)
+        # between our SELECT and INSERT. Re-query the existing row.
+        db.rollback()
+        logger.info(
+            "[literacy-report] unique constraint hit for child=%s week=%s — "
+            "returning existing row",
+            child_id,
+            week_start,
+        )
+        row = db.execute(
+            select(LiteracyWeeklyReport).where(
+                LiteracyWeeklyReport.child_id == child_id,
+                LiteracyWeeklyReport.week_start == week_start,
+            )
+        ).scalar_one_or_none()
+        return row
     db.refresh(row)
     return row
 
@@ -259,6 +307,9 @@ async def generate_literacy_report(
     3. Stream via agent gateway
     4. Persist result
     """
+    # Defense-in-depth: verify child belongs to caller's family
+    _validate_child_in_family(db, child_id=child_id, family_id=family_id)
+
     # Idempotency check
     existing = db.execute(
         select(LiteracyWeeklyReport).where(

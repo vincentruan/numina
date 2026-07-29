@@ -58,6 +58,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showFailToast } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -74,6 +75,7 @@ import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api
 defineOptions({ name: 'LiteracyReportPage' })
 
 const { t } = useI18n()
+const route = useRoute()
 
 const loading = ref(true)
 const loadError = ref(false)
@@ -108,7 +110,10 @@ async function init() {
     const childListRes = await getReportChildren()
     children.value = childListRes.children
     if (children.value.length > 0) {
-      selectedChildId.value = children.value[0].child_id
+      // Pre-select child from query param (e.g. from BabyPage navigation)
+      const queryChildId = route.query.child_id as string | undefined
+      const match = queryChildId && children.value.find(c => c.child_id === queryChildId)
+      selectedChildId.value = match ? match.child_id : children.value[0].child_id
     }
   } catch {
     loadError.value = true

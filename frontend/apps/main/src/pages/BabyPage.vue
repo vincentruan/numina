@@ -63,13 +63,16 @@
             </template>
           </van-cell>
           <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')" />
-          <van-cell
-            v-if="aiStore.aiEnabled && selectedChildId"
-            :title="t('baby.literacyReportEntry')"
-            :value="reportStatusLabel(String(selectedChildId))"
-            is-link
-            @click="navigateToReport(String(selectedChildId))"
-          />
+          <template v-if="selectedChildId">
+            <van-cell
+              v-if="aiStore.aiEnabled"
+              :title="t('baby.literacyReportEntry')"
+              :value="reportStatusLabel(String(selectedChildId))"
+              is-link
+              @click="navigateToReport(String(selectedChildId))"
+            />
+            <AiGatedInline v-else :is-owner="authStore.user?.role === 'owner'" />
+          </template>
         </van-cell-group>
 
         <!-- Content Tabs -->
@@ -575,8 +578,9 @@ import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
+import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 import IIcon from '@/components/IIcon.vue'
-import { getReportStatus, generateReport, type ReportStatus } from '@/api/literacyReport'
+import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
 import { useAIStore } from '@/stores/ai'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { parseApiDate } from '@/utils/format'
@@ -648,20 +652,7 @@ function reportStatusLabel(childId: string): string {
 }
 
 async function navigateToReport(childId: string) {
-  const status = reportStatusMap.value[String(childId)]
-  if (status?.thread_id) {
-    router.push(`/ai/chat?thread_id=${encodeURIComponent(status.thread_id)}`)
-  } else {
-    // No cached thread — trigger generation then navigate
-    try {
-      const { data } = await generateReport(childId)
-      if (data.thread_id) {
-        router.push(`/ai/chat?thread_id=${encodeURIComponent(data.thread_id)}`)
-      }
-    } catch {
-      // silently fail
-    }
-  }
+  router.push(`/baby/literacy-report?child_id=${encodeURIComponent(childId)}`)
 }
 
 const childMembers = computed(() => familyStore.members.filter(m => m.role === 'child'))
