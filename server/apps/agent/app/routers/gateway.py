@@ -526,3 +526,55 @@ async def trigger_dashboard_narrative_run(
             "Content-Location": f"/internal/gateway/runs/dashboard-narrative/{thread_id}/{record.run_id}",
         },
     )
+
+
+class LiteracyWeeklyReportRunRequest(BaseModel):
+    """Request body for internal literacy-weekly-report run trigger."""
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/literacy-weekly-report/{thread_id}")
+async def trigger_literacy_weekly_report_run(
+    thread_id: str,
+    body: LiteracyWeeklyReportRunRequest,
+    request: Request,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> StreamingResponse:
+    """Trigger a literacy-weekly-report stream_run from the backend."""
+    _verify_token(x_agent_token)
+    _validate_path_segment(thread_id, "thread_id")
+
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "literacy-weekly-report"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body, thread_id, request, body.family_id, body.user_id, internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/literacy-weekly-report/{thread_id}/{record.run_id}",
+        },
+    )

@@ -295,6 +295,7 @@ async def run_agent(
       - ``finance-coach`` → ``_run_finance_coach_agent`` (Plan A single-run advice).
       - ``wish-advice``   → ``_run_wish_advice_agent`` (Plan B T7 single-run advice).
       - ``dashboard-narrative`` → ``_run_dashboard_narrative_agent`` (仪表盘叙事).
+      - ``literacy-weekly-report`` → ``_run_literacy_weekly_report_agent`` (启蒙周报).
 
     The allowlist preventing unknown / asset-report / import-parse / finance-coach
     / wish-advice values from reaching here is enforced upstream in
@@ -362,6 +363,18 @@ async def run_agent(
             return
         if app == "dashboard-narrative":
             await _run_dashboard_narrative_agent(
+                bridge=bridge,
+                run_manager=run_manager,
+                record=record,
+                family_id=family_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                graph_input=graph_input,
+                config=config,
+            )
+            return
+        if app == "literacy-weekly-report":
+            await _run_literacy_weekly_report_agent(
                 bridge=bridge,
                 run_manager=run_manager,
                 record=record,
@@ -2813,6 +2826,195 @@ async def _run_numina_agent(
                 )
             )
             _track_task(task)
+
+        await bridge.publish_end(run_id)
+        asyncio.create_task(bridge.cleanup(run_id, delay=60))
+        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
+
+
+# Synthetic trigger for literacy-weekly-report runs.
+_SYNTHETIC_LITERACY_REPORT_TRIGGER = "/literacy-weekly-report"
+
+
+def _extract_literacy_report_context(graph_input: dict | None) -> str | None:
+    """Extract backend-injected report context from graph_input messages."""
+    if not graph_input or not isinstance(graph_input, dict):
+        return None
+    msgs = graph_input.get("messages")
+    if not isinstance(msgs, list) or not msgs:
+        return None
+    last = msgs[-1]
+    if isinstance(last, dict) and last.get("role") in ("user", "human"):
+        content = last.get("content", "")
+        if isinstance(content, str) and content.strip():
+            return content
+    return None
+
+
+async def _run_literacy_weekly_report_agent(
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    family_id: str,
+    user_id: str | None,
+    thread_id: str,
+    graph_input: dict | None,
+    config: dict[str, Any],
+) -> None:
+    """literacy-weekly-report dispatch branch.
+
+    Runs a single stream_run agent with skill_name='literacy-weekly-report'.
+    The backend injects child_id + week context as the user message.
+    The agent calls MCP tools to fetch literacy data and generates a weekly report.
+    """
+    run_id = record.run_id
+    t_start = time.monotonic()
+    success = False
+    error_type: str | None = None
+    completion_status = "error"
+    ai_response_parts: list[str] = []
+    cumulative_usage: dict[str, int] | None = None
+
+    try:
+        # 1. Mark running + publish metadata
+        await run_manager.set_status(run_id, RunStatus.running)
+        await bridge.publish(
+            run_id, "metadata", {"run_id": run_id, "thread_id": thread_id}
+        )
+
+        # 2. Fetch per-family AI config
+        client = BackendClient(family_id=family_id)
+        ai_config = await client.get_family_ai_config()
+        providers = ai_config.get("providers", [])
+        if not providers:
+            raise RuntimeError("未配置 AI 供应商")
+        selected_provider = next(
+            (p for p in providers if p.get("is_active")), providers[0]
+        )
+
+        # 3. Fetch enabled MCP servers
+        mcp_servers = await _resolve_numina_mcp_servers(
+            client, family_id, user_id, "[_run_literacy_weekly_report_agent]"
+        )
+
+        # 4. Build adapter
+        from apps.agent.services.agent_registry import get_agent_registry
+
+        agent_meta = await get_agent_registry().get("literacy-weekly-report", family_id)
+        memory_enabled = (
+            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
+        )
+
+        adapter = create_family_adapter(
+            family_id,
+            selected_provider,
+            timeout_seconds=120,
+            subagent_enabled=False,
+            plan_mode=False,
+            mcp_servers=mcp_servers,
+            agent_name="literacy-weekly-report",
+            memory_enabled=memory_enabled,
+        )
+
+        # 5. User message = backend-injected context or synthetic trigger fallback
+        user_message = (
+            _extract_literacy_report_context(graph_input)
+            or _SYNTHETIC_LITERACY_REPORT_TRIGGER
+        )
+
+        # 6. PII redaction (defense-in-depth)
+        context = FamilyContext(family_id=family_id, free_text=user_message)
+        redacted = pii_redactor.redact(context)
+
+        # 7. Stream via typed_stream_dispatch
+        from apps.agent.services.deerflow_adapter.active_skill_context import (
+            set_active_skill,
+        )
+
+        _skill_token = set_active_skill("literacy-weekly-report")
+        async for sse_type, data in adapter.typed_stream_dispatch(
+            skill_name="literacy-weekly-report",
+            context=redacted,
+            thread_id=thread_id,
+            enable_thinking=False,
+        ):
+            if record.abort_event.is_set():
+                break
+
+            if sse_type == "end":
+                if isinstance(data, dict) and data.get("usage"):
+                    raw_usage = data["usage"]
+                    cumulative_usage = {
+                        "input_tokens": raw_usage.get("input_tokens", 0),
+                        "output_tokens": raw_usage.get("output_tokens", 0),
+                        "total_tokens": raw_usage.get("total_tokens", 0),
+                    }
+                break
+            if sse_type == "error":
+                await bridge.publish(run_id, "error", data)
+                break
+
+            # Forward canonical frames
+            await bridge.publish(run_id, sse_type, data)
+
+            if sse_type == "messages" and isinstance(data, dict):
+                msg_type = data.get("type")
+                if msg_type == "ai":
+                    content = data.get("content")
+                    if content:
+                        ai_response_parts.append(content)
+
+        # 8. Terminal status
+        if record.abort_event.is_set():
+            await run_manager.set_status(run_id, RunStatus.interrupted)
+            completion_status = "interrupted"
+        else:
+            await run_manager.set_status(run_id, RunStatus.success)
+            completion_status = "complete"
+            success = record.status == RunStatus.success
+
+    except asyncio.CancelledError:
+        error_type = "Cancelled"
+        await run_manager.set_status(run_id, RunStatus.interrupted)
+        raise
+    except Exception as exc:
+        error_type = type(exc).__name__
+        logger.warning(
+            "[_run_literacy_weekly_report_agent] failed run=%s err=%s",
+            run_id,
+            error_type,
+        )
+        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        await bridge.publish(
+            run_id, "error", {"message": str(exc), "name": error_type}
+        )
+
+    finally:
+        if "_skill_token" in locals():
+            from apps.agent.services.deerflow_adapter.active_skill_context import (
+                reset_active_skill,
+            )
+
+            reset_active_skill(_skill_token)
+
+        audit_logger.log_call(
+            AuditEntry(
+                family_id=family_id,
+                audit_id=run_id,
+                user_id=user_id or "",
+                skill_id="literacy-weekly-report",
+                success=success,
+                error_type=error_type,
+                deerflow_attempted=True,
+                duration_ms=int((time.monotonic() - t_start) * 1000),
+            )
+        )
+
+        end_payload: dict[str, Any] = {"status": completion_status}
+        if cumulative_usage:
+            end_payload["usage"] = cumulative_usage
+        await bridge.publish(run_id, "end", end_payload)
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
