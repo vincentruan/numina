@@ -1338,7 +1338,11 @@ export default {
     editChildLunar: '农历生日',
     editChildSave: '保存',
     editChildSaved: '信息已更新',
-    editChildFailed: '更新失败，请重试'
+    editChildFailed: '更新失败，请重试',
+    literacyReportEntry: 'Literacy Report',
+    literacyReportReady: 'Report ready',
+    literacyReportNone: 'No report yet',
+    literacyReportGenerating: 'Generating…',
   },
   secondFactor: {
     title: 'Two-Factor Authentication',
