@@ -165,6 +165,11 @@
           <SvgIcon name="web-search" :size="16" class="cell-icon" />
         </template>
       </van-cell>
+      <van-cell :title="t('settings.asrManage')" is-link to="/settings/ai/asr">
+        <template #icon>
+          <van-icon name="volume-o" size="16" class="cell-icon" />
+        </template>
+      </van-cell>
       <van-cell :title="t('settings.skillsManage')" is-link to="/settings/ai/skills">
         <template #icon>
           <SvgIcon name="wand" :size="16" class="cell-icon" />

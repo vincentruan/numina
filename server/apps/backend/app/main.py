@@ -85,6 +85,7 @@ from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_
 from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
+from apps.backend.app.routers import ai_asr as ai_asr_router
 from apps.backend.app.routers import ai_chat as ai_chat_router
 from apps.backend.app.routers import ai_config as ai_config_router
 from apps.backend.app.routers import ai_context as ai_context_router
@@ -445,6 +446,7 @@ app.include_router(files_router.router, prefix="/api/v1")
 app.include_router(admin_ai_extraction_router.router, prefix="/api/v1")
 app.include_router(admin_audit_logs_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
+app.include_router(ai_asr_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
