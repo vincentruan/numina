@@ -11,6 +11,9 @@ export interface FamilyConfigValues {
   scheduled_monthly_report_hour: number
   scheduled_weekly_scan_day: number
   scheduled_weekly_scan_hour: number
+  literacy_report_day: number
+  literacy_report_hour: number
+  ai_cache_ttl_literacy_weekly_report: number
 }
 
 export interface UserConfigValues {

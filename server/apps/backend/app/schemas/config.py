@@ -52,6 +52,9 @@ class FamilyConfigResponse(BaseModel):
     scheduled_monthly_report_hour: int
     scheduled_weekly_scan_day: int
     scheduled_weekly_scan_hour: int
+    literacy_report_day: int
+    literacy_report_hour: int
+    ai_cache_ttl_literacy_weekly_report: int
 
 
 class UserConfigResponse(BaseModel):
