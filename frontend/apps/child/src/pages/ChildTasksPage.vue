@@ -5,6 +5,7 @@
 
     <!-- Actual content -->
     <template v-else>
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -237,7 +238,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
@@ -257,6 +258,7 @@ import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
 import EmptyState from '@/components/EmptyState.vue'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
 import allDoneSvgRaw from '@/assets/empty-states/all-done.svg?raw'
 
@@ -284,6 +286,7 @@ const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
+const inlineError = ref({ visible: false, message: '' })
 
 // Balance polling via composable
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
@@ -475,11 +478,6 @@ async function pollForApproval(instanceId: string) {
     try {
       const res = await http.get<{ status: string }>(`/child/chores/${instanceId}/status`)
       if (res.data.status === 'approved') {
-        // Update chores ref so watch(chores) triggers checkAndTriggerCelebration
-        const idx = chores.value.findIndex(c => c.id === instanceId)
-        if (idx !== -1) {
-          chores.value[idx] = { ...chores.value[idx], status: 'approved' }
-        }
         await checkAutoDraw()
         return
       }
@@ -564,7 +562,7 @@ async function claim(instanceId: string) {
   } catch {
     // Revert optimistic update
     if (idx !== -1) chores.value[idx] = { ...chores.value[idx], is_pool_unclaimed: true }
-    showFailToast(t('chore.claimFailed'))
+    inlineError.value = { visible: true, message: t('chore.claimFailed') }
   } finally {
     claimingId.value = null
   }
@@ -585,7 +583,7 @@ async function doAbandon() {
     abandonSheetVisible.value = false
     abandonTarget.value = null
   } catch {
-    showFailToast(t('chore.abandonFailed'))
+    inlineError.value = { visible: true, message: t('chore.abandonFailed') }
     abandonTarget.value = null
   } finally {
     abandoningId.value = null

@@ -1,5 +1,6 @@
 <template>
   <div class="wish-detail-page">
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <!-- Skeleton during initial load -->
     <ChildWishDetailSkeleton v-if="loading" />
 
@@ -83,7 +84,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildWishDetailSkeleton from '@/components/skeletons/ChildWishDetailSkeleton.vue'
-import { showToast, showFailToast } from 'vant'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -94,6 +95,7 @@ import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { daysEstimate } from '@numina/math'
 import { parseApiDate } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader.vue'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -105,6 +107,7 @@ const stats = ref<ChildWishStats | null>(null)
 const ledger = ref<CoinTransaction[]>([])
 const loading = ref(true)
 const actioning = ref(false)
+const inlineError = ref({ visible: false, message: '' })
 
 const wishId = computed(() => String(route.params.id))
 
@@ -151,7 +154,7 @@ async function redeem() {
     await requestRedemption(wish.value.id)
     await load()
   } catch {
-    showFailToast(t('toast.submitFailed'))
+    inlineError.value = { visible: true, message: t('toast.submitFailed') }
   } finally {
     actioning.value = false
   }

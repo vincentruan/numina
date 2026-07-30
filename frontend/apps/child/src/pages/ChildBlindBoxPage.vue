@@ -1,5 +1,6 @@
 <template>
   <div class="child-blind-box-page">
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <!-- Clay-styled header band — lavender feature card -->
     <div class="page-header">
       <p class="page-title">{{ t('blindBox.navTitle') }}</p>
@@ -75,12 +76,13 @@
 
 <script setup lang="ts">
 import { onMounted, ref, toRefs } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { parseLocalDate } from '@/utils/format'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 
 const { t, locale } = useI18n()
 const store = useBlindBoxStore()
@@ -89,6 +91,7 @@ const { draws, bonusDraws, loading, lastDraw } = toRefs(store)
 const activeTab = ref<'draw' | 'history'>('draw')
 const animating = ref(false)
 const revealed = ref(false)
+const inlineError = ref({ visible: false, message: '' })
 const refreshing = ref(false)
 
 onMounted(async () => {
@@ -111,7 +114,7 @@ async function onDraw() {
     await store.useBonusDraw(bonusDraws.value[0].id)
     revealed.value = true
   } catch {
-    showFailToast(t('toast.drawFailed'))
+    inlineError.value = { visible: true, message: t('toast.drawFailed') }
   } finally {
     animating.value = false
   }
@@ -126,7 +129,7 @@ async function onUseBonusDraw(bonusId: string) {
     revealed.value = true
     activeTab.value = 'draw'
   } catch {
-    showFailToast(t('toast.useBonusFailed'))
+    inlineError.value = { visible: true, message: t('toast.useBonusFailed') }
   } finally {
     animating.value = false
   }

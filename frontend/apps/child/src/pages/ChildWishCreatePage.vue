@@ -1,5 +1,6 @@
 <template>
   <div class="create-page">
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <!-- Nav bar -->
     <div class="nav-bar">
       <button class="nav-back" :aria-label="t('common.back')" @click="router.replace('/wishes')">
@@ -118,10 +119,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showToast } from 'vant'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { createChildWish } from '@/api/childWishes'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -148,6 +150,7 @@ const form = ref({
 const creating = ref(false)
 const showEmojiPicker = ref(false)
 const showSuccessDialog = ref(false)
+const inlineError = ref({ visible: false, message: '' })
 
 const priorities = computed(() => [
   { value: 'high' as const, label: t('wishes.priorityHigh') },
@@ -172,7 +175,7 @@ async function submitWish() {
     })
     showSuccessDialog.value = true
   } catch {
-    showFailToast(t('toast.submitFailed'))
+    inlineError.value = { visible: true, message: t('toast.submitFailed') }
   } finally {
     creating.value = false
   }

@@ -9,6 +9,7 @@
       @refresh="onRefresh"
     >
       <h2 class="page-title">{{ t('scenario.title') }}</h2>
+      <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
 
       <div v-if="loading && !refreshing && !scenario" class="loading-state">
         {{ t('scenario.loading') }}
@@ -48,7 +49,7 @@ defineOptions({ name: 'ChildScenario' })
 
 import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showFailToast } from 'vant'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getWeeklyScenario, submitChoice, type ScenarioResponse } from '@/api/literacy'
 import ScenarioCard from '@/components/literacy/ScenarioCard.vue'
@@ -68,6 +69,8 @@ const feedback = reactive({
   dimensionHint: '',
   badgesUnlocked: [] as string[],
 })
+
+const inlineError = ref({ visible: false, message: '' })
 
 async function load() {
   loading.value = true
@@ -97,7 +100,7 @@ async function onChoose(index: number) {
     // Mark scenario completed locally
     scenario.value = { ...scenario.value, completed: true }
   } catch {
-    showFailToast(t('scenario.submitFailed'))
+    inlineError.value = { visible: true, message: t('scenario.submitFailed') }
   }
 }
 
