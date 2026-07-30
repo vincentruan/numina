@@ -13,6 +13,7 @@
       :success-text="t('common.pullRefresh.success')"
       @refresh="onRefresh"
     >
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <!-- Date navigation — flat card -->
     <div class="date-nav-card">
       <button
@@ -256,7 +257,8 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
@@ -291,6 +293,7 @@ const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
+const inlineError = ref({ visible: false, message: '' })
 const submittingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
 const abandoningId = ref<string | null>(null)
@@ -507,6 +510,8 @@ async function checkAutoDraw() {
     if (res.data) {
       autoDraw.value = res.data
       showAutoDrawOverlay.value = true
+    } else if (!taskCelebrationVisible.value) {
+      showToast({ message: t('chore.consolation'), duration: 2000 })
     }
   } catch {
     // silent — blind box is a bonus, not critical
@@ -606,7 +611,7 @@ async function claim(instanceId: string) {
   } catch {
     // Revert optimistic update
     if (idx !== -1) chores.value[idx] = { ...chores.value[idx], is_pool_unclaimed: true }
-    showFailToast(t('chore.claimFailed'))
+    inlineError.value = { visible: true, message: t('chore.claimFailed') }
   } finally {
     claimingId.value = null
   }
@@ -627,7 +632,7 @@ async function doAbandon() {
     abandonSheetVisible.value = false
     abandonTarget.value = null
   } catch {
-    showFailToast(t('chore.abandonFailed'))
+    inlineError.value = { visible: true, message: t('chore.abandonFailed') }
     abandonTarget.value = null
   } finally {
     abandoningId.value = null

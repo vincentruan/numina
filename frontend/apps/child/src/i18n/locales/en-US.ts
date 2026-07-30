@@ -106,6 +106,7 @@ export default {
     abandonWishHint: '{remaining} ⭐ away from 「{wishName}」 — finishing this gets you closer 🌟',
     claimFailed: 'Could not claim, task may already be taken',
     swipeToComplete: 'Swipe to complete',
+    consolation: 'Better luck next time! Keep going',
     claimDisabledHistorical: '⏳ Past tasks cannot be claimed',
     claimDisabledUnavailable: '🔒 Cannot claim in current state',
     abandonFailed: 'Could not give up, please try again',
