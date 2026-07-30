@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -18,7 +18,6 @@ from apps.backend.app.services.literacy_report_service import (
 )
 from apps.backend.app.utils.snowflake import next_id
 from packages.db.models.literacy_report import LiteracyWeeklyReport
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

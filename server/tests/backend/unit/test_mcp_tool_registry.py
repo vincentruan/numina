@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 
 from apps.backend.app.services.mcp_tool_registry import (
-    MCPToolMeta,
     _REGISTRY,
+    MCPToolMeta,
     get_tool,
     list_tools_for_role,
     validate_registry,
@@ -91,9 +91,9 @@ class TestValidateRegistry:
             allowed_roles=frozenset(),
             requires_write=False,
         )
-        with patch.dict(_REGISTRY, {"broken_tool": broken}):
-            with pytest.raises(RuntimeError, match="empty allowed_roles"):
-                validate_registry()
+        with patch.dict(_REGISTRY, {"broken_tool": broken}), \
+             pytest.raises(RuntimeError, match="empty allowed_roles"):
+            validate_registry()
 
     def test_validate_registry_raises_on_unknown_role(self):
         broken = MCPToolMeta(
@@ -103,9 +103,9 @@ class TestValidateRegistry:
             allowed_roles=frozenset({"admin"}),
             requires_write=False,
         )
-        with patch.dict(_REGISTRY, {"broken_tool": broken}):
-            with pytest.raises(RuntimeError, match="unknown roles"):
-                validate_registry()
+        with patch.dict(_REGISTRY, {"broken_tool": broken}), \
+             pytest.raises(RuntimeError, match="unknown roles"):
+            validate_registry()
 
 
 def test_literacy_tools_registered():

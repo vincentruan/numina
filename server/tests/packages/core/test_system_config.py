@@ -75,7 +75,7 @@ def test_loader_invalid_yaml_raises(tmp_path, monkeypatch):
     _write_yaml(tmp_path / "docker-compose.yml", "")  # marker
     _write_yaml(tmp_path / "system-config.yaml", "{ this is: not valid: yaml }: x:")
     monkeypatch.setattr(system_config, "_project_root", lambda: tmp_path)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match="."):
         system_config.get_system_config()
 
 

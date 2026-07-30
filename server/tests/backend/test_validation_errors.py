@@ -37,9 +37,9 @@ def short_endpoint(body: ShortModel):
 
 
 # Register the same handlers as the main app
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError  # noqa: E402
 
-from apps.backend.app.error_handlers import validation_error_handler
+from apps.backend.app.error_handlers import validation_error_handler  # noqa: E402
 
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 

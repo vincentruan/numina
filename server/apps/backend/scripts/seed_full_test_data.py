@@ -5,7 +5,7 @@ Run from server/ directory: uv run python apps/backend/scripts/seed_full_test_da
 
 import random
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
@@ -177,7 +177,7 @@ def seed_tags(db, user: User):
 
 def seed_assets(db, user: User, tags: list[Tag]):
     """Create diverse assets for a user."""
-    categories = db.query(Category).filter(Category.is_system == True).all()
+    categories = db.query(Category).filter(Category.is_system).all()
     if not categories:
         print("ERROR: No system categories found. Run seed_categories first.")
         return []

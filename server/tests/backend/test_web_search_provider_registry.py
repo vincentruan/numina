@@ -38,7 +38,9 @@ def test_ddg_search_does_not_require_api_key():
 
 
 def test_reconcile_registry_returns_empty_when_all_present():
-    from apps.backend.app.services.web_search_provider_registry import reconcile_registry
+    from apps.backend.app.services.web_search_provider_registry import (
+        reconcile_registry,
+    )
     # Without deerflow.community installed, should return empty (graceful skip)
     result = reconcile_registry()
     assert isinstance(result, list)

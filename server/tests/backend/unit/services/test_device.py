@@ -18,6 +18,7 @@ def _make_family(db) -> Family:
 
 def _make_user(db, family_id: int, role: str = "owner") -> User:
     import bcrypt
+
     from apps.backend.app.utils.snowflake import next_id
     user = User(
         id=next_id(),

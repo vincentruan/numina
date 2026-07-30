@@ -54,9 +54,15 @@ def _make_updater_and_queue(storage_path: str):
     the bridge's patched class methods run against live instances.
     """
     from deerflow.agents.memory.backends.deermem.deermem.config import DeerMemConfig
-    from deerflow.agents.memory.backends.deermem.deermem.core.queue import MemoryUpdateQueue
-    from deerflow.agents.memory.backends.deermem.deermem.core.storage import FileMemoryStorage
-    from deerflow.agents.memory.backends.deermem.deermem.core.updater import MemoryUpdater
+    from deerflow.agents.memory.backends.deermem.deermem.core.queue import (
+        MemoryUpdateQueue,
+    )
+    from deerflow.agents.memory.backends.deermem.deermem.core.storage import (
+        FileMemoryStorage,
+    )
+    from deerflow.agents.memory.backends.deermem.deermem.core.updater import (
+        MemoryUpdater,
+    )
 
     cfg = DeerMemConfig.from_backend_config({"storage_path": storage_path})
     storage = FileMemoryStorage(cfg)
@@ -79,8 +85,15 @@ def _isolate_global_memory_config():
 
 def test_get_memory_config_is_contextvar_aware():
     """get_memory_config() returns the active runtime config's memory when one is pushed."""
-    from deerflow.config.app_config import pop_current_app_config, push_current_app_config
-    from deerflow.config.memory_config import MemoryConfig, get_memory_config, set_memory_config
+    from deerflow.config.app_config import (
+        pop_current_app_config,
+        push_current_app_config,
+    )
+    from deerflow.config.memory_config import (
+        MemoryConfig,
+        get_memory_config,
+        set_memory_config,
+    )
 
     memory_config_bridge.install()
 
@@ -102,7 +115,10 @@ def test_get_memory_config_is_contextvar_aware():
 
 def test_snapshot_and_pop_roundtrip():
     """snapshot_config captures the pushed config; pop_config returns and removes it."""
-    from deerflow.config.app_config import pop_current_app_config, push_current_app_config
+    from deerflow.config.app_config import (
+        pop_current_app_config,
+        push_current_app_config,
+    )
 
     memory_config_bridge.install()
 
@@ -143,7 +159,9 @@ def test_update_replays_family_config_on_background_thread():
     and construct a bare MemoryUpdater via __new__ (its __init__ now requires a
     config + storage we do not need for this patch-level test).
     """
-    from deerflow.agents.memory.backends.deermem.deermem.core.updater import MemoryUpdater
+    from deerflow.agents.memory.backends.deermem.deermem.core.updater import (
+        MemoryUpdater,
+    )
     from deerflow.config.app_config import (
         peek_current_app_config,
         pop_current_app_config,
@@ -205,7 +223,9 @@ def test_update_replays_family_config_on_background_thread():
 
 def test_update_without_snapshot_falls_back_gracefully():
     """A direct update call (no prior enqueue) does not crash when no snapshot exists."""
-    from deerflow.agents.memory.backends.deermem.deermem.core.updater import MemoryUpdater
+    from deerflow.agents.memory.backends.deermem.deermem.core.updater import (
+        MemoryUpdater,
+    )
 
     memory_config_bridge.install()
 

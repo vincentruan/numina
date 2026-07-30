@@ -1,3 +1,4 @@
+import contextlib
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -35,7 +36,7 @@ def list_assets(
     query = (
         db.query(Asset)
         .options(joinedload(Asset.category), joinedload(Asset.tags))
-        .filter(Asset.family_id == user.family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == user.family_id, Asset.is_archived.is_(False))
     )
     if category_id:
         query = query.filter(Asset.category_id == category_id)
@@ -161,10 +162,8 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
 
-    try:
-        check_on_asset_write(db, asset)
-    except Exception:
-        pass  # 提醒检测失败不影响主流程
+    with contextlib.suppress(Exception):
+        check_on_asset_write(db, asset)  # 提醒检测失败不影响主流程
     return asset
 
 
@@ -190,10 +189,8 @@ def update_asset(db: Session, user: User, asset_id: int, req: AssetUpdate) -> As
     db.refresh(asset)
     from apps.backend.app.services.notification.dispatcher import check_on_asset_write
 
-    try:
-        check_on_asset_write(db, asset)
-    except Exception:
-        pass  # 提醒检测失败不影响主流程
+    with contextlib.suppress(Exception):
+        check_on_asset_write(db, asset)  # 提醒检测失败不影响主流程
     return asset
 
 

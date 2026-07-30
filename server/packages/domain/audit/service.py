@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import TYPE_CHECKING
 
 from packages.core.logging import get_logger
@@ -22,7 +23,7 @@ def write_audit_log(
     ip_address: str | None = None,
     user_agent: str | None = None,
     detail: str | None = None,
-    db: "Session | None" = None,
+    db: Session | None = None,
 ) -> None:
     """Append a row to security_audit_logs. Fails silently.
 
@@ -69,11 +70,11 @@ def write_audit_log(
 def purge_old_audit_logs(retention_days: int = 90) -> int:
     """Delete audit log entries older than retention_days. Returns count deleted."""
     try:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from packages.db.models.security_audit_log import SecurityAuditLog
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         db = SessionLocal()
         count = 0
         try:

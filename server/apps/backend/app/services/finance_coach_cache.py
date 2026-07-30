@@ -14,7 +14,7 @@ Entity-change invalidation: any asset/liability/wish write (Task 9) calls
 ``invalidate_skill(family_id, "finance_coach", db)`` so the next dashboard
 load regenerates with fresh data (spec §7.2: event-driven, not pure TTL).
 """
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -81,7 +81,7 @@ def is_cache_fresh(
             ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
     else:
         ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
-    age = datetime.now(timezone.utc).replace(tzinfo=None) - row.generated_at
+    age = datetime.now(UTC).replace(tzinfo=None) - row.generated_at
     return bool(age < ttl)
 
 
@@ -103,7 +103,7 @@ def upsert_skill_result(
         report_json=payload,
         status="completed",
         skill_id=skill_id,
-        generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        generated_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(row)
     db.flush()  # get the id without committing (caller commits)

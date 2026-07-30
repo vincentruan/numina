@@ -31,7 +31,7 @@ class TestThinkingTagParserBasic:
     def test_multiple_thinking_blocks(self):
         parser = ThinkingTagParser()
         results = list(parser.feed(f"{OPEN}First{CLOSE} and {OPEN}Second{CLOSE}"))
-        final = parser.flush()
+        _final = parser.flush()
         thinking_parts = [r[1] for r in results if r[0] == "thinking"]
         text_parts = [r[1] for r in results if r[0] == "text"]
         assert thinking_parts[0] == "First"

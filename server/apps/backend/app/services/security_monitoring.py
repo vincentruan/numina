@@ -7,10 +7,11 @@ import logging
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger("security")
 
@@ -260,11 +261,7 @@ class SecurityMonitor:
         key = f"suspicious_count:{event.client_ip}"
         count = self._store.increment_counter(key, 300)
 
-        threshold = self.THRESHOLDS["suspicious_requests"]
-        if count >= threshold["count"]:
-            return True
-
-        return False
+        return count >= self.THRESHOLDS["suspicious_requests"]["count"]
 
     async def _trigger_alert(self, event: SecurityEvent):
         """触发告警"""

@@ -78,7 +78,7 @@ async def test_llm_cannot_escalate_via_family_id_arg():
                 mock_list.return_value = [{"id": "a1", "name": "car"}]
 
                 # Adversarial call: LLM tries to pass family_id=200
-                result = await session_a.call_tool("get_assets", {"family_id": "200", "limit": 10})
+                _result = await session_a.call_tool("get_assets", {"family_id": "200", "limit": 10})
 
                 # Verify the service was called with the BOUND family_id (100), not the arg (200).
                 call_args = mock_list.call_args

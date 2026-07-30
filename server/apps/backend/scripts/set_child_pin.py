@@ -11,8 +11,8 @@ import sys
 
 import bcrypt
 
-from packages.db.session import SessionLocal
 from packages.db.models.user import User
+from packages.db.session import SessionLocal
 
 
 def set_child_pin(username: str, pin: str) -> bool:

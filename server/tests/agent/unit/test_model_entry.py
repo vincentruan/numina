@@ -1,5 +1,6 @@
 """Unit tests for ModelEntryBuilder — provider-to-class mapping + thinking config."""
 import pytest
+
 from packages.core.model_entry import build_model_entry
 
 

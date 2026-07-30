@@ -97,7 +97,7 @@ def list_siblings(
             User.family_id == child.family_id,
             User.role == UserRole.CHILD,
             User.id != child.id,
-            User.is_active == True,
+            User.is_active,
         )
         .all()
     )

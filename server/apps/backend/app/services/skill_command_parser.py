@@ -135,7 +135,4 @@ class SkillCommandParser:
             return False
 
         # Path traversal (post-decode)
-        if ".." in normalized or "/" in normalized or "\\" in normalized:
-            return False
-
-        return True
+        return ".." not in normalized and "/" not in normalized and "\\" not in normalized

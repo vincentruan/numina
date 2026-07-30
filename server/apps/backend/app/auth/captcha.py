@@ -10,7 +10,10 @@ from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.cache import get_captcha_payload_cache
-from apps.backend.app.services.security_log import SecurityEventType, _log_security_event
+from apps.backend.app.services.security_log import (
+    SecurityEventType,
+    _log_security_event,
+)
 
 logger = get_logger("captcha")
 
@@ -47,7 +50,7 @@ async def verify_captcha(
     try:
         body = await request.json()
     except Exception:
-        raise AppError(ErrorCode.CAPTCHA_MISSING)
+        raise AppError(ErrorCode.CAPTCHA_MISSING) from None
 
     altcha = body.get("altcha")
 
@@ -102,4 +105,4 @@ async def verify_captcha(
     except Exception as e:
         # Fail-closed: if cache unavailable, reject request
         logger.error(f"Captcha cache error: {e}")
-        raise AppError(ErrorCode.CAPTCHA_SERVICE_UNAVAILABLE)
+        raise AppError(ErrorCode.CAPTCHA_SERVICE_UNAVAILABLE) from e

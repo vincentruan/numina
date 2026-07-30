@@ -7,14 +7,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from apps.backend.app.services.dashboard_narrative import (
     _build_narrative_context,
     _extract_first_sentence,
     _separate_narrative_and_thinking,
 )
-
 
 # ---------------------------------------------------------------------------
 # _extract_first_sentence

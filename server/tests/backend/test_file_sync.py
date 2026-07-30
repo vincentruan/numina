@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from apps.backend.app.models.cached_file import CachedFile
 from apps.backend.app.models.file_remote_location import FileRemoteLocation
-from apps.backend.app.models.storage_backend import StorageBackend as StorageBackendModel
+from apps.backend.app.models.storage_backend import (
+    StorageBackend as StorageBackendModel,
+)
 from apps.backend.app.services.storage.base import StorageConnectionError
 
 
@@ -83,7 +85,7 @@ class TestFileSyncJob:
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"fake-image-data")
 
-        user_id, family_id = "user-1", "family-1"
+        _user_id, _family_id = "user-1", "family-1"
         # Insert family/user stubs directly — use existing db fixture
         # Instead, use a real registered user via the db fixture
         # We'll patch SessionLocal to return our test db

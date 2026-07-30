@@ -19,7 +19,7 @@ def auto_generate_daily_snapshots(db: Session) -> None:
             db.query(AssetSnapshot)
             .filter(
                 AssetSnapshot.family_id == family.id,
-                AssetSnapshot.user_id == None,
+                AssetSnapshot.user_id.is_(None),
                 AssetSnapshot.snapshot_date == today,
             )
             .first()
@@ -33,7 +33,7 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
     snapshots = []
 
     members = (
-        db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+        db.query(User).filter(User.family_id == family_id, User.is_active).all()
     )
 
     family_total_assets = 0.0
@@ -42,7 +42,7 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
     for member in members:
         total_assets = (
             db.query(Asset)
-            .filter(Asset.user_id == member.id, Asset.is_archived == False)
+            .filter(Asset.user_id == member.id, Asset.is_archived.is_(False))
             .with_entities(Asset.current_value, Asset.currency)
             .all()
         )
@@ -55,18 +55,18 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
 
         total_liabilities = (
             db.query(Liability)
-            .filter(Liability.user_id == member.id, Liability.is_active == True)
+            .filter(Liability.user_id == member.id, Liability.is_active)
             .with_entities(Liability.remaining_amount, Liability.currency)
             .all()
         )
         member_liabilities = sum(
             ExchangeRateService.convert(
-                float(l.remaining_amount or 0),
-                getattr(l, "currency", "CNY") or "CNY",
+                float(liab.remaining_amount or 0),
+                getattr(liab, "currency", "CNY") or "CNY",
                 "CNY",
                 db,
             )
-            for l in total_liabilities
+            for liab in total_liabilities
         )
 
         family_total_assets += member_assets
@@ -103,7 +103,7 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
         db.query(AssetSnapshot)
         .filter(
             AssetSnapshot.family_id == family_id,
-            AssetSnapshot.user_id == None,
+            AssetSnapshot.user_id.is_(None),
             AssetSnapshot.snapshot_date == today,
         )
         .first()

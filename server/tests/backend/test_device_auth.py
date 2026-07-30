@@ -18,6 +18,7 @@ def test_device_ping_with_etag(client, db):
     """GET /api/v1/auth/device-ping with If-None-Match header returns device_id if valid."""
     # Create a valid device session directly (create_device_session doesn't accept device_id)
     from datetime import datetime, timedelta
+
     from apps.backend.app.utils.snowflake import next_id
 
     family = _make_family(db)
@@ -61,6 +62,7 @@ def test_device_ping_without_etag(client):
 def test_device_ping_with_weak_etag(client, db):
     """GET /api/v1/auth/device-ping with weak ETag (W/) is handled correctly."""
     from datetime import datetime, timedelta
+
     from apps.backend.app.utils.snowflake import next_id
 
     family = _make_family(db)

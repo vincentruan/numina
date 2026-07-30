@@ -89,17 +89,16 @@ def _check_milestones(
     )
 
     # 1. first_chore — triggered by any chore approval
-    if instance is not None:
-        if _try_record_once_cached(
-            db,
-            child_user_id,
-            family_id,
-            "first_chore",
-            instance.id,
-            "chore_instance",
-            existing_once_per_child,
-        ):
-            triggered.append("first_chore")
+    if instance is not None and _try_record_once_cached(
+        db,
+        child_user_id,
+        family_id,
+        "first_chore",
+        instance.id,
+        "chore_instance",
+        existing_once_per_child,
+    ):
+        triggered.append("first_chore")
 
     # 2. streak milestones — per cycle, triggered by chore approval
     if instance is not None:
@@ -186,29 +185,27 @@ def _check_milestones(
     if ref_id is not None and ref_type is not None:
         total = get_total_earned(db, child_user_id, family_id)
         for threshold, mtype in [(50, "coins_50"), (200, "coins_200")]:
-            if total >= threshold:
-                if _try_record_once_cached(
-                    db,
-                    child_user_id,
-                    family_id,
-                    mtype,
-                    ref_id,
-                    ref_type,
-                    existing_once_per_child,
-                ):
-                    triggered.append(mtype)
+            if total >= threshold and _try_record_once_cached(
+                db,
+                child_user_id,
+                family_id,
+                mtype,
+                ref_id,
+                ref_type,
+                existing_once_per_child,
+            ):
+                triggered.append(mtype)
 
     # 4. first_wish_realized — triggered by wish realization
-    if wish is not None:
-        if _try_record_once_cached(
-            db,
-            child_user_id,
-            family_id,
-            "first_wish_realized",
-            wish.id,
-            "child_wish",
-            existing_once_per_child,
-        ):
+    if wish is not None and _try_record_once_cached(
+        db,
+        child_user_id,
+        family_id,
+        "first_wish_realized",
+        wish.id,
+        "child_wish",
+        existing_once_per_child,
+    ):
             triggered.append("first_wish_realized")
 
     # Return the most notable milestone for the UI toast (priority order)
@@ -369,7 +366,7 @@ def _try_record_streak_cycle(
     """
     from apps.backend.app.models.chore import ChoreInstance
 
-    threshold = {v: k for k, v in _STREAK_MILESTONES.items()}[milestone_type]
+    _threshold = {v: k for k, v in _STREAK_MILESTONES.items()}[milestone_type]  # noqa: F841
 
     last = (
         db.query(ChildMilestone)
@@ -473,7 +470,7 @@ def _create_milestone_draw(
             db.query(BlindBoxGift)
             .filter(
                 BlindBoxGift.family_id == family_id,
-                BlindBoxGift.is_active == True,
+                BlindBoxGift.is_active,
             )
             .all()
         )

@@ -27,7 +27,7 @@ def bootstrap_currencies(db: Session) -> None:
     """Ensure favorite currencies exist. Idempotent."""
     from apps.backend.app.models.currency import Currency
 
-    existing = db.query(Currency).filter(Currency.is_favorite == True).first()
+    existing = db.query(Currency).filter(Currency.is_favorite).first()
     if existing:
         return
 

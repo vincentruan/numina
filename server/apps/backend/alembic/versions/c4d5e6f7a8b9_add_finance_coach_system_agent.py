@@ -12,14 +12,14 @@ and import-parse). The bootstrap_agents() function re-syncs this row on
 startup (single source of truth in bootstrap/agents.py), so this migration
 only seeds existing DBs; fresh DBs get the row from bootstrap.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
 revision: str = "c4d5e6f7a8b9"
-down_revision: Union[str, None] = "f8a4c2e1b9d6"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "f8a4c2e1b9d6"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

@@ -5,7 +5,10 @@ import time
 import fakeredis
 import pytest
 
-from apps.backend.app.services.cache.factory import get_rate_limit_cache, reset_rate_limit_cache
+from apps.backend.app.services.cache.factory import (
+    get_rate_limit_cache,
+    reset_rate_limit_cache,
+)
 from apps.backend.app.services.cache.memory import MemoryCacheBackend
 from apps.backend.app.services.cache.redis import RedisCacheBackend
 

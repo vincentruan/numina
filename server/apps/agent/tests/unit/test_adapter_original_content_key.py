@@ -18,7 +18,9 @@ from apps.agent.services.deerflow_adapter.original_user_content_context import (
 @pytest.fixture(autouse=True)
 def _apply_patches():
     """Apply sync_tool_patch before tests (idempotent)."""
-    from apps.agent.services.deerflow_adapter.sync_tool_patch import apply_sync_tool_patches
+    from apps.agent.services.deerflow_adapter.sync_tool_patch import (
+        apply_sync_tool_patches,
+    )
 
     apply_sync_tool_patches()
     yield

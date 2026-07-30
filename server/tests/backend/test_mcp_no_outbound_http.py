@@ -12,7 +12,6 @@ import pytest
 
 from apps.backend.app.services.mcp_session import MCPSession
 
-
 _MCP_FILES = [
     "apps/backend/app/services/mcp_session.py",
     "apps/backend/app/services/mcp_tool_registry.py",
@@ -32,11 +31,10 @@ class TestStaticImportGuard:
                     assert not any(
                         alias.name.startswith(f) for f in _FORBIDDEN_IMPORTS
                     ), f"{filepath} imports forbidden module: {alias.name}"
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    assert not any(
-                        node.module.startswith(f) for f in _FORBIDDEN_IMPORTS
-                    ), f"{filepath} imports from forbidden module: {node.module}"
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                assert not any(
+                    node.module.startswith(f) for f in _FORBIDDEN_IMPORTS
+                ), f"{filepath} imports from forbidden module: {node.module}"
 
 
 class TestDynamicZeroOutboundHTTP:

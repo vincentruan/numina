@@ -121,17 +121,17 @@ def get_aggregate(
     family_id = user.family_id
     total_assets = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Asset.current_value), 0))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .scalar()
     )
     total_liabilities = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Liability.remaining_amount), 0))
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .scalar()
     )
     asset_count = (
         db.query(sqlfunc.count(Asset.id))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .scalar()
     )
     # Coerce to float: asset values are Float, liability amounts are now
@@ -163,17 +163,17 @@ def get_member_summary(
 
     total_assets = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Asset.current_value), 0))
-        .filter(Asset.user_id == member_id, Asset.is_archived == False)
+        .filter(Asset.user_id == member_id, Asset.is_archived.is_(False))
         .scalar()
     )
     total_liabilities = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Liability.remaining_amount), 0))
-        .filter(Liability.user_id == member_id, Liability.is_active == True)
+        .filter(Liability.user_id == member_id, Liability.is_active)
         .scalar()
     )
     asset_count = (
         db.query(sqlfunc.count(Asset.id))
-        .filter(Asset.user_id == member_id, Asset.is_archived == False)
+        .filter(Asset.user_id == member_id, Asset.is_archived.is_(False))
         .scalar()
     )
     # Coerce to float: asset values are Float, liability amounts are Decimal
@@ -592,7 +592,7 @@ def get_all_child_balances(
         .filter(
             User.family_id == user.family_id,
             User.role == UserRole.CHILD,
-            User.is_active == True,
+            User.is_active,
         )
         .all()
     )
@@ -690,7 +690,7 @@ def get_children_chore_stats(
         .filter(
             User.family_id == user.family_id,
             User.role == UserRole.CHILD,
-            User.is_active == True,
+            User.is_active,
         )
         .all()
     )

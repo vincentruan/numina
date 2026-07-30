@@ -656,4 +656,4 @@ def verify_temp_token(temp_token: str) -> dict:
     except PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="临时令牌已过期或无效"
-        )
+        ) from None

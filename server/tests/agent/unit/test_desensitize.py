@@ -1,15 +1,15 @@
 """Unit tests for core/desensitize.py — Bug fix: remaining_amount_range_mid."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from apps.agent.core.desensitize import (
-    desensitize_liabilities,
-    desensitize_assets,
-    desensitize_members,
     _amount_to_range_mid,
+    desensitize_assets,
+    desensitize_liabilities,
+    desensitize_members,
 )
 
 

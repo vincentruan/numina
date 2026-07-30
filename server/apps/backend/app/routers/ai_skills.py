@@ -505,7 +505,7 @@ async def install_skill_endpoint(
         try:
             download_result = await downloader.download(parse_result)
         except SkillDownloadError as e:
-            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"下载技能失败: {e}")
+            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"下载技能失败: {e}") from e
         content = download_result.content
         source_url = download_result.source_url
         skill_id = download_result.skill_id
@@ -532,9 +532,9 @@ async def install_skill_endpoint(
             if not content:
                 raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "AI 安装返回内容为空")
         except httpx.TimeoutException:
-            raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 安装超时，请稍后重试")
+            raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 安装超时，请稍后重试") from None
         except httpx.HTTPError as e:
-            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 安装请求失败: {e}")
+            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 安装请求失败: {e}") from e
         source_url = None
 
     # Step 3: Parse frontmatter
@@ -615,7 +615,7 @@ async def install_skill_endpoint(
         # Compensating transaction: delete the DB row
         db.delete(record)
         db.commit()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败") from None
 
     return SkillDefinitionResponse(
         id=record.skill_id,
@@ -664,9 +664,9 @@ async def ai_create_skill_endpoint(
     except AppError:
         raise
     except httpx.TimeoutException:
-        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 生成超时，请稍后重试")
+        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 生成超时，请稍后重试") from None
     except httpx.HTTPError as e:
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 生成请求失败: {e}")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 生成请求失败: {e}") from e
 
     # Validate content size
     if len(content.encode("utf-8")) > 64 * 1024:
@@ -754,7 +754,7 @@ def save_raw_skill_endpoint(
     except Exception:
         db.delete(record)
         db.commit()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败") from None
 
     return SkillDefinitionResponse(
         id=record.skill_id,
@@ -910,7 +910,7 @@ async def install_from_artifact_endpoint(
     except Exception:
         db.delete(record)
         db.commit()
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "技能文件写入失败") from None
 
     return SkillDefinitionResponse(
         id=record.skill_id,

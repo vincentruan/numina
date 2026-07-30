@@ -170,7 +170,7 @@ def test_child_draw(client, auth_headers, second_user_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert child_resp.status_code == 201
-    child = child_resp.json()["data"]
+    _child = child_resp.json()["data"]
     child_token = child_login_two_phase(client, "xiaomingbb", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     child_headers = {"Authorization": f"Bearer {child_token}"}

@@ -392,11 +392,9 @@ class DeerFlowAdapter:
         finally:
             # Reset the ContextVar, but catch ValueError in case we're in a
             # different context (e.g., after GeneratorExit when client disconnects)
-            try:
-                reset_original_user_content(original_content_token)
-            except ValueError:
+            with contextlib.suppress(ValueError):
                 # Token was created in a different context, ignore
-                pass
+                reset_original_user_content(original_content_token)
 
     async def typed_stream_dispatch(
         self,

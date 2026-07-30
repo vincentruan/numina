@@ -1,7 +1,7 @@
 """Tests for the literacy badge evaluation service (U3)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -108,7 +108,7 @@ class TestGetCurrentBadge:
             id=next_id(),
             child_id=child.id,
             definition_id=defn.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -122,7 +122,7 @@ class TestGetCurrentBadge:
     def test_superseded_badge_returns_next_highest(self, db, child, definitions):
         d1 = definitions[("earning", 1)]
         d2 = definitions[("earning", 2)]
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         b1 = LiteracyBadge(
             id=next_id(),
             child_id=child.id,
@@ -148,7 +148,7 @@ class TestGetCurrentBadge:
 
     def test_all_superseded_returns_none(self, db, child, definitions):
         d1 = definitions[("earning", 1)]
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         b1 = LiteracyBadge(
             id=next_id(),
             child_id=child.id,
@@ -245,7 +245,7 @@ class TestEvaluateBadgeUnlocks:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(existing)
@@ -278,7 +278,7 @@ class TestEvaluateBadgeUnlocks:
                     id=next_id(),
                     child_id=child.id,
                     definition_id=d3.id,
-                    earned_at=datetime.now(tz=timezone.utc),
+                    earned_at=datetime.now(tz=UTC),
                     source="scenario",
                 )
             )
@@ -393,8 +393,8 @@ class TestEvaluateBadgeUnlocks:
                 id=next_id(),
                 child_id=child.id,
                 definition_id=d.id,
-                earned_at=datetime.now(tz=timezone.utc),
-                superseded_at=datetime.now(tz=timezone.utc) if level < 3 else None,
+                earned_at=datetime.now(tz=UTC),
+                superseded_at=datetime.now(tz=UTC) if level < 3 else None,
                 source="scenario",
             )
             db.add(badge)
@@ -440,7 +440,7 @@ class TestCreditBadgeCoins:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -470,7 +470,7 @@ class TestCreditBadgeCoins:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -494,7 +494,7 @@ class TestCreditBadgeCoins:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)

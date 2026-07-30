@@ -106,7 +106,7 @@ def blind_box_trigger(db: Any, child: Any) -> Any:
         db.query(BlindBoxGift)
         .filter(
             BlindBoxGift.family_id == child.family_id,
-            BlindBoxGift.is_active == True,
+            BlindBoxGift.is_active,
         )
         .all()
     )

@@ -23,7 +23,6 @@ from apps.agent.services.deerflow_adapter.adapter import (
 )
 from tests.agent.golden.fixtures import REDACTED_CONTEXT
 
-
 # ── Fake event helpers ────────────────────────────────────────────────────────
 
 

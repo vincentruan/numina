@@ -41,7 +41,7 @@ def import_json(
     # Import custom categories
     category_map: dict[str, str] = {}  # name -> id
     existing_cats = db.query(Category).filter(
-        (Category.family_id == family_id) | (Category.family_id == None)
+        (Category.family_id == family_id) | (Category.family_id.is_(None))
     ).all()
     for c in existing_cats:
         category_map[c.name] = str(c.id)

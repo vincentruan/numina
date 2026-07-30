@@ -38,14 +38,14 @@ def _patched_create_mcp_http_client(
 _httpx_utils.create_mcp_http_client = _patched_create_mcp_http_client
 
 
-import os
-from contextlib import asynccontextmanager
-from pathlib import Path
+import os  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-from fastapi import FastAPI
+from fastapi import FastAPI  # noqa: E402
 
-from apps.agent.app.config import settings
-from apps.agent.core.logging import setup_logging
+from apps.agent.app.config import settings  # noqa: E402
+from apps.agent.core.logging import setup_logging  # noqa: E402
 
 if "DEER_FLOW_CONFIG_PATH" not in os.environ:
     os.environ["DEER_FLOW_CONFIG_PATH"] = str(
@@ -200,7 +200,7 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend → agent calls (suggestions endpoint)
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 app.add_middleware(
     CORSMiddleware,
@@ -215,15 +215,15 @@ app.add_middleware(
 )
 
 
-# Router imports after app definition — noqa: E402
-from apps.agent.app.routers import cache as cache_router
-from apps.agent.app.routers import gateway as gateway_router
-from apps.agent.routers import import_parse as import_parse_router
-from apps.agent.routers import input_polish as input_polish_router
-from apps.agent.routers import model_test as model_test_router
-from apps.agent.routers import runs_stream as runs_stream_router
-from apps.agent.routers import suggest as suggest_router
-from apps.agent.routers import threads as threads_router
+# Router imports after app definition
+from apps.agent.app.routers import cache as cache_router  # noqa: E402
+from apps.agent.app.routers import gateway as gateway_router  # noqa: E402
+from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
+from apps.agent.routers import input_polish as input_polish_router  # noqa: E402
+from apps.agent.routers import model_test as model_test_router  # noqa: E402
+from apps.agent.routers import runs_stream as runs_stream_router  # noqa: E402
+from apps.agent.routers import suggest as suggest_router  # noqa: E402
+from apps.agent.routers import threads as threads_router  # noqa: E402
 
 app.include_router(suggest_router.router)
 app.include_router(cache_router.router)

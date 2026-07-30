@@ -28,7 +28,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.services.security_log import SecurityEventType, _log_security_event
+from apps.backend.app.services.security_log import (
+    SecurityEventType,
+    _log_security_event,
+)
 
 logger = logging.getLogger(__name__)
 

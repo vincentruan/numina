@@ -6,7 +6,6 @@ They are used by both golden case tests and integration tests.
 
 from apps.agent.schemas.context import RedactedContext
 
-
 # ── Shared redacted context ────────────────────────────────────────────────────
 
 REDACTED_CONTEXT = RedactedContext(

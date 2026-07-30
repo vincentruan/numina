@@ -48,7 +48,7 @@ async def suggest_asset_fields(
         resp.raise_for_status()
         return resp.json()
     except httpx.TimeoutException:
-        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT)
+        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
         logger.error(f"调用 agent suggest 失败: {e}")
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e

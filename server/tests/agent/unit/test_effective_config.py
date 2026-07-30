@@ -1,7 +1,9 @@
 """Unit tests for EffectiveConfigBuilder."""
 import shutil
+
 import pytest
-from packages.core.effective_config import EffectiveConfigBuilder, EffectiveConfig
+
+from packages.core.effective_config import EffectiveConfig, EffectiveConfigBuilder
 from packages.core.path_manager import PathManager
 
 

@@ -5,7 +5,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from apps.agent.services.deerflow_adapter.adapter import invalidate_family_adapter_cache
 from packages.security.service_auth.agent_token_verify import verify_service_token
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/internal/cache", tags=["internal"])
 @router.post("/invalidate/{family_id}")
 def invalidate_cache(
     family_id: str,
-    _token_family: str = Depends(verify_service_token),
+    token_family: str = Depends(verify_service_token),
 ) -> dict:
     """清理家庭的 DeerFlowAdapter 缓存。
 
@@ -29,11 +29,12 @@ def invalidate_cache(
 
     Args:
         family_id: 家庭 ID
-        x_agent_token: 内部认证 token
 
     Returns:
         {"success": True, "family_id": "..."}
     """
+    if family_id != token_family:
+        raise HTTPException(status_code=403, detail="family_id mismatch")
     invalidate_family_adapter_cache(family_id)
     logger.info(f"[agent/cache] invalidated adapter cache for family={family_id}")
     return {"success": True, "family_id": family_id}

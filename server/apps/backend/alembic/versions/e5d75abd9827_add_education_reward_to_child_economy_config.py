@@ -11,17 +11,16 @@ B1 教育联动：ChildEconomyConfig 加 2 列
 fresh-DB idempotency guard：检查列是否已存在，已存在则跳过 add_column，
 避免 fresh-DB（create_all 已建表含新列）执行 migration 时报错。
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'e5d75abd9827'
-down_revision: Union[str, None] = '6c8a42d83b59'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '6c8a42d83b59'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _existing_columns(bind, table: str) -> list[str]:

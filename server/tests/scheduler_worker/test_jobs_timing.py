@@ -78,17 +78,16 @@ class TestCleanupJobs:
         with patch(
             "packages.domain.device.service.cleanup_expired_device_sessions",
             return_value=3,
-        ) as mock_expired:
-            with patch(
-                "packages.domain.device.service.delete_old_revoked_sessions",
-                return_value=2,
-            ) as mock_purged:
-                from apps.scheduler_worker.jobs import device_session_cleanup_job
+        ) as mock_expired, patch(
+            "packages.domain.device.service.delete_old_revoked_sessions",
+            return_value=2,
+        ) as mock_purged:
+            from apps.scheduler_worker.jobs import device_session_cleanup_job
 
-                device_session_cleanup_job()
+            device_session_cleanup_job()
 
-                mock_expired.assert_called_once()
-                mock_purged.assert_called_once()
+            mock_expired.assert_called_once()
+            mock_purged.assert_called_once()
 
 
 class TestReminderJob:

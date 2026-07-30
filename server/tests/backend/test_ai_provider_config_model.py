@@ -1,4 +1,7 @@
-from apps.backend.app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
+from apps.backend.app.models.ai_provider_config import (
+    AIProviderConfig,
+    AIProviderTestResult,
+)
 from apps.backend.app.utils.snowflake import next_id
 
 

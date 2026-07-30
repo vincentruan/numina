@@ -420,11 +420,7 @@ def add_column(
     # type-appropriate fallback so legacy DBs can be upgraded in place.
     # (Columns with a real server_default are already handled above.)
     if db_type == "sqlite" and not column_info["nullable"] and not default_clause:
-        if "BOOLEAN" in type_sql.upper():
-            default_clause = "DEFAULT 0"
-        elif "INTEGER" in type_sql.upper():
-            default_clause = "DEFAULT 0"
-        elif any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT")):
+        if "BOOLEAN" in type_sql.upper() or "INTEGER" in type_sql.upper() or any(t in type_sql.upper() for t in ("REAL", "NUMERIC", "FLOAT")):
             default_clause = "DEFAULT 0"
         else:  # TEXT and other string types
             default_clause = "DEFAULT ''"

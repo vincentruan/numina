@@ -237,7 +237,10 @@ class SetupNumericPinRequest(BaseModel):
     @field_validator("pin")
     @classmethod
     def check_pin(cls, v: str) -> str:
-        from apps.backend.app.constants.pin import NUMERIC_PIN_MAX_LENGTH, NUMERIC_PIN_MIN_LENGTH
+        from apps.backend.app.constants.pin import (
+            NUMERIC_PIN_MAX_LENGTH,
+            NUMERIC_PIN_MIN_LENGTH,
+        )
         if not v.isdigit():
             raise ValueError("数字PIN只能包含数字")
         if len(v) < NUMERIC_PIN_MIN_LENGTH or len(v) > NUMERIC_PIN_MAX_LENGTH:
@@ -252,7 +255,10 @@ class ChangeNumericPinRequest(BaseModel):
     @field_validator("new_pin")
     @classmethod
     def check_new_pin(cls, v: str) -> str:
-        from apps.backend.app.constants.pin import NUMERIC_PIN_MAX_LENGTH, NUMERIC_PIN_MIN_LENGTH
+        from apps.backend.app.constants.pin import (
+            NUMERIC_PIN_MAX_LENGTH,
+            NUMERIC_PIN_MIN_LENGTH,
+        )
         if not v.isdigit():
             raise ValueError("数字PIN只能包含数字")
         if len(v) < NUMERIC_PIN_MIN_LENGTH or len(v) > NUMERIC_PIN_MAX_LENGTH:

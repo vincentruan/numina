@@ -5,15 +5,15 @@ Revises: b6895c98ds3
 Create Date: 2026-06-03
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c7896d99es4"
-down_revision: Union[str, None] = "b6895c98ds3"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "b6895c98ds3"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _column_exists(table_name: str, column_name: str) -> bool:

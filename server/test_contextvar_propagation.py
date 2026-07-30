@@ -6,10 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 test_config_var = contextvars.ContextVar('test_config', default='default_value')
 
 # Import the patched wrapper
-from apps.agent.services.deerflow_adapter.sync_tool_patch import apply_sync_tool_patches
+from apps.agent.services.deerflow_adapter.sync_tool_patch import apply_sync_tool_patches  # noqa: E402, I001
+
 apply_sync_tool_patches()
 
-from deerflow.tools.sync import make_sync_tool_wrapper
+from deerflow.tools.sync import make_sync_tool_wrapper  # noqa: E402, I001
+
 
 # Create an async function that reads the contextvar
 async def async_tool_func():

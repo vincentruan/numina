@@ -8,8 +8,8 @@ import pytest
 from apps.backend.app.services.skill_command_parser import ParseResult
 from apps.backend.app.services.skill_downloader import (
     DownloadResult,
-    SkillDownloadError,
     SkillDownloader,
+    SkillDownloadError,
 )
 
 VALID_SKILL_MD = "---\nname: deploy-staging\ndescription: Deploy to staging\n---\n\n# Instructions\nDo stuff"
@@ -187,9 +187,8 @@ class TestGitHubFallback:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="404"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="404"):
+            await downloader.download(parse_result)
 
 
 class TestTimeout:
@@ -208,9 +207,8 @@ class TestTimeout:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="[Tt]imeout"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="[Tt]imeout"):
+            await downloader.download(parse_result)
 
     @pytest.mark.asyncio
     async def test_connect_timeout_raises_descriptive_error(self, downloader):
@@ -227,9 +225,8 @@ class TestTimeout:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="[Tt]imeout"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="[Tt]imeout"):
+            await downloader.download(parse_result)
 
 
 class TestResponseSizeLimit:
@@ -248,9 +245,8 @@ class TestResponseSizeLimit:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="too large"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="too large"):
+            await downloader.download(parse_result)
 
     @pytest.mark.asyncio
     async def test_content_length_header_exceeds_1mb_rejected(self, downloader):
@@ -270,9 +266,8 @@ class TestResponseSizeLimit:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="too large"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="too large"):
+            await downloader.download(parse_result)
 
 
 class TestInvalidContent:
@@ -292,9 +287,8 @@ class TestInvalidContent:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="not a valid SKILL.md"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="not a valid SKILL.md"):
+            await downloader.download(parse_result)
 
     @pytest.mark.asyncio
     async def test_frontmatter_without_name_raises_validation_error(self, downloader):
@@ -311,9 +305,8 @@ class TestInvalidContent:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="not a valid SKILL.md"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="not a valid SKILL.md"):
+            await downloader.download(parse_result)
 
 
 class TestNon200Status:
@@ -331,9 +324,8 @@ class TestNon200Status:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="HTTP 500"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="HTTP 500"):
+            await downloader.download(parse_result)
 
     @pytest.mark.asyncio
     async def test_403_raises_descriptive_error(self, downloader):
@@ -349,9 +341,8 @@ class TestNon200Status:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="HTTP 403"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="HTTP 403"):
+            await downloader.download(parse_result)
 
 
 class TestRedirectRejection:
@@ -372,9 +363,8 @@ class TestRedirectRejection:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="[Rr]edirect"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="[Rr]edirect"):
+            await downloader.download(parse_result)
 
     @pytest.mark.asyncio
     async def test_302_redirect_rejected(self, downloader):
@@ -393,9 +383,8 @@ class TestRedirectRejection:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="[Rr]edirect"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="[Rr]edirect"):
+            await downloader.download(parse_result)
 
     @pytest.mark.asyncio
     async def test_307_redirect_rejected(self, downloader):
@@ -414,16 +403,15 @@ class TestRedirectRejection:
         with patch(
             "apps.backend.app.services.skill_downloader.httpx.AsyncClient",
             return_value=mock_client,
-        ):
-            with pytest.raises(SkillDownloadError, match="[Rr]edirect"):
-                await downloader.download(parse_result)
+        ), pytest.raises(SkillDownloadError, match="[Rr]edirect"):
+            await downloader.download(parse_result)
 
 
 class TestHostAllowlist:
     @pytest.mark.asyncio
     async def test_disallowed_host_rejected(self, downloader):
         """URL with disallowed host is rejected before fetch."""
-        parse_result = ParseResult(
+        _parse_result = ParseResult(
             match_type="url",
             provider="evil",
             skill_name="test",

@@ -584,7 +584,7 @@ def claim_instance(db: Session, child_user: User, instance_id: str) -> ChoreInst
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT) from None
     db.refresh(instance)
     instance._is_pool_unclaimed = (  # type: ignore[misc]
         instance.child_user_id == instance.family_id
@@ -625,7 +625,7 @@ def abandon_instance(db: Session, child_user: User, instance_id: str) -> ChoreIn
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT) from None
     db.refresh(instance)
     instance._is_pool_unclaimed = (  # type: ignore[misc]
         instance.child_user_id == instance.family_id

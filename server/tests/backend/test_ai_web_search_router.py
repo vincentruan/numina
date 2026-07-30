@@ -1,8 +1,6 @@
 # server/tests/backend/test_ai_web_search_router.py
 import pytest
 
-
-
 # NOTE: Do NOT define a local `client` fixture here.
 # Use the `client` fixture from server/tests/backend/conftest.py which
 # properly overrides get_db for test isolation.

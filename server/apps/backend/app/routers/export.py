@@ -79,19 +79,19 @@ def export_liabilities_csv(
         "名称", "类别", "原始金额", "剩余金额", "月供",
         "利率", "开始日期", "结束日期", "机构", "状态", "备注",
     ])
-    for l in liabilities:
+    for liab in liabilities:
         writer.writerow([
-            l.name,
-            l.category,
-            l.original_amount,
-            l.remaining_amount,
-            l.monthly_payment or "",
-            l.interest_rate or "",
-            l.start_date.isoformat() if l.start_date else "",
-            l.end_date.isoformat() if l.end_date else "",
-            l.institution or "",
-            "还款中" if l.is_active else "已结清",
-            l.notes or "",
+            liab.name,
+            liab.category,
+            liab.original_amount,
+            liab.remaining_amount,
+            liab.monthly_payment or "",
+            liab.interest_rate or "",
+            liab.start_date.isoformat() if liab.start_date else "",
+            liab.end_date.isoformat() if liab.end_date else "",
+            liab.institution or "",
+            "还款中" if liab.is_active else "已结清",
+            liab.notes or "",
         ])
 
     output.seek(0)
@@ -119,7 +119,7 @@ def export_all_json(
     liabilities = db.query(Liability).filter(Liability.family_id == family_id).all()
     categories = (
         db.query(Category)
-        .filter((Category.family_id == family_id) | (Category.family_id == None))
+        .filter((Category.family_id == family_id) | (Category.family_id.is_(None)))
         .all()
     )
     tags = db.query(Tag).filter(Tag.family_id == family_id).all()
@@ -157,19 +157,19 @@ def export_all_json(
         ],
         "liabilities": [
             {
-                "name": l.name,
-                "category": l.category,
-                "original_amount": str(l.original_amount) if l.original_amount is not None else None,
-                "remaining_amount": str(l.remaining_amount) if l.remaining_amount is not None else None,
-                "monthly_payment": str(l.monthly_payment) if l.monthly_payment is not None else None,
-                "interest_rate": l.interest_rate,
-                "start_date": _serialize_date(l.start_date),
-                "end_date": _serialize_date(l.end_date),
-                "institution": l.institution,
-                "notes": l.notes,
-                "is_active": l.is_active,
+                "name": liab.name,
+                "category": liab.category,
+                "original_amount": str(liab.original_amount) if liab.original_amount is not None else None,
+                "remaining_amount": str(liab.remaining_amount) if liab.remaining_amount is not None else None,
+                "monthly_payment": str(liab.monthly_payment) if liab.monthly_payment is not None else None,
+                "interest_rate": liab.interest_rate,
+                "start_date": _serialize_date(liab.start_date),
+                "end_date": _serialize_date(liab.end_date),
+                "institution": liab.institution,
+                "notes": liab.notes,
+                "is_active": liab.is_active,
             }
-            for l in liabilities
+            for liab in liabilities
         ],
         "categories": [
             {

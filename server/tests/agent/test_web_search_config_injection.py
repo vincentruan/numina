@@ -79,7 +79,9 @@ def ai_config_mcp_only():
 
 def test_inject_web_search_provider_into_config(base_config_dir, ai_config_with_ws):
     """First available provider (tavily) should be injected into web_search tool."""
-    from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+    from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+        _generate_temp_config,
+    )
 
     config_path = _generate_temp_config(base_config_dir, ai_config_with_ws, family_id="test1")
     config = yaml.safe_load(config_path.read_text())
@@ -91,7 +93,9 @@ def test_inject_web_search_provider_into_config(base_config_dir, ai_config_with_
 
 def test_no_web_search_providers_removes_tool(base_config_dir, ai_config_no_ws):
     """When no providers configured, web_search tool should be removed."""
-    from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+    from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+        _generate_temp_config,
+    )
 
     config_path = _generate_temp_config(base_config_dir, ai_config_no_ws, family_id="test2")
     config = yaml.safe_load(config_path.read_text())
@@ -102,7 +106,9 @@ def test_no_web_search_providers_removes_tool(base_config_dir, ai_config_no_ws):
 
 def test_web_search_mcp_fallback_when_no_native(base_config_dir, ai_config_mcp_only):
     """When only MCP websearch available, web_search tool removed but MCP injected."""
-    from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+    from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+        _generate_temp_config,
+    )
 
     config_path = _generate_temp_config(base_config_dir, ai_config_mcp_only, family_id="test3")
     config = yaml.safe_load(config_path.read_text())

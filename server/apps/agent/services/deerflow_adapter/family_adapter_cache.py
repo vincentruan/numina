@@ -538,9 +538,8 @@ def _generate_temp_config(
         if "stream_usage" not in model_entry:
             model_entry["stream_usage"] = True
         db_timeout = ai_config.get("timeout_seconds")
-        if isinstance(db_timeout, int) and db_timeout > 0:
-            if "stream_chunk_timeout" not in model_entry:
-                model_entry["stream_chunk_timeout"] = float(db_timeout)
+        if isinstance(db_timeout, int) and db_timeout > 0 and "stream_chunk_timeout" not in model_entry:
+            model_entry["stream_chunk_timeout"] = float(db_timeout)
 
     # ── api_base → base_url normalisation ──
     # langchain_openai.ChatOpenAI accepts the endpoint override as ``base_url``

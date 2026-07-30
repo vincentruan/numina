@@ -9,7 +9,6 @@ Adds:
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = 's0158t32umn8'

@@ -64,7 +64,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
     # Query assets and convert each to default currency
     assets = (
         db.query(Asset)
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .all()
     )
     total_assets_val = 0.0
@@ -81,18 +81,18 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
     # Query liabilities and convert each to default currency
     liabilities = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .all()
     )
     total_liabilities_val = 0.0
-    for l in liabilities:
-        if l.remaining_amount is not None:
-            liability_currency = getattr(l, "currency", "CNY") or "CNY"
-            # l.remaining_amount is Decimal (Numeric); ExchangeRateService.convert
+    for liab in liabilities:
+        if liab.remaining_amount is not None:
+            liability_currency = getattr(liab, "currency", "CNY") or "CNY"
+            # liab.remaining_amount is Decimal (Numeric); ExchangeRateService.convert
             # expects float. Coerce here — the aggregate is a stat where float
             # precision is sufficient.
             converted = ExchangeRateService.convert(
-                float(l.remaining_amount), liability_currency, default_currency, db
+                float(liab.remaining_amount), liability_currency, default_currency, db
             )
             total_liabilities_val += converted
 
@@ -122,7 +122,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         db.query(AssetSnapshot)
         .filter(
             AssetSnapshot.family_id == family_id,
-            AssetSnapshot.user_id == None,
+            AssetSnapshot.user_id.is_(None),
             AssetSnapshot.snapshot_date <= last_month,
         )
         .order_by(AssetSnapshot.snapshot_date.desc())
@@ -159,7 +159,7 @@ def get_allocation(db: Session, user: User) -> AllocationResponse:
     assets = (
         db.query(Asset)
         .options(joinedload(Asset.category))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .all()
     )
 
@@ -216,7 +216,7 @@ def get_liability_allocation(db: Session, user: User) -> LiabilityAllocationResp
 
     liabilities = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .all()
     )
 
@@ -268,7 +268,7 @@ def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:
         db.query(AssetSnapshot)
         .filter(
             AssetSnapshot.family_id == family_id,
-            AssetSnapshot.user_id == None,
+            AssetSnapshot.user_id.is_(None),
             AssetSnapshot.snapshot_date >= start_date,
         )
         .order_by(AssetSnapshot.snapshot_date)
@@ -306,8 +306,8 @@ def get_top_assets(db: Session, user: User, limit: int = 10) -> list[TopAssetIte
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
-            Asset.current_value != None,
+            Asset.is_archived.is_(False),
+            Asset.current_value.isnot(None),
         )
         .order_by(Asset.current_value.desc().nullslast())
         .limit(limit)
@@ -349,9 +349,9 @@ def get_daily_cost_ranking(
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
-            Asset.purchase_date != None,
-            Asset.purchase_price != None,
+            Asset.is_archived.is_(False),
+            Asset.purchase_date.isnot(None),
+            Asset.purchase_price.isnot(None),
         )
         .all()
     )
@@ -404,7 +404,7 @@ def get_low_usage_assets(db: Session, user: User) -> list[LowUsageItem]:
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.usage_frequency.in_(["rarely", "idle"]),
         )
         .all()
@@ -441,10 +441,10 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.asset_type == "financial",
-            Asset.purchase_price != None,
-            Asset.current_value != None,
+            Asset.purchase_price.isnot(None),
+            Asset.current_value.isnot(None),
         )
         .all()
     )
@@ -538,7 +538,7 @@ def get_states_summary(db: Session, user: User) -> dict:
             func.count(Asset.id).label("count"),
             func.coalesce(func.sum(Asset.current_value), 0).label("total_value"),
         )
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .group_by(Asset.status)
         .all()
     )
@@ -567,7 +567,7 @@ def get_home_assets(db: Session, user: User, limit: int = 5) -> dict:
             .options(joinedload(Asset.category), joinedload(Asset.tags))
             .filter(
                 Asset.family_id == family_id,
-                Asset.is_archived == False,
+                Asset.is_archived.is_(False),
                 Asset.status == status,
             )
             .order_by(Asset.updated_at.desc())
@@ -653,10 +653,9 @@ def get_home_assets_page(
         Asset.status == status,
     ]
     if category_id:
-        try:
+        import contextlib
+        with contextlib.suppress(ValueError):
             filters.append(Asset.category_id == int(category_id))
-        except ValueError:
-            pass  # invalid category_id format — ignore filter, return all
     if asset_type in ("physical", "financial"):
         filters.append(Asset.asset_type == asset_type)
     if search:
@@ -721,10 +720,10 @@ def get_expiring_soon_assets(
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.status == "in_use",  # Only active assets
-            Asset.purchase_date != None,
-            Asset.expected_lifespan_days != None,
+            Asset.purchase_date.isnot(None),
+            Asset.expected_lifespan_days.isnot(None),
         )
         .all()
     )
@@ -802,7 +801,7 @@ def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsR
         db.query(func.count(Asset.id))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.created_at >= start_date,
         )
         .scalar()
@@ -813,7 +812,7 @@ def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsR
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == user.family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.created_at >= start_date,
         )
         .order_by(Asset.created_at.desc())
@@ -854,7 +853,7 @@ def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsR
 
 def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
     """S0 智能发现 - 5项统计卡片"""
-    default_currency = user.default_currency or "CNY"
+    _default_currency = user.default_currency or "CNY"  # noqa: F841
     family_id = user.family_id
     today = date.today()
 
@@ -868,7 +867,7 @@ def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
         db.query(Asset)
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.purchase_date >= last_month_start,
             Asset.purchase_date <= last_month_end,
         )
@@ -879,7 +878,7 @@ def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
         db.query(Asset)
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.purchase_date >= prev_month_start,
             Asset.purchase_date < last_month_start,
         )
@@ -915,8 +914,8 @@ def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
-            Asset.purchase_date != None,
+            Asset.is_archived.is_(False),
+            Asset.purchase_date.isnot(None),
         )
         .all()
     )
@@ -959,7 +958,7 @@ def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
 
 def get_goal_progress(db: Session, user: User) -> GoalProgressResponse:
     """S2 目标进度总览"""
-    default_currency = user.default_currency or "CNY"
+    _default_currency = user.default_currency or "CNY"  # noqa: F841
     family_id = user.family_id
     today = date.today()
 
@@ -969,10 +968,10 @@ def get_goal_progress(db: Session, user: User) -> GoalProgressResponse:
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.status == "in_use",
-            Asset.purchase_date != None,
-            Asset.expected_lifespan_days != None,
+            Asset.purchase_date.isnot(None),
+            Asset.expected_lifespan_days.isnot(None),
         )
         .all()
     )
@@ -1028,7 +1027,7 @@ def get_goal_progress(db: Session, user: User) -> GoalProgressResponse:
 
 def get_type_distribution(db: Session, user: User) -> TypeDistributionResponse:
     """S3 资产类型分布"""
-    default_currency = user.default_currency or "CNY"
+    _default_currency = user.default_currency or "CNY"  # noqa: F841
     family_id = user.family_id
 
     allocation = get_allocation(db, user)
@@ -1041,8 +1040,8 @@ def get_type_distribution(db: Session, user: User) -> TypeDistributionResponse:
         )
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
-            Asset.category_id != None,
+            Asset.is_archived.is_(False),
+            Asset.category_id.isnot(None),
         )
         .group_by(Asset.category_id)
         .all()
@@ -1082,8 +1081,8 @@ def get_duration_distribution(db: Session, user: User) -> DurationDistributionRe
         db.query(Asset)
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
-            Asset.purchase_date != None,
+            Asset.is_archived.is_(False),
+            Asset.purchase_date.isnot(None),
         )
         .all()
     )
@@ -1146,10 +1145,10 @@ def get_retention_rate(db: Session, user: User) -> RetentionRateResponse:
         .options(joinedload(Asset.category))
         .filter(
             Asset.family_id == family_id,
-            Asset.is_archived == False,
+            Asset.is_archived.is_(False),
             Asset.asset_type == "physical",
-            Asset.purchase_price != None,
-            Asset.purchase_date != None,
+            Asset.purchase_price.isnot(None),
+            Asset.purchase_date.isnot(None),
         )
         .all()
     )
@@ -1281,7 +1280,7 @@ def get_upcoming_payments(
         db.query(Liability)
         .filter(
             Liability.family_id == user.family_id,
-            Liability.is_active == True,
+            Liability.is_active,
             Liability.start_date.isnot(None),
         )
         .all()

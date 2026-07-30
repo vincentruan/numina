@@ -28,7 +28,10 @@ from apps.backend.app.database import Base
 
 # Import all models so they register with Base.metadata
 from apps.backend.app.models.ai_agent import AIAgent
-from apps.backend.app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
+from apps.backend.app.models.ai_provider_config import (
+    AIProviderConfig,
+    AIProviderTestResult,
+)
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.asset_lifecycle_event import AssetLifecycleEvent
 from apps.backend.app.models.category import Category
@@ -60,7 +63,6 @@ from packages.db.models.reminder_notification import ReminderNotification
 from packages.db.models.revoked_token import RevokedToken
 from packages.db.models.security_audit_log import SecurityAuditLog
 from packages.db.models.user import User
-
 
 # Table insertion order (parents before children to satisfy FK constraints)
 TABLE_ORDER = [
@@ -206,7 +208,7 @@ def migrate_data():
         sys.exit(1)
 
     print(f"📦 SQLite: {sqlite_url}")
-    print(f"🐘 PostgreSQL: [credentials hidden]")
+    print("🐘 PostgreSQL: [credentials hidden]")
 
     src = sa.create_engine(sqlite_url)
     dst = sa.create_engine(pgsql_url)
@@ -226,7 +228,7 @@ def migrate_data():
     # Skip internal tables
     skip_tables = {"alembic_version"}
 
-    print(f"\n📊 Step 2: Migrating data in dependency order...")
+    print("\n📊 Step 2: Migrating data in dependency order...")
     total_rows = 0
     success_count = 0
     empty_count = 0
@@ -268,7 +270,7 @@ def migrate_data():
             converted_rows = []
             for row in rows:
                 converted_row = {}
-                for col_name, value in zip(common_cols, row):
+                for col_name, value in zip(common_cols, row, strict=True):
                     pg_type = pg_col_types.get(table_name, {}).get(col_name, "")
                     converted_row[col_name] = convert_value(value, pg_type, col_name)
                 converted_rows.append(converted_row)
@@ -281,15 +283,15 @@ def migrate_data():
             try:
                 with dst.begin() as dst_conn:
                     dst_conn.execute(text(insert_sql), converted_rows)
-                print(f" ✅")
+                print(" ✅")
                 total_rows += len(converted_rows)
                 success_count += 1
             except Exception as e:
-                print(f" ❌")
+                print(" ❌")
                 print(f"      Error: {e}")
                 error_count += 1
 
-    print(f"\n   📊 Summary:")
+    print("\n   📊 Summary:")
     print(f"      Success: {success_count} tables")
     print(f"      Empty: {empty_count} tables")
     print(f"      Error: {error_count} tables")

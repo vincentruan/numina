@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from enum import Enum
+import enum
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(enum.StrEnum):
     # Auth
     AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
     AUTH_TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED"
