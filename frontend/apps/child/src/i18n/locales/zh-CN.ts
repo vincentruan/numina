@@ -365,6 +365,7 @@ export default {
     sealTreasureChest: '锁住宝箱！',
     reducedMotionToast: '✨ 任务通过！获得 {stars} ⭐',
     candleAriaLabel: '等待审批中',
+    educationReward: '爸爸妈妈奖励了你 {coins} 星星币！',
   },
   assetDetail: {
     title: '资产详情',

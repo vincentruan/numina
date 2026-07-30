@@ -28,6 +28,7 @@ export function useCelebration() {
   const celebrationStarsEarned = ref(0)
   const celebrationTaskIds = ref<string[]>([])
   const celebrationStreakTier = ref<StreakTier>(0)
+  const celebrationEducationRewardCoins = ref(0)
 
   /**
    * Trigger celebration for approved tasks not yet celebrated.
@@ -42,6 +43,11 @@ export function useCelebration() {
     )
     celebrationTaskIds.value = tasks.map((t) => t.id)
     celebrationStreakTier.value = resolveStreakTier(tasks)
+    // B1 教育奖励：aggregate education reward coins across pending celebrations
+    celebrationEducationRewardCoins.value = tasks.reduce(
+      (sum, t) => sum + (t.education_reward_coins ?? 0),
+      0,
+    )
     celebrationVisible.value = true
   }
 
@@ -72,6 +78,7 @@ export function useCelebration() {
     celebrationStarsEarned,
     celebrationTaskIds,
     celebrationStreakTier,
+    celebrationEducationRewardCoins,
     triggerCelebration,
     onCelebrationDismiss,
     checkAndTriggerCelebration,

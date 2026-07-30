@@ -243,6 +243,7 @@
       :task-refs="choreCardRefs"
       :balance-ref="balanceCardRef"
       :task-ids="celebrationTaskIds"
+      :education-reward-coins="celebrationEducationRewardCoins"
       @dismiss="onCelebrationDismiss"
       @balance-react="onBalanceReact"
       @balance-react-end="onBalanceReactEnd"
@@ -407,6 +408,7 @@ const {
   celebrationStarsEarned,
   celebrationTaskIds,
   celebrationStreakTier,
+  celebrationEducationRewardCoins,
   onCelebrationDismiss: dismissTaskCelebration,
   checkAndTriggerCelebration,
 } = useCelebration()

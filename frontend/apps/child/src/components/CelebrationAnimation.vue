@@ -12,6 +12,7 @@
           :visible="popupVisible"
           :task-count="taskCount"
           :stars-earned="starsEarned"
+          :education-reward-coins="educationRewardCoins"
           @confirm="onPopupConfirm"
           @auto-dismiss="onPopupConfirm"
         />
@@ -64,12 +65,14 @@ const props = withDefaults(
     taskRefs?: Map<string, HTMLElement> | null
     balanceRef?: HTMLElement | null
     taskIds?: string[]
+    educationRewardCoins?: number
   }>(),
   {
     streakTier: 0,
     taskRefs: null,
     balanceRef: null,
     taskIds: () => [],
+    educationRewardCoins: 0,
   },
 )
 

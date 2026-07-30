@@ -364,6 +364,7 @@ export default {
     sealTreasureChest: 'Seal the Treasure Chest!',
     reducedMotionToast: '✨ Task approved! Earned {stars} ⭐',
     candleAriaLabel: 'Awaiting approval',
+    educationReward: 'Mom and Dad rewarded you {coins} star coins!',
   },
   assetDetail: {
     title: 'Asset Details',

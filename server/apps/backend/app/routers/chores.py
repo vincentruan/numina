@@ -248,6 +248,28 @@ def get_my_chores(
         resp = ChoreInstanceResponse.model_validate(instance)
         resp.is_pool_unclaimed = getattr(instance, "_is_pool_unclaimed", False)
         result.append(resp)
+
+    # B1 教育奖励：batch-query Activity to signal which approved instances
+    # triggered an education reward, so the child celebration can show
+    # "爸爸妈妈奖励了你 X 星星币！".
+    approved_ids = [int(r.id) for r in result if r.status == "approved"]
+    if approved_ids:
+        from apps.backend.app.models.activity import Activity
+
+        rewarded = set(
+            db.query(Activity.entity_id)
+            .filter(
+                Activity.type == "education_reward",
+                Activity.entity_id.in_(approved_ids),
+                Activity.family_id == child.family_id,
+            )
+            .all()
+        )
+        rewarded_ids = {row[0] for row in rewarded}
+        for r in result:
+            if r.status == "approved" and int(r.id) in rewarded_ids:
+                r.education_reward_coins = r.coin_reward
+
     return result
 
 
