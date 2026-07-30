@@ -207,6 +207,8 @@ async function executeDeleteTemplate() {
     }
     showFailToast(t('toast.deleteFailed'))
   } finally {
+    deleteSheet.value.show = false
+    deletingId.value = null
     deletingId.value = null
   }
 }

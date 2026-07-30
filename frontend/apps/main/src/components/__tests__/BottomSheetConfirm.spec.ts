@@ -62,12 +62,11 @@ describe('BottomSheetConfirm', () => {
     expect(buttons[1].text()).toBe('确认')
   })
 
-  it('emits confirm and update:show(false) on confirm button click', async () => {
+  it('emits confirm on confirm button click (parent controls close)', async () => {
     const wrapper = mountSheet()
     const buttons = wrapper.findAll('.van-button')
     await buttons[1].trigger('click')
     expect(wrapper.emitted('confirm')).toHaveLength(1)
-    expect(wrapper.emitted('update:show')?.[0]).toEqual([false])
   })
 
   it('emits cancel and update:show(false) on cancel button click', async () => {

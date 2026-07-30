@@ -49,7 +49,7 @@ vi.mock('@/stores/auth', () => ({
 
 import { useMemberNotify } from '../useMemberNotify'
 
-const STORAGE_KEY = 'numina:family_snapshot'
+const STORAGE_KEY = 'numina:family_snapshot:u1'
 
 describe('useMemberNotify', () => {
   beforeEach(() => {
@@ -208,6 +208,7 @@ describe('useMemberNotify', () => {
 
   describe('markFamilySnapshot', () => {
     it('persists current family state to localStorage', () => {
+      authState.user = { id: 'u1' }
       familyState.family = { name: 'Fam', custom_title: 'T' }
       familyState.members = [{ id: 'a' }, { id: 'b' }]
       const { markFamilySnapshot } = useMemberNotify()

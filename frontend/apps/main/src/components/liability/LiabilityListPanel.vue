@@ -340,6 +340,7 @@ function confirmDelete(item: Liability) {
 async function executeDelete() {
   await liabilityStore.deleteLiability(deleteSheet.value.liabilityId)
   showSuccessToast(t('toast.deleteSuccess'))
+  deleteSheet.value.show = false
 }
 
 // --- Quick payment ---
@@ -414,6 +415,7 @@ async function executeBatchSettle() {
   )
   showToast(t('toast.liabilitySettledBatch', { count: selectedIds.value.size }))
   exitSelectMode()
+  settleSheet.value.show = false
   liabilityStore.fetchLiabilities({ is_active: true })
 }
 
@@ -430,6 +432,7 @@ async function executeBatchDelete() {
   await Promise.all([...selectedIds.value].map(id => liabilityStore.deleteLiability(id)))
   showToast(t('toast.liabilityDeleteBatch', { count: selectedIds.value.size }))
   exitSelectMode()
+  batchDeleteSheet.value.show = false
 }
 
 liabilityStore.fetchLiabilities({ is_active: true })

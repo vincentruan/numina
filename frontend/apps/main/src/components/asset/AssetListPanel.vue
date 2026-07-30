@@ -306,7 +306,7 @@
       </button>
     </template>
 
-    // More Actions Sheet
+    <!-- More Actions Sheet -->
     <van-action-sheet
       v-model:show="showMoreActions"
       :actions="moreActions"
@@ -616,6 +616,7 @@ async function executeBatchDelete() {
     const res = await batchArchiveAssets(selectedIds.value)
     decrement()
     showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
+    deleteSheet.value.show = false
     selectionMode.value = false
     selectedIds.value = []
     selectAll.value = false

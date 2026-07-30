@@ -3,7 +3,11 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 
-const STORAGE_KEY = 'numina:family_snapshot'
+function storageKey(): string {
+  const authStore = useAuthStore()
+  const userId = authStore.user?.id ?? 'anon'
+  return `numina:family_snapshot:${userId}`
+}
 
 interface FamilySnapshot {
   memberCount: number
@@ -13,7 +17,7 @@ interface FamilySnapshot {
 
 function readSnapshot(): FamilySnapshot | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey())
     return raw ? (JSON.parse(raw) as FamilySnapshot) : null
   } catch {
     return null
@@ -22,7 +26,7 @@ function readSnapshot(): FamilySnapshot | null {
 
 function writeSnapshot(snap: FamilySnapshot) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
+    localStorage.setItem(storageKey(), JSON.stringify(snap))
   } catch {
     // Storage full / blocked — non-critical
   }

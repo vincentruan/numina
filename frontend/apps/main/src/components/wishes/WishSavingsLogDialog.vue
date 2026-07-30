@@ -46,6 +46,7 @@ async function executeDeleteSavingsLog() {
     logs.value = logs.value.filter((l) => l.id !== log.id)
     showSuccessToast(t('wish.savings.deleted'))
     emit('changed') // parent refreshes progress + saved_amount
+    deleteSheet.value.show = false
   } catch {
     showFailToast(t('toast.operationFailed'))
   }

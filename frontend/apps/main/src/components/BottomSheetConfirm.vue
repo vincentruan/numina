@@ -61,7 +61,6 @@ function onPopupUpdate(value: boolean) {
 
 function onConfirm() {
   emit('confirm')
-  emit('update:show', false)
 }
 
 function onCancel() {

@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue'
+import { watch, onBeforeUnmount } from 'vue'
 
 const props = withDefaults(defineProps<{
   message: string
@@ -26,11 +26,25 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
 }>()
 
+let dismissTimer: ReturnType<typeof setTimeout> | null = null
+
 watch(() => props.visible, (val) => {
+  if (dismissTimer) {
+    clearTimeout(dismissTimer)
+    dismissTimer = null
+  }
   if (val) {
-    setTimeout(() => {
+    dismissTimer = setTimeout(() => {
       emit('update:visible', false)
+      dismissTimer = null
     }, 3000)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (dismissTimer) {
+    clearTimeout(dismissTimer)
+    dismissTimer = null
   }
 })
 </script>

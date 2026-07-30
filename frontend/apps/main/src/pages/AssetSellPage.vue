@@ -184,6 +184,7 @@ async function executeSell() {
       notes: form.value.notes || undefined,
     })
     sellResult.value = result
+    sellSheet.value.show = false
     showResult.value = true
     dashboardStore.fetchAll()
   } catch {
