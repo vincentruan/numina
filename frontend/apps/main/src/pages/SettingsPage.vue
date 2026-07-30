@@ -58,13 +58,9 @@
           <CurrencyIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
-      <van-cell
-        :title="t('settings.userAdvancedConfig')"
-        icon="setting-o"
-        is-link
-        to="/settings/user/config"
-      />
     </van-cell-group>
+
+    <!-- 家庭管理 -->
     <van-cell-group
       v-if="authStore.user?.role === 'owner' || authStore.user?.role === 'member'"
       inset
@@ -79,13 +75,6 @@
         icon="star-o"
         is-link
         to="/settings/family/coin-rates"
-      />
-      <van-cell
-        v-if="authStore.user?.role === 'owner'"
-        :title="t('settings.familyAdvancedConfig')"
-        icon="setting-o"
-        is-link
-        to="/settings/family/config"
       />
     </van-cell-group>
 
@@ -291,6 +280,7 @@ import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'v
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useMemberNotify } from '@/composables/useMemberNotify'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
@@ -314,6 +304,7 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const aiStore = useAIStore()
 const { increment, decrement } = usePageLoading()
+const { notifyConfigChange, markFamilySnapshot } = useMemberNotify()
 // Track first KeepAlive activation to avoid duplicate loading:
 // Vue 3 fires both onMounted and onActivated on first mount inside <KeepAlive>.
 // onMounted handles initial load; onActivated only refreshes on reactivation.
@@ -516,6 +507,8 @@ async function onTitleConfirm() {
     const newTitle = editTitleValue.value.trim()
     await familyStore.updateFamilyTitle(newTitle || null)
     showToast(t('toast.familyTitleUpdated'))
+    notifyConfigChange()
+    markFamilySnapshot()
   } catch (err) {
     const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined
     showToast(detail || t('toast.modifyFailed'))

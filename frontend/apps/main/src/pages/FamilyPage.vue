@@ -294,6 +294,7 @@ import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useMemberNotify } from '@/composables/useMemberNotify'
 import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
 
 const { t } = useI18n()
@@ -301,6 +302,7 @@ const { t } = useI18n()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const { increment, decrement } = usePageLoading()
+const { notifyFamilyEvent, markFamilySnapshot } = useMemberNotify()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false
@@ -480,6 +482,10 @@ async function onToggleStatus(member: { id: string; display_name: string; is_act
     await updateMemberStatus(member.id, !willDisable)
     showSuccessToast(willDisable ? t('family.memberDisabled') : t('family.memberEnabled'))
     await familyStore.fetchFamily()
+    if (willDisable) {
+      notifyFamilyEvent('memberDeactivated', { name: member.display_name })
+    }
+    markFamilySnapshot()
   } catch {
     showFailToast(t('toast.operationFailed2'))
   }
@@ -492,6 +498,7 @@ async function onRemoveMember(member: { id: string; display_name: string }) {
   try {
     await familyStore.removeMember(member.id)
     showSuccessToast(t('toast.memberRemoved'))
+    markFamilySnapshot()
   } catch {
     showFailToast(t('toast.operationFailed2'))
   }
