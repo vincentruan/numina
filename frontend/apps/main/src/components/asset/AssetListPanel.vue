@@ -306,19 +306,29 @@
       </button>
     </template>
 
-    <!-- More Actions Sheet -->
+    // More Actions Sheet
     <van-action-sheet
       v-model:show="showMoreActions"
       :actions="moreActions"
       :cancel-text="t('common.cancel')"
       @select="onMoreActionSelect"
     />
+
+    <!-- Destructive confirm: batch delete assets -->
+    <BottomSheetConfirm
+      v-model:show="deleteSheet.show"
+      :title="t('dashboard.dialog.confirmDeleteTitle')"
+      :description="t('dashboard.dialog.confirmDeleteMessage', { count: selectedIds.length })"
+      :impact-preview="t('bottomSheet.impactAssetBatchDelete')"
+      @confirm="executeBatchDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { showToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showFailToast } from 'vant'
+import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -368,6 +378,9 @@ const showMoreActions = ref(false)
 
 // FAB menu
 const fabMenuOpen = ref(false)
+
+// Destructive confirm sheet
+const deleteSheet = ref({ show: false })
 
 // Filter bar sticky/frozen control
 const filterBarRef = ref<HTMLElement | null>(null)
@@ -594,27 +607,22 @@ async function handleBatchDelete() {
     showToast(t('toast.assetSelectFirst'))
     return
   }
+  deleteSheet.value.show = true
+}
 
+async function executeBatchDelete() {
+  increment()
   try {
-    await showConfirmDialog({
-      title: t('dashboard.dialog.confirmDeleteTitle'),
-      message: t('dashboard.dialog.confirmDeleteMessage', { count: selectedIds.value.length }),
-    })
-    increment()
-    try {
-      const res = await batchArchiveAssets(selectedIds.value)
-      decrement()
-      showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
-      selectionMode.value = false
-      selectedIds.value = []
-      selectAll.value = false
-      await dashboardStore.fetchAll()
-    } catch {
-      decrement()
-      showFailToast(t('toast.deleteFailed'))
-    }
+    const res = await batchArchiveAssets(selectedIds.value)
+    decrement()
+    showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
+    selectionMode.value = false
+    selectedIds.value = []
+    selectAll.value = false
+    await dashboardStore.fetchAll()
   } catch {
-    // User cancelled
+    decrement()
+    showFailToast(t('toast.deleteFailed'))
   }
 }
 

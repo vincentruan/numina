@@ -158,6 +158,33 @@
           </div>
         </div>
       </van-dialog>
+
+      <!-- Destructive confirm: single delete -->
+      <BottomSheetConfirm
+        v-model:show="deleteSheet.show"
+        :title="t('common.confirm')"
+        :description="deleteSheet.description"
+        :impact-preview="t('bottomSheet.impactLiabilityDelete')"
+        @confirm="executeDelete"
+      />
+
+      <!-- Destructive confirm: batch settle -->
+      <BottomSheetConfirm
+        v-model:show="settleSheet.show"
+        :title="t('common.confirm')"
+        :description="settleSheet.description"
+        :impact-preview="t('bottomSheet.impactLiabilityBatchSettle')"
+        @confirm="executeBatchSettle"
+      />
+
+      <!-- Destructive confirm: batch delete -->
+      <BottomSheetConfirm
+        v-model:show="batchDeleteSheet.show"
+        :title="t('common.confirm')"
+        :description="batchDeleteSheet.description"
+        :impact-preview="t('bottomSheet.impactLiabilityBatchDelete')"
+        @confirm="executeBatchDelete"
+      />
     </template>
   </div>
 </template>
@@ -165,7 +192,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
+import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { useLiabilityStore } from '@/stores/liability'
@@ -212,6 +240,11 @@ function toggleSort() {
 
 // U5: strategy-driven sort from LiabilityStrategyCard adoption.
 const strategySort = ref<'avalanche' | 'snowball' | null>(null)
+
+// Destructive confirm sheets
+const deleteSheet = ref({ show: false, description: '', liabilityId: '' as string })
+const settleSheet = ref({ show: false, description: '' })
+const batchDeleteSheet = ref({ show: false, description: '' })
 
 function onStrategyAdopt(strategy: 'avalanche' | 'snowball' | null) {
   strategySort.value = strategy
@@ -298,12 +331,14 @@ function goEdit(item: Liability) {
   router.push(`/liabilities/${item.id}/edit`)
 }
 
-async function confirmDelete(item: Liability) {
-  await showConfirmDialog({
-    message: t('toast.confirmDelete', { name: item.name }),
-    confirmButtonColor: '#dc2626',
-  })
-  await liabilityStore.deleteLiability(item.id)
+function confirmDelete(item: Liability) {
+  deleteSheet.value.description = t('toast.confirmDelete', { name: item.name })
+  deleteSheet.value.liabilityId = item.id
+  deleteSheet.value.show = true
+}
+
+async function executeDelete() {
+  await liabilityStore.deleteLiability(deleteSheet.value.liabilityId)
   showSuccessToast(t('toast.deleteSuccess'))
 }
 
@@ -369,10 +404,11 @@ async function batchSettle() {
     showToast(t('toast.liabilitySelectFirst'))
     return
   }
-  await showConfirmDialog({
-    message: t('toast.confirmSettleBatch', { count: selectedIds.value.size }),
-    confirmButtonColor: '#059669',
-  })
+  settleSheet.value.description = t('toast.confirmSettleBatch', { count: selectedIds.value.size })
+  settleSheet.value.show = true
+}
+
+async function executeBatchSettle() {
   await Promise.all(
     [...selectedIds.value].map(id => liabilityStore.updateLiability(id, { is_active: false }))
   )
@@ -386,10 +422,11 @@ async function batchDelete() {
     showToast(t('toast.liabilitySelectFirst'))
     return
   }
-  await showConfirmDialog({
-    message: t('toast.confirmDeleteBatch', { count: selectedIds.value.size }),
-    confirmButtonColor: '#dc2626',
-  })
+  batchDeleteSheet.value.description = t('toast.confirmDeleteBatch', { count: selectedIds.value.size })
+  batchDeleteSheet.value.show = true
+}
+
+async function executeBatchDelete() {
   await Promise.all([...selectedIds.value].map(id => liabilityStore.deleteLiability(id)))
   showToast(t('toast.liabilityDeleteBatch', { count: selectedIds.value.size }))
   exitSelectMode()

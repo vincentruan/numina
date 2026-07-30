@@ -88,12 +88,21 @@
         </div>
       </div>
     </van-pull-refresh>
+
+    <!-- Destructive confirm: delete template -->
+    <BottomSheetConfirm
+      v-model:show="deleteSheet.show"
+      :title="t('choreTemplate.deleteTitle')"
+      :description="deleteSheet.description"
+      :impact-preview="t('bottomSheet.impactChoreTemplateDelete')"
+      @confirm="executeDeleteTemplate"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showConfirmDialog, showToast, showFailToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import {
@@ -103,6 +112,7 @@ import {
   type ChoreTemplate,
 } from '@/api/chores'
 import { usePageLoading } from '@/composables/usePageLoading'
+import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
@@ -113,6 +123,9 @@ const loading = ref(false)
 const refreshing = ref(false)
 const togglingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
+
+// Destructive confirm sheet
+const deleteSheet = ref({ show: false, description: '', template: null as ChoreTemplate | null })
 
 const childMembers = computed(() => familyStore.members.filter(m => m.role === 'child'))
 
@@ -167,15 +180,15 @@ async function onToggle(template: ChoreTemplate) {
   }
 }
 
-async function onDelete(template: ChoreTemplate) {
-  try {
-    await showConfirmDialog({
-      title: t('choreTemplate.deleteTitle'),
-      message: t('choreTemplate.deleteConfirm', { name: template.name }),
-    })
-  } catch {
-    return
-  }
+function onDelete(template: ChoreTemplate) {
+  deleteSheet.value.description = t('choreTemplate.deleteConfirm', { name: template.name })
+  deleteSheet.value.template = template
+  deleteSheet.value.show = true
+}
+
+async function executeDeleteTemplate() {
+  const template = deleteSheet.value.template
+  if (!template) return
 
   deletingId.value = template.id
   // Optimistic removal
