@@ -5,6 +5,7 @@
 
     <!-- Actual content -->
     <template v-else>
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -175,7 +176,7 @@ defineOptions({ name: 'ChildWishes' })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildWishesSkeleton from '@/components/skeletons/ChildWishesSkeleton.vue'
-import { showToast, showFailToast } from 'vant'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import {
@@ -189,6 +190,7 @@ import { daysEstimate, reachabilityTint, previewSpend, type ReachabilityTint, ty
 import BalanceHero from '@/components/BalanceHero.vue'
 import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 import noWishesSvgRaw from '@/assets/empty-states/no-wishes.svg?raw'
 
 const noWishesSvg = noWishesSvgRaw
@@ -207,6 +209,7 @@ const loading = ref(true)
 const error = ref('')
 const refreshing = ref(false)
 const actioningId = ref<string | null>(null)
+const inlineError = ref({ visible: false, message: '' })
 
 const activeWishes = computed(() => wishList.value?.active ?? [])
 const pendingWishes = computed(() => wishList.value?.pending_review ?? [])
@@ -317,7 +320,7 @@ async function redeem(wishId: string) {
     await requestRedemption(wishId)
     await load()
   } catch {
-    showFailToast(t('toast.submitFailed'))
+    inlineError.value = { visible: true, message: t('toast.submitFailed') }
   } finally {
     actioningId.value = null
   }

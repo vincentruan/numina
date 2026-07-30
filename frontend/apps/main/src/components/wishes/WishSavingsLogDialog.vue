@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { getSavingsLog, deleteSavingsLog } from '@/api/wishes'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
+import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 import type { SavingsLog } from '@/types'
 
 const props = defineProps<{ show: boolean; wishId: string }>()
@@ -12,6 +13,7 @@ const { t } = useI18n()
 const { format } = useCurrency()
 const logs = ref<SavingsLog[]>([])
 const loading = ref(false)
+const deleteSheet = ref({ show: false, description: '', log: null as SavingsLog | null })
 
 watch(
   () => props.show,
@@ -30,20 +32,21 @@ watch(
   },
 )
 
-async function onDelete(log: SavingsLog) {
-  try {
-    await showConfirmDialog({
-      title: t('wish.savings.deleteTitle'),
-      message: t('wish.savings.deleteConfirm', { amount: format(Number(log.amount)) }),
-    })
-  } catch {
-    return
-  }
+function onDelete(log: SavingsLog) {
+  deleteSheet.value.description = t('wish.savings.deleteConfirm', { amount: format(Number(log.amount)) })
+  deleteSheet.value.log = log
+  deleteSheet.value.show = true
+}
+
+async function executeDeleteSavingsLog() {
+  const log = deleteSheet.value.log
+  if (!log) return
   try {
     await deleteSavingsLog(props.wishId, log.id)
     logs.value = logs.value.filter((l) => l.id !== log.id)
     showSuccessToast(t('wish.savings.deleted'))
     emit('changed') // parent refreshes progress + saved_amount
+    deleteSheet.value.show = false
   } catch {
     showFailToast(t('toast.operationFailed'))
   }
@@ -80,6 +83,14 @@ function close() {
         <van-button block plain @click="close">{{ t('common.close') }}</van-button>
       </div>
     </div>
+    <!-- Destructive confirm: delete savings log -->
+    <BottomSheetConfirm
+      v-model:show="deleteSheet.show"
+      :title="t('wish.savings.deleteTitle')"
+      :description="deleteSheet.description"
+      :impact-preview="t('bottomSheet.impactSavingsLogDelete')"
+      @confirm="executeDeleteSavingsLog"
+    />
   </van-popup>
 </template>
 

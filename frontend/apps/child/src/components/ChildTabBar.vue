@@ -69,4 +69,31 @@ function onTabChange(name: string) {
 .tab-bar-wrapper {
   position: relative;
 }
+
+/* ── U4: Bouncy tab bar animation ── */
+.tab-bar-wrapper :deep(.van-tabbar-item) {
+  transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-bar-wrapper :deep(.van-tabbar-item--active) {
+  transform: scale(1.1);
+  animation: tab-bounce 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tab-bounce {
+  0%   { transform: scale(0.9); }
+  60%  { transform: scale(1.1); }
+  100% { transform: scale(1.1); }
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .tab-bar-wrapper :deep(.van-tabbar-item) {
+    transition: none;
+  }
+  .tab-bar-wrapper :deep(.van-tabbar-item--active) {
+    animation: none;
+    transform: none;
+  }
+}
 </style>

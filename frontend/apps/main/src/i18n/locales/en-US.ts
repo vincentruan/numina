@@ -3278,4 +3278,19 @@ export default {
     activityPageSizeDesc: 'Number of items loaded per page',
     unitItems: 'items',
   },
+  notify: {
+    configChanged: 'Family settings updated',
+    memberJoined: '{name} has joined the family',
+    memberDeactivated: '{name} has been deactivated',
+  },
+  bottomSheet: {
+    impactLabel: 'Impact Preview',
+    impactAssetBatchDelete: 'After deletion, historical valuation records and related data of selected assets cannot be recovered.',
+    impactLiabilityDelete: 'After deletion, payment records and related data of this liability cannot be recovered.',
+    impactLiabilityBatchDelete: 'After deletion, payment records and related data of selected liabilities cannot be recovered.',
+    impactLiabilityBatchSettle: 'After settling, selected liabilities will be marked inactive and excluded from the total owed.',
+    impactSavingsLogDelete: 'After deletion, savings progress will be rolled back. This cannot be undone.',
+    impactChoreTemplateDelete: 'Existing task instances will not be affected, but the template itself cannot be recovered.',
+    impactAssetSell: 'After sale, the asset will be removed from active assets. Historical valuations are kept but cannot be modified.',
+  },
 }

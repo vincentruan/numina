@@ -23,7 +23,7 @@
           :particle-count="starCount"
           particle-type="star"
           :duration="800"
-          :stagger-ms="120"
+          :stagger-ms="80"
           :control-point-offset="200"
           @landing-per-particle="onParticleLanded"
           @all-landed="onAllLanded"
@@ -92,8 +92,9 @@ const resolvedTarget = ref<Point | null>(null)
 const choreo = useFlightChoreography()
 
 const starCount = computed(() => {
-  if (props.taskCount <= 1) return Math.min(props.taskCount + 2, 8)
-  return Math.min(props.taskCount + 2, 12)
+  if (props.taskCount <= 1) return Math.min(props.taskCount + 2, 5)
+  // Cap at 8 particles to keep total flight time ≤ 1500ms (7×80 + 800 = 1360ms)
+  return Math.min(props.taskCount + 2, 8)
 })
 
 function resolveElementCenter(el: HTMLElement): Point {

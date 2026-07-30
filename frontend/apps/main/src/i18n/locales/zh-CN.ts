@@ -3306,4 +3306,19 @@ export default {
     activityPageSizeDesc: '每次加载的动态条数',
     unitItems: '条',
   },
+  notify: {
+    configChanged: '家庭设置已更新',
+    memberJoined: '新成员 {name} 已加入',
+    memberDeactivated: '成员 {name} 已停用',
+  },
+  bottomSheet: {
+    impactLabel: '影响预览',
+    impactAssetBatchDelete: '删除后，所选资产的历史估值记录和关联数据将不可恢复。',
+    impactLiabilityDelete: '删除后，该负债的还款记录和关联数据将不可恢复。',
+    impactLiabilityBatchDelete: '删除后，所选负债的还款记录和关联数据将不可恢复。',
+    impactLiabilityBatchSettle: '结清后，所选负债将标记为非活跃状态，不再计入待还总额。',
+    impactSavingsLogDelete: '删除后，储蓄进度将回退，此操作不可恢复。',
+    impactChoreTemplateDelete: '删除后，该模板已生成的任务实例不受影响，但模板本身不可恢复。',
+    impactAssetSell: '出售后，该资产将从活跃资产中移除，历史估值记录保留但不可修改。',
+  },
 }

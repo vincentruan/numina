@@ -5,6 +5,7 @@
 
     <!-- Actual content -->
     <template v-else>
+    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -95,11 +96,12 @@ defineOptions({ name: 'ChildLedger' })
 import { ref, computed, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildLedgerSkeleton from '@/components/skeletons/ChildLedgerSkeleton.vue'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
 import BalanceHero from '@/components/BalanceHero.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ChildInlineError from '@/components/ChildInlineError.vue'
 import noRecordsSvgRaw from '@/assets/empty-states/no-records.svg?raw'
 
 const noRecordsSvg = noRecordsSvgRaw
@@ -120,6 +122,7 @@ const siblings = ref<Sibling[]>([])
 const showGiftSheet = ref(false)
 const selectedSiblingId = ref('')
 const giftAmountStr = ref('')
+const inlineError = ref({ visible: false, message: '' })
 
 const hasSiblings = computed(() => siblings.value.length > 0)
 
@@ -166,7 +169,7 @@ async function doGift() {
     await refreshBalance()
     await load()
   } catch {
-    showFailToast(t('toast.grantBalanceFailed'))
+    inlineError.value = { visible: true, message: t('toast.grantBalanceFailed') }
   }
 }
 

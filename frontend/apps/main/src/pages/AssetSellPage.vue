@@ -67,6 +67,15 @@
       </div>
     </template>
 
+    <!-- Destructive confirm: confirm sale -->
+    <BottomSheetConfirm
+      v-model:show="sellSheet.show"
+      :title="t('assetSell.confirmTitle')"
+      :description="sellSheet.description"
+      :impact-preview="t('bottomSheet.impactAssetSell')"
+      @confirm="executeSell"
+    />
+
     <!-- Result Dialog -->
     <van-dialog
       v-model:show="showResult"
@@ -105,7 +114,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -114,6 +123,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useCurrency } from '@/composables/useCurrency'
 import { parseLocalDate } from '@/utils/format'
+import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 
 const { t } = useI18n()
 const currency = useCurrency()
@@ -126,6 +136,9 @@ const { increment, decrement } = usePageLoading()
 const submitting = ref(false)
 const showResult = ref(false)
 const sellResult = ref<AssetSellResponse | null>(null)
+
+// Destructive confirm sheet
+const sellSheet = ref({ show: false, description: '' })
 
 const form = ref({
   sell_price: '',
@@ -149,23 +162,19 @@ const daysHeld = computed(() => {
   return Math.floor(ms / 86400000)
 })
 
-async function onSubmit() {
+function onSubmit() {
   if (sellPrice.value <= 0) {
     showToast(t('toast.assetSellPriceRequired'))
     return
   }
-  try {
-    await showConfirmDialog({
-      title: t('assetSell.confirmTitle'),
-      message: t('assetSell.confirmMessage', {
-        name: asset.value?.name,
-        price: sellPrice.value,
-      }),
-    })
-  } catch {
-    // User cancelled
-    return
-  }
+  sellSheet.value.description = t('assetSell.confirmMessage', {
+    name: asset.value?.name,
+    price: sellPrice.value,
+  })
+  sellSheet.value.show = true
+}
+
+async function executeSell() {
   submitting.value = true
   try {
     const result = await assetStore.sellAsset(asset.value!.id, {
@@ -175,6 +184,7 @@ async function onSubmit() {
       notes: form.value.notes || undefined,
     })
     sellResult.value = result
+    sellSheet.value.show = false
     showResult.value = true
     dashboardStore.fetchAll()
   } catch {

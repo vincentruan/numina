@@ -19,9 +19,6 @@
           <OverviewStatCard />
         </div>
 
-        <!-- Dashboard narrative card (AI-generated monthly insights, R1-R16) -->
-        <DashboardNarrativeCard />
-
         <!-- D2/A1a: finance_coach proactive suggestions card (Plan B T5) -->
         <FinanceCoachCard />
 
@@ -58,17 +55,18 @@ import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
+import { useFamilyStore } from '@/stores/family'
 import { getUpcomingPayments } from '@/api/dashboard'
 import type { UpcomingPaymentItem } from '@/api/dashboard'
 
 defineOptions({ name: 'Dashboard' })
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useMemberNotify } from '@/composables/useMemberNotify'
 
 import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
-import DashboardNarrativeCard from '@/components/dashboard/DashboardNarrativeCard.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
@@ -80,7 +78,9 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
+const familyStore = useFamilyStore()
 const { increment, decrement } = usePageLoading()
+const { checkFamilyChanges } = useMemberNotify()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false
@@ -139,7 +139,10 @@ onMounted(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
+      familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
+    // Passive check: notify if family state changed since last snapshot.
+    checkFamilyChanges()
   } finally {
     decrement()
   }
@@ -162,7 +165,10 @@ onActivated(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
+      familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
+    // Passive check: notify if family state changed since last snapshot.
+    checkFamilyChanges()
   } finally {
     decrement()
   }
