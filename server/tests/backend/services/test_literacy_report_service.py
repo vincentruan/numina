@@ -304,3 +304,62 @@ class TestGenerateLiteracyReport:
             )
 
         assert result is None
+
+    def test_force_true_regenerates(self, db, report_child, current_week_start):
+        """force=True deletes the existing row and generates a new report."""
+        existing = LiteracyWeeklyReport(
+            child_id=report_child.id,
+            week_start=current_week_start,
+            report_json="{}",
+            narrative="old narrative",
+            thread_id="old-thread",
+        )
+        db.add(existing)
+        db.commit()
+
+        sse_bytes = _build_sse_bytes("fresh narrative")
+
+        import asyncio
+
+        with patch(
+            "apps.backend.app.services.literacy_report_service._stream_report_sse",
+            new_callable=AsyncMock,
+            return_value=sse_bytes,
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                generate_literacy_report(
+                    db,
+                    family_id=report_child.family_id,
+                    child_id=report_child.id,
+                    week_start=current_week_start,
+                    user_id=report_child.id,
+                    force=True,
+                )
+            )
+
+        assert result is not None
+        assert result.narrative == "fresh narrative"
+        assert result.thread_id != "old-thread"
+
+    def test_persist_stores_thinking_in_report_json(
+        self, db, report_child, current_week_start
+    ):
+        """_persist_report_result stores thinking text in report_json."""
+        payload = {
+            "type": "literacy_weekly_report.result",
+            "payload": {"report": "report text", "thinking": "deep reasoning"},
+        }
+        block = f"event: custom\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        sse = block.encode("utf-8")
+
+        row = _persist_report_result(
+            db,
+            child_id=report_child.id,
+            week_start=current_week_start,
+            thread_id="test-thread-thinking",
+            collected_sse=sse,
+        )
+        assert row is not None
+        stored = json.loads(row.report_json)
+        assert stored["thinking"] == "deep reasoning"
+        assert stored["narrative"] == "report text"

@@ -2866,8 +2866,24 @@ async def _run_literacy_weekly_report_agent(
     """literacy-weekly-report dispatch branch.
 
     Runs a single stream_run agent with skill_name='literacy-weekly-report'.
-    The backend injects child_id + week context as the user message.
-    The agent calls MCP tools to fetch literacy data and generates a weekly report.
+    The agent calls MCP tools (get_child_literacy_profile, get_literacy_weekly_data)
+    to fetch literacy data and generates a weekly report narrative.
+
+    Design rationale:
+    - ``skill_name="literacy-weekly-report"`` (fixed skill, no chat routing).
+    - ``thinking=True``: SKILL.md declares ``thinking: true`` — the LLM uses
+      deep reasoning for data analysis and personalized suggestions.
+    - ``plan_mode=False``: simple report generation, no multi-step planning
+      or TodoMiddleware needed.
+    - ``subagent_enabled=False``: no delegation to sub-agents.
+    - Synthetic trigger message ``/literacy-weekly-report ...``: follows the
+      DeerFlow canonical skill pattern — agent fetches its own data via MCP
+      tools rather than receiving pre-aggregated context.
+    - No tool_call/tool_result synthesis (MCP tools are not visualised).
+    - Reasoning content extracted from AI messages and forwarded as
+      ``reasoning_delta`` custom events (separate from visible content).
+    - Result custom event: ``literacy_weekly_report.result`` with
+      ``{report, thinking}`` payload for backend persistence.
     """
     run_id = record.run_id
     t_start = time.monotonic()

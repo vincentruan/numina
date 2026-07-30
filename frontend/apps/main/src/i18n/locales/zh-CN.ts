@@ -3258,6 +3258,10 @@ export default {
     history: '历史报告',
     loadFailed: '加载失败，请重试',
     retry: '重试',
+    regenerate: '重新生成',
+    generating: '正在生成周报…',
+    generateFailed: '周报生成失败',
+    streamError: '连接中断，请重试',
   },
   familyConfig: {
     title: '家庭高级设置',

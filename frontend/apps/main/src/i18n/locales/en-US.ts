@@ -3230,6 +3230,10 @@ export default {
     history: 'Report History',
     loadFailed: 'Failed to load, please retry',
     retry: 'Retry',
+    regenerate: 'Regenerate',
+    generating: 'Generating report…',
+    generateFailed: 'Report generation failed',
+    streamError: 'Connection interrupted, please retry',
   },
   familyConfig: {
     title: 'Family Advanced Settings',

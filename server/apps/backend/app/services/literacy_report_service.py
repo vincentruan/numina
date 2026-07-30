@@ -316,33 +316,51 @@ async def generate_literacy_report(
     child_id: int,
     week_start: date,
     user_id: int,
+    force: bool = False,
 ) -> LiteracyWeeklyReport | None:
     """Generate (or return existing) weekly literacy report.
 
     Idempotent: if a report already exists for this child + week, it is
-    returned unchanged without calling the agent.
+    returned unchanged without calling the agent — unless ``force=True``,
+    in which case the existing row is deleted and a new report is generated.
 
     Flow:
-    1. Check for existing report (idempotency guard)
-    2. Build context via ``build_report_context``
-    3. Stream via agent gateway
-    4. Persist result
+    1. Check for existing report (idempotency guard; skipped when force=True)
+    2. Dispatch agent via gateway (agent fetches data through MCP tools)
+    3. Persist result
     """
     # Defense-in-depth: verify child belongs to caller's family
     _validate_child_in_family(db, child_id=child_id, family_id=family_id)
 
-    # Idempotency check
-    existing = db.execute(
-        select(LiteracyWeeklyReport).where(
-            LiteracyWeeklyReport.child_id == child_id,
-            LiteracyWeeklyReport.week_start == week_start,
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        return existing
+    # Idempotency check (skipped when force=True)
+    if not force:
+        existing = db.execute(
+            select(LiteracyWeeklyReport).where(
+                LiteracyWeeklyReport.child_id == child_id,
+                LiteracyWeeklyReport.week_start == week_start,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return existing
+    else:
+        # Delete existing row so the new report replaces it
+        db.execute(
+            select(LiteracyWeeklyReport)
+            .where(
+                LiteracyWeeklyReport.child_id == child_id,
+                LiteracyWeeklyReport.week_start == week_start,
+            )
+        ).scalar_one_or_none()
+        # Use DELETE to clear the row
+        from sqlalchemy import delete as sa_delete
 
-    # Build context
-    context = build_report_context(db, child_id=child_id, week_start=week_start)
+        db.execute(
+            sa_delete(LiteracyWeeklyReport).where(
+                LiteracyWeeklyReport.child_id == child_id,
+                LiteracyWeeklyReport.week_start == week_start,
+            )
+        )
+        db.commit()
 
     # Generate thread ID and dispatch
     thread_id = _make_thread_id(family_id, child_id)
@@ -351,7 +369,8 @@ async def generate_literacy_report(
         collected_sse = await _stream_report_sse(
             family_id=family_id,
             user_id=user_id,
-            context=context,
+            child_id=child_id,
+            week_start=week_start,
             thread_id=thread_id,
         )
     except Exception:

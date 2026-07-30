@@ -63,13 +63,19 @@ def _aggregate_signals(db: Session, child_id: int, week_start: date) -> dict[str
     """Aggregate passive signals for the child during [week_start, week_start+7).
 
     Returns a dict with chore, coin, scenario, and badge data.
+
+    TODO(S7): This function imports from ``apps.backend.app.models`` which
+    violates the domain-package invariant (packages must not import from apps/).
+    ChoreInstance and CoinTransaction are defined in apps/backend/app/models/
+    rather than packages/db/models/.  Fix: move these models to packages/db/
+    or relocate _aggregate_signals to the backend service layer.
     """
     week_end = week_start + timedelta(days=7)
     ws_dt = datetime.combine(week_start, datetime.min.time())
     we_dt = datetime.combine(week_end, datetime.min.time())
 
     # -- Chore completion rate --
-    from apps.backend.app.models.chore import ChoreInstance
+    from apps.backend.app.models.chore import ChoreInstance  # TODO(S7): see above
 
     total_chores = (
         db.execute(

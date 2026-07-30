@@ -1294,6 +1294,7 @@ async def internal_generate_literacy_report(
         child_id=cid,
         week_start=week_start,
         user_id=owner.id,
+        force=force,
     )
 
     if report is None:

@@ -271,3 +271,46 @@ class TestTriggerGenerate:
         """Unauthenticated requests are rejected."""
         resp = client.post("/api/v1/ai/literacy-report/generate?child_id=123")
         assert resp.status_code == 401
+
+    def test_generate_force_true_calls_agent(self, client, db):
+        """force=true bypasses the idempotency cache and calls the agent."""
+        headers, family_id = _make_parent_token(client)
+        _enable_ai(db, family_id)
+        child = _make_child(db, family_id)
+
+        from apps.backend.app.services.literacy_report import _sunday_of
+
+        ws = _sunday_of(date.today())
+        report = LiteracyWeeklyReport(
+            child_id=child.id,
+            week_start=ws,
+            report_json=json.dumps({}),
+            narrative="cached narrative",
+            thread_id="cached-thread",
+        )
+        db.add(report)
+        db.commit()
+
+        mock_report = LiteracyWeeklyReport(
+            child_id=child.id,
+            week_start=ws,
+            report_json=json.dumps({}),
+            narrative="fresh narrative",
+            thread_id="fresh-thread",
+        )
+
+        with patch(
+            "apps.backend.app.routers.ai_literacy_report.generate_literacy_report",
+            new_callable=AsyncMock,
+            return_value=mock_report,
+        ) as mock_gen:
+            resp = client.post(
+                f"/api/v1/ai/literacy-report/generate?child_id={child.id}&force=true",
+                headers=headers,
+            )
+
+        assert resp.status_code == 200
+        # Verify force=True was passed through to the service
+        mock_gen.assert_called_once()
+        call_kwargs = mock_gen.call_args
+        assert call_kwargs.kwargs.get("force") is True
