@@ -61,10 +61,12 @@ def _invalidate_agent_cache(family_id: int) -> None:
 
     def _call():
         try:
+            from packages.security.service_auth.agent_jwt import create_agent_token
+
             resp = httpx.post(
                 agent_url,
                 headers={
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "X-Agent-Token": create_agent_token(family_id_str),
                     "Content-Type": "application/json",
                 },
                 timeout=5.0,
@@ -598,7 +600,7 @@ def get_tenant_models(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active == True,
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
             AIProviderConfig.circuit_state != "open",
         )
@@ -675,7 +677,7 @@ def get_tenant_models(
         db.query(FamilyWebSearchProvider)
         .filter(
             FamilyWebSearchProvider.family_id == family_id_int,
-            FamilyWebSearchProvider.is_enabled == True,
+            FamilyWebSearchProvider.is_enabled,
         )
         .count()
         > 0

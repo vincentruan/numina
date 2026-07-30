@@ -15,15 +15,12 @@ import pytest
 
 from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.utils.snowflake import next_id
+from packages.security.service_auth.agent_jwt import create_agent_token
 
-_TEST_AGENT_TOKEN = "test-agent-token-for-circuit-breaker"
+# Set SECRET_KEY before create_agent_token calls (singleton settings)
+from packages.core.settings import settings as _core_settings
 
-
-@pytest.fixture(autouse=True)
-def _set_agent_token():
-    """Set AGENT_INTERNAL_TOKEN for all tests in this module."""
-    with patch("packages.core.settings.settings.AGENT_INTERNAL_TOKEN", _TEST_AGENT_TOKEN):
-        yield
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 
 
 def _seed_family(db, family_id: int = 1) -> int:
@@ -90,9 +87,9 @@ def _seed_provider(
 
 
 def _agent_headers(family_id: int) -> dict:
-    """Build agent-internal token headers for backend internal endpoints."""
+    """Build agent-internal JWT token headers for backend internal endpoints."""
     return {
-        "Authorization": f"Bearer {_TEST_AGENT_TOKEN}",
+        "Authorization": f"Bearer {create_agent_token(str(family_id))}",
         "X-Family-Id": str(family_id),
         "Content-Type": "application/json",
     }

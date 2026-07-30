@@ -4,7 +4,6 @@
 并以 X-Family-Id header 中的 family_id 为边界过滤数据。
 """
 
-import hmac
 import json
 import logging
 from datetime import UTC, datetime
@@ -37,7 +36,7 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     user = (
         db.query(User)
         .filter(
-            User.family_id == family_id, User.role == UserRole.OWNER, User.is_active == True
+            User.family_id == family_id, User.role == UserRole.OWNER, User.is_active
         )
         .first()
     )
@@ -45,7 +44,7 @@ def _get_mock_user(family_id: str, db: Session) -> User:
         # fallback: 取任意活跃成员
         user = (
             db.query(User)
-            .filter(User.family_id == family_id, User.is_active == True)
+            .filter(User.family_id == family_id, User.is_active)
             .first()
         )
     if not user:
@@ -124,7 +123,7 @@ def internal_get_liabilities(
 
     liabilities = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .all()
     )
     return [
@@ -197,7 +196,7 @@ def internal_get_ai_config(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active == True,
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .order_by(
@@ -214,7 +213,7 @@ def internal_get_ai_config(
             db.query(FamilyWebSearchProvider)
             .filter(
                 FamilyWebSearchProvider.family_id == family_id_int,
-                FamilyWebSearchProvider.is_enabled == True,
+                FamilyWebSearchProvider.is_enabled,
                 FamilyWebSearchProvider.circuit_state != "open",
             )
             .order_by(FamilyWebSearchProvider.display_order.asc())
@@ -244,7 +243,7 @@ def internal_get_ai_config(
             db.query(FamilyMCPServer)
             .filter(
                 FamilyMCPServer.family_id == family_id_int,
-                FamilyMCPServer.is_enabled == True,
+                FamilyMCPServer.is_enabled,
                 FamilyMCPServer.mcp_type == "websearch",
             )
             .all()
@@ -358,7 +357,7 @@ def internal_get_ai_config(
         db.query(FamilyWebSearchProvider)
         .filter(
             FamilyWebSearchProvider.family_id == family_id_int,
-            FamilyWebSearchProvider.is_enabled == True,
+            FamilyWebSearchProvider.is_enabled,
             FamilyWebSearchProvider.circuit_state != "open",
         )
         .order_by(FamilyWebSearchProvider.display_order.asc())
@@ -387,7 +386,7 @@ def internal_get_ai_config(
         db.query(FamilyMCPServer)
         .filter(
             FamilyMCPServer.family_id == family_id_int,
-            FamilyMCPServer.is_enabled == True,
+            FamilyMCPServer.is_enabled,
             FamilyMCPServer.mcp_type == "websearch",
         )
         .all()
@@ -650,7 +649,7 @@ def internal_get_enabled_families(
     rows = (
         db.query(AIProviderConfig.family_id)
         .filter(
-            AIProviderConfig.is_active == True,
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .distinct()
@@ -1041,23 +1040,31 @@ logger = logging.getLogger(__name__)
 def verify_system_token(
     authorization: str = Header(..., alias="Authorization"),
 ) -> bool:
-    """验证 system-level service-to-service token (无 X-Family-Id)。
+    """验证 system-level JWT token (无 X-Family-Id)。
 
     仅供 scheduler_worker 等系统级调用使用，不涉及特定家庭上下文。
-    仅支持 static HMAC token 格式。
+    仅支持 JWT system token 格式。
     """
     if not authorization.startswith("Bearer "):
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token format")
 
     token = authorization[7:]
 
+    import jwt as pyjwt
+    from jwt.exceptions import PyJWTError
+
+    from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings as app_settings
 
-    if not app_settings.AGENT_INTERNAL_TOKEN:
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, details="Agent internal token not configured")
+    try:
+        payload = pyjwt.decode(token, app_settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except pyjwt.ExpiredSignatureError:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="System token expired") from None
+    except PyJWTError:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token") from None
 
-    if not hmac.compare_digest(token, app_settings.AGENT_INTERNAL_TOKEN):
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token")
+    if payload.get("type") != "system":
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid token type")
 
     return True
 
@@ -1094,7 +1101,7 @@ async def auto_generate_reports(
     # 1. 找到 report_auto_generate_enabled=True 的家庭
     auto_families = (
         db.query(Family.id)
-        .filter(Family.report_auto_generate_enabled == True)
+        .filter(Family.report_auto_generate_enabled)
         .all()
     )
     family_ids = [f.id for f in auto_families]
@@ -1108,7 +1115,7 @@ async def auto_generate_reports(
         for r in db.query(AIProviderConfig.family_id)
         .filter(
             AIProviderConfig.family_id.in_(family_ids),
-            AIProviderConfig.is_active == True,
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .all()
@@ -1150,7 +1157,7 @@ async def auto_generate_reports(
         # 5. 找到家庭 owner 作为执行用户
         owner = (
             db.query(User)
-            .filter(User.family_id == fid, User.role == UserRole.OWNER, User.is_active == True)
+            .filter(User.family_id == fid, User.role == UserRole.OWNER, User.is_active)
             .first()
         )
         if not owner:

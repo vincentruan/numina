@@ -23,7 +23,6 @@ def _make_mock_user(**overrides):
 
 @pytest.fixture(autouse=True)
 def _setup_env(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_INTERNAL_TOKEN", "test-token")
     monkeypatch.setenv("AGENT_BASE_URL", "http://agent:8001")
     monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path))
 
@@ -240,7 +239,7 @@ class TestRawSkillSaveEndpoint:
     def test_filesystem_failure_deletes_db_record(self, mock_workspace, client, mock_db):
         """P1: Raw save filesystem write failure triggers compensating DB delete."""
         # Simulate filesystem write failure
-        mock_workspace.create_custom_skill.side_effect = IOError("disk full")
+        mock_workspace.create_custom_skill.side_effect = OSError("disk full")
 
         resp = client.post(
             "/api/v1/ai/skills/custom/raw",

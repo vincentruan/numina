@@ -44,6 +44,7 @@ sys.path.insert(0, ".")
 
 from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
+from packages.security.service_auth.agent_jwt import create_agent_token
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.deerflow_adapter.active_skill_context import (
     set_active_skill,
@@ -55,6 +56,7 @@ from apps.agent.services.pii_redactor import pii_redactor
 from apps.agent.services.runtime.sandbox_provider import (
     set_family_sandbox_context,
 )
+from packages.security.service_auth.agent_jwt import create_agent_token
 
 _SYNTHETIC_TRIGGER = "/asset-report 生成家庭资产报告"
 
@@ -69,7 +71,7 @@ async def _build_mcp_servers(client: BackendClient, family_id: str, user_id: str
             if not actual_url.startswith(expected_prefix):
                 srv["url"] = expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
             mcp_headers: dict[str, str] = {
-                "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                "X-Agent-Token": create_agent_token(family_id),
                 "X-Family-Id": family_id,
             }
             if user_id:

@@ -9,18 +9,14 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from apps.agent.app.config import settings
 from apps.agent.app.main import app
 from apps.agent.services.deerflow_adapter.exceptions import DeerFlowTimeoutError
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
 
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 
-@pytest.fixture(autouse=True)
-def _set_token():
-    """Ensure AGENT_INTERNAL_TOKEN is set for all tests."""
-    original = settings.AGENT_INTERNAL_TOKEN
-    settings.AGENT_INTERNAL_TOKEN = "test-internal-token"
-    yield
-    settings.AGENT_INTERNAL_TOKEN = original
+_TEST_FAMILY_ID = "1234567890"
 
 
 @pytest.fixture
@@ -37,7 +33,7 @@ def _valid_payload(skill_name: str = "skill-creator") -> dict:
 
 
 def _auth_headers() -> dict:
-    return {"X-Agent-Token": "test-internal-token"}
+    return {"X-Agent-Token": create_agent_token(_TEST_FAMILY_ID)}
 
 
 class TestSkillDispatchSuccess:

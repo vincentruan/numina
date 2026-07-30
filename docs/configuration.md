@@ -89,7 +89,6 @@ cp data/numina.db backups/numina-$(date +%Y%m%d).db
 | `ALTCHA_HMAC_KEY` | 自动生成 | **生产必填。** 验证码 HMAC 密钥。 |
 | `AI_ENCRYPTION_KEY` | `""` | **生产必填。** Fernet 密钥，用于加密 AI API Key。生成：`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `STORAGE_ENCRYPTION_KEY` | `""` | **生产推荐。** 存储后端凭证加密密钥（独立于 `SECRET_KEY`）。 |
-| `AGENT_INTERNAL_TOKEN` | `""` | backend ↔ agent 服务间调用令牌。生产必填。 |
 | `AGENT_BASE_URL` | `http://agent:8001` | Agent 服务内部地址。 |
 | `SNOWFLAKE_MACHINE_ID` | 自动推导 | Snowflake ID 机器编号（0–1023）。多实例部署时显式设置。 |
 | `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | `5` | 登录失败锁定阈值。 |
@@ -103,7 +102,6 @@ SECRET_KEY=<openssl rand -base64 32>
 ALTCHA_HMAC_KEY=<openssl rand -base64 32>
 AI_ENCRYPTION_KEY=<Fernet.generate_key()>
 STORAGE_ENCRYPTION_KEY=<Fernet.generate_key()>
-AGENT_INTERNAL_TOKEN=<openssl rand -base64 32>
 DATABASE_URL=sqlite:////app/.numina/data/numina.db
 WORKSPACE_ROOT=/app/.numina/data/workspace
 CORS_ORIGINS=["https://numina.yourdomain.com"]

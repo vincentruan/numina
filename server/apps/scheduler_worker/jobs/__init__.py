@@ -247,10 +247,11 @@ async def auto_report_job() -> None:
 
     try:
         async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
+            from packages.security.service_auth.agent_jwt import create_system_token
             resp = await client.post(
                 f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/auto-generate-reports",
                 headers={
-                    "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+                    "Authorization": f"Bearer {create_system_token()}",
                 },
             )
         if resp.status_code == 200:

@@ -31,7 +31,7 @@ cd frontend/apps/main && pnpm dev --host 0.0.0.0
 ```
 
 **Prerequisites:**
-- `server/.env` with `AGENT_INTERNAL_TOKEN`, `AI_ENCRYPTION_KEY`
+- `server/.env` with `AI_ENCRYPTION_KEY`
 - Tenant AI resources configured (or model selector will be empty)
 - `pnpm install` run in frontend
 - `uv sync` run in server
@@ -173,5 +173,4 @@ Uncaught (in promise)
 | `RUN_DEMOUSER_TESTS` | Enable demouser tests | For E2E |
 | `RUN_AI_TESTS` | Enable AI provider tests | For streaming tests |
 | `RUN_VISUAL_TESTS` | Enable visual regression | For screenshots |
-| `AGENT_INTERNAL_TOKEN` | Agent auth token | For agent startup |
 | `AI_ENCRYPTION_KEY` | Fernet key for AI config | For agent startup |

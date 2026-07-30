@@ -163,7 +163,6 @@ setup-keys:
 	@echo "  SECRET_KEY=$$($(OPENSSL) rand -hex 32)"
 	@echo "  ALTCHA_HMAC_KEY=$$($(OPENSSL) rand -hex 32)"
 	@echo "  AI_ENCRYPTION_KEY=$$($(PYTHON) -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
-	@echo "  AGENT_INTERNAL_TOKEN=$$($(OPENSSL) rand -hex 32)"
 	@echo "  STORAGE_ENCRYPTION_KEY=$$($(PYTHON) -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 	@echo "✓ 密钥生成完成"
 
@@ -214,16 +213,6 @@ _validate-env:
 			sed -i.bak "s|^AI_ENCRYPTION_KEY=.*|AI_ENCRYPTION_KEY=$$AI_ENCRYPTION_KEY|" .env; \
 		else \
 			echo "AI_ENCRYPTION_KEY=$$AI_ENCRYPTION_KEY" >> .env; \
-		fi; \
-		NEED_UPDATE=1; \
-	fi; \
-	if ! grep -q "^AGENT_INTERNAL_TOKEN=." .env || grep -q "^AGENT_INTERNAL_TOKEN=$$" .env; then \
-		echo "⚠ AGENT_INTERNAL_TOKEN 需要配置"; \
-		AGENT_INTERNAL_TOKEN=$$($(OPENSSL) rand -hex 32); \
-		if grep -q "^AGENT_INTERNAL_TOKEN=" .env; then \
-			sed -i.bak "s/^AGENT_INTERNAL_TOKEN=.*/AGENT_INTERNAL_TOKEN=$$AGENT_INTERNAL_TOKEN/" .env; \
-		else \
-			echo "AGENT_INTERNAL_TOKEN=$$AGENT_INTERNAL_TOKEN" >> .env; \
 		fi; \
 		NEED_UPDATE=1; \
 	fi; \

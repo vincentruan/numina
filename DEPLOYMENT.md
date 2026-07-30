@@ -97,7 +97,7 @@ NUMINA_DB=postgres make setup-db
 | `ALTCHA_HMAC_KEY` | CAPTCHA 验证 | hex (64 字符) | `openssl rand -hex 32` |
 | `AI_ENCRYPTION_KEY` | AI API Key 加密 | Fernet (base64) | `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `STORAGE_ENCRYPTION_KEY` | 文件存储加密 | Fernet (base64) | 同上 |
-| `AGENT_INTERNAL_TOKEN` | 服务间通信 | hex (64 字符) | `openssl rand -hex 32` |
+| `SECRET_KEY` | 用户认证 | hex (64 字符) | `openssl rand -hex 32` |
 
 > `make setup` 会自动生成全部密钥，无需手动操作。
 

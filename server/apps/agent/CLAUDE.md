@@ -219,7 +219,7 @@ agent/
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGENT_INTERNAL_TOKEN` | — | **Required.** Shared service-to-service token; startup fails without it |
+| `BACKEND_BASE_URL` | `http://backend:8000` | Backend service address |
 | `BACKEND_BASE_URL` | `http://backend:8000` | Backend service address |
 | `AI_ENCRYPTION_KEY` | — | Fernet key shared with backend for decrypting per-family stored API keys |
 | `DATA_ROOT` | `~/.numina/data` | Unified data root — other path vars derive from this |
@@ -309,7 +309,7 @@ class MyModel(BaseModel):
 
 ### Authentication
 
-All endpoints require `X-Agent-Token` header matching `AGENT_INTERNAL_TOKEN`. No JWT — simple shared secret for internal backend → agent calls only.
+All endpoints use `X-Agent-Token` header with JWT tokens issued by `create_agent_token()`. The JWT is verified by `verify_service_token` in `packages/security/service_auth/agent_token_verify.py`.
 
 ## Gotchas
 

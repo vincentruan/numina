@@ -10,16 +10,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-VALID_TOKEN = "test-token"
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
 
-
-@pytest.fixture(autouse=True)
-def patch_token(monkeypatch):
-    monkeypatch.setenv("AGENT_INTERNAL_TOKEN", VALID_TOKEN)
-    # Also patch the already-instantiated settings singleton — monkeypatch.setenv
-    # alone doesn't affect it because pydantic-settings reads env vars at init time.
-    with patch("apps.agent.app.config.settings.AGENT_INTERNAL_TOKEN", VALID_TOKEN):
-        yield
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
+VALID_TOKEN = create_agent_token("fam1")
 
 
 async def _fake_run_publishing_result(payload: dict) -> AsyncMock:

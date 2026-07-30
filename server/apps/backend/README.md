@@ -40,7 +40,7 @@ uv run pytest tests/ --cov=app --cov-report=html  # coverage report
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | JWT access token lifetime. |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | JWT refresh token lifetime. |
 | `ENVIRONMENT` | `development` | Set to `production` to enable production validations. |
-| `AGENT_INTERNAL_TOKEN` | `""` | Service-to-service token for backend ↔ agent calls. |
+| `AGENT_BASE_URL` | `http://agent:8001` | Agent service internal URL. |
 | `AGENT_BASE_URL` | `http://agent:8001` | Agent service internal address. |
 | `ALTCHA_HMAC_KEY` | auto-generated | **Required in production.** HMAC key for captcha. |
 | `AI_ENCRYPTION_KEY` | `""` | **Required in production.** Fernet key for encrypting AI API keys. Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |

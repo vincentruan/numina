@@ -41,7 +41,7 @@ uv run pytest tests/ -v
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `AGENT_INTERNAL_TOKEN` | — | **必填**。Backend 调用 agent 的内部认证 token |
+| `BACKEND_BASE_URL` | `http://backend:8000` | Backend 服务地址 |
 | `BACKEND_BASE_URL` | `http://localhost:8000` | Backend 服务地址 |
 | `USE_DEERFLOW` | `false` | 是否启用 DeerFlow harness 路径 |
 | `DEERFLOW_CONFIG_ENV` | `dev` | DeerFlow 配置环境（`dev`/`prod`） |

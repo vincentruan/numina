@@ -6,6 +6,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apps.backend.app.main import app
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
+
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 
 
 @pytest.fixture
@@ -15,14 +19,13 @@ def client():
 
 @pytest.fixture
 def valid_token():
-    return "test-agent-token"
+    return create_agent_token("100")
 
 
 @pytest.fixture(autouse=True)
-def mock_settings(valid_token):
-    with patch("apps.backend.app.routers.mcp_internal.settings") as mock_s:
-        mock_s.AGENT_INTERNAL_TOKEN = valid_token
-        yield mock_s
+def mock_settings():
+    # No longer need to patch AGENT_INTERNAL_TOKEN — gateway uses JWT verification
+    yield
 
 
 class TestSSEHandshakeCallerValidation:
@@ -129,7 +132,7 @@ class TestSSEHandshakeCallerValidation:
                     mock_resp.return_value = MagicMock(status_code=200)
                     # Verify no exception is raised — caller passes validation
                     mock_session.assert_not_called()  # not yet
-                    resp = client.get(
+                    _resp = client.get(
                         "/api/v1/internal/mcp/100/sse",
                         headers={
                             "X-Agent-Token": valid_token,
@@ -156,7 +159,7 @@ class TestSSEHandshakeCallerValidation:
                 mock_session.return_value = MagicMock()
                 with patch("apps.backend.app.routers.mcp_internal.MCPSSEResponse") as mock_resp:
                     mock_resp.return_value = MagicMock(status_code=200)
-                    resp = client.get(
+                    _resp = client.get(
                         "/api/v1/internal/mcp/100/sse",
                         headers={
                             "X-Agent-Token": valid_token,

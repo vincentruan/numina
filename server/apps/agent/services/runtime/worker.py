@@ -248,8 +248,9 @@ async def _resolve_numina_mcp_servers(
                     srv["url"] = (
                         expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
                     )
+                from packages.security.service_auth.agent_jwt import create_agent_token
                 mcp_headers: dict[str, str] = {
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "X-Agent-Token": create_agent_token(family_id),
                     "X-Family-Id": family_id,
                 }
                 if user_id:

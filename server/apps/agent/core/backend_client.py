@@ -1,7 +1,7 @@
 """Backend 内部 HTTP 客户端。
 
 所有对 backend 的调用都通过此客户端，自动附加：
-- Authorization: Bearer {AGENT_INTERNAL_TOKEN}
+- Authorization: Bearer {JWT} (create_agent_token)
 - X-Family-Id: {family_id}
 
 backend 端点验证这两个 header，强制以 family_id 为边界过滤数据。
@@ -11,7 +11,6 @@ backend 端点验证这两个 header，强制以 family_id 为边界过滤数据
 
 import logging
 import re
-
 from typing import cast
 
 import httpx
@@ -342,8 +341,10 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
 
 
 def _make_headers(family_id: str) -> dict[str, str]:
+    from packages.security.service_auth.agent_jwt import create_agent_token
+
     return {
-        "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+        "Authorization": f"Bearer {create_agent_token(family_id)}",
         "X-Family-Id": family_id,
         "Content-Type": "application/json",
     }
@@ -565,10 +566,12 @@ async def get_ai_enabled_families() -> list[str]:
     async with httpx.AsyncClient(
         timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
+        from packages.security.service_auth.agent_jwt import create_agent_token
+
         resp = await client.get(
             "/api/v1/admin/ai/enabled-families",
             headers={
-                "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+                "Authorization": f"Bearer {create_agent_token('0')}",
                 "Content-Type": "application/json",
             },
         )

@@ -1,29 +1,32 @@
 # server/tests/backend/test_ai_internal_web_search.py
-import pytest
 from unittest.mock import patch
 
-from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
-from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+import pytest
+
 from apps.backend.app.models.family import Family
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.services.ai_crypto import encrypt_api_key
 from apps.backend.app.utils.snowflake import next_id
+from packages.security.service_auth.agent_jwt import create_agent_token
 
-_TEST_AGENT_TOKEN = "test-agent-token-for-web-search"
+# Set SECRET_KEY before create_agent_token calls (singleton settings)
+from packages.core.settings import settings as _core_settings
+
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
+_FAMILY_ID = "1001"
 
 
-@pytest.fixture(autouse=True)
-def _set_agent_token():
-    """Set AGENT_INTERNAL_TOKEN for all tests in this module."""
-    with patch("packages.core.settings.settings.AGENT_INTERNAL_TOKEN", _TEST_AGENT_TOKEN):
-        yield
+def _make_jwt(family_id: str = _FAMILY_ID) -> str:
+    return create_agent_token(family_id)
 
 
 @pytest.fixture
 def internal_headers():
     """Headers that pass verify_agent_token."""
     return {
-        "Authorization": f"Bearer {_TEST_AGENT_TOKEN}",
-        "X-Family-Id": "1001",
+        "Authorization": f"Bearer {_make_jwt()}",
+        "X-Family-Id": _FAMILY_ID,
     }
 
 
