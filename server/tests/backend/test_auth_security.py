@@ -3,10 +3,15 @@
 import statistics
 import time
 import unicodedata
+from datetime import UTC
 
 import bcrypt
 
-from apps.backend.app.auth.revoke_jti import _is_jti_revoked, revoke_all_user_tokens, revoke_jti
+from apps.backend.app.auth.revoke_jti import (
+    _is_jti_revoked,
+    revoke_all_user_tokens,
+    revoke_jti,
+)
 from apps.backend.app.services.auth import hash_password
 
 # ---------------------------------------------------------------------------
@@ -452,14 +457,14 @@ class TestChildPinAuth:
 
     def test_pin_login_succeeds_after_lockout_expires(self, client, db):
         """After lockout window passes, child can login again and fail count resets."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
         # Manually set locked-out state with an expired lockout time
         child.pin_fail_count = 3
-        child.pin_locked_until = datetime.now(timezone.utc) - timedelta(minutes=1)
+        child.pin_locked_until = datetime.now(UTC) - timedelta(minutes=1)
         db.commit()
 
         # Login should succeed — lockout has expired
@@ -471,7 +476,7 @@ class TestChildPinAuth:
 
     def test_child_refresh_with_expired_token_returns_401(self, client):
         """Expired child refresh token is rejected."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         import jwt
 
@@ -480,7 +485,7 @@ class TestChildPinAuth:
 
         expired_token = jwt.encode(
             {"sub": "fake-id", "type": "refresh", "token_version": 0,
-             "exp": datetime.now(timezone.utc) - timedelta(seconds=1)},
+             "exp": datetime.now(UTC) - timedelta(seconds=1)},
             settings.SECRET_KEY,
             algorithm=ALGORITHM,
         )
@@ -775,7 +780,7 @@ class TestSettingsStartupValidation:
         import secrets
         strong_key = secrets.token_urlsafe(32)
         s = self._make_settings(strong_key, environment="production")
-        assert s.SECRET_KEY == strong_key
+        assert strong_key == s.SECRET_KEY
 
     def test_development_empty_secret_autogenerates(self):
         """Empty/default SECRET_KEY in development auto-generates a random key."""

@@ -61,13 +61,13 @@ class TestStorageRateLimitError:
 class _DummyBackend(StorageBackend):
     """最小可实例化的具体 backend，用于测试默认属性。"""
 
-    async def save(self, content, filename, date_dir, family_id="", user_id=""):  # noqa: ANN001, ANN202
+    async def save(self, content, filename, date_dir, family_id="", user_id=""):
         return "x"
 
-    async def delete(self, remote_path):  # noqa: ANN001, ANN202
+    async def delete(self, remote_path):
         return None
 
-    def get_url(self, remote_path):  # noqa: ANN001, ANN202
+    def get_url(self, remote_path):
         return f"/{remote_path}"
 
 
@@ -88,7 +88,7 @@ class TestStorageBackendInterface:
 
     def test_subclass_missing_methods_stays_abstract(self):
         class _Incomplete(StorageBackend):
-            async def save(self, content, filename, date_dir, family_id="", user_id=""):  # noqa: ANN001, ANN202
+            async def save(self, content, filename, date_dir, family_id="", user_id=""):
                 return "x"
 
         with pytest.raises(TypeError):

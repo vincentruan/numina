@@ -1,15 +1,12 @@
 """Unit tests for services/audit_logger.py."""
 
-import json
 import os
 import sys
-import tempfile
 import uuid
-from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from apps.agent.services.audit_logger import AuditEntry, AuditLogger, setup_audit_logger
+from apps.agent.services.audit_logger import AuditEntry, setup_audit_logger
 
 
 class TestAuditEntry:

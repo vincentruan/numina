@@ -4,7 +4,7 @@ from sqlalchemy import case
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.auth.jwt_utils import id_keyed_dict
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
@@ -32,6 +32,7 @@ from apps.backend.app.schemas.family import (
 from apps.backend.app.services import coin_transactions as coin_service
 from apps.backend.app.services import family as family_service
 from apps.backend.app.services.snapshot import generate_snapshots
+from packages.core.roles import UserRole
 from packages.db.models.family import Family
 
 router = APIRouter(prefix="/family", tags=["family"])
@@ -120,17 +121,17 @@ def get_aggregate(
     family_id = user.family_id
     total_assets = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Asset.current_value), 0))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .scalar()
     )
     total_liabilities = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Liability.remaining_amount), 0))
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .scalar()
     )
     asset_count = (
         db.query(sqlfunc.count(Asset.id))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .scalar()
     )
     # Coerce to float: asset values are Float, liability amounts are now
@@ -162,17 +163,17 @@ def get_member_summary(
 
     total_assets = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Asset.current_value), 0))
-        .filter(Asset.user_id == member_id, Asset.is_archived == False)
+        .filter(Asset.user_id == member_id, Asset.is_archived.is_(False))
         .scalar()
     )
     total_liabilities = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Liability.remaining_amount), 0))
-        .filter(Liability.user_id == member_id, Liability.is_active == True)
+        .filter(Liability.user_id == member_id, Liability.is_active)
         .scalar()
     )
     asset_count = (
         db.query(sqlfunc.count(Asset.id))
-        .filter(Asset.user_id == member_id, Asset.is_archived == False)
+        .filter(Asset.user_id == member_id, Asset.is_archived.is_(False))
         .scalar()
     )
     # Coerce to float: asset values are Float, liability amounts are Decimal
@@ -193,7 +194,7 @@ def update_member_role(
     member_id: int,
     body: UpdateRoleRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     member = family_service.update_member_role(db, user, member_id, body.role)
     return UserResponse.model_validate(member)
@@ -204,16 +205,14 @@ def update_member_info(
     member_id: int,
     body: UpdateMemberInfoRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
-    if user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     member = (
         db.query(User)
         .filter(
             User.id == member_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -236,7 +235,7 @@ def update_member_info(
 def remove_member(
     member_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     family_service.remove_member(db, user, member_id)
     return {"detail": "已移除"}
@@ -247,7 +246,7 @@ def reset_member_password(
     member_id: int,
     body: ResetPasswordRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     family_service.reset_member_password(db, user, member_id, body.new_password)
     return {"detail": "✅ 密码已重置"}
@@ -258,7 +257,7 @@ def update_member_status(
     member_id: int,
     body: UpdateStatusRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     member = family_service.update_member_status(db, user, member_id, body.is_active)
     return UserResponse.model_validate(member)
@@ -267,10 +266,8 @@ def update_member_status(
 @router.post("/invite-code")
 def regenerate_invite_code(
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
-    if user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     from apps.backend.app.services.auth import _check_invite_code_rate_limit
 
     _check_invite_code_rate_limit(str(user.id))
@@ -293,7 +290,7 @@ def update_family_settings(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     config = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
@@ -430,7 +427,7 @@ def put_debt_thresholds(
 ):
     """W5: update debt-interest thresholds. Owner-only — a non-owner could
     suppress/unsuppress the whole family's high-interest warnings."""
-    if user.role != "owner":
+    if user.role != UserRole.OWNER:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     cfg = _get_or_create_debt_thresholds(db, user.family_id)
@@ -455,7 +452,7 @@ def get_child_balance(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -480,7 +477,7 @@ def get_child_ledger(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -518,7 +515,7 @@ def get_child_earning_rate(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )
@@ -594,8 +591,8 @@ def get_all_child_balances(
         db.query(User.id)
         .filter(
             User.family_id == user.family_id,
-            User.role == "child",
-            User.is_active == True,
+            User.role == UserRole.CHILD,
+            User.is_active,
         )
         .all()
     )
@@ -643,11 +640,9 @@ def get_economy_config(
 def update_economy_config(
     body: ChildEconomyConfigUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ) -> ChildEconomyConfigResponse:
     """更新子经济配置（仅 owner）。"""
-    if user.role != "owner":
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     from apps.backend.app.models.child_economy_config import ChildEconomyConfig
 
@@ -694,8 +689,8 @@ def get_children_chore_stats(
         db.query(User.id)
         .filter(
             User.family_id == user.family_id,
-            User.role == "child",
-            User.is_active == True,
+            User.role == UserRole.CHILD,
+            User.is_active,
         )
         .all()
     )

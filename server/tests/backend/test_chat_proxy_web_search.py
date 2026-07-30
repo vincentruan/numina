@@ -1,7 +1,5 @@
 """Verify backend chat proxy forwards web_search to agent."""
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
 from apps.backend.app.routers.ai_chat import ChatStreamRequest
 

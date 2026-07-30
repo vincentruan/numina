@@ -7,11 +7,11 @@ Provides:
 """
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tests.agent.golden.fixtures import REDACTED_CONTEXT
+import pytest
 
+from tests.agent.golden.fixtures import REDACTED_CONTEXT
 
 # ── Canned backend data ────────────────────────────────────────────────────────
 

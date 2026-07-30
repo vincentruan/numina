@@ -2,7 +2,7 @@
 
 import os
 import threading
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import patch
 
 
 def test_next_id_returns_positive_int():

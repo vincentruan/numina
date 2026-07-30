@@ -81,8 +81,8 @@ def _separate_narrative_and_thinking(raw: str) -> tuple[str, str]:
 
     # 1. Strip markdown formatting (preserve content)
     cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", text)  # bold
-    cleaned = re.sub(r"\*(.+?)\*", r"\1", text)  # italic
-    cleaned = re.sub(r"`(.+?)`", r"\1", text)  # inline code
+    cleaned = re.sub(r"\*(.+?)\*", r"\1", cleaned)  # italic
+    cleaned = re.sub(r"`(.+?)`", r"\1", cleaned)  # inline code
     cleaned = re.sub(r"```[\s\S]*?```", "", cleaned)  # code blocks
     # Normalize bullet markers but keep content
     cleaned = re.sub(r"^[\-\*]\s+", "• ", cleaned, flags=re.MULTILINE)
@@ -163,7 +163,10 @@ def _check_history_threshold(family_id_int: int, db_session_factory, min_months:
         # Cross-DB compatible: extract year-month as string, count distinct.
         month_count = (
             db.query(
-                func.count(func.distinct(func.strftime("%Y-%m", AssetSnapshot.snapshot_date)))
+                func.count(func.distinct(
+                    func.extract("year", AssetSnapshot.snapshot_date) * 12
+                    + func.extract("month", AssetSnapshot.snapshot_date)
+                ))
             )
             .filter(AssetSnapshot.family_id == family_id_int)
             .scalar()

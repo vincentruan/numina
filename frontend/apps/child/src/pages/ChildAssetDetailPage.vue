@@ -182,7 +182,7 @@ onMounted(load)
 
 .info-label {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
 }
 

@@ -245,7 +245,7 @@ class TestGenerateWeeklyReport:
     @pytest.mark.asyncio
     async def test_generates_report(self, db, child_user, week_start):
         with patch(
-            "apps.backend.app.services.literacy_report._build_report_narrative",
+            "packages.domain.literacy.service._build_report_narrative",
             new=AsyncMock(return_value="AI生成的周报内容"),
         ):
             report = await generate_weekly_report(db, child_user, week_start)
@@ -260,12 +260,12 @@ class TestGenerateWeeklyReport:
     @pytest.mark.asyncio
     async def test_idempotent(self, db, child_user, week_start):
         with patch(
-            "apps.backend.app.services.literacy_report._build_report_narrative",
+            "packages.domain.literacy.service._build_report_narrative",
             new=AsyncMock(return_value="first"),
         ):
             r1 = await generate_weekly_report(db, child_user, week_start)
         with patch(
-            "apps.backend.app.services.literacy_report._build_report_narrative",
+            "packages.domain.literacy.service._build_report_narrative",
             new=AsyncMock(return_value="second"),
         ):
             r2 = await generate_weekly_report(db, child_user, week_start)

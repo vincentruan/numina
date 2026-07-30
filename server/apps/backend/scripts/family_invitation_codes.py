@@ -32,7 +32,6 @@ from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
 from apps.backend.app.models.user import User
 
-
 MAX_CODE_LENGTH = 20
 
 

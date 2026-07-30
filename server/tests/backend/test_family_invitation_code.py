@@ -64,7 +64,7 @@ def test_register_with_valid_invitation_code(db, valid_invitation_code):
 
     # Verify code is marked as used after registration
     db.refresh(valid_invitation_code)
-    assert valid_invitation_code.is_used == True
+    assert valid_invitation_code.is_used
     assert valid_invitation_code.used_at is not None
     assert valid_invitation_code.used_by_username == "newuser"
 
@@ -140,4 +140,4 @@ def test_invitation_code_normalized_to_uppercase(db):
 
     # Verify code was found and marked as used
     db.refresh(code)
-    assert code.is_used == True
+    assert code.is_used

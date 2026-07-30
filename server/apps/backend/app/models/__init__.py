@@ -1,4 +1,4 @@
-# ruff: noqa: F401  # re-exporting models for convenience imports + SQLAlchemy registration
+# re-exporting models for convenience imports + SQLAlchemy registration
 from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.ai_agent import AIAgent
 from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
@@ -42,10 +42,10 @@ from apps.backend.app.models.currency import Currency
 from apps.backend.app.models.device_session import DeviceSession
 from apps.backend.app.models.exchange_rate import ExchangeRate
 from apps.backend.app.models.family import Family
+from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
 from apps.backend.app.models.family_invitation_code import (
     FamilyInvitationCode,
 )
-from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.file_remote_location import (
     FileRemoteLocation,

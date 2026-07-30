@@ -26,7 +26,6 @@ on a freshly-bootstrapped DB.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision: str = "s1k2l3m4n5o6"
@@ -173,25 +172,48 @@ def upgrade() -> None:
         # because this table's skill_id has no server_default (no
         # non-constant-default rebuild issue).
         bind = op.get_bind()
-        bind.execute(
-            sa.text(
-                "UPDATE ai_extraction_circuits SET skill_id = capability "
-                "WHERE skill_id IS NULL OR skill_id = ''"
-            )
-        )
-        existing_uqs = {
-            uq["name"]
-            for uq in bind.dialect.get_unique_constraints(
-                bind, "ai_extraction_circuits"
-            )
-        }
-        with op.batch_alter_table("ai_extraction_circuits") as batch_op:
-            batch_op.drop_column("capability")
-            if "uq_extraction_circuit_family_skill" not in existing_uqs:
-                batch_op.create_unique_constraint(
-                    "uq_extraction_circuit_family_skill",
-                    ["family_id", "skill_id"],
+        circuit_cols = _columns("ai_extraction_circuits")
+        if "skill_id" in circuit_cols:
+            # Both columns coexist (prior partial run) — copy data, then drop old.
+            bind.execute(
+                sa.text(
+                    "UPDATE ai_extraction_circuits SET skill_id = capability "
+                    "WHERE skill_id IS NULL OR skill_id = ''"
                 )
+            )
+            existing_uqs = {
+                uq["name"]
+                for uq in bind.dialect.get_unique_constraints(
+                    bind, "ai_extraction_circuits"
+                )
+            }
+            with op.batch_alter_table("ai_extraction_circuits") as batch_op:
+                batch_op.drop_column("capability")
+                if "uq_extraction_circuit_family_skill" not in existing_uqs:
+                    batch_op.create_unique_constraint(
+                        "uq_extraction_circuit_family_skill",
+                        ["family_id", "skill_id"],
+                    )
+        else:
+            # Fresh DB: only capability exists — rename it to skill_id.
+            with op.batch_alter_table("ai_extraction_circuits") as batch_op:
+                batch_op.alter_column(
+                    "capability",
+                    new_column_name="skill_id",
+                    existing_type=sa.String(length=32),
+                    existing_nullable=False,
+                )
+                existing_uqs = {
+                    uq["name"]
+                    for uq in bind.dialect.get_unique_constraints(
+                        bind, "ai_extraction_circuits"
+                    )
+                }
+                if "uq_extraction_circuit_family_skill" not in existing_uqs:
+                    batch_op.create_unique_constraint(
+                        "uq_extraction_circuit_family_skill",
+                        ["family_id", "skill_id"],
+                    )
 
     # ai_tasks
     if _has_table("ai_tasks") and "capability" in _columns("ai_tasks"):

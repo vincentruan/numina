@@ -5,8 +5,8 @@ Hot-path reads use a 5-minute LRU cache to avoid per-request DB hits.
 """
 import json
 import logging
+import threading
 import time
-from functools import lru_cache
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -170,38 +170,44 @@ def update_user_settings(
     return get_all_user_settings(db, user_id)
 
 
-# --- Hot-path cache (5-min LRU bucket) ---
+# --- Hot-path cache (5-min TTL, per-family) ---
 
 _CACHE_TTL_SECONDS = 300  # 5 minutes
-
-
-def _cache_bucket() -> int:
-    """Return current 5-minute time bucket for cache keying."""
-    return int(time.time()) // _CACHE_TTL_SECONDS
-
-
-@lru_cache(maxsize=512)
-def _cached_family_setting_raw(family_id: int, key: str, bucket: int) -> Any:  # noqa: ARG001
-    """LRU-cached DB read. The bucket param invalidates every 5 minutes."""
-    from apps.backend.app.database import SessionLocal
-
-    db = SessionLocal()
-    try:
-        return get_family_setting(db, family_id, key)
-    finally:
-        db.close()
+_family_setting_cache: dict[tuple[int, str], tuple[float, Any]] = {}
+_cache_lock = threading.Lock()
 
 
 def get_family_setting_cached(family_id: int, key: str) -> Any:
-    """Read a family setting with 5-minute in-memory cache.
+    """Read a family setting with 5-minute in-memory cache (per-family).
 
     For hot-path callers that don't have a DB session (e.g. is_cache_fresh).
     Callers must ensure the key exists in FAMILY_SETTING_DEFINITIONS
     (Task 9 callers guard with ``if config_key in FAMILY_SETTING_DEFINITIONS``).
     """
-    return _cached_family_setting_raw(family_id, key, _cache_bucket())
+    now = time.time()
+    cache_key = (family_id, key)
+    with _cache_lock:
+        entry = _family_setting_cache.get(cache_key)
+        if entry is not None:
+            ts, value = entry
+            if now - ts < _CACHE_TTL_SECONDS:
+                return value
+    # Cache miss or expired — read from DB
+    from apps.backend.app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        value = get_family_setting(db, family_id, key)
+    finally:
+        db.close()
+    with _cache_lock:
+        _family_setting_cache[cache_key] = (now, value)
+    return value
 
 
-def _invalidate_family_cache(family_id: int) -> None:  # noqa: ARG001
-    """Clear all cached entries. family_id accepted for future per-family invalidation."""
-    _cached_family_setting_raw.cache_clear()
+def _invalidate_family_cache(family_id: int) -> None:
+    """Clear cached entries for a specific family."""
+    with _cache_lock:
+        keys_to_remove = [k for k in _family_setting_cache if k[0] == family_id]
+        for k in keys_to_remove:
+            del _family_setting_cache[k]

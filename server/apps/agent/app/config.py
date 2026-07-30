@@ -28,7 +28,6 @@ class AgentSettings(BaseSettings):
 
     # Backend 内部通信
     BACKEND_BASE_URL: str = "http://backend:8000"
-    AGENT_INTERNAL_TOKEN: str = ""  # 与 backend 共享的 service-to-service token
 
     # 加密（与 backend 共享同一个 Fernet key，用于解密 API Key）
     AI_ENCRYPTION_KEY: str = ""
@@ -114,10 +113,7 @@ class AgentSettings(BaseSettings):
 
     def validate_required(self) -> None:
         """启动时校验必填配置，缺失则快速失败。"""
-        if not self.AGENT_INTERNAL_TOKEN:
-            raise ValueError(
-                "AGENT_INTERNAL_TOKEN 未配置。请在环境变量或 .env 文件中设置此值。"
-            )
+        pass
 
 
 settings = AgentSettings()

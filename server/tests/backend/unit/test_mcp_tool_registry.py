@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 
 from apps.backend.app.services.mcp_tool_registry import (
-    MCPToolMeta,
     _REGISTRY,
+    MCPToolMeta,
     get_tool,
     list_tools_for_role,
     validate_registry,
@@ -15,10 +15,11 @@ from apps.backend.app.services.mcp_tool_registry import (
 
 
 class TestRegistryContents:
-    def test_registry_contains_all_eight_tools(self):
+    def test_registry_contains_all_ten_tools(self):
         # Resolved-3 (U5 cleanup): write_numina_report / read_numina_report
         # deleted — asset-report uses DeerFlow native sandbox tools now.
         # #11 (U8 follow-up): 3 import_*_batch write tools added.
+        # Task 1: literacy weekly report tools added
         expected_names = {
             "get_family_overview",
             "get_assets",
@@ -28,6 +29,8 @@ class TestRegistryContents:
             "import_assets_batch",
             "import_liabilities_batch",
             "import_credit_cards_batch",
+            "get_child_literacy_profile",
+            "get_literacy_weekly_data",
         }
         assert set(_REGISTRY.keys()) == expected_names
 
@@ -59,12 +62,13 @@ class TestListToolsForRole:
         tools = list_tools_for_role("owner")
         # Resolved-3 (U5 cleanup): 2 report tools deleted → 5 read tools.
         # #11 (U8 follow-up): 3 import_*_batch write tools added → 8 total.
-        assert len(tools) == 8
+        # Task 1: literacy weekly report tools added → 10 total.
+        assert len(tools) == 10
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 8
+        assert len(tools) == 10
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")
@@ -87,9 +91,9 @@ class TestValidateRegistry:
             allowed_roles=frozenset(),
             requires_write=False,
         )
-        with patch.dict(_REGISTRY, {"broken_tool": broken}):
-            with pytest.raises(RuntimeError, match="empty allowed_roles"):
-                validate_registry()
+        with patch.dict(_REGISTRY, {"broken_tool": broken}), \
+             pytest.raises(RuntimeError, match="empty allowed_roles"):
+            validate_registry()
 
     def test_validate_registry_raises_on_unknown_role(self):
         broken = MCPToolMeta(
@@ -99,6 +103,23 @@ class TestValidateRegistry:
             allowed_roles=frozenset({"admin"}),
             requires_write=False,
         )
-        with patch.dict(_REGISTRY, {"broken_tool": broken}):
-            with pytest.raises(RuntimeError, match="unknown roles"):
-                validate_registry()
+        with patch.dict(_REGISTRY, {"broken_tool": broken}), \
+             pytest.raises(RuntimeError, match="unknown roles"):
+            validate_registry()
+
+
+def test_literacy_tools_registered():
+    """Literacy MCP tools are registered with correct metadata."""
+    from apps.backend.app.services.mcp_tool_registry import get_tool
+
+    profile_tool = get_tool("get_child_literacy_profile")
+    assert profile_tool is not None
+    assert profile_tool.requires_write is False
+    assert "owner" in profile_tool.allowed_roles
+    assert "member" in profile_tool.allowed_roles
+    assert "child" not in profile_tool.allowed_roles
+
+    data_tool = get_tool("get_literacy_weekly_data")
+    assert data_tool is not None
+    assert data_tool.requires_write is False
+    assert "child_id" in data_tool.input_schema["properties"]

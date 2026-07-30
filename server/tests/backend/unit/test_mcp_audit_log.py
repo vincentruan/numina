@@ -31,12 +31,12 @@ def mock_caller_user():
 class TestAuditLogFields:
     @pytest.mark.asyncio
     async def test_audit_log_success_level_info(self, session):
-        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}):
-            with patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
-                await session.call_tool("get_family_overview", {})
-                mock_logger.info.assert_called_once()
-                log_msg = mock_logger.info.call_args[0][0]
-                assert "ok" in log_msg
+        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}), \
+             patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+            await session.call_tool("get_family_overview", {})
+            mock_logger.info.assert_called_once()
+            log_msg = mock_logger.info.call_args[0][0]
+            assert "ok" in log_msg
 
     @pytest.mark.asyncio
     async def test_audit_log_permission_denied_level_warning(self):
@@ -49,34 +49,34 @@ class TestAuditLogFields:
 
     @pytest.mark.asyncio
     async def test_audit_log_service_error_level_error(self, session):
-        with patch("apps.backend.app.services.dashboard.get_overview", side_effect=RuntimeError("db down")):
-            with patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
-                await session.call_tool("get_family_overview", {})
-                mock_logger.error.assert_called_once()
-                log_msg = mock_logger.error.call_args[0][0]
-                assert "failed" in log_msg
+        with patch("apps.backend.app.services.dashboard.get_overview", side_effect=RuntimeError("db down")), \
+             patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+            await session.call_tool("get_family_overview", {})
+            mock_logger.error.assert_called_once()
+            log_msg = mock_logger.error.call_args[0][0]
+            assert "failed" in log_msg
 
     @pytest.mark.asyncio
     async def test_audit_log_includes_caller_user_id(self, session):
-        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}):
-            with patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
-                await session.call_tool("get_family_overview", {})
-                log_args = mock_logger.info.call_args[0]
-                assert "u1" in str(log_args)
+        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}), \
+             patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+            await session.call_tool("get_family_overview", {})
+            log_args = mock_logger.info.call_args[0]
+            assert "u1" in str(log_args)
 
     @pytest.mark.asyncio
     async def test_audit_log_includes_caller_role(self, session):
-        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}):
-            with patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
-                await session.call_tool("get_family_overview", {})
-                log_args = mock_logger.info.call_args[0]
-                assert "member" in str(log_args)
+        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}), \
+             patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+            await session.call_tool("get_family_overview", {})
+            log_args = mock_logger.info.call_args[0]
+            assert "member" in str(log_args)
 
     @pytest.mark.asyncio
     async def test_audit_log_does_not_use_family_id_as_user_id_stand_in(self, session):
-        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}):
-            with patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
-                await session.call_tool("get_family_overview", {})
-                log_msg_format = mock_logger.info.call_args[0][0]
-                # The log format should have caller_user_id as a distinct field
-                assert "caller_user_id" in log_msg_format
+        with patch("apps.backend.app.services.dashboard.get_overview", return_value={"ok": True}), \
+             patch("apps.backend.app.services.mcp_session.logger") as mock_logger:
+            await session.call_tool("get_family_overview", {})
+            log_msg_format = mock_logger.info.call_args[0][0]
+            # The log format should have caller_user_id as a distinct field
+            assert "caller_user_id" in log_msg_format

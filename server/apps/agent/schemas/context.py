@@ -1,6 +1,7 @@
 """家庭财务上下文数据模型（脱敏前后）。"""
 
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -15,7 +16,7 @@ class FamilyContext(BaseModel):
     dashboard_allocation: dict[str, Any] = {}
     dashboard_trend: dict[str, Any] = {}
     low_usage_assets: list[dict[str, Any]] = []
-    free_text: Optional[str] = None  # 用于 chat 端点的用户自由文本输入
+    free_text: str | None = None  # 用于 chat 端点的用户自由文本输入
 
     model_config = {"from_attributes": True}
 
@@ -31,7 +32,7 @@ class RedactedContext(BaseModel):
     dashboard_allocation: dict[str, Any] = {}
     dashboard_trend: dict[str, Any] = {}
     low_usage_assets: list[dict[str, Any]] = []
-    free_text: Optional[str] = None  # 已脱敏的自由文本（或 None）
+    free_text: str | None = None  # 已脱敏的自由文本（或 None）
     redaction_log: list[str] = []    # 记录被脱敏的字段，用于审计，不发送给 LLM
 
     model_config = {"from_attributes": True}

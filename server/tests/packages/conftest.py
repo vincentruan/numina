@@ -33,14 +33,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from packages.db.session import Base
-
 # packages.db.session.Base is SHARED with the backend — backend models (Category,
 # Tag, Asset, Liability, Wish, ...) register on the same Base. packages.db models
 # like Family/User declare string relationships to them (Family.categories →
 # "Category"), so the full backend model registry must be imported for
 # configure_mappers() to resolve. Import the backend models package wholesale.
-import apps.backend.app.models  # noqa: F401  — registers every model on shared Base
+import apps.backend.app.models
+from packages.db.session import Base
 
 _engine = create_engine(
     "sqlite:///:memory:",
@@ -63,7 +62,7 @@ def packages_db(_packages_engine):
     connection = _packages_engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection)
-    nested = connection.begin_nested()
+    _nested = connection.begin_nested()
 
     @event.listens_for(session, "after_transaction_end")
     def restart_savepoint(session, transaction):

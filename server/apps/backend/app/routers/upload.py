@@ -8,8 +8,14 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.file_record import FileRecordResponse
-from apps.backend.app.services.file_validation import detect_image_format, validate_image_magic_bytes
-from apps.backend.app.services.security_log import SecurityEventType, _log_security_event
+from apps.backend.app.services.file_validation import (
+    detect_image_format,
+    validate_image_magic_bytes,
+)
+from apps.backend.app.services.security_log import (
+    SecurityEventType,
+    _log_security_event,
+)
 from apps.backend.app.services.storage.service import StorageService
 
 router = APIRouter(prefix="/upload", tags=["upload"])

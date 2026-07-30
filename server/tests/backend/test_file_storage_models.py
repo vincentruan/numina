@@ -57,7 +57,7 @@ def _register_user_and_get_ids(client):
 
 class TestStorageBackendModel:
     def test_create_and_query(self, db):
-        backend = _make_backend(db, id="local-main", backend_type="local", is_default=True)
+        _backend = _make_backend(db, id="local-main", backend_type="local", is_default=True)
         fetched = db.query(StorageBackend).filter_by(id="local-main").first()
         assert fetched is not None
         assert fetched.backend_type == "local"

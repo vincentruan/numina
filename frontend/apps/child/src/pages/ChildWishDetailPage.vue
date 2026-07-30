@@ -241,7 +241,7 @@ onMounted(async () => {
 
 .priority-badge {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
   display: inline-block;
@@ -253,7 +253,7 @@ onMounted(async () => {
 
 .wish-desc {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0 0 16px;
   line-height: 1.5;
@@ -302,13 +302,13 @@ onMounted(async () => {
   min-width: 36px;
 }
 .progress-pct.pct-full { color: var(--color-brand-ochre); }
-.progress-hint { font-family: Inter, sans-serif; font-size: 13px; }
+.progress-hint { font-family: Inter, sans-serif; font-size: 14px; }
 .hint-full        { color: var(--color-brand-ochre); font-weight: 600; }
 .hint-days        { color: var(--color-brand-mint); font-weight: 500; }
 .hint-placeholder { color: var(--color-muted-soft); }
 .progress-pending {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin-bottom: 12px;
 }
@@ -338,7 +338,7 @@ onMounted(async () => {
 
 .fulfilled-date {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0;
 }

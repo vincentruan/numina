@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from apps.backend.app.config import settings
+from packages.security.service_auth.agent_jwt import create_agent_token
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class AgentClient:
         # Build base headers
         self.headers = {
             "X-Family-Id": self.family_id,
-            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+            "X-Agent-Token": create_agent_token(self.family_id),
         }
         if self.user_id:
             self.headers["X-User-Id"] = self.user_id

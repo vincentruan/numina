@@ -14,7 +14,7 @@ class TestDeerFlowImport:
     def test_deerflow_client_importable(self):
         """DeerFlow harness must be importable via git dependency."""
         try:
-            from deerflow.client import DeerFlowClient  # noqa: F401
+            from deerflow.client import DeerFlowClient
             assert True
         except ImportError as e:
             raise AssertionError(
@@ -23,7 +23,7 @@ class TestDeerFlowImport:
 
     def test_deerflow_agents_importable(self):
         try:
-            from deerflow.agents import make_lead_agent  # noqa: F401
+            from deerflow.agents import make_lead_agent
             assert True
         except ImportError as e:
             raise AssertionError(f"deerflow.agents not importable: {e}") from e

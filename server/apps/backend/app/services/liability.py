@@ -116,7 +116,7 @@ def list_liabilities_for_family(
 
     rows = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .limit(limit)
         .all()
     )

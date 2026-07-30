@@ -40,6 +40,7 @@ from apps.backend.app.schemas.device import (
     FamilyDeviceResponse,
 )
 from apps.backend.app.services import device as device_service
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/auth", tags=["device"])
 
@@ -131,7 +132,7 @@ def trust_device(
     )
 
     claims = {"sub": str(user_id), "fid": str(family_id), "role": role}
-    if role == "child":
+    if role == UserRole.CHILD:
         new_refresh = create_child_refresh_token(claims)
     else:
         new_refresh = create_refresh_token(claims)
@@ -164,7 +165,7 @@ def trust_device(
     )
 
     cookie_name = (
-        CHILD_REFRESH_TOKEN_COOKIE if role == "child" else REFRESH_TOKEN_COOKIE
+        CHILD_REFRESH_TOKEN_COOKIE if role == UserRole.CHILD else REFRESH_TOKEN_COOKIE
     )
     response.set_cookie(
         key=cookie_name,
@@ -327,7 +328,7 @@ def revoke_device(
         refresh_token_cookie, child_refresh_token_cookie
     )
     if current_jti == session.refresh_jti:
-        if role == "child":
+        if role == UserRole.CHILD:
             clear_child_auth_cookies(response)
         else:
             clear_auth_cookies(response)
@@ -354,7 +355,7 @@ def revoke_all_devices(
     for jti in jtis:
         revoke_jti(jti, ttl_seconds=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600)
 
-    if role == "child":
+    if role == UserRole.CHILD:
         clear_child_auth_cookies(response)
     else:
         clear_auth_cookies(response)
@@ -436,7 +437,7 @@ def check_device(
             continue
         seen_user_ids.add(s.user_id)
 
-        if user.role == "child" and user.pin_hash:
+        if user.role == UserRole.CHILD and user.pin_hash:
             second_factor_type = "emoji_pin"
         elif user.second_factor_enabled and user.second_factor_type:
             second_factor_type = user.second_factor_type
@@ -519,7 +520,7 @@ def select_device(
     db.commit()
 
     # Determine second factor
-    if user.role == "child" and user.pin_hash:
+    if user.role == UserRole.CHILD and user.pin_hash:
         second_factor_type = "emoji_pin"
     elif user.second_factor_enabled and user.second_factor_type:
         second_factor_type = user.second_factor_type
@@ -670,7 +671,7 @@ def device_webauthn_verify(
     session.expires_at = now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS)
     db.commit()
 
-    if user.role == "child" and user.pin_hash:
+    if user.role == UserRole.CHILD and user.pin_hash:
         second_factor_type = "emoji_pin"
     elif user.second_factor_enabled and user.second_factor_type:
         second_factor_type = user.second_factor_type
@@ -709,10 +710,10 @@ def list_family_devices(
     ),
     db: Session = Depends(get_db),
 ):
-    """List active device sessions for all other family members. Owner or admin only."""
+    """List active device sessions for all other family members. Owner only."""
     payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
     role = payload["role"]
-    if role not in ("owner", "admin"):
+    if role != UserRole.OWNER:
         raise AppError(ErrorCode.FORBIDDEN)
 
     user_id = int(payload["sub"])

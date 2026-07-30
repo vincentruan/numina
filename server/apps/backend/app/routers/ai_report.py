@@ -9,15 +9,15 @@ import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_serializer
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_ai_enabled, require_owner
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.ai_deps import require_ai_enabled
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -191,7 +191,7 @@ async def trigger_generate_events(
                         )
                     )
 
-            age = datetime.now(timezone.utc).replace(tzinfo=None) - cached.generated_at  # noqa: UP017
+            age = datetime.now(UTC).replace(tzinfo=None) - cached.generated_at
             if age < _report_ttl:
                 # security-lens Open Question #22 (P2, defense-in-depth): the
                 # cached report_json was validated on first write, but re-serving

@@ -7,6 +7,7 @@ from starlette.responses import Response
 from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.mcp_session import MCPSession
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/internal/mcp", tags=["internal-mcp"])
 logger = logging.getLogger(__name__)
@@ -28,10 +29,22 @@ def _get_transport():
 
 
 def _verify_agent_token(token: str | None) -> None:
-    if not settings.AGENT_INTERNAL_TOKEN:
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "agent token not configured")
-    if not token or token != settings.AGENT_INTERNAL_TOKEN:
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid agent token")
+    """Verify JWT agent token for MCP endpoints."""
+    import jwt as pyjwt
+    from jwt.exceptions import PyJWTError
+
+    from apps.backend.app.auth.deps import ALGORITHM
+
+    if not token:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "missing agent token")
+    try:
+        payload = pyjwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except pyjwt.ExpiredSignatureError:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "agent token expired") from None
+    except PyJWTError:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid agent token") from None
+    if payload.get("type") != "agent":
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid token type")
 
 
 class MCPSSEResponse(Response):
@@ -98,7 +111,7 @@ async def mcp_sse(
                 family_id, x_caller_user_id, user.family_id,
             )
             raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
-        if user.role == "child":
+        if user.role == UserRole.CHILD:
             logger.warning(
                 "[mcp_sse] child caller rejected: family=%s caller_user_id=%s",
                 family_id, x_caller_user_id,

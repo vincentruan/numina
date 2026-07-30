@@ -16,7 +16,7 @@ scheduler = AsyncIOScheduler()
 
 def setup_all_jobs() -> None:
     """Register all 8 scheduled jobs."""
-    from apps.scheduler_worker.jobs import (  # noqa: PLC0415
+    from apps.scheduler_worker.jobs import (
         audit_log_purge_job,
         auto_report_job,
         device_session_cleanup_job,

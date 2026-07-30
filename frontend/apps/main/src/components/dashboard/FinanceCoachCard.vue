@@ -2,12 +2,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFinanceCoach } from '@/api/ai'
+import { useAIStore } from '@/stores/ai'
+import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
 import { useI18n } from 'vue-i18n'
 import IIcon from '@/components/IIcon.vue'
+import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const aiStore = useAIStore()
+const authStore = useAuthStore()
+const isOwner = computed(() => authStore.user?.role === 'owner')
 const suggestions = ref<FinanceSuggestion[]>([])
 const loading = ref(true)
 const loaded = ref(false)
@@ -18,6 +24,12 @@ const expanded = ref<string[]>([])
 const count = computed(() => suggestions.value.length)
 
 async function load(force = false) {
+  if (!aiStore.aiEnabled) {
+    visible.value = false
+    loading.value = false
+    loaded.value = true
+    return
+  }
   try {
     refreshing.value = force
     const resp = await getFinanceCoach(force)
@@ -63,7 +75,13 @@ async function onToggle(names: string[]) {
 
 onMounted(() => {
   // Independent async load — does not block the page.
-  load(false)
+  // No need to call backend when AI is disabled; the teaser inline state explains it.
+  if (aiStore.aiEnabled) {
+    load(false)
+  } else {
+    loading.value = false
+    loaded.value = true
+  }
 })
 </script>
 
@@ -101,6 +119,14 @@ onMounted(() => {
             </div>
           </div>
         </template>
+
+        <!-- AI disabled teaser -->
+        <div v-else-if="!aiStore.aiEnabled" class="fc-ai-gated">
+          <AiGatedInline
+            :title="t('dashboard.financeCoach.title')"
+            :is-owner="isOwner"
+          />
+        </div>
 
         <!-- Loaded suggestions -->
         <template v-else-if="visible">

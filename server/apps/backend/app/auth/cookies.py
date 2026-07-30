@@ -45,7 +45,7 @@ def set_auth_cookies(
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,
         value=access_token,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 15 min = 900s
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 60 min = 3600s
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
         samesite="lax",
@@ -96,7 +96,7 @@ def set_child_auth_cookies(
     response.set_cookie(
         key=CHILD_ACCESS_TOKEN_COOKIE,
         value=access_token,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 15 min = 900s
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 60 min = 3600s
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
         samesite="lax",

@@ -24,11 +24,11 @@ def test_session_family_id_is_immutable():
 
 
 @pytest.mark.asyncio
-async def test_list_tools_returns_eight_tools():
+async def test_list_tools_returns_ten_tools():
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
-    # #11 (U8 follow-up): 3 import_*_batch write tools added → 8 total.
+    # 8 original + 2 literacy weekly report tools
     assert names == {
         "get_family_overview",
         "get_assets",
@@ -38,6 +38,8 @@ async def test_list_tools_returns_eight_tools():
         "import_assets_batch",
         "import_liabilities_batch",
         "import_credit_cards_batch",
+        "get_child_literacy_profile",
+        "get_literacy_weekly_data",
     }
 
 

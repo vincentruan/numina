@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from apps.backend.app.services.storage.base import StorageAuthError, StorageConnectionError
+from apps.backend.app.services.storage.base import (
+    StorageAuthError,
+    StorageConnectionError,
+)
 from apps.backend.app.services.storage.webdav import WebDAVStorageBackend
 
 
@@ -45,16 +48,16 @@ class TestWebDAVStorageBackend:
     def test_save_put_401_raises_storage_auth_error(self):
         backend = make_backend()
         with patch.object(backend._client, "request", new=AsyncMock(return_value=make_response(201))), \
-             patch.object(backend._client, "put", new=AsyncMock(return_value=make_response(401))):
-            with pytest.raises(StorageAuthError):
-                run(backend.save(b"data", "photo.jpg", "20260410"))
+             patch.object(backend._client, "put", new=AsyncMock(return_value=make_response(401))), \
+             pytest.raises(StorageAuthError):
+            run(backend.save(b"data", "photo.jpg", "20260410"))
 
     def test_save_transport_error_raises_storage_connection_error(self):
         backend = make_backend()
         with patch.object(backend._client, "request", new=AsyncMock(return_value=make_response(201))), \
-             patch.object(backend._client, "put", new=AsyncMock(side_effect=httpx.TransportError("conn failed"))):
-            with pytest.raises(StorageConnectionError):
-                run(backend.save(b"data", "photo.jpg", "20260410"))
+             patch.object(backend._client, "put", new=AsyncMock(side_effect=httpx.TransportError("conn failed"))), \
+             pytest.raises(StorageConnectionError):
+            run(backend.save(b"data", "photo.jpg", "20260410"))
 
     def test_delete_204_success(self):
         backend = make_backend()

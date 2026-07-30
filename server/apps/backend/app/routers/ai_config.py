@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_owner
-from apps.backend.app.auth.deps import require_adult
+from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
@@ -62,10 +61,12 @@ def _invalidate_agent_cache(family_id: int) -> None:
 
     def _call():
         try:
+            from packages.security.service_auth.agent_jwt import create_agent_token
+
             resp = httpx.post(
                 agent_url,
                 headers={
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "X-Agent-Token": create_agent_token(family_id_str),
                     "Content-Type": "application/json",
                 },
                 timeout=5.0,
@@ -599,7 +600,7 @@ def get_tenant_models(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
             AIProviderConfig.circuit_state != "open",
         )
@@ -676,7 +677,7 @@ def get_tenant_models(
         db.query(FamilyWebSearchProvider)
         .filter(
             FamilyWebSearchProvider.family_id == family_id_int,
-            FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+            FamilyWebSearchProvider.is_enabled,
         )
         .count()
         > 0

@@ -1,5 +1,5 @@
 # Re-export shim — implementation in packages/db/models/literacy_badge.py
-from packages.db.models.literacy_badge import (  # noqa: F401
+from packages.db.models.literacy_badge import (
     LiteracyBadge,
     LiteracyBadgeDefinition,
 )

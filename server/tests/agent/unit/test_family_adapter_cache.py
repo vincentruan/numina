@@ -149,7 +149,7 @@ class TestCheckpointerInjection:
         captured_kwargs: dict = {}
 
         try:
-            import deerflow.client as df_client_mod  # noqa: F401
+            import deerflow.client as df_client_mod
         except ImportError:
             pytest.skip("deerflow not available")
 

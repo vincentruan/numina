@@ -8,7 +8,6 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.config import settings
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
@@ -49,7 +48,7 @@ async def suggest_asset_fields(
         resp.raise_for_status()
         return resp.json()
     except httpx.TimeoutException:
-        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT)
+        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
         logger.error(f"调用 agent suggest 失败: {e}")
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e

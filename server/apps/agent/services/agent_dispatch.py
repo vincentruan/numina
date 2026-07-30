@@ -344,7 +344,7 @@ async def stream_agent_dispatch(
         # [Security] Validate backend-type MCP servers — their URL must match
         # the configured backend base URL. This prevents a compromised owner
         # from redirecting the agent's internal MCP connection to an external
-        # server, which would leak AGENT_INTERNAL_TOKEN.
+        # server, which would leak the JWT token.
         for srv in mcp_servers:
             if srv.get("name") == "Numina Backend MCP":
                 expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
@@ -375,9 +375,9 @@ async def stream_agent_dispatch(
 
     # 3a. Inject auth headers into MCP servers (required for SSE handshake)
     # The backend API returns MCP servers without auth headers; we add them here.
-    from apps.agent.app.config import settings as agent_settings
+    from packages.security.service_auth.agent_jwt import create_agent_token
     mcp_headers: dict[str, str] = {
-        "X-Agent-Token": agent_settings.AGENT_INTERNAL_TOKEN,
+        "X-Agent-Token": create_agent_token(family_id),
         "X-Family-Id": family_id,
     }
     if user_id:

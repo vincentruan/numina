@@ -1,8 +1,6 @@
 """Unit tests for device service — trust_or_reuse_device."""
 
-import pytest
 
-from apps.backend.app.models.device_session import DeviceSession
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.services import device as device_service
@@ -20,6 +18,7 @@ def _make_family(db) -> Family:
 
 def _make_user(db, family_id: int, role: str = "owner") -> User:
     import bcrypt
+
     from apps.backend.app.utils.snowflake import next_id
     user = User(
         id=next_id(),

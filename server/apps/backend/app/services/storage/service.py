@@ -1,4 +1,5 @@
 """StorageService — orchestrates file upload, dedup, and DB persistence."""
+import contextlib
 import hashlib
 import os
 from datetime import datetime
@@ -113,10 +114,8 @@ class StorageService:
             # Concurrent upload of identical bytes won the race — roll back,
             # clean up the orphaned disk file, and return the winner's record.
             db.rollback()
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(local_path)
-            except OSError:
-                pass
             winner = (
                 db.query(CachedFile)
                 .filter_by(sha256=sha256, family_id=user.family_id)

@@ -14,26 +14,32 @@
       <van-cell-group inset :title="t('blindBox.drawProbGroup')">
         <van-cell :title="t('blindBox.baseDrawProb', { pct: Math.round((form.base_draw_prob ?? 0) * 100) })">
           <template #label>
-            <van-slider
-              v-model="form.base_draw_prob"
-              :min="0"
-              :max="1"
-              :step="0.05"
-              :aria-label="t('blindBox.baseDrawProb', { pct: Math.round((form.base_draw_prob ?? 0) * 100) })"
-              @change="onSave"
-            />
+            <div class="slider-track">
+              <van-slider
+                v-model="form.base_draw_prob"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :aria-label="t('blindBox.baseDrawProb', { pct: Math.round((form.base_draw_prob ?? 0) * 100) })"
+                @change="onSave"
+              />
+            </div>
+            <div class="slider-scale"><span>0%</span><span>50%</span><span>100%</span></div>
           </template>
         </van-cell>
         <van-cell :title="t('blindBox.specialDayProb', { pct: Math.round((form.special_day_prob ?? 0) * 100) })">
           <template #label>
-            <van-slider
-              v-model="form.special_day_prob"
-              :min="0"
-              :max="1"
-              :step="0.05"
-              :aria-label="t('blindBox.specialDayProb', { pct: Math.round((form.special_day_prob ?? 0) * 100) })"
-              @change="onSave"
-            />
+            <div class="slider-track">
+              <van-slider
+                v-model="form.special_day_prob"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :aria-label="t('blindBox.specialDayProb', { pct: Math.round((form.special_day_prob ?? 0) * 100) })"
+                @change="onSave"
+              />
+            </div>
+            <div class="slider-scale"><span>0%</span><span>50%</span><span>100%</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -41,38 +47,47 @@
       <van-cell-group inset :title="t('blindBox.surpriseProbGroup')">
         <van-cell :title="t('blindBox.surpriseProbNormal', { pct: Math.round((form.surprise_prob_normal ?? 0) * 100) })">
           <template #label>
-            <van-slider
-              v-model="form.surprise_prob_normal"
-              :min="0"
-              :max="1"
-              :step="0.05"
-              :aria-label="t('blindBox.surpriseProbNormal', { pct: Math.round((form.surprise_prob_normal ?? 0) * 100) })"
-              @change="onSave"
-            />
+            <div class="slider-track">
+              <van-slider
+                v-model="form.surprise_prob_normal"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :aria-label="t('blindBox.surpriseProbNormal', { pct: Math.round((form.surprise_prob_normal ?? 0) * 100) })"
+                @change="onSave"
+              />
+            </div>
+            <div class="slider-scale"><span>0%</span><span>50%</span><span>100%</span></div>
           </template>
         </van-cell>
         <van-cell :title="t('blindBox.surpriseProbParentBday', { pct: Math.round((form.surprise_prob_parent_bday ?? 0) * 100) })">
           <template #label>
-            <van-slider
-              v-model="form.surprise_prob_parent_bday"
-              :min="0"
-              :max="1"
-              :step="0.05"
-              :aria-label="t('blindBox.surpriseProbParentBday', { pct: Math.round((form.surprise_prob_parent_bday ?? 0) * 100) })"
-              @change="onSave"
-            />
+            <div class="slider-track">
+              <van-slider
+                v-model="form.surprise_prob_parent_bday"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :aria-label="t('blindBox.surpriseProbParentBday', { pct: Math.round((form.surprise_prob_parent_bday ?? 0) * 100) })"
+                @change="onSave"
+              />
+            </div>
+            <div class="slider-scale"><span>0%</span><span>50%</span><span>100%</span></div>
           </template>
         </van-cell>
         <van-cell :title="t('blindBox.surpriseProbSiblingBday', { pct: Math.round((form.surprise_prob_sibling_bday ?? 0) * 100) })">
           <template #label>
-            <van-slider
-              v-model="form.surprise_prob_sibling_bday"
-              :min="0"
-              :max="1"
-              :step="0.05"
-              :aria-label="t('blindBox.surpriseProbSiblingBday', { pct: Math.round((form.surprise_prob_sibling_bday ?? 0) * 100) })"
-              @change="onSave"
-            />
+            <div class="slider-track">
+              <van-slider
+                v-model="form.surprise_prob_sibling_bday"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :aria-label="t('blindBox.surpriseProbSiblingBday', { pct: Math.round((form.surprise_prob_sibling_bday ?? 0) * 100) })"
+                @change="onSave"
+              />
+            </div>
+            <div class="slider-scale"><span>0%</span><span>50%</span><span>100%</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -149,5 +164,16 @@ function onSave() {
 .blind-box-config-page {
   min-height: 100vh;
   background: var(--van-background);
+}
+.slider-track {
+  padding: 8px 16px;
+}
+.slider-scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--van-text-color-3, #c8c9cc);
+  margin-top: 2px;
 }
 </style>

@@ -48,9 +48,42 @@
       <!-- Report content -->
       <WeeklyReportCard v-if="report" :report="report" />
 
+      <!-- Streaming preview (during generation) -->
+      <div v-else-if="stream.status.value === 'streaming' || stream.status.value === 'connecting'" class="streaming-preview">
+        <div class="streaming-header">
+          <van-loading size="18" color="var(--van-primary-color)" />
+          <span class="streaming-label">{{ t('literacyReport.generating') }}</span>
+        </div>
+        <div v-if="stream.narrative.value" class="streaming-text">
+          {{ stream.narrative.value }}
+        </div>
+      </div>
+
+      <!-- Stream error -->
+      <div v-else-if="stream.status.value === 'error'" class="stream-error">
+        <EmptyState image="error" :description="stream.errorMessage.value || t('literacyReport.generateFailed')" />
+        <van-button plain type="primary" size="small" @click="regenerate">
+          {{ t('literacyReport.retry') }}
+        </van-button>
+      </div>
+
       <!-- No report for this week -->
       <div v-else class="empty-state">
         <EmptyState image="search" :description="t('literacyReport.noReport')" />
+      </div>
+
+      <!-- Regenerate button (bottom, only when a report exists or stream completed) -->
+      <div v-if="report || stream.status.value === 'completed'" class="regenerate-bar">
+        <van-button
+          plain
+          type="primary"
+          size="small"
+          icon="replay"
+          :loading="stream.status.value === 'streaming' || stream.status.value === 'connecting'"
+          @click="regenerate"
+        >
+          {{ t('literacyReport.regenerate') }}
+        </van-button>
       </div>
     </template>
   </div>
@@ -58,6 +91,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showFailToast } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -70,10 +104,12 @@ import {
   getReportHistory,
 } from '@/api/literacy'
 import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api/literacy'
+import { useLiteracyStream } from '@/composables/useLiteracyStream'
 
 defineOptions({ name: 'LiteracyReportPage' })
 
 const { t } = useI18n()
+const route = useRoute()
 
 const loading = ref(true)
 const loadError = ref(false)
@@ -84,6 +120,7 @@ const history = ref<ReportHistoryWeek[]>([])
 const currentWeekStart = ref<string | null>(null)
 
 const reportLoading = ref(false)
+const stream = useLiteracyStream()
 
 const currentHistoryIndex = computed(() => {
   if (!currentWeekStart.value) return -1
@@ -108,7 +145,10 @@ async function init() {
     const childListRes = await getReportChildren()
     children.value = childListRes.children
     if (children.value.length > 0) {
-      selectedChildId.value = children.value[0].child_id
+      // Pre-select child from query param (e.g. from BabyPage navigation)
+      const queryChildId = route.query.child_id as string | undefined
+      const match = queryChildId && children.value.find(c => c.child_id === queryChildId)
+      selectedChildId.value = match ? match.child_id : children.value[0].child_id
     }
   } catch {
     loadError.value = true
@@ -185,7 +225,25 @@ function formatWeekStart(weekStart: string): string {
   }
 }
 
+async function regenerate() {
+  if (!selectedChildId.value) return
+  stream.reset()
+  report.value = null
+  await stream.connect(selectedChildId.value, true)
+  // After stream completes, reload the persisted report
+  if (stream.status.value === 'completed') {
+    await loadReport()
+  }
+}
+
+watch(stream.status, (val) => {
+  if (val === 'completed' && selectedChildId.value) {
+    loadReport()
+  }
+})
+
 watch(selectedChildId, () => {
+  if (skipNextWatch) { skipNextWatch = false; return }
   loadReport()
 })
 
@@ -194,6 +252,8 @@ watch(currentWeekStart, (val, oldVal) => {
     loadReport()
   }
 })
+
+let skipNextWatch = true
 
 onMounted(() => {
   init().then(() => {
@@ -239,5 +299,50 @@ onMounted(() => {
   font-weight: 500;
   min-width: 100px;
   text-align: center;
+}
+
+.streaming-preview {
+  margin: 12px 16px;
+  padding: 16px;
+  background: var(--card-bg, #f5f5ff);
+  border-radius: 12px;
+  border: 1px dashed var(--van-primary-color);
+}
+
+.streaming-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.streaming-label {
+  font-size: 14px;
+  color: var(--van-primary-color);
+  font-weight: 500;
+}
+
+.streaming-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.stream-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px;
+  gap: 12px;
+}
+
+.regenerate-bar {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
 }
 </style>

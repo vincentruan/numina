@@ -141,6 +141,8 @@ export default {
     noTasks: '今天没有任务，好好休息吧！',
     myWishes: '我的心愿',
     myCalendar: '📅 我的日历',
+    scenarioEntry: '📖 本周情境',
+    scenarioEntrySub: '做出选择，解锁徽章',
     quickWishes: '我的心愿',
     quickTreasures: '我的宝贝',
     quickTasks: '所有任务',

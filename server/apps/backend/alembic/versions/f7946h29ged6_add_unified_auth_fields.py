@@ -12,7 +12,6 @@ Adds:
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision: str = "f7946h29ged6"

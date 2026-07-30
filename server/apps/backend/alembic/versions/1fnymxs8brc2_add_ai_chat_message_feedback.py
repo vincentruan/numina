@@ -4,15 +4,15 @@ Revision ID: 1fnymxs8brc2
 Revises: e4e455e0567e
 Create Date: 2026-07-17
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "1fnymxs8brc2"
-down_revision: Union[str, None] = "e4e455e0567e"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "e4e455e0567e"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

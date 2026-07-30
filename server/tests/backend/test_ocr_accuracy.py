@@ -1,5 +1,8 @@
 """Tests for OCR accuracy calculator service."""
-from apps.backend.app.services.ocr_accuracy import calculate_ocr_accuracy, levenshtein_ratio
+from apps.backend.app.services.ocr_accuracy import (
+    calculate_ocr_accuracy,
+    levenshtein_ratio,
+)
 
 
 def test_levenshtein_ratio_exact_match():

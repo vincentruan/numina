@@ -14,7 +14,6 @@ import json
 import logging
 
 from fastapi.responses import StreamingResponse
-
 from sqlalchemy.orm import Session
 
 from apps.backend.app.services.ai_extraction_circuit_service import (

@@ -82,7 +82,17 @@ class TestDefinitionsCompleteness:
             assert defn.label_key, f"{key} missing label_key"
 
     def test_family_count(self):
-        assert len(FAMILY_SETTING_DEFINITIONS) == 10
+        assert len(FAMILY_SETTING_DEFINITIONS) == 13
 
     def test_user_count(self):
         assert len(USER_SETTING_DEFINITIONS) == 2
+
+
+def test_literacy_report_settings_registered():
+    from apps.backend.app.services.config_registry import FAMILY_SETTING_DEFINITIONS
+    assert "literacy_report_day" in FAMILY_SETTING_DEFINITIONS
+    assert "literacy_report_hour" in FAMILY_SETTING_DEFINITIONS
+    assert "ai_cache_ttl_literacy_weekly_report" in FAMILY_SETTING_DEFINITIONS
+    # Default: Sunday (0), 8am, 7-day TTL
+    assert FAMILY_SETTING_DEFINITIONS["literacy_report_day"].default == 0
+    assert FAMILY_SETTING_DEFINITIONS["literacy_report_hour"].default == 8

@@ -156,7 +156,7 @@ def _match_asset(name: str, family_id: str, db: Session) -> Asset | None:
         .filter(
             Asset.family_id == family_id,
             Asset.name == name,
-            Asset.is_archived == False,  # noqa: E712
+            Asset.is_archived.is_(False),
         )
         .first()
     )
@@ -165,7 +165,7 @@ def _match_asset(name: str, family_id: str, db: Session) -> Asset | None:
     # 模糊匹配：名称包含关系
     assets = (
         db.query(Asset)
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)  # noqa: E712
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
         .all()
     )
     for a in assets:

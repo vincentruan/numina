@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { showSuccessToast, showFailToast, showDialog } from 'vant'
+import { showSuccessToast, showFailToast, showDialog, showToast } from 'vant'
 import { getWishAdvice, adoptWishAdvice } from '@/api/wishes'
 import { useWishStore } from '@/stores/wish'
+import { useAIStore } from '@/stores/ai'
+import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import type { WishAdvice } from '@/types'
+
+import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
 const props = defineProps<{ wishes: { id: string; name: string; monthly_saving: string | number }[] }>()
 const router = useRouter()
 const { t } = useI18n()
 const currency = useCurrency()
 const wishStore = useWishStore()
+const aiStore = useAIStore()
+const authStore = useAuthStore()
+const isOwner = computed(() => authStore.user?.role === 'owner')
 
 const advice = ref<WishAdvice | null>(null)
 const visible = ref(false)
@@ -51,6 +58,7 @@ function validateAdvice(a: WishAdvice): boolean {
 }
 
 async function load(): Promise<void> {
+  if (!aiStore.aiEnabled) return
   if (isSuppressed()) {
     closed.value = true
     return
@@ -112,18 +120,30 @@ async function onAdopt(): Promise<void> {
 }
 
 function onFullAdvice(): void {
+  if (!aiStore.aiEnabled) {
+    showToast(t('toast.aiNotEnabled'))
+    return
+  }
   router.push({ name: 'AIChat', query: { source: 'wish_advice' } })
 }
 
 const shouldShow = computed(() => !closed.value && visible.value && advice.value !== null)
 
 onMounted(() => {
-  void load()
+  if (aiStore.aiEnabled) {
+    void load()
+  }
 })
 </script>
 
 <template>
-  <div v-if="shouldShow" class="wish-advice-card" data-test="wish-advice-card">
+  <div v-if="!aiStore.aiEnabled" class="wish-advice-card">
+    <AiGatedInline
+      :title="t('wish.advice.title')"
+      :is-owner="isOwner"
+    />
+  </div>
+  <div v-else-if="shouldShow" class="wish-advice-card" data-test="wish-advice-card">
     <div class="wa-header">
       <span class="wa-title">{{ t('wish.advice.title') }}</span>
       <van-icon name="cross" data-test="wa-close" @click="onClose" />

@@ -72,7 +72,7 @@
         :key="chore.id"
         :ref="(el) => setChoreCardRef(chore.id, el as HTMLElement | null)"
         class="chore-card"
-        :class="chore.status"
+        :class="[chore.status, { 'highlight-flash': highlightedChoreId === chore.id }]"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <CandleFlame
@@ -233,7 +233,8 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildTasks' })
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
@@ -265,7 +266,35 @@ const allDoneSvg = allDoneSvgRaw
 
 const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
+const route = useRoute()
+const router = useRouter()
 const { increment, decrement } = usePageLoading()
+
+// Highlight scroll-into-view from homepage task click
+const highlightedChoreId = ref<string | null>(null)
+let lastHandledHighlight = ''
+
+function scrollToHighlight() {
+  const id = route.query.highlight as string | undefined
+  if (!id || id === lastHandledHighlight) return
+  if (!chores.value.find(c => c.id === id)) return
+  lastHandledHighlight = id
+  highlightedChoreId.value = id
+  nextTick(() => {
+    const el = choreCardRefs.value.get(id)
+    if (el) {
+      el.scrollIntoView({ behavior: reducedMotion.value ? 'auto' : 'smooth', block: 'center' })
+    }
+    // Clear the query param silently
+    const query = { ...route.query }
+    delete query.highlight
+    router.replace({ query })
+    // Clear highlight after animation
+    setTimeout(() => {
+      highlightedChoreId.value = null
+    }, 1500)
+  })
+}
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -602,9 +631,16 @@ onMounted(async () => {
 
     // Check for pending celebrations after data loads
     checkAndTriggerCelebration(chores.value)
+    // Scroll to highlighted chore from homepage
+    scrollToHighlight()
   } finally {
     decrement()
   }
+})
+
+// KeepAlive: re-check highlight query param on re-activation
+onActivated(() => {
+  scrollToHighlight()
 })
 
 // Drive candle state transitions when chore status changes after polling.
@@ -698,7 +734,7 @@ onUnmounted(() => {
 
 .today-badge {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;
@@ -757,6 +793,22 @@ onUnmounted(() => {
 .chore-card.approved { opacity: 0.55; }
 .chore-card.rejected { opacity: 0.45; }
 
+/* Highlight flash when scrolling to a specific chore from homepage */
+.chore-card.highlight-flash {
+  animation: chore-highlight 1.5s ease-out forwards;
+}
+
+@keyframes chore-highlight {
+  0%, 15% {
+    box-shadow: 0 0 10px rgba(255, 183, 77, 0.5);
+    border-color: var(--color-brand-ochre);
+  }
+  100% {
+    box-shadow: none;
+    border-color: var(--color-hairline);
+  }
+}
+
 .chore-emoji { font-size: 28px; }
 
 .chore-info { flex: 1; }
@@ -769,7 +821,7 @@ onUnmounted(() => {
 }
 .chore-reward {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;
@@ -778,14 +830,14 @@ onUnmounted(() => {
 .streak-badge {
   display: inline-block;
   margin-left: 6px;
-  font-size: 12px;
+  font-size: 14px;
   background: var(--color-brand-peach);
   color: var(--color-ink);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
   font-weight: 600;
 }
-.streak-badge.flame-tier-7 { font-size: 13px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
+.streak-badge.flame-tier-7 { font-size: 14px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
 .streak-badge.flame-tier-14 { font-size: 14px; animation: flame-pulse 500ms ease-in-out infinite; }
 .streak-badge.flame-tier-30 { font-size: 15px; animation: flame-pulse 600ms ease-in-out infinite; }
 .streak-badge.reduced-motion { animation: none; }
@@ -797,14 +849,14 @@ onUnmounted(() => {
 
 .days-to-bonus {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 2px 0 0;
 }
 
 .claim-disabled-hint {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   margin: 8px 0 0;
   padding-left: 40px;
@@ -837,7 +889,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   padding: 0 12px;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   height: 44px;
@@ -851,7 +903,7 @@ onUnmounted(() => {
 /* ── Status badges ── */
 .status-badge {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   white-space: nowrap;
@@ -929,7 +981,7 @@ onUnmounted(() => {
 
 .abandon-sheet-reward {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 4px 0 0;
   font-weight: 500;
@@ -937,7 +989,7 @@ onUnmounted(() => {
 
 .abandon-sheet-hint {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0 0 20px;
   text-align: center;

@@ -4,12 +4,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-from packages.db.session import SessionLocal, engine
-from sqlalchemy import text
-from datetime import datetime, timezone
 import os
+from datetime import UTC, datetime, timezone
+
+from sqlalchemy import text
 
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+from packages.db.session import SessionLocal
 
 
 def _next_snowflake_id():
@@ -37,7 +38,7 @@ def _ensure_demouser_family(db):
     # Create family and user with Snowflake IDs
     family_id = _next_snowflake_id()
     invite_code = "DEMO01"
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     db.execute(
         text("""
             INSERT INTO families (id, name, invite_code, created_by, created_at, updated_at)
@@ -63,7 +64,7 @@ def _ensure_demouser_family(db):
 
 def _ensure_invitation_code(db, family_id):
     """Ensure the demo invitation code points at the demouser family."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     result = db.execute(text("SELECT code FROM family_invitation_codes WHERE code = 'DEMO-CODE'"))
     if not result.fetchone():
         db.execute(
@@ -149,8 +150,8 @@ def seed_minimal():
             print(f"\nAI config already exists: provider={provider}, model={model_id}")
             return
 
-        from apps.backend.app.services.ai_crypto import encrypt_api_key
         from apps.backend.app.models.ai_provider_config import AIProviderConfig
+        from apps.backend.app.services.ai_crypto import encrypt_api_key
 
         encrypted_key = encrypt_api_key(api_key)
 
@@ -173,7 +174,7 @@ def seed_minimal():
         db.add(config)
         db.commit()
 
-        print(f"\nCreated AI config for demouser family:")
+        print("\nCreated AI config for demouser family:")
         print(f"  family_id: {family_id}")
         print(f"  Provider: {config.provider}")
         print(f"  Model: {config.model_id} (supports extended thinking)")

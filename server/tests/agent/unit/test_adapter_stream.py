@@ -9,7 +9,6 @@ import pytest
 from apps.agent.services.deerflow_adapter.adapter import (
     DeerFlowAdapter,
     DeerFlowError,
-    DeerFlowTimeoutError,
     StreamChunk,
 )
 from tests.agent.golden.fixtures import REDACTED_CONTEXT

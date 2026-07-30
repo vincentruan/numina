@@ -197,11 +197,11 @@ class TestSelectTemplate:
 class TestGrowthDimensions:
     def test_all_dimensions_when_no_badges(self, db):
         dims = _growth_dimensions(db, child_id=9999)
-        assert set(dims) == {"earning", "saving", "investing", "giving"}
+        assert set(dims) == {"earning", "choosing", "waiting", "caring"}
 
     def test_excludes_earned_dimension(self, db):
         defn = LiteracyBadgeDefinition(
-            id=2001, dimension="saving", level=1, name="小存钱家", description="d", criteria_summary="c"
+            id=2001, dimension="choosing", level=1, name="小选择家", description="d", criteria_summary="c"
         )
         badge = LiteracyBadge(
             id=3001, child_id=9999, definition_id=defn.id, source="scenario"
@@ -210,7 +210,7 @@ class TestGrowthDimensions:
         db.commit()
 
         dims = _growth_dimensions(db, child_id=9999)
-        assert "saving" not in dims
+        assert "choosing" not in dims
         assert "earning" in dims
 
 
@@ -304,7 +304,7 @@ class TestGenerateWeeklyScenario:
 
         content = json.loads(scenario.content_json)
         assert content["story"] == _build_fallback_content()["story"]
-        assert scenario.template_id == 0
+        assert scenario.template_id is None
 
     @pytest.mark.asyncio
     async def test_week_start_is_sunday(self, db, child_user, active_template):

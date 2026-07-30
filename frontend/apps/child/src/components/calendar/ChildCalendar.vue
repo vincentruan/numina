@@ -246,7 +246,7 @@ onMounted(loadMonth)
 }
 .cal-weekdays span {
   text-align: center;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   padding: 4px 0;
 }
@@ -302,7 +302,7 @@ onMounted(loadMonth)
 }
 
 .day-num {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-ink);
   line-height: 1;
   width: 26px;
@@ -379,7 +379,7 @@ onMounted(loadMonth)
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
 }
 
@@ -391,7 +391,7 @@ onMounted(loadMonth)
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted-soft);
 }
 .stats-sep { color: var(--color-hairline); }

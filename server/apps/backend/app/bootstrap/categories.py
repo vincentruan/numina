@@ -103,11 +103,11 @@ def bootstrap_categories(db: Session) -> None:
     """Ensure system categories exist. Idempotent."""
     from apps.backend.app.models.category import Category
 
-    existing = db.query(Category).filter(Category.is_system == True).first()  # noqa: E712
+    existing = db.query(Category).filter(Category.is_system).first()
     if existing:
         icon_map = {cat["name"]: cat["icon"] for cat in SYSTEM_CATEGORIES}
         rows = db.query(Category).filter(
-            Category.is_system == True,  # noqa: E712
+            Category.is_system,
             ~Category.icon.like("icon-%"),
         ).all()
         for cat in rows:

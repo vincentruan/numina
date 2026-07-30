@@ -4,8 +4,6 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 
 def _make_settings(**overrides):
     """Create a fresh Settings instance with env overrides."""
@@ -44,34 +42,34 @@ class TestDataRootExpansion:
 
     def test_custom_data_root_is_resolved(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        assert s.DATA_ROOT == _resolve("/tmp/test-numina")
+        assert _resolve("/tmp/test-numina") == s.DATA_ROOT
 
 
 class TestDerivedPaths:
     def test_upload_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
         expected = _resolve("/tmp/test-numina") + "/workspaces"
-        assert s.UPLOAD_DIR == expected
+        assert expected == s.UPLOAD_DIR
 
     def test_workspace_root_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
         expected = _resolve("/tmp/test-numina") + "/workspaces"
-        assert s.WORKSPACE_ROOT == expected
+        assert expected == s.WORKSPACE_ROOT
 
     def test_chat_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
         expected = _resolve("/tmp/test-numina") + "/workspaces"
-        assert s.CHAT_DIR == expected
+        assert expected == s.CHAT_DIR
 
     def test_log_dir_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
         expected = _resolve("/tmp/test-numina") + "/logs"
-        assert s.LOG_DIR == expected
+        assert expected == s.LOG_DIR
 
     def test_database_url_derived_from_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
         root = _resolve("/tmp/test-numina")
-        assert s.DATABASE_URL == f"sqlite:///{root}/db/numina.db"
+        assert f"sqlite:///{root}/db/numina.db" == s.DATABASE_URL
 
     def test_all_derived_paths_under_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
@@ -107,7 +105,6 @@ class TestExplicitOverrides:
 class TestChatDirValidation:
     def test_chat_dir_strictly_under_upload_dir_raises(self):
         """CHAT_DIR being a strict subdirectory of UPLOAD_DIR is forbidden."""
-        from packages.core.settings import Settings
 
         s = _make_settings(
             DATA_ROOT="/tmp/test-numina",

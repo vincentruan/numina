@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 def fetch_rates_job() -> None:
     """Fetch and store latest exchange rates from exchangerate-api.com."""
     from packages.domain.exchange_rate.service import (
-        ExchangeRateService,  # noqa: PLC0415
+        ExchangeRateService,
     )
 
     db = SessionLocal()
@@ -40,16 +40,16 @@ def fetch_rates_job() -> None:
 
 async def file_sync_job() -> None:
     """Sync pending file_remote_locations to the default remote backend."""
-    from packages.db.models.cached_file import CachedFile  # noqa: PLC0415
+    from packages.db.models.cached_file import CachedFile
     from packages.db.models.file_remote_location import (
-        FileRemoteLocation,  # noqa: PLC0415
+        FileRemoteLocation,
     )
     from packages.db.models.storage_backend import (
-        StorageBackend as StorageBackendModel,  # noqa: PLC0415
+        StorageBackend as StorageBackendModel,
     )
-    from packages.storage.base import StorageError  # noqa: PLC0415
-    from packages.storage.config_crypto import decrypt_config  # noqa: PLC0415
-    from packages.storage.factory import get_backend_for_type  # noqa: PLC0415
+    from packages.storage.base import StorageError
+    from packages.storage.config_crypto import decrypt_config
+    from packages.storage.factory import get_backend_for_type
 
     db = SessionLocal()
     try:
@@ -158,7 +158,7 @@ async def file_sync_job() -> None:
 
 def audit_log_purge_job() -> None:
     """Purge security audit log entries older than 90 days."""
-    from packages.domain.audit.service import purge_old_audit_logs  # noqa: PLC0415
+    from packages.domain.audit.service import purge_old_audit_logs
 
     purge_old_audit_logs(retention_days=90)
 
@@ -168,7 +168,7 @@ def audit_log_purge_job() -> None:
 def revoked_token_cleanup_job() -> None:
     """Purge expired revoked token records."""
     from packages.security.revoke_jti import (
-        cleanup_expired_revoked_tokens,  # noqa: PLC0415
+        cleanup_expired_revoked_tokens,
     )
 
     db = SessionLocal()
@@ -186,7 +186,7 @@ def revoked_token_cleanup_job() -> None:
 
 def device_session_cleanup_job() -> None:
     """Expire stale DeviceSessions and purge old revoked ones."""
-    from packages.domain.device.service import (  # noqa: PLC0415
+    from packages.domain.device.service import (
         cleanup_expired_device_sessions,
         delete_old_revoked_sessions,
     )
@@ -208,7 +208,7 @@ def device_session_cleanup_job() -> None:
 def reminder_job() -> None:
     """Run daily notification/reminder checks."""
     from packages.domain.notification.service import (
-        run_scheduled_checks,  # noqa: PLC0415
+        run_scheduled_checks,
     )
 
     db = SessionLocal()
@@ -226,7 +226,7 @@ def reminder_job() -> None:
 def snapshot_job() -> None:
     """Generate daily asset snapshots for all families."""
     from packages.domain.snapshot.service import (
-        auto_generate_daily_snapshots,  # noqa: PLC0415
+        auto_generate_daily_snapshots,
     )
 
     db = SessionLocal()
@@ -243,14 +243,15 @@ def snapshot_job() -> None:
 
 async def auto_report_job() -> None:
     """Trigger report generation for eligible families (daily 8:35)."""
-    import httpx  # noqa: PLC0415
+    import httpx
 
     try:
         async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
+            from packages.security.service_auth.agent_jwt import create_system_token
             resp = await client.post(
                 f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/auto-generate-reports",
                 headers={
-                    "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+                    "Authorization": f"Bearer {create_system_token()}",
                 },
             )
         if resp.status_code == 200:
@@ -274,9 +275,9 @@ def _read_file(local_path: str) -> bytes:
 
 def literacy_report_weekly_job() -> None:
     """Generate weekly literacy reports for all children in all families."""
-    from datetime import date, timedelta  # noqa: PLC0415
+    from datetime import date, timedelta
 
-    from packages.db.models.user import User  # noqa: PLC0415
+    from packages.db.models.user import User
 
     db = SessionLocal()
     try:
@@ -296,9 +297,9 @@ def literacy_report_weekly_job() -> None:
             return
 
         # Lazy import the async service — run via asyncio
-        import asyncio  # noqa: PLC0415
+        import asyncio
 
-        from apps.backend.app.services.literacy_report import (  # noqa: PLC0415
+        from packages.domain.literacy.service import (
             generate_weekly_report,
         )
 

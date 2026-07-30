@@ -316,7 +316,7 @@ def _mcp_cache_key(mcp_servers: list[dict[str, Any]] | None) -> str:
     import hashlib
     import json
     blob = json.dumps(mcp_servers, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]  # noqa: S324 — non-crypto use
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]
 
 
 def _generate_temp_config(
@@ -538,9 +538,8 @@ def _generate_temp_config(
         if "stream_usage" not in model_entry:
             model_entry["stream_usage"] = True
         db_timeout = ai_config.get("timeout_seconds")
-        if isinstance(db_timeout, int) and db_timeout > 0:
-            if "stream_chunk_timeout" not in model_entry:
-                model_entry["stream_chunk_timeout"] = float(db_timeout)
+        if isinstance(db_timeout, int) and db_timeout > 0 and "stream_chunk_timeout" not in model_entry:
+            model_entry["stream_chunk_timeout"] = float(db_timeout)
 
     # ── api_base → base_url normalisation ──
     # langchain_openai.ChatOpenAI accepts the endpoint override as ``base_url``

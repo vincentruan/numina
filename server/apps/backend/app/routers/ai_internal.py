@@ -4,13 +4,12 @@
 并以 X-Family-Id header 中的 family_id 为边界过滤数据。
 """
 
-import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -27,6 +26,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
 from apps.backend.app.services.web_search_provider_registry import get_provider_template
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/internal", tags=["internal-agent"])
 
@@ -36,15 +36,15 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     user = (
         db.query(User)
         .filter(
-            User.family_id == family_id, User.role == "owner", User.is_active == True
-        )  # noqa: E712
+            User.family_id == family_id, User.role == UserRole.OWNER, User.is_active
+        )
         .first()
     )
     if not user:
         # fallback: 取任意活跃成员
         user = (
             db.query(User)
-            .filter(User.family_id == family_id, User.is_active == True)  # noqa: E712
+            .filter(User.family_id == family_id, User.is_active)
             .first()
         )
     if not user:
@@ -123,7 +123,7 @@ def internal_get_liabilities(
 
     liabilities = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)  # noqa: E712
+        .filter(Liability.family_id == family_id, Liability.is_active)
         .all()
     )
     return [
@@ -196,7 +196,7 @@ def internal_get_ai_config(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .order_by(
@@ -213,7 +213,7 @@ def internal_get_ai_config(
             db.query(FamilyWebSearchProvider)
             .filter(
                 FamilyWebSearchProvider.family_id == family_id_int,
-                FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+                FamilyWebSearchProvider.is_enabled,
                 FamilyWebSearchProvider.circuit_state != "open",
             )
             .order_by(FamilyWebSearchProvider.display_order.asc())
@@ -243,7 +243,7 @@ def internal_get_ai_config(
             db.query(FamilyMCPServer)
             .filter(
                 FamilyMCPServer.family_id == family_id_int,
-                FamilyMCPServer.is_enabled == True,  # noqa: E712
+                FamilyMCPServer.is_enabled,
                 FamilyMCPServer.mcp_type == "websearch",
             )
             .all()
@@ -357,7 +357,7 @@ def internal_get_ai_config(
         db.query(FamilyWebSearchProvider)
         .filter(
             FamilyWebSearchProvider.family_id == family_id_int,
-            FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+            FamilyWebSearchProvider.is_enabled,
             FamilyWebSearchProvider.circuit_state != "open",
         )
         .order_by(FamilyWebSearchProvider.display_order.asc())
@@ -386,7 +386,7 @@ def internal_get_ai_config(
         db.query(FamilyMCPServer)
         .filter(
             FamilyMCPServer.family_id == family_id_int,
-            FamilyMCPServer.is_enabled == True,  # noqa: E712
+            FamilyMCPServer.is_enabled,
             FamilyMCPServer.mcp_type == "websearch",
         )
         .all()
@@ -649,7 +649,7 @@ def internal_get_enabled_families(
     rows = (
         db.query(AIProviderConfig.family_id)
         .filter(
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .distinct()
@@ -1040,32 +1040,31 @@ logger = logging.getLogger(__name__)
 def verify_system_token(
     authorization: str = Header(..., alias="Authorization"),
 ) -> bool:
-    """验证 system-level service-to-service token (无 X-Family-Id)。
+    """验证 system-level JWT token (无 X-Family-Id)。
 
     仅供 scheduler_worker 等系统级调用使用，不涉及特定家庭上下文。
-    仅支持 static HMAC token 格式。
+    仅支持 JWT system token 格式。
     """
     if not authorization.startswith("Bearer "):
-        raise HTTPException(  # noqa: allow-http-exception
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid system token",
-        )
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token format")
 
     token = authorization[7:]
 
-    from apps.backend.app.config import settings as app_settings  # noqa: PLC0415
+    import jwt as pyjwt
+    from jwt.exceptions import PyJWTError
 
-    if not app_settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(  # noqa: allow-http-exception
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Agent internal token not configured",
-        )
+    from apps.backend.app.auth.deps import ALGORITHM
+    from apps.backend.app.config import settings as app_settings
 
-    if not hmac.compare_digest(token, app_settings.AGENT_INTERNAL_TOKEN):
-        raise HTTPException(  # noqa: allow-http-exception
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid system token",
-        )
+    try:
+        payload = pyjwt.decode(token, app_settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except pyjwt.ExpiredSignatureError:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="System token expired") from None
+    except PyJWTError:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token") from None
+
+    if payload.get("type") != "system":
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid token type")
 
     return True
 
@@ -1086,23 +1085,23 @@ async def auto_generate_reports(
     对每个符合条件的家庭，创建 session + task 并触发 agent 生成。
     """
     from apps.backend.app.models.ai_provider_config import (
-        AIProviderConfig,  # noqa: PLC0415
+        AIProviderConfig,
     )
-    from apps.backend.app.models.ai_report import AIReport  # noqa: PLC0415
-    from apps.backend.app.services.agent_client import AgentClient  # noqa: PLC0415
-    from apps.backend.app.services.ai_task_service import AITaskService  # noqa: PLC0415
+    from apps.backend.app.models.ai_report import AIReport
+    from apps.backend.app.services.agent_client import AgentClient
+    from apps.backend.app.services.ai_task_service import AITaskService
     from apps.backend.app.services.chat_session import (
-        ChatSessionService,  # noqa: PLC0415
+        ChatSessionService,
     )
-    from apps.backend.app.services.finance_coach_cache import SKILL_TTL  # noqa: PLC0415
-    from packages.db.models.family import Family  # noqa: PLC0415
+    from apps.backend.app.services.finance_coach_cache import SKILL_TTL
+    from packages.db.models.family import Family
 
     report_ttl = SKILL_TTL["report"]
 
     # 1. 找到 report_auto_generate_enabled=True 的家庭
     auto_families = (
         db.query(Family.id)
-        .filter(Family.report_auto_generate_enabled == True)  # noqa: E712
+        .filter(Family.report_auto_generate_enabled)
         .all()
     )
     family_ids = [f.id for f in auto_families]
@@ -1116,7 +1115,7 @@ async def auto_generate_reports(
         for r in db.query(AIProviderConfig.family_id)
         .filter(
             AIProviderConfig.family_id.in_(family_ids),
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.is_active,
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .all()
@@ -1128,7 +1127,7 @@ async def auto_generate_reports(
 
     triggered = 0
     skipped = 0
-    now = datetime.now(timezone.utc).replace(tzinfo=None)  # noqa: UP017
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     for fid in eligible_ids:
         # 3. 检查是否有 1 小时内的报告
@@ -1158,7 +1157,7 @@ async def auto_generate_reports(
         # 5. 找到家庭 owner 作为执行用户
         owner = (
             db.query(User)
-            .filter(User.family_id == fid, User.role == "owner", User.is_active == True)  # noqa: E712
+            .filter(User.family_id == fid, User.role == UserRole.OWNER, User.is_active)
             .first()
         )
         if not owner:
@@ -1206,3 +1205,103 @@ async def auto_generate_reports(
             skipped += 1
 
     return {"triggered": triggered, "skipped": skipped}
+
+
+# ---------------------------------------------------------------------------
+# Literacy weekly report — internal endpoints for agent scheduler
+# ---------------------------------------------------------------------------
+
+
+@router.get("/literacy-reports/children")
+def internal_get_literacy_children(
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Return children in the family for literacy report generation.
+
+    Called by agent scheduler cron job. Uses X-Family-Id from verify_agent_token.
+    """
+    children = (
+        db.query(User)
+        .filter(
+            User.family_id == int(family_id),
+            User.role == UserRole.CHILD,
+            User.is_active == True,  # noqa: E712
+        )
+        .all()
+    )
+    return [
+        {"child_id": str(c.id), "display_name": c.display_name}
+        for c in children
+    ]
+
+
+@router.post("/literacy-report/generate")
+async def internal_generate_literacy_report(
+    child_id: str = Query(..., description="Child user ID"),
+    force: bool = Query(True),
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Generate literacy report for a child — internal scheduler trigger.
+
+    Mirrors /ai/literacy-report/generate but uses verify_agent_token instead of JWT.
+    """
+    from datetime import date
+
+    from apps.backend.app.services.literacy_report import _sunday_of
+    from apps.backend.app.services.literacy_report_service import (
+        generate_literacy_report,
+    )
+
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            details=f"无效的 child_id: {child_id}",
+        ) from None
+
+    child = (
+        db.query(User)
+        .filter(
+            User.id == cid,
+            User.family_id == int(family_id),
+            User.role == UserRole.CHILD,
+        )
+        .first()
+    )
+    if child is None:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Find family owner for user_id context
+    owner = (
+        db.query(User)
+        .filter(
+            User.family_id == int(family_id),
+            User.role == UserRole.OWNER,
+            User.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if owner is None:
+        raise AppError(ErrorCode.FAMILY_NO_ACTIVE_MEMBERS)
+
+    week_start = _sunday_of(date.today())
+    report = await generate_literacy_report(
+        db,
+        family_id=int(family_id),
+        child_id=cid,
+        week_start=week_start,
+        user_id=owner.id,
+        force=force,
+    )
+
+    if report is None:
+        return {"status": "error", "week_start": week_start.isoformat()}
+
+    return {
+        "status": "ready",
+        "week_start": report.week_start.isoformat() if report.week_start else week_start.isoformat(),
+        "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+    }

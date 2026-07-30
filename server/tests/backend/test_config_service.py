@@ -3,7 +3,6 @@ import pytest
 
 from apps.backend.app.errors.exceptions import AppError
 from apps.backend.app.models.family_setting import FamilySetting
-from apps.backend.app.models.user_setting import UserSetting
 from apps.backend.app.services.config_service import (
     get_all_family_settings,
     get_all_user_settings,

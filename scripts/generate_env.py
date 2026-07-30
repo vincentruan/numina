@@ -37,7 +37,6 @@ def main() -> None:
     secret_key = generate_hex_key()
     altcha_hmac_key = generate_hex_key()
     ai_encryption_key = generate_fernet_key()
-    agent_internal_token = generate_hex_key()
     storage_encryption_key = generate_fernet_key()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -67,7 +66,6 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 SECRET_KEY={secret_key}
 ALTCHA_HMAC_KEY={altcha_hmac_key}
 AI_ENCRYPTION_KEY={ai_encryption_key}
-AGENT_INTERNAL_TOKEN={agent_internal_token}
 STORAGE_ENCRYPTION_KEY={storage_encryption_key}
 
 # 初始化邀请码 (逗号分隔，首次部署后可通过 make setup-invitation-codes 生成更多)

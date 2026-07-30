@@ -272,7 +272,7 @@ def _check_rate_limit(username: str) -> None:
         count = cache.get(key)
         if count is not None and int(count) >= max_attempts:
             ttl = cache.get_ttl(key) or 0
-            remaining = max(1, (ttl // 60) + 1)
+            remaining = max(1, (ttl // 60) + 1)  # noqa: F841
             _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, ttl))
     except Exception:
@@ -426,7 +426,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
 
     user = (
         db.query(User)
-        .filter(User.username == req.username, User.is_active == True)
+        .filter(User.username == req.username, User.is_active)
         .first()
     )
     # Timing attack protection: always execute bcrypt to ensure consistent response time
@@ -494,9 +494,9 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[ALGORITHM])
         old_jti = payload.get("jti")
     except PyJWTError:
-        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED) from None
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    user = db.query(User).filter(User.id == user_id, User.is_active).first()
     if not user:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
@@ -626,7 +626,7 @@ def verify_parent_password(db: Session, child_user: User, password: str) -> None
         .filter(
             User.family_id == child_user.family_id,
             User.role.in_(["owner", "member"]),
-            User.is_active == True,
+            User.is_active,
             User.password_hash.isnot(None),
         )
         .all()
@@ -674,7 +674,7 @@ def child_pin_login(
             db.query(User)
             .filter(
                 User.username == username.lower(),
-                User.is_active == True,
+                User.is_active,
                 User.role == "child",
             )
             .first()
@@ -682,7 +682,7 @@ def child_pin_login(
     else:
         child = (
             db.query(User)
-            .filter(User.id == child_id, User.is_active == True, User.role == "child")
+            .filter(User.id == child_id, User.is_active, User.role == "child")
             .first()
         )
 
@@ -769,9 +769,9 @@ def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         if user_id is None or token_type != "refresh":
             raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
     except PyJWTError:
-        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED) from None
 
-    child = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    child = db.query(User).filter(User.id == user_id, User.is_active).first()
     if not child or child.pin_hash is None:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 

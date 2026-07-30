@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from datetime import UTC
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -55,7 +56,6 @@ def _fake_agent_sse_stream(frames: list[tuple[str, dict]]) -> Any:
 @pytest.fixture()
 def client(monkeypatch):
     """TestClient with AgentClient.stream stubbed + auth/ai-config gates bypassed."""
-    monkeypatch.setenv("AGENT_INTERNAL_TOKEN", "test-token")
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_agent_cls,
         patch("apps.backend.app.routers.ai_report.check_circuit_blocked", return_value=None),
@@ -70,8 +70,8 @@ def client(monkeypatch):
         mock_agent_cls.return_value.stream = _fake_agent_sse_stream(
             [("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]
         )
-        from apps.backend.app.auth.ai_deps import require_ai_enabled, require_owner
-        from apps.backend.app.auth.deps import require_adult
+        from apps.backend.app.auth.ai_deps import require_ai_enabled
+        from apps.backend.app.auth.deps import require_adult, require_owner
         from apps.backend.app.main import app
 
         _fake_user = type("U", (), {"id": 1, "family_id": "family-1", "role": "owner", "language": "zh-CN"})()
@@ -131,13 +131,13 @@ def test_trigger_passes_family_id_as_string_to_agent(client):
 
 def _fresh_cached_report():
     """An AIReport-like object generated < 1h ago (cache hit)."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     return type(
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30),  # noqa: UP017
+            "generated_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=30),
             "report_json": {"overall_score": 65, "indicators": []},
         },
     )()
@@ -171,13 +171,13 @@ def test_trigger_force_bypasses_cache(client):
 
 def test_trigger_stale_cache_misses(client):
     """A report older than 1h is a cache miss → stream."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     stale = type(
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),  # noqa: UP017
+            "generated_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=2),
             "report_json": {"overall_score": 1},
         },
     )()
@@ -192,13 +192,13 @@ def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
     re-validation (missing required ``indicators``) must NOT be re-served — it
     falls through to regeneration (agent stream), bypassing the stale cache.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     corrupt = type(
         "R",
         (),
         {
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),  # noqa: UP017
+            "generated_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1),
             # Missing required ``indicators`` → _validate_json(report) is False.
             "report_json": {"overall_score": 65},
         },

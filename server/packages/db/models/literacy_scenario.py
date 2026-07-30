@@ -1,6 +1,16 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
@@ -38,8 +48,8 @@ class LiteracyScenario(Base):
         BigInteger, ForeignKey("users.id"), nullable=False, index=True
     )
     week_start: Mapped[date] = mapped_column(nullable=False, index=True)
-    template_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("literacy_scenario_templates.id"), nullable=False
+    template_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("literacy_scenario_templates.id"), nullable=True
     )
     content_json: Mapped[str] = mapped_column(Text, nullable=False, comment="Personalized scenario content")
     choice_index: Mapped[int | None] = mapped_column(Integer, nullable=True)

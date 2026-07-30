@@ -1,6 +1,5 @@
 """Tests for SKILL.md frontmatter parser."""
 
-import pytest
 
 from apps.backend.app.services.skill_parser import (
     parse_skill_frontmatter,

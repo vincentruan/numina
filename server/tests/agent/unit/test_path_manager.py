@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from packages.core.path_manager import PathSecurityError  # noqa: E402
+from packages.core.path_manager import PathSecurityError
 
 
 @pytest.fixture

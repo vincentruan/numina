@@ -37,7 +37,7 @@ def _patched_create_mcp_http_client(
 
 _httpx_utils.create_mcp_http_client = _patched_create_mcp_http_client
 
-# noqa: E402 — imports after patch are intentional
+
 import os  # noqa: E402
 from contextlib import asynccontextmanager  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -63,7 +63,7 @@ setup_logging(log_level=settings.LOG_LEVEL, log_dir=settings.LOG_DIR)
 # any agent run can enqueue a memory update.
 try:
     from apps.agent.services.deerflow_adapter import (
-        memory_config_bridge,  # noqa: F401,E402
+        memory_config_bridge,
     )
 except Exception as e:
     logging.getLogger(__name__).warning("memory_config_bridge install failed: %s", e)
@@ -215,7 +215,7 @@ app.add_middleware(
 )
 
 
-# Router imports after app definition — noqa: E402
+# Router imports after app definition
 from apps.agent.app.routers import cache as cache_router  # noqa: E402
 from apps.agent.app.routers import gateway as gateway_router  # noqa: E402
 from apps.agent.routers import import_parse as import_parse_router  # noqa: E402

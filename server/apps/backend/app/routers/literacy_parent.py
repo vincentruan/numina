@@ -24,6 +24,8 @@ from apps.backend.app.schemas.literacy_report import (
     ReportHistoryResponse,
     WeeklyReportResponse,
 )
+from apps.backend.app.services.literacy_report_service import get_report_status
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/literacy-reports", tags=["literacy-parent"])
 
@@ -51,7 +53,7 @@ def _validate_child_in_family(db: Session, child_id: int, family_id: int) -> Use
             select(User).where(
                 User.id == child_id,
                 User.family_id == family_id,
-                User.role == "child",
+                User.role == UserRole.CHILD,
                 User.is_active.is_(True),
             )
         )
@@ -60,6 +62,30 @@ def _validate_child_in_family(db: Session, child_id: int, family_id: int) -> Use
     if child is None:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
     return child
+
+
+# ---------------------------------------------------------------------------
+# GET /literacy-reports/status
+# ---------------------------------------------------------------------------
+
+
+@router.get("/status")
+def get_child_report_status(
+    child_id: str = Query(..., description="Child user ID"),
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """Return the current week's report status for BabyPage entry display."""
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            details=f"无效的 child_id: {child_id}",
+        ) from None
+    _validate_child_in_family(db, cid, current_user.family_id)
+
+    return get_report_status(db, family_id=current_user.family_id, child_id=cid)
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +104,10 @@ def get_report(
 
     If ``week_start`` is omitted, return the latest report for the child.
     """
-    cid = int(child_id)
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(ErrorCode.VALIDATION_ERROR, details=f"无效的 child_id: {child_id}") from None
     _validate_child_in_family(db, cid, current_user.family_id)
 
     if week_start:
@@ -131,7 +160,7 @@ def get_children(
         db.execute(
             select(User).where(
                 User.family_id == current_user.family_id,
-                User.role == "child",
+                User.role == UserRole.CHILD,
                 User.is_active.is_(True),
             )
         )
@@ -174,7 +203,10 @@ def get_history(
     db: Session = Depends(get_db),
 ):
     """Return available report weeks for a child (most recent first)."""
-    cid = int(child_id)
+    try:
+        cid = int(child_id)
+    except (ValueError, TypeError):
+        raise AppError(ErrorCode.VALIDATION_ERROR, details=f"无效的 child_id: {child_id}") from None
     _validate_child_in_family(db, cid, current_user.family_id)
 
     # Collect existing report weeks for this child

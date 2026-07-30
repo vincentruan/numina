@@ -106,7 +106,13 @@ def _parse_sse_events(response_text: str) -> list[dict]:
     return events
 
 
-_TOKEN = "test-internal-token"
+_TOKEN_FAMILY_ID = "family-1"
+
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
+
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
+_TOKEN = create_agent_token(_TOKEN_FAMILY_ID)
 
 
 def test_asset_report_run_rejects_missing_token(client):
@@ -139,10 +145,6 @@ def test_asset_report_run_streams_step2_json(client):
     emission is covered by the F1 e2e run, not this unit test.
     """
     with (
-        patch(
-            "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
-            _TOKEN,
-        ),
         patch(
             "apps.agent.services.runtime.worker.BackendClient.persist_report_result",
             new_callable=AsyncMock,
@@ -245,10 +247,6 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
 
     with (
         patch(
-            "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
-            _TOKEN,
-        ),
-        patch(
             "apps.agent.services.runtime.worker.create_family_adapter",
             return_value=stub,
         ),
@@ -345,10 +343,6 @@ def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch
     stub.typed_stream_dispatch = typed_stream_dispatch
 
     with (
-        patch(
-            "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
-            _TOKEN,
-        ),
         patch(
             "apps.agent.services.runtime.worker.create_family_adapter",
             return_value=stub,

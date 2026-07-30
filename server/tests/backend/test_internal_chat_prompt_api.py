@@ -1,6 +1,4 @@
 """Integration test for GET /internal/prompts/{family_id}/chat."""
-import os
-import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,10 +7,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from apps.backend.app.config import settings
-from apps.backend.app.database import Base, get_db
+from apps.backend.app.database import get_db
 from apps.backend.app.main import app
 from apps.backend.app.models.family import Family
 from apps.backend.app.services import workspace
+from packages.security.service_auth.agent_jwt import create_agent_token
 
 FAMILY_ID = 100
 
@@ -47,7 +46,6 @@ def minimal_db():
 def agent_client(minimal_db, tmp_path, monkeypatch):
     """Client with agent token and workspace configured."""
     monkeypatch.setattr(settings, "WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setattr(settings, "AGENT_INTERNAL_TOKEN", "test-token")
 
     def override_get_db():
         try:
@@ -63,9 +61,11 @@ def agent_client(minimal_db, tmp_path, monkeypatch):
     app.dependency_overrides.clear()
 
 
-def _agent_headers(token: str = "test-token") -> dict:
+def _agent_headers(token: str | None = None) -> dict:
+    """Generate auth headers with a valid JWT agent token."""
+    jwt_token = token or create_agent_token(str(FAMILY_ID))
     return {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {jwt_token}",
         "X-Family-Id": str(FAMILY_ID),
     }
 

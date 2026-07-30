@@ -12,7 +12,6 @@ import tempfile
 # `run_schema_migration`. Per-test logic still uses a separate in-memory
 # StaticPool DB below; the prod engine here only keeps lifespan startup happy.
 # Note: We FORCE override even if root .env already sets DATABASE_URL.
-import tempfile
 _TEST_LIFESPAN_DIR = tempfile.mkdtemp(prefix="numina-tests-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_LIFESPAN_DIR}/lifespan.db"
 
@@ -22,37 +21,41 @@ os.environ["AI_ENCRYPTION_KEY"] = "TWkvLCaoHF_ZlwIUzytBOveIw5wmZj4ggVjWMgJr9BM="
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from apps.backend.app.database import Base, get_db
 from apps.backend.app.main import app
 from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
-from apps.backend.app.models.ai_agent import AIAgent  # noqa: F401
-from apps.backend.app.models.ai_chat_session import AIChatSession  # noqa: F401
-from apps.backend.app.models.ai_report import AIReport  # noqa: F401
-from apps.backend.app.models.ai_task import AITask  # noqa: F401
-from apps.backend.app.models.cached_file import CachedFile  # noqa: F401
-from apps.backend.app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
-from apps.backend.app.models.device_session import DeviceSession  # noqa: F401
-from apps.backend.app.models.family import Family  # noqa: F401
-from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds  # noqa: F401
-from apps.backend.app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401from apps.backend.app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
-from apps.backend.app.models.family_setting import FamilySetting  # noqa: F401
-from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider  # noqa: F401
-from apps.backend.app.models.notification_channel import NotificationChannel  # noqa: F401
-from apps.backend.app.models.notification_config import NotificationConfig  # noqa: F401
-from apps.backend.app.models.notification_subscription import NotificationSubscription  # noqa: F401
-from apps.backend.app.models.payment_record import PaymentRecord  # noqa: F401
-from apps.backend.app.models.reminder import Reminder  # noqa: F401
-from apps.backend.app.models.revoked_token import RevokedToken  # noqa: F401
+from apps.backend.app.models.ai_agent import AIAgent
+from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.ai_report import AIReport
+from apps.backend.app.models.ai_task import AITask
+from apps.backend.app.models.cached_file import CachedFile
+from apps.backend.app.models.category_financial_default import CategoryFinancialDefault
+from apps.backend.app.models.device_session import DeviceSession
+from apps.backend.app.models.family import Family
+from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
+from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+from apps.backend.app.models.family_setting import FamilySetting
+from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
+from apps.backend.app.models.notification_channel import NotificationChannel
+from apps.backend.app.models.notification_config import NotificationConfig
+from apps.backend.app.models.notification_subscription import NotificationSubscription
+from apps.backend.app.models.payment_record import PaymentRecord
+from apps.backend.app.models.reminder import Reminder
+from apps.backend.app.models.revoked_token import RevokedToken
 
 # Import all models to ensure they're registered with Base.metadata
 # This is required for Base.metadata.create_all() to create all tables
-from apps.backend.app.models.user import User  # noqa: F401
-from apps.backend.app.models.user_setting import UserSetting  # noqa: F401
+from apps.backend.app.models.user import User
+from apps.backend.app.models.user_setting import UserSetting
 from apps.backend.app.seed.categories import seed_categories
-from apps.backend.app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
+from apps.backend.app.services.cache import (
+    reset_captcha_payload_cache,
+    reset_rate_limit_cache,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Session-scoped engine + table creation (create once, reuse across all tests)
@@ -108,7 +111,7 @@ def db(_session_engine):
     session = Session(bind=connection)
 
     # Begin a SAVEPOINT (nested transaction)
-    nested = connection.begin_nested()
+    _nested = connection.begin_nested()
 
     # If the session commits, it's caught in the SAVEPOINT (not the outer tx)
     @event.listens_for(session, "after_transaction_end")
@@ -261,7 +264,6 @@ def db_session(db):
 @pytest.fixture
 def test_family(db):
     """Create a test family."""
-    from apps.backend.app.models.family import Family
     from apps.backend.app.utils.snowflake import next_id
 
     family = Family(id=next_id(), name="Test Family for AI Results", created_by=next_id())
@@ -274,7 +276,6 @@ def test_family(db):
 @pytest.fixture
 def test_user(db, test_family):
     """Create a test user in the test family."""
-    from apps.backend.app.models.user import User
     from apps.backend.app.utils.snowflake import next_id
 
     user = User(
@@ -294,10 +295,10 @@ def test_user(db, test_family):
 def test_asset(db, test_family, test_user):
     """Create a test asset owned by the test family."""
     from apps.backend.app.models.asset import Asset
-    from apps.backend.app.utils.snowflake import next_id
 
     # Get a valid category_id from seeded categories
     from apps.backend.app.models.category import Category
+    from apps.backend.app.utils.snowflake import next_id
     category = db.query(Category).first()
 
     asset = Asset(
@@ -318,7 +319,6 @@ def test_asset(db, test_family, test_user):
 @pytest.fixture
 def other_family(db):
     """Create another family for cross-family isolation tests."""
-    from apps.backend.app.models.family import Family
     from apps.backend.app.models.user import User
     from apps.backend.app.utils.snowflake import next_id
 
@@ -344,7 +344,6 @@ def other_family(db):
 def other_family_asset(db, other_family):
     """Create an asset owned by another family."""
     from apps.backend.app.models.asset import Asset
-    from apps.backend.app.models.user import User
     from apps.backend.app.models.category import Category
     from apps.backend.app.utils.snowflake import next_id
 

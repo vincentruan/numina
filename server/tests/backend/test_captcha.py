@@ -3,7 +3,10 @@
 import hashlib
 import time
 
-from apps.backend.app.services.cache import get_captcha_payload_cache, reset_captcha_payload_cache
+from apps.backend.app.services.cache import (
+    get_captcha_payload_cache,
+    reset_captcha_payload_cache,
+)
 
 
 class TestEndpointSpecificDifficulty:

@@ -5,18 +5,17 @@ Revises: 3ec41c70c529
 Create Date: 2026-04-29 20:48:25.969544
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy import inspect
-
 from alembic import op
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision: str = 'ac070c6b7aaf'
-down_revision: Union[str, None] = '3ec41c70c529'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '3ec41c70c529'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _has_column(table: str, column: str) -> bool:

@@ -57,12 +57,12 @@ After navigating to `/child/` and clicking a child card:
 bsk snapshot --session <id>     # capture emoji buttons as @eN refs
 ```
 
-Assertions (correct PIN for 小宝 = 🐰🥕🌈⭐):
+Assertions (correct PIN for 小宝 = 🐱🌟🌈):
 - [ ] 4 empty PIN slot indicators visible
 - [ ] 12 emoji buttons in 4×3 grid
 - [ ] 删除 and 清除 buttons visible
 - [ ] Click the 4 correct emojis in order → auto-submits → navigates to `/child/` (home)
-- [ ] Wrong PIN (e.g. 🐱🐱🐱🐱) → shake animation + PIN cleared + error message
+- [ ] Wrong PIN (e.g. 🐱🐱🐱) → shake animation + PIN cleared + error message
 - [ ] `[console]` zero errors
 
 **Emoji click order note:** snapshot the grid, then click each emoji's `@eN` ref

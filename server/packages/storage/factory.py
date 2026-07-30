@@ -21,7 +21,7 @@ def get_backend_for_type(backend_type: str, config: dict) -> StorageBackend:
         return get_local_backend(upload_dir)
 
     if backend_type == "github":
-        from packages.storage.github import GitHubStorageBackend  # noqa: PLC0415
+        from packages.storage.github import GitHubStorageBackend
         key = f"github:{config.get('repo')}:{config.get('branch', 'main')}"
         if key not in _instances:
             _instances[key] = GitHubStorageBackend(
@@ -32,7 +32,7 @@ def get_backend_for_type(backend_type: str, config: dict) -> StorageBackend:
         return _instances[key]  # type: ignore[return-value]
 
     if backend_type == "webdav":
-        from packages.storage.webdav import WebDAVStorageBackend  # noqa: PLC0415
+        from packages.storage.webdav import WebDAVStorageBackend
         key = f"webdav:{config.get('url')}:{config.get('username')}"
         if key not in _instances:
             _instances[key] = WebDAVStorageBackend(

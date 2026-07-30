@@ -13,6 +13,7 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.database import SessionLocal
@@ -324,6 +325,121 @@ class MCPSession:
                         arguments.get("items") or [],
                         category_override="credit_card",
                     )
+                elif name == "get_child_literacy_profile":
+                    from apps.backend.app.models.literacy_report import (
+                        LiteracyWeeklyReport,
+                    )
+                    from apps.backend.app.services.literacy_report import _get_age_group
+                    from packages.db.models.literacy_badge import (
+                        LiteracyBadge,
+                        LiteracyBadgeDefinition,
+                    )
+                    from packages.db.models.literacy_scenario import LiteracyScenario
+
+                    query = db.query(User).filter(
+                        User.family_id == int(self._family_id),
+                        User.role == "child",
+                        User.is_active.is_(True),
+                    )
+                    child_id_arg = arguments.get("child_id")
+                    if child_id_arg:
+                        query = query.filter(User.id == int(child_id_arg))
+                    children = query.all()
+
+                    result_children = []
+                    for child in children:
+                        badges = (
+                            db.query(LiteracyBadgeDefinition)
+                            .join(
+                                LiteracyBadge,
+                                LiteracyBadge.definition_id == LiteracyBadgeDefinition.id,
+                            )
+                            .filter(
+                                LiteracyBadge.child_id == child.id,
+                                LiteracyBadge.superseded_at.is_(None),
+                            )
+                            .all()
+                        )
+                        scenario_count = (
+                            db.query(func.count(LiteracyScenario.id))
+                            .filter(
+                                LiteracyScenario.child_id == child.id,
+                                LiteracyScenario.completed_at.is_not(None),
+                            )
+                            .scalar()
+                        ) or 0
+                        latest_report = (
+                            db.query(LiteracyWeeklyReport.week_start)
+                            .filter(LiteracyWeeklyReport.child_id == child.id)
+                            .order_by(LiteracyWeeklyReport.week_start.desc())
+                            .first()
+                        )
+                        result_children.append(
+                            {
+                                "child_id": str(child.id),
+                                "display_name": child.display_name,
+                                "age_group": _get_age_group(child.birthday),
+                                "current_badges": [
+                                    {
+                                        "dimension": b.dimension,
+                                        "level": b.level,
+                                        "name": b.name,
+                                    }
+                                    for b in badges
+                                ],
+                                "total_scenarios_completed": scenario_count,
+                                "latest_report_week": (
+                                    latest_report[0].isoformat() if latest_report else None
+                                ),
+                            }
+                        )
+                    data = {"children": result_children}
+                elif name == "get_literacy_weekly_data":
+                    from datetime import timedelta
+
+                    from apps.backend.app.services.literacy_report import (
+                        _aggregate_signals,
+                        _sunday_of,
+                    )
+
+                    child_id_lit = int(arguments["child_id"])
+
+                    # Validate child belongs to caller's family
+                    child_in_family = db.query(User.id).filter(
+                        User.id == child_id_lit,
+                        User.family_id == int(self._family_id),
+                        User.role == "child",
+                    ).first()
+                    if not child_in_family:
+                        data = {"error": "孩子不属于当前家庭", "child_id": str(child_id_lit)}
+                    else:
+                        week_start_arg = arguments.get("week_start")
+                        week_start = (
+                            date.fromisoformat(week_start_arg)
+                            if week_start_arg
+                            else _sunday_of(date.today())
+                        )
+
+                        signals = _aggregate_signals(db, child_id_lit, week_start)
+                        prev_week = week_start - timedelta(days=7)
+                        prev_signals = _aggregate_signals(db, child_id_lit, prev_week)
+
+                        data = {
+                            "child_id": str(child_id_lit),
+                            "week_start": week_start.isoformat(),
+                            **signals,
+                            "trend": {
+                                "chores_delta": (
+                                    signals["chores_approved"] - prev_signals["chores_approved"]
+                                ),
+                                "coins_delta": (
+                                    signals["coin_earned"] - prev_signals["coin_earned"]
+                                ),
+                                "scenario_was_completed_prev": prev_signals[
+                                    "scenario_completed"
+                                ],
+                            },
+                        }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

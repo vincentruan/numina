@@ -63,6 +63,16 @@
             </template>
           </van-cell>
           <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')" />
+          <template v-if="selectedChildId">
+            <van-cell
+              v-if="aiStore.aiEnabled"
+              :title="t('baby.literacyReportEntry')"
+              :value="reportStatusLabel(String(selectedChildId))"
+              is-link
+              @click="navigateToReport(String(selectedChildId))"
+            />
+            <AiGatedInline v-else :is-owner="authStore.user?.role === 'owner'" />
+          </template>
         </van-cell-group>
 
         <!-- Content Tabs -->
@@ -549,6 +559,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'Baby' })
 import { ref, computed, onMounted, onActivated } from 'vue'
+import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -567,7 +578,10 @@ import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
+import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 import IIcon from '@/components/IIcon.vue'
+import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
+import { useAIStore } from '@/stores/ai'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { parseApiDate } from '@/utils/format'
 
@@ -576,6 +590,8 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
 const blindBoxStore = useBlindBoxStore()
+const aiStore = useAIStore()
+const router = useRouter()
 const { increment, decrement } = usePageLoading()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
@@ -609,6 +625,35 @@ const childChoreStats = ref<Record<string, ChoreStats>>({})
 const allWishes = ref<ParentWish[]>([])
 
 const allChores = ref<ChoreInstance[]>([])
+
+// Literacy report status per child
+const reportStatusMap = ref<Record<string, ReportStatus>>({})
+
+async function loadReportStatuses() {
+  if (!aiStore.aiEnabled || !childMembers.value.length) return
+  for (const child of childMembers.value) {
+    try {
+      const { data } = await getReportStatus(String(child.id))
+      reportStatusMap.value[String(child.id)] = data
+    } catch {
+      // best-effort
+    }
+  }
+}
+
+function reportStatusLabel(childId: string): string {
+  const status = reportStatusMap.value[String(childId)]
+  if (!status) return t('baby.literacyReportNone')
+  switch (status.status) {
+    case 'ready': return t('baby.literacyReportReady')
+    case 'generating': return t('baby.literacyReportGenerating')
+    default: return t('baby.literacyReportNone')
+  }
+}
+
+async function navigateToReport(childId: string) {
+  router.push(`/baby/literacy-report?child_id=${encodeURIComponent(childId)}`)
+}
 
 const childMembers = computed(() => familyStore.members.filter(m => m.role === 'child'))
 
@@ -1100,6 +1145,7 @@ async function loadData() {
     childChoreStats.value = stats.data
     allWishes.value = wishes
     allChores.value = chores
+    await loadReportStatuses()
   } catch {
     showFailToast(t('toast.operationFailed'))
   }
@@ -1126,6 +1172,7 @@ onMounted(async () => {
     }
     await loadData()
     await blindBoxStore.fetchDraws()
+    void loadReportStatuses()
   } finally {
     decrement()
   }
@@ -1143,6 +1190,7 @@ onActivated(async () => {
     }
     await loadData()
     await blindBoxStore.fetchDraws()
+    void loadReportStatuses()
   } finally {
     decrement()
   }

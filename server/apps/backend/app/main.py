@@ -1,4 +1,5 @@
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -85,12 +86,14 @@ from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_
 from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
+from apps.backend.app.routers import ai_asr as ai_asr_router
 from apps.backend.app.routers import ai_chat as ai_chat_router
 from apps.backend.app.routers import ai_config as ai_config_router
 from apps.backend.app.routers import ai_context as ai_context_router
 from apps.backend.app.routers import ai_finance_coach as ai_finance_coach_router
 from apps.backend.app.routers import ai_input_polish as ai_input_polish_router
 from apps.backend.app.routers import ai_internal as ai_internal_router
+from apps.backend.app.routers import ai_literacy_report as ai_literacy_report_router
 from apps.backend.app.routers import ai_mcp as ai_mcp_router
 from apps.backend.app.routers import ai_report as ai_report_router
 from apps.backend.app.routers import ai_skills as ai_skills_router
@@ -354,7 +357,12 @@ class SecurityHeadersMiddleware:
                         )
                     )
 
-                    # CSP policy
+                    # CSP policy with per-request nonce for script-src
+                    nonce = secrets.token_urlsafe(16)
+                    # Store nonce on request state for downstream handlers
+                    if "state" in scope:
+                        scope["state"]["csp_nonce"] = nonce
+                    nonce_b = nonce.encode()
                     connect_src = (
                         b"'self' http://localhost:8000 http://127.0.0.1:8000"
                         if settings.ENVIRONMENT == "development"
@@ -362,7 +370,7 @@ class SecurityHeadersMiddleware:
                     )
                     csp = (
                         b"default-src 'self'; "
-                        b"script-src 'self' 'unsafe-inline'; "
+                        b"script-src 'self' 'nonce-" + nonce_b + b"'; "
                         b"style-src 'self' 'unsafe-inline'; "
                         b"img-src 'self' data: https:; "
                         b"font-src 'self'; "
@@ -444,6 +452,7 @@ app.include_router(files_router.router, prefix="/api/v1")
 app.include_router(admin_ai_extraction_router.router, prefix="/api/v1")
 app.include_router(admin_audit_logs_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
+app.include_router(ai_asr_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
@@ -466,6 +475,7 @@ app.include_router(blind_box_router.router, prefix="/api/v1")
 app.include_router(child_blind_box_router.router, prefix="/api/v1")
 app.include_router(literacy_child_router.router, prefix="/api/v1")
 app.include_router(literacy_parent_router.router, prefix="/api/v1")
+app.include_router(ai_literacy_report_router.router, prefix="/api/v1")
 app.include_router(challenge_grants_router.router, prefix="/api/v1")
 app.include_router(challenge_grants_router.child_router, prefix="/api/v1")
 app.include_router(device_router.router, prefix="/api/v1")

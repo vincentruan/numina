@@ -18,7 +18,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlReportDesc') }}</span>
-            <van-slider v-model="form.ai_cache_ttl_report" :min="5" :max="480" :step="5" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.ai_cache_ttl_report" :min="5" :max="480" :step="5" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>5</span><span>240</span><span>480</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -28,7 +31,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlFinanceCoachDesc') }}</span>
-            <van-slider v-model="form.ai_cache_ttl_finance_coach" :min="60" :max="1440" :step="30" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.ai_cache_ttl_finance_coach" :min="60" :max="1440" :step="30" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>60</span><span>720</span><span>1440</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -38,7 +44,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlNarrativeDesc') }}</span>
-            <van-slider v-model="form.ai_cache_ttl_dashboard_narrative" :min="30" :max="720" :step="30" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.ai_cache_ttl_dashboard_narrative" :min="30" :max="720" :step="30" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>30</span><span>360</span><span>720</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -52,7 +61,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.minAssetCountDesc') }}</span>
-            <van-slider v-model="form.dashboard_min_asset_count" :min="1" :max="50" :step="1" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.dashboard_min_asset_count" :min="1" :max="50" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>1</span><span>25</span><span>50</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -62,7 +74,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.minHistoryMonthsDesc') }}</span>
-            <van-slider v-model="form.dashboard_min_history_months" :min="1" :max="12" :step="1" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.dashboard_min_history_months" :min="1" :max="12" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>1</span><span>6</span><span>12</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -72,7 +87,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.expiringDaysThresholdDesc') }}</span>
-            <van-slider v-model="form.dashboard_expiring_days_threshold" :min="7" :max="365" :step="7" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.dashboard_expiring_days_threshold" :min="7" :max="365" :step="7" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>7</span><span>182</span><span>365</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -87,7 +105,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.monthlyReportDayDesc') }}</span>
-            <van-slider v-model="form.scheduled_monthly_report_day" :min="1" :max="28" :step="1" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.scheduled_monthly_report_day" :min="1" :max="28" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>1</span><span>14</span><span>28</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -97,7 +118,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.monthlyReportHourDesc') }}</span>
-            <van-slider v-model="form.scheduled_monthly_report_hour" :min="0" :max="23" :step="1" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.scheduled_monthly_report_hour" :min="0" :max="23" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>0</span><span>12</span><span>23</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -107,7 +131,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.weeklyScanDayDesc') }}</span>
-            <van-slider v-model="form.scheduled_weekly_scan_day" :min="0" :max="6" :step="1" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.scheduled_weekly_scan_day" :min="0" :max="6" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>0</span><span>3</span><span>6</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -117,7 +144,10 @@
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.weeklyScanHourDesc') }}</span>
-            <van-slider v-model="form.scheduled_weekly_scan_hour" :min="0" :max="23" :step="1" @change="onSave" />
+            <div class="slider-track">
+              <van-slider v-model="form.scheduled_weekly_scan_hour" :min="0" :max="23" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>0</span><span>12</span><span>23</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -126,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
@@ -137,8 +167,8 @@ const { t } = useI18n()
 const loading = ref(true)
 
 const dayLabels = computed<string[]>(() => {
-  const labels = t('familyConfig.dayLabels', { returnObjects: true })
-  return Array.isArray(labels) ? labels : []
+  const labels = t('familyConfig.dayLabels', { returnObjects: true }) as unknown
+  return Array.isArray(labels) ? labels as string[] : []
 })
 
 const form = ref({
@@ -155,6 +185,10 @@ const form = ref({
 })
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+onUnmounted(() => {
+  if (saveTimer) clearTimeout(saveTimer)
+})
 
 function onSave() {
   if (saveTimer) clearTimeout(saveTimer)
@@ -195,6 +229,17 @@ onMounted(async () => {
   margin-top: 4px;
   color: var(--van-text-color-2, #969799);
   font-size: 12px;
+}
+.slider-track {
+  padding: 8px 16px;
+}
+.slider-scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--van-text-color-3, #c8c9cc);
+  margin-top: 2px;
 }
 .skeleton {
   padding: 16px;

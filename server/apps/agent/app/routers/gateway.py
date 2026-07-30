@@ -16,7 +16,7 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -27,6 +27,7 @@ from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.deerflow_adapter.exceptions import DeerFlowTimeoutError
 from apps.agent.services.runtime.lifespan import get_run_manager, get_stream_bridge
 from apps.agent.services.runtime.sse_gateway import sse_consumer, start_run
+from packages.security.service_auth.agent_token_verify import verify_service_token
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +48,6 @@ class SkillDispatchRequest(BaseModel):
     input_text: str
 
 
-def _verify_token(x_agent_token: str) -> None:
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(status_code=401, detail="invalid token")
-
-
 def _validate_path_segment(value: str, label: str) -> str:
     """Validate path segment against safe ID pattern to prevent SSRF."""
     if not value or not _SAFE_ID_PATTERN.match(value):
@@ -64,14 +60,13 @@ def _validate_path_segment(value: str, label: str) -> str:
 
 @router.get("/models")
 def list_models(
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> dict:
     """查询 DeerFlow Gateway 可用模型列表。
 
     Returns:
         DeerFlow Gateway 返回的模型列表 JSON
     """
-    _verify_token(x_agent_token)
     gateway_url = settings.DEERFLOW_GATEWAY_URL.rstrip("/")
     try:
         resp = httpx.get(f"{gateway_url}/models", timeout=10.0)
@@ -89,7 +84,7 @@ def list_models(
 def update_skill(
     skill_name: str,
     body: dict,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> dict:
     """更新 DeerFlow Gateway 技能启用状态。
 
@@ -100,7 +95,6 @@ def update_skill(
     Returns:
         DeerFlow Gateway 返回的更新结果 JSON
     """
-    _verify_token(x_agent_token)
     _validate_path_segment(skill_name, "skill_name")
     gateway_url = settings.DEERFLOW_GATEWAY_URL.rstrip("/")
     try:
@@ -122,7 +116,7 @@ def update_skill(
 @router.delete("/threads/{thread_id}")
 def delete_thread(
     thread_id: str,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> dict:
     """清理 DeerFlow Gateway 线程数据。
 
@@ -132,7 +126,6 @@ def delete_thread(
     Returns:
         {"success": True, "thread_id": "..."}
     """
-    _verify_token(x_agent_token)
     _validate_path_segment(thread_id, "thread_id")
     gateway_url = settings.DEERFLOW_GATEWAY_URL.rstrip("/")
     try:
@@ -154,14 +147,13 @@ def delete_thread(
 @router.post("/skill-dispatch")
 async def skill_dispatch(
     body: SkillDispatchRequest,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> dict:
     """内部技能调度端点 — 供 backend 调用内部技能（skill-creator/skill-installer）。
 
-    # Trust: family_id is trusted because this endpoint requires X-Agent-Token
+    # Trust: family_id is trusted because this endpoint requires X-Agent-Token (JWT)
     # and the backend always passes JWT-derived current_user.family_id
     """
-    _verify_token(x_agent_token)
 
     # Whitelist validation — only internal skills allowed
     if body.skill_name not in _ALLOWED_SKILLS:
@@ -259,7 +251,7 @@ async def trigger_asset_report_run(
     thread_id: str,
     body: AssetReportRunRequest,
     request: Request,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> StreamingResponse:
     """Trigger an asset-report stream_run from the backend (service-to-service).
 
@@ -270,7 +262,6 @@ async def trigger_asset_report_run(
     ``report.step2_json`` custom events; this endpoint streams them back as SSE
     for the backend to forward to the frontend.
     """
-    _verify_token(x_agent_token)
     _validate_path_segment(thread_id, "thread_id")
 
     # Build a duck-typed body matching start_run's getattr() access pattern.
@@ -332,7 +323,7 @@ async def trigger_finance_coach_run(
     thread_id: str,
     body: FinanceCoachRunRequest,
     request: Request,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> StreamingResponse:
     """Trigger a finance-coach stream_run from the backend (service-to-service).
 
@@ -344,7 +335,6 @@ async def trigger_finance_coach_run(
     ``suggestions[]`` JSON; this endpoint streams frames back as SSE for the
     backend to forward to the frontend (D2 dashboard card).
     """
-    _verify_token(x_agent_token)
     _validate_path_segment(thread_id, "thread_id")
 
     # Build a duck-typed body matching start_run's getattr() access pattern.
@@ -405,7 +395,7 @@ async def trigger_wish_advice_run(
     thread_id: str,
     body: WishAdviceRunRequest,
     request: Request,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> StreamingResponse:
     """Trigger a wish-advice stream_run from the backend (service-to-service).
 
@@ -417,7 +407,6 @@ async def trigger_wish_advice_run(
     streams frames back as SSE for the backend to forward to the frontend
     (W4 WishAdviceCard).
     """
-    _verify_token(x_agent_token)
     _validate_path_segment(thread_id, "thread_id")
 
     # Build a duck-typed body matching start_run's getattr() access pattern.
@@ -476,7 +465,7 @@ async def trigger_dashboard_narrative_run(
     thread_id: str,
     body: DashboardNarrativeRunRequest,
     request: Request,
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _family_id: str = Depends(verify_service_token),
 ) -> StreamingResponse:
     """Trigger a dashboard-narrative stream_run from the backend (service-to-service).
 
@@ -488,7 +477,6 @@ async def trigger_dashboard_narrative_run(
     narrative; this endpoint streams frames back as SSE for the backend to
     collect and return as JSON.
     """
-    _verify_token(x_agent_token)
     _validate_path_segment(thread_id, "thread_id")
 
     run_body = SimpleNamespace(
@@ -524,5 +512,56 @@ async def trigger_dashboard_narrative_run(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Content-Location": f"/internal/gateway/runs/dashboard-narrative/{thread_id}/{record.run_id}",
+        },
+    )
+
+
+class LiteracyWeeklyReportRunRequest(BaseModel):
+    """Request body for internal literacy-weekly-report run trigger."""
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/literacy-weekly-report/{thread_id}")
+async def trigger_literacy_weekly_report_run(
+    thread_id: str,
+    body: LiteracyWeeklyReportRunRequest,
+    request: Request,
+    _family_id: str = Depends(verify_service_token),
+) -> StreamingResponse:
+    """Trigger a literacy-weekly-report stream_run from the backend."""
+    _validate_path_segment(thread_id, "thread_id")
+
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "literacy-weekly-report"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body, thread_id, request, body.family_id, body.user_id, internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/literacy-weekly-report/{thread_id}/{record.run_id}",
         },
     )

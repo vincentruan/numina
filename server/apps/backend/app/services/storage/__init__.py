@@ -1,5 +1,5 @@
 # Re-export shim — implementations moved to packages/storage/
-from packages.storage.base import (  # noqa: F401
+from packages.storage.base import (
     StorageAuthError,
     StorageBackend,
     StorageConflictError,

@@ -117,7 +117,7 @@ const coinsExpanded = ref(false)
   border-radius: var(--radius-pill);
   padding: 6px 12px;
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   cursor: pointer;

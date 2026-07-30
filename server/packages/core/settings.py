@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./data/numina.db"
     SECRET_KEY: str = _DEFAULT_SECRET
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (was 15 min — too short for dev/testing)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     DEVICE_TRUST_EXPIRE_DAYS: int = 30  # Device trust expiry (days since last login)
     # WebAuthn settings
@@ -99,7 +99,6 @@ class Settings(BaseSettings):
 
     # AI Agent 配置
     AI_ENCRYPTION_KEY: str = ""
-    AGENT_INTERNAL_TOKEN: str = ""
     AGENT_BASE_URL: str = "http://agent:8001"
 
     # Backend external URL (for constructing internal MCP SSE endpoint URLs)
@@ -119,7 +118,7 @@ class Settings(BaseSettings):
 
     # Load `.env` (CWD-local, e.g. server/.env) then the repo-root `.env`
     # with higher precedence — same precedence as apps/agent/app/config.py.
-    # This keeps shared secrets (SECRET_KEY, AGENT_INTERNAL_TOKEN) in sync
+    # This keeps shared secrets (SECRET_KEY) in sync
     # between the backend and the agent, which both read the root .env.
     model_config = {
         "env_file": [".env", str(Path(__file__).resolve().parents[3] / ".env")],
@@ -226,24 +225,22 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
 
 # Storage backend credentials validation for production
 if settings.ENVIRONMENT == "production" and settings.STORAGE_BACKEND_TYPE:
-    if settings.STORAGE_BACKEND_TYPE == "github":
-        if not all([
-            settings.STORAGE_GITHUB_REPO_OWNER,
-            settings.STORAGE_GITHUB_REPO_NAME,
-            settings.STORAGE_GITHUB_TOKEN,
-        ]):
-            raise RuntimeError(
-                "GitHub 存储后端缺少必要配置！生产环境必须设置 "
-                "STORAGE_GITHUB_REPO_OWNER、STORAGE_GITHUB_REPO_NAME 和 STORAGE_GITHUB_TOKEN。"
-            )
-    elif settings.STORAGE_BACKEND_TYPE == "webdav":
-        if not all([
-            settings.STORAGE_WEBDAV_BASE_URL,
-            settings.STORAGE_WEBDAV_USERNAME,
-            settings.STORAGE_WEBDAV_PASSWORD,
-        ]):
-            raise RuntimeError(
-                "WebDAV 存储后端缺少必要配置！生产环境必须设置 "
+    if settings.STORAGE_BACKEND_TYPE == "github" and not all([
+        settings.STORAGE_GITHUB_REPO_OWNER,
+        settings.STORAGE_GITHUB_REPO_NAME,
+        settings.STORAGE_GITHUB_TOKEN,
+    ]):
+        raise RuntimeError(
+            "GitHub 存储后端缺少必要配置！生产环境必须设置 "
+            "STORAGE_GITHUB_REPO_OWNER、STORAGE_GITHUB_REPO_NAME 和 STORAGE_GITHUB_TOKEN。"
+        )
+    elif settings.STORAGE_BACKEND_TYPE == "webdav" and not all([
+        settings.STORAGE_WEBDAV_BASE_URL,
+        settings.STORAGE_WEBDAV_USERNAME,
+        settings.STORAGE_WEBDAV_PASSWORD,
+    ]):
+        raise RuntimeError(
+            "WebDAV 存储后端缺少必要配置！生产环境必须设置 "
                 "STORAGE_WEBDAV_BASE_URL、STORAGE_WEBDAV_USERNAME 和 STORAGE_WEBDAV_PASSWORD。"
             )
 

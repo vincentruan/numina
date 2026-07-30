@@ -30,7 +30,6 @@ from apps.backend.app.auth.deps import (
     get_current_user_from_cookie,
     get_current_user_or_child,
     get_refresh_token_from_cookie,
-    require_owner,
     verify_temp_token,
 )
 from apps.backend.app.database import get_db
@@ -66,6 +65,7 @@ from apps.backend.app.schemas.webauthn import (
     WebAuthnRegistrationRequest,
 )
 from apps.backend.app.services import auth as auth_service
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -375,7 +375,7 @@ def child_webauthn_register_options(
     Returns challenge and options for navigator.credentials.create().
     Challenge must be stored and passed back in registration request.
     """
-    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    child = db.query(User).filter(User.id == req.child_id, User.role == UserRole.CHILD).first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
@@ -400,7 +400,7 @@ def child_webauthn_register(
     Client sends credential from navigator.credentials.create().
     Credential is verified and stored in user.webauthn_credentials.
     """
-    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    child = db.query(User).filter(User.id == req.child_id, User.role == UserRole.CHILD).first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
@@ -442,7 +442,7 @@ def child_webauthn_login_options(
 
     Returns challenge and allowed credentials for navigator.credentials.get().
     """
-    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    child = db.query(User).filter(User.id == req.child_id, User.role == UserRole.CHILD).first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
@@ -468,7 +468,7 @@ def child_webauthn_login(
     Client sends credential from navigator.credentials.get().
     On success, returns tokens and sets child auth cookies.
     """
-    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    child = db.query(User).filter(User.id == req.child_id, User.role == UserRole.CHILD).first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
@@ -557,7 +557,7 @@ def login_step1(
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # Determine second factor: children with pin_hash use emoji_pin; adults use their configured type
-    if user.role == "child" and user.pin_hash:
+    if user.role == UserRole.CHILD and user.pin_hash:
         second_factor_type = "emoji_pin"
     elif user.second_factor_enabled and user.second_factor_type:
         second_factor_type = user.second_factor_type
@@ -572,7 +572,7 @@ def login_step1(
         refresh_token = create_refresh_token(
             user_claims(user, token_version=user.token_version)
         )
-        if user.role == "child":
+        if user.role == UserRole.CHILD:
             set_child_auth_cookies(response, access_token, refresh_token)
         else:
             set_auth_cookies(response, access_token, refresh_token)
@@ -614,6 +614,9 @@ def login_step2(
     if not user:
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
+    # Force re-read from DB to avoid stale connection pool cache
+    db.expire(user)
+
     strategy = get_strategy(req.factor_type)
     if not strategy.verify(db, user, req.payload):
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
@@ -625,7 +628,7 @@ def login_step2(
         user_claims(user, token_version=user.token_version)
     )
 
-    if user.role == "child":
+    if user.role == UserRole.CHILD:
         set_child_auth_cookies(response, access_token, refresh_token)
     else:
         set_auth_cookies(response, access_token, refresh_token)
@@ -723,7 +726,7 @@ def set_child_password(
         db.query(User)
         .filter(
             User.id == child_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
             User.is_active.is_(True),
         )
         .first()
@@ -734,7 +737,7 @@ def set_child_password(
     # Permission: same family + (parent role or child themselves)
     if child.family_id != user.family_id:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    if user.role == "child" and user.id != child_id:
+    if user.role == UserRole.CHILD and user.id != child_id:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
     from apps.backend.app.auth.revoke_jti import revoke_all_user_tokens

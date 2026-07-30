@@ -4,15 +4,15 @@ Revision ID: b6895c98ds3
 Revises: a5894b97cs2
 Create Date: 2026-06-02
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b6895c98ds3"
-down_revision: Union[str, None] = "a5894b97cs2"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "a5894b97cs2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

@@ -12,7 +12,9 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.cached_file import CachedFile
 from apps.backend.app.models.file_remote_location import FileRemoteLocation
-from apps.backend.app.models.storage_backend import StorageBackend as StorageBackendModel
+from apps.backend.app.models.storage_backend import (
+    StorageBackend as StorageBackendModel,
+)
 from apps.backend.app.models.user import User
 from apps.backend.app.services.storage.config_crypto import decrypt_config
 from apps.backend.app.services.storage.factory import get_backend_for_type

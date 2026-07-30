@@ -18,11 +18,12 @@ import uuid
 from types import SimpleNamespace
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel
 
 from apps.agent.app.config import settings
 from apps.agent.services.runtime.worker import _run_import_parse_agent
+from packages.security.service_auth.agent_token_verify import verify_service_token
 
 router = APIRouter(prefix="/import", tags=["import"])
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class _CapturingBridge:
 async def parse_import(
     body: ImportParseRequest,
     x_family_id: str = Header(..., alias="X-Family-Id"),
-    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    _token_family: str = Depends(verify_service_token),
     x_user_id: str = Header(None, alias="X-User-Id"),
 ):
     """解析金融文档文本，提取持仓快照（由 backend 调用）。
@@ -78,9 +79,6 @@ async def parse_import(
     ``app="import-parse"`` stream_run agent；agent 解析失败或超时返回空结果
     （items=[]），不抛异常 —— 与旧 ``import_parse_service`` 兜底契约一致。
     """
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(status_code=401, detail="invalid token")
-
     from deerflow.runtime import RunStatus
 
     run_id = f"importparse-{uuid.uuid4().hex[:12]}"

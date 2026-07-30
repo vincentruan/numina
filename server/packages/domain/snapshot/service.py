@@ -17,7 +17,7 @@ def auto_generate_daily_snapshots(db: Session) -> None:
     # PHASE2_COUPLING: imports backend internals. Remove in Phase 3 when
     # snapshot logic is fully migrated to packages/domain/snapshot/.
     try:
-        from apps.backend.app.services.snapshot import (  # noqa: PLC0415
+        from apps.backend.app.services.snapshot import (
             auto_generate_daily_snapshots as _run,
         )
     except ImportError as exc:

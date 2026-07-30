@@ -229,6 +229,21 @@ const router = createRouter({
           component: () => import('@/pages/WebSearchFormPage.vue'),
         },
         {
+          path: 'settings/ai/asr',
+          name: 'ASRConfig',
+          component: () => import('@/pages/ASRConfigPage.vue'),
+        },
+        {
+          path: 'settings/ai/asr/new',
+          name: 'ASRConfigNew',
+          component: () => import('@/pages/ASRProviderFormPage.vue'),
+        },
+        {
+          path: 'settings/ai/asr/:id/edit',
+          name: 'ASRConfigEdit',
+          component: () => import('@/pages/ASRProviderFormPage.vue'),
+        },
+        {
           path: 'settings/ai/skills',
           name: 'SkillsManage',
           component: () => import('@/pages/SkillsManagePage.vue')
@@ -409,13 +424,21 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
+  // Defense-in-depth: only known adult roles may access the main app.
+  // Any unknown/future role (not owner or member) is denied — prevents
+  // accidental access if a new non-adult role is added to the system.
+  if (isLoggedIn && user!.role !== 'owner' && user!.role !== 'member') {
+    next('/login')
+    return
+  }
+
   // Not logged in accessing protected route — redirect to login
   if (!isLoggedIn) {
     next('/login')
     return
   }
 
-  // Adult user accessing protected route — allow
+  // Adult user (owner or member) accessing protected route — allow
   next()
 })
 

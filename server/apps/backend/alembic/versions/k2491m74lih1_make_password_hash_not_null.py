@@ -12,7 +12,6 @@ Changes:
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = 'k2491m74lih1'

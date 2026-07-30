@@ -1,6 +1,5 @@
 """Tests for Unit 3: Child CRUD, device binding, force-logout."""
 
-import pytest
 
 VALID_PIN = ["🐱", "🐶", "🐸", "🦊"]
 VALID_PIN_2 = ["🐼", "🐨", "🦁", "🐯"]

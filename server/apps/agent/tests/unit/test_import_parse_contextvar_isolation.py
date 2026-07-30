@@ -24,7 +24,10 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-_TOKEN = "test-internal-token"
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
+
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 
 
 def _client_with_stubbed_worker(agent_run: Any):
@@ -62,10 +65,6 @@ def _client_with_stubbed_worker(agent_run: Any):
             "apps.agent.routers.import_parse._run_import_parse_agent",
             agent_run,
         ),
-        patch(
-            "apps.agent.routers.import_parse.settings.AGENT_INTERNAL_TOKEN",
-            _TOKEN,
-        ),
     ):
         from apps.agent.app.main import app
 
@@ -77,7 +76,7 @@ def _post(client: TestClient, family_id: str) -> Any:
     return client.post(
         "/import/parse",
         headers={
-            "X-Agent-Token": _TOKEN,
+            "X-Agent-Token": create_agent_token(family_id),
             "X-Family-Id": family_id,
             "X-User-Id": f"user-{family_id}",
         },

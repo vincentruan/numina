@@ -21,12 +21,12 @@ def _load_config():
 
 def test_create_family_adapter_accepts_available_skills():
     """create_family_adapter accepts available_skills parameter and passes it through."""
-    from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
-
     # This test verifies the signature accepts available_skills without error.
     # We don't actually create an adapter (requires full config), just verify
     # the parameter is accepted.
     import inspect
+
+    from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
     sig = inspect.signature(create_family_adapter)
     params = sig.parameters
     assert "available_skills" in params, "create_family_adapter must accept available_skills parameter"
@@ -35,15 +35,14 @@ def test_create_family_adapter_accepts_available_skills():
 
 def test_get_family_adapter_cache_key_includes_available_skills():
     """get_family_adapter cache key incorporates available_skills (U3)."""
-    from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-        get_family_adapter,
-        _adapter_cache,
-    )
-
     # Verify the cache key structure includes available_skills
     # We can't easily test the full adapter creation without a real config,
     # but we can verify the cache key tuple structure.
     import inspect
+
+    from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+        get_family_adapter,
+    )
     source = inspect.getsource(get_family_adapter)
 
     # The cache key must include available_skills (as frozenset for hashability)
@@ -55,10 +54,11 @@ def test_available_skills_none_vs_empty_set_produce_different_cache_keys():
     """None and empty set produce different cache keys (U3)."""
     # This is a structural test: verify the cache key logic distinguishes
     # between None (all skills available) and empty set (no skills available).
+    import inspect
+
     from apps.agent.services.deerflow_adapter.family_adapter_cache import (
         get_family_adapter,
     )
-    import inspect
     source = inspect.getsource(get_family_adapter)
 
     # The cache key must handle None vs frozenset() distinctly
@@ -71,10 +71,11 @@ def test_available_skills_none_vs_empty_set_produce_different_cache_keys():
 def test_available_skills_frozenset_hashable():
     """available_skills is converted to frozenset for cache key hashability (U3)."""
     # Verify the conversion logic exists
+    import inspect
+
     from apps.agent.services.deerflow_adapter.family_adapter_cache import (
         get_family_adapter,
     )
-    import inspect
     source = inspect.getsource(get_family_adapter)
 
     # Must convert set to frozenset for cache key
@@ -85,11 +86,12 @@ def test_available_skills_frozenset_hashable():
 
 def test_create_family_adapter_signature_matches_get_family_adapter():
     """create_family_adapter and get_family_adapter have matching available_skills parameter."""
+    import inspect
+
     from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
     from apps.agent.services.deerflow_adapter.family_adapter_cache import (
         get_family_adapter,
     )
-    import inspect
 
     create_sig = inspect.signature(create_family_adapter)
     get_sig = inspect.signature(get_family_adapter)

@@ -209,6 +209,6 @@ def test_refresh_token_replay_rejected_service_layer(db):
     with patch.object(revoke_module, "SessionLocal", return_value=no_close_db):
         try:
             svc_refresh_token(db, tok)
-            assert False, "Expected AUTH_REFRESH_FAILED but no error was raised"
+            raise AssertionError("Expected AUTH_REFRESH_FAILED but no error was raised")
         except AppError as exc:
             assert exc.code == ErrorCode.AUTH_REFRESH_FAILED

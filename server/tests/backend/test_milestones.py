@@ -178,7 +178,7 @@ def test_coins_50_based_on_total_earned_not_balance(client, auth_headers, child_
 
     # Approve a chore worth 10 → total earned = 58, but we check total not balance
     instance = _get_instance(client, child_user["headers"])
-    result = _complete_and_approve(client, child_user["headers"], auth_headers, instance["id"])
+    _result = _complete_and_approve(client, child_user["headers"], auth_headers, instance["id"])
 
     # Should have coins_50 in milestones since total earned (48+10=58) >= 50
     resp = client.get("/api/v1/child/milestones", headers=child_user["headers"])

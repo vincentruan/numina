@@ -15,6 +15,7 @@ evaluation failure.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -81,19 +82,27 @@ async def _evaluate_impl(
 ) -> list[LiteracyBadge]:
     dimensions = _CHORE_ONLY_DIMENSIONS if trigger == "chore_approved" else ALL_DIMENSIONS
 
-    unlocked: list[LiteracyBadge] = []
-    for dimension in dimensions:
+    async def _eval_one(dimension: str) -> LiteracyBadge | None:
         try:
-            badge = await _evaluate_dimension(db, child, dimension, trigger, scenario)
-            if badge is not None:
-                unlocked.append(badge)
+            return await _evaluate_dimension(db, child, dimension, trigger, scenario)
         except Exception:
             logger.exception(
                 "Badge evaluation failed for child %s dimension %s — skipping",
                 child.id,
                 dimension,
             )
-    return unlocked
+            return None
+
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(*[_eval_one(d) for d in dimensions]),
+            timeout=30.0,
+        )
+    except TimeoutError:
+        logger.warning("Badge evaluation timed out for child %s", child.id)
+        return []
+
+    return [b for b in results if b is not None]
 
 
 async def _evaluate_dimension(
@@ -298,7 +307,7 @@ def _build_evaluation_context(
     if trigger == "scenario_completed" and scenario is not None:
         with contextlib.suppress(Exception):
             context["latest_scenario"] = {
-                "dimension": _scenario_dimension(scenario),
+                "dimension": _scenario_dimension(db, scenario),
                 "choice_index": scenario.choice_index,
                 "feedback": scenario.feedback_json,
             }
@@ -306,39 +315,22 @@ def _build_evaluation_context(
     return context
 
 
-def _scenario_dimension(scenario: LiteracyScenario) -> str | None:
+def _scenario_dimension(db: Session, scenario: LiteracyScenario) -> str | None:
     """Best-effort lookup of the scenario's dimension via its template."""
     try:
         from packages.db.models.literacy_scenario import LiteracyScenarioTemplate
 
+        if scenario.template_id is None:
+            return None
+
         template = (
-            db_session_for_scenario(scenario)
-            .query(LiteracyScenarioTemplate.dimension)
+            db.query(LiteracyScenarioTemplate.dimension)
             .filter(LiteracyScenarioTemplate.id == scenario.template_id)
             .scalar()
         )
         return template
     except Exception:
         return None
-
-
-def db_session_for_scenario(scenario: LiteracyScenario) -> Session:
-    """Inspect helper — the scenario is already bound to a session via SA identity map."""
-    return scenario.session if hasattr(scenario, "session") and scenario.session else _NullSession()  # type: ignore[return-value]
-
-
-class _NullSession:
-    """Fallback when the scenario is detached — query returns None silently."""
-
-    def query(self, *args, **kwargs):  # noqa: D401
-        class _Q:
-            def filter(self, *a, **k):
-                return self
-
-            def scalar(self):
-                return None
-
-        return _Q()
 
 
 # ---------------------------------------------------------------------------

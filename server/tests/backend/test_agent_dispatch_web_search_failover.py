@@ -67,7 +67,7 @@ def test_transient_failures_accumulate_then_open(db, family_providers):
     """5 transient failures open the circuit."""
     tavily, _ = family_providers
 
-    for i in range(4):
+    for _ in range(4):
         WebSearchCircuitService.report_failure(tavily.id, "transient_rate_limit", db)
         db.refresh(tavily)
         assert tavily.circuit_state == "closed"

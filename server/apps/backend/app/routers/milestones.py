@@ -11,6 +11,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.services import milestones as svc
+from packages.core.roles import UserRole
 
 router = APIRouter(tags=["milestones"])
 
@@ -45,7 +46,7 @@ def list_child_milestones(
         .filter(
             User.id == child_id,
             User.family_id == user.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
         )
         .first()
     )

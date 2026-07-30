@@ -198,7 +198,7 @@ const ringStyle = computed(() => {
 }
 .ring-center-done {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--color-brand-ochre);
   line-height: 1.1;
@@ -236,7 +236,7 @@ const ringStyle = computed(() => {
 /* ── Subtitle ── */
 .ring-subtitle {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-muted);
   margin: 0;

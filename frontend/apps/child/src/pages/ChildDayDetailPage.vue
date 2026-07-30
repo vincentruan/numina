@@ -145,7 +145,7 @@ onMounted(async () => {
 
 .section-title {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   margin: 0 0 10px;
@@ -183,7 +183,7 @@ onMounted(async () => {
 }
 .event-sub {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-brand-ochre);
   margin: 2px 0 0;
   display: flex;
@@ -197,13 +197,13 @@ onMounted(async () => {
   color: var(--color-ink);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .status-tag {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   border-radius: var(--radius-pill);
   padding: 4px 10px;
   flex-shrink: 0;

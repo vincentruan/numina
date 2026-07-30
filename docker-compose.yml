@@ -18,7 +18,6 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
-      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
       - BACKEND_BASE_URL=http://numina-backend:8000
     healthcheck:
@@ -41,7 +40,6 @@ services:
       - DATA_ROOT=/app/.numina/data
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - BACKEND_BASE_URL=http://numina-backend:8000
-      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AI_MODEL=${AI_MODEL:-placeholder}

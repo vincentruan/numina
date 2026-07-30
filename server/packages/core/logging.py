@@ -146,9 +146,8 @@ def archive_old_logs(log_dir: Path, compress_after_days: int = 7) -> int:
 
             if file_mtime < cutoff_date:
                 try:
-                    with open(log_file, "rb") as f_in:
-                        with gzip.open(log_file.with_suffix(log_file.suffix + ".gz"), "wb") as f_out:
-                            shutil.copyfileobj(f_in, f_out)
+                    with open(log_file, "rb") as f_in, gzip.open(log_file.with_suffix(log_file.suffix + ".gz"), "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
 
                     log_file.unlink()
                     compressed_count += 1

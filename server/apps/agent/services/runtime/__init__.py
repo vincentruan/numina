@@ -32,7 +32,7 @@ from .lifespan import get_run_manager, get_stream_bridge, init_runtime, shutdown
 from .sandbox_provider import NuminaLocalSandboxProvider, acquire_family_sandbox
 from .sse_gateway import format_sse, sse_consumer, start_run
 from .subagent_registry import FamilySubagentRegistry, get_family_subagent_registry
-from .worker import run_agent
+from .worker import run_agent  # noqa: F811
 
 __all__ = [
     # DeerFlow re-exports

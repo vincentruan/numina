@@ -59,6 +59,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchChildMe(): Promise<User> {
     const res = await getHttp().get<User>('/auth/child/me')
+    user.value = res.data
+    setUser(res.data as StoredUser)
     return res.data
   }
 

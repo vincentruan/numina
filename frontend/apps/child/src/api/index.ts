@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { clearAuth } from '@numina/auth'
+import { getMainBaseUrl } from '@/utils/mainApp'
 
 const http = axios.create({
   baseURL: '/api/v1',
@@ -34,9 +35,10 @@ http.interceptors.response.use(
       // Don't redirect for auth endpoints (login should handle its own errors)
       if (!url.includes('/auth/')) {
         clearAuth()
-        // Redirect to main login (child app has no auth pages)
-        // Use full URL to ensure it goes through nginx to main frontend
-        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+        // Redirect to main login (child app has no auth pages).
+        // Must use getMainBaseUrl() — VITE_MAIN_APP_URL is unset, so fallback ''
+        // would resolve to the child server's /login, tripping Vite's base check.
+        const baseUrl = getMainBaseUrl()
         window.location.replace(`${baseUrl}/login?redirect=/child/`)
       }
     }

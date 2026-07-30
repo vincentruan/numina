@@ -4,8 +4,6 @@ import json
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-import pytest
-
 from apps.backend.app.models.device_session import DeviceSession
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
@@ -232,6 +230,7 @@ def test_trust_webauthn_register_options_unauthenticated(client):
 def test_trust_webauthn_register_success(client, db_session):
     """Authenticated user can register a WebAuthn credential."""
     from unittest.mock import MagicMock
+
     from apps.backend.app.auth.deps import create_access_token
 
     user, family = _create_user_and_family(db_session)

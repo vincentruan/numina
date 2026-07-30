@@ -3,11 +3,11 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
     Integer,
-    JSON,
     String,
     UniqueConstraint,
     func,

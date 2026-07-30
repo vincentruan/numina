@@ -2,13 +2,15 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.backend.app.config import settings
 from apps.backend.app.main import app
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
+
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 
 
 @pytest.fixture
-def client(monkeypatch):
-    monkeypatch.setattr(settings, "AGENT_INTERNAL_TOKEN", "test-token")
+def client():
     return TestClient(app)
 
 

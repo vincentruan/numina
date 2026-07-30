@@ -195,7 +195,7 @@ defineExpose({ load })
 
 .challenge-message {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 4px 0 0;
 }
@@ -212,7 +212,7 @@ defineExpose({ load })
 
 .progress-text {
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-brand-ochre);
   white-space: nowrap;
@@ -220,7 +220,7 @@ defineExpose({ load })
 
 .deadline-hint {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 8px 0 0;
 }

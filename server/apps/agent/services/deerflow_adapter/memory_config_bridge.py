@@ -51,13 +51,13 @@ import logging
 import threading
 from typing import Any
 
+from deerflow.config import memory_config as _memory_config_mod
 from deerflow.config.app_config import (
     AppConfig,
     peek_current_app_config,
     pop_current_app_config,
     push_current_app_config,
 )
-from deerflow.config import memory_config as _memory_config_mod
 
 # DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
 # deermem backend's queue/updater classes out of the top-level
@@ -67,8 +67,12 @@ from deerflow.config import memory_config as _memory_config_mod
 # (``_do_update_memory_sync``) are unchanged — only the import path moved.
 # Try the new path first, fall back to the legacy path for older harness revs.
 try:
-    from deerflow.agents.memory.backends.deermem.deermem.core import queue as _queue_mod  # type: ignore
-    from deerflow.agents.memory.backends.deermem.deermem.core import updater as _updater_mod  # type: ignore
+    from deerflow.agents.memory.backends.deermem.deermem.core import (
+        queue as _queue_mod,  # type: ignore
+    )
+    from deerflow.agents.memory.backends.deermem.deermem.core import (
+        updater as _updater_mod,  # type: ignore
+    )
 except ImportError:  # legacy harness (pre-#4122)
     from deerflow.agents.memory import queue as _queue_mod  # type: ignore
     from deerflow.agents.memory import updater as _updater_mod  # type: ignore
@@ -166,7 +170,7 @@ def install() -> None:
         except ImportError:
             continue
         if hasattr(mod, "get_memory_config"):
-            setattr(mod, "get_memory_config", _contextual_get_memory_config)
+            mod.get_memory_config = _contextual_get_memory_config
 
     # 2. Snapshot the family config at enqueue time.
     _orig_add = _queue_mod.MemoryUpdateQueue.add

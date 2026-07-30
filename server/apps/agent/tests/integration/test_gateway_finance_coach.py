@@ -100,20 +100,22 @@ def client():
             app.dependency_overrides.clear()
 
 
-_TOKEN = "test-internal-token"
+_TOKEN_FAMILY_ID = "family-1"
+
+from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
+
+_core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
+_TOKEN = create_agent_token(_TOKEN_FAMILY_ID)
 
 
 def test_finance_coach_route_requires_agent_token(client):
     """Without X-Agent-Token, the finance-coach route 422s (missing required
     header — matches the asset-report route's behavior)."""
-    with patch(
-        "apps.agent.app.routers.gateway.settings.AGENT_INTERNAL_TOKEN",
-        _TOKEN,
-    ):
-        resp = client.post(
-            "/internal/gateway/runs/finance-coach/some-thread",
-            json={"family_id": "family-1"},
-        )
+    resp = client.post(
+        "/internal/gateway/runs/finance-coach/some-thread",
+        json={"family_id": "family-1"},
+    )
     assert resp.status_code in (401, 422)
 
 

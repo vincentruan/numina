@@ -13,6 +13,7 @@ from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.schemas.chore import GrantRequest
 from apps.backend.app.schemas.coin import GiftRequest, GiftResponse, SiblingResponse
 from apps.backend.app.services import coin_transactions as coin_service
+from packages.core.roles import UserRole
 
 router = APIRouter(tags=["coins"])
 
@@ -94,9 +95,9 @@ def list_siblings(
         db.query(User)
         .filter(
             User.family_id == child.family_id,
-            User.role == "child",
+            User.role == UserRole.CHILD,
             User.id != child.id,
-            User.is_active == True,
+            User.is_active,
         )
         .all()
     )

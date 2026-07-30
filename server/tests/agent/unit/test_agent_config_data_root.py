@@ -8,7 +8,6 @@ from unittest.mock import patch
 def _make_agent_settings(**overrides):
     """Create a fresh AgentSettings instance with env overrides."""
     env = {
-        "AGENT_INTERNAL_TOKEN": "test-token",
         **overrides,
     }
     with patch.dict(os.environ, env, clear=False):
@@ -30,25 +29,25 @@ class TestDataRootExpansion:
 
     def test_custom_data_root_is_resolved(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.DATA_ROOT == _resolve("/tmp/test-agent")
+        assert _resolve("/tmp/test-agent") == s.DATA_ROOT
 
 
 class TestDerivedPaths:
     def test_sessions_data_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.SESSIONS_DATA_DIR == _resolve("/tmp/test-agent") + "/workspaces"
+        assert _resolve("/tmp/test-agent") + "/workspaces" == s.SESSIONS_DATA_DIR
 
     def test_agent_data_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.AGENT_DATA_DIR == _resolve("/tmp/test-agent") + "/workspaces"
+        assert _resolve("/tmp/test-agent") + "/workspaces" == s.AGENT_DATA_DIR
 
     def test_log_dir_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.LOG_DIR == _resolve("/tmp/test-agent") + "/logs"
+        assert _resolve("/tmp/test-agent") + "/logs" == s.LOG_DIR
 
     def test_deerflow_db_path_derived_from_data_root(self):
         s = _make_agent_settings(DATA_ROOT="/tmp/test-agent")
-        assert s.DEERFLOW_DB_PATH == _resolve("/tmp/test-agent") + "/db/deerflow-checkpoints.db"
+        assert _resolve("/tmp/test-agent") + "/db/deerflow-checkpoints.db" == s.DEERFLOW_DB_PATH
 
 
 class TestExplicitOverrides:

@@ -1,5 +1,4 @@
 """Tests for message_classifier.py — tool registry and suffix matching."""
-import pytest
 from apps.agent.services.message_classifier import resolve_tool_metadata
 
 

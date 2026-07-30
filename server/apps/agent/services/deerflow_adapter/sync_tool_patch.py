@@ -368,7 +368,6 @@ def _apply_mcp_proxy_bypass_patch() -> None:
         # unavailable. The worker sets srv["headers"] on the runtime mcp_servers
         # dict, but the MCP client reads from extensions_config (file-based) which
         # has no auth headers — so inject them here from settings + family context.
-        from apps.agent.app.config import settings as _agent_settings
         from apps.agent.services.runtime.sandbox_provider import (
             get_caller_user_id_context as _get_caller,
         )
@@ -377,7 +376,10 @@ def _apply_mcp_proxy_bypass_patch() -> None:
         )
         _mcp_family_id = _get_family()
         _mcp_caller_user_id = _get_caller()
-        _mcp_agent_token = getattr(_agent_settings, "AGENT_INTERNAL_TOKEN", None)
+        _mcp_agent_token = None
+        if _mcp_family_id:
+            from packages.security.service_auth.agent_jwt import create_agent_token
+            _mcp_agent_token = create_agent_token(_mcp_family_id)
         for _name, cfg in servers_config.items():
             if cfg.get("transport") in ("sse", "http"):
                 cfg["httpx_client_factory"] = _no_proxy_httpx_client

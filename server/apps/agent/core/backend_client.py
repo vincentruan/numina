@@ -1,7 +1,7 @@
 """Backend 内部 HTTP 客户端。
 
 所有对 backend 的调用都通过此客户端，自动附加：
-- Authorization: Bearer {AGENT_INTERNAL_TOKEN}
+- Authorization: Bearer {JWT} (create_agent_token)
 - X-Family-Id: {family_id}
 
 backend 端点验证这两个 header，强制以 family_id 为边界过滤数据。
@@ -11,8 +11,7 @@ backend 端点验证这两个 header，强制以 family_id 为边界过滤数据
 
 import logging
 import re
-
-from typing import Any, cast
+from typing import cast
 
 import httpx
 
@@ -342,8 +341,10 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
 
 
 def _make_headers(family_id: str) -> dict[str, str]:
+    from packages.security.service_auth.agent_jwt import create_agent_token
+
     return {
-        "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+        "Authorization": f"Bearer {create_agent_token(family_id)}",
         "X-Family-Id": family_id,
         "Content-Type": "application/json",
     }
@@ -565,10 +566,12 @@ async def get_ai_enabled_families() -> list[str]:
     async with httpx.AsyncClient(
         timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
+        from packages.security.service_auth.agent_jwt import create_agent_token
+
         resp = await client.get(
             "/api/v1/admin/ai/enabled-families",
             headers={
-                "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+                "Authorization": f"Bearer {create_agent_token('0')}",
                 "Content-Type": "application/json",
             },
         )
@@ -847,3 +850,54 @@ async def report_web_search_circuit(family_id: str, provider_id: int, failure_ty
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
+
+
+# ---------------------------------------------------------------------------
+# Literacy weekly report — scheduler support
+# ---------------------------------------------------------------------------
+
+_REPORT_TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
+
+
+async def get_literacy_children(family_id: str) -> list[dict]:
+    """Get children in a family for literacy report generation.
+
+    Args:
+        family_id: Family ID
+
+    Returns:
+        List of dicts with 'child_id' and 'display_name' keys.
+    """
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_REPORT_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
+    ) as client:
+        resp = await client.get(
+            "/api/v1/internal/literacy-reports/children",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return cast(list[dict], _unwrap(resp))
+
+
+async def generate_literacy_report(family_id: str, child_id: str) -> dict:
+    """Trigger literacy report generation for a child via internal endpoint.
+
+    Args:
+        family_id: Family ID
+        child_id: Child user ID
+
+    Returns:
+        Report status dict with 'status', 'week_start', etc.
+    """
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_REPORT_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
+    ) as client:
+        resp = await client.post(
+            "/api/v1/internal/literacy-report/generate",
+            params={"child_id": child_id, "force": "true"},
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return cast(dict, _unwrap(resp))

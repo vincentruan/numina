@@ -218,11 +218,12 @@ def test_cross_family_isolation_aggregate(client, auth_headers, second_user_head
 
 def test_family_info_returns_correct_creator_code(client, db):
     """GET /family returns the correct creator_code that was used during registration."""
+    import random
+    import string
+
     from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
     from apps.backend.app.schemas.auth import RegisterRequest
     from apps.backend.app.services.auth import register
-    import random
-    import string
 
     code_str = "".join(random.choices(string.ascii_uppercase, k=6))
     inv_code = FamilyInvitationCode(code=code_str)

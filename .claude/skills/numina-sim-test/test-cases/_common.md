@@ -16,7 +16,7 @@ Shared conventions used by all six area case files:
 - `demouser` / `DemoPass123` is the adult demo account. Child display_names
   under it are **discovered at gate time** (Phase 1.5 reads `/family/members`
   where `role=="child"`) — they are NOT hard-coded. Docker seed default:
-  小宝 (`xiaobao`) + 大宝 (`dabao`), PIN `🐰🥕🌈⭐`. Dev/other deployments may
+  小宝 (`xiaobao`) + 大宝 (`dabao`), PIN `🌟🌈`. Dev/other deployments may
   differ (e.g. `demochild`, 小明); always use the names the gate printed, not
   a fixed string. See "Child account names" below.
 - Assertions marked `[console]` are checked via `bsk evaluate` reading
@@ -99,7 +99,7 @@ driven from the child origin's page context. This is the dev-mode analog of
 the adult cookie+localStorage injection in SKILL.md "Phase 2 fallback".
 
 The child PIN is **not always known** for dev/other deployments (docker seed
-defaults `🐰🥕🌈⭐` for 小宝/大宝; dev may use `demochild`/小明 with a different
+defaults `🌟🌈` for 小宝/大宝; dev may use `demochild`/小明 with a different
 or unknown PIN). If the PIN is unknown, reset it out-of-band via sqlite
 before this step (bcrypt hash, NFC-normalized joined emoji sequence) — this
 skill does not reset credentials.
@@ -135,7 +135,7 @@ bsk evaluate --session "$SID_CHILD" "(async () => {
     body: JSON.stringify({
       temp_token: window.__tempToken,
       factor_type: 'emoji_pin',
-      payload: { pin_sequence: ['🐰','🥕','🌈','⭐'] },
+      payload: { pin_sequence: ['🐱','🐶','🌟','🌈'] },
     }),
   });
   return String(r.status);

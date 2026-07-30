@@ -1,7 +1,10 @@
 """Tests for file validation service."""
 
 
-from apps.backend.app.services.file_validation import detect_image_format, validate_image_magic_bytes
+from apps.backend.app.services.file_validation import (
+    detect_image_format,
+    validate_image_magic_bytes,
+)
 
 
 class TestValidateImageMagicBytes:

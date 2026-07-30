@@ -165,6 +165,11 @@
           <SvgIcon name="web-search" :size="16" class="cell-icon" />
         </template>
       </van-cell>
+      <van-cell :title="t('settings.asrManage')" is-link to="/settings/ai/asr">
+        <template #icon>
+          <van-icon name="volume-o" size="16" class="cell-icon" />
+        </template>
+      </van-cell>
       <van-cell :title="t('settings.skillsManage')" is-link to="/settings/ai/skills">
         <template #icon>
           <SvgIcon name="wand" :size="16" class="cell-icon" />
@@ -377,9 +382,11 @@ onActivated(async () => {
 
 // AI toggle
 const togglingAI = ref(false)
+// A config is "ready" when it has a model ID and an API key configured.
+// `ai_api_key_masked` is non-null only when the backend has stored an encrypted key.
 const hasAnyModel = computed(() =>
   aiStore.configs.some(
-    (c) => c.model_id || c.model_2_id || c.model_3_id,
+    (c) => (c.model_id || c.model_2_id || c.model_3_id) && c.ai_api_key_masked,
   ),
 )
 const aiEnabled = computed(() => aiStore.configs.some((c) => c.is_active))
@@ -389,7 +396,9 @@ async function onToggleAI(val: boolean) {
     showToast(t('settings.enableAINoModel'))
     return
   }
-  const target = aiStore.configs.find((c) => c.model_id || c.model_2_id || c.model_3_id)
+  const target = aiStore.configs.find(
+    (c) => (c.model_id || c.model_2_id || c.model_3_id) && c.ai_api_key_masked,
+  )
   if (!target) return
   togglingAI.value = true
   try {
@@ -399,6 +408,19 @@ async function onToggleAI(val: boolean) {
       message: val ? t('toast.aiEnabled') : t('toast.aiDisabled'),
       icon: 'none',
     })
+    // After enabling, run a lightweight connection test so the user gets
+    // immediate feedback if the model is unreachable (invalid key, outage…).
+    if (val) {
+      try {
+        const result = await aiApi.testProviderConfig(target.id)
+        if (!result.data.connected) {
+          showFailToast(result.data.message || t('toast.aiTestFailed'))
+        }
+      } catch {
+        // Test endpoint itself failed — not critical, the toggle was already saved.
+        showFailToast(t('toast.aiTestFailed'))
+      }
+    }
   } catch {
     showFailToast(t('toast.operationFailed2'))
   } finally {

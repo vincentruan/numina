@@ -2,11 +2,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { streamNarrative, type NarrativeStreamHandle } from '@/api/dashboard'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { showFailToast } from 'vant'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
-const authStore = useAuthStore()
 
 type Phase = 'idle' | 'streaming' | 'complete' | 'cached'
 
@@ -17,7 +18,6 @@ const cachedNarrative = ref('')
 const cachedThinking = ref('')
 const thinkingExpanded = ref(false)
 const expanded = ref<string[]>(['narrative'])
-const dismissed = ref(false)
 const thinkingElapsed = ref(0)
 
 let streamHandle: NarrativeStreamHandle | null = null
@@ -40,16 +40,24 @@ const displayThinking = computed(() => {
   return streamingThinking.value
 })
 
-/** Whether narrative should be clamped to 2 lines */
+/** Whether narrative should be clamped to 2 lines (cached phase only) */
 const narrativeClamped = computed(() => {
-  if (phase.value === 'streaming') return false
-  // complete / cached: clamp when thinking is collapsed
-  return !thinkingExpanded.value
+  return phase.value === 'cached' && !thinkingExpanded.value
 })
 
-function dismissKey(): string {
-  return `narrative_dismissed_${authStore.user?.family_id ?? 'unknown'}`
-}
+/** DOMPurify config for thinking content — allow basic formatting elements */
+const THINKING_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
+
+/** Render thinking content as sanitized markdown HTML */
+const renderedThinking = computed(() => {
+  const raw = displayThinking.value
+  if (!raw) return ''
+  const html = marked.parse(raw, { async: false }) as string
+  return DOMPurify.sanitize(html, THINKING_PURIFY_CONFIG)
+})
 
 function startElapsedTimer() {
   thinkingStartMs = Date.now()
@@ -70,20 +78,16 @@ function toggleThinking() {
   thinkingExpanded.value = !thinkingExpanded.value
 }
 
-function onDismiss() {
-  dismissed.value = true
-  sessionStorage.setItem(dismissKey(), '1')
+function toggleCachedNarrative() {
+  if (phase.value === 'cached' && !thinkingExpanded.value) {
+    thinkingExpanded.value = true
+  }
 }
 
 async function load() {
-  if (sessionStorage.getItem(dismissKey()) === '1') {
-    dismissed.value = true
-    return
-  }
-
   phase.value = 'idle'
 
-  await streamNarrative({
+  streamHandle = await streamNarrative({
     onReasoningDelta: (content) => {
       if (phase.value === 'idle') {
         phase.value = 'streaming'
@@ -128,9 +132,10 @@ async function load() {
         thinkingExpanded.value = false
       }, 1500)
     },
-    onError: () => {
+    onError: (msg) => {
       stopElapsedTimer()
       streamHandle = null
+      showFailToast(t(msg))
     },
   })
 }
@@ -148,7 +153,7 @@ onUnmounted(() => {
 
 <template>
   <van-cell-group
-    v-if="!dismissed && phase !== 'idle'"
+    v-if="phase !== 'idle'"
     inset
     class="narrative-card"
     data-test="narrative-card"
@@ -169,9 +174,6 @@ onUnmounted(() => {
               </span>
               <span class="narrative-card__title-text">{{ t('dashboard.narrative.title') }}</span>
             </span>
-            <button class="narrative-card__close" :aria-label="t('common.close')" @click.stop="onDismiss">
-              <van-icon name="cross" size="14" />
-            </button>
           </div>
         </template>
 
@@ -193,9 +195,8 @@ onUnmounted(() => {
           <!-- Thinking content -->
           <transition name="thinking-fade">
             <div v-if="thinkingExpanded && displayThinking" class="narrative-card__thinking-content">
-              <p class="narrative-card__thinking-text">
-                {{ displayThinking }}<span class="narrative-card__cursor" />
-              </p>
+              <!-- eslint-disable-next-line vue/no-v-html -- sanitized via DOMPurify -->
+              <div class="narrative-card__thinking-md" v-html="renderedThinking" />
             </div>
           </transition>
 
@@ -205,14 +206,9 @@ onUnmounted(() => {
           </p>
         </template>
 
-        <!-- ── Complete / Cached layout: narrative first, then thinking ── -->
-        <template v-else>
-          <!-- Narrative text (clamped to 2 lines when thinking collapsed) -->
-          <p :class="['narrative-card__text', { 'narrative-card__text--clamp': narrativeClamped }]">
-            {{ displayNarrative }}
-          </p>
-
-          <!-- Thinking indicator (collapsed by default) -->
+        <!-- ── Complete layout: thinking first, then narrative ── -->
+        <template v-else-if="phase === 'complete'">
+          <!-- Thinking indicator (collapsed by default after streaming) -->
           <button
             v-if="hasThinking"
             class="narrative-card__thinking-toggle"
@@ -228,9 +224,48 @@ onUnmounted(() => {
           <!-- Thinking content (expandable) -->
           <transition name="thinking-fade">
             <div v-if="thinkingExpanded && displayThinking" class="narrative-card__thinking-content">
-              <p class="narrative-card__thinking-text">{{ displayThinking }}</p>
+              <!-- eslint-disable-next-line vue/no-v-html -- sanitized via DOMPurify -->
+              <div class="narrative-card__thinking-md" v-html="renderedThinking" />
             </div>
           </transition>
+
+          <!-- Narrative text (full, not clamped) -->
+          <p class="narrative-card__text">
+            {{ displayNarrative }}
+          </p>
+        </template>
+
+        <!-- ── Cached layout: clamped narrative, click to expand ── -->
+        <template v-else>
+          <!-- Narrative text (clamped to 2 lines, clickable to expand) -->
+          <p
+            :class="['narrative-card__text', { 'narrative-card__text--clamp': narrativeClamped }]"
+            @click="toggleCachedNarrative"
+          >
+            {{ displayNarrative }}
+          </p>
+
+          <!-- Thinking indicator + content (hidden when collapsed in cached mode) -->
+          <template v-if="thinkingExpanded">
+            <button
+              v-if="hasThinking"
+              class="narrative-card__thinking-toggle"
+              @click.stop="toggleThinking"
+            >
+              <IIcon :icon="'lucide:lightbulb'" size="14" class="narrative-card__thinking-icon" />
+              <span class="narrative-card__thinking-status">
+                {{ t('dashboard.narrative.thinkingDone', { seconds: thinkingElapsed }) }}
+              </span>
+              <van-icon :name="thinkingExpanded ? 'arrow-up' : 'arrow-down'" size="10" />
+            </button>
+
+            <transition name="thinking-fade">
+              <div v-if="displayThinking" class="narrative-card__thinking-content">
+                <!-- eslint-disable-next-line vue/no-v-html -- sanitized via DOMPurify -->
+                <div class="narrative-card__thinking-md" v-html="renderedThinking" />
+              </div>
+            </transition>
+          </template>
         </template>
       </van-collapse-item>
     </van-collapse>
@@ -295,31 +330,6 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-/* Close button */
-.narrative-card__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary, #969799);
-  cursor: pointer;
-  border-radius: 50%;
-  padding: 0;
-  flex-shrink: 0;
-  margin-left: 4px;
-}
-
-.narrative-card__close:active {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-[data-theme='dark'] .narrative-card__close:active {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 /* Narrative text */
 .narrative-card__text {
   font-size: 14px;
@@ -336,6 +346,7 @@ onUnmounted(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin: 0;
+  cursor: pointer;
 }
 
 /* Streaming cursor */
@@ -383,13 +394,106 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.narrative-card__thinking-text {
+/* Thinking content — rendered markdown */
+.narrative-card__thinking-md {
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text-secondary, #969799);
-  margin: 0;
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+.narrative-card__thinking-md :deep(p) {
+  margin: 0 0 6px;
+}
+
+.narrative-card__thinking-md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.narrative-card__thinking-md :deep(strong) {
+  color: var(--text-primary, #323233);
+  font-weight: 600;
+}
+
+.narrative-card__thinking-md :deep(em) {
+  font-style: italic;
+}
+
+.narrative-card__thinking-md :deep(code) {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+}
+
+[data-theme='dark'] .narrative-card__thinking-md :deep(code) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.narrative-card__thinking-md :deep(pre) {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme='dark'] .narrative-card__thinking-md :deep(pre) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.narrative-card__thinking-md :deep(pre code) {
+  padding: 0;
+  background: none;
+  font-size: 11px;
+}
+
+.narrative-card__thinking-md :deep(ul),
+.narrative-card__thinking-md :deep(ol) {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.narrative-card__thinking-md :deep(li) {
+  margin: 2px 0;
+}
+
+.narrative-card__thinking-md :deep(h1),
+.narrative-card__thinking-md :deep(h2),
+.narrative-card__thinking-md :deep(h3),
+.narrative-card__thinking-md :deep(h4) {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #323233);
+}
+
+.narrative-card__thinking-md :deep(blockquote) {
+  margin: 6px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--van-primary-color, #1989fa);
+  opacity: 0.85;
+}
+
+.narrative-card__thinking-md :deep(a) {
+  color: var(--van-primary-color, #1989fa);
+  text-decoration: none;
+}
+
+.narrative-card__thinking-md :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.narrative-card__thinking-md :deep(hr) {
+  margin: 8px 0;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] .narrative-card__thinking-md :deep(hr) {
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Thinking expand/collapse transition */

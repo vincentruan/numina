@@ -12,7 +12,11 @@ from apps.backend.app.models.bonus_draw import BonusDraw
 from apps.backend.app.models.chore import ChoreInstance
 from apps.backend.app.models.user import User
 from apps.backend.app.routers.blind_box import _draw_to_response, _get_or_create_config
-from apps.backend.app.schemas.blind_box import BlindBoxDrawResponse, BonusDrawResponse, DrawRequest
+from apps.backend.app.schemas.blind_box import (
+    BlindBoxDrawResponse,
+    BonusDrawResponse,
+    DrawRequest,
+)
 from apps.backend.app.services.blind_box import pick_gift, should_upgrade_surprise
 
 router = APIRouter(prefix="/child/blind-box", tags=["child-blind-box"])
@@ -180,8 +184,8 @@ def get_latest_auto_draw(
         db.query(BlindBoxDraw)
         .filter(
             BlindBoxDraw.child_user_id == child.id,
-            BlindBoxDraw.is_auto_triggered == True,  # noqa: E712
-            BlindBoxDraw.shown_to_child == False,  # noqa: E712
+            BlindBoxDraw.is_auto_triggered,
+            BlindBoxDraw.shown_to_child.is_(False),
         )
         .order_by(BlindBoxDraw.draw_at.desc())
         .with_for_update()

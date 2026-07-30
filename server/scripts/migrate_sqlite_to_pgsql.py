@@ -27,40 +27,42 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from apps.backend.app.database import Base
 
 # Import all models so they register with Base.metadata
-from apps.backend.app.models.ai_agent import AIAgent  # noqa: F401
-from apps.backend.app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult  # noqa: F401
-from apps.backend.app.models.asset import Asset  # noqa: F401
-from apps.backend.app.models.asset_lifecycle_event import AssetLifecycleEvent  # noqa: F401
-from apps.backend.app.models.category import Category  # noqa: F401
-from apps.backend.app.models.child_economy_config import ChildEconomyConfig  # noqa: F401
-from apps.backend.app.models.child_wish import ChildWish  # noqa: F401
-from apps.backend.app.models.child_wish_cost_history import ChildWishCostHistory  # noqa: F401
-from apps.backend.app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
-from apps.backend.app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
-from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider  # noqa: F401
-from apps.backend.app.models.liability import Liability  # noqa: F401
-from apps.backend.app.models.payment_record import PaymentRecord  # noqa: F401
-from apps.backend.app.models.skill_registry import SkillRegistry  # noqa: F401
-from apps.backend.app.models.tag import Tag  # noqa: F401
-from apps.backend.app.models.valuation import AssetValuation  # noqa: F401
-from apps.backend.app.models.wish import Wish  # noqa: F401
-from packages.db.models import CachedFile, FileRemoteLocation, StorageBackend  # noqa: F401
-from packages.db.models.ai_task import AITask  # noqa: F401
-from packages.db.models.asset_snapshot import AssetSnapshot  # noqa: F401
-from packages.db.models.currency import Currency  # noqa: F401
-from packages.db.models.device_session import DeviceSession  # noqa: F401
-from packages.db.models.exchange_rate import ExchangeRate  # noqa: F401
-from packages.db.models.family import Family  # noqa: F401
-from packages.db.models.notification_channel import NotificationChannel  # noqa: F401
-from packages.db.models.notification_channel_config import NotificationChannelConfig  # noqa: F401
-from packages.db.models.notification_config import NotificationConfig  # noqa: F401
-from packages.db.models.notification_subscription import NotificationSubscription  # noqa: F401
-from packages.db.models.reminder import Reminder  # noqa: F401
-from packages.db.models.reminder_notification import ReminderNotification  # noqa: F401
-from packages.db.models.revoked_token import RevokedToken  # noqa: F401
-from packages.db.models.security_audit_log import SecurityAuditLog  # noqa: F401
-from packages.db.models.user import User  # noqa: F401
-
+from apps.backend.app.models.ai_agent import AIAgent
+from apps.backend.app.models.ai_provider_config import (
+    AIProviderConfig,
+    AIProviderTestResult,
+)
+from apps.backend.app.models.asset import Asset
+from apps.backend.app.models.asset_lifecycle_event import AssetLifecycleEvent
+from apps.backend.app.models.category import Category
+from apps.backend.app.models.child_economy_config import ChildEconomyConfig
+from apps.backend.app.models.child_wish import ChildWish
+from apps.backend.app.models.child_wish_cost_history import ChildWishCostHistory
+from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
+from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.payment_record import PaymentRecord
+from apps.backend.app.models.skill_registry import SkillRegistry
+from apps.backend.app.models.tag import Tag
+from apps.backend.app.models.valuation import AssetValuation
+from apps.backend.app.models.wish import Wish
+from packages.db.models import CachedFile, FileRemoteLocation, StorageBackend
+from packages.db.models.ai_task import AITask
+from packages.db.models.asset_snapshot import AssetSnapshot
+from packages.db.models.currency import Currency
+from packages.db.models.device_session import DeviceSession
+from packages.db.models.exchange_rate import ExchangeRate
+from packages.db.models.family import Family
+from packages.db.models.notification_channel import NotificationChannel
+from packages.db.models.notification_channel_config import NotificationChannelConfig
+from packages.db.models.notification_config import NotificationConfig
+from packages.db.models.notification_subscription import NotificationSubscription
+from packages.db.models.reminder import Reminder
+from packages.db.models.reminder_notification import ReminderNotification
+from packages.db.models.revoked_token import RevokedToken
+from packages.db.models.security_audit_log import SecurityAuditLog
+from packages.db.models.user import User
 
 # Table insertion order (parents before children to satisfy FK constraints)
 TABLE_ORDER = [
@@ -206,7 +208,7 @@ def migrate_data():
         sys.exit(1)
 
     print(f"📦 SQLite: {sqlite_url}")
-    print(f"🐘 PostgreSQL: [credentials hidden]")
+    print("🐘 PostgreSQL: [credentials hidden]")
 
     src = sa.create_engine(sqlite_url)
     dst = sa.create_engine(pgsql_url)
@@ -226,7 +228,7 @@ def migrate_data():
     # Skip internal tables
     skip_tables = {"alembic_version"}
 
-    print(f"\n📊 Step 2: Migrating data in dependency order...")
+    print("\n📊 Step 2: Migrating data in dependency order...")
     total_rows = 0
     success_count = 0
     empty_count = 0
@@ -268,7 +270,7 @@ def migrate_data():
             converted_rows = []
             for row in rows:
                 converted_row = {}
-                for col_name, value in zip(common_cols, row):
+                for col_name, value in zip(common_cols, row, strict=True):
                     pg_type = pg_col_types.get(table_name, {}).get(col_name, "")
                     converted_row[col_name] = convert_value(value, pg_type, col_name)
                 converted_rows.append(converted_row)
@@ -281,15 +283,15 @@ def migrate_data():
             try:
                 with dst.begin() as dst_conn:
                     dst_conn.execute(text(insert_sql), converted_rows)
-                print(f" ✅")
+                print(" ✅")
                 total_rows += len(converted_rows)
                 success_count += 1
             except Exception as e:
-                print(f" ❌")
+                print(" ❌")
                 print(f"      Error: {e}")
                 error_count += 1
 
-    print(f"\n   📊 Summary:")
+    print("\n   📊 Summary:")
     print(f"      Success: {success_count} tables")
     print(f"      Empty: {empty_count} tables")
     print(f"      Error: {error_count} tables")

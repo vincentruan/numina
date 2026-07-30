@@ -114,7 +114,7 @@ const label = computed(() => t(`badges.dimensions.${props.dimension}`))
 
 .dim-section-label {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -135,7 +135,7 @@ const label = computed(() => t(`badges.dimensions.${props.dimension}`))
 
 .dim-next-label {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-body);
   margin: 0;
 }
@@ -146,7 +146,7 @@ const label = computed(() => t(`badges.dimensions.${props.dimension}`))
 
 .dim-next-criteria {
   font-family: Inter, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 2px 0 0;
 }
@@ -164,7 +164,7 @@ const label = computed(() => t(`badges.dimensions.${props.dimension}`))
   background: none;
   border: none;
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   cursor: pointer;

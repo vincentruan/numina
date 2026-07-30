@@ -1,11 +1,9 @@
 """Tests for seed_storage_backends — env-var driven storage backend seeding."""
-import pytest
 
+from apps.backend.app.config import settings
 from apps.backend.app.models.storage_backend import StorageBackend
 from apps.backend.app.seed.storage_backends import seed_storage_backends
 from apps.backend.app.services.storage.config_crypto import decrypt_config
-from apps.backend.app.config import settings
-
 
 # ---------------------------------------------------------------------------
 # Helpers

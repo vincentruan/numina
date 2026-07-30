@@ -150,7 +150,7 @@ def update_member_status(
 def list_members(db: Session, family_id: int) -> list[dict]:
     """List members for a family."""
     rows = (
-        db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+        db.query(User).filter(User.family_id == family_id, User.is_active).all()
     )
     return [
         {

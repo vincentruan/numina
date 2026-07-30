@@ -43,7 +43,7 @@ class GitHubStorageBackend(StorageBackend):
         remote_path = f"{date_dir}/{filename}"
         b64 = base64.b64encode(content).decode()
 
-        for attempt in range(3):
+        for _ in range(3):
             body: dict = {
                 "message": f"upload {filename}",
                 "content": b64,

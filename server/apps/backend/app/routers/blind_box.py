@@ -22,6 +22,7 @@ from apps.backend.app.schemas.blind_box import (
     BonusDrawCreate,
     BonusDrawResponse,
 )
+from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/blind-box", tags=["blind-box"])
 
@@ -202,7 +203,7 @@ def create_bonus_draw(
     child = db.query(User).filter_by(
         id=req.child_user_id,
         family_id=current_user.family_id,
-        role="child",
+        role=UserRole.CHILD,
         is_active=True,
     ).first()
     if not child:

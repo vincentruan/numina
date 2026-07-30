@@ -1,6 +1,5 @@
 """Policy schemas for capability access control."""
 
-from typing import Optional
 from pydantic import BaseModel
 
 

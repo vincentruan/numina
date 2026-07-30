@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from apps.backend.app.models.ai_extraction_audit import AIExtractionAudit
 from apps.backend.app.models.ai_extraction_circuit import AIExtractionCircuit
 from apps.backend.app.services.ai_extraction_circuit_service import (
-    AIExtractionCircuitService,
     CIRCUIT_OPEN_THRESHOLD,
     RATE_LIMIT_THRESHOLD,
+    AIExtractionCircuitService,
 )
 from apps.backend.app.utils.snowflake import next_id
 

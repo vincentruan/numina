@@ -1,7 +1,7 @@
 """Tests for the literacy badge evaluation service (U3)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -13,6 +13,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.services.literacy_badge import (
     _credit_badge_coins,
     _evaluate_with_llm,
+    _extract_text,
     _get_current_badge,
     _get_next_definition,
     _parse_unlock,
@@ -107,7 +108,7 @@ class TestGetCurrentBadge:
             id=next_id(),
             child_id=child.id,
             definition_id=defn.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -121,7 +122,7 @@ class TestGetCurrentBadge:
     def test_superseded_badge_returns_next_highest(self, db, child, definitions):
         d1 = definitions[("earning", 1)]
         d2 = definitions[("earning", 2)]
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         b1 = LiteracyBadge(
             id=next_id(),
             child_id=child.id,
@@ -147,7 +148,7 @@ class TestGetCurrentBadge:
 
     def test_all_superseded_returns_none(self, db, child, definitions):
         d1 = definitions[("earning", 1)]
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         b1 = LiteracyBadge(
             id=next_id(),
             child_id=child.id,
@@ -244,7 +245,7 @@ class TestEvaluateBadgeUnlocks:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(existing)
@@ -277,7 +278,7 @@ class TestEvaluateBadgeUnlocks:
                     id=next_id(),
                     child_id=child.id,
                     definition_id=d3.id,
-                    earned_at=datetime.now(tz=timezone.utc),
+                    earned_at=datetime.now(tz=UTC),
                     source="scenario",
                 )
             )
@@ -392,8 +393,8 @@ class TestEvaluateBadgeUnlocks:
                 id=next_id(),
                 child_id=child.id,
                 definition_id=d.id,
-                earned_at=datetime.now(tz=timezone.utc),
-                superseded_at=datetime.now(tz=timezone.utc) if level < 3 else None,
+                earned_at=datetime.now(tz=UTC),
+                superseded_at=datetime.now(tz=UTC) if level < 3 else None,
                 source="scenario",
             )
             db.add(badge)
@@ -439,7 +440,7 @@ class TestCreditBadgeCoins:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -469,7 +470,7 @@ class TestCreditBadgeCoins:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -493,7 +494,7 @@ class TestCreditBadgeCoins:
             id=next_id(),
             child_id=child.id,
             definition_id=d1.id,
-            earned_at=datetime.now(tz=timezone.utc),
+            earned_at=datetime.now(tz=UTC),
             source="scenario",
         )
         db.add(badge)
@@ -597,3 +598,34 @@ class TestEvaluateWithLlm:
                 context={},
             )
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# _extract_text
+# ---------------------------------------------------------------------------
+
+
+class TestExtractText:
+    def test_string_input_returns_as_is(self):
+        assert _extract_text("hello") == "hello"
+
+    def test_dict_with_content_key(self):
+        assert _extract_text({"content": "result"}) == "result"
+
+    def test_dict_with_text_key(self):
+        assert _extract_text({"text": "hello"}) == "hello"
+
+    def test_dict_with_data_key_recurses(self):
+        assert _extract_text({"data": {"content": "nested"}}) == "nested"
+
+    def test_dict_with_data_key_string(self):
+        assert _extract_text({"data": "direct"}) == "direct"
+
+    def test_non_string_non_dict_falls_back(self):
+        result = _extract_text(42)
+        assert "42" in result
+
+    def test_dict_no_matching_keys_falls_back(self):
+        result = _extract_text({"unknown_key": "val"})
+        # No recognized key -> json.dumps fallback
+        assert "unknown_key" in result

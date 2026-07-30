@@ -8,16 +8,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-import apps.backend.app.models  # noqa: F401 — registers all ORM models
+from datetime import datetime
+
+import apps.backend.app.models
 from apps.backend.app.database import SessionLocal
+from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
 from apps.backend.app.models.user import User
-from apps.backend.app.models.ai_provider_config import AIProviderConfig
-from apps.backend.app.services.auth import hash_password
 from apps.backend.app.services.ai_crypto import encrypt_api_key
+from apps.backend.app.services.auth import hash_password
 from packages.core.snowflake import next_id
-from datetime import datetime
 
 
 def seed_test_users(db):
@@ -30,7 +31,7 @@ def seed_test_users(db):
         ("DEMO-SPOUSE", "demouser spouse"),
     ]
 
-    for code, description in codes_data:
+    for code, _description in codes_data:
         existing = db.query(FamilyInvitationCode).filter_by(code=code).first()
         if not existing:
             db.add(FamilyInvitationCode(code=code))

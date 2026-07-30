@@ -5,8 +5,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from apps.agent.schemas.context import FamilyContext, RedactedContext
-from apps.agent.services.pii_redactor import PIIRedactor, _redact_free_text
+from apps.agent.schemas.context import FamilyContext
+from apps.agent.services.pii_redactor import PIIRedactor
 
 
 class TestPIIRedactorStructured:

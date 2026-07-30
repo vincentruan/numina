@@ -5,10 +5,8 @@ removed; only ``write_report_results`` remains. ``_validate_asset_ownership`` he
 was deleted with the trigger writers (it had no other callers).
 """
 
-import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from unittest.mock import MagicMock
 
 from apps.backend.app.database import Base
 from apps.backend.app.models.ai_report import AIReport
