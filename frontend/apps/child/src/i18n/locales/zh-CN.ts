@@ -106,6 +106,7 @@ export default {
     abandonConfirm: '放弃任务',
     abandonWishHint: '距离「{wishName}」还差 {remaining} ⭐，完成这个任务又近一步了 🌟',
     claimFailed: '认领没成功，任务可能已被认领',
+    swipeToComplete: '右滑完成',
     claimDisabledHistorical: '⏳ 历史任务无法认领',
     claimDisabledUnavailable: '🔒 当前状态无法认领',
     abandonFailed: '放弃没成功，请重试',

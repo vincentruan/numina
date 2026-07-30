@@ -5,7 +5,6 @@
 
     <!-- Actual content -->
     <template v-else>
-    <ChildInlineError v-model:visible="inlineError.visible" :message="inlineError.message" />
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -71,10 +70,28 @@
       <div
         v-for="chore in chores"
         :key="chore.id"
-        :ref="(el) => setChoreCardRef(chore.id, el as HTMLElement | null)"
-        class="chore-card"
-        :class="chore.status"
+        class="swipe-wrapper"
       >
+        <!-- Swipe-to-complete background indicator -->
+        <div
+          v-if="chore.status === 'available'"
+          class="swipe-bg-indicator"
+          :style="bgStyle(chore.id)"
+          aria-hidden="true"
+        >
+          <van-icon name="success" size="24" color="var(--color-on-dark)" />
+        </div>
+        <div
+          :ref="(el) => setChoreCardRef(chore.id, el as HTMLElement | null)"
+          class="chore-card"
+          :class="chore.status"
+          :style="cardStyle(chore.id)"
+          :aria-label="chore.status === 'available' ? t('chore.swipeToComplete') : undefined"
+          @touchstart="onSwipeStart(chore.id, $event)"
+          @touchmove="onSwipeMove(chore.id, $event)"
+          @touchend="onSwipeEnd(chore.id)"
+          @touchcancel="onSwipeEnd(chore.id)"
+        >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <CandleFlame
           v-if="chore.status === 'pending_approval' || candleStates[chore.id]"
@@ -124,6 +141,7 @@
           v-if="chore.is_pool_unclaimed && claimDisabledReason(chore)"
           class="claim-disabled-hint"
         >{{ claimDisabledReason(chore) }}</p>
+        </div>
       </div>
     </div>
 
@@ -238,7 +256,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
@@ -254,11 +272,11 @@ import http from '@/api/index'
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
+import { useSwipeComplete } from '@/composables/useSwipeComplete'
 import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
 import EmptyState from '@/components/EmptyState.vue'
-import ChildInlineError from '@/components/ChildInlineError.vue'
 import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
 import allDoneSvgRaw from '@/assets/empty-states/all-done.svg?raw'
 
@@ -286,11 +304,37 @@ const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
-const inlineError = ref({ visible: false, message: '' })
 
 // Balance polling via composable
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
 const reducedMotion = useReducedMotion()
+
+// Swipe-to-complete gesture (U3)
+const {
+  onStart: swipeOnStart,
+  onMove: swipeOnMove,
+  onEnd: swipeOnEnd,
+  cardStyle,
+  bgStyle,
+} = useSwipeComplete((id) => {
+  if (submittingId.value) return
+  complete(id)
+})
+
+function onSwipeStart(id: string, e: TouchEvent) {
+  const chore = chores.value.find(c => c.id === id)
+  if (!chore || chore.status !== 'available' || submittingId.value) return
+  swipeOnStart(id, e)
+}
+
+function onSwipeMove(id: string, e: TouchEvent) {
+  swipeOnMove(id, e)
+}
+
+function onSwipeEnd(id: string) {
+  if (submittingId.value) return
+  swipeOnEnd(id)
+}
 
 const allDone = computed(() =>
   chores.value.length > 0 && chores.value.every(c => c.status === 'approved'),
@@ -562,7 +606,7 @@ async function claim(instanceId: string) {
   } catch {
     // Revert optimistic update
     if (idx !== -1) chores.value[idx] = { ...chores.value[idx], is_pool_unclaimed: true }
-    inlineError.value = { visible: true, message: t('chore.claimFailed') }
+    showFailToast(t('chore.claimFailed'))
   } finally {
     claimingId.value = null
   }
@@ -583,7 +627,7 @@ async function doAbandon() {
     abandonSheetVisible.value = false
     abandonTarget.value = null
   } catch {
-    inlineError.value = { visible: true, message: t('chore.abandonFailed') }
+    showFailToast(t('chore.abandonFailed'))
     abandonTarget.value = null
   } finally {
     abandoningId.value = null
@@ -742,8 +786,29 @@ onUnmounted(() => {
 /* ── Chore list ── */
 .chore-list { display: flex; flex-direction: column; gap: 12px; }
 
+.swipe-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.swipe-bg-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-success);
+  z-index: 0;
+  pointer-events: none;
+}
+
 .chore-card {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
