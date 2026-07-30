@@ -1,11 +1,14 @@
 """Literacy weekly report orchestration service (U6).
 
 Orchestrates the end-to-end generation of a weekly literacy report for a child:
-builds context from signal aggregation, dispatches the agent for LLM narrative
-generation via SSE, and persists the result to ``LiteracyWeeklyReport``.
+dispatches the agent for LLM narrative generation via SSE (the agent calls MCP
+tools ``get_child_literacy_profile`` + ``get_literacy_weekly_data`` to fetch its
+own data — DeerFlow canonical skill pattern), and persists the result to
+``LiteracyWeeklyReport``.
 
-Idempotent: at most one report per (child_id, week_start). Calling
-``generate_literacy_report`` twice for the same week returns the existing row.
+Idempotent: at most one report per (child_id, week_start).  Calling
+``generate_literacy_report`` twice for the same week returns the existing row
+unless ``force=True`` is passed.
 """
 from __future__ import annotations
 
@@ -149,16 +152,28 @@ def get_report_status(
 
 
 async def _stream_report_sse(
-    *, family_id: int, user_id: int, context: dict, thread_id: str
+    *, family_id: int, user_id: int, child_id: int, week_start: date, thread_id: str
 ) -> bytes:
     """Call the agent gateway and collect SSE bytes.
 
     Endpoint: ``/internal/gateway/runs/literacy-weekly-report/{thread_id}``
 
+    Sends a synthetic trigger message with ``child_id`` and ``week_start``.
+    The agent's SKILL.md drives it to call MCP tools
+    (``get_child_literacy_profile``, ``get_literacy_weekly_data``) to fetch
+    its own data — the canonical DeerFlow skill pattern (no pre-aggregated
+    context injection).
+
     Returns the raw collected SSE bytes for downstream parsing.
     """
     agent_client = AgentClient(family_id=family_id, user_id=user_id, timeout=120.0)
     agent_url = f"/internal/gateway/runs/literacy-weekly-report/{thread_id}"
+
+    # Synthetic trigger — agent fetches data via MCP tools (DeerFlow pattern).
+    trigger = (
+        f"/literacy-weekly-report 请为孩子 {child_id} 生成"
+        f" {week_start.isoformat()} 起始周的周报"
+    )
 
     async with agent_client.stream(
         "POST",
@@ -168,7 +183,7 @@ async def _stream_report_sse(
             "user_id": str(user_id),
             "input": {
                 "messages": [
-                    {"role": "user", "content": json.dumps(context, ensure_ascii=False)}
+                    {"role": "user", "content": trigger}
                 ]
             },
         },
@@ -230,9 +245,15 @@ def _persist_report_result(
         logger.info("[literacy-report] no result frame in stream — not persisting")
         return None
 
-    # Build structured report JSON from the context signals
+    # Build structured report JSON with full data for audit/debugging.
+    thinking = report_payload.get("thinking", "") if report_payload else ""
     report_json = json.dumps(
-        {"week_start": week_start.isoformat(), "source": "agent_sse"},
+        {
+            "week_start": week_start.isoformat(),
+            "source": "agent_sse",
+            "narrative": narrative,
+            "thinking": thinking,
+        },
         ensure_ascii=False,
     )
 
