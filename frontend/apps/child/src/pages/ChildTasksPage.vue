@@ -1,7 +1,7 @@
 <template>
   <div class="chores-page">
-    <!-- Clay-pulse loading state -->
-    <RoleShimmer v-if="loading && !refreshing && chores.length === 0" variant="clay-pulse" />
+    <!-- Skeleton during initial load -->
+    <ChildTasksSkeleton v-if="loading && !refreshing && chores.length === 0" />
 
     <!-- Actual content -->
     <template v-else>
@@ -235,7 +235,7 @@
 defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
-import RoleShimmer from '@/components/RoleShimmer.vue'
+import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { getUser } from '@numina/auth'
@@ -475,6 +475,11 @@ async function pollForApproval(instanceId: string) {
     try {
       const res = await http.get<{ status: string }>(`/child/chores/${instanceId}/status`)
       if (res.data.status === 'approved') {
+        // Update chores ref so watch(chores) triggers checkAndTriggerCelebration
+        const idx = chores.value.findIndex(c => c.id === instanceId)
+        if (idx !== -1) {
+          chores.value[idx] = { ...chores.value[idx], status: 'approved' }
+        }
         await checkAutoDraw()
         return
       }
