@@ -2,6 +2,9 @@
   <div class="settings-page">
     <PageHeader :title="t('settings.title')" :show-back="false" />
 
+    <!-- Invite tooltip (shown once for owners on first visit) -->
+    <div v-if="showInviteTip" class="feature-tip">{{ t('featureHints.settingsInvite') }}</div>
+
     <!-- 账户信息 -->
     <van-cell-group inset :title="t('settings.accountInfo')">
       <van-cell
@@ -202,6 +205,11 @@
       <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
     </van-cell-group>
 
+    <!-- 引导 -->
+    <van-cell-group inset class="section">
+      <van-cell :title="t('settings.replayOnboarding')" icon="guide-o" is-link @click="onReplayOnboarding" />
+    </van-cell-group>
+
     <div class="actions">
       <van-button block type="danger" plain @click="onLogout">
         {{ t('settings.logout') }}
@@ -316,6 +324,7 @@ import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
 import { updateSettings } from '@/api/auth'
 import { getFamilySettings, updateFamilySettings } from '@/api/family'
+import { isGuideDone, markGuideDone, clearAllGuideKeys } from '@/utils/storage'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
@@ -339,6 +348,9 @@ const { notifyConfigChange, markFamilySnapshot } = useMemberNotify()
 // Vue 3 fires both onMounted and onActivated on first mount inside <KeepAlive>.
 // onMounted handles initial load; onActivated only refreshes on reactivation.
 let hasActivated = false
+
+// Invite tooltip: show for owners who haven't dismissed it
+const showInviteTip = ref(false)
 
 onMounted(async () => {
   // Restart loading indicator for async data loading (router will auto-complete after 100ms)
@@ -366,6 +378,11 @@ onMounted(async () => {
     localStorage.setItem('theme-primary', savedColor)  // sync localStorage with server
     document.documentElement.style.setProperty('--theme-primary', savedColor)
     document.documentElement.style.setProperty('--van-primary-color', savedColor)
+  }
+  // Show invite tooltip for owners on first visit
+  if (!isGuideDone('tip_settings-invite') && authStore.user?.role === 'owner') {
+    showInviteTip.value = true
+    setTimeout(() => { showInviteTip.value = false; markGuideDone('tip_settings-invite') }, 3000)
   }
 })
 
@@ -580,6 +597,11 @@ async function selectThemeColor(color: string) {
   }
 }
 
+function onReplayOnboarding() {
+  clearAllGuideKeys()
+  router.push('/')
+}
+
 async function onLogout() {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('settings.logoutConfirm') })
@@ -666,5 +688,27 @@ async function onLogout() {
   /* Use inline-block for fallback vertical-align (works in non-flex contexts) */
   display: inline-block;
   vertical-align: middle;
+}
+
+/* Feature tooltip (auto-dismiss, non-interactive) */
+.feature-tip {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 13px;
+  border-bottom: 1px solid var(--separator);
+  pointer-events: none;
+  animation: feature-tip-fade 3s ease-in-out forwards;
+}
+
+@keyframes feature-tip-fade {
+  0% { opacity: 0; transform: translateY(-4px); }
+  10% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
 }
 </style>

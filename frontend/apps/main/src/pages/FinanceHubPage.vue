@@ -86,6 +86,7 @@ import { useWishStore } from '@/stores/wish'
 import { useCurrency } from '@/composables/useCurrency'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useGestureHint } from '@/composables/useGestureHint'
 
 defineOptions({ name: 'FinanceHub' })
 
@@ -96,6 +97,8 @@ const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
 const currency = useCurrency()
 const { increment, decrement } = usePageLoading()
+const assetGesture = useGestureHint('asset-longpress', { target: '.asset-list-item:first-child', type: 'long-press-pulse' })
+const liabilityGesture = useGestureHint('liability-swipe', { target: '.liability-card:first-child', type: 'swipe-left' })
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false
@@ -139,6 +142,12 @@ const debtWishHint = computed(() => {
     wish: candidate.name,
     months: delayedMonths,
   })
+})
+
+// --- Gesture hints: trigger when respective tabs become active ---
+watch(activeTab, (tab) => {
+  if (tab === 'assets' && overview.value?.asset_count) assetGesture.trigger()
+  if (tab === 'liabilities') liabilityGesture.trigger()
 })
 
 // --- ?tab= contract (KTD-1/U3): honor deep-link tab selection ---
