@@ -152,7 +152,7 @@ async function onDelete(server: MCPServer) {
 async function onToggle(server: MCPServer, enabled: boolean) {
   await updateMCPServer(server.id, { is_enabled: enabled })
   server.is_enabled = enabled
-  showToast(enabled ? t('toast.enabled') : t('toast.disabled'))
+  showSuccessToast(enabled ? t('toast.enabled') : t('toast.disabled'))
 }
 
 function onTransportConfirm({ selectedValues }: { selectedValues: string[] }) {

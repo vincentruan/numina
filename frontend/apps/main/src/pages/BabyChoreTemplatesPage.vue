@@ -102,7 +102,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import {
@@ -170,11 +170,11 @@ async function onToggle(template: ChoreTemplate) {
 
   try {
     await toggleChoreTemplate(template.id, template.is_active)
-    showToast(t('choreTemplate.toggleSuccess'))
+    showSuccessToast(t('choreTemplate.toggleSuccess'))
   } catch {
     // Rollback
     template.is_active = prevActive
-    showToast(t('choreTemplate.toggleFailed'))
+    showFailToast(t('choreTemplate.toggleFailed'))
   } finally {
     togglingId.value = null
   }
@@ -199,7 +199,7 @@ async function executeDeleteTemplate() {
 
   try {
     await deleteChoreTemplate(template.id)
-    showToast(t('choreTemplate.deleteSuccess'))
+    showSuccessToast(t('choreTemplate.deleteSuccess'))
   } catch {
     // Re-add on failure
     if (idx >= 0) {

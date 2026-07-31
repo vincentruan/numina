@@ -399,7 +399,7 @@ async function onSave() {
     router.back()
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
-    showToast(msg)
+    showFailToast(msg)
   } finally {
     saving.value = false
   }

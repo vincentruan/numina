@@ -2,7 +2,7 @@
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog, showSuccessToast } from 'vant'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
@@ -25,7 +25,7 @@ onMounted(() => {
 
 async function handleToggle(agent: Agent, enabled: boolean) {
   await agentStore.toggleAgentEnabled(agent.id, enabled)
-  showToast(enabled ? t('toast.agentToggleEnabled') : t('toast.agentToggleDisabled'))
+  showSuccessToast(enabled ? t('toast.agentToggleEnabled') : t('toast.agentToggleDisabled'))
 }
 
 async function handleDelete(agent: Agent) {
@@ -33,7 +33,7 @@ async function handleDelete(agent: Agent) {
     title: t('agents.form.deleteConfirm'),
   })
   await agentStore.removeAgent(agent.id)
-  showToast(t('agents.form.deleteSuccess'))
+  showSuccessToast(t('agents.form.deleteSuccess'))
 }
 </script>
 

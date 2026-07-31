@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@numina/auth'
 import draggable from 'vuedraggable'
@@ -91,10 +91,10 @@ async function handleToggle(provider: WebSearchProvider) {
   try {
     if (provider.is_enabled) {
       await disableWebSearchProvider(provider.id)
-      showToast(t('webSearch.disableSuccess'))
+      showSuccessToast(t('webSearch.disableSuccess'))
     } else {
       await enableWebSearchProvider(provider.id)
-      showToast(t('webSearch.enableSuccess'))
+      showSuccessToast(t('webSearch.enableSuccess'))
     }
     await load()
   } catch {
@@ -117,10 +117,10 @@ async function onDragEnd() {
   isReordering.value = true
   try {
     await reorderWebSearchProviders(newOrder)
-    showToast(t('webSearch.reorderSuccess'))
+    showSuccessToast(t('webSearch.reorderSuccess'))
     await load() // Refresh to confirm
   } catch {
-    showToast(t('webSearch.reorderFailed'))
+    showFailToast(t('webSearch.reorderFailed'))
     await load() // Reload to restore correct state
   } finally {
     isReordering.value = false
