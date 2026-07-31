@@ -297,6 +297,7 @@ import { useTrackableClauses } from '@/composables/useTrackableClauses'
 import { useSwipeComplete } from '@/composables/useSwipeComplete'
 import { tryVibrate } from '@/composables/useHaptic'
 import { useStepGuide } from '@/composables/useStepGuide'
+import { shouldShowChildGuide, recordChildGuideShown, recordChildGuideAttempt, recordChildGuideCompletion } from '@/composables/useGuideTrigger'
 import StepGuideOverlay from '@/components/common/StepGuideOverlay.vue'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
@@ -364,6 +365,9 @@ const reducedMotion = useReducedMotion()
 const { hasTrackable, init: initTrackable } = useTrackableClauses()
 
 // Step guide onboarding
+const CHILD_GUIDE_VERSION = 1
+let childConfig: Awaited<ReturnType<typeof shouldShowChildGuide>>['config'] | null = null
+
 const guideSteps = computed(() => {
   const hasChores = chores.value.length > 0
   return [
@@ -381,7 +385,23 @@ const guideSteps = computed(() => {
     },
   ]
 })
-const guide = useStepGuide({ key: 'guide_child-onboarding-v1', steps: guideSteps.value })
+const guide = useStepGuide({
+  key: 'guide_child-onboarding-v1',
+  steps: guideSteps.value,
+  onComplete: async () => {
+    if (childConfig) await recordChildGuideCompletion(childConfig, CHILD_GUIDE_VERSION)
+  },
+})
+
+async function maybeShowChildOnboarding() {
+  const result = await shouldShowChildGuide(CHILD_GUIDE_VERSION)
+  if (!result.shouldShow) return
+
+  childConfig = result.config
+  recordChildGuideShown()
+  await recordChildGuideAttempt(result.config)
+  guide.start()
+}
 
 // Swipe-to-complete gesture (U3)
 const {
@@ -734,8 +754,8 @@ onMounted(async () => {
     checkAndTriggerCelebration(chores.value)
     // Scroll to highlighted chore from homepage
     scrollToHighlight()
-    // Start onboarding guide
-    guide.start()
+    // Start onboarding guide (server-side trigger logic)
+    maybeShowChildOnboarding()
   } finally {
     decrement()
   }
