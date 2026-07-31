@@ -27,7 +27,8 @@ export default {
     netWorth: '净资产',
     totalAssets: '总资产',
     totalLiabilities: '总负债',
-    monthsSuffix: '+{months}月'
+    monthsSuffix: '+{months}月',
+    submit: 'Submit',
   },
   nav: {
     dashboard: 'Dashboard',
@@ -3348,6 +3349,15 @@ export default {
     majorHint: 'All family members need to re-sign',
     publishSuccess: 'Manifesto published',
     pendingSign: 'Pending',
+    manifestoUpdated: 'Family manifesto updated',
+    signPage: 'Sign Manifesto',
+    scrollToSign: 'Please scroll to bottom to sign',
+    waitTimer: 'Please read the manifesto carefully',
+    confirmSignBtn: 'Confirm Sign',
+    signSuccess: 'Signed successfully',
+    feedbackTitle: 'I have thoughts',
+    feedbackPlaceholder: 'Write your thoughts and suggestions...',
+    feedbackSuccess: 'Feedback submitted',
   },
   bottomSheet: {
     impactLabel: 'Impact Preview',

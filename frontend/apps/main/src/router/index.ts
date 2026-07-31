@@ -383,6 +383,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          path: 'manifesto/sign',
+          name: 'ManifestoSign',
+          component: () => import('@/pages/ManifestoSignPage.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
           path: 'manifesto/preview',
           name: 'ManifestoPreview',
           component: () => import('@/pages/ManifestoPreviewPage.vue'),

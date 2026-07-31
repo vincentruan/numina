@@ -28,6 +28,7 @@ export default {
     totalAssets: '总资产',
     totalLiabilities: '总负债',
     monthsSuffix: '+{months}月',
+    submit: '提交',
   },
   model: {
     selectTitle: '选择模型',
@@ -3376,6 +3377,15 @@ export default {
     majorHint: '所有家庭成员需要重新签署',
     publishSuccess: '约定发布成功',
     pendingSign: '待签署',
+    manifestoUpdated: '家庭约定已更新',
+    signPage: '签署约定',
+    scrollToSign: '请滚动到底部后签署',
+    waitTimer: '请仔细阅读约定内容',
+    confirmSignBtn: '确认签署',
+    signSuccess: '签署成功',
+    feedbackTitle: '我有想法',
+    feedbackPlaceholder: '写下你的想法和建议...',
+    feedbackSuccess: '反馈提交成功',
   },
   bottomSheet: {
     impactLabel: '影响预览',

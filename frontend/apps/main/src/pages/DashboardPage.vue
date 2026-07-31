@@ -45,6 +45,14 @@
 
     <!-- New User Onboarding Overlay -->
     <OnboardingOverlay :visible="showOnboarding" @complete="onOnboardingComplete" />
+
+    <!-- Manifesto Signing Popup (P1-2 non-blocking notification) -->
+    <ManifestoSigningPopup
+      :visible="showManifestoPopup"
+      :manifesto-title="unsignedManifestoTitle"
+      @update:visible="(val: boolean) => showManifestoPopup = val"
+      @navigate="onManifestoNavigate"
+    />
   </div>
 </template>
 
@@ -71,6 +79,8 @@ import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSect
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
 import LiteracyStatusCard from '@/components/dashboard/LiteracyStatusCard.vue'
+import ManifestoSigningPopup from '@/components/manifesto/ManifestoSigningPopup.vue'
+import * as manifestoApi from '@/api/manifesto'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -92,6 +102,27 @@ const upcomingPayments = ref<UpcomingPaymentItem[]>([])
 
 // Onboarding overlay
 const showOnboarding = ref(false)
+
+// Manifesto signing popup
+const showManifestoPopup = ref(false)
+const unsignedManifestoTitle = ref('')
+
+async function checkUnsignedManifesto() {
+  try {
+    const res = await manifestoApi.getUnsignedCheck()
+    if (res.data.has_unsigned && res.data.title) {
+      unsignedManifestoTitle.value = res.data.title
+      showManifestoPopup.value = true
+    }
+  } catch {
+    // Non-critical: silently ignore
+  }
+}
+
+function onManifestoNavigate() {
+  showManifestoPopup.value = false
+  router.push('/manifesto/sign')
+}
 
 function onOnboardingComplete() {
   showOnboarding.value = false
@@ -143,6 +174,8 @@ onMounted(async () => {
     ])
     // Passive check: notify if family state changed since last snapshot.
     checkFamilyChanges()
+    // Check for unsigned manifesto
+    checkUnsignedManifesto()
   } finally {
     decrement()
   }
@@ -169,6 +202,8 @@ onActivated(async () => {
     ])
     // Passive check: notify if family state changed since last snapshot.
     checkFamilyChanges()
+    // Check for unsigned manifesto
+    checkUnsignedManifesto()
   } finally {
     decrement()
   }

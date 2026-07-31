@@ -29,6 +29,10 @@ const props = withDefaults(defineProps<{
   penColor: 'var(--color-ink)',
 })
 
+const emit = defineEmits<{
+  draw: []
+}>()
+
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
 let drawing = false
@@ -103,6 +107,7 @@ function onPointerMove(e: PointerEvent) {
   lastY = pos.y
   lastTime = now
   hasDrawn = true
+  emit('draw')
 }
 
 function onPointerUp(e: PointerEvent) {
