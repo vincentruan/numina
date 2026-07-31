@@ -9,7 +9,10 @@ applies_when:
   - Reorganizing documentation structure across server modules
   - Adding invariant or pitfall sections to CLAUDE.md
 tags: [documentation, claude-md, naming-convention, module-guidance]
+last_refreshed: 2026-07-31
 ---
+
+> **Update (2026-07-31):** Since this doc was written (2026-05-14), the following additional modules have been added, each with their own CLAUDE.md: `server/packages/core`, `server/packages/security`, `server/packages/storage`, `server/packages/db`, `frontend/packages`, `site`, `frontend/apps/child`, `frontend/apps/main`. The naming convention still applies — match existing section names in each module.
 
 # CLAUDE.md Section Naming Convention
 

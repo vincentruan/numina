@@ -21,6 +21,8 @@ tags: [eslint, prettier, vue3, typescript, ruff, mypy, pydantic, fastapi, monore
 
 Numina is a monorepo with two top-level modules: `frontend/` (Vue 3 + TypeScript + Vite) and `server/` (Python — `server/apps/backend/` FastAPI + SQLAlchemy, `server/apps/agent/` DeerFlow). The repo had no linting, formatting, or type-check tooling configured — root `CLAUDE.md` said "match existing style." This made code review noisy and style inconsistent across contributors.
 
+> **Note (2026-07-31):** Frontend config paths updated — `frontend/eslint.config.js` → `frontend/apps/main/eslint.config.js`, `frontend/.prettierrc` → `frontend/apps/main/.prettierrc`, `frontend/package.json` → `frontend/apps/main/package.json`. The frontend is now a multi-app workspace; tooling configs live in each app, not the workspace root.
+
 > **Note (2026-05-14):** Phase 2 consolidated `backend/` and `agent/` into `server/apps/backend/` and `server/apps/agent/`. Path references below have been updated accordingly.
 
 The solution: module-level tooling (each module owns its own dev-experience config) plus module-level `CLAUDE.md` delta docs that tell contributors exactly how to run quality checks inside that module.
@@ -36,7 +38,7 @@ npm install --save-dev \
   eslint-plugin-vue prettier eslint-config-prettier globals
 ```
 
-**Create `frontend/eslint.config.js`:**
+**Create `frontend/apps/main/eslint.config.js`:**
 ```js
 import js from '@eslint/js'
 import pluginVue from 'eslint-plugin-vue'
@@ -78,7 +80,7 @@ export default tseslint.config(
 )
 ```
 
-**Create `frontend/.prettierrc`:**
+**Create `frontend/apps/main/.prettierrc`:**
 ```json
 {
   "singleQuote": true,
@@ -89,7 +91,7 @@ export default tseslint.config(
 }
 ```
 
-**Add npm scripts to `frontend/package.json`:**
+**Add npm scripts to `frontend/apps/main/package.json`:**
 ```json
 "lint":      "eslint src",
 "lint:fix":  "eslint src --fix",

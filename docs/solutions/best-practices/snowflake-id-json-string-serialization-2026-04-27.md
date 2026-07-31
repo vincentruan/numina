@@ -10,6 +10,7 @@ applies_when:
   - Any endpoint returning Snowflake (BigInteger) IDs in JSON responses consumed by JavaScript/TypeScript
 tags: [snowflake-id, json-serialization, javascript-precision, pydantic, biginteger, api-boundary]
 related_components: [authentication, frontend_stimulus]
+last_refreshed: 2026-07-31
 ---
 
 # Snowflake IDs Must Be Serialized as Strings at the JSON Boundary
@@ -37,7 +38,7 @@ class SnowflakeBase(BaseModel):
     model_config = {"from_attributes": True}
 
     @model_serializer(mode="wrap")
-    def _serialize_ids(self, handler: Any) -> dict:
+    def _serialize_snowflake_ids(self, handler: Any) -> dict:
         data = handler(self)
         return {
             k: str(v) if isinstance(v, int) and (k == "id" or k.endswith("_id")) else v
@@ -123,8 +124,10 @@ JS silently rounds large integers. `9007199254740993` becomes `9007199254740992`
 ```
 
 **Known affected fields at time of writing** (session history):
-- `BlindBoxGiftResponse.source_wish_id` — still needs string serialization fix
+- ~~`BlindBoxGiftResponse.source_wish_id`~~ — **resolved**: the schema now inherits `SnowflakeBase` which auto-converts all `_id` fields to `str` during serialization
 - `DeviceSession` device management endpoints (`GET /auth/devices`) — `device_id` must be string in response
+
+> **Update (2026-07-31) — UTC datetime normalization:** `SnowflakeBase` now also attaches `+00:00` to tz-naive datetimes during serialization. This ensures all datetime fields in API responses include an explicit UTC offset, preventing frontend misinterpretation of naive timestamps as local time.
 
 ## Related
 

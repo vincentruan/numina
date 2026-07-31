@@ -7,6 +7,7 @@ problem_type: best_practice
 component: logging
 severity: medium
 tags: [logging, log-rotation, log-config, log-archival, log-cleanup, log-retention]
+last_refreshed: 2026-07-31
 ---
 
 # Numina 日志配置最佳实践
@@ -101,7 +102,7 @@ logs/
 | `LOG_MAX_BYTES` | `10485760`（10MB） | 按大小轮转时单文件最大字节数 |
 | `LOG_BACKUP_COUNT` | `10` | 保留的轮转备份文件数量 |
 | `LOG_ROTATION_MODE` | `"size"` | 轮转模式：`"size"` 或 `"time"` |
-| `LOG_FORMAT` | `"%(asctime)s - %(name)s - %(levelname)s - %(message)s"` | 日志格式字符串 |
+| `LOG_FORMAT` | `str | None = None` | 日志格式字符串。为 `None` 时使用内置默认格式 |
 | `LOG_RETENTION_DAYS` | `30` | 日志文件保留天数 |
 
 **示例场景：**
@@ -154,6 +155,7 @@ async def lifespan(app: FastAPI):
         backup_count=settings.LOG_BACKUP_COUNT,
         rotation_mode=settings.LOG_ROTATION_MODE,
         retention_days=settings.LOG_RETENTION_DAYS,
+        log_format=settings.LOG_FORMAT,
     )
     yield
 

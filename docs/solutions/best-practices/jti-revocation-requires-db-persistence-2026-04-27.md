@@ -11,6 +11,7 @@ applies_when:
   - Any security state that must survive server restarts
 tags: [jwt, jti-revocation, token-security, persistence, server-restart, auth-security]
 related_components: [database, background_job]
+last_refreshed: 2026-07-31
 ---
 
 # JTI Revocation Must Be Persisted to Database, Not Held In-Memory
@@ -20,6 +21,8 @@ related_components: [database, background_job]
 The original auth implementation stored revoked JTIs in in-memory dicts (`_revoked_jtis`, `_user_revocation_times`) in `server/apps/backend/app/auth/deps.py`. This works perfectly in development and single-process testing. The failure mode only appears in production: after any server restart or redeploy, the in-memory state is lost and previously revoked tokens become valid again.
 
 A user who logs out (revoking their JTI) can have their token reused by an attacker who captured it — after the next server restart, the revocation is gone. This is a security boundary failure, not a data consistency issue.
+
+> **Update (2026-07-31):** The implementation has moved from `app/auth/deps.py` to `server/packages/security/revoke_jti.py`. The old `deps.py` is now a re-export shim that imports from the new location. The function signature has changed to `revoke_jti(jti, ttl_seconds)` — it now manages its own DB session internally, so callers no longer pass a `db` parameter. Two new functions have been added: `revoke_jti_atomic()` for atomic single-JTI revocation, and `revoke_all_user_tokens()` for bulk user-level revocation. The `RevokedToken` model's `jti` and `user_id` columns are now both nullable, supporting the distinction between single-JTI revocation (jti set, user_id nullable) and user-level revocation (user_id set, jti nullable).
 
 ## Guidance
 
@@ -32,8 +35,8 @@ class RevokedToken(Base):
     __tablename__ = "revoked_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    jti: Mapped[str] = mapped_column(unique=True, index=True)   # single token
-    user_id: Mapped[str] = mapped_column(index=True)            # user-level revocation
+    jti: Mapped[str | None] = mapped_column(unique=True, index=True, nullable=True)   # single token; nullable for user-level revocations
+    user_id: Mapped[str | None] = mapped_column(index=True, nullable=True)            # user-level revocation; nullable for single-JTI revocations
     revoked_at: Mapped[float] = mapped_column()                 # Unix timestamp
     expires_at: Mapped[float] = mapped_column(index=True)       # for cleanup
 
@@ -42,7 +45,7 @@ class RevokedToken(Base):
     )
 ```
 
-**Revocation functions** (`server/apps/backend/app/auth/deps.py`):
+**Revocation functions** (`server/packages/security/revoke_jti.py`, re-exported from `server/apps/backend/app/auth/deps.py`):
 
 ```python
 # Before — lost on restart
@@ -52,11 +55,18 @@ _user_revocation_times: dict[str, float] = {}
 def revoke_jti(jti: str, expiry: float) -> None:
     _revoked_jtis[jti] = expiry
 
-# After — survives restart
-def revoke_jti(jti: str, user_id: str, expires_at: float, db: Session) -> None:
-    db.add(RevokedToken(jti=jti, user_id=user_id,
-                        revoked_at=time.time(), expires_at=expires_at))
-    db.commit()
+# After — survives restart (current signature; self-managed DB session)
+def revoke_jti(jti: str, ttl_seconds: int) -> None:
+    """Persist a single-JTI revocation. Creates its own DB session."""
+    ...
+
+def revoke_jti_atomic(jti: str, ttl_seconds: int) -> None:
+    """Atomic single-JTI revocation with transactional guarantees."""
+    ...
+
+def revoke_all_user_tokens(user_id: str, ttl_seconds: int) -> None:
+    """User-level revocation — invalidates all tokens for a user."""
+    ...
 
 def is_token_revoked(jti: str, user_id: str, issued_at: float, db: Session) -> bool:
     # Check user-level revocation first (faster — one row covers all tokens)
@@ -118,6 +128,8 @@ def logout(token_jti: str):
 **Safe** — persisted to DB:
 ```python
 def logout(token_jti: str, user_id: str, expires_at: float, db: Session):
+    # NOTE: legacy signature shown above. Current API: revoke_jti(jti, ttl_seconds)
+    # in server/packages/security/revoke_jti.py (self-managed DB session).
     db.add(RevokedToken(jti=token_jti, user_id=user_id,
                         revoked_at=time.time(), expires_at=expires_at))
     db.commit()
