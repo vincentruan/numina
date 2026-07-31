@@ -81,7 +81,8 @@ defineOptions({ name: 'Dashboard' })
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useMemberNotify } from '@/composables/useMemberNotify'
 import { useStepGuide, type StepGuideStep } from '@/composables/useStepGuide'
-import { migrateOldOnboardingKey } from '@/utils/storage'
+import { getUserConfig, type UserConfigValues } from '@/api/config'
+import { shouldShowGuide, recordGuideShown, recordGuideAttempt, recordGuideCompletion } from '@/composables/useGuideTrigger'
 
 import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
@@ -141,7 +142,33 @@ const guideSteps = computed<StepGuideStep[]>(() => [
   },
 ])
 
-const guide = useStepGuide({ key: 'guide_main-onboarding-v2', steps: guideSteps.value })
+const GUIDE_VERSION = 2
+let userConfig: UserConfigValues | null = null
+
+const guide = useStepGuide({
+  key: 'guide_main-onboarding-v2',
+  steps: guideSteps.value,
+  onComplete: async () => {
+    if (userConfig) await recordGuideCompletion(userConfig, GUIDE_VERSION)
+  },
+})
+
+async function maybeShowOnboarding() {
+  if (router.currentRoute.value.path !== '/') return
+  if (!userConfig) {
+    try {
+      const res = await getUserConfig()
+      userConfig = res.data
+    } catch {
+      return
+    }
+  }
+  const { shouldShow } = shouldShowGuide(userConfig, GUIDE_VERSION)
+  if (!shouldShow) return
+  recordGuideShown()
+  await recordGuideAttempt(userConfig)
+  guide.start()
+}
 
 // Manifesto signing popup
 const showManifestoPopup = ref(false)
@@ -162,12 +189,6 @@ async function checkUnsignedManifesto() {
 function onManifestoNavigate() {
   showManifestoPopup.value = false
   router.push('/manifesto/sign')
-}
-
-function maybeShowOnboarding() {
-  migrateOldOnboardingKey()
-  if (router.currentRoute.value.path !== '/') return
-  guide.start()
 }
 
 // Smart-reminder status taps now deep-link into the finance assets tab (the full

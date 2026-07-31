@@ -19,6 +19,9 @@ export interface FamilyConfigValues {
 export interface UserConfigValues {
   dashboard_trend_period: string
   activity_feed_page_size: number
+  onboarding_guide_version: number
+  onboarding_attempts: number
+  onboarding_completions: number
 }
 
 export interface SettingDefinition {
