@@ -1,15 +1,15 @@
 <template>
   <van-tabbar :model-value="activeTab" class="app-tabbar" :z-index="1000" @change="onTabChange">
-    <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
-    <van-tabbar-item name="finance" icon="balance-o">{{ t('nav.finance') }}</van-tabbar-item>
-    <van-tabbar-item name="ai" :aria-label="t('settings.aiAssistant')">
+    <van-tabbar-item name="dashboard" data-tab="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
+    <van-tabbar-item name="finance" data-tab="finance" icon="balance-o">{{ t('nav.finance') }}</van-tabbar-item>
+    <van-tabbar-item name="ai" data-tab="ai" :aria-label="t('settings.aiAssistant')">
       <template #icon="{ active: isActive }">
         <AIBrainIcon :active="isActive" />
       </template>
       {{ t('nav.ai') }}
     </van-tabbar-item>
-    <van-tabbar-item v-if="isOwner" name="baby" icon="friends-o">{{ t('nav.baby') }}</van-tabbar-item>
-    <van-tabbar-item name="settings" icon="setting-o">{{ t('nav.settings') }}</van-tabbar-item>
+    <van-tabbar-item v-if="isOwner" name="baby" data-tab="baby" icon="friends-o">{{ t('nav.baby') }}</van-tabbar-item>
+    <van-tabbar-item name="settings" data-tab="settings" icon="setting-o">{{ t('nav.settings') }}</van-tabbar-item>
   </van-tabbar>
 </template>
 
