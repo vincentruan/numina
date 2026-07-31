@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { clearAllGuideKeys, migrateOldOnboardingKey, isGuideDone, markGuideDone } from '../storage'
+import { clearLegacyOnboardingKeys, isGuideDone, markGuideDone } from '../storage'
 
 describe('guide storage helpers', () => {
   beforeEach(() => {
@@ -17,32 +17,13 @@ describe('guide storage helpers', () => {
     })
   })
 
-  describe('migrateOldOnboardingKey', () => {
-    it('returns false when no old key exists', () => {
-      expect(migrateOldOnboardingKey()).toBe(false)
-    })
-
-    it('migrates old key to new key and returns true', () => {
-      localStorage.setItem('onboarding_completed', 'true')
-      const migrated = migrateOldOnboardingKey()
-      expect(migrated).toBe(true)
-      expect(localStorage.getItem('guide_main-onboarding-v2')).toBe('done')
-    })
-
-    it('does not set new key if old key is not "true"', () => {
-      localStorage.setItem('onboarding_completed', 'false')
-      migrateOldOnboardingKey()
-      expect(localStorage.getItem('guide_main-onboarding-v2')).toBeNull()
-    })
-  })
-
-  describe('clearAllGuideKeys', () => {
+  describe('clearLegacyOnboardingKeys', () => {
     it('removes all guide_/gesture_/tip_ prefixed keys', () => {
       localStorage.setItem('guide_test', 'done')
       localStorage.setItem('gesture_test', 'done')
       localStorage.setItem('tip_test', 'done')
       localStorage.setItem('other_key', 'keep')
-      clearAllGuideKeys()
+      clearLegacyOnboardingKeys()
       expect(localStorage.getItem('guide_test')).toBeNull()
       expect(localStorage.getItem('gesture_test')).toBeNull()
       expect(localStorage.getItem('tip_test')).toBeNull()
@@ -51,7 +32,7 @@ describe('guide storage helpers', () => {
 
     it('removes legacy onboarding_completed key', () => {
       localStorage.setItem('onboarding_completed', 'true')
-      clearAllGuideKeys()
+      clearLegacyOnboardingKeys()
       expect(localStorage.getItem('onboarding_completed')).toBeNull()
     })
   })

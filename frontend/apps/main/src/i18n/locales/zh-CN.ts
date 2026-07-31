@@ -1695,6 +1695,7 @@ export default {
     familyAdvancedConfig: '家庭高级设置',
     debtThresholds: '债务预警阈值',
     userAdvancedConfig: '个人偏好设置',
+    replayOnboarding: '重新播放新手引导',
   },
   changePassword: {
     title: '账户密码',
@@ -2418,20 +2419,27 @@ export default {
 
   onboarding: {
     step1: {
-      title: '家庭资产全貌',
-      desc: '这里展示您家庭的资产和负债概览',
+      empty: { title: '欢迎来到 Numina', desc: '这里是你的家庭资产全貌' },
+      data: { title: '家庭资产全貌', desc: '这里展示您家庭的净资产、总资产和总负债' },
     },
-    step2: {
-      title: '添加资产',
-      desc: '点击这里添加第一笔资产',
-    },
-    step3: {
-      title: '邀请家人',
-      desc: '在设置中邀请家人一起管理',
-    },
+    step2: { title: '管理资产与负债', desc: '点击这里管理您的资产、负债和心愿' },
+    step3: { title: '邀请家人一起', desc: '在设置中创建或加入家庭，邀请家人共同管理' },
     skip: '跳过',
     next: '下一步',
     done: '完成',
+  },
+  childOnboarding: {
+    step1: {
+      empty: { title: '你的家务任务', desc: '这里会显示你的家务任务，完成后就能获得奖励' },
+      data: { title: '你的任务列表', desc: '完成家务就能获得奖励' },
+    },
+    step2: { title: '我的奖励', desc: '积攒奖励，兑换心愿' },
+  },
+  featureHints: {
+    assetLongPress: '长按资产可快捷操作（编辑/出售/标记闲置）',
+    liabilitySwipe: '左滑负债卡片可删除',
+    aiFirst: 'AI 教练随时为您解答财务问题',
+    settingsInvite: '邀请家人加入，一起管理家庭资产',
   },
   importReport: {
     uploadTitle: '上传金融账单 PDF',
@@ -3323,6 +3331,11 @@ export default {
     activityPageSize: '每页显示条数',
     activityPageSizeDesc: '每次加载的动态条数',
     unitItems: '条',
+    guideGroup: '引导设置',
+    resetGuide: '重新播放新手引导',
+    resetGuideDesc: '清除引导记录，下次进入时重新显示',
+    resetGuideConfirmTitle: '重置引导',
+    resetGuideConfirmMsg: '将清除所有引导记录，下次进入首页时会重新显示引导。确定要重置吗？',
   },
   debtThresholds: {
     title: '债务预警阈值',

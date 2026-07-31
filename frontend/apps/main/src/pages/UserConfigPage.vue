@@ -37,6 +37,15 @@
           </template>
         </van-cell>
       </van-cell-group>
+      <!-- Onboarding Guide -->
+      <van-cell-group inset :title="t('userConfig.guideGroup')" class="section">
+        <van-cell
+          :title="t('userConfig.resetGuide')"
+          :label="t('userConfig.resetGuideDesc')"
+          is-link
+          @click="onResetGuide"
+        />
+      </van-cell-group>
     </template>
 
     <!-- Trend Period Picker -->
@@ -53,12 +62,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { useRouter } from 'vue-router'
 import { getUserConfig, updateUserConfig } from '@/api/config'
+import { resetGuideState } from '@/composables/useGuideTrigger'
 
 defineOptions({ name: 'UserConfig' })
 
 const { t } = useI18n()
+const router = useRouter()
 const loading = ref(true)
 const showTrendPicker = ref(false)
 
@@ -104,6 +116,19 @@ function onTrendConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.dashboard_trend_period = selectedValues[0]
   showTrendPicker.value = false
   onSave()
+}
+
+async function onResetGuide() {
+  try {
+    await showConfirmDialog({
+      title: t('userConfig.resetGuideConfirmTitle'),
+      message: t('userConfig.resetGuideConfirmMsg'),
+    })
+    await resetGuideState()
+    router.push('/')
+  } catch {
+    // cancelled
+  }
 }
 
 onMounted(async () => {
