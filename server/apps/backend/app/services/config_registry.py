@@ -106,6 +106,22 @@ USER_SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
         label_key="userConfig.activityPageSize",
         description_key="userConfig.activityPageSizeDesc",
     ),
+    # --- Onboarding guide state ---
+    "onboarding_guide_version": SettingDefinition(
+        type="int", default=0, min=0, max=999,
+        label_key="userConfig.onboardingGuideVersion",
+        description_key="userConfig.onboardingGuideVersionDesc",
+    ),
+    "onboarding_attempts": SettingDefinition(
+        type="int", default=0, min=0, max=9999,
+        label_key="userConfig.onboardingAttempts",
+        description_key="userConfig.onboardingAttemptsDesc",
+    ),
+    "onboarding_completions": SettingDefinition(
+        type="int", default=0, min=0, max=9999,
+        label_key="userConfig.onboardingCompletions",
+        description_key="userConfig.onboardingCompletionsDesc",
+    ),
 }
 
 

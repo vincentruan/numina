@@ -309,6 +309,11 @@ const router = createRouter({
           component: () => import('@/pages/DebtThresholdsPage.vue'),
         },
         {
+          path: 'settings/family/manifesto',
+          name: 'ManifestoSettings',
+          component: () => import('@/pages/ManifestoSettingsPage.vue'),
+        },
+        {
           path: 'settings/user/config',
           name: 'UserConfig',
           component: () => import('@/pages/UserConfigPage.vue'),

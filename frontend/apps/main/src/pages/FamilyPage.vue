@@ -395,7 +395,7 @@ async function copyInviteCode() {
     if (ok) {
       showSuccessToast(t('family.inviteCodeCopied'))
     } else {
-      showToast(t('toast.newInviteCode', { code }))
+      showSuccessToast(t('toast.newInviteCode', { code }))
     }
   }
 }
@@ -618,7 +618,7 @@ async function doAddChild() {
   } catch (err: unknown) {
     const code = (err as { response?: { data?: { code?: string } } }).response?.data?.code
     const i18nKey = code ? `errors.${code}` : ''
-    showToast({ type: 'fail', message: i18nKey && t(i18nKey) !== i18nKey ? t(i18nKey) : t('toast.operationFailed2') })
+    showFailToast(i18nKey && t(i18nKey) !== i18nKey ? t(i18nKey) : t('toast.operationFailed2'))
   } finally {
     addingChild.value = false
   }
@@ -632,7 +632,7 @@ async function onForceLogout(child: { id: string; display_name: string }) {
     await forceLogoutChild(child.id)
     showSuccessToast(t('toast.childForceLoggedOut'))
   } catch {
-    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -641,7 +641,7 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
     await unlockChildPin(child.id)
     showSuccessToast(t('toast.childPinUnlocked'))
   } catch {
-    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 

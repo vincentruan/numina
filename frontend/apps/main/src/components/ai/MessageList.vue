@@ -82,10 +82,12 @@ function getPrevGroupPlanSteps(index: number): PlanStep[] | undefined {
   return legacy?.planSteps
 }
 
-// ── Auto-scroll with user-interrupt (R5) ──
+// ── Auto-scroll with user-interrupt (R5) + MutationObserver (P1) ──
 const SCROLL_THRESHOLD = 50 // px from bottom to consider "at bottom"
 const isAutoScrolling = ref(true)
 const userScrolledUp = ref(false)
+let _mutationObserver: MutationObserver | null = null
+let _scrollDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Check if the scroll position is near the bottom */
 function isNearBottom(): boolean {
@@ -99,6 +101,39 @@ function scrollToBottom() {
   const el = scrollRef.value
   if (!el) return
   el.scrollTop = el.scrollHeight
+}
+
+/**
+ * Debounced scroll triggered by MutationObserver.
+ * Uses requestAnimationFrame + 50ms debounce to batch rapid DOM changes
+ * (e.g. markdown image load, table render, code block expansion).
+ */
+function onMutationScroll() {
+  if (!isAutoScrolling.value) return
+  if (_scrollDebounceTimer) clearTimeout(_scrollDebounceTimer)
+  _scrollDebounceTimer = setTimeout(() => {
+    requestAnimationFrame(() => {
+      if (isAutoScrolling.value) {
+        scrollToBottom()
+      }
+    })
+  }, 50)
+}
+
+/** Set up MutationObserver to catch async DOM height changes */
+function setupMutationObserver() {
+  const el = scrollRef.value
+  if (!el) return
+  // Clean up previous observer if any
+  _mutationObserver?.disconnect()
+  _mutationObserver = new MutationObserver(() => {
+    onMutationScroll()
+  })
+  _mutationObserver.observe(el, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  })
 }
 
 /** Handle scroll events: detect user scroll-up vs at-bottom */
@@ -161,6 +196,7 @@ watch(
 onMounted(() => {
   if (scrollRef.value) {
     scrollRef.value.addEventListener('scroll', onScroll, { passive: true })
+    setupMutationObserver()
   }
   scrollToBottom()
 })
@@ -168,6 +204,12 @@ onMounted(() => {
 onUnmounted(() => {
   if (scrollRef.value) {
     scrollRef.value.removeEventListener('scroll', onScroll)
+  }
+  _mutationObserver?.disconnect()
+  _mutationObserver = null
+  if (_scrollDebounceTimer) {
+    clearTimeout(_scrollDebounceTimer)
+    _scrollDebounceTimer = null
   }
 })
 </script>

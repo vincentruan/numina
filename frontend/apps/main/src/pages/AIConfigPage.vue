@@ -29,7 +29,7 @@
             </div>
             <div
               class="card-logo"
-              :class="[`logo--${cfg.provider}`, { 'card-logo--spinning': testingKey?.startsWith(`${cfg.id}-`) }]"
+              :class="[`logo--${cfg.provider}`, { 'card-logo--spinning': isTestingProvider(cfg.id) }]"
             >
               <!-- anthropic -->
               <svg v-if="cfg.provider === 'anthropic'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -129,15 +129,15 @@
                 </div>
                 <button
                   class="test-btn"
-                  :class="{ 'test-btn--testing': testingKey === `${cfg.id}-${slot}` }"
-                  :disabled="testingKey === `${cfg.id}-${slot}`"
+                  :class="{ 'test-btn--testing': testingKeys.has(`${cfg.id}-${slot}`) }"
+                  :disabled="testingKeys.has(`${cfg.id}-${slot}`)"
                   @click="onTestModel(cfg.id, slot)"
                 >
                   <span
                     class="test-btn__icon"
-                    :class="{ 'test-btn__icon--spinning': testingKey === `${cfg.id}-${slot}` }"
+                    :class="{ 'test-btn__icon--spinning': testingKeys.has(`${cfg.id}-${slot}`) }"
                   >
-                    <template v-if="testingKey === `${cfg.id}-${slot}`">
+                    <template v-if="testingKeys.has(`${cfg.id}-${slot}`)">
                       <svg v-if="cfg.provider === 'anthropic'" width="15" height="15" viewBox="0 0 24 24" fill="none">
                         <path d="M13.827 3.52h3.603L24 20h-3.603l-6.57-16.48zm-3.654 0H6.57L0 20h3.603l1.378-3.504h6.875L13.234 20h3.603l-6.664-16.48zm-1.32 9.99 2.244-5.716 2.244 5.717H8.853z" fill="currentColor" />
                       </svg>
@@ -218,7 +218,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import draggable from 'vuedraggable'
@@ -235,7 +235,7 @@ const aiStore = useAIStore()
 
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const deletingId = ref<string | null>(null)
-const testingKey = ref<string | null>(null)
+const testingKeys = ref<Set<string>>(new Set())
 const testPassedKeys = ref<Set<string>>(new Set())
 const revealedKeys = ref<Record<string, string>>({})
 const revealingId = ref<string | null>(null)
@@ -249,6 +249,14 @@ const draggableConfigs = computed({
     aiStore.configs = val
   },
 })
+
+function isTestingProvider(configId: string): boolean {
+  const prefix = `${configId}-`
+  for (const k of testingKeys.value) {
+    if (k.startsWith(prefix)) return true
+  }
+  return false
+}
 
 function capShortLabel(cap: string): string {
   if (cap === 'text_generation') return t('aiConfig.capabilityText')
@@ -305,7 +313,7 @@ function getCapabilities(cfg: ProviderConfig, slot: number): string[] {
 async function onDragEnd() {
   try {
     await aiStore.reorderConfigs(aiStore.configs.map((c) => c.id))
-    showToast(t('aiConfig.saveOrder'))
+    showSuccessToast(t('aiConfig.saveOrder'))
   } catch {
     showFailToast(t('toast.operationFailed2'))
   }
@@ -337,7 +345,7 @@ async function onToggleReveal(cfg: ProviderConfig) {
     const res = await aiApi.revealAIKey(cfg.id)
     revealedKeys.value[cfg.id] = res.data.api_key
   } catch {
-    showToast(t('aiConfig.revealFailed'))
+    showFailToast(t('aiConfig.revealFailed'))
   } finally {
     revealingId.value = null
   }
@@ -382,21 +390,21 @@ async function onResetCircuit(id: string) {
 
 async function onTestModel(configId: string, slot: number) {
   const key = `${configId}-${slot}`
-  testingKey.value = key
+  testingKeys.value = new Set([...testingKeys.value, key])
   try {
     const res = await aiApi.testProviderConfig(configId)
     if (res.data.connected) {
       testPassedKeys.value = new Set([...testPassedKeys.value, key])
-      showToast(t('aiConfig.testSuccess'))
+      showSuccessToast(t('aiConfig.testSuccess'))
     } else {
       testPassedKeys.value.delete(key)
-      showToast(`${t('aiConfig.testFailed')}: ${res.data.message ?? ''}`)
+      showFailToast(`${t('aiConfig.testFailed')}: ${res.data.message ?? ''}`)
     }
   } catch {
     testPassedKeys.value.delete(key)
-    showToast(t('aiConfig.testFailed'))
+    showFailToast(t('aiConfig.testFailed'))
   } finally {
-    testingKey.value = null
+    testingKeys.value = new Set([...testingKeys.value].filter((k) => k !== key))
   }
 }
 

@@ -189,7 +189,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { showToast, showFailToast, showLoadingToast, closeToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { marked } from 'marked'
@@ -463,7 +463,7 @@ async function onExportImage() {
     const blob = await generateReportImage(reportContentRef.value)
     closeToast()
     downloadImage(blob, reportImageFilename())
-    showToast(t('aiReport.exportImageSuccess'))
+    showSuccessToast(t('aiReport.exportImageSuccess'))
   } catch {
     closeToast()
     showFailToast(t('aiReport.exportImageFail'))
@@ -483,7 +483,7 @@ async function onExportPdf() {
     const blob = await generateReportPdf(reportContentRef.value)
     closeToast()
     downloadBlob(blob, reportPdfFilename())
-    showToast(t('aiReport.exportPdfSuccess'))
+    showSuccessToast(t('aiReport.exportPdfSuccess'))
   } catch {
     closeToast()
     showFailToast(t('aiReport.exportPdfFail'))

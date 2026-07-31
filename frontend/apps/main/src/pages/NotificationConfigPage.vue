@@ -92,7 +92,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import {
   notificationChannelsApi,
   type NotificationChannelResponse,
@@ -205,7 +205,7 @@ async function saveChannel() {
     })
     channels.value.push(created)
   }
-  showToast(t('toast.channelSaved'))
+  showSuccessToast(t('toast.channelSaved'))
   showSheet.value = false
   editingChannel.value = null
 }
@@ -213,7 +213,7 @@ async function saveChannel() {
 async function removeChannel(id: string) {
   await notificationChannelsApi.remove(id)
   channels.value = channels.value.filter((c) => c.id !== id)
-  showToast(t('toast.channelDeleted'))
+  showSuccessToast(t('toast.channelDeleted'))
 }
 
 function onTypeConfirm({ selectedValues }: { selectedValues: string[] }) {

@@ -46,8 +46,15 @@
       <div class="bottom-spacer" />
     </van-pull-refresh>
 
-    <!-- New User Onboarding Overlay -->
-    <OnboardingOverlay :visible="showOnboarding" @complete="onOnboardingComplete" />
+    <!-- Step Guide Onboarding Overlay -->
+    <StepGuideOverlay
+      :visible="guide.isActive.value"
+      :steps="guideSteps"
+      :current-step="guide.currentStep.value"
+      @skip="guide.skip"
+      @next="guide.next"
+      @complete="guide.complete"
+    />
 
     <!-- Manifesto Signing Popup (P1-2 non-blocking notification) -->
     <ManifestoSigningPopup
@@ -73,13 +80,16 @@ import type { UpcomingPaymentItem } from '@/api/dashboard'
 defineOptions({ name: 'Dashboard' })
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useMemberNotify } from '@/composables/useMemberNotify'
+import { useStepGuide, type StepGuideStep } from '@/composables/useStepGuide'
+import { getUserConfig, type UserConfigValues } from '@/api/config'
+import { shouldShowGuide, recordGuideShown, recordGuideAttempt, recordGuideCompletion } from '@/composables/useGuideTrigger'
 
 import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
-import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
+import StepGuideOverlay from '@/components/common/StepGuideOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
 import ManifestoDashboardCard from '@/components/dashboard/ManifestoDashboardCard.vue'
 import LiteracyStatusCard from '@/components/dashboard/LiteracyStatusCard.vue'
@@ -104,8 +114,61 @@ const literacyStatusRef = ref<InstanceType<typeof LiteracyStatusCard> | null>(nu
 // Upcoming payments
 const upcomingPayments = ref<UpcomingPaymentItem[]>([])
 
-// Onboarding overlay
-const showOnboarding = ref(false)
+// Step-guide onboarding
+const overview = computed(() => dashboardStore.overview)
+
+const guideSteps = computed<StepGuideStep[]>(() => [
+  {
+    selector: '.empty-dashboard, .hero-section',
+    mode: 'spotlight',
+    title: (overview.value?.asset_count ?? 0) === 0
+      ? t('onboarding.step1.empty.title')
+      : t('onboarding.step1.data.title'),
+    desc: (overview.value?.asset_count ?? 0) === 0
+      ? t('onboarding.step1.empty.desc')
+      : t('onboarding.step1.data.desc'),
+  },
+  {
+    selector: '[data-tab="finance"]',
+    mode: 'spotlight',
+    title: t('onboarding.step2.title'),
+    desc: t('onboarding.step2.desc'),
+  },
+  {
+    selector: '[data-tab="settings"]',
+    mode: 'spotlight',
+    title: t('onboarding.step3.title'),
+    desc: t('onboarding.step3.desc'),
+  },
+])
+
+const GUIDE_VERSION = 2
+let userConfig: UserConfigValues | null = null
+
+const guide = useStepGuide({
+  key: 'guide_main-onboarding-v2',
+  steps: guideSteps,
+  onComplete: async () => {
+    if (userConfig) await recordGuideCompletion(userConfig, GUIDE_VERSION)
+  },
+})
+
+async function maybeShowOnboarding() {
+  if (router.currentRoute.value.path !== '/') return
+  if (!userConfig) {
+    try {
+      const res = await getUserConfig()
+      userConfig = res.data
+    } catch {
+      return
+    }
+  }
+  const { shouldShow } = shouldShowGuide(userConfig, GUIDE_VERSION)
+  if (!shouldShow) return
+  await recordGuideAttempt(userConfig)
+  recordGuideShown()
+  guide.start()
+}
 
 // Manifesto signing popup
 const showManifestoPopup = ref(false)
@@ -127,21 +190,6 @@ function onManifestoNavigate() {
   showManifestoPopup.value = false
   router.push('/manifesto/sign')
 }
-
-function onOnboardingComplete() {
-  showOnboarding.value = false
-  localStorage.setItem('onboarding_completed', 'true')
-}
-
-function maybeShowOnboarding() {
-  if (localStorage.getItem('onboarding_completed') === 'true') return
-  // Only show when there are no assets yet
-  if ((overview.value?.asset_count ?? 0) === 0) {
-    showOnboarding.value = true
-  }
-}
-
-const overview = computed(() => dashboardStore.overview)
 
 // Smart-reminder status taps now deep-link into the finance assets tab (the full
 // asset list no longer lives on the overview page).

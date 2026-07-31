@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import {
   getSkillsGrouped,
   createCustomSkill,
@@ -98,7 +98,7 @@ async function onSubmit() {
         input_mode: form.input_mode,
         prompt_content: form.prompt_content || undefined,
       })
-      showToast(t('skills.form.updateSuccess'))
+      showSuccessToast(t('skills.form.updateSuccess'))
     } else {
       await createCustomSkill({
         skill_id: form.skill_id,
@@ -109,7 +109,7 @@ async function onSubmit() {
         input_mode: form.input_mode,
         prompt_content: form.prompt_content,
       })
-      showToast(t('skills.form.createSuccess'))
+      showSuccessToast(t('skills.form.createSuccess'))
     }
     router.back()
   } catch {

@@ -1,23 +1,22 @@
 <template>
-  <!-- Full-screen onboarding overlay with spotlight effect -->
   <Teleport to="body">
     <div
       v-if="visible"
-      class="onboarding-overlay"
+      class="stepguide-overlay"
       role="dialog"
       aria-modal="true"
-      :aria-label="t('onboarding.step' + currentStep + '.title')"
+      :aria-label="currentTitle"
       @keydown="onKeydown"
     >
       <!-- SVG spotlight mask: punches a hole over the target element -->
       <svg
-        class="onboarding-spotlight-svg"
+        class="stepguide-spotlight-svg"
         aria-hidden="true"
         :viewBox="`0 0 ${vpWidth} ${vpHeight}`"
         preserveAspectRatio="none"
       >
         <defs>
-          <mask id="onboarding-spotlight-mask">
+          <mask id="stepguide-spotlight-mask">
             <!-- White = visible (the dark overlay shows through) -->
             <rect width="100%" height="100%" fill="white" />
             <!-- Black = cut-out (transparent hole = spotlight) -->
@@ -37,50 +36,46 @@
           width="100%"
           height="100%"
           fill="rgba(1,1,32,0.72)"
-          mask="url(#onboarding-spotlight-mask)"
+          mask="url(#stepguide-spotlight-mask)"
         />
       </svg>
 
       <!-- Tooltip card positioned near the spotlight -->
       <div
         ref="tooltipRef"
-        class="onboarding-tooltip"
+        class="stepguide-tooltip"
         :style="tooltipStyle"
         role="region"
       >
         <!-- Step indicator dots -->
-        <div class="onboarding-dots" aria-hidden="true">
+        <div class="stepguide-dots" aria-hidden="true">
           <span
-            v-for="n in TOTAL_STEPS"
+            v-for="n in resolvedSteps.length"
             :key="n"
-            class="onboarding-dot"
-            :class="{ 'onboarding-dot--active': n === currentStep }"
+            class="stepguide-dot"
+            :class="{ 'stepguide-dot--active': n === currentStep + 1 }"
           />
         </div>
 
         <!-- Step content -->
-        <div
-          aria-live="polite"
-          aria-atomic="true"
-          class="onboarding-content"
-        >
-          <h3 class="onboarding-title">{{ stepTitle }}</h3>
-          <p class="onboarding-desc">{{ stepDesc }}</p>
+        <div aria-live="polite" aria-atomic="true" class="stepguide-content">
+          <h3 class="stepguide-title">{{ currentTitle }}</h3>
+          <p class="stepguide-desc">{{ currentDesc }}</p>
         </div>
 
         <!-- Action buttons -->
-        <div class="onboarding-actions">
+        <div class="stepguide-actions">
           <button
             ref="skipBtnRef"
-            class="onboarding-btn onboarding-btn--ghost"
-            @click="onSkip"
+            class="stepguide-btn stepguide-btn--ghost"
+            @click="$emit('skip')"
           >
             {{ t('onboarding.skip') }}
           </button>
           <button
             ref="nextBtnRef"
-            class="onboarding-btn onboarding-btn--primary"
-            @click="onNext"
+            class="stepguide-btn stepguide-btn--primary"
+            @click="onPrimaryClick"
           >
             {{ isLastStep ? t('onboarding.done') : t('onboarding.next') }}
           </button>
@@ -91,31 +86,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { StepGuideStep } from '@/composables/useStepGuide'
 
 const props = defineProps<{
   visible: boolean
+  steps: StepGuideStep[] | Ref<StepGuideStep[]>
+  currentStep: number
 }>()
 
 const emit = defineEmits<{
+  skip: []
+  next: []
   complete: []
 }>()
 
 const { t } = useI18n()
 
-const TOTAL_STEPS = 3
 const SPOTLIGHT_PAD = 8
 const TOOLTIP_MARGIN = 12
 
-// Step selectors — graceful degradation if element not found
-const STEP_SELECTORS: Record<number, string> = {
-  1: '.net-worth-card, .hero-section',
-  2: '.fab',
-  3: '[data-tabbar-settings], .van-tabbar-item:last-child',
-}
-
-const currentStep = ref(1)
 const spotlightRect = ref<DOMRect | null>(null)
 const vpWidth = ref(window.innerWidth)
 const vpHeight = ref(window.innerHeight)
@@ -124,13 +115,19 @@ const skipBtnRef = ref<HTMLElement | null>(null)
 const nextBtnRef = ref<HTMLElement | null>(null)
 const tooltipStyle = ref<Record<string, string>>({})
 
-const isLastStep = computed(() => currentStep.value === TOTAL_STEPS)
+const isLastStep = computed(() => {
+  return props.currentStep === resolvedSteps.value.length - 1
+})
+const resolvedSteps = computed(() => {
+  const s = props.steps
+  return 'value' in s ? s.value : s
+})
+const currentStepData = computed(() => resolvedSteps.value[props.currentStep])
+const currentTitle = computed(() => currentStepData.value?.title ?? '')
+const currentDesc = computed(() => currentStepData.value?.desc ?? '')
 
-const stepTitle = computed(() => t(`onboarding.step${currentStep.value}.title`))
-const stepDesc = computed(() => t(`onboarding.step${currentStep.value}.desc`))
-
-function getTargetElement(step: number): Element | null {
-  const selector = STEP_SELECTORS[step]
+function getTargetElement(): Element | null {
+  const selector = currentStepData.value?.selector
   if (!selector) return null
   // Try each comma-separated selector in order
   for (const sel of selector.split(',')) {
@@ -143,14 +140,12 @@ function getTargetElement(step: number): Element | null {
 function updateSpotlight() {
   vpWidth.value = window.innerWidth
   vpHeight.value = window.innerHeight
-
-  const el = getTargetElement(currentStep.value)
+  const el = getTargetElement()
   if (!el) {
     spotlightRect.value = null
     positionTooltipCenter()
     return
   }
-
   const rect = el.getBoundingClientRect()
   spotlightRect.value = rect
   nextTick(() => positionTooltip(rect))
@@ -164,13 +159,10 @@ function positionTooltip(targetRect: DOMRect) {
   const tooltipW = tooltipEl.offsetWidth || 280
   const vp = { w: vpWidth.value, h: vpHeight.value }
 
-  const spotTop = targetRect.y - SPOTLIGHT_PAD
   const spotBottom = targetRect.y + targetRect.height + SPOTLIGHT_PAD
-  const spotLeft = targetRect.x - SPOTLIGHT_PAD
-  const spotRight = targetRect.x + targetRect.width + SPOTLIGHT_PAD
+  const spotTop = targetRect.y - SPOTLIGHT_PAD
 
   let top: number
-  let left: number
 
   // Prefer placing tooltip below the spotlight
   if (spotBottom + tooltipH + TOOLTIP_MARGIN <= vp.h) {
@@ -184,8 +176,8 @@ function positionTooltip(targetRect: DOMRect) {
   }
 
   // Horizontally: center on spotlight, clamp to viewport
-  const spotCenterX = (spotLeft + spotRight) / 2
-  left = spotCenterX - tooltipW / 2
+  const spotCenterX = targetRect.x + targetRect.width / 2
+  let left = spotCenterX - tooltipW / 2
   left = Math.max(TOOLTIP_MARGIN, Math.min(left, vp.w - tooltipW - TOOLTIP_MARGIN))
 
   tooltipStyle.value = {
@@ -207,36 +199,18 @@ function positionTooltipCenter() {
   }
 }
 
-function lockBodyScroll() {
-  document.body.style.overflow = 'hidden'
-}
-
-function unlockBodyScroll() {
-  document.body.style.overflow = ''
-}
-
-function onSkip() {
-  complete()
-}
-
-function onNext() {
+function onPrimaryClick() {
   if (isLastStep.value) {
-    complete()
+    emit('complete')
   } else {
-    currentStep.value++
-    nextTick(() => updateSpotlight())
+    emit('next')
   }
-}
-
-function complete() {
-  unlockBodyScroll()
-  emit('complete')
 }
 
 // Focus trap: Tab cycles between skip and next buttons only
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    onSkip()
+    emit('skip')
     return
   }
   if (e.key === 'Tab') {
@@ -252,47 +226,48 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-function onResize() {
-  updateSpotlight()
-}
-
 watch(
   () => props.visible,
   (val) => {
     if (val) {
-      currentStep.value = 1
-      lockBodyScroll()
+      document.body.style.overflow = 'hidden'
       nextTick(() => {
         updateSpotlight()
         // Focus the next/primary button on open
         nextTick(() => nextBtnRef.value?.focus())
       })
     } else {
-      unlockBodyScroll()
+      document.body.style.overflow = ''
     }
   },
 )
 
+watch(
+  () => props.currentStep,
+  () => {
+    nextTick(() => updateSpotlight())
+  },
+)
+
 onMounted(() => {
-  window.addEventListener('resize', onResize, { passive: true })
+  window.addEventListener('resize', updateSpotlight, { passive: true })
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', onResize)
-  unlockBodyScroll()
+  window.removeEventListener('resize', updateSpotlight)
+  document.body.style.overflow = ''
 })
 </script>
 
 <style scoped>
-.onboarding-overlay {
+.stepguide-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  /* Pointer events pass through to the SVG overlay only */
   pointer-events: all;
 }
 
-.onboarding-spotlight-svg {
+.stepguide-spotlight-svg {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -301,7 +276,7 @@ onUnmounted(() => {
 }
 
 /* Tooltip card */
-.onboarding-tooltip {
+.stepguide-tooltip {
   position: fixed;
   background: var(--card-bg, #ffffff);
   border-radius: var(--radius-sm, 8px);
@@ -315,46 +290,46 @@ onUnmounted(() => {
   transition: top 0.25s ease, left 0.25s ease;
 }
 
-[data-theme='dark'] .onboarding-tooltip {
+[data-theme='dark'] .stepguide-tooltip {
   background: #1a1a3a;
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 /* Step dots */
-.onboarding-dots {
+.stepguide-dots {
   display: flex;
   gap: 6px;
   margin-bottom: 10px;
 }
 
-.onboarding-dot {
+.stepguide-dot {
   width: 6px;
   height: 6px;
-  border-radius: var(--radius-full, 9999px);
+  border-radius: 9999px;
   background: var(--color-hairline, rgba(1, 1, 32, 0.12));
   transition: background 0.2s ease, width 0.2s ease;
 }
 
-.onboarding-dot--active {
+.stepguide-dot--active {
   background: var(--van-primary-color, #010120);
   width: 16px;
 }
 
-[data-theme='dark'] .onboarding-dot {
+[data-theme='dark'] .stepguide-dot {
   background: rgba(255, 255, 255, 0.15);
 }
 
-[data-theme='dark'] .onboarding-dot--active {
+[data-theme='dark'] .stepguide-dot--active {
   background: var(--color-lavender, #bdbbff);
 }
 
 /* Content */
-.onboarding-content {
+.stepguide-content {
   margin-bottom: 14px;
 }
 
-.onboarding-title {
+.stepguide-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary, #0a0a0a);
@@ -363,7 +338,7 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 
-.onboarding-desc {
+.stepguide-desc {
   font-size: 14px;
   color: var(--text-secondary, #616161);
   margin: 0;
@@ -371,14 +346,14 @@ onUnmounted(() => {
 }
 
 /* Actions */
-.onboarding-actions {
+.stepguide-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
 
-.onboarding-btn {
+.stepguide-btn {
   min-height: 44px;
   min-width: 72px;
   padding: 0 16px;
@@ -390,39 +365,39 @@ onUnmounted(() => {
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
-.onboarding-btn:active {
+.stepguide-btn:active {
   transform: scale(0.97);
   opacity: 0.85;
 }
 
-.onboarding-btn--ghost {
+.stepguide-btn--ghost {
   background: transparent;
   color: var(--text-secondary, #616161);
   border: 1px solid var(--color-card-border, rgba(1, 1, 32, 0.12));
 }
 
-[data-theme='dark'] .onboarding-btn--ghost {
+[data-theme='dark'] .stepguide-btn--ghost {
   color: var(--text-secondary, #c8c8d0);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-.onboarding-btn--primary {
+.stepguide-btn--primary {
   background: var(--van-primary-color, #010120);
   color: var(--color-on-primary, #ffffff);
   flex: 1;
 }
 
-[data-theme='dark'] .onboarding-btn--primary {
+[data-theme='dark'] .stepguide-btn--primary {
   background: var(--color-lavender, #bdbbff);
   color: #010120;
 }
 
-.onboarding-btn:focus-visible {
+.stepguide-btn:focus-visible {
   outline: 2px solid var(--van-primary-color, #010120);
   outline-offset: 2px;
 }
 
-[data-theme='dark'] .onboarding-btn:focus-visible {
+[data-theme='dark'] .stepguide-btn:focus-visible {
   outline-color: var(--color-lavender, #bdbbff);
 }
 </style>

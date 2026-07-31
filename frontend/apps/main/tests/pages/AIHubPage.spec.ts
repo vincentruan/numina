@@ -46,6 +46,8 @@ vi.mock('vue-i18n', async (importOriginal) => {
 
 vi.mock('../../src/utils/storage', () => ({
   getUser: () => ({ display_name: 'Demo User' }),
+  isGuideDone: () => false,
+  markGuideDone: vi.fn(),
 }))
 
 vi.mock('../../src/api/ai', () => ({

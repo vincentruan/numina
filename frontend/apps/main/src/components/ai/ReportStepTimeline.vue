@@ -83,7 +83,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import type { StepStatus, ToolCallInfo, ToolResultInfo } from '@/composables/useReportStream'
 
 const props = defineProps<{
@@ -179,7 +179,7 @@ const formattedJson = computed(() => {
 async function copyJson(): Promise<void> {
   try {
     await navigator.clipboard.writeText(formattedJson.value)
-    showToast(t('aiReport.copied'))
+    showSuccessToast(t('aiReport.copied'))
   } catch {
     // Fallback for non-secure contexts (LAN-IP HTTP dev)
     const ta = document.createElement('textarea')
@@ -188,9 +188,9 @@ async function copyJson(): Promise<void> {
     ta.select()
     try {
       document.execCommand('copy')
-      showToast(t('aiReport.copied'))
+      showSuccessToast(t('aiReport.copied'))
     } catch {
-      showToast(t('toast.operationFailed'))
+      showFailToast(t('toast.operationFailed'))
     }
     document.body.removeChild(ta)
   }

@@ -1475,6 +1475,7 @@ export default {
     familyAdvancedConfig: 'Family Advanced Settings',
     debtThresholds: 'Debt Warning Thresholds',
     userAdvancedConfig: 'Personal Preferences',
+    replayOnboarding: 'Replay onboarding',
   },
   changePassword: {
     title: 'Account Password',
@@ -2135,20 +2136,27 @@ export default {
 
   onboarding: {
     step1: {
-      title: 'Family Asset Overview',
-      desc: 'This shows your family assets and liabilities at a glance',
+      empty: { title: 'Welcome to Numina', desc: 'This shows your complete family financial picture' },
+      data: { title: 'Financial Overview', desc: 'See your net worth, total assets, and liabilities' },
     },
-    step2: {
-      title: 'Add an Asset',
-      desc: 'Tap here to add your first asset',
-    },
-    step3: {
-      title: 'Invite Family',
-      desc: 'Invite family members to manage together in Settings',
-    },
+    step2: { title: 'Assets & Liabilities', desc: 'Manage your assets, liabilities, and wishes here' },
+    step3: { title: 'Invite Family', desc: 'Create or join a family in Settings to manage together' },
     skip: 'Skip',
     next: 'Next',
     done: 'Done',
+  },
+  childOnboarding: {
+    step1: {
+      empty: { title: 'Your Chores', desc: 'Your chores will appear here — complete them to earn rewards' },
+      data: { title: 'Your Task List', desc: 'Complete chores to earn rewards' },
+    },
+    step2: { title: 'My Rewards', desc: 'Earn rewards and redeem wishes' },
+  },
+  featureHints: {
+    assetLongPress: 'Long press an asset for quick actions',
+    liabilitySwipe: 'Swipe left on a liability to delete',
+    aiFirst: 'AI Coach is here to answer your finance questions',
+    settingsInvite: 'Invite family members to manage assets together',
   },
   importReport: {
     uploadTitle: 'Upload Financial Statement PDF',
@@ -2360,11 +2368,16 @@ export default {
     skillInstalled: 'Skill installed successfully',
     skillInstallFailed: 'Skill installation failed',
 
-    capability: {
-      report: {
-        name: 'Financial Health Report',
-        description: 'Comprehensive structured analysis',
-      },
+    systemCapabilities: 'System Capabilities',
+    alwaysEnabled: 'Always Enabled',
+
+    builtin: {
+      assetReport: { name: 'Asset Health Check', description: 'Structured analysis of overall family assets' },
+      financeCoach: { name: 'Finance Coach', description: 'Identify high-interest debt and idle assets with optimization suggestions' },
+      wishAdvice: { name: 'Wish Savings Advice', description: 'Optimize monthly savings allocation for pending wishes' },
+      dashboardNarrative: { name: 'Monthly Narrative', description: 'Explain this month\'s financial changes in plain language' },
+      literacyWeeklyReport: { name: 'Kids Literacy Report', description: 'Weekly financial literacy report for parents' },
+      importParse: { name: 'Document Parser', description: 'Parse uploaded financial documents and extract holdings' },
     },
 
     form: {
@@ -3290,6 +3303,11 @@ export default {
     activityPageSize: 'Items Per Page',
     activityPageSizeDesc: 'Number of items loaded per page',
     unitItems: 'items',
+    guideGroup: 'Onboarding',
+    resetGuide: 'Replay onboarding',
+    resetGuideDesc: 'Clear onboarding records to show again next visit',
+    resetGuideConfirmTitle: 'Reset onboarding',
+    resetGuideConfirmMsg: 'This will clear all onboarding records. The guide will appear again on your next visit. Continue?',
   },
   debtThresholds: {
     title: 'Debt Warning Thresholds',

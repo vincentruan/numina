@@ -5,7 +5,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { getASRConfigs, createASRConfig, updateASRConfig, testASRConfig } from '@/api/asr'
 import type { ASRProviderConfig, ASRTestResult, ASRDiffOp } from '@/api/asr'
 import PageHeader from '@/components/common/PageHeader.vue'

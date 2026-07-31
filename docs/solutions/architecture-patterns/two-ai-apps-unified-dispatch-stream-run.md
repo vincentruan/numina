@@ -110,7 +110,7 @@ Around these three pillars, the refactor made the supporting moves:
 - **U4** built the `asset-report` 3-step pipeline (`_run_asset_report_pipeline`) on top of the F2 fixes; unified all agent file paths to the DeerFlow layout (family_id as effective user) with a `_deerflow_default_workspace_md` dual-root search helper (the LLM sometimes emits a host path; the worker translates to the container path); persisted `markdown_file_path` to `ai_reports`; added cache re-validation on entity change.
 - **U6** migrated `suggest` (`server/apps/agent/services/asset_suggest.py`) to a lightweight single-LLM call (`_create_lightweight_llm` + `ainvoke`) and added XML-delimiter injection defense so the delimiter cannot appear in model output.
 - **U8** deleted the `Orchestrator` class + `dispatch` method + singleton entirely — `server/apps/agent/services/orchestrator.py` now retains only the module-level `_select_model` / `_fire_and_forget` helpers that `agent_dispatch.py` still imports, with a docstring noting the deletion.
-- `RESERVED_NAMES` in `server/apps/backend/app/routers/ai_skills.py:56` settled to `["chat", "asset-report", "import-parse", "finance-coach"]` — these are the system fixed-flow ids that owners cannot shadow with a custom skill. (`wish-advice` is per-wish, not a system fixed-flow, so it is not reserved.)
+- `RESERVED_NAMES` in `server/apps/backend/app/routers/ai_skills.py:50` settled to `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "dashboard-narrative", "literacy-weekly-report"]` — these are the system fixed-flow / reserved ids that owners cannot shadow with a custom skill.
 
 ## Why This Matters
 

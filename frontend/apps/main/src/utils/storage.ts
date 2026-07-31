@@ -74,3 +74,26 @@ export function getRefreshToken(): string | null {
   // Tokens are now in httpOnly Cookie, not accessible to JS
   return null
 }
+
+// --- Guide/Onboarding storage helpers ---
+
+export function isGuideDone(key: string): boolean {
+  return localStorage.getItem(key) === 'done'
+}
+
+export function markGuideDone(key: string): void {
+  localStorage.setItem(key, 'done')
+}
+
+/**
+ * Clean up legacy onboarding localStorage keys.
+ * Guide state is now stored server-side (user config API).
+ * This function only clears old client-side remnants.
+ */
+export function clearLegacyOnboardingKeys(): void {
+  const keysToRemove = Object.keys(localStorage).filter(k =>
+    k.startsWith('guide_') || k.startsWith('gesture_') || k.startsWith('tip_')
+  )
+  keysToRemove.forEach(k => localStorage.removeItem(k))
+  localStorage.removeItem('onboarding_completed')
+}

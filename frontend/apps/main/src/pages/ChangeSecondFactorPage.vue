@@ -76,7 +76,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import http from '@/api/index'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -173,10 +173,10 @@ async function onConfirm() {
         old_pin: oldPin.value,
         new_pin: newPin.value,
       })
-      showToast({ type: 'success', message: t('toast.pinChanged') })
+      showSuccessToast(t('toast.pinChanged'))
     } else {
       await http.post('/auth/pin/setup', { pin: newPin.value })
-      showToast({ type: 'success', message: t('toast.pinEnabled') })
+      showSuccessToast(t('toast.pinEnabled'))
     }
     await authStore.fetchMe()
     // Reset
@@ -196,7 +196,7 @@ async function onConfirm() {
       confirmPin.value = ''
       step.value = 'old'
     } else {
-      showToast({ type: 'fail', message: t('toast.operationFailed2') })
+      showFailToast(t('toast.operationFailed2'))
     }
   } finally {
     saving.value = false
@@ -212,11 +212,11 @@ async function onDisablePin() {
   saving.value = true
   try {
     await http.post('/auth/pin/disable')
-    showToast({ type: 'success', message: t('toast.pinDisabled') })
+    showSuccessToast(t('toast.pinDisabled'))
     await authStore.fetchMe()
     step.value = 'new'
   } catch {
-    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     saving.value = false
   }

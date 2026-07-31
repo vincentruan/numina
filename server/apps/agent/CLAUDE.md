@@ -97,7 +97,7 @@ Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trig
 
 `sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice` with **409** ("须经由后端触发端点"). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
 
-> **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) is `["chat", "asset-report", "import-parse", "finance-coach"]` — it protects system skill IDs from custom-skill collision. Note: `wish-advice` is accepted by the agent worker/allowlist but is **not yet** in the backend `RESERVED_NAMES` list (latent inconsistency).
+> **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) is `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "dashboard-narrative", "literacy-weekly-report"]` — it protects system skill IDs from custom-skill collision.
 
 ### Sandbox
 
@@ -320,7 +320,6 @@ All endpoints use `X-Agent-Token` header with JWT tokens issued by `create_agent
 - **Temp config dirs accumulate in `/tmp`** — `family_adapter_cache.py` creates a `tempfile.mkdtemp()` per family. Evicted entries clean up, but a crash leaves orphaned dirs.
 - **Session journal and session store can diverge** — `session_journal` writes JSONL to local disk; session metadata goes to backend DB via fire-and-forget HTTP. A backend failure leaves the local log without a corresponding DB record.
 - **Scheduler has zero active jobs** — `scheduler.py` is configured and starts cleanly but all job registrations are commented out.
-- **`wish-advice` is in the agent allowlist but not backend `RESERVED_NAMES`** — the agent worker accepts `wish-advice` as an app, but `RESERVED_NAMES` (`apps/backend/app/routers/ai_skills.py`) is `["chat","asset-report","import-parse","finance-coach"]` only. A custom skill named `wish-advice` can currently be created on the backend.
 - **Importing from `apps/backend` directly** — Symptom: `ImportError`/`ModuleNotFoundError` on `apps.backend.*`, or tests pass locally but fail in CI because the backend package is not installed in the agent's virtualenv. Cause: violates the import direction rule — the agent must not import from `apps/backend` or `apps/scheduler_worker` directly. Fix: use `core/backend_client.py` for all backend data access (HTTP).
 
 ## Links

@@ -100,7 +100,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showFailToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import {
@@ -191,7 +191,7 @@ async function onSubmit() {
       assignee_ids: template.value?.assignment_type === 'assigned' ? form.value.assignee_ids : undefined,
       real_reward_enabled: form.value.real_reward_enabled,
     })
-    showToast(t('choreTemplate.saveSuccess'))
+    showSuccessToast(t('choreTemplate.saveSuccess'))
     router.back()
   } catch {
     showFailToast(t('toast.saveFailed'))

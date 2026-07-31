@@ -1,7 +1,7 @@
 <template>
   <div class="chores-page">
     <!-- Skeleton during initial load -->
-    <ChildTasksSkeleton v-if="loading && !refreshing && chores.length === 0" />
+    <RoleShimmer v-if="loading && !refreshing && chores.length === 0" variant="clay-pulse" />
 
     <!-- Actual content -->
     <template v-else>
@@ -256,6 +256,15 @@
       @balance-react="onBalanceReact"
       @balance-react-end="onBalanceReactEnd"
     />
+
+    <StepGuideOverlay
+      :visible="guide.isActive.value"
+      :steps="guideSteps"
+      :current-step="guide.currentStep.value"
+      @skip="guide.skip"
+      @next="guide.next"
+      @complete="guide.complete"
+    />
     </template>
   </div>
 </template>
@@ -265,7 +274,7 @@ defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
-import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
+import RoleShimmer from '@/components/RoleShimmer.vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showSuccessToast } from 'vant'
 import ChildInlineError from '@/components/ChildInlineError.vue'
@@ -287,6 +296,9 @@ import { useReducedMotion } from '@/composables/useReducedMotion'
 import { useTrackableClauses } from '@/composables/useTrackableClauses'
 import { useSwipeComplete } from '@/composables/useSwipeComplete'
 import { tryVibrate } from '@/composables/useHaptic'
+import { useStepGuide } from '@/composables/useStepGuide'
+import { shouldShowChildGuide, recordChildGuideShown, recordChildGuideAttempt, recordChildGuideCompletion } from '@/composables/useGuideTrigger'
+import StepGuideOverlay from '@/components/common/StepGuideOverlay.vue'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
 import EmptyState from '@/components/EmptyState.vue'
@@ -351,6 +363,45 @@ const showAutoDrawOverlay = ref(false)
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
 const reducedMotion = useReducedMotion()
 const { hasTrackable, init: initTrackable } = useTrackableClauses()
+
+// Step guide onboarding
+const CHILD_GUIDE_VERSION = 1
+let childConfig: Awaited<ReturnType<typeof shouldShowChildGuide>>['config'] | null = null
+
+const guideSteps = computed(() => {
+  const hasChores = chores.value.length > 0
+  return [
+    {
+      selector: hasChores ? '.chore-list' : '.empty-state',
+      mode: 'spotlight' as const,
+      title: hasChores ? t('childOnboarding.step1.data.title') : t('childOnboarding.step1.empty.title'),
+      desc: hasChores ? t('childOnboarding.step1.data.desc') : t('childOnboarding.step1.empty.desc'),
+    },
+    {
+      selector: '.balance-hero, .empty-state',
+      mode: 'spotlight' as const,
+      title: t('childOnboarding.step2.title'),
+      desc: t('childOnboarding.step2.desc'),
+    },
+  ]
+})
+const guide = useStepGuide({
+  key: 'guide_child-onboarding-v1',
+  steps: guideSteps,
+  onComplete: async () => {
+    if (childConfig) await recordChildGuideCompletion(childConfig, CHILD_GUIDE_VERSION)
+  },
+})
+
+async function maybeShowChildOnboarding() {
+  const result = await shouldShowChildGuide(CHILD_GUIDE_VERSION)
+  if (!result.shouldShow) return
+
+  childConfig = result.config
+  recordChildGuideShown()
+  await recordChildGuideAttempt(result.config)
+  guide.start()
+}
 
 // Swipe-to-complete gesture (U3)
 const {
@@ -568,6 +619,11 @@ async function pollForApproval(instanceId: string) {
     try {
       const res = await http.get<{ status: string }>(`/child/chores/${instanceId}/status`)
       if (res.data.status === 'approved') {
+        // Update local chores ref so watch(chores) → checkAndTriggerCelebration fires
+        const idx = chores.value.findIndex(c => c.id === instanceId)
+        if (idx !== -1) {
+          chores.value[idx] = { ...chores.value[idx], status: 'approved' }
+        }
         await checkAutoDraw()
         return
       }
@@ -698,6 +754,8 @@ onMounted(async () => {
     checkAndTriggerCelebration(chores.value)
     // Scroll to highlighted chore from homepage
     scrollToHighlight()
+    // Start onboarding guide (server-side trigger logic)
+    maybeShowChildOnboarding()
   } finally {
     decrement()
   }

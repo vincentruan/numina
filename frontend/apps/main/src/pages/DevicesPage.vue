@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showConfirmDialog } from 'vant'
 import {
   listDevices,
   revokeDevice,
@@ -45,7 +45,7 @@ async function handleRevoke(device: DeviceSession) {
     return
   }
   await revokeDevice(device.session_id)
-  showToast(t('toast.deviceRevokeSuccess'))
+  showSuccessToast(t('toast.deviceRevokeSuccess'))
   if (device.is_current) {
     authStore.logout({ onLogout: () => router.push('/login') })
   } else {
@@ -60,7 +60,7 @@ async function handleRevokeAll() {
     return
   }
   await revokeAllDevices()
-  showToast(t('toast.deviceRevokeAllSuccess'))
+  showSuccessToast(t('toast.deviceRevokeAllSuccess'))
   // Backend already cleared auth cookies; just clean local state and redirect
   authStore.user = null
   clearAuth()
@@ -102,7 +102,7 @@ async function handleRevokeFamily(device: FamilyDevice) {
     return
   }
   await revokeDevice(String(device.session_id))
-  showToast(t('toast.deviceRevokeSuccess'))
+  showSuccessToast(t('toast.deviceRevokeSuccess'))
   familyLoaded.value = false
   await loadFamily()
 }

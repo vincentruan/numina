@@ -309,8 +309,8 @@ watch(
       <span class="message-time">{{ displayTime }}</span>
       <div class="message-footer-spacer" />
 
-      <!-- Actions -->
-      <div class="message-actions">
+      <!-- Actions: unified pill toolbar (ChatVant MessageActions pattern) -->
+      <div class="message-action-bar">
         <CopyButton v-slot="{ copy }" :content="content">
           <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="copy(); emit('copy', content)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -340,6 +340,7 @@ watch(
             <path d="M18 9a9 9 0 0 1-9 9"/>
           </svg>
         </button>
+        <span class="action-bar-divider" />
         <button
           class="action-btn"
           :class="{ 'action-btn--active': feedback === 1 }"
@@ -572,16 +573,38 @@ watch(
   flex-shrink: 0;
 }
 
-.message-actions {
-  display: flex;
-  gap: 4px;
+/* Action bar: unified pill toolbar (ChatVant MessageActions pattern) */
+.message-action-bar {
+  display: inline-flex;
+  align-items: center;
+  background: var(--action-bar-bg, rgba(0, 0, 0, 0.04));
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
   opacity: 0;
   transition: opacity 0.2s;
 }
 
-.assistant-message:hover .message-actions,
-.assistant-message:focus-within .message-actions {
+:global([data-theme='dark'] .message-action-bar) {
+  --action-bar-bg: rgba(255, 255, 255, 0.06);
+}
+
+.assistant-message:hover .message-action-bar,
+.assistant-message:focus-within .message-action-bar {
   opacity: 1;
+}
+
+/* Divider between functional actions and feedback */
+.action-bar-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--action-bar-divider-bg, rgba(0, 0, 0, 0.1));
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+:global([data-theme='dark'] .action-bar-divider) {
+  --action-bar-divider-bg: rgba(255, 255, 255, 0.12);
 }
 
 .action-btn {
@@ -615,9 +638,9 @@ watch(
 
 /* Mobile touch: always visible + larger tap targets (Apple HIG ≥ 44×44) */
 @media (hover: none) {
-  .message-actions {
+  .message-action-bar {
     opacity: 1;
-    gap: 6px;
+    gap: 2px;
     flex-shrink: 0;
   }
 

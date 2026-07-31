@@ -105,7 +105,7 @@ async function onToggleReveal() {
     const res = await revealWebSearchKey(providerId.value)
     revealedKey.value = res.api_key
   } catch {
-    showToast(t('webSearch.revealFailed'))
+    showFailToast(t('webSearch.revealFailed'))
   } finally {
     revealing.value = false
   }
@@ -144,11 +144,11 @@ async function handleSave() {
         max_results: form.value.max_results,
       })
     }
-    showToast(t('webSearch.saveSuccess'))
+    showSuccessToast(t('webSearch.saveSuccess'))
     router.back()
   } catch (e: unknown) {
     const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    showToast(detail || t('webSearch.saveFailed'))
+    showFailToast(detail || t('webSearch.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -160,13 +160,13 @@ async function handleTest() {
   try {
     const result = await testWebSearchProvider(providerId.value)
     if (result.success) {
-      showToast(t('webSearch.testSuccess'))
+      showSuccessToast(t('webSearch.testSuccess'))
     } else {
-      showToast(t('webSearch.testFailedWithMsg', { msg: result.message }))
+      showFailToast(t('webSearch.testFailedWithMsg', { msg: result.message }))
     }
   } catch (e: unknown) {
     const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    showToast(detail || t('webSearch.testFailed'))
+    showFailToast(detail || t('webSearch.testFailed'))
   } finally {
     testing.value = false
   }

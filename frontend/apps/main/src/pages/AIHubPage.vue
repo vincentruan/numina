@@ -1,5 +1,8 @@
 <template>
   <div class="ai-hub-page">
+    <!-- AI-first tooltip (shown once on first visit) -->
+    <div v-if="showAiTip" class="feature-tip">{{ t('featureHints.aiFirst') }}</div>
+
     <!-- Skeleton for initial loading -->
     <AIHubSkeleton v-if="initialLoading" />
 
@@ -307,7 +310,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getUser } from '@/utils/storage'
+import { getUser, isGuideDone, markGuideDone } from '@/utils/storage'
 import { parseApiDate } from '@/utils/format'
 import { getAIReport } from '@/api/ai'
 import { getSystemDefaultSession } from '@/api/sessions'
@@ -346,6 +349,9 @@ const authStore = useAuthStore()
 const stream = useReportStream()
 const { increment, decrement } = usePageLoading()
 const isOwner = authStore.user?.role === 'owner'
+
+// AI-first tooltip: show on first visit for 3s
+const showAiTip = ref(false)
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
@@ -697,7 +703,13 @@ async function loadPageData() {
   initialLoading.value = false
 }
 
-onMounted(loadPageData)
+onMounted(() => {
+  loadPageData()
+  if (!isGuideDone('tip_ai-first')) {
+    showAiTip.value = true
+    setTimeout(() => { showAiTip.value = false; markGuideDone('tip_ai-first') }, 3000)
+  }
+})
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
@@ -1487,5 +1499,27 @@ defineExpose({
 [data-theme='dark'] .report-summary-card:focus-visible,
 [data-theme='dark'] .report-empty-card:focus-visible {
   outline-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Feature tooltip (auto-dismiss, non-interactive) */
+.feature-tip {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 13px;
+  border-bottom: 1px solid var(--separator);
+  pointer-events: none;
+  animation: feature-tip-fade 3s ease-in-out forwards;
+}
+
+@keyframes feature-tip-fade {
+  0% { opacity: 0; transform: translateY(-4px); }
+  10% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
 }
 </style>

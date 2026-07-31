@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useAgentStore } from '@/stores/agent'
 import { getAgent } from '@/api/agent'
 import { getSkillsGrouped } from '@/api/ai'
@@ -111,10 +111,10 @@ async function handleSubmit() {
       payload.subagent_enabled = form.value.subagent_enabled
       payload.is_published = form.value.is_published
       await agentStore.editAgent(agentId.value, payload)
-      showToast(t('agents.form.updateSuccess'))
+      showSuccessToast(t('agents.form.updateSuccess'))
     } else {
       await agentStore.addAgent(form.value)
-      showToast(t('agents.form.createSuccess'))
+      showSuccessToast(t('agents.form.createSuccess'))
     }
     router.back()
   } finally {
