@@ -2492,11 +2492,16 @@ export default {
     skillInstalled: '技能安装成功',
     skillInstallFailed: '技能安装失败',
 
-    capability: {
-      report: {
-        name: '家庭资产体检',
-        description: '对家庭整体资产状况进行结构化分析',
-      },
+    systemCapabilities: '系统能力',
+    alwaysEnabled: '始终启用',
+
+    builtin: {
+      assetReport: { name: '家庭资产体检', description: '对家庭整体资产状况进行结构化分析' },
+      financeCoach: { name: '财务处方建议', description: '识别高息负债、闲置资产，给出优化建议' },
+      wishAdvice: { name: '心愿储蓄建议', description: '为待达成心愿优化每月储蓄分配' },
+      dashboardNarrative: { name: '仪表盘月度叙事', description: '用自然语言解读本月财务变化' },
+      literacyWeeklyReport: { name: '儿童财商周报', description: '为家长生成孩子的周度财商启蒙报告' },
+      importParse: { name: '金融文档解析', description: '解析上传的金融文档，提取持仓数据' },
     },
 
     form: {

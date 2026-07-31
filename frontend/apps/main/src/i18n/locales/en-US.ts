@@ -2360,11 +2360,16 @@ export default {
     skillInstalled: 'Skill installed successfully',
     skillInstallFailed: 'Skill installation failed',
 
-    capability: {
-      report: {
-        name: 'Financial Health Report',
-        description: 'Comprehensive structured analysis',
-      },
+    systemCapabilities: 'System Capabilities',
+    alwaysEnabled: 'Always Enabled',
+
+    builtin: {
+      assetReport: { name: 'Asset Health Check', description: 'Structured analysis of overall family assets' },
+      financeCoach: { name: 'Finance Coach', description: 'Identify high-interest debt and idle assets with optimization suggestions' },
+      wishAdvice: { name: 'Wish Savings Advice', description: 'Optimize monthly savings allocation for pending wishes' },
+      dashboardNarrative: { name: 'Monthly Narrative', description: 'Explain this month\'s financial changes in plain language' },
+      literacyWeeklyReport: { name: 'Kids Literacy Report', description: 'Weekly financial literacy report for parents' },
+      importParse: { name: 'Document Parser', description: 'Parse uploaded financial documents and extract holdings' },
     },
 
     form: {

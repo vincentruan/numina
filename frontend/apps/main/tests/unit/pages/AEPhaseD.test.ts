@@ -32,6 +32,16 @@ const i18n = createI18n({
         title: '技能管理',
         builtinSkills: '内置技能',
         customSkills: '自定义技能',
+        systemCapabilities: '系统能力',
+        alwaysEnabled: '始终启用',
+        builtin: {
+          assetReport: { name: '家庭资产体检', description: '结构化分析' },
+          financeCoach: { name: '财务处方建议', description: '优化建议' },
+          wishAdvice: { name: '心愿储蓄建议', description: '储蓄分配' },
+          dashboardNarrative: { name: '仪表盘月度叙事', description: '月度解读' },
+          literacyWeeklyReport: { name: '儿童财商周报', description: '周度报告' },
+          importParse: { name: '金融文档解析', description: '提取持仓' },
+        },
         capability: {
           report: { name: '资产体检', description: '综合健康评分' },
           alerts: { name: '老化预警', description: '即将到期资产' },
@@ -123,7 +133,7 @@ describe('AE4: SkillsManagePage', () => {
     })
   })
 
-  it('AE4: does NOT render the "固定技能" section', async () => {
+  it('AE4: renders "系统能力" collapsible section (read-only builtin skills)', async () => {
     const SkillsManagePage = (await import('@/pages/SkillsManagePage.vue')).default
     const wrapper = mount(SkillsManagePage, {
       global: {
@@ -134,16 +144,14 @@ describe('AE4: SkillsManagePage', () => {
       },
     })
     await flushPromises()
-    // Structural check: there should be no van-cell-group with the fixed-skills
-    // title. The fixed section's removal is what AE4 mandates; checking inner
-    // text would hit Chinese strings in template comments.
-    const cellGroups = wrapper.findAll('.van-cell-group')
-    const titleAttrs = cellGroups.map((g) => g.attributes('title'))
-    expect(titleAttrs).not.toContain('固定技能')
-    expect(titleAttrs).toContain('内置技能')
+    // The builtin section now shows a "系统能力" header (collapsible, read-only).
+    // It replaces the old "内置技能" toggle section (removed per T11).
+    const header = wrapper.find('.builtin-header')
+    expect(header.exists()).toBe(true)
+    expect(header.text()).toContain('系统能力')
   })
 
-  it('AE4: renders no builtin skill rows (BUILTIN_CAPABILITIES deleted per T11)', async () => {
+  it('AE4: builtin skills are collapsed by default and show 6 rows when expanded', async () => {
     const SkillsManagePage = (await import('@/pages/SkillsManagePage.vue')).default
     const wrapper = mount(SkillsManagePage, {
       global: {
@@ -154,13 +162,19 @@ describe('AE4: SkillsManagePage', () => {
       },
     })
     await flushPromises()
-    // T11: BUILTIN_CAPABILITIES deleted, builtinIds is empty, so the builtin
-    // section renders no rows. Builtin skills are no longer family-toggleable
-    // (is_enabled always True, no db row after family_skill_configs retirement).
-    // The custom section is empty so only the "暂无数据" placeholder cell remains.
-    const cells = wrapper.findAll('.van-cell')
-    // 0 builtin rows + 1 noData placeholder in the custom section.
-    expect(cells.length).toBe(1)
+    // Collapsed by default: builtin-list is hidden via v-show
+    const builtinList = wrapper.find('.builtin-list')
+    expect(builtinList.exists()).toBe(true)
+    // v-show sets display:none when false — check the hidden state
+    expect(builtinList.element.getAttribute('style')).toContain('display: none')
+    // Expand by clicking the header
+    await wrapper.find('.builtin-header').trigger('click')
+    // After expansion, 6 builtin skill cells should be visible
+    const cells = wrapper.findAll('.builtin-list .van-cell')
+    expect(cells.length).toBe(6)
+    // Each cell should show "始终启用" tag (no toggle switch)
+    const tags = wrapper.findAll('.always-enabled-tag')
+    expect(tags.length).toBe(6)
   })
 })
 

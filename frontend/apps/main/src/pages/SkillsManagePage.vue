@@ -2,34 +2,28 @@
   <div class="skills-manage-page">
     <PageHeader :title="t('skills.title')" />
 
-    <!-- U14 (R9): the "固定技能" section is removed entirely. The chat and
-         time_machine entries are no longer skills — they're routing
-         capabilities (see _ROUTING_CAPABILITIES in ai_capabilities.py) and
-         shouldn't appear in skill management. The api response's `fixed`
-         array is also empty after the U1 backend change. -->
-
-    <!-- Builtin skills (toggle) -->
-    <van-cell-group inset :title="t('skills.builtinSkills')" class="section">
-      <van-cell
-        v-for="skill in allBuiltinSkills"
-        :key="skill.id"
-        :title="t(`skills.capability.${skill.id}.name`)"
-        :label="t(`skills.capability.${skill.id}.description`)"
-        center
-      >
-        <template #icon>
-          <span class="skill-icon">{{ getSkillIcon(skill.id) }}</span>
-        </template>
-        <template #value>
-          <van-switch
-            :model-value="skill.is_enabled"
-            size="20px"
-            :disabled="!isOwner"
-            @change="(v: boolean) => onToggle(skill.id, v)"
-            @click.stop
-          />
-        </template>
-      </van-cell>
+    <!-- Builtin skills (read-only, collapsible) -->
+    <van-cell-group inset class="section">
+      <div class="builtin-header" @click="builtinExpanded = !builtinExpanded">
+        <span class="builtin-title">{{ t('skills.systemCapabilities') }}</span>
+        <van-icon :name="builtinExpanded ? 'arrow-up' : 'arrow-down'" size="14" color="var(--van-text-color-2)" />
+      </div>
+      <div v-show="builtinExpanded" class="builtin-list">
+        <van-cell
+          v-for="skill in builtinSkills"
+          :key="skill.id"
+          :title="skill.name"
+          :label="skill.description"
+          center
+        >
+          <template #icon>
+            <span class="skill-icon">{{ skill.icon }}</span>
+          </template>
+          <template #value>
+            <span class="always-enabled-tag">{{ t('skills.alwaysEnabled') }}</span>
+          </template>
+        </van-cell>
+      </div>
     </van-cell-group>
 
     <!-- Custom skills (toggle + edit + delete) -->
@@ -334,7 +328,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -378,8 +372,16 @@ const aiPreviewContent = ref('')
 const aiParsedName = ref<string | null>(null)
 const aiParsedDescription = ref<string | null>(null)
 
-// All builtin skills (including disabled ones for toggle display)
-const allBuiltinSkills = ref<SkillDefinition[]>([])
+// Builtin skills — read-only static list, collapsible section
+const builtinExpanded = ref(false)
+const builtinSkills = [
+  { id: 'asset-report', icon: '📊', name: t('skills.builtin.assetReport.name'), description: t('skills.builtin.assetReport.description') },
+  { id: 'finance-coach', icon: '💰', name: t('skills.builtin.financeCoach.name'), description: t('skills.builtin.financeCoach.description') },
+  { id: 'wish-advice', icon: '💡', name: t('skills.builtin.wishAdvice.name'), description: t('skills.builtin.wishAdvice.description') },
+  { id: 'dashboard-narrative', icon: '📈', name: t('skills.builtin.dashboardNarrative.name'), description: t('skills.builtin.dashboardNarrative.description') },
+  { id: 'literacy-weekly-report', icon: '📝', name: t('skills.builtin.literacyWeeklyReport.name'), description: t('skills.builtin.literacyWeeklyReport.description') },
+  { id: 'import-parse', icon: '🔍', name: t('skills.builtin.importParse.name'), description: t('skills.builtin.importParse.description') },
+]
 
 // Form draft
 const formDraft = ref({
@@ -396,11 +398,6 @@ const formDraft = ref({
 const emojiOptions = ['✨', '📊', '🔔', '💡', '🎯', '📈', '🔍', '💰', '🏠', '📋', '⚡', '🛡️', '🎨', '📦', '🔧', '💳', '📱', '🌐', '🤖', '📝']
 const colorOptions = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#a855f7']
 
-// Builtin skill IDs — must mirror the backend's BUILTIN_CAPABILITIES list.
-// chat and time_machine are NOT in this list; they're routing-only
-// capabilities, blocked from custom skill IDs via RESERVED_NAMES below.
-const builtinIds: string[] = []
-
 // Names reserved for system internal use; cannot be reused as custom skill IDs.
 // Mirrors the backend's RESERVED_NAMES constant in ai_skills.py.
 // chat = 纯 LLM 对话内部能力; asset-report/import-parse/finance-coach = 系统内置
@@ -408,13 +405,6 @@ const builtinIds: string[] = []
 const RESERVED_NAMES = ['chat', 'asset-report', 'import-parse', 'finance-coach']
 
 const SKILL_ID_RE = /^[a-z][a-z0-9_-]*$/
-
-// Skill icons mapping - matches skills.capability.{id}.name emoji prefixes in i18n
-const skillIcons: Record<string, string> = {}
-
-function getSkillIcon(skillId: string): string {
-  return skillIcons[skillId] || '✨'
-}
 
 function deriveSlug(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
@@ -433,14 +423,7 @@ const formValid = computed(() => {
 async function loadSkills() {
   loading.value = true
   try {
-    const res = await getSkillsGrouped()
-    groupedSkills.value = res
-    // For builtin toggle display, we need all builtin skills including disabled
-    // The API returns only enabled ones, so we construct the full list
-    allBuiltinSkills.value = builtinIds.map(id => {
-      const found = res.builtin?.find((s: { id: string }) => s.id === id)
-      return found || { id, skill_type: 'builtin' as const, is_enabled: false, display_order: 100, can_edit: false, can_delete: false }
-    })
+    groupedSkills.value = await getSkillsGrouped()
   } catch {
     showFailToast(t('toast.loadFailed'))
   } finally {
@@ -460,7 +443,7 @@ function validateSkillId(value: string) {
     skillIdError.value = t('skills.form.skillIdInvalid')
     return
   }
-  if (builtinIds.includes(value)) {
+  if (builtinSkills.some(s => s.id === value)) {
     skillIdError.value = t('skills.form.skillIdConflict')
     return
   }
@@ -522,7 +505,7 @@ async function onSubmitForm() {
         input_mode: formDraft.value.input_mode,
         prompt_content: formDraft.value.prompt_content || undefined,
       })
-      showToast(t('skills.form.updateSuccess'))
+      showSuccessToast(t('skills.form.updateSuccess'))
     } else {
       await createCustomSkill({
         skill_id: formDraft.value.skill_id,
@@ -533,7 +516,7 @@ async function onSubmitForm() {
         input_mode: formDraft.value.input_mode,
         prompt_content: formDraft.value.prompt_content,
       })
-      showToast(t('skills.form.createSuccess'))
+      showSuccessToast(t('skills.form.createSuccess'))
     }
     showForm.value = false
     await loadSkills()
@@ -552,7 +535,7 @@ async function onDeleteSkill(skill: SkillDefinition) {
       message: t('skills.form.deleteConfirm', { name: skill.name || skill.id }),
     })
     await deleteCustomSkill(skill.id)
-    showToast(t('skills.form.deleteSuccess'))
+    showSuccessToast(t('skills.form.deleteSuccess'))
     await loadSkills()
   } catch {
     // cancelled
@@ -565,7 +548,7 @@ async function onInstall() {
   installLoading.value = true
   try {
     await installSkill(installCommand.value.trim())
-    showToast(t('skills.install.success'))
+    showSuccessToast(t('skills.install.success'))
     showForm.value = false
     installCommand.value = ''
     await loadSkills()
@@ -575,7 +558,7 @@ async function onInstall() {
     if (message?.includes('已存在')) {
       showToast(t('skills.install.exists'))
     } else {
-      showToast(t('skills.install.failed'))
+      showFailToast(t('skills.install.failed'))
     }
   } finally {
     installLoading.value = false
@@ -595,7 +578,7 @@ async function onAICreate() {
     aiParsedName.value = res.parsed_name
     aiParsedDescription.value = res.parsed_description
   } catch {
-    showToast(t('skills.aiCreate.failed'))
+    showFailToast(t('skills.aiCreate.failed'))
   } finally {
     aiLoading.value = false
   }
@@ -616,7 +599,7 @@ async function onAISave() {
       icon: formDraft.value.icon,
       color: formDraft.value.color,
     })
-    showToast(t('skills.aiCreate.success'))
+    showSuccessToast(t('skills.aiCreate.success'))
     showForm.value = false
     aiDescription.value = ''
     aiPreviewContent.value = ''
@@ -664,6 +647,29 @@ onMounted(loadSkills)
 .skill-icon {
   margin-right: 8px;
   font-size: 20px;
+}
+
+.builtin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.builtin-title {
+  font-size: 14px;
+  color: var(--van-cell-text-color);
+  font-weight: 500;
+}
+
+.always-enabled-tag {
+  font-size: 12px;
+  color: var(--van-text-color-2);
+  background: var(--van-active-color);
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
 .custom-skill-actions {
