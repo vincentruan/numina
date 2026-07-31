@@ -1,5 +1,5 @@
 // frontend/apps/main/src/composables/useStepGuide.ts
-import { ref, type Ref } from 'vue'
+import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { isGuideDone, markGuideDone } from '@/utils/storage'
 
 export interface StepGuideStep {
@@ -13,7 +13,7 @@ export interface StepGuideStep {
 
 export interface UseStepGuideOptions {
   key: string
-  steps: StepGuideStep[]
+  steps: StepGuideStep[] | Ref<StepGuideStep[]> | ComputedRef<StepGuideStep[]>
   onComplete?: () => void
   onSkip?: () => void
 }
@@ -21,7 +21,7 @@ export interface UseStepGuideOptions {
 export interface UseStepGuideReturn {
   isActive: Ref<boolean>
   currentStep: Ref<number>
-  steps: StepGuideStep[]
+  steps: ComputedRef<StepGuideStep[]>
   start: () => void
   skip: () => void
   complete: () => void
@@ -29,9 +29,15 @@ export interface UseStepGuideReturn {
 }
 
 export function useStepGuide(options: UseStepGuideOptions): UseStepGuideReturn {
-  const { key, steps, onComplete, onSkip } = options
+  const { key, onComplete, onSkip } = options
   const isActive = ref(false)
   const currentStep = ref(0)
+
+  // Accept plain array, Ref, or ComputedRef — normalize to ComputedRef
+  const steps = computed(() => {
+    const raw = options.steps
+    return 'value' in raw ? raw.value : raw
+  })
 
   function start() {
     if (isGuideDone(key)) return
@@ -52,7 +58,7 @@ export function useStepGuide(options: UseStepGuideOptions): UseStepGuideReturn {
   }
 
   function next() {
-    if (currentStep.value < steps.length - 1) {
+    if (currentStep.value < steps.value.length - 1) {
       currentStep.value++
     }
   }

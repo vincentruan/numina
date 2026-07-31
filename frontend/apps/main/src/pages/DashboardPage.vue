@@ -147,7 +147,7 @@ let userConfig: UserConfigValues | null = null
 
 const guide = useStepGuide({
   key: 'guide_main-onboarding-v2',
-  steps: guideSteps.value,
+  steps: guideSteps,
   onComplete: async () => {
     if (userConfig) await recordGuideCompletion(userConfig, GUIDE_VERSION)
   },
@@ -165,8 +165,8 @@ async function maybeShowOnboarding() {
   }
   const { shouldShow } = shouldShowGuide(userConfig, GUIDE_VERSION)
   if (!shouldShow) return
-  recordGuideShown()
   await recordGuideAttempt(userConfig)
+  recordGuideShown()
   guide.start()
 }
 

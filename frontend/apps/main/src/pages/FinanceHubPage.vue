@@ -97,8 +97,8 @@ const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
 const currency = useCurrency()
 const { increment, decrement } = usePageLoading()
-const assetGesture = useGestureHint('asset-longpress', { target: '.asset-list-item:first-child', type: 'long-press-pulse' })
-const liabilityGesture = useGestureHint('liability-swipe', { target: '.liability-card:first-child', type: 'swipe-left' })
+const assetGesture = useGestureHint('asset-longpress')
+const liabilityGesture = useGestureHint('liability-swipe')
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false

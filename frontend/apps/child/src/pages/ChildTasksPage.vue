@@ -387,7 +387,7 @@ const guideSteps = computed(() => {
 })
 const guide = useStepGuide({
   key: 'guide_child-onboarding-v1',
-  steps: guideSteps.value,
+  steps: guideSteps,
   onComplete: async () => {
     if (childConfig) await recordChildGuideCompletion(childConfig, CHILD_GUIDE_VERSION)
   },

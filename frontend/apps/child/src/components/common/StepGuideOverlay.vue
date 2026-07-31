@@ -47,7 +47,7 @@
         <!-- Step indicator dots -->
         <div class="stepguide-dots" aria-hidden="true">
           <span
-            v-for="n in steps.length"
+            v-for="n in resolvedSteps.length"
             :key="n"
             class="stepguide-dot"
             :class="{ 'stepguide-dot--active': n === currentStep + 1 }"
@@ -83,13 +83,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { StepGuideStep } from '@/composables/useStepGuide'
 
 const props = defineProps<{
   visible: boolean
-  steps: StepGuideStep[]
+  steps: StepGuideStep[] | Ref<StepGuideStep[]>
   currentStep: number
 }>()
 
@@ -112,8 +112,14 @@ const skipBtnRef = ref<HTMLElement | null>(null)
 const nextBtnRef = ref<HTMLElement | null>(null)
 const tooltipStyle = ref<Record<string, string>>({})
 
-const isLastStep = computed(() => props.currentStep === props.steps.length - 1)
-const currentStepData = computed(() => props.steps[props.currentStep])
+const isLastStep = computed(() => {
+  return props.currentStep === resolvedSteps.value.length - 1
+})
+const resolvedSteps = computed(() => {
+  const s = props.steps
+  return 'value' in s ? s.value : s
+})
+const currentStepData = computed(() => resolvedSteps.value[props.currentStep])
 const currentTitle = computed(() => currentStepData.value?.title ?? '')
 const currentDesc = computed(() => currentStepData.value?.desc ?? '')
 

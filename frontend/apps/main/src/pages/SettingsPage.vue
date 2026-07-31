@@ -325,6 +325,7 @@ import { useAIStore } from '@/stores/ai'
 import { updateSettings } from '@/api/auth'
 import { getFamilySettings, updateFamilySettings } from '@/api/family'
 import { isGuideDone, markGuideDone, clearLegacyOnboardingKeys } from '@/utils/storage'
+import { resetGuideState } from '@/composables/useGuideTrigger'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
@@ -597,8 +598,9 @@ async function selectThemeColor(color: string) {
   }
 }
 
-function onReplayOnboarding() {
+async function onReplayOnboarding() {
   clearLegacyOnboardingKeys()
+  await resetGuideState()
   router.push('/')
 }
 
