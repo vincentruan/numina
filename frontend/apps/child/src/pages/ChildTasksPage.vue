@@ -1,7 +1,7 @@
 <template>
   <div class="chores-page">
     <!-- Skeleton during initial load -->
-    <ChildTasksSkeleton v-if="loading && !refreshing && chores.length === 0" />
+    <RoleShimmer v-if="loading && !refreshing && chores.length === 0" variant="clay-pulse" />
 
     <!-- Actual content -->
     <template v-else>
@@ -265,7 +265,7 @@ defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
-import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
+import RoleShimmer from '@/components/RoleShimmer.vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showSuccessToast } from 'vant'
 import ChildInlineError from '@/components/ChildInlineError.vue'
@@ -568,6 +568,11 @@ async function pollForApproval(instanceId: string) {
     try {
       const res = await http.get<{ status: string }>(`/child/chores/${instanceId}/status`)
       if (res.data.status === 'approved') {
+        // Update local chores ref so watch(chores) → checkAndTriggerCelebration fires
+        const idx = chores.value.findIndex(c => c.id === instanceId)
+        if (idx !== -1) {
+          chores.value[idx] = { ...chores.value[idx], status: 'approved' }
+        }
         await checkAutoDraw()
         return
       }
