@@ -94,5 +94,8 @@
   "CHORE_INSTANCE_STATUS_CONFLICT": "Chore instance status does not allow this operation",
   "CHORE_ASSIGN_TARGET_INVALID": "Target user is not a child in this family",
   "CHORE_ALREADY_CLAIMED": "This chore has already been claimed",
-  "CHORE_NOT_YOURS": "This chore does not belong to you"
+  "CHORE_NOT_YOURS": "This chore does not belong to you",
+  "MANIFESTO_NOT_FOUND": "Family manifesto not found",
+  "MANIFESTO_ALREADY_SIGNED": "Already signed this manifesto",
+  "MANIFESTO_NOT_ACTIVE": "This manifesto is not active"
 }

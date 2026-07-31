@@ -94,5 +94,8 @@
   "CHORE_INSTANCE_STATUS_CONFLICT": "家务实例当前状态不允许此操作",
   "CHORE_ASSIGN_TARGET_INVALID": "目标用户不是该家庭的孩子",
   "CHORE_ALREADY_CLAIMED": "该家务已被认领",
-  "CHORE_NOT_YOURS": "该家务不属于你"
+  "CHORE_NOT_YOURS": "该家务不属于你",
+  "MANIFESTO_NOT_FOUND": "家庭约定不存在",
+  "MANIFESTO_ALREADY_SIGNED": "已签署过该约定",
+  "MANIFESTO_NOT_ACTIVE": "该约定未生效"
 }

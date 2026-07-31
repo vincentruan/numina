@@ -61,6 +61,12 @@ from apps.backend.app.models.literacy_scenario import (
     LiteracyScenario,
     LiteracyScenarioTemplate,
 )
+from apps.backend.app.models.manifesto import (
+    FamilyManifesto,
+    ManifestoFeedback,
+    ManifestoSignature,
+    ManifestoVersion,
+)
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
@@ -120,6 +126,7 @@ from apps.backend.app.routers import blind_box as blind_box_router
 from apps.backend.app.routers import calendar as calendar_router
 from apps.backend.app.routers import challenge_grants as challenge_grants_router
 from apps.backend.app.routers import child_blind_box as child_blind_box_router
+from apps.backend.app.routers import child_manifesto as child_manifesto_router
 from apps.backend.app.routers import child_wishes as child_wishes_router
 from apps.backend.app.routers import children as children_router
 from apps.backend.app.routers import chores as chores_router
@@ -133,6 +140,7 @@ from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
 from apps.backend.app.routers import literacy_child as literacy_child_router
 from apps.backend.app.routers import literacy_parent as literacy_parent_router
+from apps.backend.app.routers import manifesto as manifesto_router
 from apps.backend.app.routers import mcp_internal as mcp_internal_router
 from apps.backend.app.routers import milestones as milestones_router
 from apps.backend.app.routers import (
@@ -493,6 +501,8 @@ app.include_router(ai_web_search_router.router, prefix="/api/v1")
 app.include_router(ai_wish_advice_router.router, prefix="/api/v1")
 app.include_router(family_config_router.router, prefix="/api/v1")
 app.include_router(user_config_router.router, prefix="/api/v1")
+app.include_router(manifesto_router.router, prefix="/api/v1")
+app.include_router(child_manifesto_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 # Serve uploaded files — mount only the uploads subtree, not the entire workspace
