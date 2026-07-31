@@ -125,6 +125,12 @@
       <van-icon name="arrow" size="16" color="var(--color-muted-soft)" />
     </router-link>
 
+    <!-- Manifesto summary (only shown after signing) -->
+    <ManifestoSummaryCard
+      :manifesto="manifesto"
+      @open="router.push('/manifesto/sign')"
+    />
+
     <!-- Top active wish progress -->
     <router-link v-if="topWish" to="/wishes" class="wish-preview">
       <div class="wish-preview-header">
@@ -194,13 +200,21 @@
       @balance-react="onBalanceReact"
       @balance-react-end="onBalanceReactEnd"
     />
+
+    <!-- Manifesto signing notification popup -->
+    <ChildManifestoPopup
+      :visible="manifestoPopupVisible"
+      :manifesto-title="manifesto?.title ?? ''"
+      @update:visible="(v) => (manifestoPopupVisible = v)"
+      @navigate="router.push('/manifesto/sign')"
+    />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildHome' })
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onActivated } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ProgressRing from '@/components/ProgressRing.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
@@ -227,6 +241,9 @@ import { useReducedMotion } from '@/composables/useReducedMotion'
 import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
 import { useAuthStore, useChildAuthStore } from '@numina/auth'
+import { useManifestoSign } from '@/composables/useManifestoSign'
+import ChildManifestoPopup from '@/components/manifesto/ChildManifestoPopup.vue'
+import ManifestoSummaryCard from '@/components/manifesto/ManifestoSummaryCard.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -241,6 +258,15 @@ const reducedMotion = useReducedMotion()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
 const refreshing = ref(false)
+
+// Manifesto state
+const {
+  manifesto,
+  signed: manifestoSigned,
+  init: initManifesto,
+} = useManifestoSign()
+const manifestoPopupVisible = ref(false)
+let hasActivated = false
 
 // ProgressRing derived data
 const completedChores = computed(() => todayChores.value.filter(c => c.status === 'approved').length)
@@ -399,8 +425,23 @@ onMounted(async () => {
   increment()
   try {
     await load()
+    await initManifesto()
+    // Show popup if unsigned manifesto exists
+    if (manifesto.value && !manifestoSigned.value) {
+      manifestoPopupVisible.value = true
+    }
   } finally {
     decrement()
+  }
+  hasActivated = true
+})
+
+// KeepAlive: re-check manifesto on reactivation (e.g., after signing)
+onActivated(async () => {
+  if (!hasActivated) return
+  await initManifesto()
+  if (manifesto.value && !manifestoSigned.value) {
+    manifestoPopupVisible.value = true
   }
 })
 

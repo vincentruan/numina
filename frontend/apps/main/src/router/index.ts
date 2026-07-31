@@ -369,6 +369,30 @@ const router = createRouter({
           path: 'baby/literacy-report',
           name: 'LiteracyReport',
           component: () => import('@/pages/LiteracyReportPage.vue')
+        },
+        {
+          path: 'manifesto/template-select',
+          name: 'ManifestoTemplateSelect',
+          component: () => import('@/pages/ManifestoTemplateSelectPage.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: 'manifesto/edit',
+          name: 'ManifestoEdit',
+          component: () => import('@/pages/ManifestoEditPage.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: 'manifesto/sign',
+          name: 'ManifestoSign',
+          component: () => import('@/pages/ManifestoSignPage.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: 'manifesto/preview',
+          name: 'ManifestoPreview',
+          component: () => import('@/pages/ManifestoPreviewPage.vue'),
+          meta: { requiresAuth: true },
         }
       ]
     },

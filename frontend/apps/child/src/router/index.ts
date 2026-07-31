@@ -87,6 +87,11 @@ const router = createRouter({
           component: () => import('@/pages/ChildBadgesPage.vue'),
         },
         {
+          path: 'manifesto/sign',
+          name: 'ManifestoSigning',
+          component: () => import('@/pages/ManifestoSigningPage.vue'),
+        },
+        {
           path: 'settings',
           name: 'ChildSettings',
           component: () => import('@/pages/ChildSettingsPage.vue'),

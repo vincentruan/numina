@@ -67,7 +67,14 @@
       :text="t('empty.allDone')"
     />
 
-    <div v-else-if="!allDone" class="chore-list">
+    <div v-else-if="!allDone">
+      <Transition name="inline-hint-fade">
+        <div v-if="hasTrackable && chores.length > 0" class="trackable-hint-card">
+          <span class="trackable-hint-icon" aria-hidden="true">⭐</span>
+          <span class="trackable-hint-text">{{ t('manifesto.trackableHint') }}</span>
+        </div>
+      </Transition>
+    <div class="chore-list">
       <div
         v-for="chore in chores"
         :key="chore.id"
@@ -147,6 +154,7 @@
     </div>
 
     <!-- Complete confirmation sheet -->
+    </div>
     <van-popup
       v-model:show="completeSheetVisible"
       position="bottom"
@@ -276,6 +284,7 @@ import http from '@/api/index'
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
+import { useTrackableClauses } from '@/composables/useTrackableClauses'
 import { useSwipeComplete } from '@/composables/useSwipeComplete'
 import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
@@ -341,6 +350,7 @@ const showAutoDrawOverlay = ref(false)
 // Balance polling via composable
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
 const reducedMotion = useReducedMotion()
+const { hasTrackable, init: initTrackable } = useTrackableClauses()
 
 // Swipe-to-complete gesture (U3)
 const {
@@ -675,6 +685,7 @@ onMounted(async () => {
   try {
     await load()
     await checkNewMilestones()
+    initTrackable()
     try {
       const wishData = await listChildWishes().catch(() => null)
       const active = wishData?.active ?? []
@@ -1137,4 +1148,52 @@ onUnmounted(() => {
 }
 .btn-abandon-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-abandon-confirm:active:not(:disabled) { transform: scale(0.96); }
+
+/* ── Trackable clause hint ── */
+.trackable-hint-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin: 8px 0 12px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-body);
+}
+
+.trackable-hint-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.trackable-hint-text {
+  flex: 1;
+  font-family: Inter, sans-serif;
+}
+
+.inline-hint-fade-enter-active,
+.inline-hint-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.inline-hint-fade-enter-from,
+.inline-hint-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inline-hint-fade-enter-active,
+  .inline-hint-fade-leave-active {
+    transition: opacity 0.15s ease;
+  }
+  .inline-hint-fade-enter-from,
+  .inline-hint-fade-leave-to {
+    opacity: 0;
+    transform: none;
+  }
+}
 </style>

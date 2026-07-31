@@ -34,6 +34,12 @@ from apps.backend.app.models.family_web_search_provider import (
     FamilyWebSearchProvider,
 )
 from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.manifesto import (
+    FamilyManifesto,
+    ManifestoFeedback,
+    ManifestoSignature,
+    ManifestoVersion,
+)
 from apps.backend.app.models.payment_record import PaymentRecord
 
 # Import all models
