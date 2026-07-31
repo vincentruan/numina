@@ -61,3 +61,6 @@ class UserConfigResponse(BaseModel):
     """All user settings merged with defaults."""
     dashboard_trend_period: str
     activity_feed_page_size: int
+    onboarding_guide_version: int
+    onboarding_attempts: int
+    onboarding_completions: int
