@@ -151,6 +151,49 @@
           </template>
         </van-cell>
       </van-cell-group>
+
+      <!-- Financial Literacy -->
+      <van-cell-group inset :title="t('familyConfig.literacyGroup')" class="section">
+        <van-cell>
+          <template #title>
+            <span>{{ t('familyConfig.literacyReportDay') }}</span>
+            <span class="value">{{ dayLabels[form.literacy_report_day] }}</span>
+          </template>
+          <template #label>
+            <span class="desc">{{ t('familyConfig.literacyReportDayDesc') }}</span>
+            <div class="slider-track">
+              <van-slider v-model="form.literacy_report_day" :min="0" :max="6" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>0</span><span>3</span><span>6</span></div>
+          </template>
+        </van-cell>
+        <van-cell>
+          <template #title>
+            <span>{{ t('familyConfig.literacyReportHour') }}</span>
+            <span class="value">{{ form.literacy_report_hour }} {{ t('familyConfig.unitHour') }}</span>
+          </template>
+          <template #label>
+            <span class="desc">{{ t('familyConfig.literacyReportHourDesc') }}</span>
+            <div class="slider-track">
+              <van-slider v-model="form.literacy_report_hour" :min="0" :max="23" :step="1" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>0</span><span>12</span><span>23</span></div>
+          </template>
+        </van-cell>
+        <van-cell>
+          <template #title>
+            <span>{{ t('familyConfig.literacyCacheTtl') }}</span>
+            <span class="value">{{ form.ai_cache_ttl_literacy_weekly_report }} {{ t('familyConfig.unitMinutes') }}</span>
+          </template>
+          <template #label>
+            <span class="desc">{{ t('familyConfig.literacyCacheTtlDesc') }}</span>
+            <div class="slider-track">
+              <van-slider v-model="form.ai_cache_ttl_literacy_weekly_report" :min="1440" :max="20160" :step="1440" @change="onSave" />
+            </div>
+            <div class="slider-scale"><span>1440</span><span>10080</span><span>20160</span></div>
+          </template>
+        </van-cell>
+      </van-cell-group>
     </template>
   </div>
 </template>
@@ -182,6 +225,9 @@ const form = ref({
   scheduled_monthly_report_hour: 8,
   scheduled_weekly_scan_day: 0,
   scheduled_weekly_scan_hour: 8,
+  literacy_report_day: 0,
+  literacy_report_hour: 8,
+  ai_cache_ttl_literacy_weekly_report: 10080,
 })
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null

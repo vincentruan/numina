@@ -304,6 +304,11 @@ const router = createRouter({
           component: () => import('@/pages/FamilyConfigPage.vue'),
         },
         {
+          path: 'settings/family/debt-thresholds',
+          name: 'DebtThresholds',
+          component: () => import('@/pages/DebtThresholdsPage.vue'),
+        },
+        {
           path: 'settings/user/config',
           name: 'UserConfig',
           component: () => import('@/pages/UserConfigPage.vue'),

@@ -69,6 +69,26 @@
       <p class="hint">{{ t('settings.educationRewardHint') }}</p>
     </div>
 
+    <!-- Auto-approve -->
+    <div class="auto-approve-section">
+      <div class="rate-row">
+        <div class="rate-label">{{ t('settings.autoApproveHours') }}</div>
+        <div class="rate-controls">
+          <van-slider
+            v-model="autoApproveHours"
+            :min="0"
+            :max="72"
+            :step="1"
+            class="slider"
+          />
+          <span class="rate-unit">
+            {{ autoApproveHours === 0 ? t('settings.autoApproveHoursManual') : `${autoApproveHours} ${t('settings.autoApproveHoursUnit')}` }}
+          </span>
+        </div>
+        <p class="hint">{{ t('settings.autoApproveHoursDesc') }}</p>
+      </div>
+    </div>
+
     <div class="save-action">
       <van-button
         block
@@ -107,6 +127,7 @@ const educationRewardEnabled = ref(false)
 const coinToYuanRate = ref(1)
 const coinToYuanRateStr = ref('1')
 const coinToYuanRateError = ref(false)
+const autoApproveHours = ref(0)
 const saving = ref(false)
 
 onMounted(async () => {
@@ -119,6 +140,7 @@ onMounted(async () => {
     educationRewardEnabled.value = res.data.education_reward_enabled
     coinToYuanRate.value = res.data.coin_to_yuan_rate
     coinToYuanRateStr.value = String(coinToYuanRate.value)
+    autoApproveHours.value = res.data.auto_approve_hours
   } catch {
     showFailToast(t('toast.loadFailed'))
   }
@@ -180,6 +202,7 @@ async function saveRates() {
       coinSilverToGold: silverToGold.value,
       educationRewardEnabled: educationRewardEnabled.value,
       coinToYuanRate: coinToYuanRate.value,
+      autoApproveHours: autoApproveHours.value,
     })
     familyStore.coinCopperToSilver = copperToSilver.value
     familyStore.coinSilverToGold = silverToGold.value

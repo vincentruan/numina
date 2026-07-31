@@ -126,6 +126,7 @@ class ChoreInstanceResponse(SnowflakeBase):
     assigned_by_user_id: int | None = None
     claimed_at: datetime | None = None
     is_pool_unclaimed: bool = False
+    education_reward_coins: int | None = None
 
     @field_validator("child_avatar_color", mode="before")
     @classmethod

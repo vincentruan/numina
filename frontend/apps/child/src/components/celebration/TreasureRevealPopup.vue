@@ -19,6 +19,9 @@
           <p v-if="taskCount === 1" class="popup-stars">
             {{ t('celebration.singleTask', { stars: starsEarned }) }}
           </p>
+          <p v-if="(educationRewardCoins ?? 0) > 0" class="popup-edu-reward">
+            {{ t('celebration.educationReward', { coins: educationRewardCoins ?? 0 }) }}
+          </p>
           <button
             type="button"
             class="popup-confirm"
@@ -43,6 +46,7 @@ const props = defineProps<{
   visible: boolean
   taskCount: number
   starsEarned: number
+  educationRewardCoins?: number
 }>()
 
 const emit = defineEmits<{
@@ -177,6 +181,20 @@ onUnmounted(clearTimers)
   margin: 0 0 20px;
 }
 
+.popup-edu-reward {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-brand-ochre);
+  margin: 0 0 16px;
+  animation: edu-reward-fade-in 400ms ease-out 300ms backwards;
+}
+
+[data-theme='dark'] .popup-edu-reward {
+  color: var(--color-brand-ochre);
+  opacity: 0.95;
+}
+
 .popup-confirm {
   margin-top: 8px;
   padding: 12px 32px;
@@ -242,6 +260,17 @@ onUnmounted(clearTimers)
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes edu-reward-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>

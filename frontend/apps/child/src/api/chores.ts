@@ -69,6 +69,7 @@ export interface ChoreInstance {
   is_pool_unclaimed: boolean
   assigned_by_user_id: string | null
   claimed_at: string | null
+  education_reward_coins: number | null
 }
 
 /** Extends ChoreInstance with child identity fields present on pending-approval responses. */
