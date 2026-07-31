@@ -36,6 +36,9 @@
         <!-- D1: Pending approvals (owner-only; component self-gates on non-empty list) -->
         <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
 
+        <!-- Family Manifesto dashboard summary (self-gates when no active manifesto) -->
+        <ManifestoDashboardCard />
+
         <!-- Focus top-3 preview across assets/liabilities/wishes -->
         <FocusTop3Card />
       </template>
@@ -78,6 +81,7 @@ import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
+import ManifestoDashboardCard from '@/components/dashboard/ManifestoDashboardCard.vue'
 import LiteracyStatusCard from '@/components/dashboard/LiteracyStatusCard.vue'
 import ManifestoSigningPopup from '@/components/manifesto/ManifestoSigningPopup.vue'
 import * as manifestoApi from '@/api/manifesto'

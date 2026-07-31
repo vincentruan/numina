@@ -194,20 +194,59 @@
           </template>
         </van-cell>
       </van-cell-group>
+
+      <!-- Family Manifesto (owner-only) -->
+      <van-cell-group v-if="isOwner" inset :title="t('manifesto.settingsGroup')" class="section">
+        <van-cell
+          :title="t('manifesto.editManifesto')"
+          is-link
+          icon="certificate"
+          @click="goManifestoEdit"
+        />
+        <van-cell
+          :title="t('manifesto.versionHistory')"
+          is-link
+          icon="orders-o"
+          @click="showHistory = true"
+        />
+        <van-cell
+          :title="t('manifesto.feedbackList')"
+          is-link
+          icon="comment-o"
+          @click="showFeedback = true"
+        >
+          <template #right-icon>
+            <van-badge v-if="unreadFeedbackCount > 0" :content="unreadFeedbackCount" />
+          </template>
+        </van-cell>
+      </van-cell-group>
     </template>
+
+    <ManifestoHistoryDialog v-model:visible="showHistory" />
+    <ManifestoFeedbackList v-model:visible="showFeedback" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
+import { useAuth } from '@/composables/useAuth'
+import * as manifestoApi from '@/api/manifesto'
+import ManifestoHistoryDialog from '@/components/manifesto/ManifestoHistoryDialog.vue'
+import ManifestoFeedbackList from '@/components/manifesto/ManifestoFeedbackList.vue'
 
 defineOptions({ name: 'FamilyConfig' })
 
 const { t } = useI18n()
+const router = useRouter()
+const { isOwner } = useAuth()
 const loading = ref(true)
+const showHistory = ref(false)
+const showFeedback = ref(false)
+const unreadFeedbackCount = ref(0)
 
 const dayLabels = computed<string[]>(() => {
   const labels = t('familyConfig.dayLabels', { returnObjects: true }) as unknown
@@ -248,6 +287,30 @@ function onSave() {
   }, 600)
 }
 
+function goManifestoEdit() {
+  manifestoApi.getCurrentManifesto()
+    .then((res) => {
+      if (res.data && res.data.id) {
+        router.push('/manifesto/edit')
+      } else {
+        router.push('/manifesto/template-select')
+      }
+    })
+    .catch(() => {
+      router.push('/manifesto/template-select')
+    })
+}
+
+async function loadUnreadCount() {
+  if (!isOwner.value) return
+  try {
+    const res = await manifestoApi.getFeedbackList()
+    unreadFeedbackCount.value = (res.data ?? []).filter(f => !f.is_read).length
+  } catch {
+    unreadFeedbackCount.value = 0
+  }
+}
+
 onMounted(async () => {
   try {
     const res = await getFamilyConfig()
@@ -255,6 +318,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  loadUnreadCount()
 })
 </script>
 
