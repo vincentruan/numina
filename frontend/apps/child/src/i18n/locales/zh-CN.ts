@@ -433,6 +433,16 @@ export default {
     notFound: '暂时没有家庭约定',
     trackableHint: '这个任务和我们的家庭约定有关哦',
   },
+  childOnboarding: {
+    skip: '跳过',
+    next: '下一步',
+    done: '知道了',
+    step1: {
+      empty: { title: '你的家务任务', desc: '这里会显示你的家务任务，完成后就能获得奖励' },
+      data: { title: '你的任务列表', desc: '完成家务就能获得奖励' },
+    },
+    step2: { title: '我的奖励', desc: '积攒奖励，兑换心愿' },
+  },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',
     allDone: '今天的任务都完成啦！太棒了 🎉',

@@ -432,6 +432,16 @@ export default {
     notFound: 'No family manifesto right now',
     trackableHint: 'This task is related to our family manifesto',
   },
+  childOnboarding: {
+    skip: 'Skip',
+    next: 'Next',
+    done: 'Got it',
+    step1: {
+      empty: { title: 'Your Chores', desc: 'Your tasks will appear here. Complete them to earn rewards' },
+      data: { title: 'Your Tasks', desc: 'Complete chores to earn rewards' },
+    },
+    step2: { title: 'My Rewards', desc: 'Save up rewards to redeem wishes' },
+  },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',
     allDone: 'All done for today! Amazing 🎉',

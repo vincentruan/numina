@@ -256,6 +256,15 @@
       @balance-react="onBalanceReact"
       @balance-react-end="onBalanceReactEnd"
     />
+
+    <StepGuideOverlay
+      :visible="guide.isActive.value"
+      :steps="guideSteps"
+      :current-step="guide.currentStep.value"
+      @skip="guide.skip"
+      @next="guide.next"
+      @complete="guide.complete"
+    />
     </template>
   </div>
 </template>
@@ -287,6 +296,8 @@ import { useReducedMotion } from '@/composables/useReducedMotion'
 import { useTrackableClauses } from '@/composables/useTrackableClauses'
 import { useSwipeComplete } from '@/composables/useSwipeComplete'
 import { tryVibrate } from '@/composables/useHaptic'
+import { useStepGuide } from '@/composables/useStepGuide'
+import StepGuideOverlay from '@/components/common/StepGuideOverlay.vue'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
 import EmptyState from '@/components/EmptyState.vue'
@@ -351,6 +362,26 @@ const showAutoDrawOverlay = ref(false)
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
 const reducedMotion = useReducedMotion()
 const { hasTrackable, init: initTrackable } = useTrackableClauses()
+
+// Step guide onboarding
+const guideSteps = computed(() => {
+  const hasChores = chores.value.length > 0
+  return [
+    {
+      selector: hasChores ? '.chore-list' : '.empty-state',
+      mode: 'spotlight' as const,
+      title: hasChores ? t('childOnboarding.step1.data.title') : t('childOnboarding.step1.empty.title'),
+      desc: hasChores ? t('childOnboarding.step1.data.desc') : t('childOnboarding.step1.empty.desc'),
+    },
+    {
+      selector: '.balance-hero, .empty-state',
+      mode: 'spotlight' as const,
+      title: t('childOnboarding.step2.title'),
+      desc: t('childOnboarding.step2.desc'),
+    },
+  ]
+})
+const guide = useStepGuide({ key: 'guide_child-onboarding-v1', steps: guideSteps.value })
 
 // Swipe-to-complete gesture (U3)
 const {
@@ -703,6 +734,8 @@ onMounted(async () => {
     checkAndTriggerCelebration(chores.value)
     // Scroll to highlighted chore from homepage
     scrollToHighlight()
+    // Start onboarding guide
+    guide.start()
   } finally {
     decrement()
   }
