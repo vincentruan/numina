@@ -94,6 +94,13 @@
         is-link
         to="/settings/family/debt-thresholds"
       />
+      <van-cell
+        v-if="authStore.user?.role === 'owner'"
+        :title="t('manifesto.editManifesto')"
+        icon="certificate"
+        is-link
+        to="/settings/family/manifesto"
+      />
     </van-cell-group>
 
     <!-- 账户安全 -->
