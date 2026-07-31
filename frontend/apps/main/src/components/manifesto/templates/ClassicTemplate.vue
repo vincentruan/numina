@@ -16,6 +16,9 @@
               :alt="signatures[idx].name"
               class="signature-image"
             />
+            <span v-else-if="signatures[idx] && signatures[idx].data === null" class="signature-consented">
+              ✓ {{ t('manifesto.tapConsented') }}
+            </span>
             <span v-else class="signature-pending">{{ t('manifesto.pending') }}</span>
           </div>
         </div>
@@ -122,5 +125,11 @@ const bodyParagraphs = computed(() => {
 .signature-pending {
   color: var(--text-secondary, #616161);
   font-size: 13px;
+}
+
+.signature-consented {
+  color: var(--color-success, #1a7a4a);
+  font-size: 13px;
+  font-weight: 500;
 }
 </style>
