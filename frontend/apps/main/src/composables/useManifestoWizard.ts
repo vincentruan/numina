@@ -1,8 +1,10 @@
 import { ref, watch, type Ref } from 'vue'
 
 const STORAGE_KEY = 'manifesto-wizard'
+const STORAGE_VERSION = 1
 
 export interface WizardState {
+  _version: number
   selectedTemplateId: string | null
   title: string
   body: string
@@ -12,6 +14,7 @@ export interface WizardState {
 }
 
 const defaults: WizardState = {
+  _version: STORAGE_VERSION,
   selectedTemplateId: null,
   title: '',
   body: '',
@@ -25,8 +28,10 @@ function loadFromStorage(): WizardState {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return { ...defaults }
     const parsed = JSON.parse(raw) as Partial<WizardState>
+    if (parsed._version !== STORAGE_VERSION) return { ...defaults }
     const blocks = Array.isArray(parsed.blocks) && parsed.blocks.length > 0 ? parsed.blocks : ['']
     return {
+      _version: STORAGE_VERSION,
       selectedTemplateId: parsed.selectedTemplateId ?? null,
       title: parsed.title ?? '',
       body: parsed.body ?? '',

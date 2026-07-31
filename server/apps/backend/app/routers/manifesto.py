@@ -121,7 +121,7 @@ def publish_update(
     return _build_manifesto_response(updated, version, sig_list)
 
 
-@router.post("/sign", response_model=ManifestoSignatureItem)
+@router.post("/sign", response_model=ManifestoSignatureItem, status_code=201)
 def sign_manifesto(
     req: ManifestoSignRequest,
     db: Session = Depends(get_db),

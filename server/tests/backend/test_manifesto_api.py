@@ -3,6 +3,7 @@
 import pytest
 
 from apps.backend.app.auth.deps import create_access_token
+from apps.backend.app.models.manifesto import ManifestoVersion
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.utils.snowflake import next_id
@@ -119,13 +120,13 @@ def test_non_owner_cannot_create_403(client, member_headers):
 # ---------------------------------------------------------------------------
 
 
-def test_member_sign_manifesto_200(client, auth_headers, member_headers, manifesto):
+def test_member_sign_manifesto_201(client, auth_headers, member_headers, manifesto):
     resp = client.post(
         "/api/v1/family/manifesto/sign",
         headers=member_headers,
         json={"signature_data": "member_sig_data"},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     data = _data(resp)
     assert data["signature_data"] == "member_sig_data"
 
@@ -280,7 +281,33 @@ def test_child_can_sign_manifesto(client, auth_headers, child_user, manifesto):
         headers=child_user["headers"],
         json={},  # signature_data nullable for tap-to-consent
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 201
+
+
+def test_child_sign_does_not_count_toward_signed_at(
+    client, auth_headers, member_headers, child_user, manifesto, db
+):
+    """Regression: child signature must not trigger signed_at before all adults sign."""
+    # Child signs first
+    resp = client.post(
+        "/api/v1/child/manifesto/sign",
+        headers=child_user["headers"],
+        json={},
+    )
+    assert resp.status_code == 201
+
+    version = db.query(ManifestoVersion).filter_by(id=manifesto["current_version_id"]).first()
+    assert version.signed_at is None  # child alone shouldn't complete signing
+
+    # Owner (1st adult) signs
+    client.post("/api/v1/family/manifesto/sign", headers=auth_headers, json={})
+    db.expire_all()
+    assert version.signed_at is None  # 1 of 2 adults — still incomplete
+
+    # Member (2nd adult) signs
+    client.post("/api/v1/family/manifesto/sign", headers=member_headers, json={})
+    db.expire_all()
+    assert version.signed_at is not None  # all adults signed → timestamp set
 
 
 def test_child_cannot_create_manifesto(client, child_user):

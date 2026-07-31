@@ -9,7 +9,7 @@
               <span class="manifesto-title__text">{{ t('manifesto.title') }}</span>
             </span>
             <span class="manifesto-summary">
-              {{ summary!.signed_count }}/{{ summary!.total_members }} {{ t('manifesto.signed') }}
+              {{ summary?.signed_count ?? 0 }}/{{ summary?.total_members ?? 0 }} {{ t('manifesto.signed') }}
             </span>
             <van-icon name="arrow" class="manifesto-arrow" />
           </div>

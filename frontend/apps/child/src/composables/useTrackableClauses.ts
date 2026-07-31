@@ -17,9 +17,9 @@ export function useTrackableClauses() {
     }
   }
 
-  function refresh() {
+  async function refresh() {
     loading.value = true
-    init()
+    await init()
   }
 
   return { trackableCount, hasTrackable, loading, init, refresh }

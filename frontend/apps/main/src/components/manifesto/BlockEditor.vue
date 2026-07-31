@@ -1,6 +1,6 @@
 <template>
   <div class="block-editor">
-    <div v-for="(block, index) in blocks" :key="index" class="block-card">
+    <div v-for="(block, index) in blocks" :key="`block-${index}-${block.slice(0, 10)}`" class="block-card">
       <div class="block-header">
         <span class="block-label">{{ t('manifesto.paragraph') }} {{ index + 1 }}</span>
         <div class="block-actions">

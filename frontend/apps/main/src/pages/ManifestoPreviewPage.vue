@@ -23,7 +23,7 @@
 
     <van-action-sheet
       v-model:show="showChangeTypeSheet"
-      :title="t('manifesto.changeType')"
+      :title="t('manifesto.changeTypeTitle')"
       :actions="changeTypeActions"
       @select="onChangeTypeSelect"
     />
@@ -121,7 +121,7 @@ async function doCreate() {
     router.replace('/settings')
     showSuccessToast(t('manifesto.publishSuccess'))
   } catch {
-    showFailToast(t('common.retry'))
+    showFailToast(t('manifesto.publishFailed'))
   } finally {
     publishing.value = false
   }
@@ -143,7 +143,7 @@ async function onChangeTypeSelect(action: { value: string }) {
     router.replace('/settings')
     showSuccessToast(t('manifesto.publishSuccess'))
   } catch {
-    showFailToast(t('common.retry'))
+    showFailToast(t('manifesto.publishFailed'))
   } finally {
     publishing.value = false
   }

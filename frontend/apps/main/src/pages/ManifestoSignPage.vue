@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
@@ -105,12 +105,15 @@ onMounted(async () => {
     const res = await manifestoApi.getCurrentManifesto()
     manifesto.value = res.data
   } catch {
-    showFailToast(t('common.retry'))
+    showFailToast(t('manifesto.signFailed'))
     router.back()
     return
   } finally {
     loading.value = false
   }
+
+  // Wait for DOM to update so scrollSentinel ref is populated
+  await nextTick()
 
   // Start 3-second timer gate
   timer = setTimeout(() => {
@@ -158,7 +161,7 @@ async function onConfirmSign() {
     showSuccessToast(t('manifesto.signSuccess'))
     router.back()
   } catch {
-    showFailToast(t('common.retry'))
+    showFailToast(t('manifesto.signFailed'))
   } finally {
     signing.value = false
   }

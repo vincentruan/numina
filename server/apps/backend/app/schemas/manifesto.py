@@ -16,24 +16,24 @@ from apps.backend.app.schemas.base import SnowflakeBase
 class ManifestoCreateRequest(BaseModel):
     template_id: str
     title: str = Field(max_length=200)
-    body: str
+    body: str = Field(max_length=20_000)
     signing_deadline: datetime | None = None
     trackable_clause_indices: list[int] | None = None
 
 
 class ManifestoPublishRequest(BaseModel):
-    title: str | None = None
-    body: str | None = None
+    title: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=20_000)
     change_type: str = Field(pattern=r"^(minor|major)$")
     trackable_clause_indices: list[int] | None = None
 
 
 class ManifestoSignRequest(BaseModel):
-    signature_data: str | None = None
+    signature_data: str | None = Field(default=None, max_length=200_000)
 
 
 class ManifestoFeedbackCreateRequest(BaseModel):
-    content: str
+    content: str = Field(max_length=2000)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ class ManifestoResponse(SnowflakeBase):
 
 
 class ManifestoDashboardSummaryResponse(SnowflakeBase):
-    manifesto_id: int
+    manifesto_id: int | None = None
     title: str
     total_members: int
     signed_count: int
@@ -105,7 +105,7 @@ class UnsignedManifestoCheckResponse(SnowflakeBase):
 
 
 class ChildManifestoResponse(SnowflakeBase):
-    manifesto_id: int
+    manifesto_id: int | None = None
     title: str
     body: str
     template_id: str

@@ -28,7 +28,7 @@ def get_child_manifesto(
     )
 
 
-@router.post("/sign", response_model=ManifestoSignatureItem)
+@router.post("/sign", response_model=ManifestoSignatureItem, status_code=201)
 def sign_manifesto(
     req: ManifestoSignRequest,
     db: Session = Depends(get_db),

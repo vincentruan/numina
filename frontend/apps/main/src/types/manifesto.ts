@@ -31,7 +31,7 @@ export interface ManifestoSignature {
 }
 
 export interface ManifestoDashboardSummary {
-  manifesto_id: string
+  manifesto_id: string | null
   title: string
   total_members: number
   signed_count: number
@@ -61,9 +61,11 @@ export interface UnsignedManifestoCheck {
   title: string | null
 }
 
+import type { Component } from 'vue'
+
 export interface TemplateDefinition {
   id: string
   nameKey: string
   lang: 'zh' | 'en'
-  component: any // Vue component
+  component: Component
 }

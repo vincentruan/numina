@@ -27,7 +27,7 @@
         <template v-else>
           <!-- Age < 5: simple tap-to-consent -->
           <div v-if="ageGroup === 'simple'" class="signing-simple-branch">
-            <button class="btn-consent-big" @click="onTapConsent">
+            <button class="btn-consent-big" :disabled="submitting" @click="onTapConsent">
               {{ t('manifesto.tapConsent') }}
             </button>
             <button
@@ -47,7 +47,7 @@
             <button
               v-if="showHandwriting"
               class="btn-stamp"
-              :disabled="signatureEmpty"
+              :disabled="signatureEmpty || submitting"
               @click="onStampHandwriting"
             >
               {{ t('manifesto.stamp') }}
@@ -141,6 +141,7 @@ function onSignatureDraw() {
 }
 
 async function onTapConsent() {
+  if (submitting.value || signed.value) return
   try {
     await showConfirmDialog({
       title: t('manifesto.tapConsent'),

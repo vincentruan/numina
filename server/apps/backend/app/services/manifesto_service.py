@@ -6,6 +6,7 @@ Module-level functions (not a class). Session as first arg.
 from __future__ import annotations
 
 from sqlalchemy import func as sa_func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -171,15 +172,27 @@ def sign_manifesto(
                 .filter(User.role != "child")
                 .count()
             )
-            signed_count = (
+            # Only count adult signatures — total_members excludes children
+            adult_signer_ids = (
+                db.query(User.id)
+                .filter_by(family_id=manifesto.family_id, is_active=True)
+                .filter(User.role != "child")
+                .subquery()
+            )
+            adult_signed_count = (
                 db.query(ManifestoSignature)
                 .filter_by(version_id=version_id)
+                .filter(ManifestoSignature.user_id.in_(db.query(adult_signer_ids)))
                 .count()
             )
-            if signed_count >= total_members and version.signed_at is None:
+            if adult_signed_count >= total_members and version.signed_at is None:
                 version.signed_at = sa_func.now()
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise AppError(ErrorCode.MANIFESTO_ALREADY_SIGNED)
     db.refresh(sig)
     return sig
 
@@ -269,7 +282,7 @@ def get_dashboard_summary(
     )
     if manifesto is None or manifesto.current_version_id is None:
         return ManifestoDashboardSummaryResponse(
-            manifesto_id=manifesto.id if manifesto else 0,
+            manifesto_id=None,
             title="",
             total_members=0,
             signed_count=0,
@@ -310,7 +323,7 @@ def get_child_manifesto(
     )
     if manifesto is None or manifesto.current_version_id is None:
         return ChildManifestoResponse(
-            manifesto_id=0,
+            manifesto_id=None,
             title="",
             body="",
             template_id="",
