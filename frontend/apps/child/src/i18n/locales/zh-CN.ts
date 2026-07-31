@@ -431,6 +431,7 @@ export default {
     popupHint: '家人有一份新的约定等你签署哦',
     signHint: '在下方写下你的名字吧',
     notFound: '暂时没有家庭约定',
+    trackableHint: '这个任务和我们的家庭约定有关哦',
   },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',

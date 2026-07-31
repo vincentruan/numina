@@ -430,6 +430,7 @@ export default {
     popupHint: 'Your family has a new manifesto waiting for you to sign',
     signHint: 'Write your name below',
     notFound: 'No family manifesto right now',
+    trackableHint: 'This task is related to our family manifesto',
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',
