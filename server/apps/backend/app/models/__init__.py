@@ -51,6 +51,12 @@ from apps.backend.app.models.file_remote_location import (
     FileRemoteLocation,
 )
 from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.manifesto import (
+    FamilyManifesto,
+    ManifestoFeedback,
+    ManifestoSignature,
+    ManifestoVersion,
+)
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
