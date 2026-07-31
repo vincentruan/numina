@@ -74,3 +74,33 @@ export function getRefreshToken(): string | null {
   // Tokens are now in httpOnly Cookie, not accessible to JS
   return null
 }
+
+// --- Guide/Onboarding storage helpers ---
+
+const GUIDE_PREFIXES = ['guide_', 'gesture_', 'tip_'] as const
+const OLD_ONBOARDING_KEY = 'onboarding_completed'
+const NEW_ONBOARDING_KEY = 'guide_main-onboarding-v2'
+
+export function isGuideDone(key: string): boolean {
+  return localStorage.getItem(key) === 'done'
+}
+
+export function markGuideDone(key: string): void {
+  localStorage.setItem(key, 'done')
+}
+
+export function migrateOldOnboardingKey(): boolean {
+  if (localStorage.getItem(OLD_ONBOARDING_KEY) === 'true') {
+    localStorage.setItem(NEW_ONBOARDING_KEY, 'done')
+    return true
+  }
+  return false
+}
+
+export function clearAllGuideKeys(): void {
+  const keysToRemove = Object.keys(localStorage).filter(k =>
+    GUIDE_PREFIXES.some(prefix => k.startsWith(prefix))
+  )
+  keysToRemove.forEach(k => localStorage.removeItem(k))
+  localStorage.removeItem(OLD_ONBOARDING_KEY)
+}
