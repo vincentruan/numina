@@ -177,4 +177,4 @@ def validate_value(
         if not isinstance(raw_value, bool):
             raise ValueError(f"'{key}' must be a boolean")
 
-    return raw_value
+    return raw_value  # type: ignore[no-any-return]

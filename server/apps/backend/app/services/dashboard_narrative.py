@@ -331,7 +331,8 @@ async def _dispatch_narrative_agent(
                 try:
                     data = json.loads(line[len("data: "):])
                     if data.get("type") == "dashboard_narrative.result":
-                        return data.get("payload", {}).get("narrative")
+                        narrative = data.get("payload", {}).get("narrative")
+                        return str(narrative) if narrative is not None else None
                 except json.JSONDecodeError:
                     continue
     return None

@@ -198,7 +198,9 @@ def _get_current_badge(
         .order_by(desc(LiteracyBadgeDefinition.level))
         .first()
     )
-    return row
+    if row is None:
+        return None
+    return row[0], row[1]
 
 
 def _get_next_definition(
@@ -271,11 +273,11 @@ def _build_evaluation_context(
         try:
             from apps.backend.app.models.child_wish import ChildWish
 
+            # ChildWish has no saved_amount column — count all wishes instead.
             saving_count = (
                 db.query(func.count(ChildWish.id))
                 .filter(
                     ChildWish.child_user_id == child_id,
-                    ChildWish.saved_amount > 0,
                 )
                 .scalar()
                 or 0
@@ -328,7 +330,7 @@ def _scenario_dimension(db: Session, scenario: LiteracyScenario) -> str | None:
             .filter(LiteracyScenarioTemplate.id == scenario.template_id)
             .scalar()
         )
-        return template
+        return str(template) if template is not None else None
     except Exception:
         return None
 
@@ -402,7 +404,7 @@ def _extract_text(data: Any) -> str:
     if isinstance(data, dict):
         for key in ("content", "text", "suggestion", "result", "message"):
             if key in data and isinstance(data[key], str):
-                return data[key]
+                return str(data[key])
         if "data" in data:
             return _extract_text(data["data"])
     return json.dumps(data, ensure_ascii=False)

@@ -117,7 +117,7 @@ async def generate_advice(db: Session, user: User) -> tuple[dict | None, str]:
     dc = user.default_currency or "CNY"
     rate_missing = False
 
-    def _conv(amount: float | None, from_cur: str) -> float:
+    def _conv(amount: Decimal | float | None, from_cur: str) -> float:
         nonlocal rate_missing
         if amount is None:
             return 0.0

@@ -261,7 +261,7 @@ class SecurityMonitor:
         key = f"suspicious_count:{event.client_ip}"
         count = self._store.increment_counter(key, 300)
 
-        return count >= self.THRESHOLDS["suspicious_requests"]["count"]
+        return bool(count >= self.THRESHOLDS["suspicious_requests"]["count"])
 
     async def _trigger_alert(self, event: SecurityEvent):
         """触发告警"""

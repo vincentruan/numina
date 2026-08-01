@@ -27,7 +27,7 @@ def _attach_savings_count(db: Session, wish: Wish) -> Wish:
         .filter(WishSavingsLog.wish_id == wish.id)
         .scalar()
     ) or 0
-    wish.savings_count = int(count)
+    wish.savings_count = int(count)  # type: ignore[attr-defined]
     return wish
 
 
