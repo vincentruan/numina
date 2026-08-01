@@ -17,10 +17,9 @@ RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../package
 COPY frontend/apps/main/ .
 RUN npx vite build
 
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 COPY --from=build /app/frontend/apps/main/dist /usr/share/nginx/html
-RUN chmod -R a+rX /usr/share/nginx/html && \
-    sed -i '/^pid/d' /etc/nginx/nginx.conf
+RUN chmod -R a+rX /usr/share/nginx/html
 COPY frontend/apps/main/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

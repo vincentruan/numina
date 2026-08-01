@@ -19,10 +19,9 @@ ARG VITE_MAIN_APP_URL=""
 ENV VITE_MAIN_APP_URL=$VITE_MAIN_APP_URL
 RUN npx vite build
 
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 COPY --from=build /app/frontend/apps/child/dist /usr/share/nginx/html
-RUN chmod -R a+rX /usr/share/nginx/html && \
-    sed -i '/^pid/d' /etc/nginx/nginx.conf
+RUN chmod -R a+rX /usr/share/nginx/html
 COPY frontend/apps/child/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
