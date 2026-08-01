@@ -10,6 +10,7 @@ import i18n from './i18n'
 import { useCurrencyStore } from './stores/currency'
 import http from './api/index'
 import { configureAuthHttp } from '@numina/auth'
+import './icons/register-icons'
 
 const app = createApp(App)
 const pinia = createPinia()
