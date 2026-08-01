@@ -40,7 +40,10 @@ services:
       - DATA_ROOT=/app/.numina/data
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - BACKEND_BASE_URL=http://numina-backend:8000
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
+      - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY must be set}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AI_MODEL=${AI_MODEL:-placeholder}
       - AI_API_KEY=${AI_API_KEY:-placeholder}
