@@ -25,10 +25,10 @@ def seed_test_users(db):
     """Create test families and users."""
     # Create invitation codes
     codes_data = [
-        ("AUTO-TEST", "testuser family"),
-        ("AUTO-TEST-2", "testuser2 family"),
-        ("DEMO-CODE", "demouser family"),
-        ("DEMO-SPOUSE", "demouser spouse"),
+        ("AUT01", "testuser family"),
+        ("AUT02", "testuser2 family"),
+        ("DEM01", "demouser family"),
+        ("DEM02", "demouser spouse"),
     ]
 
     for code, _description in codes_data:
@@ -47,7 +47,7 @@ def seed_test_users(db):
             "password": "TestPass123",
             "family_name": "Test Family",
             "role": "owner",
-            "invitation_code": "AUTO-TEST",
+            "invitation_code": "AUT01",
         },
         {
             "username": "testuser2",
@@ -55,7 +55,7 @@ def seed_test_users(db):
             "password": "TestPass456",
             "family_name": "Test Family 2",
             "role": "owner",
-            "invitation_code": "AUTO-TEST-2",
+            "invitation_code": "AUT02",
         },
         {
             "username": "demouser",
@@ -63,7 +63,7 @@ def seed_test_users(db):
             "password": "DemoPass123",
             "family_name": "Demo Family",
             "role": "owner",
-            "invitation_code": "DEMO-CODE",
+            "invitation_code": "DEM01",
         },
     ]
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -116,6 +116,8 @@ class TestAggregateSignals:
 
     def test_with_approved_chores(self, db, child_user, test_family, week_start):
         # Create 2 chores: 1 approved, 1 available (different template_ids to satisfy uq)
+        # Set created_at explicitly so the test is independent of current time.
+        created_at = datetime.combine(week_start, datetime.min.time()) + timedelta(hours=12)
         for i, status in enumerate(["approved", "available"]):
             ci = ChoreInstance(
                 id=next_id(),
@@ -126,6 +128,7 @@ class TestAggregateSignals:
                 coin_reward=10,
                 date_bucket=week_start.isoformat(),
                 status=status,
+                created_at=created_at,
             )
             db.add(ci)
         db.commit()
@@ -137,15 +140,19 @@ class TestAggregateSignals:
 
     def test_with_coin_transactions(self, db, child_user, test_family, week_start):
         # Earn 50, spend 20
+        # Set created_at explicitly so the test is independent of current time.
+        created_at = datetime.combine(week_start, datetime.min.time()) + timedelta(hours=12)
         db.add(CoinTransaction(
             id=next_id(), family_id=test_family.id,
             child_user_id=child_user.id, amount=50,
             transaction_type="chore_earn",
+            created_at=created_at,
         ))
         db.add(CoinTransaction(
             id=next_id(), family_id=test_family.id,
             child_user_id=child_user.id, amount=-20,
             transaction_type="wish_spend",
+            created_at=created_at,
         ))
         db.commit()
 

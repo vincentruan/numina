@@ -47,13 +47,10 @@ def cmd_generate(count: int | None, codes: str | None) -> None:
         if not code_list:
             print("Error: --codes must contain at least one code")
             sys.exit(1)
-        # Validate length
+        # Validate length (must match RegisterRequest 4-6 rule)
         for c in code_list:
-            if len(c) > MAX_CODE_LENGTH:
-                print(f"Error: code '{c}' exceeds max length ({MAX_CODE_LENGTH})")
-                sys.exit(1)
-            if len(c) == 0:
-                print("Error: empty code is not allowed")
+            if len(c) < 4 or len(c) > 6:
+                print(f"Error: code '{c}' must be 4-6 characters")
                 sys.exit(1)
         # Check uniqueness among provided codes
         if len(code_list) != len(set(code_list)):

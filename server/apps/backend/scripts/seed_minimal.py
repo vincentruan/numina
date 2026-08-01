@@ -65,22 +65,22 @@ def _ensure_demouser_family(db):
 def _ensure_invitation_code(db, family_id):
     """Ensure the demo invitation code points at the demouser family."""
     now = datetime.now(UTC).replace(tzinfo=None)
-    result = db.execute(text("SELECT code FROM family_invitation_codes WHERE code = 'DEMO-CODE'"))
+    result = db.execute(text("SELECT code FROM family_invitation_codes WHERE code = 'DEM01'"))
     if not result.fetchone():
         db.execute(
             text("""
                 INSERT INTO family_invitation_codes (id, code, is_used, used_at, used_by_family_id, used_by_username)
-                VALUES (:cid, 'DEMO-CODE', 1, :now, :fid, 'demouser')
+                VALUES (:cid, 'DEM01', 1, :now, :fid, 'demouser')
             """),
             {"cid": _next_snowflake_id(), "now": now, "fid": family_id},
         )
-        print("Created invitation code: DEMO-CODE")
+        print("Created invitation code: DEM01")
     else:
         db.execute(
             text("""
                 UPDATE family_invitation_codes
                 SET is_used = 1, used_at = :now, used_by_family_id = :fid, used_by_username = 'demouser'
-                WHERE code = 'DEMO-CODE'
+                WHERE code = 'DEM01'
             """),
             {"now": now, "fid": family_id},
         )
