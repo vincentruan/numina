@@ -19,7 +19,8 @@ RUN npx vite build
 
 FROM nginx:alpine
 COPY --from=build /app/frontend/apps/main/dist /usr/share/nginx/html
-RUN chmod -R a+rX /usr/share/nginx/html
+RUN chmod -R a+rX /usr/share/nginx/html && \
+    sed -i 's|pid.*/run/nginx.pid;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf
 COPY frontend/apps/main/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
