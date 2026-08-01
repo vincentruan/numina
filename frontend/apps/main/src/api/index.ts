@@ -13,7 +13,7 @@
 
 import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
-import { showFailToast, showDialog } from 'vant'
+import { showFailToast } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
@@ -95,6 +95,10 @@ function redirectToLogin() {
   })
 }
 
+// Once the session is known expired, suppress further refresh attempts to
+// prevent cascading 401 → refresh → 401 loops from concurrent requests.
+let sessionExpired = false
+
 // Response interceptor - handle 401 with automatic refresh
 http.interceptors.response.use(
   (response) => {
@@ -147,17 +151,22 @@ http.interceptors.response.use(
     const originalRequest = error.config as RetryableConfig
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Once session is known expired, skip further refresh attempts to
+      // prevent cascading 401 → refresh → 401 loops from concurrent requests.
+      if (sessionExpired) {
+        return Promise.reject(error)
+      }
+
       // Refresh endpoint failure = session expired (check before the broader
       // auth exclusion so it is not unreachable)
       if (originalRequest.url?.includes('/auth/refresh')) {
         clearAuth()
-        showDialog({
-          title: t('device.sessionExpiredTitle'),
-          message: t('device.sessionExpiredMessage'),
-          confirmButtonText: t('device.sessionExpiredConfirm'),
-        }).then(() => {
-          redirectToLogin()
-        })
+        sessionExpired = true
+        // Redirect immediately — do NOT block on showDialog, which may fail
+        // to render in embedded browsers (Lark/Feishu WebView) and leave the
+        // user stuck on a blank page with no interactive element.
+        redirectToLogin()
+        showFailToast(t('device.sessionExpiredMessage'))
         return Promise.reject(error)
       }
 
@@ -199,6 +208,7 @@ http.interceptors.response.use(
       } catch (refreshError) {
         onRefreshFailed(refreshError)
         clearAuth()
+        sessionExpired = true
         redirectToLogin()
         // Safe type narrowing with axios.isAxiosError()
         if (axios.isAxiosError(refreshError)) {
@@ -278,6 +288,7 @@ export async function refreshTokenIfNeeded(): Promise<void> {
   } catch (refreshError) {
     onRefreshFailed(refreshError)
     clearAuth()
+    sessionExpired = true
     redirectToLogin()
     // Safe type narrowing with axios.isAxiosError()
     if (axios.isAxiosError(refreshError)) {
