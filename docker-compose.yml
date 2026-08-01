@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ghcr.io/vincentruan/numina/backend:latest
+    image: ${BACKEND_IMAGE:-}
     build:
       context: ./server
       dockerfile: apps/backend/Dockerfile
@@ -88,7 +88,7 @@ services:
       start_period: 15s
 
   frontend-main:
-    image: ghcr.io/vincentruan/numina/frontend-main:latest
+    image: ${FRONTEND_MAIN_IMAGE:-}
     build:
       context: .
       dockerfile: frontend/apps/main/Dockerfile
@@ -98,7 +98,7 @@ services:
       - "80"
 
   frontend-child:
-    image: ghcr.io/vincentruan/numina/frontend-child:latest
+    image: ${FRONTEND_CHILD_IMAGE:-}
     build:
       context: .
       dockerfile: frontend/apps/child/Dockerfile

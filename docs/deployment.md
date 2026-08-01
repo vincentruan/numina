@@ -38,6 +38,23 @@ GitHub Push → GitHub Actions → Build Docker Images → Push to GHCR
 | `DEPLOY_USER` | SSH 用户名 | `geek` |
 | `DEPLOY_PATH` | 服务器上的仓库路径 | `/home/geek/data/numina` |
 
+> **开源项目注意**：如果仓库是公开的，`DEPLOY_HOST` 等 secrets 只在配置后才会触发部署。Fork 项目的人如果没有配置这些 secrets，deploy job 会自动跳过，不影响他们本地开发。
+
+### 1.5. 配置服务器 `.env`
+
+在**生产服务器**的 `~/data/numina/.env` 中添加镜像地址：
+
+```bash
+# 在服务器上执行
+echo 'FRONTEND_MAIN_IMAGE=ghcr.io/vincentruan/numina/frontend-main:latest' >> .env
+echo 'FRONTEND_CHILD_IMAGE=ghcr.io/vincentruan/numina/frontend-child:latest' >> .env
+echo 'BACKEND_IMAGE=ghcr.io/vincentruan/numina/backend:latest' >> .env
+```
+
+这样 `docker compose pull` 会从 GHCR 拉取预构建镜像，而不是本地构建。
+
+> **开源用户**：不需要设置这些变量。`docker compose up` 会自动使用 `build:` 从源码构建。
+
 ### 2. 生成 SSH 密钥（如果没有）
 
 ```bash

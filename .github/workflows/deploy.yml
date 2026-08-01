@@ -153,7 +153,7 @@ jobs:
     name: Deploy to production
     needs: [build-frontend-main, build-frontend-child, build-backend]
     if: |
-      always() &&
+      secrets.DEPLOY_HOST != '' &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
