@@ -16,7 +16,7 @@ def owner_headers(client):
         "password": "Test1234!",
         "display_name": "WebSearch Owner",
         "family_name": "WebSearchFamily",
-        "family_invitation_code": "AUTO-TEST",
+        "family_invitation_code": "AUT01",
     })
     resp = client.post("/api/v1/auth/login", json={
         "username": "wsowner",

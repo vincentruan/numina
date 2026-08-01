@@ -26,7 +26,7 @@ def _make_parent_token(client) -> tuple[dict, int]:
         "display_name": "LR7 Parent",
         "password": "LR7Pass123",
         "family_name": "LR7 Family",
-        "family_invitation_code": "AUTO-TEST",
+        "family_invitation_code": "AUT01",
     })
     assert resp.status_code == 200, resp.text
     data = resp.json().get("data", resp.json())

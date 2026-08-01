@@ -15,7 +15,7 @@ def _register_owner(client):
         "display_name": "Owner",
         "password": "OwnerPass1",
         "family_name": "Test Family",
-        "family_invitation_code": "AUTO-OWNER",
+        "family_invitation_code": "AUT08",
     })
     assert resp.status_code == 200
     return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
@@ -28,7 +28,7 @@ def _register_member(client):
         "display_name": "Owner",
         "password": "OwnerPass1",
         "family_name": "Member Family",
-        "family_invitation_code": "AUTO-MEMBER",
+        "family_invitation_code": "AUT09",
     })
     assert owner_resp.status_code == 200
     owner_headers = {"Authorization": f"Bearer {owner_resp.json()['data']['access_token']}"}

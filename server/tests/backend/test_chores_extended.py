@@ -234,7 +234,7 @@ def test_parent_grant_cross_family_rejected(client, auth_headers):
         "display_name": "Other Parent",
         "password": "TestPass123",
         "family_name": "Other Family",
-        "family_invitation_code": "AUTO-OTHER"
+        "family_invitation_code": "AUT12"
     })
     other_token = r.json()["data"]["access_token"]
     other_headers = {"Authorization": f"Bearer {other_token}"}

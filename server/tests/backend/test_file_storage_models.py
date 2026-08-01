@@ -46,7 +46,7 @@ def _register_user_and_get_ids(client):
         "display_name": "Storage User",
         "password": "TestPass123",
         "family_name": "Storage Family",
-        "family_invitation_code": "AUTO-STORAGE"
+        "family_invitation_code": "AUT13"
     })
     assert resp.status_code == 200
     token = resp.json()["data"]["access_token"]
@@ -95,7 +95,7 @@ class TestCachedFileModel:
             "display_name": "Storage User 2",
             "password": "TestPass456",
             "family_name": "Storage Family 2",
-            "family_invitation_code": "AUTO-STORAGE-2"
+            "family_invitation_code": "AUT14"
         })
         assert resp2.status_code == 200
         token2 = resp2.json()["data"]["access_token"]

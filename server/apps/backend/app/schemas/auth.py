@@ -26,15 +26,16 @@ def validate_username(username: str) -> str:
     """Validate username format.
 
     - Length: 3-50 characters
-    - Allowed: letters, digits, underscore, hyphen, @ (email format)
+    - Auto-converts to lowercase for easy memorization
+    - Allowed: lowercase letters, digits, underscore, hyphen, dot
     """
+    username = username.lower()
     if len(username) < 3:
         raise ValueError("用户名长度至少3位")
     if len(username) > 50:
         raise ValueError("用户名长度不能超过50位")
-    # Allow letters, digits, underscore, hyphen, and @ (for email-like usernames)
-    if not re.match(r"^[a-zA-Z0-9_\-@]+$", username):
-        raise ValueError("用户名只能包含字母、数字、下划线、中划线和@符号")
+    if not re.match(r"^[a-z0-9_.\-]+$", username):
+        raise ValueError("用户名只能包含小写字母、数字、下划线、中划线和点号")
     return username
 
 
@@ -60,7 +61,10 @@ class RegisterRequest(BaseModel):
     @classmethod
     def normalize_invitation_code(cls, v: str) -> str:
         """Normalize to uppercase for consistent matching."""
-        return v.upper().strip()
+        v = v.upper().strip()
+        if len(v) < 4 or len(v) > 6:
+            raise ValueError("邀请码长度必须在4-6位之间")
+        return v
 
 
 class LoginRequest(BaseModel):

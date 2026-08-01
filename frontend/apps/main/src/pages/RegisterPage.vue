@@ -14,7 +14,10 @@
           maxlength="6"
           :formatter="formatInvitationCode"
           format-trigger="onBlur"
-          :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
+          :rules="[
+            { required: true, message: t('auth.form.inviteCodeRequired') },
+            { validator: validateInvitationCode, message: t('auth.form.inviteCodeLength') }
+          ]"
         />
         <van-field
           v-model="form.family_name"
@@ -27,6 +30,8 @@
           v-model="form.username"
           :label="t('register.usernameLabel')"
           :placeholder="t('register.usernamePlaceholder')"
+          :formatter="formatUsername"
+          format-trigger="onChange"
           :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
           :error-message="getError('username')?.msg"
         />
@@ -124,6 +129,16 @@ const form = ref({
 // Formatter for invitation code (auto-uppercase)
 function formatInvitationCode(value: string): string {
   return value.toUpperCase()
+}
+
+// Formatter for username (auto-lowercase)
+function formatUsername(value: string): string {
+  return value.toLowerCase()
+}
+
+// Validate invitation code length (4-6)
+function validateInvitationCode(value: string): boolean {
+  return value.length >= 4 && value.length <= 6
 }
 
 // Real-time validation functions

@@ -67,7 +67,7 @@ class TestListAuditLogs:
         """A member (non-owner) must receive 403."""
         from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
 
-        db.add(FamilyInvitationCode(code="AUTO-AUDIT-MEMBER"))
+        db.add(FamilyInvitationCode(code="AUT18"))
         db.commit()
 
         # Register owner first
@@ -76,7 +76,7 @@ class TestListAuditLogs:
             "display_name": "Audit Owner",
             "password": "TestPass123",
             "family_name": "Audit Family",
-            "family_invitation_code": "AUTO-AUDIT-MEMBER",
+            "family_invitation_code": "AUT18",
         })
         assert owner_resp.status_code == 200
 

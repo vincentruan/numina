@@ -50,7 +50,7 @@ def _create_wish(client, headers: dict, **kwargs) -> dict:
 
 @pytest.fixture
 def auth_headers(client):
-    return _register(client, "aictx_user", "AiCtx Family", "AUTO-TEST")
+    return _register(client, "aictx_user", "AiCtx Family", "AUT01")
 
 
 @pytest.fixture

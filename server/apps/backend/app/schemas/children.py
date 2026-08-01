@@ -22,8 +22,8 @@ class CreateChildRequest(BaseModel):
             raise ValueError("用户名长度至少3位")
         if len(v) > 50:
             raise ValueError("用户名长度不能超过50位")
-        if not re.match(r"^[a-zA-Z0-9]+$", v):
-            raise ValueError("用户名只能包含字母和数字")
+        if not re.match(r"^[a-z0-9_.\-]+$", v.lower()):
+            raise ValueError("用户名只能包含小写字母、数字、下划线、中划线和点号")
         return v.lower()
 
     @field_validator("password")
@@ -74,8 +74,8 @@ class UpdateChildRequest(BaseModel):
             raise ValueError("用户名长度至少3位")
         if len(v) > 50:
             raise ValueError("用户名长度不能超过50位")
-        if not re.match(r"^[a-zA-Z0-9]+$", v):
-            raise ValueError("用户名只能包含字母和数字")
+        if not re.match(r"^[a-z0-9_.\-]+$", v.lower()):
+            raise ValueError("用户名只能包含小写字母、数字、下划线、中划线和点号")
         return v.lower()
 
     @field_validator("avatar_color")

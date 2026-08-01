@@ -5,7 +5,7 @@ def test_register_success(client):
         "display_name": "New User",
         "password": "Password123",
         "family_name": "New Family",
-        "family_invitation_code": "AUTO-CREATE"
+        "family_invitation_code": "AUT04"
     })
     assert response.status_code == 200
     data = response.json()["data"]
@@ -21,7 +21,7 @@ def test_register_duplicate_username(client, auth_headers):
         "display_name": "Another User",
         "password": "Password123",
         "family_name": "Another Family",
-        "family_invitation_code": "AUTO-DUP"
+        "family_invitation_code": "AUT05"
     })
     assert response.status_code == 400
     assert response.json()["code"] == "AUTH_USERNAME_EXISTS"
@@ -128,7 +128,7 @@ def test_register_short_password(client):
         "display_name": "Short PW",
         "password": "Ab1",
         "family_name": "Test Family",
-        "family_invitation_code": "AUTO-SHORT"
+        "family_invitation_code": "AUT16"
     })
     assert response.status_code == 422
 

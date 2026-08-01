@@ -20,7 +20,7 @@ def _make_parent_token(client) -> tuple[dict, int]:
         "display_name": "Report Parent",
         "password": "ReportPass123",
         "family_name": "Report Family",
-        "family_invitation_code": "AUTO-TEST",
+        "family_invitation_code": "AUT01",
     })
     assert resp.status_code == 200, resp.text
     data = resp.json().get("data", resp.json())

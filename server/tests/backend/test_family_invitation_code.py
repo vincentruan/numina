@@ -13,7 +13,7 @@ from apps.backend.app.services.auth import register
 @pytest.fixture
 def valid_invitation_code(db):
     """Create a valid unused invitation code for testing."""
-    code = FamilyInvitationCode(code="TEST-VALID")
+    code = FamilyInvitationCode(code="TVLID")
     db.add(code)
     db.commit()
     return code
@@ -23,7 +23,7 @@ def valid_invitation_code(db):
 def used_invitation_code(db):
     """Create an already-used invitation code for testing."""
     code = FamilyInvitationCode(
-        code="TEST-USED",
+        code="TUSED",
         is_used=True,
         used_at=datetime.utcnow(),
         used_by_family_id="test-family-id",
@@ -38,7 +38,7 @@ def used_invitation_code(db):
 def revoked_invitation_code(db):
     """Create a revoked invitation code for testing."""
     code = FamilyInvitationCode(
-        code="TEST-REVOKED",
+        code="TRVOK",
         revoked_at=datetime.utcnow(),
     )
     db.add(code)
@@ -53,7 +53,7 @@ def test_register_with_valid_invitation_code(db, valid_invitation_code):
         password="Password123",
         display_name="New User",
         family_name="New Family",
-        family_invitation_code="TEST-VALID",
+        family_invitation_code="TVLID",
     )
 
     result = register(db, req, client_ip="test-ip")
@@ -76,7 +76,7 @@ def test_register_with_invalid_invitation_code(db):
         password="Password123",
         display_name="New User",
         family_name="New Family",
-        family_invitation_code="INVALID-CODE",
+        family_invitation_code="ZZZZZ",
     )
 
     with pytest.raises(AppError) as exc_info:
@@ -92,7 +92,7 @@ def test_register_with_already_used_code(db, used_invitation_code):
         password="Password123",
         display_name="Another User",
         family_name="Another Family",
-        family_invitation_code="TEST-USED",
+        family_invitation_code="TUSED",
     )
 
     with pytest.raises(AppError) as exc_info:
@@ -108,7 +108,7 @@ def test_register_with_revoked_code(db, revoked_invitation_code):
         password="Password123",
         display_name="New User",
         family_name="New Family",
-        family_invitation_code="TEST-REVOKED",
+        family_invitation_code="TRVOK",
     )
 
     with pytest.raises(AppError) as exc_info:
@@ -120,7 +120,7 @@ def test_register_with_revoked_code(db, revoked_invitation_code):
 def test_invitation_code_normalized_to_uppercase(db):
     """Lowercase input matches uppercase code."""
     # Create code in uppercase
-    code = FamilyInvitationCode(code="TEST-LOWER")
+    code = FamilyInvitationCode(code="TLWLR")
     db.add(code)
     db.commit()
 
@@ -130,7 +130,7 @@ def test_invitation_code_normalized_to_uppercase(db):
         password="Password123",
         display_name="New User",
         family_name="New Family",
-        family_invitation_code="test-lower",  # lowercase input
+        family_invitation_code="tlwlr",  # lowercase input → normalized to "TLWLR"
     )
 
     result = register(db, req, client_ip="test-ip")

@@ -49,7 +49,7 @@ def _upcoming(client, headers: dict, days: int = 7) -> dict:
 
 @pytest.fixture
 def headers(client):
-    return _register_and_login(client, "up_user", "Up Family", "AUTO-TEST")
+    return _register_and_login(client, "up_user", "Up Family", "AUT01")
 
 
 # ---------------------------------------------------------------------------

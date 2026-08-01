@@ -24,7 +24,7 @@ def _register_owner(client):
             "display_name": "Owner",
             "password": "OwnerPass1",
             "family_name": "Test Family",
-            "family_invitation_code": "AUTO-WEBAUTHN",
+            "family_invitation_code": "AUT15",
         },
     )
     assert resp.status_code == 200

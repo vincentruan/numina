@@ -310,7 +310,7 @@ def test_parent_cross_family_blocked(client, auth_headers, child_user):
         "password": "Password123",
         "display_name": "Other Parent",
         "family_name": "Other Family",
-        "family_invitation_code": "AUTO-MILESTONE-OTHER"
+        "family_invitation_code": "AUT10"
     })
     assert r.status_code == 200
     other_token = _data(r)["access_token"]

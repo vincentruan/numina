@@ -11,12 +11,16 @@
           v-model="form.invite_code"
           :label="t('auth.inviteCodeLabel')"
           :placeholder="t('auth.inviteCodePlaceholder')"
+          :formatter="formatInviteCode"
+          format-trigger="onChange"
           :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
         />
         <van-field
           v-model="form.username"
           :label="t('auth.usernameLabel')"
           :placeholder="t('auth.usernamePlaceholder')"
+          :formatter="formatUsername"
+          format-trigger="onChange"
           :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
         />
         <van-field
@@ -102,6 +106,16 @@ const form = ref({
   password: '',
   altcha: undefined as string | undefined
 })
+
+// Formatter for invite code (auto-uppercase)
+function formatInviteCode(value: string): string {
+  return value.toUpperCase()
+}
+
+// Formatter for username (auto-lowercase)
+function formatUsername(value: string): string {
+  return value.toLowerCase()
+}
 
 async function onSubmit() {
   loading.value = true

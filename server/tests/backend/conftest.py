@@ -149,21 +149,21 @@ def db(_session_engine):
 def _seed_test_invitation_codes(session):
     """Seed test invitation codes for auth fixtures and tests."""
     codes = [
-        FamilyInvitationCode(code="AUTO-TEST"),          # conftest.py - auth_headers fixture
-        FamilyInvitationCode(code="AUTO-TEST-2"),        # conftest.py - second_user_headers fixture
-        FamilyInvitationCode(code="AUTO-ADMIN"),         # test_admin_child_switch.py
-        FamilyInvitationCode(code="AUTO-CREATE"),        # test_auth.py - test_register_success
-        FamilyInvitationCode(code="AUTO-DUP"),           # test_auth.py - test_register_duplicate_username
-        FamilyInvitationCode(code="AUTO-PARENT"),        # test_auth_security.py
-        FamilyInvitationCode(code="AUTO-TIMING"),        # test_auth_security.py
-        FamilyInvitationCode(code="AUTO-OWNER"),         # test_children.py
-        FamilyInvitationCode(code="AUTO-MEMBER"),        # test_children.py
-        FamilyInvitationCode(code="AUTO-MILESTONE-OTHER"),  # test_milestones.py
-        FamilyInvitationCode(code="AUTO-SYNC"),          # test_file_sync.py
-        FamilyInvitationCode(code="AUTO-OTHER"),         # test_chores_extended.py
-        FamilyInvitationCode(code="AUTO-STORAGE"),       # test_file_storage_models.py
-        FamilyInvitationCode(code="AUTO-STORAGE-2"),     # test_file_storage_models.py
-        FamilyInvitationCode(code="AUTO-WEBAUTHN"),      # test_webauthn.py
+        FamilyInvitationCode(code="AUT01"),          # conftest.py - auth_headers fixture
+        FamilyInvitationCode(code="AUT02"),        # conftest.py - second_user_headers fixture
+        FamilyInvitationCode(code="AUT03"),         # test_admin_child_switch.py
+        FamilyInvitationCode(code="AUT04"),        # test_auth.py - test_register_success
+        FamilyInvitationCode(code="AUT05"),           # test_auth.py - test_register_duplicate_username
+        FamilyInvitationCode(code="AUT06"),        # test_auth_security.py
+        FamilyInvitationCode(code="AUT07"),        # test_auth_security.py
+        FamilyInvitationCode(code="AUT08"),         # test_children.py
+        FamilyInvitationCode(code="AUT09"),        # test_children.py
+        FamilyInvitationCode(code="AUT10"),  # test_milestones.py
+        FamilyInvitationCode(code="AUT11"),          # test_file_sync.py
+        FamilyInvitationCode(code="AUT12"),         # test_chores_extended.py
+        FamilyInvitationCode(code="AUT13"),       # test_file_storage_models.py
+        FamilyInvitationCode(code="AUT14"),     # test_file_storage_models.py
+        FamilyInvitationCode(code="AUT15"),      # test_webauthn.py
     ]
     for code in codes:
         session.add(code)
@@ -213,7 +213,7 @@ def auth_headers(client):
         "display_name": "Test User",
         "password": "TestPass123",
         "family_name": "Test Family",
-        "family_invitation_code": "AUTO-TEST"
+        "family_invitation_code": "AUT01"
     })
     assert response.status_code == 200
     data = response.json().get("data", response.json())
@@ -231,7 +231,7 @@ def second_user_headers(client):
         "display_name": "Test User 2",
         "password": "TestPass456",
         "family_name": "Test Family 2",
-        "family_invitation_code": "AUTO-TEST-2"
+        "family_invitation_code": "AUT02"
     })
     assert response.status_code == 200
     data = response.json().get("data", response.json())
