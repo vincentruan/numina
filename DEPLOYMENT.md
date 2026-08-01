@@ -42,7 +42,7 @@ cd numina
 # 2. 交互式初始化（自动生成密钥、.env、数据目录）
 make setup
 
-# 3. 启动服务
+# 3. 启动服务（本地构建）
 make deploy
 ```
 
@@ -51,6 +51,17 @@ make deploy
 ```bash
 make setup-invitation-codes
 ```
+
+### 使用预构建镜像（推荐）
+
+如果不想在服务器上编译，可以直接拉取 GitHub Actions 构建的镜像：
+
+```bash
+make setup
+make deploy-images    # 自动从 GHCR 拉取最新镜像
+```
+
+> 首次运行会自动将 GHCR 地址写入 `.env`，无需手动配置。
 
 ## 初始化配置
 
@@ -231,7 +242,9 @@ make deploy-dev
 
 ```bash
 git pull origin main
-make deploy
+make deploy           # 本地构建模式
+# 或
+make deploy-images    # 拉取预构建镜像模式
 ```
 
 ### 数据库迁移
@@ -293,7 +306,8 @@ make deploy
 | 操作 | 命令 |
 |------|------|
 | 初始化 | `make setup` |
-| 部署 | `make deploy` |
+| 部署（本地构建） | `make deploy` |
+| 部署（拉取镜像） | `make deploy-images` |
 | 开发模式部署 | `make deploy-dev` |
 | 停止服务 | `make down` |
 | 查看状态 | `make ps` |
@@ -355,4 +369,4 @@ make deploy
 ```
 
 ---
-**最后更新**: 2026-07-25
+**最后更新**: 2026-08-02

@@ -56,14 +56,22 @@ Numina is a fully self-hosted family asset visualization and management system. 
 git clone https://github.com/vincentruan/numina.git
 cd numina
 
-# 2. Start all services
-docker-compose up -d
+# 2. Initialize (auto-generate secrets + .env + data directories)
+make setup
 
-# 3. Access the application
-# Open http://localhost:8080 in your browser
+# 3. Start services
+make deploy
+
+# 4. Generate family invitation codes (required for registration)
+make setup-invitation-codes
+
+# 5. Access the application
+# Open http://localhost in your browser
 ```
 
-**Environment Variables** (optional):
+> **Prefer pre-built images?** Run `make deploy-images` to pull the latest images from GHCR — no compilation needed on your server.
+
+**Environment Variables** (optional, `make setup` already generates them):
 
 Create a `.env` file:
 
@@ -223,11 +231,12 @@ See module READMEs for details: [Backend Tests](./server/apps/backend/README.md#
 git clone https://github.com/vincentruan/numina.git
 cd numina
 
-# 2. Start services
-docker-compose up -d
+# 2. Initialize + start
+make setup
+make deploy
 
 # 3. Access on LAN
-# http://<NAS-IP>:8080
+# http://<NAS-IP>:80
 ```
 
 ### Cloud Deployment
@@ -237,20 +246,35 @@ docker-compose up -d
 git clone https://github.com/vincentruan/numina.git
 cd numina
 
-# 2. Configure environment
-cat > .env << EOF
-SECRET_KEY=$(openssl rand -base64 32)
-PORT=8080
-EOF
+# 2. Initialize
+make setup
 
-# 3. Start services
-docker-compose up -d
+# 3. Edit .env (configure domain, database, etc.)
+# vim .env
 
-# 4. Configure HTTPS (Caddy or Nginx recommended)
+# 4. Start (local build)
+make deploy
+
+# 5. Or pull pre-built images (no server compilation)
+# make deploy-images
+
+# 6. Generate invitation codes
+make setup-invitation-codes
+
+# 7. Configure HTTPS (Caddy or Nginx recommended)
 # Example Caddy config:
 # numina.yourdomain.com {
-#     reverse_proxy localhost:8080
+#     reverse_proxy localhost:80
 # }
+```
+
+### Updating
+
+```bash
+git pull origin main
+make deploy           # local build mode
+# or
+make deploy-images    # pull pre-built images mode
 ```
 
 ### Data Backup

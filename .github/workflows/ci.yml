@@ -271,3 +271,58 @@ jobs:
       - name: Stop Docker stack
         if: always()
         run: docker compose down -v
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 6: Build & push Docker images to GHCR (main branch only)
+  # No extra secrets needed — uses GITHUB_TOKEN for GHCR auth.
+  # Server-side: configure *_IMAGE in .env, then `make deploy-images`.
+  # ──────────────────────────────────────────────────────────────────────────
+  build-images:
+    name: Build images (${{ matrix.service }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [e2e-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            file: server/apps/backend/Dockerfile
+            context: .
+          - service: agent
+            file: server/apps/agent/Dockerfile
+            context: .
+          - service: scheduler-worker
+            file: server/apps/scheduler_worker/Dockerfile
+            context: .
+          - service: frontend-main
+            file: frontend/apps/main/Dockerfile
+            context: .
+          - service: frontend-child
+            file: frontend/apps/child/Dockerfile
+            context: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

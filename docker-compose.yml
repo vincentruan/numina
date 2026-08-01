@@ -29,6 +29,7 @@ services:
       start_period: 10s
 
   agent:
+    image: ${AGENT_IMAGE:-}
     build:
       context: ./server
       dockerfile: apps/agent/Dockerfile
@@ -60,6 +61,7 @@ services:
       start_period: 15s
 
   scheduler_worker:
+    image: ${SCHEDULER_WORKER_IMAGE:-}
     build:
       context: ./server
       dockerfile: apps/scheduler_worker/Dockerfile

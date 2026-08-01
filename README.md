@@ -56,14 +56,22 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 git clone https://github.com/vincentruan/numina.git
 cd numina
 
-# 2. 启动所有服务
-docker-compose up -d
+# 2. 初始化（自动生成密钥 + .env + 数据目录）
+make setup
 
-# 3. 访问应用
-# 浏览器打开 http://localhost:8080
+# 3. 启动服务
+make deploy
+
+# 4. 生成家庭邀请码（注册需要）
+make setup-invitation-codes
+
+# 5. 访问应用
+# 浏览器打开 http://localhost
 ```
 
-**环境变量配置**（可选）：
+> **使用预构建镜像？** 运行 `make deploy-images` 可直接拉取 GHCR 上的最新镜像，无需在服务器编译。
+
+**环境变量配置**（可选，`make setup` 已自动生成）：
 
 创建 `.env` 文件：
 
@@ -213,11 +221,12 @@ numina/
 git clone https://github.com/vincentruan/numina.git
 cd numina
 
-# 2. 启动服务
-docker-compose up -d
+# 2. 初始化 + 启动
+make setup
+make deploy
 
 # 3. 局域网内访问
-# http://<NAS-IP>:8080
+# http://<NAS-IP>:80
 ```
 
 ### 云服务器部署
@@ -227,20 +236,35 @@ docker-compose up -d
 git clone https://github.com/vincentruan/numina.git
 cd numina
 
-# 2. 配置环境变量
-cat > .env << EOF
-SECRET_KEY=$(openssl rand -base64 32)
-PORT=8080
-EOF
+# 2. 初始化
+make setup
 
-# 3. 启动服务
-docker-compose up -d
+# 3. 编辑 .env（配置域名、数据库等）
+# vim .env
 
-# 4. 配置 HTTPS（推荐使用 Caddy 或 Nginx）
+# 4. 启动（本地构建）
+make deploy
+
+# 5. 或拉取预构建镜像（无需服务器编译）
+# make deploy-images
+
+# 6. 生成邀请码
+make setup-invitation-codes
+
+# 7. 配置 HTTPS（推荐使用 Caddy 或 Nginx）
 # 示例 Caddy 配置：
 # numina.yourdomain.com {
-#     reverse_proxy localhost:8080
+#     reverse_proxy localhost:80
 # }
+```
+
+### 更新
+
+```bash
+git pull origin main
+make deploy           # 本地构建模式
+# 或
+make deploy-images    # 拉取预构建镜像模式
 ```
 
 ### 数据备份

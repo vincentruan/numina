@@ -51,7 +51,7 @@ INVITATION_CODES ?=
         test test-backend test-agent test-worker test-server test-frontend test-e2e \
         migrate migrate-revision migrate-down migrate-current \
         up down build-docker pull logs logs-backend logs-agent logs-worker logs-frontend ps restart shell up-prod down-prod \
-        deploy deploy-dev \
+        deploy deploy-images deploy-dev \
         clean
 
 # ══════════════════════════════════════════════════════════
@@ -126,7 +126,8 @@ help:
 	@echo "  make down-prod     - 停止 production 容器"
 	@echo ""
 	@echo "部署:"
-	@echo "  make deploy        - 生产部署 (含健康检查 + 邀请码初始化)"
+	@echo "  make deploy        - 生产部署 (本地构建 + 健康检查 + 邀请码初始化)"
+	@echo "  make deploy-images - 拉取预构建镜像部署 (默认 GHCR，可自定义 *_IMAGE)"
 	@echo "  make deploy-dev    - 开发模式部署 (放宽安全检查 + 种子数据)"
 	@echo ""
 	@echo "维护:"
@@ -516,6 +517,39 @@ deploy: setup-data setup-env
 	@echo "数据目录: $(DATA_DIR)"
 	@echo ""
 	@echo "下一步: make setup-invitation-codes  (生成家庭邀请码)"
+	@echo ""
+
+deploy-images: setup-data setup-env
+	@if ! grep -qE '^(BACKEND_IMAGE|FRONTEND_MAIN_IMAGE|FRONTEND_CHILD_IMAGE)=' .env 2>/dev/null; then \
+		echo "未配置预构建镜像变量，使用默认 GHCR 地址..."; \
+		echo "BACKEND_IMAGE=ghcr.io/vincentruan/numina/backend:latest" >> .env; \
+		echo "AGENT_IMAGE=ghcr.io/vincentruan/numina/agent:latest" >> .env; \
+		echo "SCHEDULER_WORKER_IMAGE=ghcr.io/vincentruan/numina/scheduler-worker:latest" >> .env; \
+		echo "FRONTEND_MAIN_IMAGE=ghcr.io/vincentruan/numina/frontend-main:latest" >> .env; \
+		echo "FRONTEND_CHILD_IMAGE=ghcr.io/vincentruan/numina/frontend-child:latest" >> .env; \
+		echo "✓ 已写入 .env (如需自定义镜像地址，请编辑 .env 中的 *_IMAGE 变量)"; \
+	fi
+	@echo "拉取预构建镜像..."
+	@$(COMPOSE) pull backend agent scheduler_worker frontend-main frontend-child
+	@echo "重启服务..."
+	@$(COMPOSE) down --remove-orphans 2>/dev/null || true
+	@$(COMPOSE) up -d --no-deps backend agent scheduler_worker frontend-main frontend-child nginx
+	@echo "等待服务启动..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
+		sleep 2; \
+	done
+	@$(COMPOSE) ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend 启动超时"; exit 1; }
+	@echo "验证 API 健康检查..."
+	@curl -sf http://localhost/api/health >/dev/null || { echo "✗ API 健康检查失败"; exit 1; }
+	@echo ""
+	@echo "========================================"
+	@echo "   Numina 预构建镜像部署完成"
+	@echo "========================================"
+	@echo ""
+	@$(COMPOSE) ps
+	@echo ""
+	@echo "访问地址: http://localhost"
 	@echo ""
 
 deploy-dev: setup-data
