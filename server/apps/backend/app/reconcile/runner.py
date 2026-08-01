@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import logging
 from datetime import UTC, datetime
@@ -77,6 +78,10 @@ class DesiredStateRunner:
                 result = self._reconcile_one(resource)
                 report.results.append(result)
                 self._persist_result(result)
+                # Ensure session is clean after each resource, even on failure,
+                # so one resource's DB error doesn't cascade to subsequent resources.
+                with contextlib.suppress(Exception):
+                    self._db.rollback()
         finally:
             if locked and self._lock_provider:
                 self._lock_provider.release(lock_name)
@@ -94,6 +99,9 @@ class DesiredStateRunner:
             result = resource.check(self._db)
         except Exception as e:
             logger.error(f"[reconcile] check failed for {resource.name}: {e}")
+            # Rollback to ensure session is clean for subsequent resources
+            with contextlib.suppress(Exception):
+                self._db.rollback()
             return resource._failed(
                 error=f"Check error: {e}",
                 remediation_hint=resource.offline_hint,
@@ -126,6 +134,8 @@ class DesiredStateRunner:
                 result.changed = True
             except Exception as e:
                 logger.error(f"[reconcile] apply failed for {resource.name}: {e}")
+                with contextlib.suppress(Exception):
+                    self._db.rollback()
                 return resource._failed(
                     error=f"Apply error: {e}",
                     remediation_hint=resource.offline_hint,
