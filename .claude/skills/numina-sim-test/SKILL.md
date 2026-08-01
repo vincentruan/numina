@@ -22,15 +22,18 @@ flows → screenshot capture → test report (success summary + failure details)
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers six feature areas (detailed cases split by area under
+Covers **eight** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
-[`test-cases/_common.md`](./test-cases/_common.md)):
+[`test-cases/_common.md`](./test-cases/_common.md), role matrix in
+[`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
 1. **Child app** (`$CHILD_BASE`) — 儿童页面优化
 2. **Main app financial management** (`$BASE`) — 财务管理能力优化
 3. **AI capabilities** — PDF识别 / AI资产报告 / 数鸣智能体 / AI对话
 4. **Main app navigation coverage** (`$BASE`) — 每个页签 + 子页面 + 币种切换校验 ([`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md))
 5. **Child app navigation coverage** (`$CHILD_BASE`) — 每个页签 + 子页面 ([`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md))
 6. **AI chat DeerFlow-fidelity parity** — 输入/输出/系统集成 + 设计出入 ([`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md))
+7. **Regression sweep** — 历史缺陷回归 (R1–R9) ([`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md))
+8. **Expanded feature coverage** — Manifesto / 盲盒 / Baby / Settings / Guest / 权限边界 (F.1–F.8) ([`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -43,7 +46,7 @@ Covers six feature areas (detailed cases split by area under
 
 ## Parallel Run Structure (3-4 agents, dev mode)
 
-The six area files are organized into **4 groups by state-isolation boundary**
+The eight area files are organized into **4 groups by state-isolation boundary**
 under [`test-cases/groups/`](./test-cases/groups/) so 2-3 agents can run them in
 parallel without racing on shared browser state. See
 [`test-cases/groups/README.md`](./test-cases/groups/README.md) for the full
@@ -65,7 +68,10 @@ schedule + verified bsk concurrency evidence.
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
-cover all 111 cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
+cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
+
+> **G1 internal order:** area2 → area8 → area3 → area6 → area7. Area 7
+> (regression) runs last because R6 (auth expiry) destroys the session.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared storage). In docker, run G3
@@ -81,6 +87,28 @@ cover all 111 cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 > `$BASE` / `$CHILD_BASE` / `$API_BASE` are set per deployment mode — see
 > "Deployment Mode" below. Routes (`/login`, `/child/`, `/ai/chat`, …) are the
 > same in every mode; only the host:port differs.
+
+## Run Modes (运行模式)
+
+根据时间和目的选择不同的运行粒度:
+
+| Mode | 触发词 | 覆盖范围 | 预计耗时 |
+|------|--------|----------|----------|
+| **full** | "run sim test", "全量测试" | Area 1–8 (所有用例) | ~60-90 min |
+| **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2 | ~15-20 min |
+| **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
+| **finance** | "finance test", "财务测试" | Area 2 only (G1 subset) | ~15-20 min |
+| **ai** | "ai test", "AI测试" | Area 3 + Area 6 (G1 subset, AI 必须启用) | ~25-35 min |
+| **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
+| **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
+
+**选择逻辑:**
+1. 用户未指定模式 → 默认 `full`
+2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 9 个用例)
+3. 用户明确指定某个 area 或功能域 → 跑对应的 area
+4. `smoke` 模式跳过 Area 1/5/7/8，仅验证核心 adult 功能 + 币种回归
+
+---
 
 ## Deployment Mode (declare before running)
 
@@ -567,6 +595,24 @@ errored mid-flow.
 After the feature areas (Phase 3/4/5), run the navigation-coverage and parity
 suites. These reuse the same sessions (`$SID` adult; `$SID_CHILD` child).
 
+### AI Pre-check (before Area 3/6)
+
+Area 3 (AI capabilities) and Area 6 (AI chat parity) require AI to be enabled.
+Before running these areas, verify:
+
+```bash
+# Check AI status via API
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/ai/status" | jq '.data.enabled'
+# Or via bsk on the AI hub page
+bsk navigate ${BASE}ai --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+# Look for: "AI 已启用" or provider config present
+```
+
+- If AI is **not enabled** → skip Area 3 + Area 6 cases, mark as `SKIP-AI` in
+  the report, and continue with other areas.
+- If AI provider has no model configured → same skip, note "provider 无模型" in report.
+
 ### Area 4 — Main app navigation coverage (`$SID`)
 
 Run [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md):
@@ -612,6 +658,39 @@ AI must be enabled + provider configured.
 > See the parity matrix at the bottom of the case file. Record absent features as
 > divergences citing grep evidence; do not mark them as regressions.
 
+### Area 7 — Regression sweep (`$SID`)
+
+Run [`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md).
+9 regression cases (R1–R9) covering known historical defects:
+
+- **R1** ¥¥ double-currency symbol
+- **R2** Snowflake ID / bigint precision loss
+- **R3** en-US locale missing keys
+- **R4** NProgress stuck after rapid navigation
+- **R5** KeepAlive double-load (onMounted + onActivated)
+- **R6** Auth session expiry redirect (**session-destroying — run last**)
+- **R7** AI Chat blank response / error cleanup
+- **R8** Child coin display no ¥ symbol leak
+- **R9** CSP unsafe-eval (docker mode only)
+
+> **R6 caveat:** R6 clears `localStorage` to simulate session expiry.
+> Run R6 as the very last regression case. If session is needed after R6,
+> re-login via Phase 2 fallback.
+
+### Area 8 — Expanded feature coverage (`$SID` + `$SID_CHILD` + guest)
+
+Run [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md).
+Coverage for previously untested feature modules:
+
+- **F.1** Manifesto flow (template-select → edit → sign → preview → settings)
+- **F.2** Blind box management (draws / gifts / config)
+- **F.3** Baby management (overview / calendar / chores / templates / literacy report / approvals)
+- **F.4** Settings deep coverage (notifications / password / 2FA / devices / family config)
+- **F.5** Guest pages (welcome / register / join-family / promo) — **needs fresh bsk session**
+- **F.6** Child extended features (scenario / badges / calendar / manifesto sign)
+- **F.7** AI settings deep (MCP / web-search / ASR / skills / agents)
+- **F.8** Owner vs member permission boundary (**deferred** — requires member account)
+
 ---
 
 ## Phase 6 — Generate Test Report
@@ -654,7 +733,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.20, Area3: C3.1–C3.23, Area4: C4.0–C4.13, Area5: C5.1–C5.10, Area6: C6.1–C6.27)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.20, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -662,14 +741,14 @@ the skill log.
 
 ## 失败详情
 
-### C2.3 — 心愿详情页 (savings log/record dialogs)
+### C2.3 — 心愿详情页 (savings log/record dialogs) `RENDER`
 - **路由**: {BASE}wishes/{id}
 - **截图**: dogfood-output/c2.3-wish-detail.png
 - **预期表现**: 点击"记录储蓄"按钮弹出 WishSavingsRecordDialog, 含金额输入框
 - **当前错误表现**: 点击后无反应, 控制台报 `Cannot read property 'open' of undefined`
 - **初步判断**: WishSavingsRecordDialog 组件未挂载或 ref 未绑定; 需检查 WishDetailPage 模板中 dialog 的 v-model:show 绑定
 
-### C3.4 — AI 资产报告生成
+### C3.4 — AI 资产报告生成 `AI`
 - **路由**: {BASE}ai/report
 - **截图**: dogfood-output/c3.4-ai-report.png
 - **预期表现**: 3 步时间轴逐步 pending→running→done, 最终显示评分+摘要
@@ -690,7 +769,23 @@ the skill log.
 - **每个失败用例必须有三段**: 预期表现 / 当前错误表现 / 初步判断。缺少任一段视为记录不完整。
 - **初步判断**是基于截图 + 控制台错误 + 路由行为的推断, 不要求定位到根因; 写明"建议查 X"即可, 不展开修复方案。
 - **截图路径**用相对仓库根的路径, 便于用户点击查看。
-- 失败用例按 Area 顺序 (Area1 → Area2 → Area3) 再按 case id 排列。
+- 失败用例按 Area 顺序 (Area1 → Area2 → … → Area8) 再按 case id 排列。
+
+### Failure taxonomy (失败分类)
+
+每个失败用例在"初步判断"前标注分类代码，便于统计和趋势跟踪:
+
+| 代码 | 含义 | 典型场景 |
+|------|------|----------|
+| `RENDER` | 渲染错误 | 组件未挂载、空白页、NaN/undefined |
+| `NAV` | 导航/路由错误 | 404、route guard 错误跳转、activeTab 不对 |
+| `AUTH` | 认证/权限错误 | 401/403、session 丢失、角色越权 |
+| `DATA` | 数据/显示错误 | 金额精度丢失、双符号、空态缺失 |
+| `I18N` | 国际化错误 | key 泄露、翻译缺失、语言切换崩溃 |
+| `AI` | AI 功能错误 | stream 卡住、空白响应、report 生成失败 |
+| `INTERACT` | 交互错误 | 按钮无响应、表单验证失效、dialog 不弹出 |
+| `PERF` | 性能问题 | 页面加载超时、动画卡顿 |
+| `REGRESS` | 回归 (已知 bug 重现) | Area 7 用例失败自动标此分类 |
 
 ### After writing
 
@@ -749,6 +844,16 @@ bsk session stop "$SID"
 | 4 — Main app nav coverage (页签+币种切换) | G2 | C4.0–C4.16 | [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md) |
 | 5 — Child app nav coverage (页签+子页面) | G3 | C5.1–C5.10 | [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md) |
 | 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | G1 | C6.1–C6.27 (D1–D7) | [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md) |
+| **7 — Regression sweep (历史缺陷回归)** | **G1** | **R1–R9** | [`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md) |
+| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings)** | **G1** | **F.1–F.8** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
+
+### Supporting References
+
+| File | Purpose |
+|------|---------|
+| [`test-cases/_common.md`](./test-cases/_common.md) | Shared conventions (session, refs, console capture, child injection) |
+| [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md) | Role capability matrix (owner/member/child 权限边界 + 页面清单) |
+| [`test-cases/groups/README.md`](./test-cases/groups/README.md) | Parallel run structure + state-isolation boundaries |
 
 ## bsk Red Lines (from browser-skill)
 
@@ -775,3 +880,8 @@ bsk session stop "$SID"
 | `bsk navigate` RPC times out at 30s but the page actually loaded | Navigation often completes before the RPC returns. Do not retry blindly — verify with `bsk evaluate --session <id> "location.href"`; if correct, proceed to `snapshot` |
 | Screenshots are desktop-width (e.g. 3385×1233), not mobile 375×812 | `bsk` has no `setViewport` command; the Agent Window is desktop-sized. Note the viewport in the report; mobile-specific layout (Tab bar density, horizontal scroll) is not validated by this skill |
 | `bsk click @eN` registers the click but doesn't navigate (desktop-width coordinate offset hits a child element) | Prefer navigating directly to the target route via an id from the API (`/api/v1/wishes` → `/wishes/:id`) instead of clicking a list item in a wide viewport |
+| Running Area 7 R6 (auth expiry) before other cases → breaks remaining session | Run R6 as the **very last** regression case; it clears localStorage and destroys the session |
+| Testing Baby tab / family settings as non-owner → 403 | `demouser` is owner by default — these work. For member-role testing, see Area 8 F.8 (deferred: requires separate member account) |
+| Manifesto wizard state lost between pages | `useManifestoWizard` persists via `sessionStorage` — do not clear storage mid-flow; the wizard state resets only on explicit cancel |
+| Smoke mode accidentally running full suite | Smoke mode runs only 9 cases (C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2). Verify the mode before starting |
+| Guest pages tested with authenticated session → redirected past welcome | Use a **fresh bsk session** without cookies for F.5.x guest page tests |

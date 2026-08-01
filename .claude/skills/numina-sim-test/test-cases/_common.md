@@ -1,12 +1,17 @@
 # Numina Simulation Test Cases — Shared Conventions
 
-Shared conventions used by all six area case files:
+Shared conventions used by all area case files:
 - [`area1-child.md`](./area1-child.md) — Child app (儿童页面优化)
 - [`area2-finance.md`](./area2-finance.md) — Main app financial management (财务管理能力优化)
 - [`area3-ai.md`](./area3-ai.md) — AI capabilities (PDF/AI报告/数鸣/对话)
 - [`area4-navigation.md`](./area4-navigation.md) — Main app nav coverage (页签+子页面+币种切换)
 - [`area5-child-navigation.md`](./area5-child-navigation.md) — Child app nav coverage (页签+子页面)
 - [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) — AI chat DeerFlow-fidelity parity (输入/输出/集成+设计出入 D1–D7)
+- [`area7-regression.md`](./area7-regression.md) — Regression sweep (历史缺陷回归 R1–R9)
+- [`area8-expanded-features.md`](./area8-expanded-features.md) — Expanded coverage (Manifesto/盲盒/Baby/Settings/Guest F.1–F.8)
+
+**角色能力矩阵 (Role Capabilities Matrix):** [`role-capabilities.md`](./role-capabilities.md)
+— 每个角色 (owner/member/child) 的权限边界和可见页面清单。
 
 ## Case conventions
 
@@ -59,14 +64,23 @@ actual source tree on branch `feat/two-ai-apps-unified-dispatch`:
 
 - **Child routes** (`frontend/apps/child/src/router/index.ts`): `/` (ChildHome),
   `tasks`, `ledger`, `wishes`, `wishes/new`, `wishes/:id`, `assets/:id`,
-  `treasures`, `blind-box` (→ redirect `/treasures`), `calendar/day`, `settings`.
+  `treasures`, `blind-box` (→ redirect `/treasures`), `calendar/day`, `settings`,
+  `scenario`, `badges`, `manifesto/sign`.
 - **Child components**: `components/celebration/` (FlyToTarget, CandleFlame);
   `components/wishes/` (WishConstellationGrid, WishConstellationCard); `composables/`
   (useHaptic, useReducedMotion); `@numina/math` (daysEstimate, previewSpend, reachabilityTint).
 - **Main routes** (`frontend/apps/main/src/router/index.ts`): `/` (Dashboard),
   `wishes`, `wishes/:id`, `liabilities`, `liabilities/:id`, `assets`,
   `assets/:id`, `assets/:id/sell`, `ai` (AIHub), `ai/chat`, `ai/report`,
-  `ai/time-machine`, `settings/ai`, `settings/import-report`.
+  `ai/time-machine`, `settings/ai`, `settings/import-report`,
+  `manifesto/template-select`, `manifesto/edit`, `manifesto/sign`, `manifesto/preview`,
+  `blind-box/draws`, `blind-box/gifts`, `blind-box/gifts/new`, `blind-box/config`,
+  `baby`, `baby/calendar/day`, `baby/chores/new`, `baby/chore-templates`,
+  `baby/literacy-report`, `family/chore-approvals`,
+  `settings/notifications`, `settings/password`, `settings/second-factor`,
+  `settings/devices`, `settings/family/config`, `settings/family/coin-rates`,
+  `settings/family/debt-thresholds`, `settings/family/manifesto`, `settings/user/config`,
+  `welcome`, `register`, `join-family`, `promo/family`, `promo/developer`.
 - **Main components**: `components/wishes/` (WishSavingsProgress, WishSavingsLogDialog,
   WishSavingsRecordDialog, WishAdviceCard, WishCostEditDialog, StarCoinSuggestion);
   `components/liability/` (LiabilityStrategyCard, InterestForecast,

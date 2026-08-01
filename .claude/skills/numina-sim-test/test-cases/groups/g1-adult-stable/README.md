@@ -12,6 +12,8 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area2-finance.md`](./area2-finance.md) | 2 — Financial management | C2.1–C2.20 |
 | [`area3-ai.md`](./area3-ai.md) | 3 — AI (PDF/report/数鸣/chat) | C3.1–C3.20 |
 | [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) | 6 — AI chat DeerFlow parity | C6.1–C6.27 (D1–D7) |
+| [`area7-regression.md`](./area7-regression.md) | 7 — Regression sweep (历史缺陷回归) | R1–R9 |
+| [`area8-expanded-features.md`](./area8-expanded-features.md) | 8 — Expanded coverage (Manifesto/盲盒/Baby/Settings) | F.1–F.7 |
 
 ## State domain
 
@@ -36,21 +38,29 @@ runs **after** G1 (or before, but never concurrent).
 
 ## Agent assignment
 
-One agent drives all of G1 sequentially (area2 → area3 → area6), sharing
-`$SID`. Spawning a second agent to split G1 internally is NOT recommended:
-area2/3/6 share the adult session and interleave writes to the same AI config /
+One agent drives all of G1 sequentially (area2 → area8 → area3 → area6 → area7),
+sharing `$SID`. Spawning a second agent to split G1 internally is NOT recommended:
+area2/3/6/7/8 share the adult session and interleave writes to the same AI config /
 chat threads — a second adult agent would race on those.
+
+> **Recommended run order within G1:** area2 (finance) → area8 (expanded features) →
+> area3 (AI) → area6 (AI chat parity) → area7 (regression sweep). Area 7 runs last
+> because R6 (auth expiry) destroys the session — run it at the very end.
 
 ## Run command sketch
 
 ```bash
 # Assumes G0 produced $SID (adult session) and AI is enabled.
 SID="$SID_G0"   # reuse, do NOT session start a new one
-# area2
+# area2 — financial management
 bsk navigate ${BASE} --session "$SID" --wait-until networkidle   # dashboard (C2.1)
 # ... C2.1–C2.20 ...
-# area3 (AI must be enabled)
+# area8 — expanded features (Manifesto/Blind Box/Baby/Settings)
+# ... F.1–F.7 ...
+# area3 — AI capabilities (AI must be enabled)
 # ... C3.1–C3.20 ...
-# area6 (DeerFlow parity)
+# area6 — DeerFlow parity
 # ... C6.1–C6.27 ...
+# area7 — regression sweep (last! R6 destroys session)
+# ... R1–R8 ... (R6 last, then re-login if needed)
 ```

@@ -25,7 +25,7 @@ runs are safe by construction, not by luck.
 | Group | Dir | Files | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./g0-preconditions/) | (Phase 0/1/1.5/2 index) | serial | establishes login | none — runs first |
-| **G1** adult-stable | [`g1-adult-stable/`](./g1-adult-stable/) | area2, area3, area6 | `$SID` (adult) | reads global; per-entity writes only | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./g1-adult-stable/) | area2, area3, area6, **area7**, **area8** | `$SID` (adult) | reads global; per-entity writes only | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./g2-adult-currency/) | area4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./g3-child/) | area1, area5 | `$SID_CHILD` | child origin (isolated in dev) | **G1 or G2** |
 
