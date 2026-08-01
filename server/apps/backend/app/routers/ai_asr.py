@@ -446,9 +446,10 @@ async def transcribe_audio(
             tmp_path = tmp.name
 
         client = AsyncOpenAI(api_key=api_key, base_url=cfg.base_url)
+        asr_model = cfg.model_id or "whisper-1"
         with open(tmp_path, "rb") as f:
             transcription = await client.audio.transcriptions.create(
-                model=cfg.model_id,
+                model=asr_model,
                 file=f,
             )
 

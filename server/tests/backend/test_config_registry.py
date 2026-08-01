@@ -85,7 +85,7 @@ class TestDefinitionsCompleteness:
         assert len(FAMILY_SETTING_DEFINITIONS) == 13
 
     def test_user_count(self):
-        assert len(USER_SETTING_DEFINITIONS) == 2
+        assert len(USER_SETTING_DEFINITIONS) == 5
 
 
 def test_literacy_report_settings_registered():

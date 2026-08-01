@@ -192,7 +192,7 @@ def sign_manifesto(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise AppError(ErrorCode.MANIFESTO_ALREADY_SIGNED)
+        raise AppError(ErrorCode.MANIFESTO_ALREADY_SIGNED) from None
     db.refresh(sig)
     return sig
 

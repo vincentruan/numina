@@ -103,6 +103,11 @@ def db(_session_engine):
     # Reset cache (including registration rate limits)
     reset_rate_limit_cache()
 
+    # Defensive: clear any leaked dependency overrides from tests that
+    # manipulate app.dependency_overrides directly (e.g. internal API tests).
+    from apps.backend.app.main import app
+    app.dependency_overrides.clear()
+
     # Create a CONNECTION (not just session) for nested transaction support
     connection = _session_engine.connect()
     transaction = connection.begin()  # Outer transaction

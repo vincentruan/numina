@@ -17,13 +17,16 @@ _MCP_FILES = [
     "apps/backend/app/services/mcp_tool_registry.py",
 ]
 
+# Resolve paths relative to the server/ directory (pyproject.toml root)
+_SERVER_ROOT = Path(__file__).resolve().parent.parent.parent
+
 _FORBIDDEN_IMPORTS = {"httpx", "aiohttp", "apps.agent", "core.backend_client"}
 
 
 class TestStaticImportGuard:
     @pytest.mark.parametrize("filepath", _MCP_FILES)
     def test_no_http_library_imports(self, filepath):
-        source = Path(filepath).read_text()
+        source = (_SERVER_ROOT / filepath).read_text()
         tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

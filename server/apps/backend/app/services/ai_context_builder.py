@@ -17,6 +17,7 @@ the frontend) can warn the user.
 import json
 import logging
 import re
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -73,7 +74,7 @@ def _fmt_date(v: Any) -> str:
 
 
 def _convert(
-    amount: float | None,
+    amount: Decimal | float | None,
     from_currency: str,
     to_currency: str,
     db: Session,

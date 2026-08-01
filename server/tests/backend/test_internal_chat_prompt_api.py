@@ -55,10 +55,11 @@ def agent_client(minimal_db, tmp_path, monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 def _agent_headers(token: str | None = None) -> dict:

@@ -293,13 +293,13 @@ def _persist_report_result(
             child_id,
             week_start,
         )
-        row = db.execute(
+        conflict: LiteracyWeeklyReport | None = db.execute(
             select(LiteracyWeeklyReport).where(
                 LiteracyWeeklyReport.child_id == child_id,
                 LiteracyWeeklyReport.week_start == week_start,
             )
         ).scalar_one_or_none()
-        return row
+        return conflict
     db.refresh(row)
     return row
 
