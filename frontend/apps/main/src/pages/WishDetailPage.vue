@@ -66,7 +66,7 @@
       <WishSavingsProgress
         v-if="wish.status === 'pending'"
         :wish="wish"
-        :net-worth="0"
+        :net-worth="dashboardStore.overview?.net_worth ?? 0"
         @record="recordShow = true"
         @show-log="logShow = true"
       />
@@ -227,6 +227,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useWishStore } from '@/stores/wish'
+import { useDashboardStore } from '@/stores/dashboard'
 import { parseApiDate } from '@/utils/format'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
@@ -246,6 +247,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const wishStore = useWishStore()
+const dashboardStore = useDashboardStore()
 const liabilityStore = useLiabilityStore()
 const deleting = ref(false)
 const acting = ref(false)
@@ -406,6 +408,11 @@ onMounted(async () => {
     // W5: load debt thresholds + liabilities so the high-interest hint can render.
     void debtWarning.loadThresholds()
     liabilityStore.fetchLiabilities().catch(() => {})
+
+    // P1 fix: load dashboard overview so afford bar shows actual net worth.
+    if (!dashboardStore.overview) {
+      void dashboardStore.fetchOverview()
+    }
 
     // Pre-fill form
     if (wish.value?.expected_price) {
