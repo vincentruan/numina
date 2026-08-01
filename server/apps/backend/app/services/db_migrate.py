@@ -482,8 +482,9 @@ def align_schema(engine: Engine) -> dict[str, Any]:
     expected_tables = set(Base.metadata.tables.keys())
     existing_tables = get_existing_tables(engine)
 
-    # 1. Create missing tables
-    for table_name in expected_tables:
+    # 1. Create missing tables (topological order to respect FK dependencies)
+    sorted_table_names = [t.name for t in Base.metadata.sorted_tables]
+    for table_name in sorted_table_names:
         if table_name not in existing_tables:
             try:
                 create_table(engine, table_name)
