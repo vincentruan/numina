@@ -218,6 +218,14 @@ def _apply_active_skill_tool_filter(tools):
             ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
             filter_tools_by_skill_allowed_tools,
         )
+        # review_skill_package is a DeerFlow built-in that only works inside
+        # DeerFlow's own workspace (requires .skill archives or SKILL.md dirs).
+        # In the numina agent workspace it always fails with ValueError and
+        # causes the LLM to loop retrying — exclude it from the always-available
+        # set so the chat skill never sees it.
+        _numina_always_available = ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES - {
+            "review_skill_package",
+        }
         storage = LocalSkillStorage()
         all_skills = storage.load_skills(enabled_only=True)
         active_skills = [s for s in all_skills if s.name == active_skill_name]
@@ -230,7 +238,7 @@ def _apply_active_skill_tool_filter(tools):
         filtered = filter_tools_by_skill_allowed_tools(
             tools,
             active_skills,
-            always_allowed_tool_names=ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
+            always_allowed_tool_names=_numina_always_available,
         )
         if len(filtered) < len(tools):
             logger.debug(
