@@ -283,5 +283,7 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
             ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

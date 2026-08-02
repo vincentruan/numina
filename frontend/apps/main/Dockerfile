@@ -12,6 +12,8 @@ RUN npm install
 # Copy and install frontend app
 COPY frontend/apps/main/package*.json /app/frontend/apps/main/
 WORKDIR /app/frontend/apps/main
+# Cache bust: unique value per build prevents stale npm install layers
+ARG CACHE_BUST=default
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     npm install
