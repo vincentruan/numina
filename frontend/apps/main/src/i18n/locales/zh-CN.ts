@@ -3425,6 +3425,7 @@ export default {
     publishSuccess: '约定发布成功',
     publishFailed: '发布失败，请重试',
     signFailed: '签署失败，请重试',
+    notFound: '尚未创建家庭约定，请先创建',
     changeTypeTitle: '选择变更类型',
     pendingSign: '待签署',
     manifestoUpdated: '家庭约定已更新',

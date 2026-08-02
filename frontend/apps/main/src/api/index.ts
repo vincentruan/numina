@@ -42,7 +42,7 @@ interface ApiEnvelope<T = unknown> {
   details?: Array<{ field: string; code: string; msg: string }>
 }
 
-type RetryableConfig = AxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
+type RetryableConfig = AxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _silentErrorCodes?: string[] }
 
 const http = axios.create({
   baseURL: '/api/v1',
@@ -236,7 +236,10 @@ http.interceptors.response.use(
 
     if (error.response) {
       const { status, data } = error.response
-      if (status === 403) {
+      const silentCodes = (error.config as RetryableConfig)?._silentErrorCodes
+      if (silentCodes?.includes(data?.code)) {
+        // Caller handles this error code locally — skip global toast
+      } else if (status === 403) {
         showFailToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('errors.FORBIDDEN')))
       } else if (status === 422) {
         if (data?.details && Array.isArray(data.details)) {

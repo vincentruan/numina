@@ -30,7 +30,7 @@ export function createManifesto(req: CreateManifestoRequest) {
 }
 
 export function getCurrentManifesto() {
-  return http.get<Manifesto>('/family/manifesto')
+  return http.get<Manifesto>('/family/manifesto', { _silentErrorCodes: ['MANIFESTO_NOT_FOUND'] } as any)
 }
 
 export function getUnsignedCheck() {

@@ -40,6 +40,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { showToast } from 'vant'
 import * as manifestoApi from '@/api/manifesto'
 import ManifestoHistoryDialog from '@/components/manifesto/ManifestoHistoryDialog.vue'
 import ManifestoFeedbackList from '@/components/manifesto/ManifestoFeedbackList.vue'
@@ -62,6 +63,7 @@ function goManifestoEdit() {
       }
     })
     .catch(() => {
+      showToast(t('manifesto.notFound'))
       router.push('/manifesto/template-select')
     })
 }

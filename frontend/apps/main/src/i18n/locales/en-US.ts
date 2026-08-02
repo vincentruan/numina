@@ -3397,6 +3397,7 @@ export default {
     publishSuccess: 'Manifesto published',
     publishFailed: 'Failed to publish, please retry',
     signFailed: 'Failed to sign, please retry',
+    notFound: 'No family manifesto yet, please create one first',
     changeTypeTitle: 'Select Change Type',
     pendingSign: 'Pending',
     manifestoUpdated: 'Family manifesto updated',
