@@ -206,9 +206,6 @@
     </van-cell-group>
 
     <!-- 引导 -->
-    <van-cell-group inset class="section">
-      <van-cell :title="t('settings.replayOnboarding')" icon="guide-o" is-link @click="onReplayOnboarding" />
-    </van-cell-group>
 
     <div class="actions">
       <van-button block type="danger" plain @click="onLogout">
@@ -324,8 +321,7 @@ import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
 import { updateSettings } from '@/api/auth'
 import { getFamilySettings, updateFamilySettings } from '@/api/family'
-import { isGuideDone, markGuideDone, clearLegacyOnboardingKeys } from '@/utils/storage'
-import { resetGuideState } from '@/composables/useGuideTrigger'
+import { isGuideDone, markGuideDone } from '@/utils/storage'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
@@ -596,12 +592,6 @@ async function selectThemeColor(color: string) {
   } catch {
     // Non-critical: localStorage fallback preserves the choice locally
   }
-}
-
-async function onReplayOnboarding() {
-  clearLegacyOnboardingKeys()
-  await resetGuideState()
-  router.push('/')
 }
 
 async function onLogout() {

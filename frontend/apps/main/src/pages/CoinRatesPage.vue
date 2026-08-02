@@ -43,58 +43,12 @@
       </div>
     </div>
 
-    <!-- Education Reward -->
-    <div class="education-section">
-      <div class="section-title">{{ t('settings.educationRewardSection') }}</div>
-      <div class="rate-row education-row">
-        <div class="rate-label">{{ t('settings.educationRewardEnabled') }}</div>
-        <van-switch v-model="educationRewardEnabled" />
-      </div>
-      <div class="rate-row">
-        <div class="rate-label">{{ t('settings.educationRewardRate') }}</div>
-        <div class="rate-controls">
-          <van-field
-            v-model="coinToYuanRateStr"
-            type="digit"
-            class="rate-input"
-            :error="coinToYuanRateError"
-            :error-message="coinToYuanRateError ? t('toast.educationRewardRateInvalid') : ''"
-            @update:model-value="onCoinToYuanInput"
-          />
-          <span class="rate-unit">
-            {{ t('settings.educationRewardRateUnit', { rate: coinToYuanRate }) }}
-          </span>
-        </div>
-      </div>
-      <p class="hint">{{ t('settings.educationRewardHint') }}</p>
-    </div>
-
-    <!-- Auto-approve -->
-    <div class="auto-approve-section">
-      <div class="rate-row">
-        <div class="rate-label">{{ t('settings.autoApproveHours') }}</div>
-        <div class="rate-controls">
-          <van-slider
-            v-model="autoApproveHours"
-            :min="0"
-            :max="72"
-            :step="1"
-            class="slider"
-          />
-          <span class="rate-unit">
-            {{ autoApproveHours === 0 ? t('settings.autoApproveHoursManual') : `${autoApproveHours} ${t('settings.autoApproveHoursUnit')}` }}
-          </span>
-        </div>
-        <p class="hint">{{ t('settings.autoApproveHoursDesc') }}</p>
-      </div>
-    </div>
-
     <div class="save-action">
       <van-button
         block
         type="primary"
         :loading="saving"
-        :disabled="copperToSilverError || silverToGoldError || coinToYuanRateError"
+        :disabled="copperToSilverError || silverToGoldError"
         @click="saveRates"
       >
         {{ t('common.save') }}
@@ -123,11 +77,6 @@ const copperToSilverStr = ref('10')
 const silverToGoldStr = ref('10')
 const copperToSilverError = ref(false)
 const silverToGoldError = ref(false)
-const educationRewardEnabled = ref(false)
-const coinToYuanRate = ref(1)
-const coinToYuanRateStr = ref('1')
-const coinToYuanRateError = ref(false)
-const autoApproveHours = ref(0)
 const saving = ref(false)
 
 onMounted(async () => {
@@ -137,10 +86,6 @@ onMounted(async () => {
     silverToGold.value = res.data.coin_silver_to_gold
     copperToSilverStr.value = String(copperToSilver.value)
     silverToGoldStr.value = String(silverToGold.value)
-    educationRewardEnabled.value = res.data.education_reward_enabled
-    coinToYuanRate.value = res.data.coin_to_yuan_rate
-    coinToYuanRateStr.value = String(coinToYuanRate.value)
-    autoApproveHours.value = res.data.auto_approve_hours
   } catch {
     showFailToast(t('toast.loadFailed'))
   }
@@ -176,23 +121,9 @@ function onSilverInput(val: string) {
   }
 }
 
-function onCoinToYuanInput(val: string) {
-  const num = parseInt(val)
-  if (isNaN(num) || num < 0 || num > 10000) {
-    coinToYuanRateError.value = true
-  } else {
-    coinToYuanRateError.value = false
-    coinToYuanRate.value = num
-  }
-}
-
 async function saveRates() {
-  if (copperToSilverError.value || silverToGoldError.value || coinToYuanRateError.value) {
-    if (coinToYuanRateError.value) {
-      showToast(t('toast.educationRewardRateInvalid'))
-    } else {
-      showToast(t('toast.coinRateInvalid'))
-    }
+  if (copperToSilverError.value || silverToGoldError.value) {
+    showToast(t('toast.coinRateInvalid'))
     return
   }
   saving.value = true
@@ -200,14 +131,9 @@ async function saveRates() {
     await updateFamilySettings({
       coinCopperToSilver: copperToSilver.value,
       coinSilverToGold: silverToGold.value,
-      educationRewardEnabled: educationRewardEnabled.value,
-      coinToYuanRate: coinToYuanRate.value,
-      autoApproveHours: autoApproveHours.value,
     })
     familyStore.coinCopperToSilver = copperToSilver.value
     familyStore.coinSilverToGold = silverToGold.value
-    familyStore.educationRewardEnabled = educationRewardEnabled.value
-    familyStore.coinToYuanRate = coinToYuanRate.value
     showSuccessToast(t('toast.saveSuccess'))
     router.back()
   } catch {
@@ -263,39 +189,5 @@ async function saveRates() {
 
 .save-action {
   padding: 16px;
-}
-
-.education-section {
-  padding: 16px;
-}
-
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 12px;
-}
-
-.education-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.education-row .rate-label {
-  margin-bottom: 0;
-}
-
-.rate-unit {
-  font-size: 13px;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.hint {
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-secondary);
 }
 </style>

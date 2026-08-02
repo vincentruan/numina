@@ -195,58 +195,64 @@
         </van-cell>
       </van-cell-group>
 
-      <!-- Family Manifesto (owner-only) -->
-      <van-cell-group v-if="isOwner" inset :title="t('manifesto.settingsGroup')" class="section">
-        <van-cell
-          :title="t('manifesto.editManifesto')"
-          is-link
-          icon="certificate"
-          @click="goManifestoEdit"
-        />
-        <van-cell
-          :title="t('manifesto.versionHistory')"
-          is-link
-          icon="orders-o"
-          @click="showHistory = true"
-        />
-        <van-cell
-          :title="t('manifesto.feedbackList')"
-          is-link
-          icon="comment-o"
-          @click="showFeedback = true"
-        >
+      <!-- Education & Auto-Approve (owner-only) -->
+      <van-cell-group v-if="isOwner" inset :title="t('settings.educationRewardSection')" class="section">
+        <van-cell center :title="t('settings.educationRewardEnabled')">
           <template #right-icon>
-            <van-badge v-if="unreadFeedbackCount > 0" :content="unreadFeedbackCount" />
+            <van-switch v-model="educationRewardEnabled" size="20" @update:model-value="onEducationRewardToggle" />
+          </template>
+        </van-cell>
+        <van-cell :title="t('settings.educationRewardRate')">
+          <template #label>
+            <span class="desc">{{ t('settings.educationRewardRateUnit', { rate: coinToYuanRate }) }}</span>
+          </template>
+          <template #right-icon>
+            <van-field
+              v-model="coinToYuanRateStr"
+              type="digit"
+              class="rate-input"
+              :error="coinToYuanRateError"
+              @update:model-value="onCoinToYuanInput"
+            />
+          </template>
+        </van-cell>
+        <van-cell>
+          <template #title>
+            <span>{{ t('settings.autoApproveHours') }}</span>
+            <span class="value">{{ autoApproveHours === 0 ? t('settings.autoApproveHoursManual') : `${autoApproveHours} ${t('settings.autoApproveHoursUnit')}` }}</span>
+          </template>
+          <template #label>
+            <span class="desc">{{ t('settings.autoApproveHoursDesc') }}</span>
+            <div class="slider-track">
+              <van-slider v-model="autoApproveHours" :min="0" :max="72" :step="1" @change="onAutoApproveChange" />
+            </div>
+            <div class="slider-scale"><span>0</span><span>36</span><span>72</span></div>
           </template>
         </van-cell>
       </van-cell-group>
-    </template>
 
-    <ManifestoHistoryDialog v-model:visible="showHistory" />
-    <ManifestoFeedbackList v-model:visible="showFeedback" />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
+import { getFamilySettings, updateFamilySettings } from '@/api/family'
 import { useAuth } from '@/composables/useAuth'
-import * as manifestoApi from '@/api/manifesto'
-import ManifestoHistoryDialog from '@/components/manifesto/ManifestoHistoryDialog.vue'
-import ManifestoFeedbackList from '@/components/manifesto/ManifestoFeedbackList.vue'
 
 defineOptions({ name: 'FamilyConfig' })
 
 const { t } = useI18n()
-const router = useRouter()
 const { isOwner } = useAuth()
 const loading = ref(true)
-const showHistory = ref(false)
-const showFeedback = ref(false)
-const unreadFeedbackCount = ref(0)
+const educationRewardEnabled = ref(false)
+const coinToYuanRate = ref(1)
+const coinToYuanRateStr = ref('1')
+const coinToYuanRateError = ref(false)
+const autoApproveHours = ref(0)
 
 const dayLabels = computed<string[]>(() => {
   const labels = t('familyConfig.dayLabels', { returnObjects: true }) as unknown
@@ -287,28 +293,41 @@ function onSave() {
   }, 600)
 }
 
-function goManifestoEdit() {
-  manifestoApi.getCurrentManifesto()
-    .then((res) => {
-      if (res.data && res.data.id) {
-        router.push('/manifesto/edit')
-      } else {
-        router.push('/manifesto/template-select')
-      }
+function onEducationRewardToggle() {
+  updateFamilySettings({ educationRewardEnabled: educationRewardEnabled.value })
+    .then(() => {
+      showSuccessToast(t('toast.saveSuccess'))
     })
     .catch(() => {
-      router.push('/manifesto/template-select')
+      showFailToast(t('toast.saveFailed'))
     })
 }
 
-async function loadUnreadCount() {
-  if (!isOwner.value) return
-  try {
-    const res = await manifestoApi.getFeedbackList()
-    unreadFeedbackCount.value = (res.data ?? []).filter(f => !f.is_read).length
-  } catch {
-    unreadFeedbackCount.value = 0
+function onCoinToYuanInput(val: string) {
+  const num = parseInt(val)
+  if (isNaN(num) || num < 0 || num > 10000) {
+    coinToYuanRateError.value = true
+  } else {
+    coinToYuanRateError.value = false
+    coinToYuanRate.value = num
+    updateFamilySettings({ coinToYuanRate: num })
+      .then(() => {
+        showSuccessToast(t('toast.saveSuccess'))
+      })
+      .catch(() => {
+        showFailToast(t('toast.saveFailed'))
+      })
   }
+}
+
+function onAutoApproveChange() {
+  updateFamilySettings({ autoApproveHours: autoApproveHours.value })
+    .then(() => {
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
 }
 
 onMounted(async () => {
@@ -318,8 +337,20 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-  loadUnreadCount()
+  loadEducationSettings()
 })
+
+async function loadEducationSettings() {
+  try {
+    const res = await getFamilySettings()
+    educationRewardEnabled.value = res.data.education_reward_enabled
+    coinToYuanRate.value = res.data.coin_to_yuan_rate
+    coinToYuanRateStr.value = String(coinToYuanRate.value)
+    autoApproveHours.value = res.data.auto_approve_hours
+  } catch {
+    // non-critical
+  }
+}
 </script>
 
 <style scoped>
