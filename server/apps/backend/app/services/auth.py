@@ -15,6 +15,7 @@ Rate Limiting Trade-offs:
 See design.md for detailed trade-off analysis.
 """
 
+import json
 import logging
 import time
 from datetime import datetime, timedelta
@@ -609,6 +610,46 @@ def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
         user.avatar_color = req.avatar_color
     db.commit()
     db.refresh(user)
+    return user
+
+
+def change_username(db: Session, user: User, new_username: str) -> User:
+    """Change user username with rate limiting (max 3 times per 30 days)."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=30)
+
+    # Parse existing history
+    history: list[str] = []
+    if user.username_change_history:
+        try:
+            history = json.loads(user.username_change_history)
+        except (json.JSONDecodeError, TypeError):
+            history = []
+
+    # Filter to recent changes within the window
+    recent = [ts for ts in history if datetime.fromisoformat(ts) > cutoff]
+
+    if len(recent) >= 3:
+        raise AppError(ErrorCode.AUTH_USERNAME_CHANGE_LIMIT)
+
+    # Check uniqueness
+    existing = db.query(User).filter(
+        User.username == new_username, User.id != user.id
+    ).first()
+    if existing:
+        raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
+
+    # Update
+    old_username = user.username
+    user.username = new_username
+    recent.append(now.isoformat())
+    user.username_change_history = json.dumps(recent)
+    db.commit()
+    db.refresh(user)
+    write_audit_log(
+        "username_change", "success", user_id=user.id, family_id=user.family_id,
+        detail=f"{old_username} → {new_username}", db=db,
+    )
     return user
 
 

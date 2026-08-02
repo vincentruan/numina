@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -80,6 +81,11 @@ class User(Base):
 
     # 累计完成任务数（用于里程碑触发）
     total_approved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # 用户名修改历史（JSON 数组，存储最近修改时间戳，用于频率限制）
+    username_change_history: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # JSON array of ISO timestamp strings, e.g. ["2026-08-01T10:00:00"]
 
     family = relationship("Family", back_populates="members")
     assets = relationship("Asset", back_populates="user")

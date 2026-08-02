@@ -5,7 +5,6 @@ from fastapi import APIRouter, Cookie, Depends, Request, Response
 from jwt.exceptions import PyJWTError
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.captcha import verify_captcha
 from apps.backend.app.auth.cookies import clear_auth_cookies, clear_child_auth_cookies
 from apps.backend.app.auth.deps import (
     ACCESS_TOKEN_COOKIE,
@@ -472,10 +471,9 @@ def select_device(
     req: DeviceSelectRequest,
     request: Request,
     response: Response,
-    _: None = Depends(verify_captcha),
     db: Session = Depends(get_db),
 ):
-    """Select a user from device-bound accounts. Requires ALTCHA captcha.
+    """Select a user from device-bound accounts. No captcha required — device trust is the security proof.
 
     If user has second factor: returns temp_token for PIN step.
     If no second factor: sets auth cookies and returns directly.
