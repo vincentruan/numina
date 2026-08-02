@@ -250,13 +250,13 @@ jobs:
         include:
           - service: backend
             file: server/apps/backend/Dockerfile
-            context: .
+            context: server
           - service: agent
             file: server/apps/agent/Dockerfile
-            context: .
+            context: server
           - service: scheduler-worker
             file: server/apps/scheduler_worker/Dockerfile
-            context: .
+            context: server
           - service: frontend-main
             file: frontend/apps/main/Dockerfile
             context: .
