@@ -36,7 +36,7 @@ def revoke_jti(jti: str, ttl_seconds: float) -> None:
 
 
 def revoke_jti_atomic(jti: str, ttl_seconds: float) -> bool:
-    """Atomically revoke a JTI using INSERT OR IGNORE.
+    """Atomically revoke a JTI using INSERT ... ON CONFLICT DO NOTHING.
 
     Returns True if this call won the race (row inserted),
     False if another request already revoked this JTI.
@@ -47,8 +47,9 @@ def revoke_jti_atomic(jti: str, ttl_seconds: float) -> bool:
         expires_at = now + ttl_seconds
         result = db.execute(
             text(
-                "INSERT OR IGNORE INTO revoked_tokens (jti, revoked_at, expires_at)"
+                "INSERT INTO revoked_tokens (jti, revoked_at, expires_at)"
                 " VALUES (:jti, :revoked_at, :expires_at)"
+                " ON CONFLICT (jti) DO NOTHING"
             ),
             {"jti": jti, "revoked_at": now, "expires_at": expires_at},
         )
