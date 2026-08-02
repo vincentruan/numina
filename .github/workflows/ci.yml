@@ -169,6 +169,7 @@ jobs:
           cat > .env << 'EOF'
           SECRET_KEY=ci-test-secret-key-not-for-production
           ALTCHA_HMAC_KEY=ci-test-altcha-key
+          STORAGE_ENCRYPTION_KEY=ci-test-storage-key-not-for-production
           ENVIRONMENT=development
           EOF
 
