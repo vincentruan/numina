@@ -1,3 +1,4 @@
+# Build stage — includes vite-plugin-svg-icons-ng for SVG sprite generation
 FROM node:20-alpine AS build
 WORKDIR /app
 # Copy shared packages first
