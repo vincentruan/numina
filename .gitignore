@@ -127,6 +127,7 @@ lerna-debug.log*
 # ===========================
 # Ignore Claude local config and history, but track skills and commands
 .claude/settings.local.json
+.claude/deploy.env
 .claude/history/
 .claude/memory/
 .claude/projects/
