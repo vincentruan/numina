@@ -23,7 +23,7 @@ from G0).
 
 ## Parallelism
 
-✅ **Parallel-safe with G1 (adult-stable) AND G2 (adult-currency).**
+✅ **Parallel-safe with G1 (adult-stable) AND G2 (adult-currency) in dev mode.**
 
 This is the key enabler of the 4-group design. In **dev mode**, the child app
 (:5174) is a **different origin** from the adult app (:5173). Verified: bsk
@@ -32,9 +32,12 @@ session on :5174 does NOT see adult writes on :5173, and vice versa. G3 can run
 concurrently with either adult group.
 
 ⚠️ **Docker mode caveat:** nginx serves both apps under one origin (:80), so
-adult and child share storage. In docker mode, treat G3 as **same-origin as
-G1/G2** — do NOT parallelize; run G3 serially alongside the adult groups. The
-parallel benefit is dev-mode-only.
+adult and child share cookie + localStorage storage. The adult `access_token`
+cookie causes the child SPA's `verifyChildSession()` to fail (backend returns
+4xx for non-child role), redirecting to the adult login page. **In docker mode,
+G3 must run serially after G1/G2**, with cookie + localStorage clearing before
+child session injection. See [`area1-child.md`](./area1-child.md) "Docker mode —
+cookie clearing required" for the exact steps.
 
 ## Agent assignment
 

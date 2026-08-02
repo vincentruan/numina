@@ -18,11 +18,11 @@ Auth: adult session as `demouser` (owner). 本 Area 为只读验证，不修改�
 ```
 bsk navigate ${BASE} --session <id> --wait-until networkidle   # Dashboard
 bsk snapshot --session <id>
-bsk navigate ${BASE}assets --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -71,7 +71,7 @@ bsk snapshot --session <id>
 bsk evaluate --session <id> --expr "localStorage.setItem('numina_language', 'en-US'); 'set'"
 bsk navigate ${BASE} --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -91,9 +91,9 @@ Assertions:
 ```
 # 快速连续导航多个页面，模拟触发条件
 bsk navigate ${BASE} --session <id> --wait-until networkidle
-bsk navigate ${BASE}wishes --session <id>
-bsk navigate ${BASE}assets --session <id>
-bsk navigate ${BASE}liabilities --session <id>
+bsk navigate ${BASE}finance?tab=wishes --session <id>
+bsk navigate ${BASE}finance?tab=assets --session <id>
+bsk navigate ${BASE}finance?tab=liabilities --session <id>
 bsk navigate ${BASE} --session <id> --wait-until networkidle
 bsk wait-ms 1s
 bsk evaluate --session <id> --expr "document.querySelector('#nprogress')?.style?.cssText || 'no-nprogress-element'"
@@ -116,7 +116,7 @@ Assertions:
 # 导航到 Dashboard → 离开 → 返回，观察是否双重加载
 bsk navigate ${BASE} --session <id> --wait-until networkidle
 bsk evaluate --session <id> --expr "window.__dashboardFetchCount = 0; const origFetch = window.fetch; window.fetch = (...a) => { if (a[0]?.includes?.('/dashboard/overview')) window.__dashboardFetchCount++; return origFetch(...a); }; 'interceptor-installed'"
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk navigate ${BASE} --session <id> --wait-until networkidle
 bsk wait-ms 1s
 bsk evaluate --session <id> --expr "String(window.__dashboardFetchCount || 'no-interceptor')"

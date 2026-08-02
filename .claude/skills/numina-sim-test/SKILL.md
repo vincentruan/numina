@@ -74,12 +74,19 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 > (regression) runs last because R6 (auth expiry) destroys the session.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
-> → G3 is NOT parallel-safe with G1/G2 (shared storage). In docker, run G3
-> serially. The parallel benefit is **dev-mode-only** (child :5174 is a separate
-> origin).
+> → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
+> adult `access_token` cookie causes the child SPA's `verifyChildSession()` to
+> fail (backend returns 4xx for non-child role), redirecting to the adult
+> login page. In docker, run G3 **serially after G1/G2**, with cookie +
+> localStorage clearing + child session re-injection before G3 starts. See
+> [`area1-child.md`](./test-cases/groups/g3-child/area1-child.md) "Docker mode
+> — cookie clearing required" for the exact steps. The parallel benefit is
+> **dev-mode-only** (child :5174 is a separate origin).
 
 > **Agent rules:** (1) each agent reuses the G0 session id for its group — do
 > NOT `bsk session start` a new one, do NOT `bsk session stop` a shared session;
+> **exception:** in docker mode, G3 must stop the adult session, clear cookies,
+> and start a fresh session for child testing (see Phase 5);
 > (2) prefix failures in the report with the group (`G1-C2.3`, `G3-C1.10`);
 > (3) never split a single group across two agents — they share that group's
 > session and would race.
@@ -148,12 +155,16 @@ so the SPA still calls `/api/...` relatively.
 > **Child path stays `/child/` in both modes** (vite `base: '/child/'`), so
 > `test-cases/` routes are unchanged — only the host:port differs.
 
-> **Cookie sharing caveat (dev):** adult (:5173) and child (:5174) are
-> different origins, so the adult session cookie does NOT carry over to the
-> child port by default. In dev mode, log into the child SPA directly at
+> **Cookie sharing caveat:** In **dev mode**, adult (:5173) and child (:5174)
+> are different origins, so the adult session cookie does NOT carry over to the
+> child port. In dev mode, log into the child SPA directly at
 > `http://localhost:5174/child/` (the child login/PIN flow re-establishes
-> the session for that origin), or have the user set a shared cookie. This
-> differs from docker mode where nginx serves both under one origin.
+> the session for that origin). In **docker mode**, both apps share one
+> origin (:80) — the adult `access_token` cookie interferes with the child
+> SPA's route guard. Before child testing in docker, clear all cookies +
+> localStorage and re-inject the child session (see
+> [`area1-child.md`](./test-cases/groups/g3-child/area1-child.md) "Docker mode
+> — cookie clearing required").
 
 ### Setting the vars for the run
 
@@ -542,7 +553,12 @@ set `input.files` via DataTransfer, or call the backend parse endpoint with
 ## Phase 5 — Area 1: Child App (bsk flows)
 
 **docker mode:** the child SPA shares the adult session's cookie (same origin
-via nginx). Reuse `$SID`.
+via nginx). The adult `access_token` cookie causes the child SPA's route guard
+(`verifyChildSession()`) to fail — it calls `GET /auth/child/me` which returns
+4xx for non-child role. **Before starting G3 in docker mode**, clear all
+cookies + localStorage (see [`area1-child.md`](./test-cases/groups/g3-child/area1-child.md)
+"Docker mode — cookie clearing required"), stop the adult session, start a
+fresh session, then inject the child session via step1/step2 PIN login.
 
 **dev mode:** adult (:5173) and child (:5174) are different origins — the
 adult cookie does NOT carry over. Start a fresh session and navigate to
@@ -550,10 +566,12 @@ adult cookie does NOT carry over. Start a fresh session and navigate to
 origin.
 
 ```bash
-# docker: reuse $SID from Phase 2
+# docker: clear cookies → stop adult session → start fresh → child injection
 # dev: start a new session for the child origin
 if [ -z "${DEV_CHILD_SID:-}" ]; then
-  SID_CHILD="$SID"          # docker: same session
+  # docker: clear cookies first, then start fresh session + child injection
+  # (see area1-child.md for the full cookie-clearing sequence)
+  SID_CHILD="$SID_CHILD_FROM_DOCKER_CLEAR"
 else
   SID_CHILD="$DEV_CHILD_SID"
 fi
@@ -875,6 +893,8 @@ bsk session stop "$SID"
 | Relying on 5-min idle timeout to clean up | Always `bsk session stop <id>` explicitly |
 | Treating 401 auth-refresh as a bug | Expected on first load — filter from console errors |
 | Treating child `/child/blind-box` 404 as a bug | It redirects to `/treasures` (route alias) — that's correct |
+| Docker child page shows blank / redirects to adult login | Adult `access_token` cookie interferes with child SPA route guard. Clear cookies + localStorage before child testing in docker mode — see area1-child.md "Docker mode — cookie clearing required" |
+| Navigating to `${BASE}wishes` / `${BASE}assets` / `${BASE}liabilities` → unexpected redirect | U6: these routes redirect to `${BASE}finance?tab=wishes\|assets\|liabilities`. Use the FinanceHub tab routes in test cases |
 | Password-manager extension hijacks the tab on `bsk fill` of the password field | Do not retry `bsk fill` or use `bsk request-help` (overlay blocks the RPC). Use the Phase 2 cookie+localStorage injection fallback — no password field is focused, so the extension never activates |
 | `bsk wait-ms 2s` / `1500` rejected with a duration parse error | `wait-ms` accepts a narrow set of duration forms; if a value is rejected, drop the wait and use `--wait-until` on the next `navigate`, or poll `bsk snapshot` until the expected text appears |
 | `bsk navigate` RPC times out at 30s but the page actually loaded | Navigation often completes before the RPC returns. Do not retry blindly — verify with `bsk evaluate --session <id> "location.href"`; if correct, proceed to `snapshot` |

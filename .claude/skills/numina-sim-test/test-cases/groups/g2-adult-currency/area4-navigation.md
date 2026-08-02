@@ -43,13 +43,13 @@ bsk navigate ${BASE}settings --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk evaluate --session <id> --expr "JSON.stringify({cur: localStorage.getItem('numina_user') && JSON.parse(localStorage.getItem('numina_user')).default_currency})"
 # Note the current currency (expect CNY) and navigate to each money-bearing page, recording the displayed numbers.
-bsk navigate ${BASE}assets --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until networkidle
 bsk snapshot --session <id>     # record each asset's displayed current_value
 bsk navigate ${BASE}assets/<usd-asset-id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>     # record the detail current_value + daily_cost
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle
 bsk snapshot --session <id>     # record totalAmount + each liability remaining
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>     # record each wish expected_price
 
 # 2) Switch currency to USD (or any non-CNY) via Settings → default-currency cell
@@ -62,13 +62,13 @@ bsk snapshot --session <id>     # confirm picker closed + cell shows USD
 bsk wait-ms 1s                  # let updateSetting + fetchMe settle
 
 # 3) Re-visit each page and compare displayed numbers to baseline
-bsk navigate ${BASE}assets --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk navigate ${BASE}assets/<usd-asset-id> --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle
 bsk snapshot --session <id>
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk screenshot --session <id> --out dogfood-output/c4.0-currency-switch.png
 ```
@@ -130,7 +130,7 @@ Assertions:
 ### C4.3 Wishes tab — list + sort + pull-refresh + liability-strategy link
 
 ```
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -195,7 +195,7 @@ Assertions:
 ### C4.7 Liabilities tab — filter + sort + batch + quick-pay
 
 ```
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -331,7 +331,7 @@ Assertions:
 ```
 # Deep-link a protected route while logged out (clear localStorage + cookie)
 bsk evaluate --session <id> --expr "localStorage.clear(); 'cleared'"
-bsk navigate ${BASE}assets --session <id> --wait-until domcontentloaded
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until domcontentloaded
 bsk snapshot --session <id>
 ```
 

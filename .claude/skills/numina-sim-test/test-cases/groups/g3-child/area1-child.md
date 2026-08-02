@@ -3,15 +3,42 @@
 Shared conventions in [`_common.md`](../../_common.md).
 
 Routes live under `${CHILD_BASE}` (child SPA; `/child/` base in both modes).
-Auth: cookie is shared with the adult session in **docker** mode — establish
-the adult session as `demouser` first (prefer the cookie+localStorage
-injection fallback in SKILL.md "Phase 2 fallback" — the default `bsk fill`
-form-login can trigger a password-manager extension that hijacks the tab),
-**then** navigate to `${CHILD_BASE}`. In **dev** mode adult (:5173) and child
-(:5174) are different origins; the cookie does NOT carry over — drive the
-child two-step emoji-PIN login from the child origin's page context (see
-`_common.md` "Child session injection (dev mode)"). The child PIN-pad UI flow
-itself is exercised by C1.3 below.
+
+### Docker mode — cookie clearing required
+
+In **docker** mode, adult and child apps share one origin (`:80`). The adult
+`access_token` httpOnly cookie interferes with the child SPA's route guard:
+`verifyChildSession()` calls `GET /auth/child/me`, which returns 4xx when only
+an adult cookie is present, causing a redirect to the main login page.
+
+**Before starting G3 in docker mode**, clear all cookies and localStorage:
+
+```bash
+# After G0 adult session is established and G1/G2 are complete.
+# 1) Clear all cookies for the origin
+bsk evaluate --session "$SID" --expr "document.cookie.split(';').forEach(c => { document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'); }); 'cookies-cleared'"
+# 2) Clear localStorage (removes stale numina_user with adult role)
+bsk evaluate --session "$SID" --expr "localStorage.clear(); 'localStorage-cleared'"
+# 3) Stop the adult session — a fresh session avoids residual state
+bsk session stop "$SID"
+# 4) Start a fresh child session
+SID_CHILD=$(bsk session start | grep -oE '[a-z]{4}$')
+```
+
+Then proceed with child session injection using the step1/step2 PIN login flow
+from `_common.md` "Child session injection (dev mode)" — it works for docker
+mode too after cookie clearing. The child session establishes `child_access_token`
+cookie + `numina_user` localStorage with `role: 'child'`.
+
+> **Note:** This means G3 must run **serially after** G1/G2 in docker mode
+> (not in parallel). The parallel benefit is dev-mode-only.
+
+### Dev mode
+
+In **dev** mode adult (:5173) and child (:5174) are different origins; the
+cookie does NOT carry over — drive the child two-step emoji-PIN login from the
+child origin's page context (see `_common.md` "Child session injection (dev
+mode)"). The child PIN-pad UI flow itself is exercised by C1.3 below.
 
 ## Existing cases — core child flows
 

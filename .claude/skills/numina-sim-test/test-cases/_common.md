@@ -70,8 +70,14 @@ actual source tree on branch `feat/two-ai-apps-unified-dispatch`:
   `components/wishes/` (WishConstellationGrid, WishConstellationCard); `composables/`
   (useHaptic, useReducedMotion); `@numina/math` (daysEstimate, previewSpend, reachabilityTint).
 - **Main routes** (`frontend/apps/main/src/router/index.ts`): `/` (Dashboard),
-  `wishes`, `wishes/:id`, `liabilities`, `liabilities/:id`, `assets`,
-  `assets/:id`, `assets/:id/sell`, `ai` (AIHub), `ai/chat`, `ai/report`,
+  `finance` (FinanceHub — unified assets/liabilities/wishes via `?tab=` query),
+  `finance?tab=assets`, `finance?tab=liabilities`, `finance?tab=wishes`,
+  `assets` (→ redirect `finance?tab=assets`), `liabilities` (→ redirect `finance?tab=liabilities`),
+  `wishes` (→ redirect `finance?tab=wishes`),
+  `assets/new`, `assets/:id`, `assets/:id/edit`, `assets/:id/sell`,
+  `liabilities/new`, `liabilities/:id`, `liabilities/:id/edit`,
+  `wishes/new`, `wishes/:id`, `wishes/:id/edit`,
+  `ai` (AIHub), `ai/chat`, `ai/report`,
   `ai/time-machine`, `settings/ai`, `settings/import-report`,
   `manifesto/template-select`, `manifesto/edit`, `manifesto/sign`, `manifesto/preview`,
   `blind-box/draws`, `blind-box/gifts`, `blind-box/gifts/new`, `blind-box/config`,

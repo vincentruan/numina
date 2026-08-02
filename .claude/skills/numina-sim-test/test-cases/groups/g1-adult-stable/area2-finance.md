@@ -33,7 +33,7 @@ Assertions:
 ### C2.2 Wish list (WishListPage) — savings progress + advice + debt hint
 
 ```
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -81,7 +81,7 @@ Assertions:
 ### C2.5 Liability list (LiabilityListPage) — strategy card + interest forecast
 
 ```
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -127,7 +127,7 @@ Assertions:
 ### C2.8 Asset list + detail + sell flow
 
 ```
-bsk navigate ${BASE}assets --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -209,7 +209,7 @@ Covers W1 (wish savings fields: `saved_amount`/`target_date`/`monthly_saving` +
 ### C2.12 Wish savings fields — monthly_saving + target_date
 
 ```
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 # Open a wish that has monthly_saving + target_date set
 bsk click @eN --session <id>
@@ -227,7 +227,7 @@ Assertions:
 
 ```
 # Navigate to wishes with different savings states
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -267,7 +267,7 @@ Covers W5 (high-interest liability ↔ wish linkage hint) and L1/L2
 ### C2.15 Debt-warning hint bar — threshold linkage
 
 ```
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -299,17 +299,19 @@ Assertions:
 
 ```
 # Direct API test (L1/L2 single-source amortization util + route)
+# NOTE: This is a pure-compute endpoint — it takes remaining/annual_rate directly,
+# NOT a liability_id. The backend has no DB access for this endpoint.
 curl -s -X POST "${API_BASE}/liabilities/simulate" \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"liability_id":"<id>","mode":"equal","extra_monthly":500}' | jq .
+  -d '{"remaining":"10000","annual_rate":"12","monthly_payment":"500","extra_monthly":"500"}' | jq .
 curl -s -X POST "${API_BASE}/liabilities/simulate" \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"liability_id":"<id>","mode":"min-payment","extra_monthly":0}' | jq .
+  -d '{"remaining":"10000","annual_rate":"12","monthly_payment":null,"extra_monthly":"0"}' | jq .
 ```
 
 Assertions:
-- [ ] `mode=equal` returns a revised payoff timeline (months) + total interest + interest saved
-- [ ] `mode=min-payment` with `extra_monthly=0` returns the baseline min-payment schedule
+- [ ] `monthly_payment` given (equal-payment mode) returns a revised payoff timeline (months) + total interest + interest saved
+- [ ] `monthly_payment: null` (minimum-payment mode, e.g. credit card) with `extra_monthly=0` returns the baseline min-payment schedule
 - [ ] min-payment non-cover boundary: when min-payment < monthly interest (rate=60% edge), returns a structured "cannot-pay-off" result (no 500/crash, no infinite loop — 1200-month cap)
 - [ ] Frontend SimulateExtraDialog (C2.6) consumes the same util client-side; results match the API
 - [ ] `[console]` zero errors
@@ -366,9 +368,9 @@ financial pages.
 
 ```
 bsk navigate ${BASE} --session <id> --wait-until networkidle        # dashboard
-bsk navigate ${BASE}assets --session <id> --wait-until networkidle   # asset list
-bsk navigate ${BASE}liabilities --session <id> --wait-until networkidle  # liability list
-bsk navigate ${BASE}wishes --session <id> --wait-until networkidle   # wish list
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until networkidle   # asset list
+bsk navigate ${BASE}finance?tab=liabilities --session <id> --wait-until networkidle  # liability list
+bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle   # wish list
 bsk snapshot --session <id>
 ```
 
