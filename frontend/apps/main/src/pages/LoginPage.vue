@@ -1354,9 +1354,9 @@ async function submitEmojiPin() {
 }
 
 .account-name {
-  color: var(--text-primary, #f5f5f5);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 400;
   margin-bottom: 4px;
 }
 

@@ -1696,6 +1696,7 @@ export default {
     debtThresholds: '债务预警阈值',
     userAdvancedConfig: '个人偏好设置',
     replayOnboarding: '重新播放新手引导',
+    importReport: '导入账单',
   },
   changePassword: {
     title: '账户密码',
@@ -2482,6 +2483,7 @@ export default {
     parseFailed: '解析失败，请检查文件是否为金融账单',
     importSuccess: '导入完成：更新 {update} 条，新建 {create} 条',
     importFailed: '导入失败，请稍后重试',
+    warningAmountMissing: '金额未识别，请手动补充',
   },
   mcp: {
     title: 'MCP 服务管理',

@@ -30,6 +30,8 @@ class DeviceCheckRequest(BaseModel):
 class DeviceCheckUserItem(SnowflakeBase):
     user_id: int
     display_name: str
+    username: str | None
+    family_name: str
     avatar_color: str
     role: str
     second_factor_type: str | None

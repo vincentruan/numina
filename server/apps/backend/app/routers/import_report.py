@@ -293,7 +293,7 @@ async def parse_pdf(
         matched = _match_asset(item_name, str(current_user.family_id), db)
         warning = None
         if current_value is None:
-            warning = "金额未识别，请手动补充"
+            warning = "amount_not_recognized"
 
         preview_items.append(ImportPreviewItem(
             temp_id=f"tmp_{uuid.uuid4().hex[:8]}",

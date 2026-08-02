@@ -63,7 +63,7 @@
             <span v-if="item.matched_asset_name" class="matched-name">
               → {{ item.matched_asset_name }}
             </span>
-            <span v-if="item.warning" class="warning-text">⚠ {{ item.warning }}</span>
+            <span v-if="item.warning" class="warning-text">⚠ {{ warningText(item.warning) }}</span>
           </div>
         </div>
       </van-cell-group>
@@ -96,6 +96,14 @@ const confirming = ref(false)
 
 const updateCount = computed(() => editableItems.value.filter((i) => i.action === 'update').length)
 const createCount = computed(() => editableItems.value.filter((i) => i.action === 'create').length)
+
+const WARNING_MAP: Record<string, string> = {
+  amount_not_recognized: 'importReport.warningAmountMissing',
+}
+function warningText(code: string): string {
+  const key = WARNING_MAP[code]
+  return key ? t(key) : code
+}
 
 async function handleFileRead(file: UploaderFileListItem | UploaderFileListItem[]) {
   const item = Array.isArray(file) ? file[0] : file

@@ -1476,6 +1476,7 @@ export default {
     debtThresholds: 'Debt Warning Thresholds',
     userAdvancedConfig: 'Personal Preferences',
     replayOnboarding: 'Replay onboarding',
+    importReport: 'Import Statement',
   },
   changePassword: {
     title: 'Account Password',
@@ -2199,6 +2200,7 @@ export default {
     parseFailed: 'Parsing failed, please check if the file is a financial statement',
     importSuccess: 'Import complete: updated {update}, created {create}',
     importFailed: 'Import failed, please try again later',
+    warningAmountMissing: 'Amount not recognized, please enter manually',
   },
   aiConfig: {
     pageTitle: 'AI Assistant Config',
