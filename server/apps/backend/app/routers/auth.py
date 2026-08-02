@@ -40,6 +40,7 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.auth import (
     ChangeNumericPinRequest,
     ChangePasswordRequest,
+    ChangeUsernameRequest,
     ChildRefreshResponse,
     JoinFamilyRequest,
     LoginRequest,
@@ -227,6 +228,16 @@ def change_password(
     """修改密码，成功后吊销该用户所有现存 token，需重新登录。"""
     auth_service.change_password(db, user, req.old_password, req.new_password)
     return {"message": "密码已修改，请重新登录"}
+
+
+@router.post("/me/username", response_model=UserResponse)
+def change_username(
+    req: ChangeUsernameRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """修改用户名，每月最多3次。"""
+    return auth_service.change_username(db, user, req.new_username)
 
 
 @router.post("/me/password/reset")

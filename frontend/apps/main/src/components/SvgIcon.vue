@@ -49,7 +49,6 @@ const colorStyle = computed(() => {
 .svg-icon {
   width: 1em;
   height: 1em;
-  fill: currentColor;
   overflow: hidden;
   /* When size is explicitly set, align to middle for proper line alignment */
   vertical-align: middle;

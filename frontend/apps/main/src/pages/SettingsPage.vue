@@ -19,7 +19,7 @@
           <UserIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''">
+      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" is-link to="/settings/username">
         <template #icon>
           <UsernameIcon :size="16" class="cell-icon" />
         </template>
@@ -683,7 +683,7 @@ async function onLogout() {
 }
 .cell-icon {
   margin-right: 4px;
-  color: var(--van-cell-icon-color);
+  color: var(--van-gray-6);
   flex-shrink: 0;
   /* Override van-cell's align-items: normal which causes top alignment */
   align-self: center;

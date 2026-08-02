@@ -284,6 +284,11 @@ const router = createRouter({
           component: () => import('@/pages/ChangePasswordPage.vue'),
         },
         {
+          path: 'settings/username',
+          name: 'ChangeUsername',
+          component: () => import('@/pages/ChangeUsernamePage.vue'),
+        },
+        {
           path: 'settings/second-factor',
           name: 'ChangeSecondFactor',
           component: () => import('@/pages/ChangeSecondFactorPage.vue'),

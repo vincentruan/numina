@@ -169,6 +169,15 @@ class ChangePasswordRequest(BaseModel):
         return validate_password_strength(v)
 
 
+class ChangeUsernameRequest(BaseModel):
+    new_username: str
+
+    @field_validator("new_username")
+    @classmethod
+    def check_new_username(cls, v: str) -> str:
+        return validate_username(v)
+
+
 class ResetPasswordRequest(BaseModel):
     """Reset password via notification channel — no old password required."""
     pass
