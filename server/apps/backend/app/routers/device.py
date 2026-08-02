@@ -404,6 +404,7 @@ def check_device(
     from datetime import datetime
 
     from apps.backend.app.models.device_session import DeviceSession
+    from apps.backend.app.models.family import Family
     from apps.backend.app.models.user import User
 
     now = datetime.utcnow()
@@ -425,6 +426,11 @@ def check_device(
     user_ids = [s.user_id for s in sessions]
     users = db.query(User).filter(User.id.in_(user_ids), User.is_active.is_(True)).all()
     user_map = {u.id: u for u in users}
+
+    # Fetch family names for all bound users
+    family_ids = {u.family_id for u in users if u.family_id}
+    families = db.query(Family).filter(Family.id.in_(family_ids)).all() if family_ids else []
+    family_map = {f.id: (f.custom_title or f.name) for f in families}
 
     items: list[DeviceCheckUserItem] = []
     seen_user_ids: set[int] = set()
@@ -452,6 +458,8 @@ def check_device(
             DeviceCheckUserItem(
                 user_id=user.id,
                 display_name=user.display_name,
+                username=user.username,
+                family_name=family_map.get(user.family_id, ""),
                 avatar_color=user.avatar_color,
                 role=user.role,
                 second_factor_type=second_factor_type,

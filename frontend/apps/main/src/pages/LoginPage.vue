@@ -56,6 +56,9 @@
                   {{ user.displayName.charAt(0) }}
                 </div>
                 <p class="account-name">{{ user.displayName }}</p>
+                <p v-if="user.username || user.familyName" class="account-subtitle">
+                  <span v-if="user.username">@{{ user.username }}</span><span v-if="user.username && user.familyName"> / </span><span v-if="user.familyName">{{ user.familyName }}</span>
+                </p>
                 <span class="account-role">{{ t(`role.${user.role}`) }}</span>
               </div>
             </van-swipe-item>
@@ -299,6 +302,8 @@ const trustedUser = ref<TrustedUser | null>(null)
 interface BoundUser {
   userId: string
   displayName: string
+  username: string | null
+  familyName: string
   avatarColor: string
   role: string
   secondFactorType: string | null
@@ -336,6 +341,8 @@ onMounted(async () => {
       boundUsers.value = data.users.map((u: DeviceCheckUser) => ({
         userId: String(u.user_id),
         displayName: u.display_name,
+        username: u.username,
+        familyName: u.family_name,
         avatarColor: u.avatar_color,
         role: u.role,
         secondFactorType: u.second_factor_type,
@@ -1358,6 +1365,16 @@ async function submitEmojiPin() {
   font-size: 16px;
   font-weight: 400;
   margin-bottom: 4px;
+}
+
+.account-subtitle {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  margin-bottom: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .account-role {

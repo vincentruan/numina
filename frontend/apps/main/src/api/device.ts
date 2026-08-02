@@ -3,6 +3,8 @@ import http from './index'
 export interface DeviceCheckUser {
   user_id: string
   display_name: string
+  username: string | null
+  family_name: string
   avatar_color: string
   role: string
   second_factor_type: string | null
