@@ -3,7 +3,7 @@ import http from './index'
 export interface NotificationChannelResponse {
   id: string
   family_id: string
-  channel_type: 'telegram' | 'email'
+  channel_type: 'telegram' | 'email' | 'feishu'
   name: string
   is_enabled: boolean
   subscriptions: string[]
@@ -12,7 +12,7 @@ export interface NotificationChannelResponse {
 }
 
 export interface NotificationChannelCreate {
-  channel_type: 'telegram' | 'email'
+  channel_type: 'telegram' | 'email' | 'feishu'
   name: string
   config: Record<string, string | number>
   is_enabled: boolean

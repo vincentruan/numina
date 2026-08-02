@@ -50,6 +50,10 @@
           <van-field v-model="form.bot_token" :label="t('reminders.botTokenLabel')" :placeholder="t('reminders.botTokenPlaceholder')" type="password" />
           <van-field v-model="form.chat_id" :label="t('reminders.chatIdLabel')" :placeholder="t('reminders.chatIdPlaceholder')" />
         </template>
+        <template v-if="form.channel_type === 'feishu'">
+          <van-field v-model="form.webhook_url" :label="t('reminders.webhookUrlLabel')" :placeholder="t('reminders.webhookUrlPlaceholder')" />
+          <van-field v-model="form.secret" :label="t('reminders.feishuSecretLabel')" :placeholder="t('reminders.feishuSecretPlaceholder')" type="password" />
+        </template>
         <template v-if="form.channel_type === 'email'">
           <van-field v-model="form.smtp_host" :label="t('reminders.smtpHostLabel')" :placeholder="t('reminders.smtpHostPlaceholder')" />
           <van-field v-model="form.smtp_port" :label="t('reminders.smtpPortLabel')" type="number" :placeholder="t('reminders.smtpPortPlaceholder')" />
@@ -92,7 +96,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast, showFailToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import {
   notificationChannelsApi,
   type NotificationChannelResponse,
@@ -110,13 +114,16 @@ const reminderTypes = ['large_purchase', 'expiring_soon', 'maturity']
 const typePickerColumns = computed(() => [
   { text: t('reminders.channelType.telegram'), value: 'telegram' },
   { text: t('reminders.channelType.email'), value: 'email' },
+  { text: t('reminders.channelType.feishu'), value: 'feishu' },
 ])
 
 const form = reactive({
   name: '',
-  channel_type: 'telegram' as 'telegram' | 'email',
+  channel_type: 'telegram' as 'telegram' | 'email' | 'feishu',
   bot_token: '',
   chat_id: '',
+  webhook_url: '',
+  secret: '',
   smtp_host: '',
   smtp_port: 587,
   smtp_user: '',
@@ -131,6 +138,8 @@ function resetForm() {
   form.channel_type = 'telegram'
   form.bot_token = ''
   form.chat_id = ''
+  form.webhook_url = ''
+  form.secret = ''
   form.smtp_host = ''
   form.smtp_port = 587
   form.smtp_user = ''
@@ -175,9 +184,15 @@ async function saveChannel() {
     showToast(t('reminders.smtpHostRequired'))
     return
   }
+  if (form.channel_type === 'feishu' && !form.webhook_url.trim()) {
+    showToast(t('reminders.webhookUrlRequired'))
+    return
+  }
   const config: Record<string, string | number> =
     form.channel_type === 'telegram'
       ? { bot_token: form.bot_token, chat_id: form.chat_id }
+      : form.channel_type === 'feishu'
+      ? { webhook_url: form.webhook_url, secret: form.secret }
       : {
           smtp_host: form.smtp_host,
           smtp_port: typeof form.smtp_port === 'number' ? form.smtp_port : parseInt(form.smtp_port) || 587,
@@ -217,7 +232,7 @@ async function removeChannel(id: string) {
 }
 
 function onTypeConfirm({ selectedValues }: { selectedValues: string[] }) {
-  form.channel_type = selectedValues[0] as 'telegram' | 'email'
+  form.channel_type = selectedValues[0] as 'telegram' | 'email' | 'feishu'
   showTypePicker.value = false
 }
 </script>

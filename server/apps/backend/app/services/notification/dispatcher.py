@@ -258,6 +258,36 @@ def _dispatch_notifications(
                 status="sent" if success else "failed",
             )
             db.add(rn)
+        elif channel.channel_type == "feishu":
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(
+                    _send_feishu_async(channel, reminder, template_vars, db)
+                )
+            except RuntimeError:
+                pass
+    db.commit()
+
+
+async def _send_feishu_async(
+    channel: NotificationChannel,
+    reminder: Reminder,
+    template_vars: dict,
+    db: Session,
+) -> None:
+    config = _get_channel_config(db, channel)
+    text = render_template(reminder.reminder_type, "feishu", template_vars)
+    success = await NotificationSender.send_feishu(
+        webhook_url=config.get("webhook_url", ""),
+        secret=config.get("secret", ""),
+        text=text,
+    )
+    rn = ReminderNotification(
+        reminder_id=reminder.id,
+        channel_id=channel.id,
+        status="sent" if success else "failed",
+    )
+    db.add(rn)
     db.commit()
 
 

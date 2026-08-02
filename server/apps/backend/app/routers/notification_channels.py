@@ -21,7 +21,7 @@ from apps.backend.app.utils.snowflake import next_id
 
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
 
-VALID_CHANNEL_TYPES = {"telegram", "email"}
+VALID_CHANNEL_TYPES = {"telegram", "email", "feishu"}
 VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
 
 
