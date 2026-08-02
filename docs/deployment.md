@@ -59,6 +59,54 @@ FRONTEND_CHILD_IMAGE=ghcr.io/vincentruan/numina/frontend-child:latest
 
 如需使用自定义镜像仓库（例如 Fork 后推送到自己的 GHCR），编辑 `.env` 中的 `*_IMAGE` 变量即可。
 
+## 环境变量配置
+
+无论哪种部署模式，都需要正确配置 `.env`。
+
+### 初始化
+
+```bash
+make setup    # 自动生成 .env（含随机密钥）
+```
+
+`make setup` 会自动生成以下密钥：
+- `SECRET_KEY` — JWT 签名
+- `ALTCHA_HMAC_KEY` — 验证码
+- `AI_ENCRYPTION_KEY` — AI API Key 加密
+- `STORAGE_ENCRYPTION_KEY` — 存储后端加密
+
+### 必须配置的变量
+
+| 变量 | 说明 | 生成方式 |
+|------|------|----------|
+| `SECRET_KEY` | JWT 签名密钥 | `openssl rand -hex 32` |
+| `ALTCHA_HMAC_KEY` | 验证码密钥 | `openssl rand -hex 32` |
+| `AI_ENCRYPTION_KEY` | AI Key 加密（Fernet） | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `STORAGE_ENCRYPTION_KEY` | 存储加密（Fernet） | 同上 |
+
+> 以上密钥由 `make setup` 自动生成，无需手动配置。
+
+### 按需配置的变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `DATABASE_URL` | `sqlite:////app/.numina/data/db/numina.db` | 数据库路径 |
+| `DATA_ROOT` | `/app/.numina/data` | 数据存储根目录 |
+| `CORS_ORIGINS` | `["http://localhost:80"]` | CORS 允许的域名 |
+| `AI_MODEL` | `placeholder` | AI 模型 ID |
+| `AI_API_KEY` | `placeholder` | AI API 密钥 |
+
+完整变量列表参见 [configuration.md](./configuration.md)。
+
+### 两种模式的变量注入方式
+
+| 场景 | 镜像构建时 | 容器运行时 |
+|------|-----------|-----------|
+| `make deploy`（本地构建） | 无特殊变量 | 从 `.env` 注入所有配置 |
+| `make deploy-images`（拉取镜像） | 无特殊变量 | 从 `.env` 注入所有配置 |
+
+**关键**：所有密钥和配置都是**运行时注入**，不烘焙进镜像。预构建镜像与本地构建使用完全相同的 `.env`。
+
 ## 镜像标签
 
 每个服务有两个标签：

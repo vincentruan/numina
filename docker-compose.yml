@@ -15,7 +15,7 @@ services:
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
-      - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
+      - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
