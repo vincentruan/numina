@@ -36,7 +36,7 @@ jobs:
 
       - name: Run pytest
         run: |
-          uv run pytest tests/backend --tb=short -q -m "not integration" \
+          uv run pytest tests/backend -n auto --tb=short -q -m "not integration" \
             --deselect tests/backend/test_activities.py::test_activities_family_isolation \
             --deselect tests/backend/test_assets.py::test_cross_family_isolation \
             --deselect tests/backend/test_assets.py::test_batch_archive_cross_family_isolation \
@@ -46,10 +46,10 @@ jobs:
             --deselect tests/backend/test_wishes.py::test_cross_family_isolation
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 2: Frontend typecheck
+  # Job 2: Frontend Main — typecheck + vitest (single job, single install)
   # ──────────────────────────────────────────────────────────────────────────
-  frontend-typecheck:
-    name: Frontend Typecheck (vue-tsc)
+  frontend-main:
+    name: Frontend Main (typecheck + test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -69,6 +69,13 @@ jobs:
           node-version: "20"
           cache: "pnpm"
           cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
 
       - name: Install dependencies
         working-directory: frontend
@@ -77,15 +84,14 @@ jobs:
       - name: Type check
         run: pnpm run typecheck && pnpm run typecheck:test
 
+      - name: Run Vitest
+        run: pnpm run test:run
+
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 2b: Child Frontend typecheck
-  # The child app's `typecheck` script runs `vue-tsc --noEmit -p tsconfig.app.json`;
-  # its app config has no *.test.ts/*.spec.ts exclusion, so src + co-located tests
-  # are both type-checked. This job closes the green-while-red gap where child type
-  # errors previously reached CI unchecked (only vitest ran).
+  # Job 3: Frontend Child — typecheck + vitest (single job, single install)
   # ──────────────────────────────────────────────────────────────────────────
-  frontend-child-typecheck:
-    name: Child Frontend Typecheck (vue-tsc)
+  frontend-child:
+    name: Frontend Child (typecheck + test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -106,88 +112,32 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install dependencies
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: Type check
-        run: pnpm run typecheck
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Job 3: Frontend Vitest tests (parallel with backend)
-  # ──────────────────────────────────────────────────────────────────────────
-  frontend-vitest:
-    name: Frontend Vitest Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/apps/main
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Cache pnpm store
+        uses: actions/cache@v4
         with:
-          version: 9
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
 
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
-      - name: Run Vitest
-        run: pnpm run test:run
+      - name: Type check + Vitest
+        run: pnpm run typecheck && pnpm run test:run
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 4: Child Frontend Vitest tests (parallel with backend)
-  # ──────────────────────────────────────────────────────────────────────────
-  frontend-child-vitest:
-    name: Child Frontend Vitest Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/apps/child
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Vitest
-        run: pnpm run test:run
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Job 5: E2E smoke tests (minimal, fast)
-  # Depends on backend + frontend typecheck (vitest jobs run in parallel)
+  # Job 4: E2E smoke tests (minimal, fast)
+  # Depends on backend + frontend jobs
   # ──────────────────────────────────────────────────────────────────────────
   e2e-smoke:
     name: E2E Smoke Tests
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-typecheck]
+    needs: [backend-test, frontend-main, frontend-child]
     timeout-minutes: 15
     env:
       AI_ENCRYPTION_KEY: ci-dummy-key-not-used
+      DOCKER_BUILDKIT: 1
 
     steps:
       - uses: actions/checkout@v4
@@ -202,6 +152,13 @@ jobs:
       - name: Install Playwright dependencies
         working-directory: tests
         run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
         working-directory: tests
@@ -218,6 +175,7 @@ jobs:
       - name: Start Docker stack (minimal services)
         run: |
           # Build only essential services (skip agent which requires vendor/deerflow-harness)
+          # DOCKER_BUILDKIT=1 enables layer caching for faster rebuilds
           docker compose build backend frontend-main frontend-child nginx
           # Bring up core services
           docker compose up -d --no-deps backend frontend-main frontend-child
@@ -273,7 +231,7 @@ jobs:
         run: docker compose down -v
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 6: Build & push Docker images to GHCR (main branch only)
+  # Job 5: Build & push Docker images to GHCR (main branch only)
   # No extra secrets needed — uses GITHUB_TOKEN for GHCR auth.
   # Server-side: configure *_IMAGE in .env, then `make deploy-images`.
   # ──────────────────────────────────────────────────────────────────────────
