@@ -615,19 +615,9 @@ def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
 
 def change_username(db: Session, user: User, new_username: str) -> User:
     """Change user username with rate limiting (max 3 times per 30 days)."""
-    now = datetime.utcnow()
-    cutoff = now - timedelta(days=30)
+    from apps.backend.app.schemas.auth import parse_username_change_history
 
-    # Parse existing history
-    history: list[str] = []
-    if user.username_change_history:
-        try:
-            history = json.loads(user.username_change_history)
-        except (json.JSONDecodeError, TypeError):
-            history = []
-
-    # Filter to recent changes within the window
-    recent = [ts for ts in history if datetime.fromisoformat(ts) > cutoff]
+    recent = parse_username_change_history(user.username_change_history)
 
     if len(recent) >= 3:
         raise AppError(ErrorCode.AUTH_USERNAME_CHANGE_LIMIT)
@@ -642,8 +632,11 @@ def change_username(db: Session, user: User, new_username: str) -> User:
     # Update
     old_username = user.username
     user.username = new_username
-    recent.append(now.isoformat())
-    user.username_change_history = json.dumps(recent)
+    now = datetime.utcnow()
+    # Convert recent datetimes back to ISO strings for storage, then append current
+    history_to_store = [ts.isoformat() for ts in recent]
+    history_to_store.append(now.isoformat())
+    user.username_change_history = json.dumps(history_to_store)
     db.commit()
     db.refresh(user)
     write_audit_log(

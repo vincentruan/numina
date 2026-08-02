@@ -17,6 +17,10 @@ export interface User {
   created_at: string
   second_factor_enabled?: boolean
   second_factor_type?: string | null
+  birthday?: string | null
+  birthday_is_lunar?: boolean
+  username_changes_remaining?: number
+  username_next_available_at?: string | null
 }
 
 export interface ChildUser {

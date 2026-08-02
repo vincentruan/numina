@@ -1,7 +1,9 @@
+import json
 import re
 from datetime import date as date_type
+from datetime import datetime, timedelta
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -37,6 +39,47 @@ def validate_username(username: str) -> str:
     if not re.match(r"^[a-z0-9_.\-]+$", username):
         raise ValueError("用户名只能包含小写字母、数字、下划线、中划线和点号")
     return username
+
+
+# ---------------------------------------------------------------------------
+# Username change history helpers
+# ---------------------------------------------------------------------------
+
+_MAX_USERNAME_CHANGES = 3
+_USERNAME_CHANGE_WINDOW_DAYS = 30
+
+
+def parse_username_change_history(history_raw: str | None) -> list[datetime]:
+    """Parse ``username_change_history`` JSON into recent change datetimes (within the window)."""
+    if not history_raw:
+        return []
+    try:
+        raw_list: list[str] = json.loads(history_raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    cutoff = datetime.utcnow() - timedelta(days=_USERNAME_CHANGE_WINDOW_DAYS)
+    return [
+        datetime.fromisoformat(ts)
+        for ts in raw_list
+        if datetime.fromisoformat(ts) > cutoff
+    ]
+
+
+def compute_username_change_info(history_raw: str | None) -> tuple[int, str | None]:
+    """Compute remaining username changes and the next-available ISO timestamp.
+
+    Returns:
+        ``(remaining, next_available_at)`` — *next_available_at* is ``None``
+        when there is no recent history.
+    """
+    recent = parse_username_change_history(history_raw)
+    remaining = max(0, _MAX_USERNAME_CHANGES - len(recent))
+    next_available: str | None = None
+    if recent:
+        next_available = (
+            min(recent) + timedelta(days=_USERNAME_CHANGE_WINDOW_DAYS)
+        ).isoformat()
+    return remaining, next_available
 
 
 class RegisterRequest(BaseModel):
@@ -123,6 +166,29 @@ class UserResponse(SnowflakeBase):
     second_factor_type: str | None = None
     birthday: date_type | None = None
     birthday_is_lunar: bool = False
+    username_changes_remaining: int = 3
+    username_next_available_at: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def compute_username_change_fields(cls, data):  # type: ignore[no-untyped-def]
+        # Extract username_change_history from ORM object or dict
+        if isinstance(data, dict):
+            history_raw = data.get("username_change_history")
+        else:
+            history_raw = getattr(data, "username_change_history", None)
+
+        remaining, next_available = compute_username_change_info(history_raw)
+
+        # Convert ORM object to dict so extra computed fields are included
+        if not isinstance(data, dict):
+            data = {
+                c.name: getattr(data, c.name, None)
+                for c in data.__table__.columns  # type: ignore[attr-defined]
+            }
+        data["username_changes_remaining"] = remaining
+        data["username_next_available_at"] = next_available
+        return data
 
     @field_validator("avatar_color", mode="before")
     @classmethod

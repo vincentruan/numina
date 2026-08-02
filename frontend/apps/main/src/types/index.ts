@@ -1,22 +1,5 @@
-export interface User {
-  id: string
-  family_id: string
-  username: string | null  // 修复：允许 null（儿童账号可能为 null，迁移后必填）
-  display_name: string
-  avatar_color: string
-  role: 'owner' | 'member' | 'child'
-  is_active: boolean
-  theme: string
-  language: string
-  default_currency: string
-  theme_color: string | null
-  view_mode: string
-  created_at: string
-  second_factor_enabled?: boolean
-  second_factor_type?: string | null
-  birthday?: string | null
-  birthday_is_lunar?: boolean
-}
+import type { User as _AuthUser } from '@numina/auth'
+export type { User } from '@numina/auth'
 
 export interface Family {
   id: string
@@ -25,7 +8,7 @@ export interface Family {
   invite_code: string
   creator_code?: string
   created_by: string
-  members: User[]
+  members: _AuthUser[]
 }
 
 export interface Category {
