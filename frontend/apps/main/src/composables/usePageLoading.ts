@@ -153,6 +153,35 @@ export function usePageLoading() {
     nprogressStarted = false
   }
 
+  // Shared cleanup: withdraw this instance's pending contributions and
+  // complete NProgress if no other instances remain.
+  // Always call done() when loadingCount reaches 0 — router may have started
+  // NProgress directly (via markRouterNprogressActive) without setting
+  // nprogressStarted, so we must not gate on that flag.
+  function withdrawInstance() {
+    const instance = pendingInstances.get(instanceId)
+    if (!instance || !instance.active) return
+
+    instance.active = false
+
+    if (instance.count > 0 && loadingCount.value >= instance.count) {
+      loadingCount.value -= instance.count
+      instance.count = 0
+    }
+
+    pendingInstances.delete(instanceId)
+
+    if (loadingCount.value === 0) {
+      NProgress.done()
+      nprogressStarted = false
+
+      if (stuckTimeoutId !== null) {
+        clearTimeout(stuckTimeoutId)
+        stuckTimeoutId = null
+      }
+    }
+  }
+
   // KeepAlive safety net: when the component is deactivated (tab switch),
   // its pending loading contributions must be withdrawn immediately.
   // Without this, navigating from a page with in-flight async work to another
@@ -161,63 +190,10 @@ export function usePageLoading() {
   // and NProgress stays stuck.
   // The matching onActivated → increment() re-registers the instance via the
   // existing re-registration branch, so reactivation works correctly.
-  onDeactivated(() => {
-    const instance = pendingInstances.get(instanceId)
-    if (instance && instance.active) {
-      // Mark inactive to prevent stale decrement() after reactivation
-      instance.active = false
-
-      // Subtract this instance's remaining count from global counter
-      if (instance.count > 0 && loadingCount.value >= instance.count) {
-        loadingCount.value -= instance.count
-        instance.count = 0
-      }
-
-      // Remove from map
-      pendingInstances.delete(instanceId)
-
-      // Complete NProgress if all loading is now done
-      if (loadingCount.value === 0 && nprogressStarted) {
-        NProgress.done()
-        nprogressStarted = false
-
-        if (stuckTimeoutId !== null) {
-          clearTimeout(stuckTimeoutId)
-          stuckTimeoutId = null
-        }
-      }
-    }
-  })
+  onDeactivated(withdrawInstance)
 
   // Safety net: mark instance inactive and clear its pending contributions on unmount
-  onUnmounted(() => {
-    const instance = pendingInstances.get(instanceId)
-    if (instance && instance.active) {
-      // Mark inactive to prevent stale decrement() calls
-      instance.active = false
-
-      // Subtract this instance's remaining count from global counter
-      if (instance.count > 0 && loadingCount.value >= instance.count) {
-        loadingCount.value -= instance.count
-        instance.count = 0
-      }
-
-      // Remove from map
-      pendingInstances.delete(instanceId)
-
-      // Complete NProgress if all loading is now done
-      // Always call done() when loadingCount reaches 0 - router may have started NProgress directly
-      if (loadingCount.value === 0) {
-        NProgress.done()
-        nprogressStarted = false
-
-        if (stuckTimeoutId !== null) {
-          clearTimeout(stuckTimeoutId)
-          stuckTimeoutId = null
-        }
-      }
-    }
-  })
+  onUnmounted(withdrawInstance)
 
   const isGlobalLoading = computed(() => loadingCount.value > 0)
 
