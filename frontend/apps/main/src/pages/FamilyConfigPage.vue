@@ -205,15 +205,10 @@
         <van-cell :title="t('settings.educationRewardRate')">
           <template #label>
             <span class="desc">{{ t('settings.educationRewardRateUnit', { rate: coinToYuanRate }) }}</span>
-          </template>
-          <template #right-icon>
-            <van-field
-              v-model="coinToYuanRateStr"
-              type="digit"
-              class="rate-input"
-              :error="coinToYuanRateError"
-              @update:model-value="onCoinToYuanInput"
-            />
+            <div class="slider-track">
+              <van-slider v-model="coinToYuanRate" :min="1" :max="10" :step="1" @change="onCoinToYuanChange" />
+            </div>
+            <div class="slider-scale"><span>1</span><span>5</span><span>10</span></div>
           </template>
         </van-cell>
         <van-cell>
@@ -250,8 +245,6 @@ const { isOwner } = useAuth()
 const loading = ref(true)
 const educationRewardEnabled = ref(false)
 const coinToYuanRate = ref(1)
-const coinToYuanRateStr = ref('1')
-const coinToYuanRateError = ref(false)
 const autoApproveHours = ref(0)
 
 const dayLabels = computed<string[]>(() => {
@@ -303,21 +296,14 @@ function onEducationRewardToggle() {
     })
 }
 
-function onCoinToYuanInput(val: string) {
-  const num = parseInt(val)
-  if (isNaN(num) || num < 0 || num > 10000) {
-    coinToYuanRateError.value = true
-  } else {
-    coinToYuanRateError.value = false
-    coinToYuanRate.value = num
-    updateFamilySettings({ coinToYuanRate: num })
-      .then(() => {
-        showSuccessToast(t('toast.saveSuccess'))
-      })
-      .catch(() => {
-        showFailToast(t('toast.saveFailed'))
-      })
-  }
+function onCoinToYuanChange() {
+  updateFamilySettings({ coinToYuanRate: coinToYuanRate.value })
+    .then(() => {
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
 }
 
 function onAutoApproveChange() {
@@ -345,7 +331,6 @@ async function loadEducationSettings() {
     const res = await getFamilySettings()
     educationRewardEnabled.value = res.data.education_reward_enabled
     coinToYuanRate.value = res.data.coin_to_yuan_rate
-    coinToYuanRateStr.value = String(coinToYuanRate.value)
     autoApproveHours.value = res.data.auto_approve_hours
   } catch {
     // non-critical

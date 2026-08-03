@@ -2089,7 +2089,6 @@ export default {
     familyTitleUpdated: '家庭名称已修改',
     ownerOnlyWarning: '只有家庭创建者可以修改名称',
     coinRateInvalid: '请输入 1-10 的整数',
-    educationRewardRateInvalid: '请输入大于等于 0 的整数',
     confirmForceLogout: '确定要强制退出 {name} 的所有设备吗？',
     // Settings
     themeChanged: '主题色已更改',

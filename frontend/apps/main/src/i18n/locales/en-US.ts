@@ -1861,7 +1861,6 @@ export default {
     familyTitleUpdated: 'Family name updated',
     ownerOnlyWarning: 'Only the family owner can change the name',
     coinRateInvalid: 'Please enter an integer between 1 and 10',
-    educationRewardRateInvalid: 'Please enter an integer greater than or equal to 0',
     confirmForceLogout: 'Force logout all devices for {name}?',
     // Settings
     themeChanged: 'Theme color updated',
