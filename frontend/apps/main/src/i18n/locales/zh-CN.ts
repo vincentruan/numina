@@ -96,6 +96,7 @@ export default {
     educationRewardMonth: '本月',
     educationRewardCount: '{count} 笔',
     educationRewardEmpty: '暂无教育奖励支出',
+    importButton: '导入',
     educationRewardDetailTitle: '教育奖励支出明细',
     educationRewardDetailEmpty: '暂无教育奖励支出记录',
     loadFailed: '加载财务概览失败',

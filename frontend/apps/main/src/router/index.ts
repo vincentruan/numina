@@ -143,6 +143,12 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
+          // Multi-format intelligent import — R16: moved from settings/import-report.
+          path: 'finance/import',
+          name: 'ImportReport',
+          component: () => import('@/pages/ImportReportPage.vue'),
+        },
+        {
           path: 'blind-box/draws',
           name: 'BlindBoxDraws',
           component: () => import('@/pages/BlindBoxDrawsPage.vue')
@@ -294,9 +300,9 @@ const router = createRouter({
           component: () => import('@/pages/ChangeSecondFactorPage.vue'),
         },
         {
+          // R16: old route redirects to new /finance/import (client-side redirect).
           path: 'settings/import-report',
-          name: 'ImportReport',
-          component: () => import('@/pages/ImportReportPage.vue'),
+          redirect: '/finance/import',
         },
         {
           path: 'settings/family/coin-rates',
