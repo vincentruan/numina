@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue'
+import { mount } from '@vue/test-utils'
 import NProgress from 'nprogress'
 
 describe('usePageLoading fix verification', () => {
@@ -73,5 +75,51 @@ describe('usePageLoading fix verification', () => {
     // NProgress.done should NOT have been called again because timeout was cleared
     expect(NProgress.done).not.toHaveBeenCalled()
     vi.useRealTimers()
+  })
+
+  it('should reset loadingCount when KeepAlive deactivates a component with pending work', async () => {
+    const source = await vi.importActual<any>('../../src/composables/usePageLoading')
+
+    // CompA: calls increment() in onMounted (simulates async fetch still in-flight)
+    const CompA = defineComponent({
+      name: 'CompA',
+      setup() {
+        const { increment } = source.usePageLoading()
+        increment() // Pending async work — no matching decrement yet
+      },
+      render: () => h('div', 'A'),
+    })
+
+    // CompB: no loading work
+    const CompB = defineComponent({
+      name: 'CompB',
+      render: () => h('div', 'B'),
+    })
+
+    // Wrapper: KeepAlive with dynamic component switch
+    const Wrapper = defineComponent({
+      setup() {
+        const current = ref('A')
+        return { current }
+      },
+      render() {
+        return h(KeepAlive, { include: ['CompA', 'CompB'] }, [
+          this.current === 'A' ? h(CompA) : h(CompB),
+        ])
+      },
+    })
+
+    const wrapper = mount(Wrapper)
+    expect(source.globalLoadingCount.value).toBe(1)
+
+    // Switch component: CompA gets deactivated (KeepAlive caches it, no unmount)
+    wrapper.vm.current = 'B'
+    await nextTick()
+
+    // onDeactivated in usePageLoading should have cleaned up CompA's pending count
+    expect(source.globalLoadingCount.value).toBe(0)
+    expect(NProgress.done).toHaveBeenCalled()
+
+    wrapper.unmount()
   })
 })

@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onUnmounted, onDeactivated, type Ref } from 'vue'
 import NProgress from 'nprogress'
 
 // Global loading counter (shared across all components in the page)
@@ -152,6 +152,42 @@ export function usePageLoading() {
     NProgress.done()
     nprogressStarted = false
   }
+
+  // KeepAlive safety net: when the component is deactivated (tab switch),
+  // its pending loading contributions must be withdrawn immediately.
+  // Without this, navigating from a page with in-flight async work to another
+  // cached page leaves loadingCount elevated (the old page's onUnmounted never
+  // fires under KeepAlive), so the new page's decrement() can never reach 0
+  // and NProgress stays stuck.
+  // The matching onActivated → increment() re-registers the instance via the
+  // existing re-registration branch, so reactivation works correctly.
+  onDeactivated(() => {
+    const instance = pendingInstances.get(instanceId)
+    if (instance && instance.active) {
+      // Mark inactive to prevent stale decrement() after reactivation
+      instance.active = false
+
+      // Subtract this instance's remaining count from global counter
+      if (instance.count > 0 && loadingCount.value >= instance.count) {
+        loadingCount.value -= instance.count
+        instance.count = 0
+      }
+
+      // Remove from map
+      pendingInstances.delete(instanceId)
+
+      // Complete NProgress if all loading is now done
+      if (loadingCount.value === 0 && nprogressStarted) {
+        NProgress.done()
+        nprogressStarted = false
+
+        if (stuckTimeoutId !== null) {
+          clearTimeout(stuckTimeoutId)
+          stuckTimeoutId = null
+        }
+      }
+    }
+  })
 
   // Safety net: mark instance inactive and clear its pending contributions on unmount
   onUnmounted(() => {
