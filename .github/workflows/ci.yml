@@ -186,6 +186,16 @@ jobs:
           # Build only essential services (skip agent which requires vendor/deerflow-harness)
           # DOCKER_BUILDKIT=1 enables layer caching for faster rebuilds
           docker compose build backend frontend-main frontend-child nginx
+          # Bring up PostgreSQL first (backend depends on it)
+          docker compose --profile postgres up -d postgres
+          # Wait for PostgreSQL to be ready
+          for i in $(seq 1 15); do
+            if docker compose exec -T postgres pg_isready -U numina > /dev/null 2>&1; then
+              echo "✓ PostgreSQL ready"
+              break
+            fi
+            sleep 1
+          done
           # Bring up core services
           docker compose up -d --no-deps backend frontend-main frontend-child
           docker compose up -d --no-deps nginx
