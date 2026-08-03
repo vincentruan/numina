@@ -15,12 +15,14 @@ services:
     restart: unless-stopped
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env.production
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
+      - NUMINA_PROJECT_ROOT=/app
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -38,6 +40,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env.production
     environment:
@@ -46,6 +49,7 @@ services:
       - ENVIRONMENT=production
       - BACKEND_BASE_URL=http://numina-backend:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - NUMINA_PROJECT_ROOT=/app
     depends_on:
       backend:
         condition: service_healthy
@@ -66,6 +70,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env.production
     environment:
@@ -74,6 +79,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - ENVIRONMENT=production
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
+      - NUMINA_PROJECT_ROOT=/app
     depends_on:
       backend:
         condition: service_healthy

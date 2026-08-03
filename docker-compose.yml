@@ -8,6 +8,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
     environment:
@@ -21,6 +22,7 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - AGENT_BASE_URL=http://numina-agent:8001
       - BACKEND_BASE_URL=http://numina-backend:8000
+      - NUMINA_PROJECT_ROOT=/app
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -37,6 +39,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
+      - ./system-config.yaml:/app/system-config.yaml:ro
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
@@ -70,6 +73,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
     environment:
@@ -80,6 +84,7 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
+      - NUMINA_PROJECT_ROOT=/app
     depends_on:
       backend:
         condition: service_healthy

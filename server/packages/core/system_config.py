@@ -41,8 +41,9 @@ def _project_root() -> Path:
     """Resolve project root via env override or filesystem walk.
 
     Container environments set ``NUMINA_PROJECT_ROOT=/app`` to bypass the
-    docker-compose.yml filesystem probe. Falls back to walking up from this
-    module when env var is absent or invalid.
+    filesystem probe. Falls back to walking up from this module looking for
+    project markers (``docker-compose.yml`` or ``pyproject.toml``).
+    As a last resort, checks ``/app`` (standard Docker container layout).
     """
     env_root = os.environ.get(_PROJECT_ROOT_ENV)
     if env_root:
@@ -55,14 +56,27 @@ def _project_root() -> Path:
             env_root,
         )
 
+    # Walk up looking for project markers
+    markers = ("docker-compose.yml", "pyproject.toml")
     cur = Path(__file__).resolve()
     for _ in range(8):
-        if (cur / "docker-compose.yml").exists():
+        if any((cur / m).exists() for m in markers):
             return cur
         cur = cur.parent
+
+    # Last-resort: Docker container layout (WORKDIR /app with packages/ inside)
+    docker_app = Path("/app")
+    if docker_app.is_dir() and (docker_app / "packages").is_dir():
+        logger.warning(
+            "Falling back to /app as project root (Docker container detected). "
+            "Set %s=/app to silence this warning.",
+            _PROJECT_ROOT_ENV,
+        )
+        return docker_app
+
     raise RuntimeError(
-        "Cannot locate project root from "
-        f"{Path(__file__).resolve()} (no docker-compose.yml within 8 levels)"
+        f"Cannot locate project root from {Path(__file__).resolve()} "
+        f"(no {', '.join(markers)} within 8 levels, and /app is not a container root)"
     )
 
 

@@ -8,6 +8,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
     environment:
@@ -21,6 +22,7 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_BASE_URL=http://numina-agent:8001
       - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/.numina/data/workspace}
+      - NUMINA_PROJECT_ROOT=/app
     command: uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
@@ -38,6 +40,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
+      - ./system-config.yaml:/app/system-config.yaml:ro
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
@@ -45,6 +48,7 @@ services:
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - NUMINA_PROJECT_ROOT=/app
     command: uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent
     depends_on:
       backend:
@@ -65,6 +69,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
+      - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
     environment:
@@ -75,6 +80,7 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
+      - NUMINA_PROJECT_ROOT=/app
     command: uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker
     depends_on:
       backend:
