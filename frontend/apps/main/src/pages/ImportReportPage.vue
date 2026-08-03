@@ -19,6 +19,34 @@
         </van-uploader>
         <p class="paste-hint">{{ t('importReport.pasteHint') }}</p>
       </van-cell-group>
+
+      <!-- R23: Recent imports history section -->
+      <div class="history-section">
+        <div class="section-header">
+          <span>{{ t('importReport.recentImports') }}</span>
+        </div>
+        <van-loading v-if="historyLoading" size="24px" />
+        <div v-else-if="historyItems.length === 0" class="history-empty">
+          <p>{{ t('importReport.noImportHistory') }}</p>
+        </div>
+        <van-cell-group v-else inset>
+          <van-cell
+            v-for="h in historyItems"
+            :key="h.id"
+            :title="h.source_filename"
+            :label="formatDate(h.created_at)"
+            is-link
+            @click="selectedHistory = h"
+          >
+            <template #value>
+              <div class="history-meta">
+                <van-tag :type="statusTagType(h.status)" size="medium">{{ statusText(h.status) }}</van-tag>
+                <span class="history-count">{{ h.item_count }}{{ t('importReport.items') }}</span>
+              </div>
+            </template>
+          </van-cell>
+        </van-cell-group>
+      </div>
     </div>
 
     <!-- Parsing step -->
@@ -115,6 +143,30 @@
         <van-button type="primary" block @click="router.back()">{{ t('importReport.done') }}</van-button>
       </div>
     </div>
+
+    <!-- R23: History detail popup with rollback -->
+    <van-popup v-model:show="showHistoryDetail" position="bottom" round :style="{ maxHeight: '70vh' }">
+      <div v-if="selectedHistory" class="history-detail">
+        <div class="history-detail-header">
+          <h3>{{ selectedHistory.source_filename }}</h3>
+          <van-tag :type="statusTagType(selectedHistory.status)">{{ statusText(selectedHistory.status) }}</van-tag>
+        </div>
+        <p class="history-detail-date">{{ formatDate(selectedHistory.created_at) }} · {{ selectedHistory.item_count }}{{ t('importReport.items') }}</p>
+
+        <van-button
+          v-if="selectedHistory.can_rollback"
+          type="danger"
+          plain
+          block
+          @click="handleRollback"
+        >
+          {{ t('importReport.rollback') }}
+        </van-button>
+        <p v-else-if="selectedHistory.status === 'committed'" class="rollback-expired">
+          {{ t('importReport.rollbackExpired') }}
+        </p>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -126,8 +178,8 @@ import { showToast, showSuccessToast, showFailToast } from 'vant'
 import type { UploaderFileListItem } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
 import PreviewItem from '@/components/import/PreviewItem.vue'
-import { parseFile, confirmImport } from '@/api/importReport'
-import type { ImportPreview, ImportPreviewItem, ConfirmResponse } from '@/api/importReport'
+import { parseFile, confirmImport, getImportHistory, rollbackImport } from '@/api/importReport'
+import type { ImportPreview, ImportPreviewItem, ConfirmResponse, HistoryItem } from '@/api/importReport'
 
 defineOptions({ name: 'ImportReportPage' })
 
@@ -141,6 +193,61 @@ const confirming = ref(false)
 const confirmResult = ref<ConfirmResponse | null>(null)
 const currentFile = ref<File | null>(null)
 const draftId = ref<string | null>(null)
+
+// History state (R23).
+const historyItems = ref<HistoryItem[]>([])
+const historyLoading = ref(false)
+const showHistoryDetail = ref(false)
+const selectedHistory = ref<HistoryItem | null>(null)
+
+function formatDate(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function statusTagType(status: string): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
+  if (status === 'committed') return 'success'
+  if (status === 'rolled_back') return 'warning'
+  return 'default'
+}
+
+function statusText(status: string): string {
+  if (status === 'committed') return t('importReport.statusCommitted')
+  if (status === 'rolled_back') return t('importReport.statusRolledBack')
+  return t('importReport.statusPending')
+}
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    historyItems.value = await getImportHistory()
+  } catch {
+    // Silent fail — history is non-critical.
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function handleRollback() {
+  if (!selectedHistory.value) return
+  const { showConfirmDialog } = await import('vant')
+  try {
+    await showConfirmDialog({
+      title: t('importReport.rollbackConfirmTitle'),
+      message: t('importReport.rollbackConfirmMsg', {
+        filename: selectedHistory.value.source_filename,
+        count: selectedHistory.value.item_count,
+      }),
+    })
+    const result = await rollbackImport(selectedHistory.value.id)
+    showSuccessToast(t('importReport.rollbackSuccess', { count: result.archived_count }))
+    showHistoryDetail.value = false
+    loadHistory()
+  } catch {
+    // User cancelled or API error.
+  }
+}
 
 // R1: accepted file types.
 const acceptTypes = 'application/pdf,image/png,image/jpeg,.xlsx,.xls,.csv'
@@ -212,6 +319,7 @@ function handlePaste(e: ClipboardEvent) {
 
 onMounted(() => {
   document.addEventListener('paste', handlePaste)
+  loadHistory()
 })
 onUnmounted(() => {
   document.removeEventListener('paste', handlePaste)
