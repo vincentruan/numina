@@ -56,7 +56,7 @@ def test_parse_returns_400_for_empty_pdf(client, auth_headers):
     assert resp.status_code == 400
 
 
-def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
+def test_parse_returns_200_with_guidance_when_agent_finds_nothing(client, auth_headers):
     """R7a: agent returns zero items → 200 with empty items + guidance message."""
     empty = {"source": "", "report_date": None, "items": []}
     with patch(
@@ -76,7 +76,7 @@ def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
             headers=auth_headers,
         )
     assert resp.status_code == 200
-    data = resp.json().get("data", resp.json())
+    data = resp.json()["data"]
     assert data["items"] == []
     assert data["message"] is not None
 

@@ -1,6 +1,7 @@
 """Tests for multi-format import endpoints — U2 verification."""
 
 import io
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from apps.backend.app.models.draft_import import DraftImport
@@ -238,6 +239,8 @@ class TestHistoryEndpoint:
                 source_format="pdf",
                 status="committed" if i < 2 else "pending",
             )
+            # Stagger created_at to avoid SQLite second-precision ties.
+            d.created_at = datetime(2026, 8, 3, 12, 0, i, tzinfo=UTC)
             d.set_parsed_items([{"name": f"item_{j}"} for j in range(i + 1)])
             db.add(d)
         db.flush()

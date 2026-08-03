@@ -203,6 +203,7 @@ const selectedHistory = ref<HistoryItem | null>(null)
 function formatDate(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -244,8 +245,11 @@ async function handleRollback() {
     showSuccessToast(t('importReport.rollbackSuccess', { count: result.archived_count }))
     showHistoryDetail.value = false
     loadHistory()
-  } catch {
-    // User cancelled or API error.
+  } catch (err: unknown) {
+    // Distinguish user cancellation from real API errors.
+    if (err instanceof Error && err.message !== 'cancel') {
+      showFailToast(t('importReport.rollbackFailed'))
+    }
   }
 }
 
@@ -256,11 +260,12 @@ const assetItems = computed(() => editableItems.value.filter((i) => i.target_mod
 const liabilityItems = computed(() => editableItems.value.filter((i) => i.target_model === 'liability'))
 
 // R10: sort low-confidence items to top of each section.
+// Unknown confidence (null) defaults to 0 so it surfaces for review.
 const sortedAssetItems = computed(() =>
-  [...assetItems.value].sort((a, b) => (a.confidence ?? 1) - (b.confidence ?? 1))
+  [...assetItems.value].sort((a, b) => (a.confidence ?? 0) - (b.confidence ?? 0))
 )
 const sortedLiabilityItems = computed(() =>
-  [...liabilityItems.value].sort((a, b) => (a.confidence ?? 1) - (b.confidence ?? 1))
+  [...liabilityItems.value].sort((a, b) => (a.confidence ?? 0) - (b.confidence ?? 0))
 )
 
 const duplicateCount = computed(() =>
@@ -450,5 +455,50 @@ async function handleConfirm() {
 .result-error-text {
   font-size: 12px;
   color: var(--van-danger-color, #ee0a24);
+}
+.history-section {
+  margin-top: 16px;
+}
+.history-section .section-header {
+  padding: 8px 16px;
+}
+.history-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--van-text-color-3);
+  font-size: 13px;
+}
+.history-detail {
+  padding: 16px;
+}
+.history-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.history-detail-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.history-detail-date {
+  font-size: 13px;
+  color: var(--van-text-color-2);
+  margin-bottom: 16px;
+}
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.history-count {
+  font-size: 12px;
+  color: var(--van-text-color-2);
+}
+.rollback-expired {
+  font-size: 12px;
+  color: var(--van-text-color-3);
+  text-align: center;
+  margin-top: 8px;
 }
 </style>

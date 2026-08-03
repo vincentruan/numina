@@ -42,9 +42,6 @@ def upgrade() -> None:
             ),
         )
         op.create_index(
-            "ix_draft_imports_family_id", "draft_imports", ["family_id"]
-        )
-        op.create_index(
             "ix_draft_imports_family_created",
             "draft_imports",
             ["family_id", "created_at"],
@@ -74,5 +71,4 @@ def downgrade() -> None:
     # Drop draft_imports table
     if bind.dialect.has_table(bind, "draft_imports"):
         op.drop_index("ix_draft_imports_family_created", table_name="draft_imports")
-        op.drop_index("ix_draft_imports_family_id", table_name="draft_imports")
         op.drop_table("draft_imports")

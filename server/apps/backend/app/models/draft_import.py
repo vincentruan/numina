@@ -41,7 +41,12 @@ class DraftImport(Base):
     # --- JSON helpers (parsed_items is Text, not a native JSON column) ---
 
     def get_parsed_items(self) -> list[dict]:
-        return json.loads(self.parsed_items) if self.parsed_items else []
+        if not self.parsed_items:
+            return []
+        try:
+            return json.loads(self.parsed_items)
+        except (json.JSONDecodeError, TypeError):
+            return []
 
     def set_parsed_items(self, items: list[dict]) -> None:
         self.parsed_items = json.dumps(items, ensure_ascii=False)

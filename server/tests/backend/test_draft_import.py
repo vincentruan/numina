@@ -56,7 +56,8 @@ class TestDraftImportModel:
         db.add(draft)
         db.flush()
 
-        # Round-trip: read back from DB
+        # Force reload from DB to verify actual JSON deserialization.
+        db.expire_all()
         loaded = db.query(DraftImport).filter_by(id=draft.id).first()
         assert loaded is not None
         result = loaded.get_parsed_items()
@@ -78,6 +79,7 @@ class TestDraftImportModel:
         db.add(draft)
         db.flush()
 
+        db.expire_all()
         loaded = db.query(DraftImport).filter_by(id=draft.id).first()
         assert loaded is not None
         ids = loaded.get_committed_record_ids()
@@ -95,6 +97,7 @@ class TestDraftImportModel:
         db.add(draft)
         db.flush()
 
+        db.expire_all()
         loaded = db.query(DraftImport).filter_by(id=draft.id).first()
         assert loaded.get_committed_record_ids() == []
 
@@ -110,6 +113,7 @@ class TestDraftImportModel:
         db.add(draft)
         db.flush()
 
+        db.expire_all()
         loaded = db.query(DraftImport).filter_by(id=draft.id).first()
         assert loaded.status == "pending"
 

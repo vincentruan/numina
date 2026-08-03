@@ -40,7 +40,7 @@
         type="number"
         inputmode="decimal"
         :placeholder="t('importReport.enterValue')"
-        @update:model-value="(v: string) => emit('update', item.temp_id, { current_value: v === '' ? null : Number(v) })"
+        @update:model-value="(v: string) => emit('update', item.temp_id, { current_value: safeNumber(v) })"
       />
       <van-field
         :model-value="item.asset_type === 'financial' ? t('importReport.financial') : t('importReport.physical')"
@@ -65,7 +65,7 @@
         type="number"
         inputmode="decimal"
         :placeholder="t('importReport.enterValue')"
-        @update:model-value="(v: string) => emit('update', item.temp_id, { original_amount: v === '' ? null : Number(v) })"
+        @update:model-value="(v: string) => emit('update', item.temp_id, { original_amount: safeNumber(v) })"
       />
       <van-field
         :model-value="item.remaining_amount ?? undefined"
@@ -73,7 +73,7 @@
         type="number"
         inputmode="decimal"
         :placeholder="t('importReport.enterValue')"
-        @update:model-value="(v: string) => emit('update', item.temp_id, { remaining_amount: v === '' ? null : Number(v) })"
+        @update:model-value="(v: string) => emit('update', item.temp_id, { remaining_amount: safeNumber(v) })"
       />
       <van-field
         :model-value="item.monthly_payment ?? undefined"
@@ -81,7 +81,7 @@
         type="number"
         inputmode="decimal"
         :placeholder="t('importReport.enterValue')"
-        @update:model-value="(v: string) => emit('update', item.temp_id, { monthly_payment: v === '' ? null : Number(v) })"
+        @update:model-value="(v: string) => emit('update', item.temp_id, { monthly_payment: safeNumber(v) })"
       />
       <van-field
         :model-value="item.interest_rate ?? undefined"
@@ -89,7 +89,7 @@
         type="number"
         inputmode="decimal"
         :placeholder="t('importReport.enterValue')"
-        @update:model-value="(v: string) => emit('update', item.temp_id, { interest_rate: v === '' ? null : Number(v) })"
+        @update:model-value="(v: string) => emit('update', item.temp_id, { interest_rate: safeNumber(v) })"
       />
       <van-field
         :model-value="item.currency"
@@ -146,17 +146,24 @@ const { t } = useI18n()
 const showModelPicker = ref(false)
 const showAssetTypePicker = ref(false)
 
+// Safe numeric field conversion — prevents NaN from reaching the backend.
+function safeNumber(v: string): number | null {
+  if (v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 // Confidence indicator (R10).
-const lowConfidence = computed(() => (props.item.confidence ?? 1) < 0.6)
+const lowConfidence = computed(() => (props.item.confidence ?? 0) < 0.6)
 const confidenceColor = computed(() => {
-  const c = props.item.confidence ?? 1
+  const c = props.item.confidence ?? 0
   if (c >= 0.8) return '#07c160'
   if (c >= 0.6) return '#ff976a'
   return '#ee0a24'
 })
 const confidenceTextColor = computed(() => '#fff')
 const confidenceIcon = computed(() => {
-  const c = props.item.confidence ?? 1
+  const c = props.item.confidence ?? 0
   if (c >= 0.8) return 'success'
   if (c >= 0.6) return 'warning-o'
   return 'cross'

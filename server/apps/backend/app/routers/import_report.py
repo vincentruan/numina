@@ -158,22 +158,25 @@ def _extract_excel_to_text(data: bytes, fmt: str) -> str:
     if fmt == "csv":
         text_data = data.decode("utf-8-sig", errors="replace")
         reader = csv.DictReader(io.StringIO(text_data))
-        rows = list(reader)
+        import itertools
+        rows = list(itertools.islice(reader, 200))
     else:
         import openpyxl
 
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-        ws = wb.active
-        if ws is None:
-            return ""
-        rows_list = list(ws.iter_rows(values_only=True))
-        if not rows_list:
-            return ""
-        headers = [str(c) if c is not None else f"col_{i}" for i, c in enumerate(rows_list[0])]
-        rows = []
-        for row in rows_list[1:]:
-            rows.append(dict(zip(headers, row, strict=False)))
-        wb.close()
+        try:
+            ws = wb.active
+            if ws is None:
+                return ""
+            rows_list = list(ws.iter_rows(values_only=True))
+            if not rows_list:
+                return ""
+            headers = [str(c) if c is not None else f"col_{i}" for i, c in enumerate(rows_list[0])]
+            rows = []
+            for row in rows_list[1:]:
+                rows.append(dict(zip(headers, row, strict=False)))
+        finally:
+            wb.close()
 
     if not rows:
         return ""
@@ -653,15 +656,20 @@ def confirm_import(
 
     # R22: update DraftImport status to "committed".
     if req.draft_id:
-        draft = db.query(DraftImport).filter(
-            DraftImport.id == int(req.draft_id),
-            DraftImport.family_id == current_user.family_id,
-        ).first()
-        if draft:
-            draft.status = "committed"
-            all_ids = created_asset_ids + created_liability_ids
-            draft.set_committed_record_ids(all_ids)
-            db.commit()
+        try:
+            draft_id_int = int(req.draft_id)
+        except ValueError:
+            draft_id_int = None
+        if draft_id_int is not None:
+            draft = db.query(DraftImport).filter(
+                DraftImport.id == draft_id_int,
+                DraftImport.family_id == current_user.family_id,
+            ).first()
+            if draft:
+                draft.status = "committed"
+                all_ids = created_asset_ids + created_liability_ids
+                draft.set_committed_record_ids(all_ids)
+                db.commit()
 
     return ConfirmResponse(
         updated=stats["updated"],
@@ -794,7 +802,11 @@ def rollback_import(
     Sets is_archived=True on all imported records.
     Checks for cross-references before rollback.
     """
-    draft = db.query(DraftImport).filter(DraftImport.id == int(draft_id)).first()
+    try:
+        draft_id_int = int(draft_id)
+    except ValueError:
+        raise AppError(ErrorCode.IMPORT_DRAFT_NOT_FOUND) from None
+    draft = db.query(DraftImport).filter(DraftImport.id == draft_id_int).first()
     if not draft:
         raise AppError(ErrorCode.IMPORT_DRAFT_NOT_FOUND)
 
