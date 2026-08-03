@@ -32,19 +32,6 @@
           <span>{{ debtWishHint }}</span>
         </div>
 
-        <!-- R17: Import action button in page header area -->
-        <div class="finance-hub-header">
-          <van-button
-            icon="upload"
-            type="primary"
-            size="small"
-            plain
-            @click="$router.push('/finance/import')"
-          >
-            {{ t('financeHub.importButton') }}
-          </van-button>
-        </div>
-
         <!-- Three sub-tabs: 资产 / 负债 / 心愿 -->
         <van-tabs v-model:active="activeTab" shrink class="finance-tabs">
           <van-tab name="assets">
@@ -252,12 +239,6 @@ onActivated(async () => {
 .debt-wish-hint .van-icon {
   flex-shrink: 0;
   font-size: 16px;
-}
-
-.finance-hub-header {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 12px 0;
 }
 
 .hub-error {
