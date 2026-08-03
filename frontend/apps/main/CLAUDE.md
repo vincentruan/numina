@@ -65,6 +65,12 @@ src/
 | Secondary text | `#616161` | `#c8c8d0` | `--text-secondary` |
 | CTA | `var(--van-primary-color)` | `#bdbbff` | `--van-primary-color` |
 
+## UI Design Patterns
+
+按页面区域（总览/财务/AI/宝贝/设置）的 Vant 4 组件选择、卡片布局、表单模式、CRUD 交互、DeerFlow 复刻等实践详见 [`docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md`](../../../../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md)。
+
+**核心约束**: 除 AI 场景外，整体 UI 组件尽量复用 Vant 4。AI 场景使用自定义组件复刻 DeerFlow 交互。
+
 ## Links
 
 Parent [`CLAUDE.md`](../../CLAUDE.md) — frontend workspace 约束
