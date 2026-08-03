@@ -82,7 +82,7 @@ export async function getImportHistory(): Promise<HistoryItem[]> {
   return resp.data
 }
 
-export async function rollbackImport(draftId: string): Promise<{ status: string; archived_count: number }> {
+export async function rollbackImport(draftId: string): Promise<{ status: string; archived_count: number; draft_id: string }> {
   const resp = await http.post(`/import/rollback/${draftId}`)
   return resp.data
 }

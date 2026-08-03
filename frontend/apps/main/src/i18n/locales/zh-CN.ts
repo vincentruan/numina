@@ -2495,6 +2495,7 @@ export default {
     originalAmount: '原始金额',
     remainingAmount: '剩余金额',
     monthlyPayment: '月还款额',
+    interestRate: '利率(%)',
     currency: '币种',
     enterValue: '请输入',
     actionUpdate: '匹配更新',

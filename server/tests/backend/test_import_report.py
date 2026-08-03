@@ -33,7 +33,7 @@ def test_parse_returns_preview(client, auth_headers, db):
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
-            files={"file": ("test.pdf", b"fake-pdf", "application/pdf")},
+            files={"file": ("test.pdf", b"%PDF-1.4 fake content", "application/pdf")},
             headers=auth_headers,
         )
     assert resp.status_code == 200
@@ -50,13 +50,14 @@ def test_parse_returns_400_for_empty_pdf(client, auth_headers):
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
-            files={"file": ("scan.pdf", b"fake-pdf", "application/pdf")},
+            files={"file": ("scan.pdf", b"%PDF-1.4 fake scan", "application/pdf")},
             headers=auth_headers,
         )
     assert resp.status_code == 400
 
 
 def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
+    """R7a: agent returns zero items → 200 with empty items + guidance message."""
     empty = {"source": "", "report_date": None, "items": []}
     with patch(
         "apps.backend.app.routers.import_report._call_agent_parse",
@@ -71,10 +72,13 @@ def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
-            files={"file": ("other.pdf", b"fake-pdf", "application/pdf")},
+            files={"file": ("other.pdf", b"%PDF-1.4 other content", "application/pdf")},
             headers=auth_headers,
         )
-    assert resp.status_code == 422
+    assert resp.status_code == 200
+    data = resp.json().get("data", resp.json())
+    assert data["items"] == []
+    assert data["message"] is not None
 
 
 def test_parse_image_based_pdf_passes_thread_id_and_image_paths(client, auth_headers):
@@ -107,10 +111,10 @@ def test_parse_image_based_pdf_passes_thread_id_and_image_paths(client, auth_hea
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
-            files={"file": ("scan.pdf", b"fake-pdf", "application/pdf")},
+            files={"file": ("scan.pdf", b"%PDF-1.4 fake scan", "application/pdf")},
             headers=auth_headers,
         )
-    assert resp.status_code == 422  # agent 返空 items → 422（与纯文本空结果一致）
+    assert resp.status_code == 200  # R7a: agent 返空 items → 200 + message
     # thread_id + image_paths 必须传给 agent
     assert captured["thread_id"] is not None
     assert captured["thread_id"].startswith("importparse-thread-")
@@ -142,10 +146,10 @@ def test_parse_text_pdf_does_not_pass_image_paths(client, auth_headers):
     ):
         resp = client.post(
             "/api/v1/import/parse-pdf",
-            files={"file": ("text.pdf", b"fake-pdf", "application/pdf")},
+            files={"file": ("text.pdf", b"%PDF-1.4 fake text", "application/pdf")},
             headers=auth_headers,
         )
-    assert resp.status_code == 422
+    assert resp.status_code == 200  # R7a: agent 返空 items → 200 + message
     # 纯文本路径不传 vision 契约
     assert captured["thread_id"] is None
     assert captured["image_paths"] is None
@@ -231,7 +235,7 @@ def test_confirm_updates_existing_asset(client, auth_headers, db):
 
 
 def test_confirm_skips_cross_family_asset(client, auth_headers, second_user_headers, db):
-    """matched_asset_id 属于其他家庭时，应降级为 create。"""
+    """matched_asset_id 属于其他家庭时，应跳过并返回错误。"""
     from apps.backend.app.models.asset import Asset
     from apps.backend.app.models.category import Category
     from apps.backend.app.models.user import User
@@ -260,6 +264,7 @@ def test_confirm_skips_cross_family_asset(client, auth_headers, second_user_head
             {
                 "temp_id": "tmp_003",
                 "name": "贵州茅台",
+                "target_model": "asset",
                 "asset_type": "financial",
                 "category_hint": "股票",
                 "current_value": 168000.0,
@@ -273,6 +278,8 @@ def test_confirm_skips_cross_family_asset(client, auth_headers, second_user_head
     }
     resp = client.post("/api/v1/import/confirm", json=payload, headers=auth_headers)
     assert resp.status_code == 200
-    # Cross-family asset cannot be updated — should fall back to create
-    assert resp.json()["data"]["created"] == 1
-    assert resp.json()["data"]["updated"] == 0
+    data = resp.json()["data"]
+    # Cross-family asset cannot be updated — returns error, not fallback create
+    assert data["updated"] == 0
+    assert data["skipped"] == 1
+    assert data["items"][0]["status"] == "error"

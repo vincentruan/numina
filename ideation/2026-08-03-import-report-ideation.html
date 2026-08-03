@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideation: Import-Report 多格式智能导入</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #fff;
+    --text: #1c1917;
+    --text-muted: #57534e;
+    --border: #e7e5e4;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --accent-text: #1e40af;
+    --warn-soft: #fef3c7;
+    --warn-text: #92400e;
+    --success-soft: #dcfce7;
+    --success-text: #166534;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1917;
+      --surface: #292524;
+      --text: #fafaf9;
+      --text-muted: #a8a29e;
+      --border: #44403c;
+      --accent: #60a5fa;
+      --accent-soft: #1e3a5f;
+      --accent-text: #93c5fd;
+      --warn-soft: #451a03;
+      --warn-text: #fbbf24;
+      --success-soft: #052e16;
+      --success-text: #86efac;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+  .container {
+    max-width: 920px;
+    margin-inline: auto;
+  }
+  header {
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+    margin-bottom: 0.5rem;
+  }
+  header h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.75rem;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    border: 1px solid var(--border);
+  }
+  section {
+    margin-bottom: 2.5rem;
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  p, li {
+    max-width: 70ch;
+    color: var(--text);
+  }
+  p + p { margin-top: 0.75rem; }
+  .grounding-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  @media (min-width: 640px) {
+    .grounding-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .grounding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .grounding-card h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+  .grounding-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .grounding-card li {
+    font-size: 0.9rem;
+    padding: 0.2rem 0;
+    padding-left: 1rem;
+    position: relative;
+    color: var(--text-muted);
+  }
+  .grounding-card li::before {
+    content: "·";
+    position: absolute;
+    left: 0;
+    font-weight: 700;
+  }
+  .axes-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+  }
+  .axis-chip {
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .axis-chip .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-right: 0.4rem;
+  }
+  .jump-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .jump-list a {
+    font-size: 0.85rem;
+    color: var(--accent-text);
+    text-decoration: none;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: var(--accent-soft);
+  }
+  .jump-list a:hover { opacity: 0.8; }
+  .idea-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .idea-card .rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-right: 0.6rem;
+    flex-shrink: 0;
+  }
+  .idea-card .title-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .idea-card h3 {
+    margin-bottom: 0;
+    font-size: 1.05rem;
+  }
+  .idea-card .desc {
+    font-size: 0.95rem;
+    color: var(--text);
+    margin-bottom: 1rem;
+    max-width: 70ch;
+  }
+  .idea-meta {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  @media (min-width: 640px) {
+    .idea-meta { grid-template-columns: auto 1fr; }
+  }
+  .idea-meta dt {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .idea-meta dd {
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+  .conf-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .conf-high { background: var(--success-soft); color: var(--success-text); }
+  .conf-med { background: var(--warn-soft); color: var(--warn-text); }
+  .cx-chip {
+    display: inline-flex;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  table.rejection {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  table.rejection th {
+    text-align: left;
+    padding: 0.5rem;
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  table.rejection td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    vertical-align: top;
+  }
+  table.rejection tr:last-child td { border-bottom: none; }
+  footer.composition-signal {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  footer.composition-signal code {
+    font-size: 0.8rem;
+    background: var(--surface);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+  }
+  .flow-diagram {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .flow-diagram .arrow { color: var(--accent); font-weight: 700; margin: 0 0.3rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="eyebrow">Ideation</div>
+  <h1>Import-Report 多格式智能导入</h1>
+  <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 60ch;">
+    将导入功能从设置迁移至财务模块，扩展支持截图和 Excel 文件的 AI 识别导入，并提供交互式预览编辑界面。
+  </p>
+  <div class="meta">
+    <span class="meta-chip">📅 2026-08-03</span>
+    <span class="meta-chip">🏗️ repo-grounded</span>
+    <span class="meta-chip">📊 40 raw → 7 survivors</span>
+  </div>
+</header>
+
+<section id="grounding">
+  <h2>Grounding Context</h2>
+  <div class="grounding-grid">
+    <div class="grounding-card">
+      <h4>Codebase 现状</h4>
+      <ul>
+        <li>导入页当前路由 <code>/settings/import-report</code></li>
+        <li>组件 <code>ImportReportPage.vue</code>，仅接受 PDF</li>
+        <li>后端 <code>/api/v1/import/parse-pdf</code> 同步调用 agent</li>
+        <li>Agent <code>import-parse</code> 是第 3 个 <code>stream_run</code> agent</li>
+        <li>MCP 批量写入工具已存在但未接入导入流程</li>
+        <li>视觉管线 (U11) 已支持扫描件 PDF→PNG→vision</li>
+        <li>AI chat 已接受多格式文件（PDF/Excel/图片）做分析</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>外部调研</h4>
+      <ul>
+        <li>无主流消费级金融 App 使用 LLM-vision 做文档解析</li>
+        <li>截图→数据最佳实践：多模态 LLM + 结构化输出 schema</li>
+        <li>Excel 导入标准 UX：上传→映射列→预览（YNAB 模式）</li>
+        <li>预览 UX：分屏、置信度着色、行内编辑</li>
+        <li>URL 建议：<code>/import</code> 作为顶级路由</li>
+        <li>成本策略：轻量模型优先，低置信时升级</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>数据模型</h4>
+      <ul>
+        <li><strong>Asset</strong>: name, type, value, currency, purchase details, institution</li>
+        <li><strong>Liability</strong>: name, amounts, rates, dates, institution</li>
+        <li><strong>Wish</strong>: name, price, priority, savings progress</li>
+        <li>当前 confirm 端点仅创建 Asset，不覆盖 Liability/Wish</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>关键约束</h4>
+      <ul>
+        <li>隐私优先、自托管家庭系统</li>
+        <li>所有 UI 文案必须 i18n</li>
+        <li>错误信息用中文</li>
+        <li>财务路由已组织在 <code>/finance</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="axes">
+  <h2>Topic Axes</h2>
+  <ul class="axes-list">
+    <li class="axis-chip"><span class="num">1</span>路由组织</li>
+    <li class="axis-chip"><span class="num">2</span>多格式摄入</li>
+    <li class="axis-chip"><span class="num">3</span>AI 识别管线</li>
+    <li class="axis-chip"><span class="num">4</span>预览确认 UX</li>
+    <li class="axis-chip"><span class="num">5</span>数据模型映射</li>
+  </ul>
+</section>
+
+<section id="ideas">
+  <h2>Ranked Ideas</h2>
+
+  <ul class="jump-list">
+    <li><a href="#r1">1. 统一文档摄入管线</a></li>
+    <li><a href="#r2">2. 路由重组</a></li>
+    <li><a href="#r3">3. 零摩擦捕捉</a></li>
+    <li><a href="#r4">4. 交互式预览</a></li>
+    <li><a href="#r5">5. AI 万能表格识别</a></li>
+    <li><a href="#r6">6. 流式渐进解析</a></li>
+    <li><a href="#r7">7. 自动提交+撤销</a></li>
+  </ul>
+
+  <article class="idea-card" id="r1">
+    <div class="title-row">
+      <span class="rank">1</span>
+      <h3>统一文档摄入管线 + 草稿暂存</h3>
+    </div>
+    <p class="desc">构建单一摄入管线，接受任何文档类型（PDF、截图、Excel），通过共享的 extract → stage → review → commit 流程处理。引入 <code>draft_imports</code> 暂存表，状态为 pending 的记录不触碰真实 Asset/Liability 表，直到用户确认。将 <code>/confirm-via-agent</code> 设为默认确认路径，利用已有的 MCP 批量写入工具（<code>import_assets_batch</code>、<code>import_liabilities_batch</code>）实现原子性批量提交和逐行错误报告。</p>
+    <div class="flow-diagram">
+      任意文件 <span class="arrow">→</span> 格式检测+提取 <span class="arrow">→</span> draft_imports 暂存 <span class="arrow">→</span> 预览/编辑 <span class="arrow">→</span> 确认 → MCP batch write
+    </div>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>多格式摄入 + 预览确认 UX</dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> 代码库已有 3 个 MCP batch-write 工具和视觉管线，但未在导入流程中使用；现有 confirm 端点直接写 DB，无逐行错误报告</dd>
+      <dt>Rationale</dt><dd>最高杠杆基础架构。一旦暂存层存在，每个新数据源只需一个适配器，不需要新的审核流程。复利效应：导入、对账、重复检测、手动修正都成为同一 draft_imports 表上的操作</dd>
+      <dt>Downsides</dt><dd>需要新增 draft_imports 表和 alembic migration；确认流程需重构为两阶段</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-high">90%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">High</span></dd>
+    </dl>
+  </article>
+
+  <article class="idea-card" id="r2">
+    <div class="title-row">
+      <span class="rank">2</span>
+      <h3>路由重组：迁移至 /finance/import</h3>
+    </div>
+    <p class="desc">将导入页面从 <code>/settings/import-report</code> 迁移至 <code>/finance/import</code>，使 <code>/finance</code> 成为数据操作中枢。在 FinanceHubPage 页头添加"导入"操作按钮（非 tab——它是单次向导，不是持久列表），保持 hub 整洁同时让导入在用户思考数据的地方可发现。旧 URL 设置 301 重定向保持向后兼容。</p>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>路由组织</dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> router/index.ts 将 ImportReport 嵌套在 settings 下，与密码更改、设备管理并列——这些是设置关注点，不是金融数据摄入</dd>
+      <dt>Rationale</dt><dd>路由结构是一扇单向门。当导入获得截图和 Excel 支持后，它将成为主要的数据摄入界面。在功能扩展前先建立正确的信息架构，避免后续二次重构。同时为 reconcile、export 等未来数据操作预留自然位置</dd>
+      <dt>Downsides</dt><dd>需要更新所有指向旧路由的导航链接和文档；需处理 deep link 兼容</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-high">95%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">Low</span></dd>
+    </dl>
+  </article>
+
+  <article class="idea-card" id="r3">
+    <div class="title-row">
+      <span class="rank">3</span>
+      <h3>零摩擦捕捉：剪贴板粘贴 + 截图直传</h3>
+    </div>
+    <p class="desc">反转上传模型：页面监听 Ctrl+V 粘贴事件，直接从剪贴板提取图片 blob 发送到视觉管线。PDF 变为次要的"或选择文件"路径。用户在京东/淘宝截图后，Ctrl+V 粘贴即触发识别——无需文件选择器对话框，1 步完成输入。后端统一 <code>/import/parse</code> 端点接受 <code>pdf, png, jpg, xlsx, xls, csv</code>，服务端自动检测格式并路由到对应提取策略。</p>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>多格式摄入</dd>
+      <dt>Basis</dt><dd><strong>reasoned:</strong> 当前流程需要 4 步（按钮→文件选择器→导航→选择），而用户往往刚截完图。剪贴板粘贴将操作缩减为 1 步。视觉管线 (U11) 已原生处理图片，后端仅需在上传处理器中增加 image/* 支持</dd>
+      <dt>Rationale</dt><dd>电商截图是家庭资产追踪中最高频、最痛苦的输入源。当前每次京东订单都需手动录入——这个摩擦点正是此功能要消除的。做对了会让产品感觉"有魔力"</dd>
+      <dt>Downsides</dt><dd>需要平台特定的提取提示（京东/淘宝/Amazon 布局不同）；移动端粘贴支持有限</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-high">85%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">Medium</span></dd>
+    </dl>
+  </article>
+
+  <article class="idea-card" id="r4">
+    <div class="title-row">
+      <span class="rank">4</span>
+      <h3>交互式预览 + 字段级置信度可视化</h3>
+    </div>
+    <p class="desc">扩展预览页从"只读确认"到"完整编辑界面"。每行显示置信度着色：绿色=高置信（AI 精确匹配）、黄色=需审查（模糊匹配或缺失值）、红色=需编辑。用户可修改 asset_type、从 21 个系统类别中选择 category、切换 currency、切换 create/update action，或删除不需要的行。支持按 target_type 分组（asset/liability/wish），使用 van-picker 组件。</p>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>预览确认 UX</dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> ImportPreviewItem schema 返回 asset_type, category_hint, currency, quantity——但前端预览仅为 name 和 current_value 渲染可编辑字段，其余字段不可变</dd>
+      <dt>Rationale</dt><dd>截图和 Excel 引入比银行对账单 PDF 更多的解析不确定性。预览页是用户建立信任的主要界面。如果用户无法修正错误分类的资产或纠正误读的价格，他们会失去对 AI 导入数据的信任并退回手动录入。编辑界面必须匹配输入的不确定性</dd>
+      <dt>Downsides</dt><dd>前端开发量较大；需要为每个字段类型实现合适的编辑组件</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-high">90%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">Medium</span></dd>
+    </dl>
+  </article>
+
+  <article class="idea-card" id="r5">
+    <div class="title-row">
+      <span class="rank">5</span>
+      <h3>AI 驱动的万能表格识别（无列映射向导）</h3>
+    </div>
+    <p class="desc">跳过传统 Excel 导入的列映射步骤。将表格数据作为结构化文本（逐行 JSON）发送给 import-parse agent，让 LLM 在上下文中推断列语义（"A 列是资产名称、C 列是金额、D 列是日期"）。系统通过 <code>ImportTemplate</code> 模型记住该文件的列模式，下次上传同格式文件时跳过 AI 推断直接按已知映射解析——将向导从"每次痛苦"变为"一次痛苦"。</p>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>多格式摄入 + AI 识别管线</dd>
+      <dt>Basis</dt><dd><strong>reasoned:</strong> LLM 擅长这种结构推断。给定 50 行 {A: '招商银行', B: 150000, C: 'CNY'}，模型立即识别 B 为 value、A 为 institution。当前 agent 已处理 PDF 的自由文本，表格行作为 JSON-lines 在结构上更简单</dd>
+      <dt>Rationale</dt><dd>消除了传统 Excel 导入的 3 步向导，降低用户认知负担。模板记忆创造复利——从同一银行第 5 次导入时几乎零摩擦。这对自托管家庭应用尤其强大，因为同一家庭反复从相同来源导入</dd>
+      <dt>Downsides</dt><dd>LLM 对非标准格式的推断可能出错；需要 fallback 到手动映射</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-med">80%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">Medium</span></dd>
+    </dl>
+  </article>
+
+  <article class="idea-card" id="r6">
+    <div class="title-row">
+      <span class="rank">6</span>
+      <h3>流式渐进解析</h3>
+    </div>
+    <p class="desc">对大型 PDF（10+ 页银行对账单）或多文件批量上传，改为流式解析：AI 每解析完一页/一个文件就立即推送预览卡片，用户可以在全部解析完成前开始审查和确认已解析部分。后端利用现有 SSE 管线（stream_run 协议），让 import-parse agent 每处理完一页就发布增量结果事件。用户从"等 2 分钟看白屏"变为"每 10 秒看到新内容"。</p>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>AI 识别管线 + 预览确认 UX</dd>
+      <dt>Basis</dt><dd><strong>direct:</strong> 当前后端有 120s 超时（agent 有 110s 内部超时），用户可能等待长达 2 分钟无任何反馈。stream_run 基础设施已支持 SSE——但 parse-pdf 端点是同步 JSON</dd>
+      <dt>Rationale</dt><dd>2 分钟的加载转圈是"感觉坏了"的 UX 定义——用户会刷新页面中断解析。流式预览将感知等待时间从 O(n) 降至 O(1)。这对截图/Excel 输入更重要，因为它们可能产出更多条目、耗时更长</dd>
+      <dt>Downsides</dt><dd>需要将 parse 端点从同步 JSON 转为 SSE；前端需支持增量渲染</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-med">75%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">High</span></dd>
+    </dl>
+  </article>
+
+  <article class="idea-card" id="r7">
+    <div class="title-row">
+      <span class="rank">7</span>
+      <h3>自动提交 + 时间窗撤销</h3>
+    </div>
+    <p class="desc">取消预览确认步骤的替代方案：AI 解析完成后直接写入数据库，同时在 Dashboard 展示"最近导入"卡片，列出本次导入的所有条目，附带 60 秒倒计时撤销按钮。超时后条目仍可逐条修改/删除，但批量撤销窗口关闭。新增 <code>import_batch</code> 表记录每次导入的条目 ID 列表，支持按 batch 回滚。</p>
+    <dl class="idea-meta">
+      <dt>Axis</dt><dd>预览确认 UX</dd>
+      <dt>Basis</dt><dd><strong>reasoned:</strong> 对于高频用户（每周导入银行账单），80% 的情况 AI 识别准确，预览步骤变成纯粹的点击疲劳。类似 email 的 undo-send 模式——安全网存在但不增加大多数场景的操作成本</dd>
+      <dt>Rationale</dt><dd>将导入从 3 步减到 1 步。对已建立信任的老用户，预览是纯摩擦。可与 Idea #4 共存：默认展示预览，但允许用户开启"自动提交"模式跳过确认</dd>
+      <dt>Downsides</dt><dd>新用户可能困惑于数据"自动出现"；需要 batch 回滚基础设施；误操作风险</dd>
+      <dt>Confidence</dt><dd><span class="conf-chip conf-med">70%</span></dd>
+      <dt>Complexity</dt><dd><span class="cx-chip">Medium</span></dd>
+    </dl>
+  </article>
+</section>
+
+<section id="rejections">
+  <h2>Rejection Summary</h2>
+  <table class="rejection">
+    <thead>
+      <tr><th>#</th><th>Idea</th><th>Reason Rejected</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Promote to /import route</td><td>Subsumed by #2 route reorganization</td></tr>
+      <tr><td>2</td><td>E-commerce platform schemas</td><td>Subsumed by #3 zero-friction capture</td></tr>
+      <tr><td>3</td><td>Excel column-mapping wizard</td><td>Superseded by #5 (LLM-driven, no wizard needed)</td></tr>
+      <tr><td>4</td><td>Extend confirm for liabilities/wishes</td><td>Subsumed by #1 universal ingestion</td></tr>
+      <tr><td>5</td><td>Batch MCP write path</td><td>Subsumed by #1 draft staging + batch MCP</td></tr>
+      <tr><td>6</td><td>Exception-only confirmation</td><td>Alternative to #4/#7, less flexible standalone</td></tr>
+      <tr><td>7</td><td>Unified /parse strategy pattern</td><td>Subsumed by #1 universal pipeline</td></tr>
+      <tr><td>8</td><td>E-commerce → wish auto-creation</td><td>Subsumed by #1 multi-model support</td></tr>
+      <tr><td>9</td><td>Ambient folder watch</td><td>Too expensive for self-hosted family app</td></tr>
+      <tr><td>10</td><td>Confidence-gated model escalation</td><td>Subsumed by #1 pipeline design</td></tr>
+      <tr><td>11</td><td>Schema-driven extraction contracts</td><td>Valuable follow-up, not core import feature</td></tr>
+      <tr><td>12</td><td>Finance Hub as data ops center</td><td>Subsumed by #2 route reorganization</td></tr>
+      <tr><td>13</td><td>Vision extraction shared primitive</td><td>Subsumed by #1 pipeline reuse</td></tr>
+      <tr><td>14</td><td>Fuzzy column mapping memory</td><td>Subsumed by #5 template memory</td></tr>
+      <tr><td>15</td><td>Post-ingest reconciliation hooks</td><td>Valuable follow-up, not blocking import feature</td></tr>
+      <tr><td>16</td><td>Customs Advance Ruling (analogy)</td><td>Too niche metaphor; principle captured in #4</td></tr>
+      <tr><td>17</td><td>Orchestral quantization (analogy)</td><td>Metaphor doesn't carry concrete implementation</td></tr>
+      <tr><td>18</td><td>Forensic chain-of-custody (analogy)</td><td>Audit trail valuable but too expensive for v1</td></tr>
+      <tr><td>19</td><td>MRF waste sorting (analogy)</td><td>Subsumed by #1 cascading pipeline</td></tr>
+      <tr><td>20</td><td>Linnaean taxonomy (analogy)</td><td>Too niche; custom categories follow-up</td></tr>
+      <tr><td>21</td><td>Insurance evidence tagging (analogy)</td><td>Subsumed by #4 confidence visualization</td></tr>
+      <tr><td>22</td><td>MARC authority files (analogy)</td><td>Valuable data quality follow-up, not core</td></tr>
+      <tr><td>23</td><td>ATC conflict detection (analogy)</td><td>Duplicate detection follow-up, not blocking</td></tr>
+      <tr><td>24</td><td>Finance Hub 内嵌录入条</td><td>Subsumed by #2 route reorganization</td></tr>
+      <tr><td>25</td><td>对话式文档解析</td><td>Too expensive for v1; infra not ready</td></tr>
+      <tr><td>26</td><td>截图即录入 share sheet</td><td>Aspirational; subsumed by #3 clipboard paste</td></tr>
+      <tr><td>27</td><td>多源融合</td><td>Too expensive for v1; cross-source reconciliation is follow-up</td></tr>
+      <tr><td>28</td><td>资产详情页更新入口</td><td>Scope overrun — single-asset update is different feature</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer class="composition-signal">
+  Composed 2026-08-03T16:00Z by ce-ideate from <code>import-report feature focus</code>
+</footer>
+
+</div>
+</body>
+</html>

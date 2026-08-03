@@ -57,7 +57,7 @@ def upgrade() -> None:
             op.add_column(
                 "liabilities",
                 sa.Column(
-                    "is_archived", sa.Boolean(), nullable=False, server_default=sa.text("0")
+                    "is_archived", sa.Boolean(), nullable=False, server_default=sa.text("FALSE")
                 ),
             )
 

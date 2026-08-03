@@ -36,7 +36,7 @@
             :title="h.source_filename"
             :label="formatDate(h.created_at)"
             is-link
-            @click="selectedHistory = h"
+            @click="selectedHistory = h; showHistoryDetail = true"
           >
             <template #value>
               <div class="history-meta">

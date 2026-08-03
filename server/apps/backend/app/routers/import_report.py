@@ -105,6 +105,27 @@ def _validate_file_size(data: bytes, fmt: str) -> None:
         raise AppError(ErrorCode.IMPORT_FILE_TOO_LARGE)
 
 
+# Magic bytes for format validation (P1-9 security hardening).
+_MAGIC_BYTES = {
+    "image": [b"\x89PNG", b"\xff\xd8\xff"],  # PNG, JPEG
+    "pdf": [b"%PDF"],
+}
+
+
+def _validate_magic_bytes(data: bytes, fmt: str) -> None:
+    """Validate file magic bytes match the claimed format.
+
+    Raises IMPORT_PDF_UNREADABLE if the file content doesn't match the expected format.
+    Excel/CSV are not validated (ZIP/XML structures are complex to check via magic bytes).
+    """
+    if fmt not in _MAGIC_BYTES:
+        return  # No magic byte check for excel/csv
+    if len(data) < 4:
+        raise AppError(ErrorCode.IMPORT_PDF_UNREADABLE)
+    if not any(data.startswith(magic) for magic in _MAGIC_BYTES[fmt]):
+        raise AppError(ErrorCode.IMPORT_PDF_UNREADABLE)
+
+
 def _save_image_to_sandbox(
     data: bytes, family_id: str, thread_id: str, filename: str = "upload.png"
 ) -> str:
@@ -119,8 +140,10 @@ def _save_image_to_sandbox(
     )
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine extension from content.
-    ext = Path(filename).suffix.lower() or ".png"
+    # Determine extension from content — whitelist to prevent unexpected file types.
+    ext = Path(filename).suffix.lower()
+    if ext not in {".png", ".jpg", ".jpeg"}:
+        ext = ".png"
     save_path = uploads_dir / f"upload{ext}"
     save_path.write_bytes(data)
     return f"/mnt/user-data/uploads/upload{ext}"
@@ -359,13 +382,20 @@ async def parse_file(
     R3: single unified /parse endpoint. Server-side format detection (R4).
     Creates a DraftImport record for tracking (R21).
     """
-    raw = await file.read()
     family_id = str(current_user.family_id)
     filename = file.filename or "upload"
 
-    # Detect format (R4: conditional dispatch).
+    # Detect format first (R4: conditional dispatch) — only needs metadata, not bytes.
     fmt = _detect_format(filename, file.content_type)
+
+    # Check size before reading full content to avoid OOM on large uploads.
+    limit = _MAX_EXCEL_BYTES if fmt in ("excel", "csv") else _MAX_IMAGE_BYTES
+    if file.size is not None and file.size > limit:
+        raise AppError(ErrorCode.IMPORT_FILE_TOO_LARGE)
+
+    raw = await file.read()
     _validate_file_size(raw, fmt)
+    _validate_magic_bytes(raw, fmt)
     file_hash = _compute_file_hash(raw)
 
     # Pre-generate thread_id for sandbox path.
@@ -517,46 +547,11 @@ def confirm_import(
     # Split items by target_model and action.
     asset_creates = [i for i in req.items if i.target_model == "asset" and i.action == "create"]
     liability_creates = [i for i in req.items if i.target_model == "liability" and i.action == "create"]
-    updates = [i for i in req.items if i.action == "update" and i.matched_asset_id]
+    # Only asset updates are supported (liability matching is not implemented in /parse).
+    updates = [i for i in req.items if i.target_model == "asset" and i.action == "update" and i.matched_asset_id]
 
     # --- Asset updates (direct DB write) ---
     for item in updates:
-        if item.target_model == "liability":
-            # Liability update: find by matched ID (stored as liability ID in matched_asset_id).
-            liability = (
-                db.query(Liability)
-                .filter(
-                    Liability.id == item.matched_asset_id,
-                    Liability.family_id == current_user.family_id,
-                )
-                .first()
-            )
-            if liability:
-                if item.remaining_amount is not None:
-                    liability.remaining_amount = Decimal(str(item.remaining_amount))
-                if item.original_amount is not None:
-                    liability.original_amount = Decimal(str(item.original_amount))
-                if item.monthly_payment is not None:
-                    liability.monthly_payment = Decimal(str(item.monthly_payment))
-                if item.interest_rate is not None:
-                    liability.interest_rate = item.interest_rate
-                if item.currency:
-                    liability.currency = item.currency
-                if item.notes:
-                    liability.notes = item.notes
-                stats["updated"] += 1
-                result_items.append(ConfirmResultItem(
-                    temp_id=item.temp_id, status="updated",
-                    id=str(liability.id), name=liability.name,
-                ))
-            else:
-                stats["skipped"] += 1
-                result_items.append(ConfirmResultItem(
-                    temp_id=item.temp_id, status="error",
-                    error="负债记录不存在",
-                ))
-            continue
-
         # Asset update.
         asset = (
             db.query(Asset)
@@ -658,7 +653,10 @@ def confirm_import(
 
     # R22: update DraftImport status to "committed".
     if req.draft_id:
-        draft = db.query(DraftImport).filter_by(id=req.draft_id).first()
+        draft = db.query(DraftImport).filter(
+            DraftImport.id == int(req.draft_id),
+            DraftImport.family_id == current_user.family_id,
+        ).first()
         if draft:
             draft.status = "committed"
             all_ids = created_asset_ids + created_liability_ids
@@ -796,7 +794,7 @@ def rollback_import(
     Sets is_archived=True on all imported records.
     Checks for cross-references before rollback.
     """
-    draft = db.query(DraftImport).filter_by(id=draft_id).first()
+    draft = db.query(DraftImport).filter(DraftImport.id == int(draft_id)).first()
     if not draft:
         raise AppError(ErrorCode.IMPORT_DRAFT_NOT_FOUND)
 

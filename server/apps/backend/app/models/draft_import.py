@@ -20,7 +20,7 @@ class DraftImport(Base):
     __tablename__ = "draft_imports"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
-    family_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     source_filename: Mapped[str] = mapped_column(String(500), nullable=False)
     source_format: Mapped[str] = mapped_column(String(20), nullable=False)  # pdf/png/jpeg/xlsx/csv

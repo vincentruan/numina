@@ -84,6 +84,14 @@
         @update:model-value="(v: string) => emit('update', item.temp_id, { monthly_payment: v === '' ? null : Number(v) })"
       />
       <van-field
+        :model-value="item.interest_rate ?? undefined"
+        :label="t('importReport.interestRate')"
+        type="number"
+        inputmode="decimal"
+        :placeholder="t('importReport.enterValue')"
+        @update:model-value="(v: string) => emit('update', item.temp_id, { interest_rate: v === '' ? null : Number(v) })"
+      />
+      <van-field
         :model-value="item.currency"
         :label="t('importReport.currency')"
         :placeholder="'CNY'"
