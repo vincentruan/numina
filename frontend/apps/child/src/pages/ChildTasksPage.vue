@@ -393,6 +393,17 @@ const guide = useStepGuide({
   },
 })
 
+// Dismiss onboarding guide when navigating away — prevents the overlay
+// (z-index 9999, pointer-events all) from blocking tab-bar clicks on other pages.
+watch(
+  () => router.currentRoute.value.path,
+  (path) => {
+    if (path !== '/tasks' && guide.isActive.value) {
+      guide.skip()
+    }
+  },
+)
+
 async function maybeShowChildOnboarding() {
   const result = await shouldShowChildGuide(CHILD_GUIDE_VERSION)
   if (!result.shouldShow) return

@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -152,6 +152,17 @@ const guide = useStepGuide({
     if (userConfig) await recordGuideCompletion(userConfig, GUIDE_VERSION)
   },
 })
+
+// Dismiss onboarding guide when navigating away — prevents the overlay
+// (z-index 9999, pointer-events all) from blocking tab-bar clicks on other pages.
+watch(
+  () => router.currentRoute.value.path,
+  (path) => {
+    if (path !== '/' && guide.isActive.value) {
+      guide.skip()
+    }
+  },
+)
 
 async function maybeShowOnboarding() {
   if (router.currentRoute.value.path !== '/') return
