@@ -1,33 +1,62 @@
 <template>
-  <div v-if="childMembers.length > 0 && aiStore.aiEnabled" class="literacy-status-card">
-    <div class="literacy-status-header">
-      <span class="literacy-status-title">{{ t('dashboard.literacyReport') }}</span>
-      <router-link to="/baby/literacy-report" class="literacy-status-link">
-        {{ t('dashboard.literacyViewAll') }}<van-icon name="arrow" size="12" />
-      </router-link>
-    </div>
-    <div class="literacy-status-list">
-      <div
-        v-for="child in childMembers"
-        :key="child.id"
-        class="literacy-status-row"
-      >
-        <div
-          class="literacy-status-avatar"
-          :style="{ background: child.avatar_color || '#FF6B6B' }"
-        >
-          {{ (child.display_name ?? '?').charAt(0) }}
-        </div>
-        <span class="literacy-status-name">{{ child.display_name }}</span>
-        <span
-          class="literacy-status-badge"
-          :class="statusClass(child.id)"
-        >
-          {{ statusLabel(child.id) }}
-        </span>
-      </div>
-    </div>
-  </div>
+  <van-cell-group v-if="childMembers.length > 0 && aiStore.aiEnabled" inset class="chart-section literacy-status-card">
+    <van-collapse v-model="expanded">
+      <van-collapse-item name="literacy">
+        <template #title>
+          <div class="literacy-header">
+            <span class="literacy-title">
+              <span class="literacy-icon">
+                <van-loading v-if="loading" size="16px" type="spinner" color="#1989fa" />
+                <IIcon v-else :icon="'lucide:book-open'" size="18" class="literacy-icon__svg" />
+              </span>
+              <span class="literacy-title__text">{{ t('dashboard.literacyReport') }}</span>
+            </span>
+            <span v-if="loading" class="literacy-summary literacy-summary--loading">
+              <van-loading size="12px" type="spinner" />
+            </span>
+            <span v-else class="literacy-summary">
+              {{ readyCount }}/{{ childMembers.length }}
+            </span>
+          </div>
+        </template>
+
+        <template v-if="loading">
+          <div v-for="child in childMembers" :key="child.id" class="literacy-skeleton-row">
+            <div class="literacy-skeleton-avatar" />
+            <div class="literacy-skeleton-name" />
+            <div class="literacy-skeleton-badge" />
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="child in childMembers"
+            :key="child.id"
+            class="literacy-status-row"
+          >
+            <div
+              class="literacy-status-avatar"
+              :style="{ background: child.avatar_color || '#FF6B6B' }"
+            >
+              {{ (child.display_name ?? '?').charAt(0) }}
+            </div>
+            <span class="literacy-status-name">{{ child.display_name }}</span>
+            <span
+              class="literacy-status-badge"
+              :class="statusClass(child.id)"
+            >
+              {{ statusLabel(child.id) }}
+            </span>
+          </div>
+          <div class="literacy-footer">
+            <router-link to="/baby/literacy-report" class="literacy-view-all">
+              {{ t('dashboard.literacyViewAll') }}<van-icon name="arrow" size="12" />
+            </router-link>
+          </div>
+        </template>
+      </van-collapse-item>
+    </van-collapse>
+  </van-cell-group>
 </template>
 
 <script setup lang="ts">
@@ -36,19 +65,27 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
 const aiStore = useAIStore()
 
 const statusMap = ref<Record<string, ReportStatus>>({})
+const loading = ref(true)
+const expanded = ref<string[]>([])
 
 const childMembers = computed(() =>
   familyStore.members.filter(m => m.role === 'child' && m.is_active),
 )
 
+const readyCount = computed(() =>
+  childMembers.value.filter(c => statusMap.value[String(c.id)]?.status === 'ready').length,
+)
+
 async function loadStatuses() {
   if (!aiStore.aiEnabled || !childMembers.value.length) return
+  loading.value = true
   for (const child of childMembers.value) {
     try {
       const { data } = await getReportStatus(String(child.id))
@@ -57,6 +94,7 @@ async function loadStatuses() {
       // best-effort
     }
   }
+  loading.value = false
 }
 
 function statusClass(childId: string | number): string {
@@ -84,40 +122,96 @@ defineExpose({ loadStatuses })
 
 <style scoped>
 .literacy-status-card {
-  background: var(--card-bg, #fff);
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin: 12px 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: block;
+  margin: 8px 0;
 }
-.literacy-status-header {
+.literacy-status-card :deep(.van-collapse-item__title) {
+  justify-content: flex-start;
+}
+.literacy-status-card :deep(.van-cell__title) {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.literacy-status-card :deep(.van-cell__value) {
+  flex: none;
+  width: 0;
+}
+.literacy-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.literacy-status-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary, #0a0a0a);
-}
-.literacy-status-link {
-  font-size: 13px;
-  color: var(--text-secondary, #616161);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  text-decoration: none;
-}
-.literacy-status-list {
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  min-width: 0;
   gap: 8px;
 }
+.literacy-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.literacy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4em;
+  height: 1.4em;
+  flex-shrink: 0;
+}
+.literacy-icon__svg {
+  color: #1989fa;
+}
+.literacy-title__text {
+  font-weight: 600;
+}
+.literacy-summary {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--van-text-color-2);
+}
+.literacy-summary--loading {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Skeleton rows */
+.literacy-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.literacy-skeleton-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--van-skeleton-row-background, #f2f3f5);
+  flex-shrink: 0;
+}
+.literacy-skeleton-name {
+  flex: 1;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--van-skeleton-row-background, #f2f3f5);
+}
+.literacy-skeleton-badge {
+  width: 48px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--van-skeleton-row-background, #f2f3f5);
+  flex-shrink: 0;
+}
+
+/* Status rows */
 .literacy-status-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 8px 0;
+}
+.literacy-status-row + .literacy-status-row {
+  border-top: 1px solid var(--separator, #eee);
 }
 .literacy-status-avatar {
   width: 24px;
@@ -169,5 +263,21 @@ defineExpose({ loadStatuses })
 [data-theme='dark'] .literacy-status-badge.none {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-secondary, #c8c8d0);
+}
+
+.literacy-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--separator, #eee);
+}
+.literacy-view-all {
+  font-size: 13px;
+  color: var(--text-secondary, #616161);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
 }
 </style>

@@ -749,9 +749,8 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
 // ── /ai/context (A1b greenfield chat prefill, Plan B T6) ─────────────────────
 //
 // Fetch the family-scoped entity context to inject as the first user turn.
-// Cookie auth (credentials:'include'), mirroring getFinanceCoach. The backend
-// wraps the response in the EnvelopeResponse ({code:"OK", data:{source,summary}}),
-// so unwrap .data here. signal allows the caller (useAiContext) to abort after 3s.
+// signal allows the caller (useAiContext) to abort after 3s.
+// EnvelopeResponse unwrapping is handled by the Axios response interceptor.
 export interface AiContextResponse {
   source: string
   summary: string
@@ -762,26 +761,9 @@ export async function getAiContext(
   id: string,
   signal?: AbortSignal,
 ): Promise<AiContextResponse> {
-  let res = await fetch(
-    `/api/v1/ai/context?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`,
-    { method: 'GET', credentials: 'include', signal },
-  )
-  if (res.status === 401) {
-    try {
-      await refreshTokenIfNeeded()
-    } catch {
-      throw new Error('401')
-    }
-    res = await fetch(
-      `/api/v1/ai/context?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`,
-      { method: 'GET', credentials: 'include', signal },
-    )
-  }
-  if (!res.ok) throw new Error(`ai/context ${res.status}`)
-  const body = (await res.json()) as { code?: string; data?: AiContextResponse } | AiContextResponse
-  // Unwrap the EnvelopeResponse if present (backend default_response_class).
-  if (body && typeof body === 'object' && 'data' in body && body.data) {
-    return body.data
-  }
-  return body as AiContextResponse
+  const { data } = await http.get<AiContextResponse>('/ai/context', {
+    params: { source, id },
+    signal,
+  })
+  return data
 }

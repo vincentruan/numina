@@ -1104,6 +1104,12 @@ export default {
       daysLeft: '距下次还款还有 {days} 天',
       today: '今天还款',
     },
+    // Literacy weekly report status card
+    literacyReport: '素养周报',
+    literacyViewAll: '查看全部',
+    literacyReady: '已生成',
+    literacyGenerating: '生成中',
+    literacyNone: '未生成',
   },
   wish: {
     detail: '心愿详情',

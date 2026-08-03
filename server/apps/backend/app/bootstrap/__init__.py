@@ -23,6 +23,9 @@ def run_bootstrap(db: Session) -> None:
         bootstrap_category_financial_defaults,
     )
     from apps.backend.app.bootstrap.currencies import bootstrap_currencies
+    from apps.backend.app.bootstrap.family_mcp_servers import (
+        bootstrap_family_mcp_servers,
+    )
     from apps.backend.app.bootstrap.invitation_codes import bootstrap_invitation_codes
     from apps.backend.app.bootstrap.skills import bootstrap_skills
     from apps.backend.app.bootstrap.storage_backends import bootstrap_storage_backends
@@ -34,5 +37,6 @@ def run_bootstrap(db: Session) -> None:
     bootstrap_category_financial_defaults(db)
     bootstrap_agents(db)
     bootstrap_skills(db)
+    bootstrap_family_mcp_servers(db)
 
     logger.info("系统初始化数据检查完成")

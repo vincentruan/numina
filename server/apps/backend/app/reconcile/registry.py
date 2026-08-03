@@ -176,6 +176,36 @@ def _db_seed_resources() -> list[Resource]:
     def _apply_skills(db: Session) -> ResourceResult | None:
         return None
 
+    def _check_family_mcp_servers(db: Session) -> ResourceResult | None:
+        from apps.backend.app.models.family import Family
+        from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+
+        all_ids = {row.id for row in db.query(Family.id).all()}
+        covered = {
+            row.family_id
+            for row in db.query(FamilyMCPServer.family_id)
+            .filter(FamilyMCPServer.name == "Numina Backend MCP")
+            .all()
+        }
+        missing = len(all_ids - covered)
+        if missing == 0:
+            return None
+        return ResourceResult(
+            resource_name="seed_family_mcp_servers",
+            resource_type=ResourceType.DATABASE_SEED,
+            desired_version="1",
+            status=ResourceStatus.DRIFTED,
+            current_version=f"missing={missing}",
+            critical=False,
+        )
+
+    def _apply_family_mcp_servers(db: Session) -> ResourceResult | None:
+        from apps.backend.app.bootstrap.family_mcp_servers import (
+            bootstrap_family_mcp_servers,
+        )
+        bootstrap_family_mcp_servers(db)
+        return None
+
     return [
         DatabaseSeedResource(
             name="seed_categories",
@@ -226,6 +256,14 @@ def _db_seed_resources() -> list[Resource]:
             critical=True,
             check_fn=_check_skills,
             apply_fn=_apply_skills,
+        ),
+        DatabaseSeedResource(
+            name="seed_family_mcp_servers",
+            desired_version="1",
+            critical=False,
+            failure_action=FailureAction.WARN_ONLY,
+            check_fn=_check_family_mcp_servers,
+            apply_fn=_apply_family_mcp_servers,
         ),
     ]
 

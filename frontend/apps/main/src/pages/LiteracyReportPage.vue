@@ -164,7 +164,7 @@ async function loadReport() {
   try {
     const [reportRes, historyRes] = await Promise.all([
       getReport(selectedChildId.value, currentWeekStart.value ?? undefined).catch(() => null),
-      getReportHistory(selectedChildId.value),
+      getReportHistory(selectedChildId.value).catch(() => ({ weeks: [] })),
     ])
     report.value = reportRes
     history.value = historyRes.weeks ?? []

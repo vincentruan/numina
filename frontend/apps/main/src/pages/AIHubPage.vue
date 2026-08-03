@@ -840,7 +840,7 @@ defineExpose({
 .ai-hub-page {
   background: var(--bg-secondary);
   min-height: 100vh;
-  padding-bottom: 140px;
+  padding-bottom: 180px; /* InputBox + AppTabBar + safe area */
 }
 
 /* ── Header: Clean card style ── */

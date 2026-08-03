@@ -18,15 +18,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 拦截所有对 /api/threads/{path} 的 HTTP 方法
-@router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], response_model=None)
-async def proxy_langgraph_request(
+
+async def _proxy_to_agent(
     path: str,
     request: Request,
-    current_user: User = Depends(require_adult),
+    current_user: User,
 ) -> Response | StreamingResponse:
     """代理转发 LangGraph SDK 的请求到 Agent 端。
-    
+
     安全机制: 附加 X-Family-Id 等关键头信息，实现租户级别数据隔离。
     """
     # 读取请求的 body 和 params
@@ -41,14 +40,15 @@ async def proxy_langgraph_request(
 
     method = request.method
     agent_client = AgentClient(current_user.family_id, current_user.id)
+    target_path = f"/api/threads/{path}" if path else "/api/threads"
 
     # 如果是流式请求 (比如 events/stream)
-    if "stream" in path or request.headers.get("accept", "") == "text/event-stream":
+    if (path and "stream" in path) or request.headers.get("accept", "") == "text/event-stream":
         async def _simple_stream():
             try:
                 async with agent_client.stream(
                     method,
-                    f"/api/threads/{path}",
+                    target_path,
                     content=body if body else None,
                     params=params,
                     headers=forward_headers,
@@ -61,22 +61,14 @@ async def proxy_langgraph_request(
             except Exception as e:
                 logger.error(f"LangGraph proxy stream error on {path}: {e}")
                 yield b""
-                
+
         return StreamingResponse(_simple_stream(), media_type="text/event-stream")
     else:
-        # 非流式请求
         try:
-            # We don't have a generic dispatch method on agent_client easily exposing content= bytes 
-            # instead of json/data directly, but we can do it via a custom method or just httpx.AsyncClient usage here.
-            # Actually, agent_client can expose a custom method, but we can just use httpx.AsyncClient with agent_client.headers 
-            # because we need to pass raw body bytes. Wait! AgentClient's methods `post`, `get`, etc. support `data` for bytes.
-            # But the HTTP method is dynamic (`method`). It's easier to just use `httpx.AsyncClient` here directly for the dynamic method 
-            # while reusing the `agent_client.headers`.
-            
             async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
                 req = client.build_request(
                     method,
-                    agent_client._build_url(f"/api/threads/{path}"),
+                    agent_client._build_url(target_path),
                     content=body if body else None,
                     params=params,
                     headers={**agent_client.headers, **forward_headers},
@@ -94,3 +86,24 @@ async def proxy_langgraph_request(
         except Exception as e:
             logger.error(f"LangGraph proxy error on {path}: {e}")
             return Response(content="Internal Server Error", status_code=500)
+
+
+# 拦截 /api/threads 根路径 (如 POST /api/threads 创建线程)
+@router.api_route("", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], response_model=None)
+async def proxy_langgraph_root(
+    request: Request,
+    current_user: User = Depends(require_adult),
+) -> Response | StreamingResponse:
+    """代理转发 /api/threads 根路径请求到 Agent 端。"""
+    return await _proxy_to_agent("", request, current_user)
+
+
+# 拦截所有对 /api/threads/{path} 的 HTTP 方法
+@router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], response_model=None)
+async def proxy_langgraph_request(
+    path: str,
+    request: Request,
+    current_user: User = Depends(require_adult),
+) -> Response | StreamingResponse:
+    """代理转发 LangGraph SDK 的请求到 Agent 端。"""
+    return await _proxy_to_agent(path, request, current_user)

@@ -957,8 +957,14 @@ export default {
       extraPlaceholder: '输入每月额外多还金额',
       invalidExtra: '请输入有效的非负金额',
       immediatePayoff: '立即还清',
-      askAi: '问 AI 优化还款'
-    }
+      askAi: 'Ask AI to optimize repayment'
+    },
+    // Literacy weekly report status card
+    literacyReport: 'Literacy Report',
+    literacyViewAll: 'View all',
+    literacyReady: 'Generated',
+    literacyGenerating: 'Generating',
+    literacyNone: 'Not generated',
   },
   wish: {
     detail: 'Wish Detail',

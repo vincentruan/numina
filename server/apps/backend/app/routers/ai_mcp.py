@@ -91,7 +91,10 @@ def list_mcp_servers(
     """列出当前家庭所有 MCP server（env_vars 仅 owner 可见）。"""
     servers = (
         db.query(FamilyMCPServer)
-        .filter(FamilyMCPServer.family_id == current_user.family_id)
+        .filter(
+            FamilyMCPServer.family_id == current_user.family_id,
+            FamilyMCPServer.mcp_type != "backend",
+        )
         .order_by(FamilyMCPServer.id)
         .all()
     )

@@ -170,7 +170,7 @@
 
       <!-- Regenerate -->
       <div class="regen-section">
-        <van-button plain block :loading="isGenerating" @click="onGenerate()">
+        <van-button plain block :loading="isGenerating" @click="onGenerate(true)">
           {{ t('aiTask.regenBtn') }}
         </van-button>
       </div>
