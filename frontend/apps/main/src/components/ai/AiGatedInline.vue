@@ -14,7 +14,7 @@ const router = useRouter()
 const { t } = useI18n()
 
 function onAction() {
-  router.push('/settings/ai')
+  router.push('/settings')
 }
 </script>
 
