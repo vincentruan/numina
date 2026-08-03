@@ -14,7 +14,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=postgresql://numina:numinapass@numina-postgres:5432/numina
+      - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -40,6 +40,8 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./system-config.yaml:/app/system-config.yaml:ro
+    env_file:
+      - .env
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
@@ -53,7 +55,8 @@ services:
       - AI_MODEL=${AI_MODEL:-placeholder}
       - AI_API_KEY=${AI_API_KEY:-placeholder}
       - NUMINA_PROJECT_ROOT=/app
-      - DEERFLOW_DB_URL=postgresql://numina:numinapass@numina-postgres:5432/numina_deerflow
+      - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina}
+      - DEERFLOW_DB_URL=${DEERFLOW_DB_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina_deerflow}
     depends_on:
       backend:
         condition: service_healthy
@@ -79,7 +82,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=postgresql://numina:numinapass@numina-postgres:5432/numina
+      - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - ENVIRONMENT=${ENVIRONMENT:-development}
