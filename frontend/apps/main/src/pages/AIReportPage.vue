@@ -437,7 +437,11 @@ async function onGenerate(force = false) {
     if (!registered) {
       setTimeout(registerBgTask, 500)
     }
-    await connectPromise
+    const started = await connectPromise
+    if (!started) {
+      showToast({ message: t('aiReport.alreadyGenerating'), icon: 'warning-o' })
+      return
+    }
     // Cache hit → stream.report holds the cached report.
     if (stream.cached.value && stream.report.value) {
       currentReport.value = stream.report.value as unknown as AIReport

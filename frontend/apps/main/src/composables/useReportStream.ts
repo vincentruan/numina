@@ -57,7 +57,7 @@ export interface UseReportStreamReturn {
   toolResults: Ref<ToolResultInfo[]>
   step2Json: Ref<Record<string, unknown> | null>
   abort: (keepRunning?: boolean) => void
-  connect: (force?: boolean) => Promise<void>
+  connect: (force?: boolean) => Promise<boolean>
   reset: () => void
   pollTaskUntilComplete: () => Promise<void>
   startPolling: () => Promise<void>
@@ -309,8 +309,8 @@ export function useReportStream(): UseReportStreamReturn {
     await pollTaskUntilComplete()
   }
 
-  async function connect(force = false): Promise<void> {
-    if (status.value === 'streaming' || status.value === 'connecting') return
+  async function connect(force = false): Promise<boolean> {
+    if (status.value === 'streaming' || status.value === 'connecting') return false
     abortController = new AbortController()
     const signal = abortController.signal
 
@@ -347,11 +347,11 @@ export function useReportStream(): UseReportStreamReturn {
         status.value = 'streaming'
         progressMessage.value = t('aiHub.reportQueued')
         await pollTaskUntilComplete()
-        return
+        return true
       }
       // 200 = cache hit — short-circuit with cached report.
       handleCacheHit(data)
-      return
+      return true
     }
 
     if (!res.body) {
@@ -437,6 +437,7 @@ export function useReportStream(): UseReportStreamReturn {
       // process → finish when status is already completed via a custom event.
       if (status.value === 'streaming') status.value = 'completed'
     }
+    return true
   }
 
   return {

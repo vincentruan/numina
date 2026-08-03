@@ -626,7 +626,11 @@ async function generateReport() {
     if (!registered) {
       setTimeout(registerBgTask, 500)
     }
-    await connectPromise
+    const started = await connectPromise
+    if (!started) {
+      showToast({ message: t('aiReport.alreadyGenerating'), icon: 'warning-o' })
+      return
+    }
     // Stream completed — reload from API to get the persisted report
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
@@ -680,7 +684,13 @@ async function refreshReport(silent?: boolean) {
     if (!registered) {
       setTimeout(registerBgTask, 500)
     }
-    await connectPromise
+    const started = await connectPromise
+    if (!started) {
+      if (!silent) {
+        showToast({ message: t('aiReport.alreadyGenerating'), icon: 'warning-o' })
+      }
+      return
+    }
     // Stream completed — reload from API to get the persisted report
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()

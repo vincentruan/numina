@@ -2609,6 +2609,7 @@ export default {
     viewMarkdownFallback: 'View the generated report',
     taskStarted: 'Report generation has started; you may leave the page at any time',
     taskQueued: 'Report generation is queued, waiting for other tasks to finish',
+    alreadyGenerating: 'Report is already being generated, please wait',
     previousReportWhileGenerating: 'Generating new report; showing the previous report below',
     scoreUnit: 'pts',
     overallScore: 'Overall Health Score',

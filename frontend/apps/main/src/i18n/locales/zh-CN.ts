@@ -2933,6 +2933,7 @@ export default {
     viewMarkdownFallback: '查看已生成的报告',
     taskStarted: '报告生成任务已开始，可随时退出页面',
     taskQueued: '报告生成任务已排队，等待其他任务完成',
+    alreadyGenerating: '报告正在生成中，请等待完成',
     previousReportWhileGenerating: '正在生成新报告，下方显示的是上一份报告',
     scoreUnit: '分',
     overallScore: '综合健康评分',
