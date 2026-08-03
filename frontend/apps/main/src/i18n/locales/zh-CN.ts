@@ -2804,6 +2804,7 @@ export default {
     disabledTitle: 'AI 助手未开启',
     disabledDesc: '请联系家庭管理员在设置中配置并启用 AI 助手',
     disabledAction: '前往设置',
+    aiNotEnabled: '请先在设置中启用 AI 助手',
     title: 'AI 智能助手',
     greeting: '你好，{userName}',
     scoreUnit: '分',

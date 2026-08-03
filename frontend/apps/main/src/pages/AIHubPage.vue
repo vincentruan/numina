@@ -159,7 +159,7 @@
             </div>
             <p class="agent-empty-text">{{ t('aiHub.myAgentsEmpty') }}</p>
             <p class="agent-empty-hint">{{ t('aiHub.myAgentsEmptyHint') }}</p>
-            <van-button v-if="isOwner" size="small" type="primary" plain @click="router.push({ name: 'AgentCreate' })">
+            <van-button v-if="isOwner" size="small" type="primary" plain @click="navigateToAgentCreate">
               {{ t('aiHub.myAgentsCreate') }}
             </van-button>
           </div>
@@ -174,7 +174,7 @@
               @edit="handleAgentEdit"
             />
             <!-- Create agent card -->
-            <div v-if="isOwner" class="agent-card agent-card--create" role="button" tabindex="0" @click="router.push({ name: 'AgentCreate' })" @keydown.enter="router.push({ name: 'AgentCreate' })" @keydown.space.prevent="router.push({ name: 'AgentCreate' })">
+            <div v-if="isOwner" class="agent-card agent-card--create" role="button" tabindex="0" @click="navigateToAgentCreate" @keydown.enter="navigateToAgentCreate" @keydown.space.prevent="navigateToAgentCreate">
               <div class="agent-card__icon">＋</div>
               <div class="agent-card__body">
                 <div class="agent-card__name">{{ t('agents.createAgent') }}</div>
@@ -237,9 +237,9 @@
               class="app-list-item"
               role="button"
               tabindex="0"
-              @click="router.push('/ai/time-machine')"
-              @keydown.enter="router.push('/ai/time-machine')"
-              @keydown.space.prevent="router.push('/ai/time-machine')"
+              @click="navigateToTimeMachine"
+              @keydown.enter="navigateToTimeMachine"
+              @keydown.space.prevent="navigateToTimeMachine"
             >
               <div class="app-list-item__icon">
                 <SvgIcon name="time-machine" class="icon-svg" />
@@ -396,7 +396,16 @@ const analysisApps = computed(() => [
   { id: 'time-machine', name: t('aiHub.timeMachineCardTitle'), desc: t('aiHub.timeMachineCardDesc'), route: '/ai/time-machine' },
 ])
 
+// Guard: show toast and return true when AI is not enabled, so callers can
+// bail out of navigation early.  Keeps the message in one place.
+function guardAiEnabled(): boolean {
+  if (aiStore.aiEnabled) return false
+  showToast({ message: t('aiHub.aiNotEnabled'), icon: 'warning-o' })
+  return true
+}
+
 function goToAnalytics(tab: 'trend' | 'insight') {
+  if (guardAiEnabled()) return
   router.push({
     path: '/dashboard/analytics',
     query: { tab },
@@ -646,6 +655,7 @@ async function refreshReport(silent?: boolean) {
 }
 
 function handleAgentConsult(agent: Agent) {
+  if (guardAiEnabled()) return
   // R4: unified agentId routing — every agent card lands in AIChatBox with
   // the agent's id in the query string. AIChatBox loads the matching
   // agent's soul/skills based on agentId. No more agent_name special cases
@@ -657,6 +667,7 @@ function handleAgentConsult(agent: Agent) {
 }
 
 function handleNuminaConsult() {
+  if (guardAiEnabled()) return
   if (!numinaAgent.value) return
   const agentId = numinaAgent.value.id
   getSystemDefaultSession(SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS)
@@ -689,6 +700,16 @@ function handleNuminaConsult() {
 
 function handleAgentEdit(agent: Agent) {
   router.push({ name: 'AgentEdit', params: { id: agent.id } })
+}
+
+function navigateToAgentCreate() {
+  if (guardAiEnabled()) return
+  router.push({ name: 'AgentCreate' })
+}
+
+function navigateToTimeMachine() {
+  if (guardAiEnabled()) return
+  router.push('/ai/time-machine')
 }
 
 async function loadPageData() {
