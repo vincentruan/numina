@@ -26,6 +26,7 @@ from apps.backend.app.models.child_wish import ChildWish
 from apps.backend.app.models.child_wish_cost_history import (
     ChildWishCostHistory,
 )
+from apps.backend.app.models.draft_import import DraftImport
 from apps.backend.app.models.family_invitation_code import (
     FamilyInvitationCode,
 )

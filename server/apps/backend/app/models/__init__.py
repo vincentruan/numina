@@ -40,6 +40,7 @@ from apps.backend.app.models.chore import ChoreInstance, ChoreTemplate
 from apps.backend.app.models.coin_transaction import CoinTransaction
 from apps.backend.app.models.currency import Currency
 from apps.backend.app.models.device_session import DeviceSession
+from apps.backend.app.models.draft_import import DraftImport
 from apps.backend.app.models.exchange_rate import ExchangeRate
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_debt_thresholds import FamilyDebtThresholds
