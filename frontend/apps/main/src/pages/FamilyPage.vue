@@ -161,7 +161,7 @@
             plain
             type="primary"
             size="small"
-            style="margin-top: 12px"
+            style="margin: 12px 16px 0"
             @click="showAddChildSheet = true"
           >{{ t('family.addChild') }}</van-button>
         </div>
@@ -173,6 +173,7 @@
             plain
             type="primary"
             size="small"
+            style="margin: 0 16px"
             @click="showAddChildSheet = true"
           >{{ t('family.addChild') }}</van-button>
         </div>

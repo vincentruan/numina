@@ -195,6 +195,34 @@
         </van-cell>
       </van-cell-group>
 
+      <!-- Star Coin Exchange Rates (owner-only) -->
+      <van-cell-group v-if="isOwner" inset :title="t('familyConfig.coinRateGroup')" class="section">
+        <van-cell>
+          <template #title>
+            <span>{{ t('familyConfig.copperToSilverRate') }}</span>
+            <span class="value">{{ coinCopperToSilver }}</span>
+          </template>
+          <template #label>
+            <div class="slider-track">
+              <van-slider v-model="coinCopperToSilver" :min="1" :max="10" :step="1" @change="onCopperToSilverChange" />
+            </div>
+            <div class="slider-scale"><span>1</span><span>5</span><span>10</span></div>
+          </template>
+        </van-cell>
+        <van-cell>
+          <template #title>
+            <span>{{ t('familyConfig.silverToGoldRate') }}</span>
+            <span class="value">{{ coinSilverToGold }}</span>
+          </template>
+          <template #label>
+            <div class="slider-track">
+              <van-slider v-model="coinSilverToGold" :min="1" :max="10" :step="1" @change="onSilverToGoldChange" />
+            </div>
+            <div class="slider-scale"><span>1</span><span>5</span><span>10</span></div>
+          </template>
+        </van-cell>
+      </van-cell-group>
+
       <!-- Education & Auto-Approve (owner-only) -->
       <van-cell-group v-if="isOwner" inset :title="t('settings.educationRewardSection')" class="section">
         <van-cell center :title="t('settings.educationRewardEnabled')">
@@ -237,15 +265,19 @@ import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
 import { getFamilySettings, updateFamilySettings } from '@/api/family'
 import { useAuth } from '@/composables/useAuth'
+import { useFamilyStore } from '@/stores/family'
 
 defineOptions({ name: 'FamilyConfig' })
 
 const { t } = useI18n()
 const { isOwner } = useAuth()
+const familyStore = useFamilyStore()
 const loading = ref(true)
 const educationRewardEnabled = ref(false)
 const coinToYuanRate = ref(1)
 const autoApproveHours = ref(0)
+const coinCopperToSilver = ref(10)
+const coinSilverToGold = ref(10)
 
 const dayLabels = computed<string[]>(() => {
   const labels = t('familyConfig.dayLabels', { returnObjects: true }) as unknown
@@ -284,6 +316,28 @@ function onSave() {
       showFailToast(t('toast.operationFailed2'))
     }
   }, 600)
+}
+
+function onCopperToSilverChange() {
+  updateFamilySettings({ coinCopperToSilver: coinCopperToSilver.value })
+    .then(() => {
+      familyStore.coinCopperToSilver = coinCopperToSilver.value
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
+}
+
+function onSilverToGoldChange() {
+  updateFamilySettings({ coinSilverToGold: coinSilverToGold.value })
+    .then(() => {
+      familyStore.coinSilverToGold = coinSilverToGold.value
+      showSuccessToast(t('toast.saveSuccess'))
+    })
+    .catch(() => {
+      showFailToast(t('toast.saveFailed'))
+    })
 }
 
 function onEducationRewardToggle() {
@@ -332,6 +386,8 @@ async function loadEducationSettings() {
     educationRewardEnabled.value = res.data.education_reward_enabled
     coinToYuanRate.value = res.data.coin_to_yuan_rate
     autoApproveHours.value = res.data.auto_approve_hours
+    coinCopperToSilver.value = res.data.coin_copper_to_silver
+    coinSilverToGold.value = res.data.coin_silver_to_gold
   } catch {
     // non-critical
   }

@@ -77,14 +77,6 @@
       <van-cell :title="t('settings.familyMembers')" icon="friends-o" is-link to="/family" />
       <van-cell
         v-if="authStore.user?.role === 'owner'"
-        :title="t('settings.coinRate')"
-        :value="t('settings.coinRateValue', { c2s: familyStore.coinCopperToSilver, s2g: familyStore.coinSilverToGold })"
-        icon="star-o"
-        is-link
-        to="/settings/family/coin-rates"
-      />
-      <van-cell
-        v-if="authStore.user?.role === 'owner'"
         :title="t('settings.familyAdvancedConfig')"
         icon="setting-o"
         is-link

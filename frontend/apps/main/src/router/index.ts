@@ -305,11 +305,6 @@ const router = createRouter({
           redirect: '/finance/import',
         },
         {
-          path: 'settings/family/coin-rates',
-          name: 'CoinRates',
-          component: () => import('@/pages/CoinRatesPage.vue'),
-        },
-        {
           path: 'settings/family/config',
           name: 'FamilyConfig',
           component: () => import('@/pages/FamilyConfigPage.vue'),

@@ -3,12 +3,10 @@
     <div v-if="!isOnline" class="offline-banner" role="alert" aria-live="assertive">
       {{ t('toast.networkError') }}
     </div>
-    <router-view v-slot="{ Component, route }">
-      <Transition name="page-fade" mode="out-in">
-        <KeepAlive :include="cachedTabs">
-          <component :is="Component" :key="route.path" />
-        </KeepAlive>
-      </Transition>
+    <router-view v-slot="{ Component }">
+      <KeepAlive :include="cachedTabs">
+        <component :is="Component" />
+      </KeepAlive>
     </router-view>
     <AppTabBar />
   </div>
@@ -60,13 +58,5 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.page-fade-enter-active,
-.page-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
 
-.page-fade-enter-from,
-.page-fade-leave-to {
-  opacity: 0;
-}
 </style>
