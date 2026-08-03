@@ -312,7 +312,7 @@ import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watc
 import { useRouter, useRoute } from 'vue-router'
 import { getUser, isGuideDone, markGuideDone } from '@/utils/storage'
 import { parseApiDate } from '@/utils/format'
-import { getAIReport } from '@/api/ai'
+import { getAIReport, getAITask } from '@/api/ai'
 import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
@@ -601,11 +601,36 @@ async function loadReport() {
 async function generateReport() {
   reportLoading.value = true
   stream.reset()
+  let registered = false
+  async function registerBgTask() {
+    if (registered) return
+    try {
+      const task = await getAITask('report')
+      if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        aiStore.registerBackgroundTask({
+          capability: 'report',
+          taskId: task.task_id,
+          sessionId: task.session_id || '',
+          startedAt: task.started_at || new Date().toISOString(),
+          status: task.status,
+        })
+        registered = true
+      }
+    } catch {
+      // best-effort; task polling on return will catch up
+    }
+  }
   try {
-    await stream.connect()
+    const connectPromise = stream.connect()
+    await registerBgTask()
+    if (!registered) {
+      setTimeout(registerBgTask, 500)
+    }
+    await connectPromise
     // Stream completed — reload from API to get the persisted report
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
+    aiStore.clearBackgroundTask('report')
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
@@ -628,13 +653,38 @@ async function refreshReport(silent?: boolean) {
 
   if (!silent) reportLoading.value = true
   stream.reset()
+  let registered = false
+  async function registerBgTask() {
+    if (registered) return
+    try {
+      const task = await getAITask('report')
+      if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        aiStore.registerBackgroundTask({
+          capability: 'report',
+          taskId: task.task_id,
+          sessionId: task.session_id || '',
+          startedAt: task.started_at || new Date().toISOString(),
+          status: task.status,
+        })
+        registered = true
+      }
+    } catch {
+      // best-effort; task polling on return will catch up
+    }
+  }
   try {
     // force=true bypasses the 8h cache (plan step 6) — the refresh button
     // means the user wants a fresh report, not the cached one.
-    await stream.connect(true)
+    const connectPromise = stream.connect(true)
+    await registerBgTask()
+    if (!registered) {
+      setTimeout(registerBgTask, 500)
+    }
+    await connectPromise
     // Stream completed — reload from API to get the persisted report
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
+    aiStore.clearBackgroundTask('report')
   } catch (err) {
     if (!silent) {
       // Check if it's a timeout or connection error
@@ -736,20 +786,42 @@ onMounted(() => {
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false
-onActivated(() => {
+onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
+  // If a report task is still running (user navigated away while generation
+  // was in progress), resume polling so the page picks up latest progress.
+  try {
+    const task = await getAITask('report')
+    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+      aiStore.registerBackgroundTask({
+        capability: 'report',
+        taskId: task.task_id,
+        sessionId: task.session_id || '',
+        startedAt: task.started_at || new Date().toISOString(),
+        status: task.status,
+      })
+      await stream.startPolling()
+      await loadReport()
+      aiStore.clearBackgroundTask('report')
+      return
+    } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
+      aiStore.clearBackgroundTask('report')
+    }
+  } catch {
+    // ignore status fetch errors; fall through to normal page load
+  }
   loadPageData()
 })
 
 // This page is KeepAlive-cached (MainLayout cachedTabs includes 'AIHub'), so
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
-// Abort the report SSE stream + stop the cookie-refresh interval on deactivate
-// (and on full unmount) so they don't leak while the cached page sits in memory.
+// Abort the frontend SSE reader but keep the backend pipeline running so the
+// user can navigate back and pick up progress via polling.
 onDeactivated(() => {
-  stream.abort()
+  stream.abort(true)
 })
 onUnmounted(() => {
-  stream.abort()
+  stream.abort(true)
 })
 
 // Expose refs and functions for testing purposes
