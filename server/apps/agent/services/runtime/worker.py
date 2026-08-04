@@ -402,6 +402,32 @@ async def run_agent(
         reset_family_sandbox_context()
 
 
+async def _set_report_title(thread_id: str, family_id: int) -> None:
+    """Set a fixed-format title on the report's chat session.
+
+    Report runs have no user message for LLM title generation, so we use a
+    deterministic timestamp-based title (e.g. "家庭资产分析报告 20260804 1430").
+    Best-effort: any failure is logged and swallowed.
+    """
+    try:
+        from datetime import UTC, datetime
+
+        from apps.agent.services.session_store import AiSessionRepository
+
+        now = datetime.now(UTC)
+        title = f"家庭资产分析报告 {now.strftime('%Y%m%d %H%M')}"
+        repo = AiSessionRepository(str(family_id))
+        await repo.update_summary(
+            session_id=thread_id,
+            family_id=str(family_id),
+            summary=None,
+            title=title,
+        )
+        logger.info("[_set_report_title] Set title '%s' for thread %s", title, thread_id)
+    except Exception as e:
+        logger.warning("[_set_report_title] Failed for thread %s: %s", thread_id, e)
+
+
 async def _run_asset_report_pipeline(
     *,
     bridge: StreamBridge,
@@ -741,8 +767,13 @@ async def _run_asset_report_pipeline(
             )
         )
 
-        # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow
-        # pattern). No suggestions/title (report is not a chat).
+        # 11. Set report session title (fixed format with timestamp).
+        # Unlike chat runs, the report pipeline has no user message for LLM
+        # title generation — use a deterministic timestamp-based title instead.
+        if completion_status == "complete":
+            asyncio.create_task(_set_report_title(thread_id, family_id))
+
+        # 12. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
         end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:
             end_payload["usage"] = cumulative_usage

@@ -197,8 +197,10 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
         "(用户语言的建议2，15-40字)"
       ],
       "data": {
-        "net_worth": 28000000,
-        "mom_change_pct": 1.2
+        "items": [
+          {"key": "net_worth", "zh": "净资产", "en": "Net Worth", "value": 28000000},
+          {"key": "mom_change_pct", "zh": "环比变化", "en": "MoM Change", "value": 1.2}
+        ]
       }
     },
     {
@@ -212,8 +214,8 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
       ],
       "data": {
         "items": [
-          {"category_name": "房产", "percentage": 95},
-          {"category_name": "流动资产", "percentage": 2}
+          {"key": "real_estate", "zh": "房产", "en": "Real Estate", "value": 95},
+          {"key": "liquid", "zh": "流动资产", "en": "Liquid Assets", "value": 2}
         ]
       }
     },
@@ -227,8 +229,10 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
         "(用户语言的建议2)"
       ],
       "data": {
-        "liability_ratio": 51,
-        "monthly_payment_ratio": 45
+        "items": [
+          {"key": "liability_ratio", "zh": "负债率", "en": "Liability Ratio", "value": 51},
+          {"key": "monthly_payment_ratio", "zh": "月供占比", "en": "Monthly Payment Ratio", "value": 45}
+        ]
       }
     },
     {
@@ -241,8 +245,10 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
         "(用户语言的建议2)"
       ],
       "data": {
-        "liquidity_ratio": 2,
-        "emergency_months": 1.5
+        "items": [
+          {"key": "liquidity_ratio", "zh": "流动性比率", "en": "Liquidity Ratio", "value": 2},
+          {"key": "emergency_months", "zh": "应急月数", "en": "Emergency Months", "value": 1.5}
+        ]
       }
     },
     {
@@ -255,8 +261,10 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
         "(用户语言的建议2)"
       ],
       "data": {
-        "concentration_ratio": 95,
-        "diversification_score": 2
+        "items": [
+          {"key": "concentration_ratio", "zh": "集中度", "en": "Concentration Ratio", "value": 95},
+          {"key": "diversification_score", "zh": "分散评分", "en": "Diversification Score", "value": 2}
+        ]
       }
     }
   ]
@@ -276,7 +284,7 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
 | `indicators[].score` | integer(1-5) | 1=很差 2=较差 3=一般 4=良好 5=优秀 |
 | `indicators[].narrative` | string(150-350字) | markdown 分析文本，**禁止表格**，用 `**加粗**` 突出关键结论 + `-` 无序列表 |
 | `indicators[].suggestions` | array[string] | 2-3条建议，每条15-40字，使用观察性语言 |
-| `indicators[].data` | object | 可选的数据可视化字段 |
+| `indicators[].data` | object | 可选的数据可视化字段，推荐格式 `{"items": [{"key", "zh", "en", "value"}]}`；其中 `zh`/`en` 为多语言 label，前端按用户语言选择显示 |
 
 ## 常见指标 key
 

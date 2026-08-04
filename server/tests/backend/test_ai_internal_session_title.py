@@ -131,6 +131,7 @@ def test_session_to_dict_exposes_parent_thread_id():
     """U2: _session_to_dict must surface parent_thread_id for list/detail APIs."""
     row = SimpleNamespace(
         id="thread-1",
+        thread_id=None,
         family_id=1,
         user_id=42,
         agent_id=None,

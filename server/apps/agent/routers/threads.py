@@ -672,7 +672,9 @@ async def search_threads(
 
     return [
         ThreadResponse(
-            thread_id=str(r.get("session_id", "")),
+            # Prefer the LangGraph UUID thread_id when present; fall back to
+            # the snowflake session_id for sessions created via chat_stream.
+            thread_id=str(r.get("thread_id") or r.get("session_id", "")),
             status=r.get("status", "idle"),
             created_at=coerce_iso(r.get("created_at", "")),
             updated_at=coerce_iso(r.get("updated_at", "")),

@@ -145,17 +145,15 @@
             </div>
             <!-- Dynamic data visualization -->
             <div v-if="indicator.data && Object.keys(indicator.data).length > 0" class="indicator-data">
-              <!-- Allocation items -->
-              <div v-if="indicator.data.items && Array.isArray(indicator.data.items)" class="alloc-bars">
-                <div v-for="item in indicator.data.items" :key="item.category_name" class="alloc-bar-row">
-                  <span class="alloc-name">{{ item.category_name }}</span>
-                  <div class="alloc-bar-bg">
-                    <div class="alloc-bar-fill" :style="{ width: `${item.percentage}%` }" />
-                  </div>
-                  <span class="alloc-pct">{{ item.percentage.toFixed(1) }}%</span>
+              <!-- New format: items array with bilingual labels -->
+              <template v-if="getIndicatorDataItems(indicator)">
+                <div v-for="item in getIndicatorDataItems(indicator)!" :key="item.key" class="data-row">
+                  <span>{{ item.zh === item.en ? item.zh : (locale === 'en-US' ? item.en : item.zh) }}</span>
+                  <span v-if="typeof item.value === 'number'">{{ formatValue(item.key, item.value) }}</span>
+                  <span v-else>{{ item.value }}</span>
                 </div>
-              </div>
-              <!-- Generic data rows -->
+              </template>
+              <!-- Legacy fallback: flat key-value object -->
               <template v-else>
                 <div v-for="(value, key) in indicator.data" :key="key" class="data-row">
                   <span>{{ getDataLabel(key) }}</span>
@@ -397,6 +395,16 @@ function getDataLabel(key: string): string {
     return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
   }
   return key
+}
+
+/** Extract bilingual data items from indicator.data (new SKILL.md v2 format).
+ * Returns null when the data uses the legacy flat key-value format. */
+function getIndicatorDataItems(indicator: AIReportIndicator): Array<{ key: string; zh: string; en: string; value: number }> | null {
+  const items = indicator.data?.items
+  if (!items || !Array.isArray(items)) return null
+  // Only treat as new format when items carry bilingual labels
+  if (items.length === 0 || typeof items[0] !== 'object' || !('zh' in items[0])) return null
+  return items as Array<{ key: string; zh: string; en: string; value: number }>
 }
 
 function formatDate(iso: string | null): string {

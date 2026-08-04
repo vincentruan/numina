@@ -759,6 +759,7 @@ class ReportResultRequest(BaseModel):
 def _session_to_dict(s: "object") -> dict:
     return {
         "session_id": str(s.id),  # type: ignore[attr-defined]
+        "thread_id": s.thread_id,  # type: ignore[attr-defined]
         "family_id": str(s.family_id),  # type: ignore[attr-defined]
         "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
         "agent_id": str(s.agent_id) if s.agent_id else None,  # type: ignore[attr-defined]
@@ -775,6 +776,31 @@ def _session_to_dict(s: "object") -> dict:
     }
 
 
+def _find_session_row(
+    db: Session,
+    session_id: str,
+) -> "object | None":
+    """Look up an ai_chat_sessions row by PK (snowflake) or thread_id (UUID).
+
+    The ``session_id`` parameter comes from the agent and is either a numeric
+    snowflake string (Path A: backend chat_stream) or a LangGraph UUID string
+    (Path B: frontend createThread).  Numeric IDs match the ``id`` PK; UUIDs
+    match the ``thread_id`` column.
+    """
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+
+    try:
+        int_id = int(session_id)
+        return db.query(AIChatSession).filter(AIChatSession.id == int_id).first()
+    except (ValueError, TypeError):
+        # UUID format — look up by the thread_id column
+        return (
+            db.query(AIChatSession)
+            .filter(AIChatSession.thread_id == session_id)
+            .first()
+        )
+
+
 @router.post("/ai/sessions/upsert")
 def internal_upsert_session(
     body: SessionUpsertRequest,
@@ -782,18 +808,41 @@ def internal_upsert_session(
     db: Session = Depends(get_db),
 ):
     from apps.backend.app.models.ai_chat_session import AIChatSession
+    from apps.backend.app.utils.snowflake import next_id
 
-    row = db.query(AIChatSession).filter(AIChatSession.id == body.session_id).first()
+    # Determine whether the caller passed a snowflake PK or a UUID thread_id.
+    is_uuid = False
+    try:
+        int(body.session_id)
+    except (ValueError, TypeError):
+        is_uuid = True
+
+    row = _find_session_row(db, body.session_id)
     if row is None:
-        row = AIChatSession(
-            id=body.session_id,
-            family_id=int(family_id),
-            user_id=int(body.user_id) if body.user_id else None,
-            agent_id=int(body.agent_id) if body.agent_id else None,
-            last_model=body.last_model,
-            source=body.source,
-            parent_thread_id=body.parent_thread_id,
-        )
+        if is_uuid:
+            # Path B: agent generated a UUID thread_id.  Generate a snowflake
+            # PK and store the UUID in the thread_id column so subsequent
+            # lookups by UUID can find this row.
+            row = AIChatSession(
+                id=next_id(),
+                thread_id=body.session_id,
+                family_id=int(family_id),
+                user_id=int(body.user_id) if body.user_id else None,
+                agent_id=int(body.agent_id) if body.agent_id else None,
+                last_model=body.last_model,
+                source=body.source,
+                parent_thread_id=body.parent_thread_id,
+            )
+        else:
+            row = AIChatSession(
+                id=int(body.session_id),
+                family_id=int(family_id),
+                user_id=int(body.user_id) if body.user_id else None,
+                agent_id=int(body.agent_id) if body.agent_id else None,
+                last_model=body.last_model,
+                source=body.source,
+                parent_thread_id=body.parent_thread_id,
+            )
         db.add(row)
     else:
         if row.family_id != int(family_id):
@@ -823,8 +872,6 @@ def internal_update_session_summary(
 ):
     import logging
 
-    from apps.backend.app.models.ai_chat_session import AIChatSession
-
     logger = logging.getLogger(__name__)
 
     logger.info(
@@ -836,11 +883,11 @@ def internal_update_session_summary(
         repr(body.model),
     )
 
-    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != int(family_id):
+    row = _find_session_row(db, session_id)
+    if row is None or row.family_id != int(family_id):  # type: ignore[attr-defined]
         raise AppError(ErrorCode.NOT_FOUND)
     if body.summary:
-        row.last_message_summary = body.summary[:200]
+        row.last_message_summary = body.summary[:200]  # type: ignore[attr-defined]
     if body.title:
         # Preserve the existing (auto-generated) title on the first manual
         # rename so the original TitleMiddleware-produced title is never lost.
@@ -962,12 +1009,10 @@ def internal_get_session(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    from apps.backend.app.models.ai_chat_session import AIChatSession
-
-    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != int(family_id):
+    row = _find_session_row(db, session_id)
+    if row is None or row.family_id != int(family_id):  # type: ignore[attr-defined]
         raise AppError(ErrorCode.NOT_FOUND)
-    return _session_to_dict(row)
+    return _session_to_dict(row)  # type: ignore[arg-type]
 
 
 @router.delete("/ai/sessions/{session_id}")
@@ -977,15 +1022,13 @@ def internal_delete_session(
     db: Session = Depends(get_db),
 ):
     """Delete a session row (agent-facing). Checkpointer cleanup is the caller's responsibility."""
-    from apps.backend.app.models.ai_chat_session import AIChatSession
-
     try:
         family_id_int = int(family_id)
     except ValueError:
         raise AppError(ErrorCode.NOT_FOUND) from None
 
-    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != family_id_int:
+    row = _find_session_row(db, session_id)
+    if row is None or row.family_id != family_id_int:  # type: ignore[attr-defined]
         raise AppError(ErrorCode.NOT_FOUND)
     db.delete(row)
     db.commit()

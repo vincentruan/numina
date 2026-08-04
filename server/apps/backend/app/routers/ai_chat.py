@@ -135,7 +135,11 @@ def _get_session_for_family(
     family_id: int | str,
     db: Session,
 ) -> AIChatSession | None:
-    """Load a session by ID, enforcing family_id ownership (security invariant)."""
+    """Load a session by ID, enforcing family_id ownership (security invariant).
+
+    Accepts both numeric snowflake IDs (matched against ``id`` PK) and UUID
+    strings (matched against ``thread_id`` column).
+    """
     if session_id is None:
         return None
     try:
@@ -150,10 +154,15 @@ def _get_session_for_family(
             .first()
         )
     except (ValueError, TypeError):
-        # UUID format — query as string (DeerFlow agent creates UUID thread_ids)
+        # UUID format — query by thread_id column (LangGraph agent creates
+        # UUID thread_ids that are stored in the thread_id column, not the
+        # BigInteger PK).
         return (
             db.query(AIChatSession)
-            .filter(AIChatSession.id == str(session_id), AIChatSession.family_id == fid)
+            .filter(
+                AIChatSession.thread_id == str(session_id),
+                AIChatSession.family_id == fid,
+            )
             .first()
         )
 
@@ -487,7 +496,9 @@ def submit_message_feedback(
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    thread_id = str(session.id)
+    # Prefer the LangGraph thread_id (UUID) when set; fall back to the
+    # snowflake PK for sessions created via the backend chat_stream path.
+    thread_id = session.thread_id or str(session.id)
     row = (
         db.query(AIChatMessageFeedback)
         .filter(
@@ -530,7 +541,9 @@ def get_session_feedback(
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    thread_id = str(session.id)
+    # Prefer the LangGraph thread_id (UUID) when set; fall back to the
+    # snowflake PK for sessions created via the backend chat_stream path.
+    thread_id = session.thread_id or str(session.id)
     rows = (
         db.query(AIChatMessageFeedback)
         .filter(
