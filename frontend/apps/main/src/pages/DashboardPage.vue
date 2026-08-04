@@ -48,6 +48,7 @@
 
     <!-- Step Guide Onboarding Overlay -->
     <StepGuideOverlay
+      ref="guideOverlayRef"
       :visible="guide.isActive.value"
       :steps="guideSteps"
       :current-step="guide.currentStep.value"
@@ -110,6 +111,7 @@ const { checkFamilyChanges } = useMemberNotify()
 let hasActivated = false
 const refreshing = ref(false)
 const literacyStatusRef = ref<InstanceType<typeof LiteracyStatusCard> | null>(null)
+const guideOverlayRef = ref<InstanceType<typeof StepGuideOverlay> | null>(null)
 
 // Upcoming payments
 const upcomingPayments = ref<UpcomingPaymentItem[]>([])
@@ -155,11 +157,25 @@ const guide = useStepGuide({
 
 // Dismiss onboarding guide when navigating away — prevents the overlay
 // (z-index 9999, pointer-events all) from blocking tab-bar clicks on other pages.
+// Also resets body scroll that was frozen by overflow:hidden during the guide,
+// so the target page starts at scroll position 0.
 watch(
   () => router.currentRoute.value.path,
   (path) => {
     if (path !== '/' && guide.isActive.value) {
+      // Zero the saved scroll position BEFORE skip(), so the overlay's close
+      // watcher restores 0 (not the old Dashboard scroll position).
+      if (guideOverlayRef.value) {
+        guideOverlayRef.value.savedBodyScrollTop = 0
+      }
       guide.skip()
+      // Guide's overlay watch restores overflow, but body.scrollTop may
+      // have accumulated offset during overlay lifetime — reset it here
+      // before the target page mounts to prevent hidden-header syndrome.
+      document.body.style.overflow = ''
+      document.body.scrollTop = 0
+      document.documentElement.scrollTop = 0
+      window.scrollTo(0, 0)
     }
   },
 )

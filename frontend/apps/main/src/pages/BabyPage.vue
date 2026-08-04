@@ -1177,6 +1177,9 @@ onMounted(async () => {
     decrement()
   }
   loading.value = false
+  // Ensure page starts at top after content replaces skeleton
+  // (van-tabs scrollable may push scroll position during init)
+  requestAnimationFrame(() => window.scrollTo(0, 0))
 })
 
 // KeepAlive 缓存页面：返回时触发 onActivated 而非 onMounted
@@ -1195,6 +1198,7 @@ onActivated(async () => {
     decrement()
   }
   loading.value = false
+  requestAnimationFrame(() => window.scrollTo(0, 0))
 })
 </script>
 

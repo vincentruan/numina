@@ -226,18 +226,35 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+// Save body scroll position when overlay opens so we can restore it on close.
+// Exposed so parent can zero it before skip() during navigation, preventing
+// the overlay from restoring a stale scroll position of the old page.
+const savedBodyScrollTop = ref(0)
+defineExpose({ savedBodyScrollTop })
+
 watch(
   () => props.visible,
   (val) => {
     if (val) {
+      savedBodyScrollTop.value = window.scrollY
       document.body.style.overflow = 'hidden'
+      // Prevent any residual body scroll from leaking through
+      document.body.scrollTop = 0
+      document.documentElement.scrollTop = 0
       nextTick(() => {
         updateSpotlight()
-        // Focus the next/primary button on open
-        nextTick(() => nextBtnRef.value?.focus())
+        // Focus the next/primary button on open (preventScroll avoids
+        // mobile browsers jumping to the fixed-position button)
+        nextTick(() => nextBtnRef.value?.focus({ preventScroll: true }))
       })
     } else {
       document.body.style.overflow = ''
+      // Reset body scroll — overflow:hidden期间可能积累偏移
+      document.body.scrollTop = 0
+      document.documentElement.scrollTop = 0
+      // Restore the scroll position the page had before the guide opened
+      window.scrollTo(0, savedBodyScrollTop.value)
+      savedBodyScrollTop.value = 0
     }
   },
 )
@@ -255,7 +272,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateSpotlight)
+  // Defensive cleanup: ensure overflow and scroll are reset even if
+  // the visible watcher didn't fire (e.g. parent destroyed without toggling visible)
   document.body.style.overflow = ''
+  document.body.scrollTop = 0
+  document.documentElement.scrollTop = 0
 })
 </script>
 
