@@ -156,9 +156,18 @@
               <!-- Legacy fallback: flat key-value object -->
               <template v-else>
                 <div v-for="(value, key) in indicator.data" :key="key" class="data-row">
-                  <span>{{ getDataLabel(key) }}</span>
-                  <span v-if="typeof value === 'number'">{{ formatValue(key, value) }}</span>
-                  <span v-else>{{ value }}</span>
+                  <span>{{ getDataLabel(String(key)) }}</span>
+                  <!-- Array value: render each element as a sub-row -->
+                  <template v-if="Array.isArray(value)">
+                    <div v-for="(item, itemIdx) in (value as unknown[])" :key="itemIdx" class="data-sub-row">
+                      <span v-if="typeof item === 'object' && item !== null">{{ Array.isArray(item) ? item.join(', ') : Object.entries(item as Record<string, unknown>).map(([k, v]) => `${getDataLabel(k)}: ${typeof v === 'number' ? formatValue(k, v) : String(v)}`).join(', ') }}</span>
+                      <span v-else>{{ typeof item === 'number' ? formatValue(String(key), item) : String(item) }}</span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span v-if="typeof value === 'number'">{{ formatValue(String(key), value) }}</span>
+                    <span v-else>{{ String(value) }}</span>
+                  </template>
                 </div>
               </template>
             </div>
@@ -384,6 +393,21 @@ const DATA_LABEL_KEYS = new Set([
   'total_assets', 'total_liabilities', 'net_worth', 'mom_change_pct',
   'liability_ratio', 'count', 'low_usage_count', 'total_daily_cost',
   'real_net_worth',
+  // Liability-related
+  'mortgage_amount', 'consumer_loan_amount', 'credit_card_debt',
+  'monthly_payment', 'interest_rate', 'remaining_term_months',
+  'debt_to_income_ratio', 'credit_utilization_ratio',
+  // Asset category names (when used as flat key-value pair)
+  'real_estate', 'cash', 'liquid_assets', 'financial_assets',
+  'investments', 'crypto', 'insurance', 'consumer_goods',
+  // Growth / liquidity
+  'asset_growth_rate', 'income_growth_rate', 'liquid_asset_ratio',
+  'financial_asset_ratio', 'real_estate_concentration',
+  'emergency_months', 'liquidity_ratio', 'monthly_expense',
+  // Risk / diversification
+  'concentration_ratio', 'diversification_score', 'insurance_coverage',
+  'insurance_coverage_ratio', 'monthly_payment_ratio',
+  'low_yield_asset_ratio', 'non_productive_asset_ratio',
 ])
 
 function getDataLabel(key: string): string {
@@ -402,9 +426,25 @@ function getDataLabel(key: string): string {
 function getIndicatorDataItems(indicator: AIReportIndicator): Array<{ key: string; zh: string; en: string; value: number }> | null {
   const items = indicator.data?.items
   if (!items || !Array.isArray(items)) return null
-  // Only treat as new format when items carry bilingual labels
-  if (items.length === 0 || typeof items[0] !== 'object' || !('zh' in items[0])) return null
-  return items as Array<{ key: string; zh: string; en: string; value: number }>
+  if (items.length === 0) return null
+
+  // Standard bilingual format: { key, zh, en, value }
+  const first = items[0]
+  if (typeof first === 'object' && first !== null && 'zh' in first && 'en' in first) {
+    return items as Array<{ key: string; zh: string; en: string; value: number }>
+  }
+
+  // Fallback: model emitted { category_name, percentage } or similar flat objects
+  // Normalize into bilingual items so the same rendering path works.
+  return items.map((item: Record<string, unknown>, idx: number) => {
+    const label = String(item.category_name ?? item.name ?? item.label ?? `item_${idx}`)
+    return {
+      key: String(item.key ?? idx),
+      zh: label,
+      en: label,
+      value: Number(item.percentage ?? item.value ?? item.amount ?? 0),
+    }
+  })
 }
 
 function formatDate(iso: string | null): string {
@@ -668,6 +708,14 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--text-secondary);
   padding: 3px 0;
+}
+.data-sub-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 1px 0 1px 12px;
+  opacity: 0.85;
 }
 .positive { color: #f44336; }
 .negative { color: #4caf50; }

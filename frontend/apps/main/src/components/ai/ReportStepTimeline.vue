@@ -27,10 +27,11 @@
             <van-icon :name="expandedStep === 1 ? 'arrow-up' : 'arrow-down'" class="step-toggle" />
           </div>
         </template>
-        <div class="step-desc">{{ t('aiReport.step1Desc') }}</div>
+        <div class="step-desc" :class="{ 'step-desc--shimmer': isStep1Active }">{{ t('aiReport.step1Desc') }}</div>
         <div v-if="expandedStep === 1" class="step-panel">
-          <!-- Thinking accumulation -->
-          <div v-if="step1Thinking" class="thinking-text" aria-live="polite">{{ step1Thinking }}</div>
+          <!-- Thinking accumulation (rendered as markdown) -->
+          <!-- eslint-disable vue/no-v-html -->
+          <div v-if="step1Thinking" class="thinking-text thinking-markdown" aria-live="polite" v-html="renderedThinking" />
           <!-- Tool calls (write_file etc.) -->
           <div v-for="tc in writeToolCalls" :key="tc.id || tc.name" class="tool-call-card">
             <div class="tool-call-name">
@@ -56,7 +57,7 @@
             <van-icon :name="expandedStep === 2 ? 'arrow-up' : 'arrow-down'" class="step-toggle" />
           </div>
         </template>
-        <div class="step-desc">{{ t('aiReport.step2Desc') }}</div>
+        <div class="step-desc" :class="{ 'step-desc--shimmer': isStep2Active }">{{ t('aiReport.step2Desc') }}</div>
         <div v-if="expandedStep === 2" class="step-panel">
           <div v-if="step2Status === 'error'" class="step-error">{{ t('aiReport.step2JsonFailed') }}</div>
           <div v-else-if="step2Json" class="json-panel">
@@ -74,7 +75,7 @@
         <template #title>
           <span>{{ t('aiReport.step3') }}</span>
         </template>
-        <div class="step-desc">{{ t('aiReport.step3Desc') }}</div>
+        <div class="step-desc" :class="{ 'step-desc--shimmer': isStep3Active }">{{ t('aiReport.step3Desc') }}</div>
       </van-step>
     </van-steps>
   </div>
@@ -84,6 +85,8 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import type { StepStatus, ToolCallInfo, ToolResultInfo } from '@/composables/useReportStream'
 
 const props = defineProps<{
@@ -106,6 +109,18 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const THINKING_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
+
+const renderedThinking = computed(() => {
+  if (!props.step1Thinking) return ''
+  const raw = marked.parse(props.step1Thinking, { async: false }) as string
+  return DOMPurify.sanitize(raw, THINKING_PURIFY_CONFIG)
+})
+
 const expandedStep = ref<number | null>(1)
 
 function toggleStep(step: number): void {
@@ -142,6 +157,7 @@ const isStep1Active = computed(() =>
   props.step1Status === 'process' || (props.step1Status === 'waiting' && props.streaming),
 )
 const isStep2Active = computed(() => props.step2Status === 'process')
+const isStep3Active = computed(() => props.step3Status === 'process')
 
 const writeToolCalls = computed(() =>
   props.toolCalls.filter((tc) => tc.name.includes('write_file') || tc.name.includes('read_file')),
@@ -245,6 +261,23 @@ async function copyJson(): Promise<void> {
   color: var(--text-secondary);
   margin-top: 2px;
 }
+.step-desc--shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    color-mix(in srgb, var(--van-primary-color) 50%, var(--text-secondary)) 50%,
+    var(--text-secondary) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: step-shimmer 1.8s ease-in-out infinite;
+}
+@keyframes step-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 .step-panel {
   margin-top: 10px;
   font-size: 13px;
@@ -256,6 +289,36 @@ async function copyJson(): Promise<void> {
   margin-bottom: 8px;
   max-height: 40vh;
   overflow-y: auto;
+}
+.thinking-markdown {
+  white-space: normal;
+  :deep(p) {
+    margin: 0 0 6px;
+    &:last-child { margin-bottom: 0; }
+  }
+  :deep(strong) {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  :deep(ul), :deep(ol) {
+    margin: 4px 0;
+    padding-left: 18px;
+  }
+  :deep(li) {
+    margin: 2px 0;
+  }
+  :deep(h1), :deep(h2), :deep(h3) {
+    margin: 10px 0 4px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  :deep(code) {
+    background: var(--bg-secondary);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
 }
 .tool-call-card {
   display: flex;

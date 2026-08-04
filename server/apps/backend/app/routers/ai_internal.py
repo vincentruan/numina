@@ -953,6 +953,7 @@ def internal_persist_report(
     from apps.backend.app.services.ai_result_parser import (
         _contains_markdown_table,
         _validate_json,
+        _validate_report_data_items,
     )
     from apps.backend.app.services.ai_result_writer import write_report_results
 
@@ -963,6 +964,7 @@ def internal_persist_report(
         isinstance(report_json, dict)
         and _validate_json(report_json, "report")
         and not _contains_markdown_table(report_json)
+        and _validate_report_data_items(report_json)
     ):
         logger.warning(
             "[internal_persist_report] rejected unvalidated report_json family=%s",

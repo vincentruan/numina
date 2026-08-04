@@ -284,7 +284,7 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
 | `indicators[].score` | integer(1-5) | 1=很差 2=较差 3=一般 4=良好 5=优秀 |
 | `indicators[].narrative` | string(150-350字) | markdown 分析文本，**禁止表格**，用 `**加粗**` 突出关键结论 + `-` 无序列表 |
 | `indicators[].suggestions` | array[string] | 2-3条建议，每条15-40字，使用观察性语言 |
-| `indicators[].data` | object | 可选的数据可视化字段，推荐格式 `{"items": [{"key", "zh", "en", "value"}]}`；其中 `zh`/`en` 为多语言 label，前端按用户语言选择显示 |
+| `indicators[].data` | object | 可选的数据可视化字段。**必须**使用 `items` 数组格式：`{"items": [{"key", "zh", "en", "value"}]}`；其中 `zh`/`en` 为多语言 label，前端按用户语言选择显示。**禁止**将数组数据（如资产配置列表、负债明细等）放入 `narrative` 字段，必须放入 `data.items` |
 
 ## 常见指标 key
 
@@ -297,6 +297,25 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
 | 流动性分析 | `liquidity_analysis` |
 | 风险评估 | `risk_assessment` |
 | 增长潜力 | `growth_potential` |
+
+## 常见 data.items key（使用以下 key 以确保前端多语言标签正确显示）
+
+| 中文 | key | en |
+|------|-----|-----|
+| 总资产 | `total_assets` | Total Assets |
+| 总负债 | `total_liabilities` | Total Liabilities |
+| 净资产 | `net_worth` | Net Worth |
+| 负债率 | `liability_ratio` | Liability Ratio |
+| 房贷 | `mortgage_amount` | Mortgage |
+| 消费贷 | `consumer_loan_amount` | Consumer Loan |
+| 信用卡欠款 | `credit_card_debt` | Credit Card Debt |
+| 月供 | `monthly_payment` | Monthly Payment |
+| 流动性资产 | `liquid_assets` | Liquid Assets |
+| 金融资产 | `financial_assets` | Financial Assets |
+| 房产 | `real_estate` | Real Estate |
+| 应急月数 | `emergency_months` | Emergency Months |
+| 集中度 | `concentration_ratio` | Concentration Ratio |
+| 月供收入比 | `monthly_payment_ratio` | Monthly Payment Ratio |
 
 ## 边界限制
 
@@ -317,6 +336,7 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
 - **必须声明 filename**：`write_file` 成功只返回 `"OK"`，不返回路径，故必须在响应文本中 `WRITE_FILE: <filename>` 声明
 - **最终只输出 JSON**：步骤3的 `read_file` 之后，最终响应只能是 ```json 代码块
 - **narrative 禁止表格**：使用 `**加粗**` + `-` 无序列表，发现自己在写 `|` 分隔符立即停止转换
+- **data 必须用 items 数组**：所有数值型数据（资产配置、负债明细、流动性指标等）必须放入 `data.items` 数组，每项格式 `{"key": "snake_case_key", "zh": "中文", "en": "English", "value": 数字}`。禁止在 `narrative` 中嵌入 JSON 数组字符串
 - **所有用户可见文本必须用用户设定的语言**：`label`、`narrative`、`suggestions`、`summary` 的文本语言必须与用户语言设置一致（见 trigger message 末尾的语言指令）。`key` 字段始终用英文 snake_case
 - 严禁投资建议，使用观察性语言
 
