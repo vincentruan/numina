@@ -18,19 +18,13 @@ def require_ai_enabled(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> User:
-    """要求当前家庭已开启 AI 功能（有激活的 AIProviderConfig）。"""
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
-
-    active_config = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-        )
+    """要求当前家庭已开启 AI 功能（Family.ai_enabled 开关）。"""
+    family = (
+        db.query(Family)
+        .filter(Family.id == current_user.family_id)
         .first()
     )
-    if not active_config:
+    if not family or not family.ai_enabled:
         raise AppError(ErrorCode.AI_NOT_ENABLED)
     return current_user
 

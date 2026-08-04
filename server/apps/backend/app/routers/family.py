@@ -318,20 +318,18 @@ def update_family_settings(
             family.report_auto_generate_enabled = body.report_auto_generate_enabled
             db.commit()
 
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
-
-    ai_enabled = (
-        db.query(AIProviderConfig)
-        .filter_by(family_id=user.family_id, is_active=True)
-        .first()
-        is not None
-    )
+    # Handle ai_enabled on Family model
+    if body.ai_enabled is not None:
+        family = db.query(Family).filter_by(id=user.family_id).first()
+        if family:
+            family.ai_enabled = body.ai_enabled
+            db.commit()
 
     family_row = db.query(Family).filter_by(id=user.family_id).first()
 
     return FamilySettingsResponse(
         auto_approve_hours=config.auto_approve_hours,
-        ai_enabled=ai_enabled,
+        ai_enabled=family_row.ai_enabled if family_row else False,
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
         education_reward_enabled=config.education_reward_enabled,
@@ -352,20 +350,11 @@ def get_family_settings(
         db.commit()
         db.refresh(config)
 
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
-
-    ai_enabled = (
-        db.query(AIProviderConfig)
-        .filter_by(family_id=user.family_id, is_active=True)
-        .first()
-        is not None
-    )
-
     family_row = db.query(Family).filter_by(id=user.family_id).first()
 
     return FamilySettingsResponse(
         auto_approve_hours=config.auto_approve_hours,
-        ai_enabled=ai_enabled,
+        ai_enabled=family_row.ai_enabled if family_row else False,
         coin_copper_to_silver=config.coin_copper_to_silver,
         coin_silver_to_gold=config.coin_silver_to_gold,
         education_reward_enabled=config.education_reward_enabled,

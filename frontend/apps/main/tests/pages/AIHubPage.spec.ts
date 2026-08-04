@@ -15,11 +15,10 @@ const { push, loadAgents, aiStoreMock } = vi.hoisted(() => ({
   push: vi.fn(),
   loadAgents: vi.fn(() => Promise.resolve()),
   aiStoreMock: {
-    aiEnabled: true,
     draftQuery: '',
     deepThinkEnabled: false,
     webSearchEnabled: false,
-    fetchConfig: vi.fn(() => Promise.resolve()),
+    fetchConfigs: vi.fn(() => Promise.resolve()),
   },
 }))
 
@@ -69,6 +68,12 @@ vi.mock('../../src/composables/useAIReportStream', () => ({
 
 vi.mock('../../src/stores/ai', () => ({
   useAIStore: vi.fn(() => aiStoreMock),
+}))
+
+vi.mock('../../src/stores/family', () => ({
+  useFamilyStore: vi.fn(() => ({
+    aiEnabled: true,
+  })),
 }))
 
 vi.mock('../../src/stores/auth', () => ({

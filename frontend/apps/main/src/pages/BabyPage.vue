@@ -65,7 +65,7 @@
           <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')" />
           <template v-if="selectedChildId">
             <van-cell
-              v-if="aiStore.aiEnabled"
+              v-if="familyStore.aiEnabled"
               :title="t('baby.literacyReportEntry')"
               :value="reportStatusLabel(String(selectedChildId))"
               is-link
@@ -581,7 +581,6 @@ import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 import IIcon from '@/components/IIcon.vue'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
-import { useAIStore } from '@/stores/ai'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { parseApiDate } from '@/utils/format'
 
@@ -590,7 +589,6 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
 const blindBoxStore = useBlindBoxStore()
-const aiStore = useAIStore()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
@@ -630,7 +628,7 @@ const allChores = ref<ChoreInstance[]>([])
 const reportStatusMap = ref<Record<string, ReportStatus>>({})
 
 async function loadReportStatuses() {
-  if (!aiStore.aiEnabled || !childMembers.value.length) return
+  if (!familyStore.aiEnabled || !childMembers.value.length) return
   for (const child of childMembers.value) {
     try {
       const { data } = await getReportStatus(String(child.id))

@@ -41,8 +41,8 @@ vi.mock('@/stores/wish', () => ({
   useWishStore: () => ({ fetchWishes: fetchWishesMock }),
 }))
 
-vi.mock('@/stores/ai', () => ({
-  useAIStore: () => ({
+vi.mock('@/stores/family', () => ({
+  useFamilyStore: () => ({
     aiEnabled: true,
   }),
 }))

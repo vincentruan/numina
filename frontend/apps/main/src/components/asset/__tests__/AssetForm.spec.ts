@@ -31,8 +31,8 @@ vi.mock('@/api/ai', () => ({
 }))
 
 // Mock stores
-vi.mock('@/stores/ai', () => ({
-  useAIStore: () => ({
+vi.mock('@/stores/family', () => ({
+  useFamilyStore: () => ({
     aiEnabled: false,
   }),
 }))

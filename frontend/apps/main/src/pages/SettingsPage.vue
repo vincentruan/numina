@@ -402,7 +402,7 @@ onActivated(async () => {
   }
 })
 
-// AI toggle
+// AI toggle — reads from family-level flag (familyStore.aiEnabled)
 const togglingAI = ref(false)
 // A config is "ready" when it has a model ID and an API key configured.
 // `ai_api_key_masked` is non-null only when the backend has stored an encrypted key.
@@ -411,28 +411,35 @@ const hasAnyModel = computed(() =>
     (c) => (c.model_id || c.model_2_id || c.model_3_id) && c.ai_api_key_masked,
   ),
 )
-const aiEnabled = computed(() => aiStore.configs.some((c) => c.is_active))
+const aiEnabled = computed(() => familyStore.aiEnabled)
 
 async function onToggleAI(val: boolean) {
   if (!hasAnyModel.value) {
     showToast(t('settings.enableAINoModel'))
     return
   }
-  const target = aiStore.configs.find(
-    (c) => (c.model_id || c.model_2_id || c.model_3_id) && c.ai_api_key_masked,
-  )
-  if (!target) return
   togglingAI.value = true
   try {
-    await aiApi.updateProviderConfig(target.id, { is_active: val })
-    await aiStore.fetchConfigs()
+    // 1. Update family-level master switch
+    await updateFamilySettings({ aiEnabled: val })
+    familyStore.aiEnabled = val
+
+    // 2. Also activate/deactivate first valid provider so routing works
+    const target = aiStore.configs.find(
+      (c) => (c.model_id || c.model_2_id || c.model_3_id) && c.ai_api_key_masked,
+    )
+    if (target) {
+      await aiApi.updateProviderConfig(target.id, { is_active: val })
+      await aiStore.fetchConfigs()
+    }
+
     showToast({
       message: val ? t('toast.aiEnabled') : t('toast.aiDisabled'),
       icon: 'none',
     })
     // After enabling, run a lightweight connection test so the user gets
     // immediate feedback if the model is unreachable (invalid key, outage…).
-    if (val) {
+    if (val && target) {
       try {
         const result = await aiApi.testProviderConfig(target.id)
         if (!result.data.connected) {

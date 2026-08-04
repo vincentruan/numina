@@ -642,20 +642,16 @@ def internal_get_enabled_families(
     """返回所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。
 
     注意：verify_agent_token 要求 X-Family-Id header，定时任务调用时传入任意有效 family_id 即可。
-    实际返回所有有激活 AIProviderConfig 的家庭，不受 family_id 过滤。
+    实际返回所有 Family.ai_enabled=true 的家庭，不受 family_id 过滤。
     """
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
+    from apps.backend.app.models.family import Family
 
     rows = (
-        db.query(AIProviderConfig.family_id)
-        .filter(
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-        )
-        .distinct()
+        db.query(Family.id)
+        .filter(Family.ai_enabled.is_(True))
         .all()
     )
-    return [r.family_id for r in rows]
+    return [r.id for r in rows]
 
 
 @router.get("/skill-registry/{family_id}")
@@ -1078,15 +1074,12 @@ async def auto_generate_reports(
 
     条件：
     1. Family.report_auto_generate_enabled == True
-    2. 有激活的 AIProviderConfig（AI 功能已开启）
+    2. Family.ai_enabled=true（AI 功能已开启）
     3. 最近 1 小时内没有已完成的报告
     4. 没有正在运行中的 AI 任务
 
     对每个符合条件的家庭，创建 session + task 并触发 agent 生成。
     """
-    from apps.backend.app.models.ai_provider_config import (
-        AIProviderConfig,
-    )
     from apps.backend.app.models.ai_report import AIReport
     from apps.backend.app.services.agent_client import AgentClient
     from apps.backend.app.services.ai_task_service import AITaskService
@@ -1109,14 +1102,15 @@ async def auto_generate_reports(
     if not family_ids:
         return {"triggered": 0, "skipped": 0, "message": "没有开启自动生成的家庭"}
 
-    # 2. 过滤出有激活 AIProviderConfig 的家庭
+    # 2. 过滤出 Family.ai_enabled=true 的家庭
+    from apps.backend.app.models.family import Family
+
     ai_enabled_ids = set(
-        r.family_id
-        for r in db.query(AIProviderConfig.family_id)
+        r.id
+        for r in db.query(Family.id)
         .filter(
-            AIProviderConfig.family_id.in_(family_ids),
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
+            Family.id.in_(family_ids),
+            Family.ai_enabled.is_(True),
         )
         .all()
     )

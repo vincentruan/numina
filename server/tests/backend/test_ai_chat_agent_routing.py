@@ -9,26 +9,19 @@ selected, so _resolve_skills was unreachable from production traffic.
 
 import pytest
 
-from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.models.user import User
 
 
 @pytest.fixture
 def ai_enabled(db, auth_headers):
-    """require_ai_enabled gates the chat endpoint — seed a provider config so
-    the family registers as AI-enabled."""
+    """require_ai_enabled gates the chat endpoint — enable the family-level
+    AI switch so the family registers as AI-enabled."""
     user = db.query(User).filter_by(username="testuser").first()
     assert user is not None
-    db.add(
-        AIProviderConfig(
-            family_id=user.family_id,
-            name="测试配置",
-            provider="anthropic",
-            api_key_encrypted="test_encrypted_key",
-            model_id="claude-3-5-sonnet-20241022",
-            is_active=True,
-        )
-    )
+    from apps.backend.app.models.family import Family
+    family = db.query(Family).filter_by(id=user.family_id).first()
+    assert family is not None
+    family.ai_enabled = True
     db.commit()
 
 

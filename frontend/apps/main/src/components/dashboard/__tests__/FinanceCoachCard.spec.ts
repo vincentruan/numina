@@ -27,8 +27,8 @@ vi.mock('vant', () => ({
   showFailToast: vi.fn(),
 }))
 
-vi.mock('@/stores/ai', () => ({
-  useAIStore: () => ({
+vi.mock('@/stores/family', () => ({
+  useFamilyStore: () => ({
     aiEnabled: true,
   }),
 }))

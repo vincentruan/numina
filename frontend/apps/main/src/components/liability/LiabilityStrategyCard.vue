@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
-import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import type { Liability } from '@/types'
 
 const props = defineProps<{ liabilities: Liability[] }>()
@@ -12,7 +12,7 @@ const emit = defineEmits<{ (e: 'adopt', strategy: 'avalanche' | 'snowball' | nul
 const router = useRouter()
 const { t } = useI18n()
 const { format } = useCurrency()
-const aiStore = useAIStore()
+const familyStore = useFamilyStore()
 
 // spec §6.2: only render when ≥2 active liabilities.
 const activeLiabilities = computed(() => (props.liabilities || []).filter((l) => l.is_active))
@@ -88,7 +88,7 @@ function resetStrategy() {
 }
 
 function askAi() {
-  if (!aiStore.aiEnabled) return
+  if (!familyStore.aiEnabled) return
   router.push({ name: 'AIChat', query: { source: 'liability_strategy' } })
 }
 </script>
@@ -142,13 +142,13 @@ function askAi() {
         <van-button
           size="small"
           plain
-          :disabled="!aiStore.aiEnabled"
+          :disabled="!familyStore.aiEnabled"
           @click="askAi"
         >
           {{ t('liability.strategy.askAi') }}
         </van-button>
         <span
-          v-if="!aiStore.aiEnabled"
+          v-if="!familyStore.aiEnabled"
           class="strat-ai-disabled-hint"
           role="note"
           aria-label="AI 助手未启用"

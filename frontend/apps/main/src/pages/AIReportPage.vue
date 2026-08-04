@@ -196,6 +196,7 @@ import { marked } from 'marked'
 import { parseApiDate } from '@/utils/format'
 import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import { getAIReport, getAIReportMarkdown, getAITask } from '@/api/ai'
 import type { AIReport, AIReportIndicator } from '@/types'
@@ -215,6 +216,7 @@ const { t, locale } = useI18n()
 const { formatIn } = useCurrency()
 
 const aiStore = useAIStore()
+const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 
 const currentReport = ref<AIReport | null>(null)
@@ -404,7 +406,7 @@ function formatDate(iso: string | null): string {
 }
 
 async function onGenerate(force = false) {
-  if (!aiStore.config?.ai_enabled) {
+  if (!familyStore.aiEnabled) {
     showToast(t('toast.aiNotEnabled'))
     return
   }
@@ -497,7 +499,6 @@ async function onExportPdf() {
 }
 
 onMounted(async () => {
-  await aiStore.fetchConfig()
   await loadExistingReport()
 
   // If a report task is still running (possibly from a previous session or

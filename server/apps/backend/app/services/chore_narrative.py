@@ -22,23 +22,8 @@ def _fallback_narrative(chore_name: str, coins: int, multiplier: float = 1.0) ->
 
 
 def _is_ai_enabled(family: Family) -> bool:
-    """Check if the family has an active AI provider config."""
-    from sqlalchemy.orm import object_session
-
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
-
-    db = object_session(family)
-    if db is None:
-        return False
-    return (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == family.id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-        )
-        .first()
-    ) is not None
+    """Check if the family has AI enabled (family-level toggle)."""
+    return bool(family.ai_enabled)
 
 
 async def generate_narrative(

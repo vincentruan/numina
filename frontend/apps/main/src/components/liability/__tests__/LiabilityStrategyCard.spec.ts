@@ -28,8 +28,8 @@ vi.mock('vant', () => ({
 }))
 
 const aiEnabledMock = { value: true }
-vi.mock('@/stores/ai', () => ({
-  useAIStore: () => ({
+vi.mock('@/stores/family', () => ({
+  useFamilyStore: () => ({
     aiEnabled: computed(() => aiEnabledMock.value),
   }),
 }))
