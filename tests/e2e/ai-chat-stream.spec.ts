@@ -116,7 +116,7 @@ test.describe('DeerFlow parity: streaming state', () => {
 
     // Filter out network errors
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors during streaming: ${realErrors.join(', ')}`).toHaveLength(0)
   })

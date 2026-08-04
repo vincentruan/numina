@@ -188,7 +188,7 @@ test.describe('DeerFlow parity: error states', () => {
 
     // Filter out network errors (standard pattern)
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
 
     // Should not have critical JS errors

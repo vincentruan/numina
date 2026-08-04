@@ -147,7 +147,6 @@ from apps.backend.app.routers import (
     notification_channels as notification_channels_router,
 )
 from apps.backend.app.routers import notification_config as notification_config_router
-from apps.backend.app.routers import notifications as notifications_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import user_config as user_config_router
@@ -476,7 +475,6 @@ app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")
 app.include_router(child_wishes_router.router, prefix="/api/v1")
 app.include_router(milestones_router.router, prefix="/api/v1")
-app.include_router(notifications_router.router, prefix="/api/v1")
 app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(blind_box_router.router, prefix="/api/v1")

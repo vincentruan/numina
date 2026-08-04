@@ -32,7 +32,7 @@ test.describe('AI hub and features', () => {
 
     // No critical JS errors (filter network errors)
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -63,7 +63,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByText('家庭资产体检')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai/report: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -94,7 +94,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByText('老化预警')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai/alerts: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -113,7 +113,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByRole('button', { name: /扫描闲置/ })).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai/disposal: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -132,7 +132,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByText('负债优化')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai/liability: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -151,7 +151,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByText('配置漂移')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai/allocation: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -170,7 +170,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByText('新对话')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai/chat: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -189,7 +189,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByRole('button', { name: /添加供应商|AI 服务商/ })).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /settings/ai: ${realErrors.join(', ')}`).toHaveLength(0)
   })
@@ -219,7 +219,7 @@ test.describe('AI hub and features', () => {
     await expect(page.getByText('AI 智能助手')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors on /ai with empty family: ${realErrors.join(', ')}`).toHaveLength(0)
   })

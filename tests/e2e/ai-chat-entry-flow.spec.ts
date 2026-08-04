@@ -37,7 +37,7 @@ test.describe('AI chat entry flow', () => {
     await streamRequest
 
     const realErrors = consoleErrors.filter(
-      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
+      (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError')
     )
     expect(realErrors, `Console errors: ${realErrors.join(', ')}`).toHaveLength(0)
   })

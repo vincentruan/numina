@@ -3097,7 +3097,6 @@ export default {
     timeoutShort: '请求超时',
     connecting: '正在连接...',
     connectionFailed: '连接失败',
-    wsConnectionFailed: 'WebSocket 连接失败',
     connectionInterrupted: '连接中断',
     authFailed: '鉴权失败',
   },
