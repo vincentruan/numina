@@ -25,6 +25,7 @@ dependencies = [
     "altcha>=1.0.0",
     "pymupdf>=1.28.0",
     "openpyxl>=3.1.5",
+    "jiwer>=4.0.0",
 ]
 
 [project.optional-dependencies]
