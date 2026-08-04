@@ -428,6 +428,48 @@ async def _set_report_title(thread_id: str, family_id: int) -> None:
         logger.warning("[_set_report_title] Failed for thread %s: %s", thread_id, e)
 
 
+async def _set_import_parse_title(thread_id: str, family_id: int) -> None:
+    """Set a fixed-format title on the import-parse session."""
+    try:
+        from datetime import UTC, datetime
+
+        from apps.agent.services.session_store import AiSessionRepository
+
+        now = datetime.now(UTC)
+        title = f"文件导入解析 {now.strftime('%Y%m%d %H%M')}"
+        repo = AiSessionRepository(str(family_id))
+        await repo.update_summary(
+            session_id=thread_id,
+            family_id=str(family_id),
+            summary=None,
+            title=title,
+        )
+        logger.info("[_set_import_parse_title] Set title '%s' for thread %s", title, thread_id)
+    except Exception as e:
+        logger.warning("[_set_import_parse_title] Failed for thread %s: %s", thread_id, e)
+
+
+async def _set_literacy_report_title(thread_id: str, family_id: int) -> None:
+    """Set a fixed-format title on the literacy weekly report session."""
+    try:
+        from datetime import UTC, datetime
+
+        from apps.agent.services.session_store import AiSessionRepository
+
+        now = datetime.now(UTC)
+        title = f"启蒙周报 {now.strftime('%Y%m%d %H%M')}"
+        repo = AiSessionRepository(str(family_id))
+        await repo.update_summary(
+            session_id=thread_id,
+            family_id=str(family_id),
+            summary=None,
+            title=title,
+        )
+        logger.info("[_set_literacy_report_title] Set title '%s' for thread %s", title, thread_id)
+    except Exception as e:
+        logger.warning("[_set_literacy_report_title] Failed for thread %s: %s", thread_id, e)
+
+
 async def _run_asset_report_pipeline(
     *,
     bridge: StreamBridge,
@@ -1086,8 +1128,11 @@ async def _run_import_parse_agent(
             )
         )
 
-        # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow
-        # pattern). No suggestions/title (parse is not a chat).
+        # 11. Set import-parse session title (fixed format with timestamp).
+        if completion_status == "complete":
+            asyncio.create_task(_set_import_parse_title(thread_id, family_id))
+
+        # 12. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
         end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:
             end_payload["usage"] = cumulative_usage
@@ -3094,6 +3139,10 @@ async def _run_literacy_weekly_report_agent(
                 duration_ms=int((time.monotonic() - t_start) * 1000),
             )
         )
+
+        # Set literacy weekly report session title (fixed format with timestamp).
+        if completion_status == "complete":
+            asyncio.create_task(_set_literacy_report_title(thread_id, family_id))
 
         end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:
