@@ -38,6 +38,7 @@ from apps.agent.services.goal_store import (
     write_thread_goal,
 )
 from apps.agent.services.runtime.lifespan import get_run_manager
+from apps.agent.services.runtime.run_extras import _is_fallback_title
 from apps.agent.services.session_store import AiSessionRepository
 
 
@@ -707,12 +708,14 @@ async def patch_thread(
     repo = AiSessionRepository(x_family_id)
     # Handle metadata-based title updates (legacy path)
     if "title" in body.metadata:
-        await repo.update_summary(
-            session_id=thread_id,
-            family_id=x_family_id,
-            summary=None,
-            title=body.metadata["title"],
-        )
+        new_title = body.metadata["title"]
+        if new_title and not _is_fallback_title(str(new_title)):
+            await repo.update_summary(
+                session_id=thread_id,
+                family_id=x_family_id,
+                summary=None,
+                title=str(new_title).strip()[:256],
+            )
     # Handle top-level title/is_pinned updates
     if body.title is not None or body.is_pinned is not None:
         await repo.update_session(
@@ -949,12 +952,12 @@ async def update_thread_state(
 
     if body.values and "title" in body.values:
         new_title = body.values["title"]
-        if new_title:
+        if new_title and not _is_fallback_title(str(new_title)):
             await repo.update_summary(
                 session_id=thread_id,
                 family_id=x_family_id,
                 summary=None,
-                title=new_title,
+                title=str(new_title).strip()[:256],
             )
 
     return ThreadStateResponse(

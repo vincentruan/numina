@@ -183,3 +183,28 @@ def test_is_fallback_title_detects_truncated_context_json():
     # Real titles and LLM JSON without context keys must NOT be flagged.
     assert _is_fallback_title("家庭资产总览分析") is False
     assert _is_fallback_title('{"summary": "资产配置建议"}') is False
+
+
+def test_is_fallback_title_detects_thinking_block_repr():
+    """A Python list-literal repr of structured model output (thinking blocks)
+    must be detected as a fallback title.
+
+    Regression: when the model returns content as a list of dicts
+    (e.g. Claude extended thinking, Qwen3 thinking blocks), calling ``str()``
+    on ``response.content`` produces a Python repr like
+    ``[{'signature': '', 'thinking': '用户希望为一段对话生成一个简洁的标题...'}]``
+    which is NOT a real summary. The old check only detected ``[SKILL:`` prefix
+    and JSON objects — list-literal repr slipped through.
+    """
+    # Full thinking block repr (Python list of dicts)
+    thinking_title = "[{'signature': '', 'thinking': '用户希望为一段对话生成一个简洁的标题。\\n对话内容：用户问了关于家庭资产的问题'}]"
+    assert _is_fallback_title(thinking_title) is True
+    # Truncated thinking block repr
+    truncated_thinking = "[{'signature': '', 'thinking': '用户希望为一段对话"
+    assert _is_fallback_title(truncated_thinking) is True
+    # Thinking block with 'type' key instead of 'signature'
+    typed_thinking = "[{'type': 'thinking', 'thinking': '生成标题...'}, {'type': 'text', 'text': '家庭资产总览'}]"
+    assert _is_fallback_title(typed_thinking) is True
+    # Real titles must NOT be flagged
+    assert _is_fallback_title("家庭资产总览分析") is False
+    assert _is_fallback_title("保险配置建议") is False

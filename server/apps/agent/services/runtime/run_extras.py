@@ -31,6 +31,45 @@ _SKILL_PROMPT_PREFIX = "[SKILL:"
 _FALLBACK_TITLE_MAX_CHARS = 50
 
 
+def _strip_thinking_from_text(text: str) -> str:
+    """Remove ``<think>...</think>`` blocks from text (reasoning model output)."""
+    import re
+    # Standard <think>...</think> blocks
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
+    # Collapse blank lines left by removal
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _extract_text_from_content_blocks(content: Any) -> str:
+    """Extract only text portions from structured LLM output.
+
+    Models with thinking (Claude extended thinking, Qwen3, etc.) may return
+    ``response.content`` as a list of dicts:
+    ``[{"type": "thinking", "thinking": "..."}, {"type": "text", "text": "..."}]``.
+
+    When ``str()`` is called on such a list, the result is a Python repr like
+    ``[{'signature': '', 'thinking': '...'}]`` which is NOT valid JSON.
+
+    Returns the concatenated text from ``text``/``content`` blocks only.
+    Falls back to ``str(content)`` for plain strings.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict):
+                block_type = block.get("type", "")
+                if block_type == "thinking":
+                    continue  # skip thinking blocks entirely
+                text_val = block.get("text") or block.get("content")
+                if isinstance(text_val, str) and text_val.strip():
+                    parts.append(text_val.strip())
+        return " ".join(parts) if parts else str(content)
+    return str(content)
+
+
 async def generate_suggestions(ai_response: str, user_message: str, ai_config: dict[str, Any]) -> list[str]:
     """Generate 3 follow-up question suggestions based on the conversation."""
     if not ai_response or len(ai_response.strip()) < 20:
@@ -40,6 +79,12 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
         llm = _create_lightweight_llm(ai_config, temperature=0.7, max_tokens=200)
         from langchain_core.messages import HumanMessage, SystemMessage
 
+        # Strip thinking blocks from the AI response so the suggestion LLM
+        # doesn't get confused by internal reasoning content.
+        cleaned_response = _strip_thinking_from_text(ai_response)
+        if len(cleaned_response.strip()) < 20:
+            return []
+
         system = SystemMessage(content=(
             "You are a helpful assistant that suggests 3 concise follow-up questions "
             "the user might ask next, based on the AI's response. "
@@ -48,12 +93,14 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
         ))
         human = HumanMessage(content=(
             f"User asked: {user_message}\n\n"
-            f"AI responded: {ai_response[:500]}\n\n"
+            f"AI responded: {cleaned_response[:500]}\n\n"
             "Suggest 3 follow-up questions as a JSON array."
         ))
 
         response = await llm.ainvoke([system, human])
-        content = response.content.strip()
+        # Handle structured output (list of dicts with thinking blocks)
+        raw_content = _extract_text_from_content_blocks(response.content)
+        content = raw_content.strip()
         # Strip markdown code fences if present
         if content.startswith("```"):
             content = content.split("\n", 1)[-1] if "\n" in content else content[3:]
@@ -75,11 +122,20 @@ def _is_fallback_title(title: str | None) -> bool:
     message (``_build_prompt`` output) — either the legacy ``[SKILL:chat]``-prefixed
     form or the current bare-JSON form (``{"free_text": ..., "family_id": ...}``).
     These are NOT real summaries and must be replaced by an LLM-generated title.
+
+    Also detects Python list-literal repr of structured LLM output (thinking
+    blocks): ``[{'signature': '', 'thinking': '...'}]``. This leaks when the
+    model returns content as a list of dicts and ``str()`` is called on it.
     """
     if not title or not str(title).strip():
         return True
     t = str(title).strip()
     if t == "New Chat" or t.startswith(_SKILL_PROMPT_PREFIX):
+        return True
+    # Python list-literal repr of structured model output (thinking blocks).
+    # e.g. ``[{'signature': '', 'thinking': '用户希望为一段对话生成一个简洁的标题...'}]``
+    # This is NOT a real summary — it's the raw repr of a list[dict] response.content.
+    if t.startswith("[{") and ("thinking" in t or "signature" in t or "type" in t):
         return True
     # Bare-JSON context wrapper (current _build_prompt output). Detect by parsing;
     # a real summary is never a JSON object of context fields.
@@ -111,9 +167,35 @@ def _text_fallback_title(text: str) -> str:
 
 
 def _parse_title_content(content: Any) -> str:
-    """Normalise raw LLM output into a clean title string."""
-    text = content if isinstance(content, str) else str(content)
-    title = text.strip().strip('`"\'').strip()
+    """Normalise raw LLM output into a clean title string.
+
+    Handles three forms:
+    - Plain string (most models).
+    - List of content-block dicts (Anthropic Claude, some OpenAI-compatible
+      models with thinking): extract only ``text`` blocks, skip ``thinking``.
+    - Fallback ``str()`` for anything else.
+    """
+    if isinstance(content, list):
+        # Structured output: list of content-block dicts (e.g. from Claude
+        # with extended thinking, or Qwen3 with thinking blocks).
+        # Extract only the text portions — thinking blocks are NOT titles.
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict):
+                # Standard content block: {"type": "text", "text": "..."}
+                text_val = block.get("text")
+                if isinstance(text_val, str) and text_val.strip():
+                    parts.append(text_val.strip())
+                # Legacy/thinking block: {"type": "thinking", "thinking": "..."}
+                # or {"type": "text", "content": "..."}
+                elif not text_val:
+                    content_val = block.get("content")
+                    if isinstance(content_val, str) and content_val.strip():
+                        parts.append(content_val.strip())
+        title = " ".join(parts).strip().strip('`"\'').strip()
+    else:
+        text = content if isinstance(content, str) else str(content)
+        title = text.strip().strip('`"\'').strip()
     if title.startswith("```"):
         title = title.split("\n", 1)[-1] if "\n" in title else title[3:]
         if title.endswith("```"):
@@ -196,7 +278,7 @@ async def _generate_title_via_llm(
         ))
         human = HumanMessage(content=(
             f"User: {user_message[:300]}\n\n"
-            f"Assistant: {ai_response[:300]}\n\n"
+            f"Assistant: {_strip_thinking_from_text(ai_response)[:300]}\n\n"
             "Title:"
         ))
 
@@ -232,7 +314,7 @@ async def sync_title_from_checkpoint(
     ai_config: dict[str, Any] | None = None,
     user_message: str = "",
     ai_response: str = "",
-) -> None:
+) -> str | None:
     """Persist a proper conversation title into the ``ai_chat_sessions`` row.
 
     DeerFlow's ``TitleMiddleware`` writes to the checkpoint's
@@ -251,6 +333,8 @@ async def sync_title_from_checkpoint(
 
     Best-effort: any failure is logged and swallowed. Only writes when the
     session is still untitled or the existing title is a recognisable fallback.
+
+    Returns the title that was persisted, or ``None`` when no title was written.
     """
     try:
         from apps.agent.services.session_store import AiSessionRepository
@@ -261,22 +345,23 @@ async def sync_title_from_checkpoint(
         session = await repo.get_session(thread_id)
         db_title = session.get("title") if session else None
         if db_title and not _is_fallback_title(db_title):
-            return
+            return db_title
 
         # 2. Prefer a proper title from the checkpoint (async middleware path).
         ckpt_title = await _read_checkpoint_title(thread_id)
         if ckpt_title and not _is_fallback_title(ckpt_title):
+            title = str(ckpt_title).strip()
             await repo.update_summary(
                 session_id=thread_id,
                 family_id=family_id,
                 summary=None,
-                title=str(ckpt_title).strip(),
+                title=title,
             )
-            logger.info("[run_extras] Synced title '%s' for thread %s", ckpt_title, thread_id)
-            return
+            logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
+            return title
 
         # 3. The sync stream() path only wrote a fallback - generate a real title.
-        title: str | None = None
+        title = None
         if ai_config and user_message:
             title = await _generate_title_via_llm(user_message, ai_response, ai_config)
 
@@ -292,5 +377,8 @@ async def sync_title_from_checkpoint(
                 title=title,
             )
             logger.info("[run_extras] Generated title '%s' for thread %s", title, thread_id)
+            return title
+        return None
     except Exception as e:
         logger.warning("[run_extras] Failed to sync title for thread %s: %s", thread_id, e)
+        return None

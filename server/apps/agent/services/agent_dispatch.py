@@ -30,6 +30,7 @@ from apps.agent.services.message_classifier import (
 )
 from apps.agent.services.pii_redactor import pii_redactor
 from apps.agent.services.policy_guard import policy_guard
+from apps.agent.services.runtime.run_extras import _is_fallback_title
 from apps.agent.services.session_journal import session_journal
 from apps.agent.services.stream_events import EventStreamBuilder
 from packages.core import get_path_manager
@@ -955,13 +956,16 @@ async def _persist_session_metadata(
 
     title: str | None = None
     if raw_title:
-        redacted_title, _ = pii_redactor.redact_text(raw_title)
-        # Strip HTML-style tags so a future v-html consumer can't execute
-        # markup smuggled in by the LLM. Plan §Risks row 6 — the existing
-        # frontend uses mustache (safe) but defence-in-depth keeps the DB clean.
-        redacted_title = re.sub(r"<[^>]+>", "", redacted_title)
-        if redacted_title.strip():
-            title = redacted_title.strip()[:50]
+        if _is_fallback_title(raw_title):
+            raw_title = None
+        else:
+            redacted_title, _ = pii_redactor.redact_text(raw_title)
+            # Strip HTML-style tags so a future v-html consumer can't execute
+            # markup smuggled in by the LLM. Plan §Risks row 6 — the existing
+            # frontend uses mustache (safe) but defence-in-depth keeps the DB clean.
+            redacted_title = re.sub(r"<[^>]+>", "", redacted_title)
+            if redacted_title.strip():
+                title = redacted_title.strip()[:50]
     if not title:
         try:
             title = await _build_fallback_title(family_id, agent_name, user_id)
