@@ -30,7 +30,7 @@ export function createManifesto(req: CreateManifestoRequest) {
 }
 
 export function getCurrentManifesto() {
-  return http.get<Manifesto>('/family/manifesto', { _silentErrorCodes: ['MANIFESTO_NOT_FOUND'] } as any)
+  return http.get<Manifesto>('/family/manifesto', { _silentErrorCodes: ['MANIFESTO_NOT_FOUND'] })
 }
 
 export function getUnsignedCheck() {
@@ -54,7 +54,9 @@ export function submitFeedback(content: string) {
 }
 
 export function getFeedbackList() {
-  return http.get<ManifestoFeedback[]>('/family/manifesto/feedback')
+  return http.get<ManifestoFeedback[]>('/family/manifesto/feedback', {
+    _silentErrorCodes: ['MANIFESTO_NOT_FOUND'],
+  })
 }
 
 export function getDashboardSummary() {

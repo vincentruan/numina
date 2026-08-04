@@ -18,6 +18,15 @@ import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
 
+// Extend AxiosRequestConfig to support silent error code suppression.
+// When a request's error code is in this list, the global interceptor skips the toast
+// so the caller can handle it locally (e.g. empty state instead of error).
+declare module 'axios' {
+  interface AxiosRequestConfig<D = any> {
+    _silentErrorCodes?: string[]
+  }
+}
+
 const MAX_RETRIES = 2
 const RETRY_BASE_DELAY_MS = 800
 
@@ -42,7 +51,7 @@ interface ApiEnvelope<T = unknown> {
   details?: Array<{ field: string; code: string; msg: string }>
 }
 
-type RetryableConfig = AxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _silentErrorCodes?: string[] }
+type RetryableConfig = AxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
 
 const http = axios.create({
   baseURL: '/api/v1',
