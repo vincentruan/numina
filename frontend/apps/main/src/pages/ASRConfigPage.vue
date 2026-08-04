@@ -107,7 +107,9 @@ function statusClass(cfg: ASRProviderConfig): string {
 }
 
 function providerLabel(provider: string): string {
-  return provider === 'openai' ? 'OpenAI' : 'OpenAI Compatible'
+  if (provider === 'openai') return 'OpenAI'
+  if (provider === 'siliconflow') return 'SiliconFlow'
+  return 'OpenAI Compatible'
 }
 
 function diffTitle(op: ASRDiffOp): string {

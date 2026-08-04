@@ -2,7 +2,7 @@
 /**
  * ASRProviderFormPage — create/edit ASR provider config
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
@@ -22,7 +22,7 @@ const isEdit = computed(() => !!configId.value)
 
 // Form fields
 const name = ref('')
-const provider = ref<'openai' | 'openai_compatible'>('openai')
+const provider = ref<'openai' | 'openai_compatible' | 'siliconflow'>('openai')
 const apiKey = ref('')
 const baseUrl = ref('')
 const modelId = ref('')
@@ -38,9 +38,26 @@ const existingConfig = ref<ASRProviderConfig | null>(null)
 // Provider picker
 const showProviderPicker = ref(false)
 
+// Auto-fill base URL and model when switching provider
+const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; modelId: string }> = {
+  openai: { baseUrl: 'https://api.openai.com/v1', modelId: 'whisper-1' },
+  siliconflow: { baseUrl: 'https://api.siliconflow.cn/v1', modelId: 'FunAudioLLM/SenseVoiceSmall' },
+}
+
+watch(provider, (newProvider) => {
+  const defaults = PROVIDER_DEFAULTS[newProvider]
+  if (defaults && !configId.value) {
+    baseUrl.value = defaults.baseUrl
+    if (!modelId.value) {
+      modelId.value = defaults.modelId
+    }
+  }
+})
+
 function providerLabel(p: string): string {
   if (p === 'openai') return t('asrConfig.providerOpenAI')
   if (p === 'openai_compatible') return t('asrConfig.providerOpenAICompatible')
+  if (p === 'siliconflow') return t('asrConfig.providerSiliconFlow')
   return p
 }
 
@@ -54,7 +71,7 @@ async function loadExisting() {
     if (cfg) {
       existingConfig.value = cfg
       name.value = cfg.name
-      provider.value = cfg.provider as 'openai' | 'openai_compatible'
+      provider.value = cfg.provider as 'openai' | 'openai_compatible' | 'siliconflow'
       baseUrl.value = cfg.base_url || ''
       modelId.value = cfg.model_id || ''
       model2Id.value = cfg.model_2_id || ''
@@ -150,10 +167,16 @@ onMounted(loadExisting)
                   <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="currentColor" />
                 </svg>
                 <!-- OpenAI Compatible -->
-                <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg v-else-if="provider === 'openai_compatible'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="currentColor" opacity="0.85" />
                   <circle cx="18" cy="6" r="4" fill="currentColor" opacity="0.15" />
                   <path d="M17 5v2M18 4v4M19 5v2" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.6" />
+                </svg>
+                <!-- SiliconFlow -->
+                <svg v-else-if="provider === 'siliconflow'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" fill="currentColor" opacity="0.2" />
+                  <path d="M7 7h10M7 17h10M7 7v10M17 7v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                  <circle cx="12" cy="12" r="2.5" fill="currentColor" />
                 </svg>
               </div>
               <span class="provider-cell-text">{{ providerLabel(provider) }}</span>
@@ -422,6 +445,17 @@ onMounted(loadExisting)
 [data-theme='dark'] .logo--openai_compatible {
   background: rgba(100, 116, 139, 0.15);
   color: #94a3b8;
+}
+
+/* SiliconFlow: indigo */
+.logo--siliconflow {
+  background: color-mix(in srgb, #6366f1 12%, transparent);
+  color: #6366f1;
+}
+
+[data-theme='dark'] .logo--siliconflow {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
 }
 
 .provider-cell-text {

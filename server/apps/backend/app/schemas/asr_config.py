@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
-_VALID_ASR_PROVIDERS = ("openai", "openai_compatible")
+_VALID_ASR_PROVIDERS = ("openai", "openai_compatible", "siliconflow")
 
 
 class ASRConfigResponse(SnowflakeBase):

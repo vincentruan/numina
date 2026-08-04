@@ -45,6 +45,12 @@ _MAX_AUDIO_SIZE = 10 * 1024 * 1024  # 10 MB
 # Circuit breaker: auto-disable after this many consecutive failures
 _CIRCUIT_FAILURE_THRESHOLD = 3
 
+# Default base URLs per provider
+_PROVIDER_DEFAULT_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "siliconflow": "https://api.siliconflow.cn/v1",
+}
+
 # Test audio files and their reference languages
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
 _TEST_AUDIO_FILES = {
@@ -54,6 +60,13 @@ _TEST_AUDIO_FILES = {
 
 # WER threshold: above this percentage, test is considered failed
 _WER_FAIL_THRESHOLD = 50.0
+
+
+def _resolve_base_url(cfg: ASRProviderConfig) -> str | None:
+    """Return the base_url for an ASR config, falling back to provider defaults."""
+    if cfg.base_url:
+        return cfg.base_url
+    return _PROVIDER_DEFAULT_BASE_URLS.get(cfg.provider)
 
 
 def _cfg_to_response(cfg: ASRProviderConfig) -> ASRConfigResponse:
@@ -311,7 +324,7 @@ async def test_asr_config(
         db.commit()
         return ASRTestResult(success=False, message="测试音频文件不存在，请联系管理员")
 
-    client = AsyncOpenAI(api_key=api_key, base_url=cfg.base_url)
+    client = AsyncOpenAI(api_key=api_key, base_url=_resolve_base_url(cfg))
     lang_results: list[ASRLangTestResult] = []
 
     for lang, audio_path in available_tests.items():
@@ -445,7 +458,7 @@ async def transcribe_audio(
             tmp.write(content)
             tmp_path = tmp.name
 
-        client = AsyncOpenAI(api_key=api_key, base_url=cfg.base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=_resolve_base_url(cfg))
         asr_model = cfg.model_id or "whisper-1"
         with open(tmp_path, "rb") as f:
             transcription = await client.audio.transcriptions.create(
