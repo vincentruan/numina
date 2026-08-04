@@ -39,7 +39,7 @@ def fetch_rates_job() -> None:
 # ── Job 2: File sync ──────────────────────────────────────────────────────────
 
 async def file_sync_job() -> None:
-    """Sync pending file_remote_locations to the default remote backend."""
+    """Sync pending file_remote_locations to each family's remote backend."""
     from packages.db.models.cached_file import CachedFile
     from packages.db.models.file_remote_location import (
         FileRemoteLocation,
@@ -53,97 +53,103 @@ async def file_sync_job() -> None:
 
     db = SessionLocal()
     try:
-        default_backend_row = (
+        active_backends = (
             db.query(StorageBackendModel)
-            .filter_by(is_default=True, is_active=True)
-            .first()
-        )
-        if default_backend_row is None:
-            return
-
-        config = decrypt_config(default_backend_row.config)
-        if config is None:
-            logger.warning("无法解密存储后端配置，跳过同步")
-            return
-
-        backend = get_backend_for_type(default_backend_row.backend_type, config)
-
-        pending = (
-            db.query(FileRemoteLocation)
-            .filter_by(backend_id=default_backend_row.id)
-            .filter(FileRemoteLocation.sync_status.in_(["pending", "failed"]))
-            .filter(FileRemoteLocation.retry_count < 3)
-            .limit(50)
+            .filter_by(is_active=True)
             .all()
         )
+        if not active_backends:
+            return
 
-        # Pre-fetch all CachedFile rows in one query to avoid N+1
-        file_ids = [loc.file_id for loc in pending]
-        cached_files: dict = {
-            cf.id: cf
-            for cf in db.query(CachedFile).filter(CachedFile.id.in_(file_ids)).all()
-        }
-
-        upload_dir = Path(settings.UPLOAD_DIR).resolve()
-
-        for loc in pending:
-            cached_file = cached_files.get(loc.file_id)
-            if cached_file is None or cached_file.deleted_at is not None:
-                loc.sync_status = "failed"
-                loc.last_error = "本地文件记录不存在或已删除"
-                db.commit()
-                continue
-
-            # Guard against path traversal: local_path must resolve within UPLOAD_DIR
-            resolved_path = Path(cached_file.local_path).resolve()
-            if not resolved_path.is_relative_to(upload_dir):
-                loc.sync_status = "failed"
-                loc.last_error = f"路径越界，拒绝访问: {cached_file.local_path}"
-                db.commit()
-                logger.warning(f"文件同步路径越界: {cached_file.id} -> {cached_file.local_path}")
-                continue
-
-            try:
-                filename = Path(cached_file.local_path).name
-                content = await asyncio.to_thread(_read_file, cached_file.local_path)
-
-                remote_path = await asyncio.wait_for(
-                    backend.save(content, filename, cached_file.date_dir),
-                    timeout=30,
+        for backend_row in active_backends:
+            config = decrypt_config(backend_row.config)
+            if config is None:
+                logger.warning(
+                    f"无法解密存储后端配置 (family_id={backend_row.family_id})，跳过"
                 )
-                loc.sync_status = "synced"
-                loc.remote_path = remote_path
-                loc.remote_url = backend.get_url(remote_path)
-                loc.synced_at = datetime.now()
-                db.commit()
-            except TimeoutError:
-                loc.retry_count += 1
-                loc.last_error = "上传超时 (30s)"
-                if loc.retry_count >= 3:
+                continue
+
+            backend = get_backend_for_type(backend_row.backend_type, config)
+
+            pending = (
+                db.query(FileRemoteLocation)
+                .filter_by(backend_id=backend_row.id)
+                .filter(FileRemoteLocation.sync_status.in_(["pending", "failed"]))
+                .filter(FileRemoteLocation.retry_count < 3)
+                .limit(50)
+                .all()
+            )
+
+            if not pending:
+                continue
+
+            # Pre-fetch all CachedFile rows in one query to avoid N+1
+            file_ids = [loc.file_id for loc in pending]
+            cached_files: dict = {
+                cf.id: cf
+                for cf in db.query(CachedFile).filter(CachedFile.id.in_(file_ids)).all()
+            }
+
+            upload_dir = Path(settings.UPLOAD_DIR).resolve()
+
+            for loc in pending:
+                cached_file = cached_files.get(loc.file_id)
+                if cached_file is None or cached_file.deleted_at is not None:
                     loc.sync_status = "failed"
-                db.commit()
-                logger.warning(f"文件同步超时: {cached_file.id}")
-            except FileNotFoundError:
-                loc.retry_count += 1
-                loc.last_error = f"本地文件不存在: {cached_file.local_path}"
-                if loc.retry_count >= 3:
+                    loc.last_error = "本地文件记录不存在或已删除"
+                    db.commit()
+                    continue
+
+                # Guard against path traversal: local_path must resolve within UPLOAD_DIR
+                resolved_path = Path(cached_file.local_path).resolve()
+                if not resolved_path.is_relative_to(upload_dir):
                     loc.sync_status = "failed"
-                db.commit()
-                logger.warning(f"文件同步本地文件不存在: {cached_file.id}")
-            except StorageError as e:
-                loc.retry_count += 1
-                loc.last_error = str(e)
-                if loc.retry_count >= 3:
-                    loc.sync_status = "failed"
-                db.commit()
-                logger.warning(f"文件同步失败: {cached_file.id}: {e}")
-            except Exception as e:
-                loc.retry_count += 1
-                loc.last_error = str(e)
-                if loc.retry_count >= 3:
-                    loc.sync_status = "failed"
-                db.commit()
-                logger.exception(f"文件同步异常: {cached_file.id}: {e}")
+                    loc.last_error = f"路径越界，拒绝访问: {cached_file.local_path}"
+                    db.commit()
+                    logger.warning(f"文件同步路径越界: {cached_file.id} -> {cached_file.local_path}")
+                    continue
+
+                try:
+                    filename = Path(cached_file.local_path).name
+                    content = await asyncio.to_thread(_read_file, cached_file.local_path)
+
+                    remote_path = await asyncio.wait_for(
+                        backend.save(content, filename, cached_file.date_dir),
+                        timeout=30,
+                    )
+                    loc.sync_status = "synced"
+                    loc.remote_path = remote_path
+                    loc.remote_url = backend.get_url(remote_path)
+                    loc.synced_at = datetime.now()
+                    db.commit()
+                except TimeoutError:
+                    loc.retry_count += 1
+                    loc.last_error = "上传超时 (30s)"
+                    if loc.retry_count >= 3:
+                        loc.sync_status = "failed"
+                    db.commit()
+                    logger.warning(f"文件同步超时: {cached_file.id}")
+                except FileNotFoundError:
+                    loc.retry_count += 1
+                    loc.last_error = f"本地文件不存在: {cached_file.local_path}"
+                    if loc.retry_count >= 3:
+                        loc.sync_status = "failed"
+                    db.commit()
+                    logger.warning(f"文件同步本地文件不存在: {cached_file.id}")
+                except StorageError as e:
+                    loc.retry_count += 1
+                    loc.last_error = str(e)
+                    if loc.retry_count >= 3:
+                        loc.sync_status = "failed"
+                    db.commit()
+                    logger.warning(f"文件同步失败: {cached_file.id}: {e}")
+                except Exception as e:
+                    loc.retry_count += 1
+                    loc.last_error = str(e)
+                    if loc.retry_count >= 3:
+                        loc.sync_status = "failed"
+                    db.commit()
+                    logger.exception(f"文件同步异常: {cached_file.id}: {e}")
 
             lo, hi = backend.write_delay_range
             await asyncio.sleep(random.uniform(lo, hi))

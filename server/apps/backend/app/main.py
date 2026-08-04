@@ -148,6 +148,7 @@ from apps.backend.app.routers import (
 )
 from apps.backend.app.routers import notification_config as notification_config_router
 from apps.backend.app.routers import reminders as reminders_router
+from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
@@ -498,6 +499,7 @@ app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
 app.include_router(ai_web_search_router.router, prefix="/api/v1")
 app.include_router(ai_wish_advice_router.router, prefix="/api/v1")
 app.include_router(family_config_router.router, prefix="/api/v1")
+app.include_router(storage_backend_router.router, prefix="/api/v1")
 app.include_router(user_config_router.router, prefix="/api/v1")
 app.include_router(manifesto_router.router, prefix="/api/v1")
 app.include_router(child_manifesto_router.router, prefix="/api/v1")

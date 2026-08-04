@@ -259,7 +259,6 @@ def _make_backend_row(*, config: str | None = "enc:cfg", backend_id: int = 11):
         id=backend_id,
         backend_type="local",
         config=config,
-        is_default=True,
         is_active=True,
     )
 
@@ -288,11 +287,11 @@ def _make_cached_file(*, file_id: int = 101, local_path: str, deleted_at=None):
     )
 
 
-def _configure_db_query(mock_session, *, backend_row, pending, cached_files):
+def _configure_db_query(mock_session, *, backend_rows, pending, cached_files):
     """按模型类型配置 db.query(...) 的链式返回值。
 
     file_sync_job 内三次查询：
-      1. db.query(StorageBackend).filter_by(...).first()        -> backend_row
+      1. db.query(StorageBackend).filter_by(...).all()           -> backend_rows
       2. db.query(FileRemoteLocation).filter_by().filter().filter().limit().all() -> pending
       3. db.query(CachedFile).filter(...).all()                  -> cached_files
     """
@@ -301,7 +300,7 @@ def _configure_db_query(mock_session, *, backend_row, pending, cached_files):
         q = MagicMock()
         name = getattr(model, "__name__", "")
         if name == "StorageBackend":
-            q.filter_by.return_value.first.return_value = backend_row
+            q.filter_by.return_value.all.return_value = backend_rows
         elif name == "FileRemoteLocation":
             # filter_by(...).filter(...).filter(...).limit(...).all()
             chain = q.filter_by.return_value.filter.return_value.filter.return_value
@@ -328,7 +327,7 @@ class TestFileSyncJobEarlyReturn:
     async def test_no_default_backend_returns_early(self, mock_session_local, no_real_sleep):
         """无默认后端行 → 直接 return，session 关闭，不触碰 backend。"""
         _configure_db_query(
-            mock_session_local, backend_row=None, pending=[], cached_files=[]
+            mock_session_local, backend_rows=[], pending=[], cached_files=[]
         )
         with patch(
             "packages.storage.factory.get_backend_for_type"
@@ -344,7 +343,7 @@ class TestFileSyncJobEarlyReturn:
         """decrypt_config 返回 None → 记录 warning 并 return，不构造 backend。"""
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(config="bad"),
+            backend_rows=[_make_backend_row(config="bad")],
             pending=[],
             cached_files=[],
         )
@@ -384,7 +383,7 @@ class TestFileSyncJobBranches:
         loc = _make_loc(file_id=999)
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[],  # 无对应 cached file
         )
@@ -413,7 +412,7 @@ class TestFileSyncJobBranches:
         )
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[cf],
         )
@@ -436,7 +435,7 @@ class TestFileSyncJobBranches:
         cf = _make_cached_file(file_id=101, local_path=str(outside))
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[cf],
         )
@@ -462,7 +461,7 @@ class TestFileSyncJobBranches:
         cf = _make_cached_file(file_id=101, local_path=str(real_file))
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[cf],
         )
@@ -505,7 +504,7 @@ class TestFileSyncJobBranches:
         cf = _make_cached_file(file_id=101, local_path=str(real_file))
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[cf],
         )
@@ -543,7 +542,7 @@ class TestFileSyncJobBranches:
         cf = _make_cached_file(file_id=101, local_path=str(real_file))
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[cf],
         )
@@ -567,7 +566,7 @@ class TestFileSyncJobBranches:
         cf = _make_cached_file(file_id=101, local_path=str(real_file))
         _configure_db_query(
             mock_session_local,
-            backend_row=_make_backend_row(),
+            backend_rows=[_make_backend_row()],
             pending=[loc],
             cached_files=[cf],
         )

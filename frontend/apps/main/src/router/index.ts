@@ -320,6 +320,11 @@ const router = createRouter({
           component: () => import('@/pages/ManifestoSettingsPage.vue'),
         },
         {
+          path: 'settings/family/storage',
+          name: 'FamilyStorageBackend',
+          component: () => import('@/pages/FamilyStorageBackendPage.vue'),
+        },
+        {
           path: 'settings/user/config',
           name: 'UserConfig',
           component: () => import('@/pages/UserConfigPage.vue'),

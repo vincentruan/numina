@@ -96,6 +96,13 @@
         is-link
         to="/settings/family/manifesto"
       />
+      <van-cell
+        v-if="authStore.user?.role === 'owner'"
+        :title="t('settings.familyRemoteBackup')"
+        icon="cloud-o"
+        is-link
+        to="/settings/family/storage"
+      />
     </van-cell-group>
 
     <!-- 账户安全 -->

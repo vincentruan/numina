@@ -1,3 +1,4 @@
+import os
 import secrets
 from pathlib import Path
 
@@ -74,24 +75,6 @@ class Settings(BaseSettings):
     WORKSPACE_ROOT: str = "./data/workspaces"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
     STORAGE_ENCRYPTION_KEY: str = ""
-
-    # Remote storage backend configuration (seeded on startup)
-    # Supports one remote backend: "github" or "webdav"
-    STORAGE_BACKEND_TYPE: str = ""  # "github", "webdav", or empty (no remote backend)
-    STORAGE_BACKEND_NAME: str = ""  # Display name for the backend
-    STORAGE_BACKEND_IS_DEFAULT: bool = False
-    STORAGE_BACKEND_IS_ACTIVE: bool = True
-
-    # GitHub storage backend credentials
-    STORAGE_GITHUB_REPO_OWNER: str = ""
-    STORAGE_GITHUB_REPO_NAME: str = ""
-    STORAGE_GITHUB_BRANCH: str = "main"
-    STORAGE_GITHUB_TOKEN: str = ""  # Personal access token with repo scope
-
-    # WebDAV storage backend credentials
-    STORAGE_WEBDAV_BASE_URL: str = ""
-    STORAGE_WEBDAV_USERNAME: str = ""
-    STORAGE_WEBDAV_PASSWORD: str = ""
 
     # Chat session storage configuration
     CHAT_DIR: str = "./data/workspaces"  # Base dir; sessions stored under tenants/{fid}/chat/
@@ -223,26 +206,31 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
         "避免与 SECRET_KEY 共用导致密钥轮换风险。"
     )
 
-# Storage backend credentials validation for production
-if settings.ENVIRONMENT == "production" and settings.STORAGE_BACKEND_TYPE:
-    if settings.STORAGE_BACKEND_TYPE == "github" and not all([
-        settings.STORAGE_GITHUB_REPO_OWNER,
-        settings.STORAGE_GITHUB_REPO_NAME,
-        settings.STORAGE_GITHUB_TOKEN,
-    ]):
-        raise RuntimeError(
-            "GitHub 存储后端缺少必要配置！生产环境必须设置 "
-            "STORAGE_GITHUB_REPO_OWNER、STORAGE_GITHUB_REPO_NAME 和 STORAGE_GITHUB_TOKEN。"
-        )
-    elif settings.STORAGE_BACKEND_TYPE == "webdav" and not all([
-        settings.STORAGE_WEBDAV_BASE_URL,
-        settings.STORAGE_WEBDAV_USERNAME,
-        settings.STORAGE_WEBDAV_PASSWORD,
-    ]):
-        raise RuntimeError(
-            "WebDAV 存储后端缺少必要配置！生产环境必须设置 "
-                "STORAGE_WEBDAV_BASE_URL、STORAGE_WEBDAV_USERNAME 和 STORAGE_WEBDAV_PASSWORD。"
-            )
+# Legacy storage backend environment variables check
+# Remote storage is now configured per-family via the Settings UI.
+# These env vars are no longer supported and must be removed before startup.
+_LEGACY_STORAGE_ENV_KEYS = (
+    "STORAGE_BACKEND_TYPE",
+    "STORAGE_BACKEND_NAME",
+    "STORAGE_BACKEND_IS_DEFAULT",
+    "STORAGE_BACKEND_IS_ACTIVE",
+    "STORAGE_GITHUB_REPO_OWNER",
+    "STORAGE_GITHUB_REPO_NAME",
+    "STORAGE_GITHUB_BRANCH",
+    "STORAGE_GITHUB_TOKEN",
+    "STORAGE_WEBDAV_BASE_URL",
+    "STORAGE_WEBDAV_USERNAME",
+    "STORAGE_WEBDAV_PASSWORD",
+)
+
+_legacy_storage_vars_found = [k for k in _LEGACY_STORAGE_ENV_KEYS if os.environ.get(k)]
+if _legacy_storage_vars_found:
+    raise RuntimeError(
+        "检测到已废弃的远程存储环境变量: "
+        f"{', '.join(_legacy_storage_vars_found)}。\n"
+        "远程备份已改为按家庭维度配置，请在「设置 → 家庭管理 → 家庭远程备份」中配置，"
+        "并删除上述环境变量后重新启动。"
+    )
 
 # CHAT_DIR validation - must not be a strict subdirectory of UPLOAD_DIR
 # (UPLOAD_DIR subtree is served as static files; equality is OK because
