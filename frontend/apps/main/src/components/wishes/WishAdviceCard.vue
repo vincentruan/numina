@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showDialog, showToast } from 'vant'
 import { getWishAdvice, adoptWishAdvice } from '@/api/wishes'
@@ -131,6 +131,12 @@ const shouldShow = computed(() => !closed.value && visible.value && advice.value
 
 onMounted(() => {
   if (familyStore.aiEnabled) {
+    void load()
+  }
+})
+
+watch(() => familyStore.aiEnabled, (enabled) => {
+  if (enabled && !advice.value) {
     void load()
   }
 })

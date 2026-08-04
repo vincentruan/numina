@@ -175,6 +175,8 @@ export default {
     },
     literacyReport: 'Literacy Report',
     literacyViewAll: 'View all',
+    literacyReady: 'Generated',
+    literacyGenerating: 'Generating',
     literacyNone: 'Not generated',
   },
   aiChat: {

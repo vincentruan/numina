@@ -402,11 +402,9 @@ async def run_agent(
         reset_family_sandbox_context()
 
 
-async def _set_report_title(thread_id: str, family_id: int) -> None:
-    """Set a fixed-format title on the report's chat session.
+async def _set_session_title(thread_id: str, family_id: int, title_prefix: str) -> None:
+    """Set a fixed-format title on a session.
 
-    Report runs have no user message for LLM title generation, so we use a
-    deterministic timestamp-based title (e.g. "家庭资产分析报告 20260804 1430").
     Best-effort: any failure is logged and swallowed.
     """
     try:
@@ -415,7 +413,7 @@ async def _set_report_title(thread_id: str, family_id: int) -> None:
         from apps.agent.services.session_store import AiSessionRepository
 
         now = datetime.now(UTC)
-        title = f"家庭资产分析报告 {now.strftime('%Y%m%d %H%M')}"
+        title = f"{title_prefix} {now.strftime('%Y%m%d %H%M')}"
         repo = AiSessionRepository(str(family_id))
         await repo.update_summary(
             session_id=thread_id,
@@ -423,51 +421,9 @@ async def _set_report_title(thread_id: str, family_id: int) -> None:
             summary=None,
             title=title,
         )
-        logger.info("[_set_report_title] Set title '%s' for thread %s", title, thread_id)
+        logger.info("[_set_session_title] Set title '%s' for thread %s", title, thread_id)
     except Exception as e:
-        logger.warning("[_set_report_title] Failed for thread %s: %s", thread_id, e)
-
-
-async def _set_import_parse_title(thread_id: str, family_id: int) -> None:
-    """Set a fixed-format title on the import-parse session."""
-    try:
-        from datetime import UTC, datetime
-
-        from apps.agent.services.session_store import AiSessionRepository
-
-        now = datetime.now(UTC)
-        title = f"文件导入解析 {now.strftime('%Y%m%d %H%M')}"
-        repo = AiSessionRepository(str(family_id))
-        await repo.update_summary(
-            session_id=thread_id,
-            family_id=str(family_id),
-            summary=None,
-            title=title,
-        )
-        logger.info("[_set_import_parse_title] Set title '%s' for thread %s", title, thread_id)
-    except Exception as e:
-        logger.warning("[_set_import_parse_title] Failed for thread %s: %s", thread_id, e)
-
-
-async def _set_literacy_report_title(thread_id: str, family_id: int) -> None:
-    """Set a fixed-format title on the literacy weekly report session."""
-    try:
-        from datetime import UTC, datetime
-
-        from apps.agent.services.session_store import AiSessionRepository
-
-        now = datetime.now(UTC)
-        title = f"启蒙周报 {now.strftime('%Y%m%d %H%M')}"
-        repo = AiSessionRepository(str(family_id))
-        await repo.update_summary(
-            session_id=thread_id,
-            family_id=str(family_id),
-            summary=None,
-            title=title,
-        )
-        logger.info("[_set_literacy_report_title] Set title '%s' for thread %s", title, thread_id)
-    except Exception as e:
-        logger.warning("[_set_literacy_report_title] Failed for thread %s: %s", thread_id, e)
+        logger.warning("[_set_session_title] Failed for thread %s: %s", thread_id, e)
 
 
 async def _run_asset_report_pipeline(
@@ -813,7 +769,7 @@ async def _run_asset_report_pipeline(
         # Unlike chat runs, the report pipeline has no user message for LLM
         # title generation — use a deterministic timestamp-based title instead.
         if completion_status == "complete":
-            asyncio.create_task(_set_report_title(thread_id, family_id))
+            asyncio.create_task(_set_session_title(thread_id, family_id, "家庭资产分析报告"))
 
         # 12. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
         end_payload: dict[str, Any] = {"status": completion_status}
@@ -1130,7 +1086,7 @@ async def _run_import_parse_agent(
 
         # 11. Set import-parse session title (fixed format with timestamp).
         if completion_status == "complete":
-            asyncio.create_task(_set_import_parse_title(thread_id, family_id))
+            asyncio.create_task(_set_session_title(thread_id, family_id, "文件导入解析"))
 
         # 12. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
         end_payload: dict[str, Any] = {"status": completion_status}
@@ -3142,7 +3098,7 @@ async def _run_literacy_weekly_report_agent(
 
         # Set literacy weekly report session title (fixed format with timestamp).
         if completion_status == "complete":
-            asyncio.create_task(_set_literacy_report_title(thread_id, family_id))
+            asyncio.create_task(_set_session_title(thread_id, family_id, "启蒙周报"))
 
         end_payload: dict[str, Any] = {"status": completion_status}
         if cumulative_usage:

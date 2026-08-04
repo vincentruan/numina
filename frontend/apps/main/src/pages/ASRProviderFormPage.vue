@@ -44,15 +44,20 @@ const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; modelId: string }> = 
   siliconflow: { baseUrl: 'https://api.siliconflow.cn/v1', modelId: 'FunAudioLLM/SenseVoiceSmall' },
 }
 
-watch(provider, (newProvider) => {
+watch(provider, (newProvider, oldProvider) => {
   const defaults = PROVIDER_DEFAULTS[newProvider]
   if (defaults && !configId.value) {
-    baseUrl.value = defaults.baseUrl
-    if (!modelId.value) {
+    const oldDefaults = oldProvider ? PROVIDER_DEFAULTS[oldProvider] : undefined
+    // Only reset baseUrl if it still matches the previous provider's default
+    if (!oldDefaults || baseUrl.value === oldDefaults.baseUrl) {
+      baseUrl.value = defaults.baseUrl
+    }
+    // Only set modelId if it's empty or still matches previous provider's default
+    if (!modelId.value || (oldDefaults && modelId.value === oldDefaults.modelId)) {
       modelId.value = defaults.modelId
     }
   }
-})
+}, { immediate: true })
 
 function providerLabel(p: string): string {
   if (p === 'openai') return t('asrConfig.providerOpenAI')

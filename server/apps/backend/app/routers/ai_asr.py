@@ -62,11 +62,17 @@ _TEST_AUDIO_FILES = {
 _WER_FAIL_THRESHOLD = 50.0
 
 
-def _resolve_base_url(cfg: ASRProviderConfig) -> str | None:
+def _resolve_base_url(cfg: ASRProviderConfig) -> str:
     """Return the base_url for an ASR config, falling back to provider defaults."""
     if cfg.base_url:
         return cfg.base_url
-    return _PROVIDER_DEFAULT_BASE_URLS.get(cfg.provider)
+    url = _PROVIDER_DEFAULT_BASE_URLS.get(cfg.provider)
+    if url is None:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            details=f"provider '{cfg.provider}' 需要配置 base_url",
+        )
+    return url
 
 
 def _cfg_to_response(cfg: ASRProviderConfig) -> ASRConfigResponse:

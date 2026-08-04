@@ -343,6 +343,7 @@ function onSilverToGoldChange() {
 function onEducationRewardToggle() {
   updateFamilySettings({ educationRewardEnabled: educationRewardEnabled.value })
     .then(() => {
+      familyStore.educationRewardEnabled = educationRewardEnabled.value
       showSuccessToast(t('toast.saveSuccess'))
     })
     .catch(() => {
@@ -353,6 +354,7 @@ function onEducationRewardToggle() {
 function onCoinToYuanChange() {
   updateFamilySettings({ coinToYuanRate: coinToYuanRate.value })
     .then(() => {
+      familyStore.coinToYuanRate = coinToYuanRate.value
       showSuccessToast(t('toast.saveSuccess'))
     })
     .catch(() => {

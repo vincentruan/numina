@@ -607,10 +607,10 @@ def _apply_mcp_cache_threading_lock_patch() -> None:
             # injects auth headers from ContextVars.
             from deerflow.mcp.tools import get_mcp_tools
             _cache_mod._mcp_tools_cache = _asyncio.run(get_mcp_tools())
-            _cache_mod._cache_initialized = True
             _cache_mod._config_path, _cache_mod._config_signature = (
                 _cache_mod._current_config_state()
             )
+            _cache_mod._cache_initialized = True
             logger.info(
                 "[sync_tool_patch] MCP tools initialized via threading-lock patch: %d tool(s)",
                 len(_cache_mod._mcp_tools_cache or []),

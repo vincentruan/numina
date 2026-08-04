@@ -420,17 +420,26 @@ async function onToggleAI(val: boolean) {
   }
   togglingAI.value = true
   try {
-    // 1. Update family-level master switch
-    await updateFamilySettings({ aiEnabled: val })
-    familyStore.aiEnabled = val
-
-    // 2. Also activate/deactivate first valid provider so routing works
+    // 1. First activate/deactivate provider (can fail, easier to recover)
     const target = aiStore.configs.find(
       (c) => (c.model_id || c.model_2_id || c.model_3_id) && c.ai_api_key_masked,
     )
     if (target) {
       await aiApi.updateProviderConfig(target.id, { is_active: val })
       await aiStore.fetchConfigs()
+    }
+
+    // 2. Then update family-level master switch (with rollback)
+    try {
+      await updateFamilySettings({ aiEnabled: val })
+      familyStore.aiEnabled = val
+    } catch (e) {
+      // Rollback provider change if family switch update fails
+      if (target) {
+        await aiApi.updateProviderConfig(target.id, { is_active: !val }).catch(() => {})
+        await aiStore.fetchConfigs().catch(() => {})
+      }
+      throw e
     }
 
     showToast({

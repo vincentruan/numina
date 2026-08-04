@@ -11,6 +11,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import verify_agent_token
@@ -859,7 +860,18 @@ def internal_upsert_session(
         # branch's parent.
         if body.parent_thread_id and not row.parent_thread_id:
             row.parent_thread_id = body.parent_thread_id
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Concurrent insert detected — fetch the existing row
+        logger.info(
+            "[internal] IntegrityError on session upsert for %s, checking existing row",
+            body.session_id,
+        )
+        row = _find_session_row(db, body.session_id)
+        if row is None:
+            raise
     return {"ok": True}
 
 
