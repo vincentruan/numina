@@ -13,7 +13,7 @@
  * - Main content area with markdown rendering
  * - Actions: copy, regenerate, feedback (thumbs up/down)
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 import type { CitationSource } from '@/utils/ai-chat/citations'
@@ -149,6 +149,22 @@ function suggestionChips(): string[] {
   return props.suggestions ?? []
 }
 
+// Track dismissed chips by value so removals survive re-renders
+const dismissedChips = ref(new Set<string>())
+
+// Visible chips: filter out dismissed ones
+const visibleChips = computed(() => {
+  const all = suggestionChips()
+  if (dismissedChips.value.size === 0) return all
+  return all.filter((c) => !dismissedChips.value.has(c))
+})
+
+function dismissChip(chip: string) {
+  dismissedChips.value.add(chip)
+  // Re-measure overflow after a chip is removed
+  nextTick(() => measureChipOverflow())
+}
+
 // Marquee scrolling: detect overflow chips via canvas text measurement
 // and apply CSS animation class + distance variable
 const overflowIdxs = ref<number[]>([])
@@ -165,11 +181,9 @@ function measureTextPxWidth(text: string, font: string): number {
 
 function measureChipOverflow() {
   const container = chipsContainerRef.value
-  console.log('[SuggestionChip] container:', !!container)
   if (!container) return
 
   const chips = container.querySelectorAll<HTMLButtonElement>('.suggestion-chip')
-  console.log('[SuggestionChip] chips count:', chips.length)
   const next: number[] = []
 
   chips.forEach((chip, idx) => {
@@ -183,16 +197,6 @@ function measureChipOverflow() {
     const textW = measureTextPxWidth(text, font)
     const availW = chip.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
 
-    console.log(`[SuggestionChip] chip ${idx}:`, {
-      text: text.substring(0, 30),
-      textW: Math.round(textW),
-      availW: Math.round(availW),
-      chipW: chip.clientWidth,
-      padL: cs.paddingLeft,
-      padR: cs.paddingRight,
-      overflow: textW > availW + 2,
-    })
-
     if (textW > availW + 2) {
       next.push(idx)
       chip.style.setProperty('--marquee-distance', `-${Math.round(textW - availW)}px`)
@@ -201,7 +205,6 @@ function measureChipOverflow() {
     }
   })
   overflowIdxs.value = next
-  console.log('[SuggestionChip] overflowIdxs:', next)
 }
 
 function onChipClick(chip: string) {
@@ -213,7 +216,7 @@ const shouldShowChips = computed(() =>
   props.phase === 'done' &&
   props.content &&
   props.content.length >= 30 &&
-  suggestionChips().length > 0
+  visibleChips.value.length > 0
 )
 
 // flush: 'post' ensures this runs AFTER DOM updates
@@ -366,14 +369,16 @@ watch(
       </div>
     </div>
 
-    <!-- Suggestion chips -->
+    <!-- Suggestion chips: DeerFlow-style outlined buttons with per-chip dismiss -->
     <div
-      v-if="phase === 'done' && content && content.length >= 30 && suggestionChips().length > 0"
+      v-if="phase === 'done' && content && content.length >= 30 && visibleChips.length > 0"
       ref="chipsContainerRef"
       class="suggestion-chips"
+      role="group"
+      :aria-label="t('aiChat.suggestionsAria')"
     >
       <button
-        v-for="(chip, idx) in suggestionChips()"
+        v-for="(chip, idx) in visibleChips"
         :key="chip"
         class="suggestion-chip"
         :class="{ 'suggestion-chip--scrolling': overflowIdxs.includes(idx) }"
@@ -381,6 +386,20 @@ watch(
         @click="onChipClick(chip)"
       >
         <span class="suggestion-chip__text">{{ chip }}</span>
+        <span
+          class="suggestion-chip__dismiss"
+          role="button"
+          tabindex="0"
+          :aria-label="t('aiChat.suggestionRemove')"
+          @click.stop="dismissChip(chip)"
+          @keydown.enter.prevent="dismissChip(chip)"
+          @keydown.space.prevent="dismissChip(chip)"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </span>
       </button>
     </div>
   </div>
@@ -686,7 +705,7 @@ watch(
   }
 }
 
-/* Suggestion chips */
+/* Suggestion chips — DeerFlow style: outlined, no fill */
 .suggestion-chips {
   display: flex;
   flex-wrap: wrap;
@@ -696,22 +715,34 @@ watch(
 
 .suggestion-chip {
   position: relative;
+  display: inline-flex;
+  align-items: center;
   max-width: min(100%, 320px);
-  padding: 8px 14px;
+  padding: 6px 28px 6px 14px; /* extra right padding for dismiss button */
   font-size: 13px;
-  background: rgba(129, 140, 248, 0.1);
-  border: 1px solid rgba(129, 140, 248, 0.2);
+  background: transparent;
+  border: 1px solid var(--suggestion-chip-border, rgba(129, 140, 248, 0.35));
   border-radius: 20px;
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
   overflow: hidden;
   text-align: left;
+  line-height: 1.4;
 }
 
 .suggestion-chip:hover {
-  background: rgba(129, 140, 248, 0.2);
-  border-color: rgba(129, 140, 248, 0.3);
+  background: rgba(129, 140, 248, 0.06);
+  border-color: rgba(129, 140, 248, 0.5);
+}
+
+:global([data-theme='dark']) .suggestion-chip {
+  --suggestion-chip-border: rgba(160, 165, 255, 0.3);
+}
+
+:global([data-theme='dark']) .suggestion-chip:hover {
+  background: rgba(160, 165, 255, 0.08);
+  border-color: rgba(160, 165, 255, 0.45);
 }
 
 .suggestion-chip__text {
@@ -720,6 +751,37 @@ watch(
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* Dismiss button: positioned top-right inside chip */
+.suggestion-chip__dismiss {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.suggestion-chip:hover .suggestion-chip__dismiss {
+  opacity: 0.7;
+}
+
+.suggestion-chip__dismiss:hover {
+  opacity: 1 !important;
+  background: rgba(128, 128, 128, 0.15);
 }
 
 /* Overflow chips: auto-scroll marquee (works on mobile without hover) */

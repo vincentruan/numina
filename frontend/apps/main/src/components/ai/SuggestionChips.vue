@@ -6,6 +6,7 @@
  * Templates like "查看{category}详情" with context-derived interpolation.
  *
  * Overflow chips with long text auto-scroll (marquee) for readability on mobile.
+ * Each chip has a dismiss (X) button in the top-right corner.
  */
 
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
@@ -28,7 +29,20 @@ const prefersReducedMotion = computed(() => {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 })
 
-// ── Marquee: detect overflow chips and apply scroll animation ──
+// ── Dismiss: track removed chips by value ──
+const dismissedChips = ref(new Set<string>())
+
+const visibleSuggestions = computed(() => {
+  if (dismissedChips.value.size === 0) return props.suggestions
+  return props.suggestions.filter((s) => !dismissedChips.value.has(s))
+})
+
+function dismissChip(text: string) {
+  dismissedChips.value.add(text)
+  nextTick(() => measureOverflow())
+}
+
+// ─ Marquee: detect overflow chips and apply scroll animation ──
 const containerRef = ref<HTMLDivElement | null>(null)
 const overflowIdxs = ref<Set<number>>(new Set())
 
@@ -42,7 +56,8 @@ function measureOverflow() {
     const next = new Set<number>()
 
     chips.forEach((chip, idx) => {
-      const text = chip.textContent ?? ''
+      const textEl = chip.querySelector('.suggestion-chip__text') as HTMLElement | null
+      const text = textEl?.textContent ?? chip.textContent ?? ''
       if (!text) return
 
       // Use scrollWidth vs clientWidth to detect overflow
@@ -82,7 +97,7 @@ const handleClick = (text: string) => {
 
 <template>
   <div
-    v-if="suggestions.length > 0"
+    v-if="visibleSuggestions.length > 0"
     ref="containerRef"
     class="suggestion-chips"
     :class="{ 'suggestion-chips--static': prefersReducedMotion }"
@@ -90,14 +105,28 @@ const handleClick = (text: string) => {
     :aria-label="t('aiChat.suggestionsAria')"
   >
     <button
-      v-for="(text, idx) in suggestions"
-      :key="idx"
+      v-for="(text, idx) in visibleSuggestions"
+      :key="text"
       class="suggestion-chip"
       :class="{ 'suggestion-chip--scrolling': overflowIdxs.has(idx) }"
       type="button"
       @click="handleClick(text)"
     >
       <span class="suggestion-chip__text">{{ text }}</span>
+      <span
+        class="suggestion-chip__dismiss"
+        role="button"
+        tabindex="0"
+        :aria-label="t('aiChat.suggestionRemove')"
+        @click.stop="dismissChip(text)"
+        @keydown.enter.prevent="dismissChip(text)"
+        @keydown.space.prevent="dismissChip(text)"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </span>
     </button>
   </div>
 </template>
@@ -132,7 +161,7 @@ const handleClick = (text: string) => {
   display: inline-flex;
   align-items: center;
   max-width: min(100%, 280px);
-  padding: 6px 12px;
+  padding: 6px 28px 6px 12px; /* extra right padding for dismiss button */
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary, rgba(255, 255, 255, 0.85));
@@ -153,6 +182,36 @@ const handleClick = (text: string) => {
 .suggestion-chip:focus-visible {
   outline: 2px solid var(--van-primary-color, #007aff);
   outline-offset: 2px;
+}
+
+/* Dismiss button: positioned top-right inside chip */
+.suggestion-chip__dismiss {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.suggestion-chip:hover .suggestion-chip__dismiss {
+  opacity: 0.7;
+}
+
+.suggestion-chip__dismiss:hover {
+  opacity: 1 !important;
+  background: rgba(128, 128, 128, 0.15);
 }
 
 /* Text span — normal state: truncate with ellipsis */
@@ -198,7 +257,7 @@ const handleClick = (text: string) => {
 
   .suggestion-chip {
     font-size: 13px;
-    padding: 5px 10px;
+    padding: 5px 24px 5px 10px;
     max-width: 180px;
     flex-shrink: 0;
   }
