@@ -207,6 +207,9 @@ export default {
         connection_interrupted: '连接中断',
       },
     },
+    literacyReport: '素养周报',
+    literacyViewAll: '查看全部',
+    literacyNone: '未生成',
   },
   ai: {
     systemAgents: '系统智能体',

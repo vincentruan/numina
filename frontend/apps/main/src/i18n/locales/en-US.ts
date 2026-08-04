@@ -172,7 +172,10 @@ export default {
     },
     section: {
       assetList: '资产列表 ({count})'
-    }
+    },
+    literacyReport: 'Literacy Report',
+    literacyViewAll: 'View all',
+    literacyNone: 'Not generated',
   },
   aiChat: {
     connecting: 'Connecting model',
