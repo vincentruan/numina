@@ -9,6 +9,7 @@ import { showSuccessToast, showFailToast } from 'vant'
 import { getASRConfigs, createASRConfig, updateASRConfig, testASRConfig } from '@/api/asr'
 import type { ASRProviderConfig, ASRTestResult, ASRDiffOp } from '@/api/asr'
 import PageHeader from '@/components/common/PageHeader.vue'
+import ASRProviderPickerSheet from '@/components/ai/ASRProviderPickerSheet.vue'
 
 defineOptions({ name: 'ASRProviderFormPage' })
 
@@ -34,12 +35,14 @@ const testing = ref(false)
 const testResult = ref<ASRTestResult | null>(null)
 const existingConfig = ref<ASRProviderConfig | null>(null)
 
-// Provider options
-const providerOptions = [
-  { text: 'OpenAI', value: 'openai' },
-  { text: 'OpenAI Compatible', value: 'openai_compatible' },
-]
+// Provider picker
 const showProviderPicker = ref(false)
+
+function providerLabel(p: string): string {
+  if (p === 'openai') return t('asrConfig.providerOpenAI')
+  if (p === 'openai_compatible') return t('asrConfig.providerOpenAICompatible')
+  return p
+}
 
 const canSubmit = computed(() => name.value.trim() && apiKey.value.trim())
 
@@ -92,7 +95,7 @@ async function handleSave() {
         model_3_id: model3Id.value.trim() || null,
       })
     }
-    showSuccessToast(t('aiConfig.aiConfigSaved'))
+    showSuccessToast(t('toast.aiConfigSaved'))
     router.push('/settings/ai/asr')
   } catch {
     showFailToast(t('common.failed'))
@@ -123,13 +126,6 @@ async function handleTestAndEnable() {
   }
 }
 
-function onProviderConfirm({ selectedOptions }: { selectedOptions: { text: string; value: string }[] }) {
-  if (selectedOptions[0]) {
-    provider.value = selectedOptions[0].value as 'openai' | 'openai_compatible'
-  }
-  showProviderPicker.value = false
-}
-
 onMounted(loadExisting)
 </script>
 
@@ -140,14 +136,30 @@ onMounted(loadExisting)
     <div class="page-body">
       <van-cell-group inset>
         <!-- Provider type -->
-        <van-field
-          :model-value="provider === 'openai' ? 'OpenAI' : 'OpenAI Compatible'"
+        <van-cell
+          :title="t('asrConfig.provider')"
           is-link
-          readonly
-          :label="t('asrConfig.provider')"
-          :placeholder="t('asrConfig.provider')"
+          class="provider-select-cell"
           @click="showProviderPicker = true"
-        />
+        >
+          <template #value>
+            <div class="provider-cell-value">
+              <div class="provider-cell-logo" :class="`logo--${provider}`">
+                <!-- OpenAI -->
+                <svg v-if="provider === 'openai'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="currentColor" />
+                </svg>
+                <!-- OpenAI Compatible -->
+                <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="currentColor" opacity="0.85" />
+                  <circle cx="18" cy="6" r="4" fill="currentColor" opacity="0.15" />
+                  <path d="M17 5v2M18 4v4M19 5v2" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.6" />
+                </svg>
+              </div>
+              <span class="provider-cell-text">{{ providerLabel(provider) }}</span>
+            </div>
+          </template>
+        </van-cell>
 
         <!-- Name -->
         <van-field
@@ -251,13 +263,10 @@ onMounted(loadExisting)
       </div>
 
       <!-- Provider picker -->
-      <van-popup v-model:show="showProviderPicker" position="bottom" round>
-        <van-picker
-          :columns="providerOptions"
-          @confirm="onProviderConfirm"
-          @cancel="showProviderPicker = false"
-        />
-      </van-popup>
+      <ASRProviderPickerSheet
+        v-model:show="showProviderPicker"
+        v-model="provider"
+      />
     </div>
   </div>
 </template>
@@ -357,5 +366,71 @@ onMounted(loadExisting)
 
 .mt-12 {
   margin-top: 12px;
+}
+
+/* Provider cell with logo */
+.provider-select-cell :deep(.van-cell__title) {
+  flex: none;
+  width: var(--van-field-label-width, 6.2em);
+  margin-right: var(--van-field-label-margin-right, 12px);
+}
+
+.provider-select-cell :deep(.van-cell__value) {
+  flex: 1;
+  min-width: 0;
+}
+
+.provider-cell-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.provider-cell-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.provider-cell-logo svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* OpenAI: green */
+.logo--openai {
+  background: color-mix(in srgb, #10a37f 12%, transparent);
+  color: #10a37f;
+}
+
+[data-theme='dark'] .logo--openai {
+  background: rgba(16, 163, 127, 0.15);
+  color: #34d399;
+}
+
+/* OpenAI Compatible: blue-gray */
+.logo--openai_compatible {
+  background: color-mix(in srgb, #64748b 12%, transparent);
+  color: #64748b;
+}
+
+[data-theme='dark'] .logo--openai_compatible {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+}
+
+.provider-cell-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
