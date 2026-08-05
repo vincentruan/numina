@@ -82,16 +82,32 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 
 ## CodeGraph
 
-Prefer CodeGraph MCP (`codegraph_*` tools) over grep/read for structural code queries. See [`codegraph-structural-code-search-2026-06-10.md`](./docs/solutions/developer-experience/codegraph-structural-code-search-2026-06-10.md) for setup and edge cases.
+CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file in this project. Reads are sub-millisecond and return structural information grep cannot. Prefer `codegraph_*` tools over grep/read for structural queries. See [`codegraph-structural-code-search-2026-06-10.md`](./docs/solutions/developer-experience/codegraph-structural-code-search-2026-06-10.md) for setup and edge cases.
 
-| Query | Tool | Example |
-|-------|------|---------|
-| "Where is X defined?" | `codegraph_search` | Find symbol by name |
-| "What calls Y?" | `codegraph_callers` | Trace upstream deps |
-| "How does X reach Y?" | `codegraph_trace` | Full call path in one call |
-| "What breaks if Z changes?" | `codegraph_impact` | Change impact analysis |
-| "Context for a task" | `codegraph_context` | Search + callers + callees |
-| "Multiple symbols' source" | `codegraph_explore` | Batch retrieval |
+| Query | Tool |
+|-------|------|
+| "Where is X defined?" / "Find symbol named X" | `codegraph_search` |
+| "What calls function Y?" | `codegraph_callers` |
+| "What does Y call?" | `codegraph_callees` |
+| "How does X reach Y? / trace the flow" | `codegraph_trace` (one call = whole path, incl. dynamic hops) |
+| "What breaks if Z changes?" | `codegraph_impact` |
+| "Show me Y's signature / source / docstring" | `codegraph_node` |
+| "Context for a task/area" | `codegraph_context` |
+| "Multiple symbols' source at once" | `codegraph_explore` |
+| "What files exist under path/" | `codegraph_files` |
+| "Is the index healthy?" | `codegraph_status` |
+
+### Rules of thumb
+
+- **Trust codegraph results.** They come from a full AST parse. Do NOT re-verify with grep — slower, less accurate, wastes context.
+- **Don't grep first** when looking up a symbol by name. `codegraph_search` returns kind + location + signature in one call.
+- **Don't chain `codegraph_search` + `codegraph_node`** for context — `codegraph_context` is one call.
+- **Don't loop `codegraph_node`** over many symbols — one `codegraph_explore` returns several symbols' source in a single capped call.
+- **Index lag**: file watcher debounces ~500ms behind writes; don't re-query immediately after editing.
+
+### If `.codegraph/` doesn't exist
+
+The MCP server returns "not initialized." Ask: *"Want me to run `codegraph init -i` to build the index?"*
 
 ## Module Documentation
 
