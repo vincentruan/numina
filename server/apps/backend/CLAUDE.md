@@ -61,22 +61,22 @@ Serializing as strings preserves exact values across the API boundary.
 
 | 问题场景 | 参考文档 |
 |---------|---------|
-| Snowflake ID 序列化 / JS 精度丢失 | [`snowflake-id-serialization`](../../../../docs/solutions/best-practices/snowflake-id-json-string-serialization-2026-04-27.md) |
-| 金额计算精度 / Decimal vs Float / money-as-str | [`money-decimal-compute`](../../../../docs/solutions/best-practices/money-decimal-compute-str-wire-serialization.md) |
-| 缓存键粒度 / 多用户数据隔离 | [`cache-key-granularity`](../../../../docs/solutions/best-practices/cache-key-granularity-matches-data-scope-2026-04-27.md) |
-| JWT JTI 撤销 / token 安全 | [`jti-revocation`](../../../../docs/solutions/best-practices/jti-revocation-requires-db-persistence-2026-04-27.md) |
-| Pydantic 验证错误本地化 | [`fastapi-pydantic-validation`](../../../../docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md) |
-| Redis fail-fast / 集群部署 | [`redis-fail-fast`](../../../../docs/solutions/best-practices/redis-fail-fast-strategy.md) |
-| 日志配置 / rotation / archival | [`logging-config`](../../../../docs/solutions/best-practices/logging-config.md) |
-| 安全审计 / 文件上传 magic bytes | [`security-audit`](../../../../docs/solutions/best-practices/security-audit.md) |
-| 安全防护 / rate-limiting / brute-force | [`security-protection`](../../../../docs/solutions/best-practices/security-protection.md) |
-| Altcha CAPTCHA 集成 | [`altcha-captcha`](../../../../docs/solutions/best-practices/altcha-captcha-best-practices-2026-04-03.md) |
-| 文件存储抽象 / GitHub API / WebDAV | [`file-storage-abstraction`](../../../../docs/solutions/best-practices/file-storage-abstraction-2026-04-10.md) |
-| Nginx DNS 上游缓存 / stale DNS | [`nginx-stale-dns`](../../../../docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) |
-| 统一数据根路径管理 / Docker volume | [`unified-data-root-path`](../../../../docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) |
-| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
-| DB check constraint 与 Pydantic regex 不一致 | [`db-check-constraint-pydantic-regex-sync`](../../../../docs/solutions/best-practices/db-check-constraint-pydantic-regex-sync.md) |
-| ASR WER/CER 100% 错误率 / 文本归一化 | [`asr-wer-whitespace-stripping-tokenization`](../../../../docs/solutions/integration-issues/asr-wer-whitespace-stripping-tokenization.md) |
+| Snowflake ID 序列化 / JS 精度丢失 | [`snowflake-id-serialization`](../../../docs/solutions/best-practices/snowflake-id-json-string-serialization-2026-04-27.md) |
+| 金额计算精度 / Decimal vs Float / money-as-str | [`money-decimal-compute`](../../../docs/solutions/best-practices/money-decimal-compute-str-wire-serialization.md) |
+| 缓存键粒度 / 多用户数据隔离 | [`cache-key-granularity`](../../../docs/solutions/best-practices/cache-key-granularity-matches-data-scope-2026-04-27.md) |
+| JWT JTI 撤销 / token 安全 | [`jti-revocation`](../../../docs/solutions/best-practices/jti-revocation-requires-db-persistence-2026-04-27.md) |
+| Pydantic 验证错误本地化 | [`fastapi-pydantic-validation`](../../../docs/solutions/best-practices/fastapi-pydantic-validation-error-localization-2026-04-16.md) |
+| Redis fail-fast / 集群部署 | [`redis-fail-fast`](../../../docs/solutions/best-practices/redis-fail-fast-strategy.md) |
+| 日志配置 / rotation / archival | [`logging-config`](../../../docs/solutions/best-practices/logging-config.md) |
+| 安全审计 / 文件上传 magic bytes | [`security-audit`](../../../docs/solutions/best-practices/security-audit.md) |
+| 安全防护 / rate-limiting / brute-force | [`security-protection`](../../../docs/solutions/best-practices/security-protection.md) |
+| Altcha CAPTCHA 集成 | [`altcha-captcha`](../../../docs/solutions/best-practices/altcha-captcha-best-practices-2026-04-03.md) |
+| 文件存储抽象 / GitHub API / WebDAV | [`file-storage-abstraction`](../../../docs/solutions/best-practices/file-storage-abstraction-2026-04-10.md) |
+| Nginx DNS 上游缓存 / stale DNS | [`nginx-stale-dns`](../../../docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) |
+| 统一数据根路径管理 / Docker volume | [`unified-data-root-path`](../../../docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) |
+| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
+| DB check constraint 与 Pydantic regex 不一致 | [`db-check-constraint-pydantic-regex-sync`](../../../docs/solutions/best-practices/db-check-constraint-pydantic-regex-sync.md) |
+| ASR WER/CER 100% 错误率 / 文本归一化 | [`asr-wer-whitespace-stripping-tokenization`](../../../docs/solutions/integration-issues/asr-wer-whitespace-stripping-tokenization.md) |
 
 ## App Layout
 

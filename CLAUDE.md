@@ -80,6 +80,19 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 | `ui-bugs/` | UI 问题 | 深色模式 CSS 特异性、Vant4 Field 绑定 |
 | `developer-experience/` | 开发体验 | CodeGraph 使用、CLAUDE.md 模块化、i18n 切换 |
 
+## CodeGraph
+
+Prefer CodeGraph MCP (`codegraph_*` tools) over grep/read for structural code queries. See [`codegraph-structural-code-search-2026-06-10.md`](./docs/solutions/developer-experience/codegraph-structural-code-search-2026-06-10.md) for setup and edge cases.
+
+| Query | Tool | Example |
+|-------|------|---------|
+| "Where is X defined?" | `codegraph_search` | Find symbol by name |
+| "What calls Y?" | `codegraph_callers` | Trace upstream deps |
+| "How does X reach Y?" | `codegraph_trace` | Full call path in one call |
+| "What breaks if Z changes?" | `codegraph_impact` | Change impact analysis |
+| "Context for a task" | `codegraph_context` | Search + callers + callees |
+| "Multiple symbols' source" | `codegraph_explore` | Batch retrieval |
+
 ## Module Documentation
 
 For module-specific dev commands, conventions, and patterns:

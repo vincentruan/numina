@@ -20,16 +20,16 @@ These must hold in every code path — never bypass them:
 
 | 问题场景 | 参考文档 |
 |---------|---------|
-| DeerFlow stream 类型不匹配 / SSE 安全问题 | [`deerflow-stream-type-mismatch`](../../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
-| GLM5 thinking provider endpoint 错误 | [`deerflow-glm5-thinking-mismatch`](../../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
-| DeerFlow harness 静默 fallback / 并发问题 | [`deerflow-harness-fixes`](../../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
-| MCP tools 加载失败 / 跨线程 asyncio.Lock 死锁 | [`mcp-cache-asyncio-lock-threading-deadlock`](../../../../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) |
-| 会话标题显示 thinking-block 原始内容 | [`thinking-block-content-leaking-into-titles`](../../../../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) |
-| stream 提前关闭 / 连接中断 | [`stream-closure-fix`](../../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
-| 多 provider 熔断 / cascade retry | [`three-state-circuit-breaker`](../../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
-| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
-| MCP chat adapter 架构 | [`mcp-chat-adapter-architecture`](../../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
-| 多 app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
+| DeerFlow stream 类型不匹配 / SSE 安全问题 | [`deerflow-stream-type-mismatch`](../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
+| GLM5 thinking provider endpoint 错误 | [`deerflow-glm5-thinking-mismatch`](../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
+| DeerFlow harness 静默 fallback / 并发问题 | [`deerflow-harness-fixes`](../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
+| MCP tools 加载失败 / 跨线程 asyncio.Lock 死锁 | [`mcp-cache-asyncio-lock-threading-deadlock`](../../../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) |
+| 会话标题显示 thinking-block 原始内容 | [`thinking-block-content-leaking-into-titles`](../../../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) |
+| stream 提前关闭 / 连接中断 | [`stream-closure-fix`](../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
+| 多 provider 熔断 / cascade retry | [`three-state-circuit-breaker`](../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
+| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
+| MCP chat adapter 架构 | [`mcp-chat-adapter-architecture`](../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
+| 多 app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
 
 ## Cross-Cutting Invariants
 

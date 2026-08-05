@@ -70,9 +70,9 @@ src/
 
 | 问题场景 | 参考文档 |
 |---------|---------|
-| NProgress 进度条卡住不消失 / guard flag 问题 | [`nprogress-stuck-child`](../../../../docs/solutions/ui-bugs/nprogress-stuck-spinning-bypassed-guard.md) |
-| 设备指纹稳定性 / 认证相关 | [`device-fingerprint-stability`](../../../../docs/solutions/integration-issues/device-fingerprint-stability.md) |
-| 儿童游戏化系统架构 | [`gamified-child-system`](../../../../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) |
+| NProgress 进度条卡住不消失 / guard flag 问题 | [`nprogress-stuck-child`](../../../docs/solutions/ui-bugs/nprogress-stuck-spinning-bypassed-guard.md) |
+| 设备指纹稳定性 / 认证相关 | [`device-fingerprint-stability`](../../../docs/solutions/integration-issues/device-fingerprint-stability.md) |
+| 儿童游戏化系统架构 | [`gamified-child-system`](../../../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) |
 
 ## Links
 
