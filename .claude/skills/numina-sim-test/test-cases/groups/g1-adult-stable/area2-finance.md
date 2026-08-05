@@ -379,3 +379,117 @@ Assertions (per page):
 - [ ] Large amounts (e.g. demouser's 59M total assets) display without JS precision loss (bigint-as-str wire format)
 - [ ] Computed values (net worth, totals, allocation percentages) are arithmetically correct
 - [ ] `[console]` zero errors
+
+---
+
+## New cases — Dashboard extras (FocusTop3Card + dashboard_narrative)
+
+Reverse-engineered from frontend `FocusTop3Card.spec.ts` (top-3 assets /
+liabilities / wishes by urgency) and backend `test_dashboard_narrative.py`
+(AI-generated narrative summary). Covers HIGH-IMPACT gaps in the previous
+inventory.
+
+### C2.21 Dashboard — FocusTop3Card 三大紧急项
+
+```
+bsk navigate ${BASE} --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# 定位 "重点事项" / FocusTop3Card 区块
+```
+
+Assertions:
+- [ ] 卡片显示三个标签页: 资产 (by current_value desc) / 负债 (by interest_rate desc) / 心愿 (by nearest target_date)
+- [ ] 每个标签页显示 ≤3 条, 带 "查看全部" 链接 → `/finance?tab=X`
+- [ ] 心愿标签页 *排除* 无 target_date 的心愿 (spec: "nearest target_date, excludes wishes with no target_date")
+- [ ] 少于 3 条时不补位/不截断
+- [ ] 某域为 0 条时显示 empty state
+- [ ] 加载期间显示 skeleton (AssetListPanel skeleton 模式)
+- [ ] `[console]` zero errors
+
+### C2.22 Dashboard — AI 叙事卡片 (dashboard_narrative)
+
+```
+bsk navigate ${BASE} --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+# 定位 AI 叙事区块 (DashboardNarrativeCard 或类似)
+```
+
+Assertions:
+- [ ] 卡片存在 + 渲染 (若 AI 启用)
+- [ ] 显示 AI 生成的摘要文字 (非空, 非占位符)
+- [ ] 刷新按钮可点 → 重新生成 (loading 状态 → 新内容)
+- [ ] AI 禁用时卡片隐藏 (不显示空框或 "请启用 AI")
+- [ ] `[console]` zero errors
+
+> **AI 必须启用:** 若 aiEnabled=false, 跳过并标注 SKIP-AI。
+
+---
+
+## New cases — What-if 模拟器 (交互式)
+
+Reverse-engineered from backend `test_whatif.py` + `test_projection.py` +
+`test_purchasing_power.py`. C3.6 只验证 AI 时光机 *页面渲染*; C2.23 验证
+*实际交互* (参数调整 → 预测曲线变化)。
+
+### C2.23 What-if 模拟器 — 参数调整 + 预测曲线
+
+```
+bsk navigate ${BASE}finance?tab=assets --session <id> --wait-until networkidle
+# 找到 "What-if 模拟" 按钮 / 入口
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] 模拟器打开 (dialog 或子页面)
+- [ ] 显示至少一个参数滑块 (如 "年增长率" / "投资期限")
+- [ ] 滑块拖动 → 预测曲线 (ECharts) 实时更新 (无需点"计算")
+- [ ] 参数极端值 (0% / 100%) 不崩溃
+- [ ] 重置按钮 → 参数回到默认, 曲线回到初始状态
+- [ ] `[console]` zero errors
+
+---
+
+## New cases — Asset sell flow 完整路径
+
+C2.8 仅触及 sell 入口; C2.24 验证完整的出售 → 收益计算 → 状态流转。
+Reverse-engineered from backend `test_assets.py` sell-flow tests + frontend
+`AssetSellPage.spec.ts`。
+
+### C2.24 Asset sell — 完整出售流程 + 状态变更
+
+```
+# 选择一条状态为 in_use 或 idle 的资产 (不能是 sold)
+bsk navigate ${BASE}assets/<id>/sell --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] 表单显示: 出售价 (sell_price) + 手续费 (sell_fee)
+- [ ] net_recovery (净回收) 实时计算 = sell_price − sell_fee
+- [ ] net_recovery 为负数 → 警告提示 ("出售将产生亏损")
+- [ ] 提交 POST → 201, 跳转到资产详情页
+- [ ] 详情页状态徽章变为 "sold"
+- [ ] 资产从活跃列表消失 (或显示 sold 灰色状态)
+- [ ] Dashboard 总资产减少 (反映 sold 资产的 removal)
+- [ ] `[console]` zero errors
+
+---
+
+## New cases — 汇率 API 直接验证
+
+C4.0 验证 UI 显示 bug (per-record 不重算); C2.25 验证汇率 API 端点本身。
+Reverse-engineered from backend `test_exchange_rate.py`。
+
+### C2.25 汇率 API — 实时汇率查询
+
+```
+# 通过 curl 直接调用 (无需 bsk)
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/currencies/rates" | jq .
+```
+
+Assertions:
+- [ ] 返回 200 + 汇率表 (base=CNY, targets=[USD,EUR,JPY,...])
+- [ ] 所有汇率 > 0 (非 0 / 非 null / 非 1:1 fallback)
+- [ ] `updated_at` 时间戳在 24 小时内 (非过期数据)
+- [ ] `GET /currencies` 返回支持的货币列表 (含代码 + 名称 + 符号)
+- [ ] `[console]` zero errors (curl 不适用, 但前端调用 /rates 时不应报 console 错误)

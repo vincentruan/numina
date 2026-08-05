@@ -580,6 +580,107 @@ Assertions (如果 member 账户可用):
 
 ---
 
+## New cases — Baby 家务审批端到端 +  sibling 赠币
+
+Reverse-engineered from backend `test_chores.py` (43 tests, full lifecycle:
+create/assign/complete/approve/reject/abandon), `test_chore_assignment.py`
+(9 tests), `test_coin_gifting.py` (sibling coin transfer). 之前 F.3.6 仅
+验证审批页 *渲染*; F.9 验证 *端到端流转* (child 完成 → parent 审批 → 币
+到账)。F.10 验证 sibling 赠币的 *实际交易*。
+
+### F.9.1 家务审批端到端 — child 完成 + parent 批准
+
+> **前置:** 需 demouser family 有 ≥1 child + ≥1 chore 已分配给该 child。
+
+```
+# Step 1: child 端登录, 完成一条家务
+bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
+bsk snapshot --session "$SID_CHILD"
+# 找到一条 chore, 点击 "完成"
+bsk click @eN --session "$SID_CHILD"   # 完成按钮
+bsk wait-ms 2s
+bsk snapshot --session "$SID_CHILD"
+# 应看到 "待审批" / "pending" 状态
+
+# Step 2: adult 端登录, 进入审批页
+bsk navigate ${BASE}baby/chores/approvals --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+```
+
+Assertions:
+- [ ] 审批页显示 ≥1 条待审批的家务完成记录
+- [ ] 每条记录显示: child 名称 + chore 名称 + 完成时间 + 请求的 coin 数
+- [ ] "批准" 按钮可点 → 弹出确认框 → 确认
+- [ ] 批准后: 该记录从 "待审批" 列表消失
+- [ ] child 端刷新 → coin balance 增加对应数量
+- [ ] Activity 记录中出现一条 "chore_reward" 类型的入账
+- [ ] `[console]` zero errors
+
+### F.9.2 家务审批 — parent 拒绝 + 反馈
+
+```
+# 接续 F.9.1, child 再完成一条 chore
+# adult 端进入审批页
+bsk navigate ${BASE}baby/chores/approvals --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+bsk click @eN --session "$SID"   # "拒绝" 按钮
+```
+
+Assertions:
+- [ ] "拒绝" 按钮可点 → 弹出确认框 (可含拒绝理由输入框)
+- [ ] 拒绝后: 该记录从 "待审批" 列表消失
+- [ ] child 端刷新 → coin balance 不变
+- [ ] child 端该 chore 状态变为 "rejected" 或 "abandoned"
+- [ ] Activity 记录中 **无** chore_reward 入账
+- [ ] `[console]` zero errors
+
+### F.9.3 家务完成庆祝动画 — FlyToTarget + coin bump
+
+> **与 C1.10 的差异:** C1.10 仅验证动画 *触发*; F.9.3 验证 审批通过
+> 后的 *完整庆祝链路* (动画 + coin bump + 音效)。
+
+```
+# 接续 F.9.1 的批准操作, 在 child 端观察
+bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
+bsk screenshot --session "$SID_CHILD" --out dogfood-output/f9.3-celebration.png
+```
+
+Assertions:
+- [ ] 批准后 child 端首页/ledger 出现 coin bump 动画 (数字跳动 + 增加)
+- [ ] FlyToTarget 粒子效果 (coin 从 chore 卡片飞向 balance 显示)
+- [ ] 触感反馈 (mobile: navigator.vibrate; desktop: 跳过)
+- [ ] reduced-motion 模式下: 动画降级为静态 (无 FlyToTarget, 仅数字变化)
+- [ ] `[console]` zero errors
+
+---
+
+### F.10 — Sibling 赠币端到端
+
+Reverse-engineered from backend `test_coin_gifting.py`. C1.2 渲染了赠币按钮;
+F.10 验证 *实际交易*: sender 扣币 + receiver 加币 + Activity 记录。
+
+> **前置:** demouser family 有 ≥2 child 账户, 且 sender 有 ≥1 coin。
+
+```
+# 以 sender child 登录
+bsk navigate "$CHILD_BASE"ledger --session "$SID_CHILD" --wait-until networkidle
+bsk snapshot --session "$SID_CHILD"
+# 找到 "赠送" 按钮 / sibling 头像
+bsk click @eN --session "$SID_CHILD"
+```
+
+Assertions:
+- [ ] 弹出赠币对话框, 显示可选的 sibling 列表 (不含自己)
+- [ ] 选择 receiver + 输入金额 → 提交
+- [ ] 金额 > sender balance → 校验错误 ("余额不足")
+- [ ] 金额 ≤ 0 → 校验错误
+- [ ] 合法金额提交 → sender ledger 出现一条 "gift_sent" 扣币记录
+- [ ] receiver ledger 出现一条 "gift_received" 加币记录 (切换 child 登录验证)
+- [ ] sender coin balance 减少, receiver coin balance 增加
+- [ ] `[console]` zero errors
+
+---
+
 ## Quick Reference
 
 | Case | 功能模块 | 路由 | 角色要求 |
@@ -592,3 +693,5 @@ Assertions (如果 member 账户可用):
 | F.6.1–F.6.5 | Child 扩展 | `/scenario`, `/badges`, ... | child |
 | F.7.1–F.7.5 | AI 设置深度 | `/settings/ai/*` | owner |
 | F.8.1 | 权限边界 | owner-only 页面 | member (deferred) |
+| F.9.1–F.9.3 | 家务审批端到端 | `/baby/chores/approvals` | owner + child |
+| F.10 | Sibling 赠币端到端 | `/ledger` (child) | child |
