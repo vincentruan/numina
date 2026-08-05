@@ -207,8 +207,9 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
     )
 
 # Legacy storage backend environment variables check
-# Remote storage is now configured per-family via the Settings UI.
-# These env vars are no longer supported and must be removed before startup.
+# NOTE: We do NOT raise at import time because that would block the Alembic CLI
+# from running the migration that cleans up legacy backends. The guard is exposed
+# as a callable checked during app startup instead.
 _LEGACY_STORAGE_ENV_KEYS = (
     "STORAGE_BACKEND_TYPE",
     "STORAGE_BACKEND_NAME",
@@ -223,14 +224,14 @@ _LEGACY_STORAGE_ENV_KEYS = (
     "STORAGE_WEBDAV_PASSWORD",
 )
 
-_legacy_storage_vars_found = [k for k in _LEGACY_STORAGE_ENV_KEYS if os.environ.get(k)]
-if _legacy_storage_vars_found:
-    raise RuntimeError(
-        "检测到已废弃的远程存储环境变量: "
-        f"{', '.join(_legacy_storage_vars_found)}。\n"
-        "远程备份已改为按家庭维度配置，请在「设置 → 家庭管理 → 家庭远程备份」中配置，"
-        "并删除上述环境变量后重新启动。"
-    )
+
+def check_legacy_storage_env_vars() -> list[str]:
+    """Return a list of legacy storage env vars that are still set.
+
+    This is called during application startup (FastAPI lifespan), NOT at module
+    import time, so the Alembic CLI can still import settings and run migrations.
+    """
+    return [k for k in _LEGACY_STORAGE_ENV_KEYS if os.environ.get(k)]
 
 # CHAT_DIR validation - must not be a strict subdirectory of UPLOAD_DIR
 # (UPLOAD_DIR subtree is served as static files; equality is OK because

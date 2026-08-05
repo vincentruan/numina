@@ -2,7 +2,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -59,17 +59,47 @@ class WebDAVStorageConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _validate_config_for_type(
+    backend_type: StorageBackendType,
+    config: GitHubStorageConfig | WebDAVStorageConfig,
+) -> None:
+    expected_type: type = {
+        StorageBackendType.GITHUB: GitHubStorageConfig,
+        StorageBackendType.WEBDAV: WebDAVStorageConfig,
+    }[backend_type]
+    if not isinstance(config, expected_type):
+        raise ValueError(
+            f"backend_type '{backend_type.value}' requires "
+            f"{expected_type.__name__}, got {type(config).__name__}"
+        )
+
+
 class StorageBackendCreateRequest(BaseModel):
     backend_type: StorageBackendType
     config: GitHubStorageConfig | WebDAVStorageConfig
     display_name: str | None = None
     is_active: bool = True
 
+    @model_validator(mode="after")
+    def _config_matches_type(self) -> "StorageBackendCreateRequest":
+        _validate_config_for_type(self.backend_type, self.config)
+        return self
+
 
 class StorageBackendUpdateRequest(BaseModel):
     config: GitHubStorageConfig | WebDAVStorageConfig | None = None
     display_name: str | None = None
     is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def _config_matches_type(self) -> "StorageBackendUpdateRequest":
+        if self.config is not None and self.backend_type is not None:
+            _validate_config_for_type(self.backend_type, self.config)
+        return self
+
+    # backend_type is not currently accepted on update, but we include this
+    # field so the validator above can be wired if the API is extended later.
+    backend_type: StorageBackendType | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +110,7 @@ class StorageBackendUpdateRequest(BaseModel):
 class StorageBackendResponse(SnowflakeBase):
     """Public view of a family's storage backend (no credentials exposed)."""
 
+    id: int
     backend_type: str
     display_name: str | None
     is_active: bool

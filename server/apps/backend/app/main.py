@@ -214,6 +214,20 @@ async def lifespan(app: FastAPI):
     ):
         logger.info("数据库结构已完整，无需迁移")
 
+    # Refuse to boot if legacy storage env vars are still set. This check lives
+    # in lifespan (not module import time) so the Alembic CLI can still run
+    # migrations while legacy vars are present.
+    from packages.core.settings import check_legacy_storage_env_vars
+
+    legacy_storage_vars = check_legacy_storage_env_vars()
+    if legacy_storage_vars:
+        raise RuntimeError(
+            "检测到已废弃的远程存储环境变量: "
+            f"{', '.join(legacy_storage_vars)}。\n"
+            "远程备份已改为按家庭维度配置，请在「设置 → 家庭管理 → 家庭远程备份」中配置，"
+            "并删除上述环境变量后重新启动。"
+        )
+
     db = SessionLocal()
     try:
         # --- Desired State Reconciliation ---

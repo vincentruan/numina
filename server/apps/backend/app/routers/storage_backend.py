@@ -21,8 +21,7 @@ from apps.backend.app.schemas.storage_backend import (
     StorageBackendStatusResponse,
     StorageBackendUpdateRequest,
 )
-from apps.backend.app.services.storage.config_crypto import decrypt_config, encrypt_config
-from apps.backend.app.services.storage.factory import get_backend_for_type
+from apps.backend.app.services.storage.config_crypto import encrypt_config
 from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/family/storage", tags=["family-storage"])
@@ -144,19 +143,6 @@ def delete_backend(
     backend = _get_owned_backend(db, user.family_id)
     if backend is None or backend.id != backend_id:
         raise AppError(ErrorCode.STORAGE_BACKEND_NOT_FOUND)
-
-    # Verify the backend is reachable before allowing deletion,
-    # so we can surface a helpful error if credentials are invalid.
-    config = decrypt_config(backend.config)
-    if config:
-        try:
-            storage = get_backend_for_type(backend.backend_type, config)
-            # Quick connectivity check — just list root; ignore failures.
-            import asyncio
-            asyncio.get_event_loop().run_until_complete(storage.list(""))
-        except Exception:
-            # Non-fatal — proceed with deletion even if backend is unreachable
-            pass
 
     # Orphan remote locations instead of hard-deleting them
     from apps.backend.app.models.file_remote_location import FileRemoteLocation

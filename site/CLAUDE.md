@@ -121,20 +121,6 @@ open site/project/index.html
 # ../assets/ paths require root-level access
 ```
 
-## Assets
-
-All screenshots are WebP format, optimized to ~200KB per image:
-- `dashboard-final-top.webp` — Hero, feature card 1
-- `dashboard-final-bottom.webp` — Feature card 2
-- `dashboard-final-cards.webp` — Feature card 3
-- `wishes-page.webp` — Feature card 4, children highlight
-
-Icons (24×24 stroke-based SVGs):
-- `asset-tracking.svg`
-- `liability-management.svg`
-- `dashboard-visualization.svg`
-- `children-incentive.svg`
-
 ## Accessibility
 
 - Skip-link: `<a href="#features" class="skip-link">跳转到主要内容</a>`
@@ -149,18 +135,9 @@ Both pages cross-link each other:
 - `overview/index.html` footer: "开发者？查看部署指南 →" → `../project/`
 - `project/index.html` footer: "产品介绍 →" → `../overview/`
 
-## Related Plans
-
-- `docs/plans/2026-04-18-003-feat-github-pages-landing-page-plan.md` — Original landing page plan
-- `docs/plans/2026-04-19-002-feat-two-page-landing-site-plan.md` — Rename landing→site + two-page structure
-- `docs/plans/2026-04-18-004-feat-frontend-promotional-pages-plan.md` — Vue frontend pages (different scope, NOT site/)
-
 ## What NOT to Do
 
 - Do NOT add filler content, placeholder sections, or "data slop"
 - Do NOT use Inter/Roboto/Arial/Space Grotesk fonts
-- Do NOT use purple gradients or generic color schemes
-- Do NOT add scattered micro-interactions
-- Do NOT redeclare `style.css` classes in page `<style>` blocks
-- Do NOT use JavaScript on overview page (brand should be static)
-- Do NOT link to Vue frontend routes (users haven't deployed yet — link to GitHub repo)
+- Do NOT use purple gradients or generic rounded-corner + left-border patterns
+- Do NOT add JavaScript on overview page (brand should be static)

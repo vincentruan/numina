@@ -29,7 +29,6 @@ Import from `@numina/auth`:
 
 ### Auth Key Invariants
 
-- **No `as any`, `@ts-ignore`** — fix types properly
 - **Don't import Vant directly** — leave to consuming app's auto-import
 
 ## `@numina/math` Exports

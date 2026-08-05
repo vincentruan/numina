@@ -25,13 +25,26 @@ depends_on: tuple[str, ...] | None = None
 
 
 def upgrade() -> None:
+    # Step 0: Make file_remote_locations.backend_id nullable so we can orphan
+    # references to legacy backends before deleting them.
+    with op.batch_alter_table("file_remote_locations") as batch_op:
+        batch_op.alter_column(
+            "backend_id",
+            existing_type=sa.BigInteger(),
+            nullable=True,
+        )
+
     # Step 1: Add family_id column (nullable first, so we can delete legacy rows)
     op.add_column(
         "storage_backends",
         sa.Column("family_id", sa.BigInteger(), nullable=True),
     )
 
-    # Step 2: Remove legacy global backends (no family association)
+    # Step 2: Orphan references to legacy global backends, then delete them
+    op.execute(
+        "UPDATE file_remote_locations SET backend_id = NULL, sync_status = 'orphaned' "
+        "WHERE backend_id IN (SELECT id FROM storage_backends WHERE family_id IS NULL)"
+    )
     op.execute("DELETE FROM storage_backends WHERE family_id IS NULL")
 
     # Step 3: Make family_id NOT NULL and add FK + index + unique constraint
@@ -79,3 +92,6 @@ def downgrade() -> None:
             "fk_storage_backends_family_id", type_="foreignkey"
         )
         batch_op.drop_column("family_id")
+
+    # file_remote_locations.backend_id is restored to NOT NULL on downgrade
+    # (legacy data is gone, so no orphaned rows should remain).

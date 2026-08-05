@@ -3,29 +3,6 @@
 Module-specific guidance for the Python FastAPI backend.
 See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
 
-## Quality Commands
-
-Run from `server/` (the uv workspace root). The canonical test root is `tests/backend/` (the legacy `apps/backend/tests/` was removed); `pyproject.toml` sets `testpaths = ["tests"]`.
-
-```bash
-uv run ruff check apps/backend/                    # lint
-uv run ruff check apps/backend/ --fix              # lint + auto-fix
-uv run ruff format apps/backend/                   # format (only files you touch)
-uv run mypy apps/backend/                          # type check
-uv run pytest tests/backend/ -v                    # run all backend tests
-uv run pytest tests/backend/ -v -k "keyword"       # run tests matching keyword
-uv run pytest tests/ -v                            # run all server tests (backend + agent + packages + scheduler_worker)
-cd apps/backend && uv run alembic revision --autogenerate -m "description"   # create migration
-cd apps/backend && uv run alembic upgrade head                                # apply migrations
-```
-
-## Tooling
-
-- **uv:** package manager. Use `uv add`/`uv remove` to manage dependencies. Never use `pip install` directly.
-- **ruff:** lint + format. Config in `pyproject.toml` under `[tool.ruff]`. Rules: E, F, I (imports), UP (pyupgrade).
-- **mypy:** type checker. Config in `pyproject.toml` under `[tool.mypy]` (`python_version = "3.12"`, `ignore_missing_imports = true`, `warn_return_any = true`, `plugins = ["pydantic.mypy"]`). Ratchet strictness over time by adding `disallow_untyped_defs = true` per module.
-- **pytest:** test runner. Tests in `tests/backend/` (canonical root; `testpaths = ["tests"]`). Each test gets a fresh in-memory SQLite DB.
-
 ## Cache Backend
 
 Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to enable Redis. When using Redis, also set `REDIS_URL` (e.g. `redis://localhost:6379/0`). The in-memory backend is suitable for single-instance dev; Redis is required for multi-worker or multi-instance deployments.
@@ -33,8 +10,7 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 ## Key Invariants
 
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
-- **Pydantic v2 only** — see root [CLAUDE.md](../../../CLAUDE.md) §Key Invariants for rule; see §Patterns below for examples.
-- **Import direction** — apps never import sibling apps. Use `packages/` for shared logic. Never `from apps.agent import ...` or `from apps.scheduler_worker import ...` inside backend code.
+- **Import direction** — see [server/CLAUDE.md](../../CLAUDE.md) §Import Direction.
 - **Error detail convention** — backend uses `AppError` (`app/errors/exceptions.py`) with `ErrorCode` enum (`app/errors/codes.py`). Each error code maps to a status code via `ERROR_META` and to i18n messages via `app/errors/locales/{zh-CN,en-US}.json`. The global `error_handlers.py` catches `AppError`, `RequestValidationError`, `StarletteHTTPException`, and `StorageError`, returning a unified JSON envelope: `{"code": "ERROR_CODE", "message": "localized message", "data": null, "request_id": "..."}`. Language is selected via `Accept-Language` header. Frontend catches via axios interceptor and maps `code` to i18n key `t('errors.ERROR_CODE')`.
 - **Agent Communication** — Never use raw `httpx.AsyncClient` to call Agent microservices. Always use `apps.backend.app.services.agent_client.AgentClient`. It guarantees tenant isolation by automatically injecting `X-Family-Id`, `X-User-Id`, and `X-Agent-Token` headers.
 
@@ -99,6 +75,8 @@ Serializing as strings preserves exact values across the API boundary.
 | Nginx DNS 上游缓存 / stale DNS | [`nginx-stale-dns`](../../../../docs/solutions/integration-issues/nginx-stale-dns-upstream-cache.md) |
 | 统一数据根路径管理 / Docker volume | [`unified-data-root-path`](../../../../docs/solutions/architecture-patterns/unified-data-root-path-management-2026-05-17.md) |
 | MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
+| DB check constraint 与 Pydantic regex 不一致 | [`db-check-constraint-pydantic-regex-sync`](../../../../docs/solutions/best-practices/db-check-constraint-pydantic-regex-sync.md) |
+| ASR WER/CER 100% 错误率 / 文本归一化 | [`asr-wer-whitespace-stripping-tokenization`](../../../../docs/solutions/integration-issues/asr-wer-whitespace-stripping-tokenization.md) |
 
 ## App Layout
 
@@ -216,33 +194,7 @@ When adding a new router: register it in `app/main.py`, set `prefix=""` for root
 
 ## Patterns
 
-### Pydantic v2
-
-```python
-# ✅ ConfigDict
-from pydantic import BaseModel, ConfigDict
-class MySchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-# ✅ model_validate
-obj = MySchema.model_validate(orm_instance)
-
-# ✅ field_validator
-from pydantic import field_validator
-class MySchema(BaseModel):
-    @field_validator("field_name")
-    @classmethod
-    def validate_field(cls, v: str) -> str:
-        return v.strip()
-```
-
-### Code Style
-
-- **Import order:** stdlib → third-party → local (`app.*`), blank line between groups
-- **Type annotations:** `str | None`, `list[str]` (Python 3.10+ union syntax)
-- **Private helpers:** `_to_response(asset)` (leading underscore)
-
-### Family Invitation Code
+### Common Pitfalls
 
 - 6-character alphanumeric code stored on the `Family` model
 - `POST /api/v1/family/invite-code` regenerates it (owner only)
@@ -274,20 +226,9 @@ Financial assets carry return fields:
 
 ### Common Pitfalls
 
-- Router decorators use `""` not `"/"` — see root [CLAUDE.md](../../../CLAUDE.md) §URL Style for the `redirect_slashes=False` rule
-- Auth endpoints (`/login`, `/register`, `/refresh`) return `200`, not `201`
-- Asset and Liability `POST` endpoints return `201`
-- `TokenResponse` does not include `user` — call `GET /auth/me` separately after login
 - `DELETE /assets/{id}` archives (sets `is_archived=True`), does not hard-delete
 - Dashboard queries filter `is_archived=False` — archived assets are excluded from all aggregates
 - **Error handling pattern:** raise `AppError(ErrorCode.XXX, details=...)` from `app/errors/exceptions.py`. The global handler in `error_handlers.py` maps it to the i18n JSON envelope via `errors/codes.py` + `errors/locales/{zh-CN,en-US}.json`. Never raise raw `HTTPException` with English strings for new code — use `AppError` + `ErrorCode`.
-
-### Failure Patterns
-
-**JS precision loss / NaN on IDs in the frontend**
-- Symptom: frontend receives `NaN` or a rounded/incorrect integer where an ID should appear; `JSON.parse()` silently loses precision on large numbers
-- Cause: response schema inherits from plain `BaseModel` — IDs are serialized as JSON integers, which exceed JS's safe integer range (2⁵³) for Snowflake IDs
-- Fix: inherit the response schema from `SnowflakeBase` (from `apps.backend.app.schemas.base`); IDs are then serialized as strings automatically — no manual `str()` calls needed
 
 ## MCP Caller Binding Invariants
 

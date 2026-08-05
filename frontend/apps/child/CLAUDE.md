@@ -39,7 +39,6 @@ src/
 
 ### Gotchas
 
-- **van-list in pull-refresh**: `van-list` must be inside `van-pull-refresh`, not sibling
 - **Route cache**: ChildHome, ChildTasks, ChildLedger, ChildWishes, ChildTreasures
 - **Canvas warm cream**: `#fffaf0` (light), `#0a1a1a` (dark) — NOT pure white/black
 
