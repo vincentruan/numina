@@ -375,6 +375,82 @@ async def trigger_finance_coach_run(
     )
 
 
+class ChatRunRequest(BaseModel):
+    """Request body for internal chat run trigger (backend → agent).
+
+    The backend /ai/chat/stream endpoint calls this after passing its own
+    require_ai_enabled + require_adult. Trust model mirrors FinanceCoachRunRequest:
+    family_id is trusted because the endpoint requires X-Agent-Token (R1 internal
+    bypass — start_run(internal=True)).
+    """
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/chat/{thread_id}")
+async def trigger_chat_run(
+    thread_id: str,
+    body: ChatRunRequest,
+    request: Request,
+    _family_id: str = Depends(verify_service_token),
+) -> StreamingResponse:
+    """Trigger a numina chat stream_run from the backend (service-to-service).
+
+    The backend /ai/chat/stream endpoint creates a stream_run with app="numina"
+    via this X-Agent-Token-authenticated endpoint, bypassing R1's frontend 409
+    gate (internal=True). The worker's _run_numina_agent then drives the live
+    conversation agent; this endpoint streams frames back as SSE for the backend
+    to forward to the frontend.
+    """
+    _validate_path_segment(thread_id, "thread_id")
+
+    # Merge caller metadata with the app marker
+    merged_metadata = {"app": "numina"}
+    if body.metadata:
+        merged_metadata.update(body.metadata)
+
+    # Build a duck-typed body matching start_run's getattr() access pattern.
+    run_body = SimpleNamespace(
+        assistant_id=body.metadata.get("assistant_id") if body.metadata else None,
+        input=body.input,
+        config=None,
+        metadata=merged_metadata,
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/chat/{thread_id}/{record.run_id}",
+        },
+    )
+
+
 class WishAdviceRunRequest(BaseModel):
     """Request body for internal wish-advice run trigger (backend → agent).
 

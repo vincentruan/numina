@@ -278,16 +278,18 @@ async def chat_stream(
                 + b"\n"
             )
 
-        # Route to the runs.py endpoint (LangGraph SSE format).
+        # Route to the internal gateway endpoint (X-Agent-Token auth, bypasses R1 409 gate).
         # When agent_id is absent, fall back to the 小鸣 system agent (NUMINA_AGENT_ID).
         agent_id = body.agent_id or str(NUMINA_AGENT_ID)
-        agent_url = f"/api/threads/{session_id}/runs/stream"
+        agent_url = f"/internal/gateway/runs/chat/{session_id}"
         request_json = {
-            "assistant_id": agent_id,
+            "family_id": str(current_user.family_id),
+            "user_id": str(current_user.id),
             "input": {
                 "messages": [{"role": "user", "content": body.question}],
             },
             "metadata": {
+                "assistant_id": agent_id,
                 "deep_think": body.deep_think,
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
