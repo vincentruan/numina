@@ -34,6 +34,23 @@ These must hold in every code path — never bypass them:
 3. **Audit logging:** Every agent run emits an audit event via `audit_logger.log_call()` in the `finally` block of each per-app runner in `runtime/worker.py` (e.g. `_run_numina_agent`). Both success and error paths are covered — the `finally` placement guarantees it.
 4. **DeerFlow-only execution:** All multi-step agent orchestration goes through `DeerFlowAdapter.typed_stream_dispatch` (in `services/deerflow_adapter/`). Never implement a custom runtime, tool registry, skill loader, memory manager, orchestrator, or workflow engine. Lightweight single-call LLM paths (`suggest`, `input_polish`) use `core/llm.py` directly — these are explicitly exempt (no DeerFlow dispatch needed for one-shot calls).
 
+## DeerFlow 问题排查指南
+
+遇到以下问题时，参考对应的 solution 文档：
+
+| 问题场景 | 参考文档 |
+|---------|---------|
+| DeerFlow stream 类型不匹配 / SSE 安全问题 | [`deerflow-stream-type-mismatch`](../../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
+| GLM5 thinking provider endpoint 错误 | [`deerflow-glm5-thinking-mismatch`](../../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
+| DeerFlow harness 静默 fallback / 并发问题 | [`deerflow-harness-fixes`](../../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
+| MCP tools 加载失败 / 跨线程 asyncio.Lock 死锁 | [`user-feedback-branch-fixes`](../../../../docs/solutions/ui-bugs/user-feedback-branch-multi-domain-fixes-2026-08-05.md) (Bug 3) |
+| 会话标题显示 thinking-block 原始内容 | 同上 (Bug 4) |
+| stream 提前关闭 / 连接中断 | [`stream-closure-fix`](../../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
+| 多 provider 熔断 / cascade retry | [`three-state-circuit-breaker`](../../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
+| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
+| MCP chat adapter 架构 | [`mcp-chat-adapter-architecture`](../../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
+| 多 app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
+
 ## Cross-Cutting Invariants
 
 These apply across the whole server monorepo. An agent loading only this file must still know them.
