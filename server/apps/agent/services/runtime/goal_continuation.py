@@ -170,17 +170,8 @@ async def _reread_goal_and_checkpoint(
     checkpointer: Any, thread_id: str
 ) -> tuple[dict[str, Any] | None, Any]:
     goal = await read_thread_goal(checkpointer, thread_id)
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
-        checkpointer, "get_tuple", None
-    )
-    if aget_tuple is None:
-        return goal, None
-    result = aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
-    import inspect
-
-    if inspect.isawaitable(result):
-        result = await result
-    return goal, result
+    checkpoint_tuple = await _reread_checkpoint_tuple(checkpointer, thread_id)
+    return goal, checkpoint_tuple
 
 
 async def _reread_checkpoint_tuple(checkpointer: Any, thread_id: str) -> Any:
