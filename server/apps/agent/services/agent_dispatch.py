@@ -101,7 +101,6 @@ def _classify_stream_error(e: Exception) -> str:
     return "transient_network"
 
 
-
 # ── Classification helpers — delegated to shared message_classifier module ───
 # Private aliases kept for readability of stream_agent_dispatch internals.
 _classify_message = classify_message
@@ -131,7 +130,9 @@ def _generate_tool_result_summary(content: Any) -> str | None:
         if not keys:
             return "空结果"
         # Filter out internal/technical keys
-        display_keys = [k for k in keys if not k.startswith("_") and k not in ("raw", "data")]
+        display_keys = [
+            k for k in keys if not k.startswith("_") and k not in ("raw", "data")
+        ]
         if not display_keys:
             return f"{len(keys)} 项数据"
         if len(display_keys) <= 3:
@@ -173,6 +174,7 @@ def _resolve_skills(
     if isinstance(agent_skills, str):
         try:
             import json
+
             agent_skills = json.loads(agent_skills)
         except (json.JSONDecodeError, TypeError):
             logger.warning(
@@ -188,11 +190,13 @@ def _resolve_skills(
     if agent_skills == ["chat"]:
         return []
     if "*" in agent_skills:
-        return [s for s in family_enabled_skills if s.get("skill_id") not in _INTERNAL_ONLY_SKILLS]
+        return [
+            s
+            for s in family_enabled_skills
+            if s.get("skill_id") not in _INTERNAL_ONLY_SKILLS
+        ]
     allowed = set(agent_skills) - _INTERNAL_ONLY_SKILLS
     return [s for s in family_enabled_skills if s.get("skill_id") in allowed]
-
-
 
 
 async def stream_agent_dispatch(
@@ -221,9 +225,7 @@ async def stream_agent_dispatch(
         "deerflow_attempted": False,
         "success": False,
     }
-    builder_events = EventStreamBuilder(
-        skill_id=f"agent-{agent_id}", task_id=task_id
-    )
+    builder_events = EventStreamBuilder(skill_id=f"agent-{agent_id}", task_id=task_id)
 
     def _emit_audit(error_type: str | None) -> None:
         """Emit one AuditEntry — wraps audit_logger.log_call so the audit
@@ -326,7 +328,9 @@ async def stream_agent_dispatch(
     try:
         enabled_skills = await client.get_enabled_skills()
     except Exception as e:
-        logger.warning("get_enabled_skills failed for family %s: %s", family_id, type(e).__name__)
+        logger.warning(
+            "get_enabled_skills failed for family %s: %s", family_id, type(e).__name__
+        )
         enabled_skills = []
 
     # Apply per-agent skill scope: AI问答 (chat-only) → no business skills;
@@ -358,7 +362,12 @@ async def stream_agent_dispatch(
                         expected_prefix,
                         actual_url,
                     )
-                    srv["url"] = settings.BACKEND_BASE_URL.rstrip("/") + "/api/v1/internal/mcp/" + family_id + "/sse"
+                    srv["url"] = (
+                        settings.BACKEND_BASE_URL.rstrip("/")
+                        + "/api/v1/internal/mcp/"
+                        + family_id
+                        + "/sse"
+                    )
                     logger.info(
                         "[agent_dispatch] corrected backend MCP URL for family=%s url=%s",
                         family_id,
@@ -377,6 +386,7 @@ async def stream_agent_dispatch(
     # 3a. Inject auth headers into MCP servers (required for SSE handshake)
     # The backend API returns MCP servers without auth headers; we add them here.
     from packages.security.service_auth.agent_jwt import create_agent_token
+
     mcp_headers: dict[str, str] = {
         "X-Agent-Token": create_agent_token(family_id),
         "X-Family-Id": family_id,
@@ -457,6 +467,7 @@ async def stream_agent_dispatch(
     from apps.agent.services.runtime.sandbox_provider import (
         set_family_sandbox_context,
     )
+
     set_family_sandbox_context(family_id, caller_user_id=user_id)
 
     app_config_dict = dict(effective.config_dict)
@@ -511,9 +522,7 @@ async def stream_agent_dispatch(
 
     # 8a. Set per-run extensions_config path via ContextVar (NOT process-global env).
     # DeerFlow reads MCP server configs from this file. Must be set before make_lead_agent.
-    # CRITICAL: Reset MCP tools cache because the cache tracks mtime of a SINGLE file path.
-    # In multi-family architecture, each family gets a DIFFERENT temp config file path.
-    # Without reset, the cache would keep using stale tools from a previous family's config.
+    # MCP cache reset is optimized: only reset when config content changed (T4).
     #
     # NOTE: The previous implementation set the process-global
     # DEER_FLOW_EXTENSIONS_CONFIG_PATH env var, which is a single process-wide slot
@@ -521,26 +530,14 @@ async def stream_agent_dispatch(
     # embeds a family_id). The ContextVar is coroutine-scoped and propagated into the
     # deerflow executor thread + sync tool pool, so each run sees its own path.
     if extensions_config_path:
-        try:
-            from deerflow.config.extensions_config import reset_extensions_config
-            from deerflow.mcp.cache import reset_mcp_tools_cache
-
-            # Reset both caches: MCP tools cache and ExtensionsConfig singleton.
-            # Without this, DeerFlow would reuse stale config from a previous family.
-            reset_mcp_tools_cache()
-            reset_extensions_config()
-            logger.debug(
-                "[agent_dispatch] reset MCP tools cache for new family=%s config_path=%s",
-                family_id,
-                extensions_config_path,
-            )
-        except ImportError:
-            logger.warning(
-                "[agent_dispatch] deerflow cache reset functions not available"
-            )
+        from apps.agent.services.deerflow_adapter.adapter import (
+            _maybe_reset_mcp_cache,
+        )
         from apps.agent.services.runtime.sandbox_provider import (
             set_extensions_config_path,
         )
+
+        _maybe_reset_mcp_cache(extensions_config_path)
         set_extensions_config_path(extensions_config_path)
 
     # All control flow from here lives inside `try/finally` so the persistence
@@ -576,6 +573,7 @@ async def stream_agent_dispatch(
             from apps.agent.services.deerflow_adapter.family_adapter_cache import (
                 _get_shared_checkpointer,
             )
+
             agent_graph.checkpointer = _get_shared_checkpointer()
         except Exception:
             # Non-fatal: stream still works; aget_state will raise later and
@@ -664,7 +662,10 @@ async def stream_agent_dispatch(
                 if not isinstance(event, dict):
                     continue
                 for _node_name, node_output in event.items():
-                    if not isinstance(node_output, dict) or "messages" not in node_output:
+                    if (
+                        not isinstance(node_output, dict)
+                        or "messages" not in node_output
+                    ):
                         continue
                     for msg in node_output["messages"]:
                         kind = _classify_message(msg)
@@ -675,8 +676,7 @@ async def stream_agent_dispatch(
                                 # Include timestamp metadata for frontend duration calculation
                                 # and shimmer animation activation (deerflow pattern)
                                 yield builder_events.phase(
-                                    "thinking",
-                                    {"timestamp": time.time()}
+                                    "thinking", {"timestamp": time.time()}
                                 ).to_ndjson()
                                 thinking_started = True
                             if reasoning:
@@ -689,16 +689,21 @@ async def stream_agent_dispatch(
                             for call in _extract_tool_calls(msg):
                                 tname = call["name"]
                                 # Skip duplicate tool calls (same call_id already processed)
-                                call_id = str(call["id"]) if call["id"] else str(uuid.uuid4())
+                                call_id = (
+                                    str(call["id"]) if call["id"] else str(uuid.uuid4())
+                                )
                                 if call_id in seen_tool_call_ids:
                                     logger.debug(
                                         "[agent_dispatch] Skipping duplicate tool.call id=%s name=%s",
-                                        call_id, tname
+                                        call_id,
+                                        tname,
                                     )
                                     continue
                                 seen_tool_call_ids.add(call_id)
 
-                                ttype, tdisplay, ticon, tkey = _resolve_tool_metadata(tname)
+                                ttype, tdisplay, ticon, tkey = _resolve_tool_metadata(
+                                    tname
+                                )
                                 tools_used.append(tname)
                                 evt = builder_events.tool_call(
                                     tool_name=tname,
@@ -721,7 +726,10 @@ async def stream_agent_dispatch(
                                         arguments=call["args"],
                                     )
                                 except Exception as e:
-                                    logger.warning("[agent_dispatch] journal write_tool_call failed: %s", e)
+                                    logger.warning(
+                                        "[agent_dispatch] journal write_tool_call failed: %s",
+                                        e,
+                                    )
                                 yield evt.to_ndjson()
                             continue
 
@@ -744,12 +752,15 @@ async def stream_agent_dispatch(
                                 # Check for JSON error format
                                 try:
                                     import json
+
                                     parsed = json.loads(content_str)
                                     if isinstance(parsed, dict) and "error" in parsed:
                                         tool_success = False
                                 except (json.JSONDecodeError, TypeError):
                                     # Not JSON, check for string error patterns
-                                    if content_str.startswith("Error:") or content_str.startswith("Error "):
+                                    if content_str.startswith(
+                                        "Error:"
+                                    ) or content_str.startswith("Error "):
                                         tool_success = False
 
                             # Journal write BEFORE yield to ensure persistence on disconnect
@@ -762,7 +773,10 @@ async def stream_agent_dispatch(
                                     execution_time_ms=0,  # streaming path lacks timing metadata
                                 )
                             except Exception as e:
-                                logger.warning("[agent_dispatch] journal write_tool_result failed: %s", e)
+                                logger.warning(
+                                    "[agent_dispatch] journal write_tool_result failed: %s",
+                                    e,
+                                )
                             # Tool messages from langchain don't carry success/timing —
                             # we detect success from content patterns (JSON error field or "Error:" prefix)
                             yield builder_events.tool_result(
@@ -784,7 +798,8 @@ async def stream_agent_dispatch(
                             if content_hash == last_answer_hash and len(content) > 20:
                                 logger.debug(
                                     "[agent_dispatch] Skipping duplicate answer content hash=%s len=%s",
-                                    content_hash, len(content)
+                                    content_hash,
+                                    len(content),
                                 )
                                 continue
                             last_answer_hash = content_hash
@@ -847,6 +862,7 @@ async def stream_agent_dispatch(
             from apps.agent.services.runtime.sandbox_provider import (
                 set_extensions_config_path,
             )
+
             set_extensions_config_path(None)
 
         audit_state["success"] = success
@@ -857,19 +873,21 @@ async def stream_agent_dispatch(
         # never blocks the response close. _fire_and_forget no-ops cleanly
         # when no event loop is running (e.g. during teardown).
         if _fire_and_forget is not None:
-            _fire_and_forget(_persist_session_metadata(
-                agent_graph=agent_graph,
-                runnable_config=runnable_config,
-                family_id=family_id,
-                user_id=user_id,
-                session_id=thread_id,
-                agent_id=str(agent_id),
-                agent_name=agent_name,
-                answer="".join(answer_parts),
-                model_id=model_id,
-                success=success,
-                start_ms=t_start,
-            ))
+            _fire_and_forget(
+                _persist_session_metadata(
+                    agent_graph=agent_graph,
+                    runnable_config=runnable_config,
+                    family_id=family_id,
+                    user_id=user_id,
+                    session_id=thread_id,
+                    agent_id=str(agent_id),
+                    agent_name=agent_name,
+                    answer="".join(answer_parts),
+                    model_id=model_id,
+                    success=success,
+                    start_ms=t_start,
+                )
+            )
 
 
 # ── Session persistence ─────────────────────────────────────────────────────

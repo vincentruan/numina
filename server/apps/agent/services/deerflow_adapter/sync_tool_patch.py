@@ -80,7 +80,9 @@ def apply_sync_tool_patches() -> None:
         return_section = source.rsplit("return", 1)[-1]
         if "_ensure_sync_invocable_tool" in return_section:
             upstream_fix_present = True
-            logger.debug("[sync_tool_patch] upstream sync-wrap fix detected; will still patch for interrupt tools")
+            logger.debug(
+                "[sync_tool_patch] upstream sync-wrap fix detected; will still patch for interrupt tools"
+            )
     except Exception:
         pass
 
@@ -126,7 +128,9 @@ def apply_sync_tool_patches() -> None:
     _tools_mod.get_available_tools = _patched_get_available_tools
     _tools_pkg.get_available_tools = _patched_get_available_tools
 
-    logger.info("[sync_tool_patch] patched get_available_tools to wrap all tools for sync invocation")
+    logger.info(
+        "[sync_tool_patch] patched get_available_tools to wrap all tools for sync invocation"
+    )
     _patched = True
     # Upstream 2.1.0 already fixed make_sync_tool_wrapper (contextvar propagation
     # + RunnableConfig injection) and _find_usage_recorder (CallbackManager unwrap),
@@ -162,7 +166,9 @@ def _apply_original_user_content_patch() -> None:
     try:
         from langchain_core.messages import HumanMessage
     except ImportError:
-        logger.warning("[sync_tool_patch] langchain_core.messages.HumanMessage not found; skipping")
+        logger.warning(
+            "[sync_tool_patch] langchain_core.messages.HumanMessage not found; skipping"
+        )
         return
 
     _orig_init = HumanMessage.__init__
@@ -190,7 +196,9 @@ def _apply_original_user_content_patch() -> None:
         _orig_init(self, *args, **kwargs)
 
     HumanMessage.__init__ = _patched_init  # type: ignore[method-assign]
-    logger.info("[sync_tool_patch] patched HumanMessage.__init__ to inject ORIGINAL_USER_CONTENT_KEY")
+    logger.info(
+        "[sync_tool_patch] patched HumanMessage.__init__ to inject ORIGINAL_USER_CONTENT_KEY"
+    )
 
 
 def _apply_active_skill_tool_filter(tools):
@@ -208,6 +216,7 @@ def _apply_active_skill_tool_filter(tools):
         from apps.agent.services.deerflow_adapter.active_skill_context import (
             get_active_skill,
         )
+
         active_skill_name = get_active_skill()
     except Exception:
         return tools
@@ -219,6 +228,7 @@ def _apply_active_skill_tool_filter(tools):
             ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
             filter_tools_by_skill_allowed_tools,
         )
+
         # review_skill_package is a DeerFlow built-in that only works inside
         # DeerFlow's own workspace (requires .skill archives or SKILL.md dirs).
         # In the numina agent workspace it always fails with ValueError and
@@ -244,7 +254,9 @@ def _apply_active_skill_tool_filter(tools):
         if len(filtered) < len(tools):
             logger.debug(
                 "[sync_tool_patch] filtered tools %d -> %d for active skill %r",
-                len(tools), len(filtered), active_skill_name,
+                len(tools),
+                len(filtered),
+                active_skill_name,
             )
         return filtered
     except Exception as e:
@@ -280,7 +292,9 @@ def _apply_subagent_contextvar_patch() -> None:
     try:
         import deerflow.subagents.executor as _executor_mod
     except (ImportError, AttributeError):
-        logger.warning("[sync_tool_patch] deerflow.subagents.executor not found; skipping")
+        logger.warning(
+            "[sync_tool_patch] deerflow.subagents.executor not found; skipping"
+        )
         return
 
     _orig_submit = _executor_mod._submit_to_isolated_loop_in_context
@@ -298,7 +312,9 @@ def _apply_subagent_contextvar_patch() -> None:
         )
 
     _executor_mod._submit_to_isolated_loop_in_context = _patched_submit
-    logger.info("[sync_tool_patch] patched _submit_to_isolated_loop_in_context to propagate contextvars into isolated loop")
+    logger.info(
+        "[sync_tool_patch] patched _submit_to_isolated_loop_in_context to propagate contextvars into isolated loop"
+    )
 
 
 def _apply_mcp_proxy_bypass_patch() -> None:
@@ -313,7 +329,9 @@ def _apply_mcp_proxy_bypass_patch() -> None:
     try:
         import httpx
     except ImportError:
-        logger.warning("[sync_tool_patch] httpx not installed; skipping MCP proxy patch")
+        logger.warning(
+            "[sync_tool_patch] httpx not installed; skipping MCP proxy patch"
+        )
         return
 
     def _no_proxy_httpx_client(
@@ -351,7 +369,9 @@ def _apply_mcp_proxy_bypass_patch() -> None:
 
         _orig_get_mcp_tools = _mcp_mod.get_mcp_tools
     except ImportError:
-        logger.warning("[sync_tool_patch] deerflow.mcp.tools or adapters not found; skipping MCP proxy patch")
+        logger.warning(
+            "[sync_tool_patch] deerflow.mcp.tools or adapters not found; skipping MCP proxy patch"
+        )
         return
 
     async def _patched_get_mcp_tools():
@@ -383,11 +403,23 @@ def _apply_mcp_proxy_bypass_patch() -> None:
         from apps.agent.services.runtime.sandbox_provider import (
             get_family_sandbox_context as _get_family,
         )
+
         _mcp_family_id = _get_family()
         _mcp_caller_user_id = _get_caller()
+        if _mcp_family_id is None:
+            # Do not silently load MCP tools without a tenant: that leads to
+            # the "all records empty" symptom. Log + continue (fail-open but
+            # loud) so existing global-config paths still work, but make the
+            # missing tenant visible.
+            _mcp_mod.logger.warning(
+                "MCP tool load without family_id context — "
+                "tools will lack tenant headers (X-Family-Id). "
+                "This likely indicates a ContextVar propagation failure."
+            )
         _mcp_agent_token = None
         if _mcp_family_id:
             from packages.security.service_auth.agent_jwt import create_agent_token
+
             _mcp_agent_token = create_agent_token(_mcp_family_id)
         for _name, cfg in servers_config.items():
             if cfg.get("transport") in ("sse", "http"):
@@ -435,10 +467,15 @@ def _apply_mcp_proxy_bypass_patch() -> None:
                 tool_name_prefix=False,
             )
             tools = await client.get_tools()
-            _mcp_mod.logger.info(f"Successfully loaded {len(tools)} tool(s) from MCP servers")
+            _mcp_mod.logger.info(
+                f"Successfully loaded {len(tools)} tool(s) from MCP servers"
+            )
 
             for tool in tools:
-                if getattr(tool, "func", None) is None and getattr(tool, "coroutine", None) is not None:
+                if (
+                    getattr(tool, "func", None) is None
+                    and getattr(tool, "coroutine", None) is not None
+                ):
                     tool.func = make_sync_tool_wrapper(tool.coroutine, tool.name)
 
             return tools
@@ -447,7 +484,9 @@ def _apply_mcp_proxy_bypass_patch() -> None:
             return []
 
     _mcp_mod.get_mcp_tools = _patched_get_mcp_tools
-    logger.info("[sync_tool_patch] patched get_mcp_tools to bypass system proxy (trust_env=False) on SSE/HTTP MCP connections")
+    logger.info(
+        "[sync_tool_patch] patched get_mcp_tools to bypass system proxy (trust_env=False) on SSE/HTTP MCP connections"
+    )
     _apply_extensions_config_path_patch()
 
 
@@ -474,7 +513,9 @@ def _apply_extensions_config_path_patch() -> None:
     try:
         from deerflow.config.extensions_config import ExtensionsConfig
     except ImportError:
-        logger.warning("[sync_tool_patch] ExtensionsConfig not found; skipping resolve_config_path patch")
+        logger.warning(
+            "[sync_tool_patch] ExtensionsConfig not found; skipping resolve_config_path patch"
+        )
         return
 
     _orig_resolve_config_path = ExtensionsConfig.resolve_config_path
@@ -483,6 +524,7 @@ def _apply_extensions_config_path_patch() -> None:
         from apps.agent.services.runtime.sandbox_provider import (
             get_extensions_config_path as _get_ext_path,
         )
+
         if config_path is None:
             ctx_path = _get_ext_path()
             if ctx_path:
@@ -492,7 +534,10 @@ def _apply_extensions_config_path_patch() -> None:
         return _orig_resolve_config_path.__func__(cls, config_path)
 
     ExtensionsConfig.resolve_config_path = classmethod(_patched_resolve_config_path)  # type: ignore[assignment]
-    logger.info("[sync_tool_patch] patched ExtensionsConfig.resolve_config_path to consult per-run ContextVar before env var")
+    logger.info(
+        "[sync_tool_patch] patched ExtensionsConfig.resolve_config_path to consult per-run ContextVar before env var"
+    )
+
 
 def _apply_clarification_artifact_patch() -> None:
     """Patch ``_tool_message_event`` + ``_serialize_message`` to preserve ``artifact``.
@@ -512,7 +557,9 @@ def _apply_clarification_artifact_patch() -> None:
     try:
         from deerflow.client import DeerFlowClient
     except ImportError:
-        logger.warning("[sync_tool_patch] DeerFlowClient not found; skipping clarification artifact patch")
+        logger.warning(
+            "[sync_tool_patch] DeerFlowClient not found; skipping clarification artifact patch"
+        )
         return
 
     _orig_tool_message_event = DeerFlowClient._tool_message_event
@@ -538,7 +585,9 @@ def _apply_clarification_artifact_patch() -> None:
 
     DeerFlowClient._serialize_message = staticmethod(_patched_serialize_message)
 
-    logger.info("[sync_tool_patch] patched _tool_message_event + _serialize_message to preserve ToolMessage.artifact (human_input)")
+    logger.info(
+        "[sync_tool_patch] patched _tool_message_event + _serialize_message to preserve ToolMessage.artifact (human_input)"
+    )
 
 
 def _apply_mcp_cache_threading_lock_patch() -> None:
@@ -606,6 +655,7 @@ def _apply_mcp_cache_threading_lock_patch() -> None:
             # patched version (see _apply_mcp_proxy_bypass_patch) already
             # injects auth headers from ContextVars.
             from deerflow.mcp.tools import get_mcp_tools
+
             _cache_mod._mcp_tools_cache = _asyncio.run(get_mcp_tools())
             _cache_mod._config_path, _cache_mod._config_signature = (
                 _cache_mod._current_config_state()
@@ -616,7 +666,9 @@ def _apply_mcp_cache_threading_lock_patch() -> None:
                 len(_cache_mod._mcp_tools_cache or []),
             )
         except Exception:
-            logger.exception("[sync_tool_patch] MCP tools init failed via threading-lock patch")
+            logger.exception(
+                "[sync_tool_patch] MCP tools init failed via threading-lock patch"
+            )
             return []
         finally:
             _lazy_init_thread_lock.release()
@@ -624,4 +676,6 @@ def _apply_mcp_cache_threading_lock_patch() -> None:
         return _cache_mod._mcp_tools_cache or []
 
     _cache_mod.get_cached_mcp_tools = _patched_get_cached_mcp_tools
-    logger.info("[sync_tool_patch] patched get_cached_mcp_tools to use threading.Lock (fixes event-loop deadlock in worker threads)")
+    logger.info(
+        "[sync_tool_patch] patched get_cached_mcp_tools to use threading.Lock (fixes event-loop deadlock in worker threads)"
+    )

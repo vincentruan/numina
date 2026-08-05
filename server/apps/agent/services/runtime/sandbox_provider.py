@@ -65,12 +65,14 @@ _caller_user_id_context: contextvars.ContextVar[str | None] = contextvars.Contex
 # sync tool-executor pool (via _run_in_executor_with_context + the
 # make_sync_tool_wrapper contextvar patch), so each run sees its own path with
 # no cross-family leakage.
-_extensions_config_path_context: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "numina_extensions_config_path", default=None
+_extensions_config_path_context: contextvars.ContextVar[str | None] = (
+    contextvars.ContextVar("numina_extensions_config_path", default=None)
 )
 
 
-def set_family_sandbox_context(family_id: str, caller_user_id: str | None = None) -> None:
+def set_family_sandbox_context(
+    family_id: str, caller_user_id: str | None = None
+) -> None:
     """Set the current family_id for sandbox path resolution + DeerFlow user.
 
     Must be called before ``acquire(thread_id)`` in the same coroutine.
@@ -98,7 +100,10 @@ def set_family_sandbox_context(family_id: str, caller_user_id: str | None = None
         token = set_current_user(SimpleNamespace(id=family_id))
         _current_user_token.set(token)
     except Exception:
-        logger.debug("[sandbox] set_current_user failed (deerflow user_context unavailable)", exc_info=True)
+        logger.debug(
+            "[sandbox] set_current_user failed (deerflow user_context unavailable)",
+            exc_info=True,
+        )
 
 
 def get_caller_user_id_context() -> str | None:
@@ -148,6 +153,18 @@ def reset_family_sandbox_context() -> None:
 def get_family_sandbox_context() -> str | None:
     """Return the current coroutine's family_id, or ``None`` if not set."""
     return _family_id_context.get()
+
+
+def assert_mcp_context_complete(stage: str) -> None:
+    """Fail-fast if critical tenant ContextVars are unset.
+
+    Thin wrapper around :func:`run_context.assert_run_context_complete`.
+    Kept for backward compatibility — callers that imported from this
+    module continue to work.
+    """
+    from apps.agent.services.runtime.run_context import assert_run_context_complete
+
+    assert_run_context_complete(stage)
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +290,9 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     # depth: it re-reads the family_id ContextVar and overrides any stale
     # ``"default"`` (e.g. if a caller invokes acquire before the ContextVar
     # propagated) so the LRU cache key + sandbox ID are always family-scoped.
-    def acquire(self, thread_id: str | None = None, *, user_id: str | None = None) -> str:
+    def acquire(
+        self, thread_id: str | None = None, *, user_id: str | None = None
+    ) -> str:
         family_id = get_family_sandbox_context()
         # Family context is the tenant truth — override any harness-supplied
         # user_id (Numina uses family_id as DeerFlow's effective user). When no

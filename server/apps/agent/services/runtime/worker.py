@@ -17,40 +17,21 @@ import asyncio
 import logging
 import re
 import shutil
-import time
 from pathlib import Path
 from typing import Any
 
-from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
+from deerflow.runtime import RunManager, RunRecord, StreamBridge
 
 from apps.agent.core.backend_client import BackendClient
-from apps.agent.schemas.context import FamilyContext
-from apps.agent.services.audit_logger import AuditEntry, audit_logger
-from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
-from apps.agent.services.message_classifier import (
-    extract_tool_calls,
-    resolve_tool_metadata,
-)
-
-# Shared provider-selection helper (circuit-state aware). Imported lazily via
-# function scope in each runner to avoid a circular import with orchestrator.py
-# — but the symbol is referenced here at module level for testability.
-from apps.agent.services.orchestrator import _select_stream_run_provider
-from apps.agent.services.pii_redactor import pii_redactor
 from packages.core import get_path_manager
 
 from .asset_report_middleware import parse_report_json
-from .gc import schedule_run_cleanup
 from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
     _prepare_goal_continuation_input,
 )
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
-from .run_pipeline import (
-    _fire_and_forget_circuit_report,
-    _resolve_numina_mcp_servers,
-    _track_task,
-)
+from .run_pipeline import _track_task
 from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
 logger = logging.getLogger(__name__)
@@ -877,306 +858,117 @@ async def _run_numina_agent(
 ) -> None:
     """Background agent execution for the Numina (/ai/chat) application.
 
-    Publishes events to the ``StreamBridge`` and uses the ``RunManager`` for
-    lifecycle tracking.  Runs inside ``asyncio.create_task()`` so it does not
-    block the SSE response.
+    Uses ``RunPipeline`` for the standard scaffolding (setup + streaming +
+    teardown).  The chat runner is the only runner with extra complexity:
+    per-call config overrides from the frontend, dynamic skill selection
+    (chat vs chat-search), slash-message bypass, goal continuation loop,
+    follow-up suggestions, and LLM-generated thread titles.
 
-    Key patterns preserved from DeerFlow ``run_agent``:
-    - ``await run_manager.set_status(run_id, RunStatus.running)`` at start
-    - ``await bridge.publish(run_id, "metadata", ...)`` as first event
-    - ``record.abort_event.is_set()`` checks for cooperative cancellation
-    - Terminal status ``success`` / ``error`` / ``interrupted``
-    - ``await bridge.publish_end(run_id)`` in ``finally``
-    - Deferred ``bridge.cleanup(run_id, delay=60)`` in ``finally``
-
-    # [Copied from DeerFlow Reference] — patterns from runtime/runs/worker.py
-    # [Integrated with Numina Multi-Tenant] — family_id scoping
+    The goal continuation loop (D1 — DeerFlow worker.py parity) calls
+    ``p.run_skill()`` for each hidden continuation turn after the initial
+    user-visible turn.  ``run_skill`` accumulates ``ai_response_parts`` and
+    ``cumulative_usage`` across turns, so the post-stream hooks (suggestions,
+    title) see the full conversation.
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    # Completion status surfaced to the client in the `end` frame (Q2). Default
-    # to "error" so an unexpected path never reports "complete" falsely.
-    completion_status = "error"
-    # Stream-extras inputs — initialised here so the ``finally`` block is safe
-    # when the run aborts before streaming starts. Title/suggestion generation
-    # are skipped when ``selected_provider`` stays None.
-    selected_provider: dict[str, Any] | None = None
-    user_message = ""
-    _skill_token = None
-    ai_response_parts: list[str] = []
-    # Cumulative token usage from the adapter's `end` event (DeerFlow pattern).
-    # Captured here so the worker's own `end` frame can include it.
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata (DeerFlow pattern)
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id,
-            "metadata",
-            {
-                "run_id": run_id,
-                "thread_id": thread_id,
-            },
-        )
+    # Pre-pipeline setup: resolve dynamic parameters that depend on the
+    # family AI config (web-search capability, custom skills) or on the
+    # frontend's per-call overrides (config.configurable).
+    client = BackendClient(family_id=family_id)
+    ai_config = await client.get_family_ai_config()
 
-        # 2. Fetch per-family AI config (tenant-isolated)
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
+    # Extract per-call execution-mode overrides from the RunnableConfig.
+    # The frontend sends these in config.configurable (see reference
+    # backend/app/gateway/services.py:merge_run_context_overrides). They
+    # control DeerFlow's tool loading (subagent_enabled -> task tool) and
+    # planning middleware (plan_mode -> TodoList/write_todos) on a per-call
+    # basis.
+    #
+    # IMPORTANT: These values MUST be passed to create_family_adapter as
+    # init-time parameters (not just per-call overrides). The cache key in
+    # family_adapter_cache.py includes (subagent_enabled, plan_mode), so
+    # different mode combinations get distinct DeerFlowClient instances.
+    configurable = (
+        config.get("configurable", {}) if isinstance(config, dict) else {}
+    )
+    call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
+    call_plan_mode = bool(configurable.get("is_plan_mode", False))
+    call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
+    call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
 
-        # 3. Fetch enabled MCP servers so the chat skill can query family data
-        # via MCP tools (get_family_overview, get_assets, ...). Without this,
-        # _generate_temp_config writes no extensions_config.json and DeerFlow
-        # loads zero MCP tools - the agent then falls back to the empty context
-        # fields injected by _build_prompt and reports "all records empty".
-        # Mirrors the same logic in agent_dispatch.stream_agent_dispatch.
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, family_id, user_id, "[_run_numina_agent]"
-        )
+    # Web-search behavioral guidance lives in the skill files:
+    # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
+    # The skill is selected below (chat-search vs chat) based on call_websearch_enabled,
+    # so no runtime injection is needed — and injecting here would leak
+    # internal guidance into user-visible prompts.
+    # Only use chat-search when actual search capability is configured.
+    # Otherwise the model is told it can search but has no tools → hallucinated searches.
+    has_search_capability = bool(
+        ai_config.get("web_search_providers")
+        or ai_config.get("web_search_mcp_servers")
+    )
 
-        # 4a. Extract per-call execution-mode overrides from the RunnableConfig.
-        # The frontend sends these in config.configurable (see reference
-        # backend/app/gateway/services.py:merge_run_context_overrides). They
-        # control DeerFlow's tool loading (subagent_enabled -> task tool) and
-        # planning middleware (plan_mode -> TodoList/write_todos) on a per-call
-        # basis.
-        #
-        # IMPORTANT: These values MUST be passed to create_family_adapter as
-        # init-time parameters (not just per-call overrides). The cache key in
-        # family_adapter_cache.py includes (subagent_enabled, plan_mode), so
-        # different mode combinations get distinct DeerFlowClient instances.
-        # If we pass hardcoded False here, the DeerFlowClient is created with
-        # plan_mode=False, and while _ensure_agent() can rebuild the agent when
-        # per-call plan_mode=True arrives via stream(), this causes unnecessary
-        # agent rebuilds on every call and may miss the TodoMiddleware's
-        # write_todos tool if the rebuild doesn't fire correctly.
-        configurable = (
-            config.get("configurable", {}) if isinstance(config, dict) else {}
-        )
-        call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
-        call_plan_mode = bool(configurable.get("is_plan_mode", False))
-        call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
-        call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
-
-        # U3: Fetch enabled custom skills for slash activation whitelist.
-        # The worker fetches the family's enabled custom skills and passes them
-        # to create_family_adapter so DeerFlow's SkillActivationMiddleware enforces
-        # the whitelist. Q1 resolution: custom-skills-only (builtin excluded).
-        enabled_skills = await client.get_enabled_skills()
-        available_skills = {
-            s["skill_id"] for s in enabled_skills if s.get("skill_type") == "custom"
-        }
-
-        # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
-        # U7 (D5 TodoList): plan_mode=True makes DeerFlow's build_middlewares
-        # inject its own TodoMiddleware (write_todos tool + context-loss /
-        # premature-exit hooks) — see deerflow/agents/lead_agent/agent.py. No
-        # custom middleware is injected here: a second TodoMiddleware (the former
-        # numina copy) collided with DeerFlow's on LangChain's name-based dedup
-        # (``Please remove duplicate middleware instances``) and double-fired the
-        # after_model reminder. plan_mode is part of the LRU cache key
-        # (family_adapter_cache.py cache_key), so plan_mode=True / False get
-        # distinct DeerFlowClient instances.
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=240,
-            subagent_enabled=call_subagent_enabled,
-            plan_mode=call_plan_mode,
-            mcp_servers=mcp_servers,
-            middlewares=None,
-            available_skills=available_skills,  # U3: slash activation whitelist
-        )
-
-        # 5. Extract user message for context
-        if graph_input and "messages" in graph_input:
-            msgs = graph_input["messages"]
-            if isinstance(msgs, list) and msgs:
-                last = msgs[-1]
-                if isinstance(last, dict) and last.get("role") in ("user", "human"):
-                    user_message = last.get("content", "")
-
-        # 5a. Web-search behavioral guidance lives in the skill files:
-        # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
-        # The skill is selected below (chat-search vs chat) based on call_websearch_enabled,
-        # so no runtime injection is needed — and injecting here would leak
-        # internal guidance into user-visible prompts.
-        # Only use chat-search when actual search capability is configured.
-        # Otherwise the model is told it can search but has no tools → hallucinated searches.
-        has_search_capability = bool(
-            ai_config.get("web_search_providers")
-            or ai_config.get("web_search_mcp_servers")
-        )
-
-        # 5b. Skill discovery is handled natively by DeerFlow: apply_prompt_template
-        # renders <skill_system> (with <available_skills> listing the active skill's
-        # metadata) into the system prompt, filtered by available_skills passed to
-        # DeerFlowClient. The LLM then calls read_file to load the full SKILL.md.
-        # The former self-built <skill_index> user-message injection duplicated this
-        # and leaked internal guidance into the user-visible message, so it was removed.
-
-        # 6. PII redaction (Key Invariant #1)
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
-
-        # 7. Stream via typed_stream_dispatch → publish to bridge.
-        # Collect AI text for suggestions, and synthesize `tool_call` custom
-        # events from `messages` frames so R6 (规划步骤) renders under v2 —
-        # the legacy runs.py router did this inline; the v2 worker must too,
-        # because typed_stream_dispatch yields raw LangGraph `messages` events
-        # (with tool_calls on the AI message) rather than pre-split tool_call
-        # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        skill_id = (
+    def _resolve_skill_name(cfg: dict) -> str:
+        """Callable passed to RunPipeline.skill_name — resolved after ai_config
+        is fetched inside __aenter__."""
+        return (
             "chat-search"
             if (call_websearch_enabled and has_search_capability)
             else "chat"
         )
-        # Set the active skill so sync_tool_patch can filter tools to this skill's
-        # declared allowed-tools whitelist (see active_skill_context module docstring).
-        #
-        # U2: For slash-activated skills (e.g. `/my-budget task`), skip set_active_skill
-        # so DeerFlow's SkillToolPolicyMiddleware owns tool filtering instead of numina's
-        # _apply_active_skill_tool_filter. The adapter sets ORIGINAL_USER_CONTENT_KEY
-        # (U1), so DeerFlow's SkillActivationMiddleware can parse the slash.
-        from deerflow.skills.slash import parse_slash_skill_reference
 
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
+    # U3: Fetch enabled custom skills for slash activation whitelist.
+    # The worker fetches the family's enabled custom skills and passes them
+    # to create_family_adapter so DeerFlow's SkillActivationMiddleware enforces
+    # the whitelist. Q1 resolution: custom-skills-only (builtin excluded).
+    enabled_skills = await client.get_enabled_skills()
+    available_skills = {
+        s["skill_id"] for s in enabled_skills if s.get("skill_type") == "custom"
+    }
+
+    # Extract user message for suggestions and title generation.
+    user_message = _extract_backend_user_message(graph_input) or ""
+
+    # Determine whether this is a slash-activated skill message. For slash
+    # messages, skip set_active_skill so DeerFlow's SkillActivationMiddleware
+    # owns tool filtering instead of numina's _apply_active_skill_tool_filter.
+    from deerflow.skills.slash import parse_slash_skill_reference
+
+    is_slash_message = parse_slash_skill_reference(user_message) is not None
+
+    # Build the pipeline with all numina-specific parameters.
+    async with RunPipeline(
+        app_name="numina",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=call_plan_mode,
+        subagent_enabled=call_subagent_enabled,
+        enable_thinking=call_thinking_enabled,
+        timeout_seconds=240,
+        skill_name=_resolve_skill_name,
+        available_skills=available_skills,
+        skip_active_skill=is_slash_message,
+    ) as p:
+        # For slash-activated skills (U2), set the skill context manually
+        # after the pipeline's __aenter__ (which skipped set_active_skill).
+        if is_slash_message:
+            from apps.agent.services.deerflow_adapter.active_skill_context import (
+                set_active_skill,
+            )
+
+            p._skill_token = set_active_skill(p.skill_name)
+
+        # 1. First (user-visible) stream turn.
+        await p.run_skill(
+            user_message, enable_thinking=call_thinking_enabled
         )
 
-        _is_slash_message = parse_slash_skill_reference(user_message) is not None
-        # Slash-activated skill: skip set_active_skill, let DeerFlow handle it
-        # Non-slash message: use existing chat/chat-search pre-selection
-        _skill_token = None if _is_slash_message else set_active_skill(skill_id)
-
-        async def _stream_once(
-            stream_context: Any, *, is_continuation: bool = False
-        ) -> None:
-            """Run one DeerFlow stream turn and forward events to the bridge.
-
-            Extracted from the inline loop so the U4 goal continuation loop can
-            re-invoke it with a hidden continuation ``RedactedContext``. When
-            ``is_continuation`` is True the turn is a hidden goal-continuation
-            turn (logged, not user-visible as a new prompt).
-            """
-            # ``cumulative_usage`` is reassigned
-            # here but declared in the enclosing ``_run_numina_agent`` scope —
-            # declare them nonlocal so the assignments propagate (and so the
-            # continuation loop sees an interrupt flagged during a turn).
-            nonlocal cumulative_usage
-            async for sse_type, data in adapter.typed_stream_dispatch(
-                skill_name=skill_id,
-                context=stream_context,
-                thread_id=thread_id,
-                enable_thinking=call_thinking_enabled,
-                subagent_enabled=call_subagent_enabled,
-                plan_mode=call_plan_mode,
-            ):
-                # Cooperative cancellation check (DeerFlow pattern)
-                if record.abort_event.is_set():
-                    break
-
-                if sse_type == "end":
-                    # Capture cumulative usage from DeerFlow before breaking.
-                    # The adapter yields ("end", {"usage": {...}}) from
-                    # DeerFlowClient.stream() end event.
-                    if isinstance(data, dict) and data.get("usage"):
-                        raw_usage = data["usage"]
-                        cumulative_usage = {
-                            "input_tokens": raw_usage.get("input_tokens", 0),
-                            "output_tokens": raw_usage.get("output_tokens", 0),
-                            "total_tokens": raw_usage.get("total_tokens", 0),
-                        }
-                    break
-                if sse_type == "error":
-                    await bridge.publish(run_id, "error", data)
-                    break
-
-                # Forward the canonical frame (messages / values / custom).
-                await bridge.publish(run_id, sse_type, data)
-
-                # Mirror runs.py:223-236 — collect AI text and synthesize
-                # `tool_call` custom events from the AI message's tool_calls so
-                # the frontend planning-steps UI (R6) updates in real time.
-                if sse_type == "messages" and isinstance(data, dict):
-                    msg_type = data.get("type")
-
-                    if msg_type == "ai":
-                        content = data.get("content")
-                        tool_calls = data.get("tool_calls")
-                        msg_id = data.get("id")
-                        logger.info(
-                            "[_run_numina_agent] AI message received: run=%s id=%s content_len=%d has_tool_calls=%s",
-                            run_id,
-                            msg_id,
-                            len(content) if content else 0,
-                            bool(tool_calls),
-                        )
-                        if content:
-                            ai_response_parts.append(content)
-                        else:
-                            logger.warning(
-                                "[_run_numina_agent] AI message with empty content: run=%s data_keys=%s",
-                                run_id,
-                                list(data.keys()),
-                            )
-                        tool_calls_raw = tool_calls
-                        if tool_calls_raw:
-                            # Use extract_tool_calls to properly handle LangChain ToolCall objects
-                            for tc in extract_tool_calls(data):
-                                raw_name = tc.get("name", "")
-                                # Resolve display metadata (display_name/icon/tool_type/
-                                # display_key) the same way agent_dispatch.py does, so the
-                                # /ai/chat planning-steps UI shows readable Chinese action
-                                # labels (e.g. "查询资产数据") instead of raw tool names
-                                # (e.g. "Numina Backend MCP_get_assets").
-                                tool_type, display_name, icon, display_key = (
-                                    resolve_tool_metadata(raw_name)
-                                )
-                                payload: dict[str, Any] = {
-                                    "type": "tool_call",
-                                    "tool_call_id": tc.get("id", ""),
-                                    "tool_name": raw_name,
-                                    "args": tc.get("args", {}),
-                                    "display_name": display_name,
-                                    "icon": icon,
-                                    "tool_type": tool_type,
-                                }
-                                if display_key:
-                                    payload["display_key"] = display_key
-                                await bridge.publish(run_id, "custom", payload)
-
-                    elif msg_type == "tool":
-                        # Tool result message — forward to frontend so ChainOfThought
-                        # can update step status from 'running' to 'done' and display
-                        # artifact links (which require status === 'done').
-                        tool_call_id = str(data.get("tool_call_id") or "")
-                        tool_name = data.get("name") or ""
-                        content = data.get("content")
-                        if tool_call_id:
-                            await bridge.publish(
-                                run_id,
-                                "custom",
-                                {
-                                    "type": "tool_result",
-                                    "tool_call_id": tool_call_id,
-                                    "tool_name": tool_name,
-                                    "content": content,
-                                },
-                            )
-
-        # 7a. First (user-visible) stream turn.
-        await _stream_once(redacted)
-
-        # 7b. U4 goal continuation loop (D1 — DeerFlow worker.py:519-542 parity).
+        # 2. U4 goal continuation loop (D1 — DeerFlow worker.py parity).
         # After the user-visible turn, evaluate whether the active goal is
         # satisfied; if not (and the blocker is the only continuable one,
         # ``goal_not_met_yet``), inject a hidden continuation turn and stream
@@ -1194,8 +986,8 @@ async def _run_numina_agent(
             continuation = await _prepare_goal_continuation_input(
                 checkpointer=_get_shared_checkpointer_for_goal(),
                 thread_id=thread_id,
-                run_id=run_id,
-                family_ai_config=selected_provider or {},
+                run_id=p.run_id,
+                family_ai_config=p.selected_provider or {},
                 family_id=family_id,
                 user_id=user_id,
                 abort_event=record.abort_event,
@@ -1204,86 +996,29 @@ async def _run_numina_agent(
                 break
             logger.info(
                 "[_run_numina_agent] goal continuation run=%s thread=%s count=%s",
-                run_id,
+                p.run_id,
                 thread_id,
                 continuation.get("continuation_count"),
             )
-            await _stream_once(continuation["context"], is_continuation=True)
-
-        # 8. Terminal status - drives the `end` completion signal (Q2).
-        # ``interrupted`` is set only by user-initiated cancel via abort_event.
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-        success = record.status == RunStatus.success
-
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning("[_run_numina_agent] failed run=%s err=%s", run_id, error_type)
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        # Circuit-breaker reporting: classify the exception and report to the
-        # backend so the provider's circuit_state can transition to open.
-        _fire_and_forget_circuit_report(
-            family_id, selected_provider, exc
-        )
-        await bridge.publish(
-            run_id,
-            "error",
-            {"message": str(exc), "name": error_type},
-        )
-
-    finally:
-        # Clear the active-skill ContextVar so it cannot leak into a later run
-        # reusing this thread/coroutine. Guarded: _skill_token is only set if
-        # dispatch reached the skill-selection step, and is None
-        # for slash-activated messages (U2) where set_active_skill was skipped.
-        if _skill_token is not None:
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
+            # Hidden continuation turn — same frame-forwarding as the first
+            # turn (tool_call/tool_result synthesis, ai_response accumulation).
+            # run_skill handles PII redaction internally (defense-in-depth).
+            await p.run_skill(
+                continuation["context"].free_text,
+                enable_thinking=call_thinking_enabled,
             )
 
-            reset_active_skill(_skill_token)
-
-        # 9. Audit log (Key Invariant #3)
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="chat",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-        # 10. Terminal frames: follow-up suggestions (R8), `end` with completion
-        # status (Q2), and fire-and-forget title generation — then the end
-        # sentinel + deferred cleanup (DeerFlow pattern).
-        #
-        # R8: generate follow-up suggestions BEFORE publishing `end`, because
-        # the frontend attaches suggestions to the last AI message in the `end`
-        # handler. If suggestions arrive after `end`, they are silently dropped.
-        # — NOT the whole ``ai_config`` envelope, which nests provider keys
-        # (api_key/ai_model_id/ai_base_url) under ``providers``. Passing the
-        # envelope leaves every key unset, so the suggestions LLM falls back
-        # to a dummy key and silently 401s. Skipped when the run aborted
-        # before a provider was selected OR when the run was cancelled/interrupted.
-        if completion_status == "complete" and selected_provider is not None:
-            ai_response = "".join(ai_response_parts)
+        # 3. Post-stream: follow-up suggestions (R8).
+        # Generated BEFORE publishing `end`, because the frontend attaches
+        # suggestions to the last AI message in the `end` handler. If
+        # suggestions arrive after `end`, they are silently dropped.
+        if p.completion_status == "complete" and p.selected_provider is not None:
             suggestions = await generate_suggestions(
-                ai_response, user_message, selected_provider
+                p.ai_text, user_message, p.selected_provider
             )
             if suggestions:
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "suggestions",
@@ -1291,32 +1026,18 @@ async def _run_numina_agent(
                     },
                 )
 
-        # Q2: publish a real `end` data frame carrying the completion status
-        # so the frontend can distinguish a clean completion from a truncated
-        # stream (#19) without guessing from content. publish_end() below only
-        # signals the sentinel (data=None), so the data frame must precede it.
-        # Include cumulative token usage from DeerFlow when available.
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        # Thread title: generate for ALL completion states (complete, interrupted,
-        # error) so even cancelled/failed threads get a sidebar title (DeerFlow
-        # ``_ensure_interrupted_title`` pattern). The sync ``after_model`` hook
-        # already produced a fallback title via the values SSE events during the
-        # stream; this post-stream step upgrades it to an LLM-generated title
-        # when possible, then publishes the final title via a values event so
-        # the frontend can update the sidebar without polling.
-        generated_title: str | None = None
-        if selected_provider is not None and user_message:
+        # 4. Post-stream: LLM-generated thread title.
+        # Generated for ALL completion states (complete, interrupted, error)
+        # so even cancelled/failed threads get a sidebar title (DeerFlow
+        # ``_ensure_interrupted_title`` pattern).
+        if p.selected_provider is not None and user_message:
             task = asyncio.create_task(
                 sync_title_from_checkpoint(
                     thread_id,
                     family_id,
-                    ai_config=selected_provider,
+                    ai_config=p.selected_provider,
                     user_message=user_message,
-                    ai_response="".join(ai_response_parts),
+                    ai_response=p.ai_text,
                 )
             )
             _track_task(task)
@@ -1324,16 +1045,10 @@ async def _run_numina_agent(
                 generated_title = await task
             except Exception:
                 generated_title = None
-
-        # Publish the generated title via a values event so the frontend updates
-        # the sidebar in real-time (DeerFlow pattern: title flows through the
-        # values SSE channel, not a separate HTTP poll).
-        if generated_title:
-            await bridge.publish(run_id, "values", {"title": generated_title})
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
+            if generated_title:
+                await bridge.publish(
+                    p.run_id, "values", {"title": generated_title}
+                )
 
 
 # Synthetic trigger for literacy-weekly-report runs.

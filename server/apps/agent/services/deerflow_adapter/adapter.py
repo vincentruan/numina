@@ -117,6 +117,83 @@ def _get_semaphore() -> asyncio.Semaphore:
     return _semaphore
 
 
+# ---------------------------------------------------------------------------
+# MCP cache optimization (T4) + extensions_config_path resolution (T2)
+# ---------------------------------------------------------------------------
+
+# Tracks the last-reset state for MCP cache optimization.
+# (extensions_config_path, content_signature) — only reset when changed.
+# Process-global: under concurrent multi-family requests, families with
+# different configs will alternate resets. This is inherent to DeerFlow's
+# global MCP cache singleton. The optimization reduces resets from
+# "every request" to "every config change".
+_last_reset_state: tuple[str | None, tuple | None] | None = None
+
+
+def _resolve_extensions_config_path(config_path: str | None) -> str | None:
+    """Derive extensions_config.json path from the family config_path.
+
+    Returns the absolute path string if the file exists, else None.
+    Called in the async caller so the value propagates via copy_context()
+    alongside the other 4 tenant ContextVars.
+    """
+    if not config_path:
+        return None
+    from pathlib import Path
+
+    ext = Path(config_path).parent / "extensions_config.json"
+    return str(ext) if ext.exists() else None
+
+
+def _maybe_reset_mcp_cache(extensions_path: str) -> None:
+    """Reset MCP cache only when the extensions config changed.
+
+    Avoids tearing down MCP sessions on every ``_produce()`` entry when the
+    config file is unchanged.  Uses DeerFlow's own content-signature approach
+    (``path``, ``mtime``, ``size``, ``sha256``) — the same mechanism as
+    ``deerflow.mcp.cache._is_cache_stale``.
+
+    Risk: ``_last_reset_state`` is process-global.  Under concurrent
+    multi-family requests with different config paths, two families will
+    alternate resets (each sees the other's state as "changed").  This is
+    inherent to DeerFlow's global singleton — unavoidable without per-family
+    MCP caching.  The optimization still helps repeated requests from the
+    same family (the common case for interactive chat).
+    """
+    global _last_reset_state
+    try:
+        from pathlib import Path
+
+        from deerflow.mcp.cache import _get_config_signature
+    except (ImportError, AttributeError):
+        # Fallback: always reset if signature tracking is unavailable.
+        try:
+            from deerflow.config.extensions_config import reset_extensions_config
+            from deerflow.mcp.cache import reset_mcp_tools_cache
+
+            reset_mcp_tools_cache()
+            reset_extensions_config()
+        except ImportError:
+            pass
+        return
+
+    sig = _get_config_signature(Path(extensions_path))
+    current_state: tuple[str | None, tuple | None] = (extensions_path, sig)
+
+    if current_state == _last_reset_state:
+        return  # Config unchanged — skip expensive reset.
+
+    try:
+        from deerflow.config.extensions_config import reset_extensions_config
+        from deerflow.mcp.cache import reset_mcp_tools_cache
+
+        reset_mcp_tools_cache()
+        reset_extensions_config()
+        _last_reset_state = current_state
+    except ImportError:
+        pass
+
+
 class DeerFlowAdapter:
     """Async adapter for DeerFlowClient. Protocol translation only — no business logic.
 
@@ -210,33 +287,102 @@ class DeerFlowAdapter:
         preventing SQLITE_BUSY. The lock is held on the async side (before the
         executor call) so it works correctly across threads.
         """
-        async with _get_semaphore(), _CHECKPOINTER_LOCK:
-            try:
-                loop = asyncio.get_running_loop()
-                result = await asyncio.wait_for(
-                    _run_in_executor_with_context(
-                        loop,
-                        _get_executor(),
-                        self._sync_dispatch,
-                        skill_name,
-                        context,
-                        thread_id,
-                    ),
-                    timeout=self._timeout,
-                )
-                return str(result)
-            except TimeoutError:
-                raise DeerFlowTimeoutError(
-                    f"DeerFlow skill '{skill_name}' timed out after {self._timeout}s"
-                ) from None
-            except DeerFlowSkillNotFoundError:
-                raise
-            except DeerFlowError:
-                raise
-            except Exception as e:
-                raise DeerFlowError(
-                    f"DeerFlow error in skill '{skill_name}': {e}"
-                ) from e
+        # Set extensions_config_path in the async caller so it propagates via
+        # copy_context() alongside the other 4 tenant ContextVars (T2).
+        from apps.agent.services.runtime.sandbox_provider import (
+            set_extensions_config_path,
+        )
+
+        extensions_path = _resolve_extensions_config_path(self._config_path)
+        if extensions_path:
+            set_extensions_config_path(extensions_path)
+        try:
+            async with _get_semaphore(), _CHECKPOINTER_LOCK:
+                try:
+                    loop = asyncio.get_running_loop()
+                    result = await asyncio.wait_for(
+                        _run_in_executor_with_context(
+                            loop,
+                            _get_executor(),
+                            self._sync_dispatch,
+                            skill_name,
+                            context,
+                            thread_id,
+                        ),
+                        timeout=self._timeout,
+                    )
+                    return str(result)
+                except TimeoutError:
+                    raise DeerFlowTimeoutError(
+                        f"DeerFlow skill '{skill_name}' timed out after {self._timeout}s"
+                    ) from None
+                except DeerFlowSkillNotFoundError:
+                    raise
+                except DeerFlowError:
+                    raise
+                except Exception as e:
+                    raise DeerFlowError(
+                        f"DeerFlow error in skill '{skill_name}': {e}"
+                    ) from e
+        finally:
+            if extensions_path:
+                set_extensions_config_path(None)
+
+    @contextlib.contextmanager
+    def _family_config_context(self):
+        """Push per-family DeerFlow AppConfig into thread context.
+
+        Yields the reloaded family AppConfig (or ``None`` in global-config mode).
+        On exit, pops the config.
+
+        Handles only the DeerFlow AppConfig push/pop + MCP cache reset.
+        The ``extensions_config_path`` ContextVar is set by the async caller
+        (before ``_run_in_executor_with_context``) and propagated via
+        ``copy_context()`` — so all 5 tenant ContextVars propagate uniformly.
+
+        Replaces the 3 copy-pasted ritual blocks that were in
+        ``raw_stream_dispatch._produce``, ``_async_stream_chunks._produce``,
+        and ``_sync_dispatch``.
+        """
+        if not self._config_path:
+            yield None
+            return
+
+        from deerflow.config.app_config import (
+            pop_current_app_config,
+            push_current_app_config,
+            reload_app_config,
+        )
+
+        from apps.agent.services.runtime.sandbox_provider import (
+            assert_mcp_context_complete,
+        )
+
+        family_config = reload_app_config(str(self._config_path))
+        push_current_app_config(family_config)
+
+        # Assert tenant ContextVar survived the copy_context() hop from the
+        # async caller into this executor thread.  Fail-fast here (instead of
+        # at MCP tool load time) so the error message points at the propagation
+        # boundary, not at an empty-tools symptom.
+        assert_mcp_context_complete("executor-thread entry")
+
+        # MCP cache reset (optimized — only when config changed).
+        # extensions_config_path is already set by the async caller and
+        # propagated via copy_context().  We just need to reset the global
+        # MCP cache singleton if the config content changed.
+        from pathlib import Path as _Path
+
+        extensions_path = (
+            _Path(str(self._config_path)).parent / "extensions_config.json"
+        )
+        if extensions_path.exists():
+            _maybe_reset_mcp_cache(str(extensions_path))
+
+        try:
+            yield family_config
+        finally:
+            pop_current_app_config()
 
     async def stream_dispatch(
         self,
@@ -280,8 +426,16 @@ class DeerFlowAdapter:
             reset_original_user_content,
             set_original_user_content,
         )
+        from apps.agent.services.runtime.sandbox_provider import (
+            set_extensions_config_path,
+        )
 
         original_content_token = set_original_user_content(context.free_text)
+        # Set extensions_config_path in the async caller (T2) so it propagates
+        # via copy_context() alongside the other 4 tenant ContextVars.
+        extensions_path = _resolve_extensions_config_path(self._config_path)
+        if extensions_path:
+            set_extensions_config_path(extensions_path)
         try:
             # Build per-call kwargs for DeerFlowClient.stream(). Only include
             # overrides that are explicitly set (not None) so the adapter's
@@ -298,67 +452,7 @@ class DeerFlowAdapter:
 
                 def _produce() -> None:
                     try:
-                        if self._config_path:
-                            from deerflow.config.app_config import (
-                                pop_current_app_config,
-                                push_current_app_config,
-                                reload_app_config,
-                            )
-
-                            family_config = reload_app_config(str(self._config_path))
-                            push_current_app_config(family_config)
-
-                            # Set the per-run extensions_config path via ContextVar.
-                            # DeerFlow's ExtensionsConfig.from_file() reads MCP server
-                            # configs from this file. The extensions_config.json is
-                            # generated alongside config.yaml in
-                            # family_adapter_cache._generate_temp_config() when
-                            # mcp_servers is provided.
-                            #
-                            # We use a coroutine-scoped ContextVar instead of the
-                            # process-global DEER_FLOW_EXTENSIONS_CONFIG_PATH env var:
-                            # the env var is a single process-wide slot that two
-                            # concurrent family runs overwrite, leaking family-A's MCP
-                            # SSE URL (which embeds family-A's id) into family-B's run.
-                            # The ContextVar is propagated into the deerflow executor
-                            # thread + sync tool-executor pool, so _patched_get_mcp_tools
-                            # reads the correct per-run path. No env restore needed —
-                            # ContextVar isolation is automatic.
-                            from pathlib import Path as _Path
-
-                            from apps.agent.services.runtime.sandbox_provider import (
-                                set_extensions_config_path,
-                            )
-
-                            extensions_path = (
-                                _Path(str(self._config_path)).parent
-                                / "extensions_config.json"
-                            )
-                            if extensions_path.exists():
-                                set_extensions_config_path(str(extensions_path))
-                                # Reset MCP cache so DeerFlow picks up the new config
-                                try:
-                                    from deerflow.config.extensions_config import (
-                                        reset_extensions_config,
-                                    )
-                                    from deerflow.mcp.cache import reset_mcp_tools_cache
-
-                                    reset_mcp_tools_cache()
-                                    reset_extensions_config()
-                                except ImportError:
-                                    pass
-
-                            try:
-                                message = self._build_prompt(skill_name, context)
-                                for event in self._client.stream(
-                                    message, thread_id=thread_id, **stream_kwargs
-                                ):
-                                    loop.call_soon_threadsafe(queue.put_nowait, event)
-                            finally:
-                                if extensions_path.exists():
-                                    set_extensions_config_path(None)
-                                pop_current_app_config()
-                        else:
+                        with self._family_config_context():
                             message = self._build_prompt(skill_name, context)
                             for event in self._client.stream(
                                 message, thread_id=thread_id, **stream_kwargs
@@ -395,6 +489,9 @@ class DeerFlowAdapter:
             with contextlib.suppress(ValueError):
                 # Token was created in a different context, ignore
                 reset_original_user_content(original_content_token)
+            # Reset extensions_config_path (set in async caller, T2).
+            if extensions_path:
+                set_extensions_config_path(None)
 
     async def typed_stream_dispatch(
         self,
@@ -477,6 +574,15 @@ class DeerFlowAdapter:
         enable_thinking: bool,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Wrap synchronous DeerFlowClient.stream() to yield chunks asynchronously."""
+        # Set extensions_config_path in the async caller (T2) so it propagates
+        # via copy_context() alongside the other 4 tenant ContextVars.
+        from apps.agent.services.runtime.sandbox_provider import (
+            set_extensions_config_path,
+        )
+
+        extensions_path = _resolve_extensions_config_path(self._config_path)
+        if extensions_path:
+            set_extensions_config_path(extensions_path)
         loop = asyncio.get_running_loop()
         # Queue carries StreamChunk chunks, None for clean end, or BaseException for errors.
         queue: asyncio.Queue[StreamChunk | BaseException | None] = asyncio.Queue()
@@ -583,65 +689,12 @@ class DeerFlowAdapter:
         def _produce() -> None:
             """Run in thread pool — puts StreamChunk objects into queue, None signals end."""
             try:
-                if self._config_path:
-                    # Use DeerFlow's ContextVar API to inject per-family config into this
-                    # thread's context without touching global env vars or holding a lock.
-                    # ContextVars are isolated per ThreadPoolExecutor worker, so concurrent
-                    # family requests see their own config.
-                    from deerflow.config.app_config import (
-                        pop_current_app_config,
-                        push_current_app_config,
-                        reload_app_config,
-                    )
-
-                    family_config = reload_app_config(str(self._config_path))
-                    push_current_app_config(family_config)
-
-                    # Set the per-run extensions_config path via ContextVar.
-                    # See raw_stream_dispatch._produce for the multi-family leak
-                    # rationale (process-global env var → cross-family MCP URL
-                    # leak). ContextVar is coroutine-scoped and propagated into
-                    # the deerflow executor thread + sync tool pool.
-                    from pathlib import Path as _Path
-
-                    from apps.agent.services.runtime.sandbox_provider import (
-                        set_extensions_config_path,
-                    )
-
-                    extensions_path = (
-                        _Path(str(self._config_path)).parent / "extensions_config.json"
-                    )
-                    if extensions_path.exists():
-                        set_extensions_config_path(str(extensions_path))
-                        # Reset MCP cache so DeerFlow picks up the new config
-                        try:
-                            from deerflow.config.extensions_config import (
-                                reset_extensions_config,
-                            )
-                            from deerflow.mcp.cache import reset_mcp_tools_cache
-
-                            reset_mcp_tools_cache()
-                            reset_extensions_config()
-                        except ImportError:
-                            pass
-
-                    try:
-                        message = self._build_prompt(skill_name, context)
-                        for event in self._client.stream(
-                            message,
-                            thread_id=thread_id,
-                            thinking_enabled=enable_thinking,
-                        ):
-                            _process_event(event)
-                    finally:
-                        if extensions_path.exists():
-                            set_extensions_config_path(None)
-                        pop_current_app_config()
-                else:
-                    # Global config mode — no per-family override needed
+                with self._family_config_context():
                     message = self._build_prompt(skill_name, context)
                     for event in self._client.stream(
-                        message, thread_id=thread_id, thinking_enabled=enable_thinking
+                        message,
+                        thread_id=thread_id,
+                        thinking_enabled=enable_thinking,
                     ):
                         _process_event(event)
             except Exception as e:
@@ -671,6 +724,9 @@ class DeerFlowAdapter:
             # wait, but we still need to await the shielded coroutine to actually block.
             with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                 await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+            # Reset extensions_config_path (set in async caller, T2).
+            if extensions_path:
+                set_extensions_config_path(None)
 
     def _sync_dispatch(
         self, skill_name: str, context: RedactedContext, thread_id: str
@@ -680,61 +736,7 @@ class DeerFlowAdapter:
             message = self._build_prompt(skill_name, context)
             chunks = []
 
-            if self._config_path:
-                from deerflow.config.app_config import (
-                    pop_current_app_config,
-                    push_current_app_config,
-                    reload_app_config,
-                )
-
-                family_config = reload_app_config(str(self._config_path))
-                push_current_app_config(family_config)
-
-                # Set the per-run extensions_config path via ContextVar.
-                # See raw_stream_dispatch._produce for the multi-family leak
-                # rationale (process-global env var → cross-family MCP URL leak).
-                from pathlib import Path as _Path
-
-                from apps.agent.services.runtime.sandbox_provider import (
-                    set_extensions_config_path,
-                )
-
-                extensions_path = (
-                    _Path(str(self._config_path)).parent / "extensions_config.json"
-                )
-                if extensions_path.exists():
-                    set_extensions_config_path(str(extensions_path))
-                    # Reset MCP cache so DeerFlow picks up the new config
-                    try:
-                        from deerflow.config.extensions_config import (
-                            reset_extensions_config,
-                        )
-                        from deerflow.mcp.cache import reset_mcp_tools_cache
-
-                        reset_mcp_tools_cache()
-                        reset_extensions_config()
-                    except ImportError:
-                        pass
-
-                try:
-                    for event in self._client.stream(
-                        message=message,
-                        thread_id=thread_id,
-                    ):
-                        if (
-                            hasattr(event, "type")
-                            and event.type == "messages-tuple"
-                            and isinstance(event.data, dict)
-                            and event.data.get("type") == "ai"
-                        ):
-                            content = event.data.get("content")
-                            if isinstance(content, str) and content:
-                                chunks.append(content)
-                finally:
-                    if extensions_path.exists():
-                        set_extensions_config_path(None)
-                    pop_current_app_config()
-            else:
+            with self._family_config_context():
                 for event in self._client.stream(
                     message=message,
                     thread_id=thread_id,

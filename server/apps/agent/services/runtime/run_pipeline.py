@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
@@ -105,11 +106,20 @@ class RunPipeline:
         enable_thinking: bool = False,
         timeout_seconds: int = 120,
         # Optional: override the skill_name passed to typed_stream_dispatch
-        # (defaults to app_name)
-        skill_name: str | None = None,
+        # (defaults to app_name).  Accepts a callable that receives the fetched
+        # ai_config dict and returns the resolved skill name — used by the chat
+        # runner to pick chat vs chat-search based on web-search capability.
+        skill_name: str | Callable[[dict], str] | None = None,
         # Optional: override MCP server resolution. Pass [] to skip MCP entirely
         # (dashboard-narrative has allowed-tools: []). Default None = resolve.
         mcp_servers: list[dict[str, Any]] | None = None,
+        # Optional: custom skills whitelist passed to create_family_adapter.
+        # When None, no available_skills parameter is forwarded (adapter default).
+        available_skills: set[str] | None = None,
+        # Optional: skip auto-setting the active skill in __aenter__.  Used by
+        # the chat runner for slash-activated messages where DeerFlow's
+        # SkillActivationMiddleware handles skill selection instead.
+        skip_active_skill: bool = False,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -123,8 +133,13 @@ class RunPipeline:
         self.memory_enabled = memory_enabled
         self.enable_thinking = enable_thinking
         self.timeout_seconds = timeout_seconds
-        self.skill_name = skill_name or app_name
+        self._skill_name_spec: str | Callable[[dict], str] | None = skill_name
+        self.skill_name: str = (
+            skill_name if isinstance(skill_name, str) else app_name
+        )
         self._mcp_servers_override = mcp_servers
+        self._available_skills = available_skills
+        self._skip_active_skill = skip_active_skill
 
         # Populated by __aenter__
         self.run_id: str = record.run_id
@@ -164,6 +179,11 @@ class RunPipeline:
         if self.selected_provider is None:
             raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
+        # 2b. Resolve callable skill_name (e.g. chat runner picks chat vs
+        #     chat-search based on web-search capability in ai_config).
+        if callable(self._skill_name_spec):
+            self.skill_name = self._skill_name_spec(ai_config)
+
         # 3. Fetch enabled MCP servers (or use override)
         if self._mcp_servers_override is not None:
             mcp_servers = self._mcp_servers_override
@@ -180,9 +200,7 @@ class RunPipeline:
             self.memory_enabled = bool(agent_meta["memory_enabled"])
 
         # 5. Build adapter
-        self.adapter = create_family_adapter(
-            self.family_id,
-            self.selected_provider,
+        adapter_kwargs: dict[str, Any] = dict(
             timeout_seconds=self.timeout_seconds,
             subagent_enabled=self.subagent_enabled,
             plan_mode=self.plan_mode,
@@ -190,13 +208,24 @@ class RunPipeline:
             agent_name=self.app_name,
             memory_enabled=self.memory_enabled,
         )
-
-        # 6. Set active skill (so sync_tool_patch filters tools correctly)
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
+        if self._available_skills is not None:
+            adapter_kwargs["available_skills"] = self._available_skills
+        self.adapter = create_family_adapter(
+            self.family_id,
+            self.selected_provider,
+            **adapter_kwargs,
         )
 
-        self._skill_token = set_active_skill(self.skill_name)
+        # 6. Set active skill (so sync_tool_patch filters tools correctly).
+        #    Skip when the caller manages skill activation externally — e.g.
+        #    the chat runner for slash-activated messages where DeerFlow's
+        #    SkillActivationMiddleware handles selection.
+        if not self._skip_active_skill:
+            from apps.agent.services.deerflow_adapter.active_skill_context import (
+                set_active_skill,
+            )
+
+            self._skill_token = set_active_skill(self.skill_name)
         return self
 
     async def __aexit__(
@@ -291,7 +320,11 @@ class RunPipeline:
         )
 
     async def run_skill(
-        self, user_message: str, *, enable_reasoning_delta: bool = False
+        self,
+        user_message: str,
+        *,
+        enable_reasoning_delta: bool = False,
+        enable_thinking: bool | None = None,
     ) -> None:
         """Run the skill via typed_stream_dispatch and forward frames to bridge.
 
@@ -300,7 +333,14 @@ class RunPipeline:
         caller to read after this method returns. Synthesizes tool_call/tool_result
         custom events so the frontend can reuse the chat renderer (unless
         reasoning_delta mode is active, which uses a different message path).
+
+        ``enable_thinking`` overrides the pipeline-level setting for this turn
+        only (used by the chat runner where the frontend controls thinking
+        per-call via ``config.configurable.thinking_enabled``).
         """
+        effective_thinking = (
+            enable_thinking if enable_thinking is not None else self.enable_thinking
+        )
         # PII redaction (Key Invariant #1) — defense-in-depth
         context = FamilyContext(family_id=self.family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
@@ -310,7 +350,7 @@ class RunPipeline:
             skill_name=self.skill_name,
             context=redacted,
             thread_id=self.thread_id,
-            enable_thinking=self.enable_thinking,
+            enable_thinking=effective_thinking,
         ):
             if self.record.abort_event.is_set():
                 break
