@@ -192,6 +192,16 @@ class RunPipeline:
                 client, self.family_id, self.user_id, f"[{self.app_name}]"
             )
 
+        # 3b. Fail-fast: verify all tenant ContextVars are set before the
+        # adapter is created. Without this, a missing ContextVar (e.g.
+        # numina_extensions_config_path) would only surface later in the
+        # executor thread where the error message is hard to diagnose.
+        from apps.agent.services.runtime.sandbox_provider import (
+            assert_mcp_context_complete,
+        )
+
+        assert_mcp_context_complete(f"RunPipeline[{self.app_name}].__aenter__")
+
         # 4. Resolve memory_enabled from AgentRegistry (when caller didn't override)
         from apps.agent.services.agent_registry import get_agent_registry
 

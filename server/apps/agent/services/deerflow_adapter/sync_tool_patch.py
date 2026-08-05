@@ -391,48 +391,16 @@ def _apply_mcp_proxy_bypass_patch() -> None:
 
         # Inject the no-proxy httpx client factory into every SSE/HTTP server
         # so internal MCP calls bypass system proxy env vars.
-        # Also inject X-Agent-Token + X-Family-Id headers — the Numina Backend MCP
-        # SSE endpoint (mcp_internal.py:72) requires X-Agent-Token; without it the
-        # connection 403s and ALL MCP tools (get_assets/import_assets_batch/...) are
-        # unavailable. The worker sets srv["headers"] on the runtime mcp_servers
-        # dict, but the MCP client reads from extensions_config (file-based) which
-        # has no auth headers — so inject them here from settings + family context.
-        from apps.agent.services.runtime.sandbox_provider import (
-            get_caller_user_id_context as _get_caller,
-        )
-        from apps.agent.services.runtime.sandbox_provider import (
-            get_family_sandbox_context as _get_family,
-        )
-
-        _mcp_family_id = _get_family()
-        _mcp_caller_user_id = _get_caller()
-        if _mcp_family_id is None:
-            # Do not silently load MCP tools without a tenant: that leads to
-            # the "all records empty" symptom. Log + continue (fail-open but
-            # loud) so existing global-config paths still work, but make the
-            # missing tenant visible.
-            _mcp_mod.logger.warning(
-                "MCP tool load without family_id context — "
-                "tools will lack tenant headers (X-Family-Id). "
-                "This likely indicates a ContextVar propagation failure."
-            )
-        _mcp_agent_token = None
-        if _mcp_family_id:
-            from packages.security.service_auth.agent_jwt import create_agent_token
-
-            _mcp_agent_token = create_agent_token(_mcp_family_id)
+        #
+        # Auth headers (X-Agent-Token, X-Family-Id, X-Caller-User-Id) are NOT
+        # injected here — they are written to extensions_config.json by
+        # _write_extensions_config() (via _resolve_numina_mcp_servers() in
+        # RunPipeline), which ExtensionsConfig.from_file() above already read.
+        # The previous ContextVar-based header injection was redundant (same
+        # values, same headers) and has been removed.
         for _name, cfg in servers_config.items():
             if cfg.get("transport") in ("sse", "http"):
                 cfg["httpx_client_factory"] = _no_proxy_httpx_client
-                if _mcp_agent_token or _mcp_family_id or _mcp_caller_user_id:
-                    existing_headers = dict(cfg.get("headers", {}))
-                    if _mcp_agent_token:
-                        existing_headers["X-Agent-Token"] = _mcp_agent_token
-                    if _mcp_family_id:
-                        existing_headers["X-Family-Id"] = _mcp_family_id
-                    if _mcp_caller_user_id:
-                        existing_headers["X-Caller-User-Id"] = _mcp_caller_user_id
-                    cfg["headers"] = existing_headers
 
         # Replicate the original OAuth header + interceptor handling.
         initial_oauth_headers = await get_initial_oauth_headers(extensions_config)

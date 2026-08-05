@@ -18,6 +18,16 @@ from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _mock_mcp_context_assert():
+    """Mock assert_mcp_context_complete so tests don't need to set up
+    sandbox ContextVars (set_family_sandbox_context, etc.)."""
+    with patch(
+        "apps.agent.services.runtime.sandbox_provider.assert_mcp_context_complete",
+    ):
+        yield
+
+
 def _make_record(run_id: str = "run-1") -> RunRecord:
     """Build a minimal RunRecord for testing."""
     record = MagicMock(spec=RunRecord)
