@@ -13,57 +13,35 @@ Session memory injection:
 - All families share one checkpointer instance; DeerFlow namespaces state by
   thread_id so family isolation is maintained at the conversation level.
 
-Deep-think → provider effort mapping
-------------------------------------
-The frontend exposes a single boolean ``deep_think`` toggle. DeerFlow 2 selects
-between two pre-built sub-configs based on that boolean:
+Model entry construction
+------------------------
+The per-family ``models[0]`` block is built by
+``packages.core.model_entry.build_model_entry`` — the single source of truth
+for provider class selection, thinking routing, max_tokens resolution, and
+Responses API wiring. That module documents the per-provider contracts
+(DeepSeek R1, OpenAI-compatible, native OpenAI, Anthropic extended thinking).
 
-- ``deep_think=True``  → ``model.when_thinking_enabled``  (high-effort path)
-- ``deep_think=False`` → ``model.when_thinking_disabled`` (low-effort path)
+This module's ``_generate_temp_config`` composes that model entry with
+Numina-specific, non-provider concerns — per-family memory isolation,
+sandbox, skills, MCP, and web_search tool injection — then writes a
+temporary YAML config for DeerFlow to consume.
 
-Provider-specific contracts (verified against context7 official docs, 2026):
+DeerFlow runtime transformations
+--------------------------------
+We deliberately do NOT inject ``stream_usage=True`` or normalize
+``api_base → base_url`` here. DeerFlow's ``create_chat_model()`` factory
+handles both generically:
 
-- **DeepSeek R1** — thinking is intrinsic to the model. Both branches set
-  ``extra_body.thinking.{type: enabled|disabled}`` per the DeerFlow CONFIGURATION.md
-  example. DeepSeek still emits reasoning_content even when disabled (a model-level
-  behaviour we cannot turn off).
+- ``stream_usage``: ``factory.py:304-306`` auto-injects for any model class
+  whose ``model_fields`` includes ``stream_usage``.
+- ``api_base``: ``factory.py:45-73`` (``_normalize_openai_base_url``)
+  renames ``api_base → base_url`` for ``BaseChatOpenAI`` subclasses that
+  don't declare ``api_base`` themselves (``ChatDeepSeek`` does, so it is
+  left alone — matches the vendor SDK).
 
-- **OpenAI-compatible vendors via OpenAI Chat Completions endpoint** (GLM/Qwen/QwQ
-  on DashScope, Novita, Together, vLLM, etc.) — accept ``extra_body.enable_thinking``
-  boolean as a vendor extension. Verified against DeerFlow 2 vLLM example
-  (``chat_template_kwargs.enable_thinking``) and Novita example (``thinking.type``).
-
-- **Native OpenAI** (gpt-5*, o-series) — does NOT accept ``enable_thinking``. The
-  reasoning effort is a top-level parameter (``reasoning_effort: 'low' | 'medium'
-  | 'high'``) on the Chat Completions / Responses APIs; DeerFlow harness reads
-  ``supports_reasoning_effort: true`` on the model entry and emits the correct
-  shape automatically. Source: openai-python ChatCompletionReasoningEffort,
-  DeerFlow CONFIGURATION.md "Codex CLI" example.
-
-- **Anthropic Claude (native Messages API)** — uses ``thinking.type=enabled``
-  with ``budget_tokens`` (extended thinking). Verified against
-  anthropic-sdk-python `examples/thinking.py`. Budget is now computed as a
-  fraction (60% high-effort) of the resolved max_tokens via
-  ``_compute_anthropic_thinking_budget`` so it adapts to per-model output
-  ceilings (Sonnet 4 → 64K, Haiku 4 → 8K, etc.). When the resolved budget
-  cannot satisfy Anthropic's constraints (>=1024, <max_tokens), the branch
-  gracefully degrades to ``thinking.type=disabled``.
-  ``ANTHROPIC_LOW_EFFORT_FRACTION`` is reserved for a future low-effort tier
-  (Anthropic SDK 2026 also exposes beta ``output_config.effort: "low"``).
-
-max_tokens resolution
-----------------------
-The model entry's ``max_tokens`` field is set by ``_resolve_max_tokens`` with
-three-tier priority:
-  1. ``ai_config['max_tokens']`` — user-set in the DB ``ai_providers`` row
-  2. ``system-config.yaml`` prefix-matched default (per ``packages.core.system_config``)
-  3. ``None`` — key is omitted; SDK / vendor defaults take over
-
-Status (2026-05-31):
-  Native OpenAI now opts into the Responses API (``use_responses_api: true``
-  + ``output_version: responses/v1``) per DeerFlow 2 README's
-  ``gpt-5-responses`` recipe. OpenAI-compatible gateways stay on Chat
-  Completions (no Responses support upstream).
+The family-scoped ``stream_chunk_timeout`` override (DB ``timeout_seconds``)
+is a Numina value-add on top of DeerFlow's 240s default and is emitted by
+``build_model_entry``.
 """
 
 import atexit
@@ -81,74 +59,161 @@ from typing import Any, cast
 from deerflow.client import DeerFlowClient
 from deerflow.config.app_config import reload_app_config
 
-from packages.core.system_config import get_max_tokens_default
+from packages.core.model_entry import build_model_entry
 
 logger = logging.getLogger(__name__)
 
-# Anthropic extended-thinking budget tokens are computed as a fraction of
-# the model's per-response max_tokens. Anthropic API constraints (verified
-# via context7 against anthropic-sdk-python `examples/thinking.py` and the
-# ModelInfo schema):
-#   - budget_tokens >= 1024  (hard minimum)
-#   - budget_tokens <  max_tokens  (must leave room for visible output)
-#
-# Sources:
-#   - anthropic-sdk-python `examples/thinking.py` (budget=1600, max=3200 → 50%)
-#   - simonw/llm-anthropic README (32000 for complex tasks)
-# DeerFlow 2 itself does not prescribe a default; we pick conservative
-# fractions that work for both small (Haiku 8K) and large (Sonnet 4 64K)
-# response budgets.
-ANTHROPIC_BUDGET_MIN_TOKENS = 1024  # API hard minimum
-ANTHROPIC_HIGH_EFFORT_FRACTION = 0.60  # deep_think=True → 60% of max_tokens
-ANTHROPIC_LOW_EFFORT_FRACTION = 0.25  # reserved for future low-effort tier (not yet wired)
-# Headroom keeps visible output from being crowded out by reasoning tokens:
-ANTHROPIC_BUDGET_OUTPUT_HEADROOM_TOKENS = 256
-# Fallback when the resolved max_tokens is None (model not in yaml table and
-# user did not set it). Matches DeerFlow 2 `claude-sonnet-4.6` example value.
-ANTHROPIC_FALLBACK_MAX_TOKENS = 4096
 
+def _inject_memory(
+    config: dict[str, Any],
+    family_id: str,
+    memory_enabled: bool,
+) -> None:
+    """Inject per-family memory path isolation into config (in-place).
 
-def _resolve_max_tokens(ai_config: dict[str, Any]) -> int | None:
-    """Resolve the effective ``max_tokens`` for a family's AI config.
-
-    Three-tier priority:
-      1. ``ai_config['max_tokens']``   — user-set in DB ai_providers row
-      2. ``system-config.yaml`` prefix-matched default (via packages.core.system_config)
-      3. ``None``                       — caller should NOT emit max_tokens in the
-                                          model entry yaml; SDK / vendor defaults take over.
+    Each family gets its own ``{AGENT_DATA_DIR}/{family_id}/agent/memory/``
+    directory so DeerMem facts don't leak across families. When
+    ``memory_enabled=False`` (fixed-flow agents like asset-report), injection
+    and write are both disabled.
     """
-    explicit = ai_config.get("max_tokens")
-    if isinstance(explicit, int) and explicit > 0:
-        return explicit
-    model_id = (ai_config.get("ai_model_id") or "").strip()
-    return get_max_tokens_default(model_id)
+    from apps.agent.app.config import settings
+
+    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory"
+    memory_path.mkdir(parents=True, exist_ok=True)
+    if "memory" not in config:
+        config["memory"] = {}
+    config["memory"]["manager_class"] = "deermem"
+    backend_config = config["memory"].get("backend_config") or {}
+    backend_config["storage_path"] = str(memory_path)
+    config["memory"]["backend_config"] = backend_config
+
+    if not memory_enabled:
+        config["memory"]["enabled"] = False
+        config["memory"]["injection_enabled"] = False
 
 
-def _compute_anthropic_thinking_budget(
-    max_tokens: int,
-    fraction: float,
-) -> int | None:
-    """Compute Anthropic ``budget_tokens`` for the given max_tokens / fraction.
+def _inject_sandbox(config: dict[str, Any]) -> None:
+    """Inject Numina's family-scoped sandbox provider (in-place)."""
+    if "sandbox" not in config:
+        config["sandbox"] = {
+            "use": "apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider"
+        }
 
-    Returns ``None`` when ``max_tokens`` is too small to satisfy both
-    ``budget >= ANTHROPIC_BUDGET_MIN_TOKENS`` and ``budget < max_tokens`` —
-    caller must fall back to ``thinking.type=disabled``.
 
-    Algorithm::
+def _inject_skills(config: dict[str, Any]) -> None:
+    """Inject host-resolved skills.path into config (in-place).
 
-        raw    = floor(max_tokens * fraction)
-        capped = min(raw, max_tokens - ANTHROPIC_BUDGET_OUTPUT_HEADROOM_TOKENS)
-        if capped < ANTHROPIC_BUDGET_MIN_TOKENS:
-            return None
-        return capped
+    The base config ships a container path that doesn't resolve on the host
+    dev machine, so we override with the agent's builtin skills root.
     """
-    if max_tokens <= 0 or fraction <= 0:
-        return None
-    raw = int(max_tokens * fraction)
-    capped = min(raw, max_tokens - ANTHROPIC_BUDGET_OUTPUT_HEADROOM_TOKENS)
-    if capped < ANTHROPIC_BUDGET_MIN_TOKENS:
-        return None
-    return capped
+    _skills_root = Path(__file__).resolve().parent.parent.parent / "skills" / "builtin"
+    config.setdefault("skills", {})
+    config["skills"]["path"] = str(_skills_root)
+
+
+def _inject_mcp(
+    config: dict[str, Any],
+    mcp_servers: list[dict[str, Any]] | None,
+) -> None:
+    """Inject MCP servers list into config (in-place)."""
+    if mcp_servers:
+        config["mcp_servers"] = mcp_servers
+
+
+def _inject_web_search(
+    config: dict[str, Any],
+    ai_config: dict[str, Any],
+    mcp_servers: list[dict[str, Any]] | None,
+    web_search_mcp_servers: list[dict[str, Any]],
+) -> None:
+    """Inject web_search tool configuration (in-place).
+
+    Priority: native providers > MCP fallback. When no native providers are
+    configured, the web_search tool is removed and MCP servers (if any) take
+    over via the ``mcp_servers`` config key.
+    """
+    web_search_providers = ai_config.get("web_search_providers", [])
+
+    if web_search_providers:
+        first_provider = web_search_providers[0]
+        provider_class = first_provider.get("provider_class", "")
+        provider_api_key = first_provider.get("api_key", "")
+        provider_max_results = first_provider.get("max_results", 5)
+
+        if not provider_class:
+            logger.warning(
+                "[deerflow_config] web_search provider_class is empty; "
+                "removing web_search tool",
+            )
+            tools = config.get("tools", [])
+            config["tools"] = [t for t in tools if t.get("name") != "web_search"]
+        else:
+            tools = config.get("tools", [])
+            for tool in tools:
+                if tool.get("name") == "web_search":
+                    tool["use"] = provider_class
+                    tool["api_key"] = provider_api_key
+                    tool["max_results"] = provider_max_results
+                    break
+
+            # Inject web_fetch tool (Jina AI-based page content fetcher)
+            tools = config.get("tools", [])
+            if not any(t.get("name") == "web_fetch" for t in tools):
+                tools.append(
+                    {
+                        "name": "web_fetch",
+                        "group": "web",
+                        "use": "deerflow.community.jina_ai_tools:web_fetch_tool",
+                        "timeout": 10,
+                        "trust_env": False,
+                    }
+                )
+                config["tools"] = tools
+    else:
+        # No native providers — remove web_search tool
+        tools = config.get("tools", [])
+        config["tools"] = [
+            t for t in tools if t.get("name") not in ("web_search", "web_fetch")
+        ]
+
+        # Inject web search MCP servers if available
+        if web_search_mcp_servers and not mcp_servers:
+            config["mcp_servers"] = web_search_mcp_servers
+        elif web_search_mcp_servers and mcp_servers:
+            existing_servers = config.get("mcp_servers", [])
+            existing_names = {s.get("name") for s in existing_servers}
+            for ws_server in web_search_mcp_servers:
+                if ws_server.get("name") not in existing_names:
+                    existing_servers.append(ws_server)
+            config["mcp_servers"] = existing_servers
+
+
+def _write_extensions_config(
+    temp_dir: Path,
+    mcp_servers: list[dict[str, Any]],
+) -> None:
+    """Write extensions_config.json for DeerFlow's ExtensionsConfig.from_file().
+
+    DeerFlow reads MCP server configs from this file (not from config.yaml).
+    The DEER_FLOW_EXTENSIONS_CONFIG_PATH env var is set in adapter._produce()
+    to point here, under _init_lock serialization.
+    """
+    import json as _json
+
+    mcp_servers_dict = {}
+    for srv in mcp_servers:
+        name = srv.get("name", "default")
+        mcp_servers_dict[name] = {
+            "type": srv.get("transport", "sse"),
+            "url": srv.get("url", ""),
+            "headers": srv.get("headers", {}),
+            "enabled": True,
+        }
+    extensions_data = {"mcpServers": mcp_servers_dict}
+    extensions_path = temp_dir / "extensions_config.json"
+    with open(extensions_path, "w", encoding="utf-8") as f:
+        _json.dump(extensions_data, f, ensure_ascii=False)
+
 
 # Safe ID pattern for family_id validation (prevents path traversal)
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
@@ -158,7 +223,10 @@ _MAX_CACHE_SIZE = 100
 # Values are either (DeerFlowClient, Path) for a live entry, or None as a
 # placeholder while a new client is being initialised (prevents TOCTOU races
 # where two threads both pass the size check and both insert).
-_adapter_cache: OrderedDict[tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None], tuple[DeerFlowClient, Path] | None] = OrderedDict()
+_adapter_cache: OrderedDict[
+    tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None],
+    tuple[DeerFlowClient, Path] | None,
+] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
 # Per-key init lock: serialises reload_app_config + DeerFlowClient() for the
@@ -170,7 +238,9 @@ _init_lock = threading.Lock()
 # Guarded by _checkpointer_lock to prevent double-initialisation under concurrency.
 _shared_checkpointer: Any = None
 _checkpointer_lock = threading.Lock()
-_checkpointer_ctx: Any = None  # open context manager keeping the SqliteSaver connection alive
+_checkpointer_ctx: Any = (
+    None  # open context manager keeping the SqliteSaver connection alive
+)
 _checkpointer_pool: Any = None  # open psycopg connection pool for PostgresSaver
 
 
@@ -227,20 +297,30 @@ async def async_init_checkpointer(db_path: str | None = None) -> None:
                     conn=cast(Any, _checkpointer_pool),
                 )
                 await _shared_checkpointer.setup()
-                logger.info("[deerflow_cache] shared checkpointer: AsyncPostgresSaver(%s)", db_url)
+                logger.info(
+                    "[deerflow_cache] shared checkpointer: AsyncPostgresSaver(%s)",
+                    db_url,
+                )
             else:
                 # ── SQLite backend (AsyncSqliteSaver) ─────────────────
                 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
                 if db_path is None:
                     from apps.agent.app.config import settings
+
                     db_path = settings.DEERFLOW_DB_PATH
 
-                _os.makedirs(_os.path.dirname(db_path) if _os.path.dirname(db_path) else ".", exist_ok=True)
+                _os.makedirs(
+                    _os.path.dirname(db_path) if _os.path.dirname(db_path) else ".",
+                    exist_ok=True,
+                )
 
                 _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
                 _shared_checkpointer = await _checkpointer_ctx.__aenter__()
-                logger.info("[deerflow_cache] shared checkpointer: AsyncSqliteSaver(%s)", db_path)
+                logger.info(
+                    "[deerflow_cache] shared checkpointer: AsyncSqliteSaver(%s)",
+                    db_path,
+                )
         except ImportError as _ie:
             from langgraph.checkpoint.memory import InMemorySaver
 
@@ -255,7 +335,8 @@ async def async_init_checkpointer(db_path: str | None = None) -> None:
 
             _shared_checkpointer = InMemorySaver()
             logger.warning(
-                "[deerflow_cache] checkpointer async init failed (%s); falling back to InMemorySaver", e
+                "[deerflow_cache] checkpointer async init failed (%s); falling back to InMemorySaver",
+                e,
             )
 
 
@@ -277,6 +358,7 @@ def _get_shared_checkpointer(base_config_dir: str | None = None):
 
         # Not yet initialized — use InMemorySaver as fallback
         from langgraph.checkpoint.memory import InMemorySaver
+
         _shared_checkpointer = InMemorySaver()
         logger.warning(
             "[deerflow_cache] checkpointer not async-initialized; using InMemorySaver"
@@ -315,6 +397,7 @@ def _mcp_cache_key(mcp_servers: list[dict[str, Any]] | None) -> str:
         return ""
     import hashlib
     import json
+
     blob = json.dumps(mcp_servers, sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]
 
@@ -332,6 +415,7 @@ def _generate_temp_config(
         base_config_dir: 基础配置目录路径
         ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
         family_id: 家庭 ID（用于 memory 存储路径隔离）
+        mcp_servers: MCP server 列表（注入到 config.yaml + extensions_config.json）
         memory_enabled: Whether DeerMem injection + write are enabled for this
             agent (read from ai_agents.memory_enabled via AgentRegistry by the
             caller). Fixed-flow agents (asset-report) pass False to be
@@ -340,380 +424,53 @@ def _generate_temp_config(
 
     Returns:
         临时配置文件的路径
+
+    Implementation notes — what this function does NOT do (DeerFlow factory handles it):
+      - ``stream_usage=True`` injection: DeerFlow factory.py:304-306 auto-injects
+        for any model class whose ``model_fields`` includes ``stream_usage``.
+      - ``api_base → base_url`` normalization: DeerFlow factory.py:45-73
+        (``_normalize_openai_base_url``) handles this for ``BaseChatOpenAI``
+        subclasses that don't declare ``api_base`` themselves.
     """
     import yaml  # type: ignore[import-untyped]
 
     # Validate family_id to prevent path traversal
     if family_id and not _SAFE_ID_PATTERN.match(family_id):
-        raise ValueError(f"Invalid family_id: {family_id!r}. Must match pattern: {_SAFE_ID_PATTERN.pattern}")
+        raise ValueError(
+            f"Invalid family_id: {family_id!r}. Must match pattern: {_SAFE_ID_PATTERN.pattern}"
+        )
 
-    # 复制 base config 作为模板
     base_config_path = Path(base_config_dir) / "base" / "config.yaml"
     if not base_config_path.exists():
         raise FileNotFoundError(f"Base config not found: {base_config_path}")
 
-    # 读取模板 YAML
     with open(base_config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    # 提取家庭的 AI 配置 — 缺少关键字段时趁早报错
-    api_key = ai_config.get("api_key", "")
-    model_id = ai_config.get("ai_model_id")
-    if not model_id:
-        raise ValueError(
-            f"ai_model_id is required but not configured for family={family_id}. "
-            "请在 AI 配置中填写模型 ID。"
-        )
-    base_url = ai_config.get("ai_base_url", "")
-    provider = ai_config.get("ai_provider", "openai")
-
-    # 映射 provider 到 LangChain 类路径（DeerFlow 期望冒号分隔格式）
-    provider_class_map: dict[str, str] = {
-        "anthropic": "langchain_anthropic:ChatAnthropic",
-        "openai": "langchain_openai:ChatOpenAI",
-        "openai_compatible": "langchain_openai:ChatOpenAI",
-    }
-    use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
-
-    # 构建 models 列表（DeerFlow harness 期望的格式）
-    # Prefer model_1_capabilities list; fall back to legacy thinking_supported flag.
-    model_1_caps = ai_config.get("model_1_capabilities")
-    if model_1_caps is not None:
-        thinking_supported = "deep_thinking" in model_1_caps
-    else:
-        thinking_supported = bool(ai_config.get("thinking_supported", False))
-
-    # Vision capability: "vision" or "vision_understanding" in model_1_capabilities
-    # (frontend CapabilityPickerSheet stores "vision_understanding"; accept both for
-    # backward compat), or a dedicated vision_model_id configured (mirrors
-    # ai_config.py:579's logic). Wiring supports_vision into the model entry lets
-    # the DeerFlow harness assembly-time gate the view_image_tool (tools.py:110)
-    # and mount ViewImageMiddleware (factory.py:270) — without it the agent cannot
-    # read images even when the underlying model supports them.
-    if model_1_caps is not None:
-        vision_supported = (
-            "vision" in model_1_caps
-            or "vision_understanding" in model_1_caps
-            or bool(ai_config.get("vision_model_id"))
-        )
-    else:
-        vision_supported = bool(ai_config.get("vision_model_id"))
-
-    # Select appropriate LangChain model class based on provider and thinking support.
-    # DeerFlow provides patched model classes for vendor-specific reasoning_content
-    # extraction. Native OpenAI uses the stock class because reasoning is delivered
-    # via standard top-level fields (not vendor reasoning_content streams).
-    if thinking_supported:
-        if "deepseek" in model_id.lower():
-            # DeepSeek R1 requires patched class for reasoning content
-            use_class = "deerflow.models.patched_deepseek:PatchedChatDeepSeek"
-        elif provider == "openai" and not base_url:
-            # Native OpenAI: stock ChatOpenAI; reasoning effort flows through
-            # supports_reasoning_effort (configured below).
-            use_class = "langchain_openai:ChatOpenAI"
-        elif provider in ("openai", "openai_compatible"):
-            # OpenAI-compatible vendors (GLM-5, Qwen3, QwQ via DashScope/Novita/vLLM)
-            # need the patched class to capture reasoning_content from vendor-specific
-            # streaming deltas.
-            use_class = "deerflow.models.patched_openai:PatchedChatOpenAI"
-        elif provider == "anthropic":
-            # Native Anthropic; reasoning lives in `thinking` content blocks which
-            # langchain-anthropic already handles.
-            use_class = "langchain_anthropic:ChatAnthropic"
-        else:
-            use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
-    else:
-        # Non-thinking models use standard classes
-        use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
-
-    model_entry: dict[str, Any] = {
-        "name": "main",
-        "use": use_class,
-        "model": model_id,
-        "api_key": api_key,
-        "supports_thinking": thinking_supported,
-        "supports_vision": vision_supported,
-    }
-
-    # Resolve max_tokens with three-tier priority: user (DB) > yaml prefix > None.
-    # When None, we deliberately omit the key so DeerFlow / SDK / vendor defaults
-    # take over (some vendors — DashScope notably — recommend not pre-setting it).
-    resolved_max_tokens = _resolve_max_tokens(ai_config)
-    if resolved_max_tokens is not None:
-        model_entry["max_tokens"] = resolved_max_tokens
-
-    # Native OpenAI: opt into the Responses API path (DeerFlow 2 README's
-    # `gpt-5-responses` recipe). The harness then emits `reasoning.effort`
-    # (Responses-style nested) instead of top-level `reasoning_effort` and
-    # ships output_version=responses/v1 for stable LangChain output shapes.
-    # OpenAI-compatible vendors (DashScope/Novita/vLLM, etc.) do NOT support
-    # Responses API — they stay on Chat Completions, identified by base_url.
-    if provider == "openai" and not base_url:
-        model_entry["use_responses_api"] = True
-        model_entry["output_version"] = "responses/v1"
-
-    # Configure when_thinking_enabled/disabled per provider contract.
-    # Provider-specific contracts verified against context7 official docs (2026):
-    # - DeepSeek R1: extra_body.thinking.type
-    # - OpenAI-compatible vendors (GLM/Qwen/QwQ via DashScope/Novita/vLLM): extra_body.enable_thinking
-    # - Native OpenAI (gpt-5/o-series): top-level reasoning_effort via supports_reasoning_effort
-    # - Anthropic Claude: thinking.type + budget_tokens
-    if thinking_supported:
-        if "deepseek" in model_id.lower():
-            model_entry["when_thinking_enabled"] = {
-                "extra_body": {"thinking": {"type": "enabled"}}
-            }
-            model_entry["when_thinking_disabled"] = {
-                "extra_body": {"thinking": {"type": "disabled"}}
-            }
-        elif provider == "openai" and not base_url:
-            # Native OpenAI endpoint — use the documented top-level reasoning_effort.
-            # DeerFlow 2 reads supports_reasoning_effort and emits the right shape
-            # (Chat Completions: top-level `reasoning_effort`; Responses API:
-            # `reasoning.effort` after enabling use_responses_api).
-            model_entry["supports_reasoning_effort"] = True
-            model_entry["when_thinking_enabled"] = {"reasoning_effort": "high"}
-            model_entry["when_thinking_disabled"] = {"reasoning_effort": "low"}
-        elif provider in ("openai", "openai_compatible"):
-            # OpenAI-compatible vendors (GLM-5, Qwen3, QwQ, etc. via DashScope,
-            # Novita, Together, vLLM) accept extra_body.enable_thinking as a
-            # vendor extension. This branch matches `provider=openai` with a
-            # custom base_url and `provider=openai_compatible`.
-            model_entry["when_thinking_enabled"] = {
-                "extra_body": {"enable_thinking": True}
-            }
-            model_entry["when_thinking_disabled"] = {
-                "extra_body": {"enable_thinking": False}
-            }
-        elif provider == "anthropic":
-            # Native Anthropic Claude Messages API. Compute budget_tokens as a
-            # fraction of the resolved max_tokens. Anthropic enforces:
-            #   budget_tokens >= 1024  AND  budget_tokens < max_tokens
-            # If max_tokens is too small for both constraints, gracefully fall
-            # back to thinking.type=disabled so deep_think still goes through
-            # without an API error (user perception: "thinking didn't engage").
-            budget_max = resolved_max_tokens or ANTHROPIC_FALLBACK_MAX_TOKENS
-            high_budget = _compute_anthropic_thinking_budget(
-                budget_max, ANTHROPIC_HIGH_EFFORT_FRACTION
-            )
-            if high_budget is None:
-                logger.info(
-                    "anthropic max_tokens=%s too small for budget>=%s with %.0f%% fraction; "
-                    "falling back to thinking.type=disabled",
-                    budget_max,
-                    ANTHROPIC_BUDGET_MIN_TOKENS,
-                    ANTHROPIC_HIGH_EFFORT_FRACTION * 100,
-                )
-                model_entry["when_thinking_enabled"] = {
-                    "thinking": {"type": "disabled"}
-                }
-            else:
-                model_entry["when_thinking_enabled"] = {
-                    "thinking": {
-                        "type": "enabled",
-                        "budget_tokens": high_budget,
-                    }
-                }
-            model_entry["when_thinking_disabled"] = {
-                "thinking": {"type": "disabled"}
-            }
-
-    if base_url:
-        model_entry["base_url"] = base_url
-
-    # ── DeerFlow factory.py parity: stream_usage + stream_chunk_timeout ──
-    # DeerFlow's factory.create_chat_model() auto-injects these for all
-    # OpenAI-compatible models. Without them:
-    #   - stream_usage: LangChain only auto-enables when no custom base_url
-    #     is set, so third-party endpoints silently lose token usage data
-    #     (TokenUsage shows 0/0/0).
-    #   - stream_chunk_timeout: LangChain default is 60s, too aggressive for
-    #     reasoning models (DeepSeek-R1, QwQ) whose first chunk can take
-    #     90~150s. We use the user-configured timeout_seconds from DB.
-    _openai_compat_use_paths = (
-        "langchain_openai:ChatOpenAI",
-        "deerflow.models.patched_openai:PatchedChatOpenAI",
-    )
-    if use_class in _openai_compat_use_paths:
-        if "stream_usage" not in model_entry:
-            model_entry["stream_usage"] = True
-        db_timeout = ai_config.get("timeout_seconds")
-        if isinstance(db_timeout, int) and db_timeout > 0 and "stream_chunk_timeout" not in model_entry:
-            model_entry["stream_chunk_timeout"] = float(db_timeout)
-
-    # ── api_base → base_url normalisation ──
-    # langchain_openai.ChatOpenAI accepts the endpoint override as ``base_url``
-    # (with ``openai_api_base`` as a legacy alias). If a caller passes
-    # ``api_base`` (a common mistake copied from other model classes),
-    # LangChain silently diverts it into ``model_kwargs``, which then gets
-    # spread into every Completions.create() call and rejected by the OpenAI
-    # SDK with "unexpected keyword argument 'api_base'". Normalise here so
-    # the endpoint override works as the user intended.
-    if "api_base" in model_entry and "base_url" not in model_entry:
-        model_entry["base_url"] = model_entry.pop("api_base")
-
-    config["models"] = [model_entry]
-    # 移除旧的 llm 节（已弃用）
+    # Build the declarative model entry (provider class + thinking + max_tokens)
+    config["models"] = [build_model_entry(ai_config)]
     config.pop("llm", None)
 
-    # 注入家庭级 memory 隔离路径：每家庭独立目录，防止跨家庭 facts 污染
-    # DeerFlow rev >=10890e10 (#4122 pluggable memory abstraction) moved the
-    # deermem storage path from the top-level ``memory.storage_path`` key into
-    # ``memory.backend_config.storage_path`` (parsed by DeerMemConfig). The
-    # top-level MemoryConfig now carries ``manager_class`` + ``backend_config``
-    # instead of a flat ``storage_path`` field.
-    #
-    # storage_path must be a DIRECTORY (not a file): DeerMem stores per-user
-    # memory under ``{storage_path}/users/{uid}/memory.json``. The pre-#4122
-    # convention pointed at a ``memory.json`` file; the guard in
-    # ``get_memory_manager`` (manager.py:439-446) raises on a file-style value
-    # to fail loud rather than silently NotADirectoryError on save. Point at a
-    # per-family ``memory/`` directory; the legacy ``memory.json`` file (if any)
-    # is left in place as a sibling and simply no longer read — its pre-
-    # abstraction schema (version/user/personalContext) is incompatible with
-    # the new per-uid layout and cannot be auto-migrated. Memory is derived
-    # context state, not core family data, so loss is recoverable.
-    from apps.agent.app.config import settings
-    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory"
-    memory_path.mkdir(parents=True, exist_ok=True)
-    if "memory" not in config:
-        config["memory"] = {}
-    config["memory"]["manager_class"] = "deermem"
-    backend_config = config["memory"].get("backend_config") or {}
-    backend_config["storage_path"] = str(memory_path)
-    config["memory"]["backend_config"] = backend_config
+    # Numina-specific injections (no DeerFlow equivalents)
+    _inject_memory(config, family_id, memory_enabled)
+    _inject_sandbox(config)
+    _inject_skills(config)
+    _inject_mcp(config, mcp_servers)
+    web_search_mcp = ai_config.get("web_search_mcp_servers", [])
+    _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 
-    # U4 Open Question (DeerMem pollution): agents with memory_enabled=False
-    # (read from ai_agents.memory_enabled via AgentRegistry by the caller) are
-    # stateless — disable DeerMem injection (DynamicContextMiddleware skips the
-    # <memory> block) + write (MemoryMiddleware skips fact writes). Fixed-flow
-    # agents (asset-report) declare memory_enabled=False on their ai_agents row;
-    # chat + custom agents keep the default True. The flag is a per-agent
-    # attribute, not an adapter-layer agent_name hardcode — adding a new
-    # stateless agent is just setting the column.
-    if not memory_enabled:
-        config["memory"]["enabled"] = False
-        config["memory"]["injection_enabled"] = False
-
-    # [Integrated with Numina Multi-Tenant] — inject Numina's sandbox provider
-    # so that the per-family config YAML uses the family-scoped provider.
-    if "sandbox" not in config:
-        config["sandbox"] = {
-            "use": "apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider"
-        }
-
-    # Inject host-resolved skills.path. The base config ships a container path
-    # (/app/apps/agent/skills/builtin) that does not resolve on the host dev
-    # machine, so DeerFlow's native skill scanner (LocalSkillStorage) would find
-    # zero skills. Resolve to the agent's builtin skills root (containing the
-    # DeerFlow-native ``public/`` category subdir), computed from this file's
-    # location for both local dev and container layouts.
-    #
-    # Custom (per-family) skills are NOT read from this path: DeerFlow's
-    # UserScopedSkillStorage resolves them via get_paths().user_custom_skills_dir(
-    # family_id) = {DEER_FLOW_HOME}/users/{family_id}/skills/custom/, and
-    # DEER_FLOW_HOME == AGENT_DATA_DIR == backend WORKSPACE_ROOT (all derive from
-    # DATA_ROOT/workspaces). Backend workspace.create_custom_skill writes custom
-    # SKILL.md files to that exact path, so runtime reads align with zero bridging.
-    _skills_root = Path(__file__).resolve().parent.parent.parent / "skills" / "builtin"
-    config.setdefault("skills", {})
-    config["skills"]["path"] = str(_skills_root)
-
-    if mcp_servers:
-        config["mcp_servers"] = mcp_servers
-
-    # Web search provider injection — inject first available native provider or remove tool
-    # when only MCP fallback available. Priority: native providers > MCP servers.
-    web_search_providers = ai_config.get("web_search_providers", [])
-    web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
-
-    if web_search_providers:
-        # Inject first available native provider into web_search tool
-        first_provider = web_search_providers[0]
-        provider_class = first_provider.get("provider_class", "")
-        provider_api_key = first_provider.get("api_key", "")
-        provider_max_results = first_provider.get("max_results", 5)
-
-        # Guard: empty provider_class would cause resolve_variable("") to fail
-        if not provider_class:
-            logger.warning(
-                "[deerflow_config] web_search provider_class is empty for family=%s; "
-                "removing web_search tool",
-                family_id,
-            )
-            tools = config.get("tools", [])
-            config["tools"] = [t for t in tools if t.get("name") != "web_search"]
-        else:
-            # Find and update the web_search tool entry
-            tools = config.get("tools", [])
-            for tool in tools:
-                if tool.get("name") == "web_search":
-                    tool["use"] = provider_class
-                    tool["api_key"] = provider_api_key
-                    tool["max_results"] = provider_max_results
-                    break
-
-            # Inject web_fetch tool (Jina AI-based page content fetcher).
-            # chat-search/SKILL.md declares allowed-tools: [web_search, web_fetch];
-            # without this entry the tool policy silently drops web_fetch and the
-            # LLM only sees web_search.
-            tools = config.get("tools", [])
-            if not any(t.get("name") == "web_fetch" for t in tools):
-                tools.append({
-                    "name": "web_fetch",
-                    "group": "web",
-                    "use": "deerflow.community.jina_ai.tools:web_fetch_tool",
-                    "timeout": 10,
-                    "trust_env": False,
-                })
-                config["tools"] = tools
-    else:
-        # No native providers — remove web_search tool (MCP fallback handled separately)
-        tools = config.get("tools", [])
-        config["tools"] = [t for t in tools if t.get("name") not in ("web_search", "web_fetch")]
-
-        # Inject web search MCP servers from ai_config if available and not already injected
-        # The mcp_servers parameter may contain general MCP servers; web_search_mcp_servers
-        # are web search-specific servers that should also be added when native providers unavailable
-        if web_search_mcp_servers and not mcp_servers:
-            config["mcp_servers"] = web_search_mcp_servers
-        elif web_search_mcp_servers and mcp_servers:
-            # Merge web search MCP servers with existing MCP servers
-            existing_servers = config.get("mcp_servers", [])
-            # Avoid duplicates by name
-            existing_names = {s.get("name") for s in existing_servers}
-            for ws_server in web_search_mcp_servers:
-                if ws_server.get("name") not in existing_names:
-                    existing_servers.append(ws_server)
-            config["mcp_servers"] = existing_servers
-
-    # 写入临时文件
+    # Write temp YAML config
     temp_dir = Path(tempfile.mkdtemp(prefix="deerflow_config_"))
     temp_config_path = temp_dir / "config.yaml"
     with open(temp_config_path, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        yaml.dump(
+            config, f, allow_unicode=True, default_flow_style=False, sort_keys=False
+        )
     os.chmod(temp_config_path, 0o600)
 
-    # Generate extensions_config.json for DeerFlow's ExtensionsConfig.from_file()
-    # DeerFlow reads MCP server configs from this file (not from config.yaml).
-    # The DEER_FLOW_EXTENSIONS_CONFIG_PATH env var is set in adapter._produce()
-    # to point here, under _init_lock serialization.
+    # Write extensions_config.json for MCP server discovery
     if mcp_servers:
-        import json as _json
-
-        mcp_servers_dict = {}
-        for srv in mcp_servers:
-            name = srv.get("name", "default")
-            mcp_servers_dict[name] = {
-                "type": srv.get("transport", "sse"),
-                "url": srv.get("url", ""),
-                "headers": srv.get("headers", {}),
-                "enabled": True,
-            }
-        extensions_data = {"mcpServers": mcp_servers_dict}
-        extensions_path = temp_dir / "extensions_config.json"
-        with open(extensions_path, "w", encoding="utf-8") as f:
-            _json.dump(extensions_data, f, ensure_ascii=False)
+        _write_extensions_config(temp_dir, mcp_servers)
 
     return temp_config_path
 
@@ -772,7 +529,9 @@ def get_family_adapter(
         DeerFlowClient 实例
     """
     if base_config_dir is None:
-        base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
+        base_config_dir = os.path.join(
+            os.path.dirname(__file__), "..", "..", "deerflow_config"
+        )
 
     config_id: str = ai_config.get("config_id", "")
     # middlewares are unhashable objects; key by their id() tuple so a client
@@ -782,9 +541,21 @@ def get_family_adapter(
     middlewares_key = tuple(id(m) for m in middlewares) if middlewares else ()
     # available_skills is a set (unhashable); key by frozenset so a client with
     # a different skill whitelist never collides (U3: slash activation).
-    available_skills_key = frozenset(available_skills) if available_skills is not None else None
-    cache_key: tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None] = (
-        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers), agent_name or "", middlewares_key, memory_enabled, available_skills_key,
+    available_skills_key = (
+        frozenset(available_skills) if available_skills is not None else None
+    )
+    cache_key: tuple[
+        str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None
+    ] = (
+        family_id,
+        config_id,
+        subagent_enabled,
+        plan_mode,
+        _mcp_cache_key(mcp_servers),
+        agent_name or "",
+        middlewares_key,
+        memory_enabled,
+        available_skills_key,
     )
 
     # Fast path: return cached client
@@ -792,7 +563,13 @@ def get_family_adapter(
         entry = _adapter_cache.get(cache_key)
         if entry is not None:
             _adapter_cache.move_to_end(cache_key)
-            logger.debug("[deerflow_cache] reuse cached adapter for family=%s config_id=%s subagent=%s plan=%s", family_id, config_id, subagent_enabled, plan_mode)
+            logger.debug(
+                "[deerflow_cache] reuse cached adapter for family=%s config_id=%s subagent=%s plan=%s",
+                family_id,
+                config_id,
+                subagent_enabled,
+                plan_mode,
+            )
             return entry
 
         # Reserve the slot with a placeholder to prevent concurrent initialisations
@@ -813,7 +590,13 @@ def get_family_adapter(
     # memory_enabled is read by the async caller (worker) via AgentRegistry and
     # threaded down as a bool — get_family_adapter is sync (runs inside the
     # adapter's ThreadPoolExecutor), so it cannot await the registry itself.
-    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id, mcp_servers=mcp_servers, memory_enabled=memory_enabled)
+    temp_config_path = _generate_temp_config(
+        base_config_dir,
+        ai_config,
+        family_id=family_id,
+        mcp_servers=mcp_servers,
+        memory_enabled=memory_enabled,
+    )
 
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
@@ -880,7 +663,9 @@ def get_family_adapter(
                 _adapter_cache.pop(cache_key, None)
         with contextlib.suppress(Exception):
             shutil.rmtree(temp_config_path.parent, ignore_errors=True)
-        raise RuntimeError(f"Failed to initialize DeerFlowClient for family={family_id} config_id={config_id}: {e}") from e
+        raise RuntimeError(
+            f"Failed to initialize DeerFlowClient for family={family_id} config_id={config_id}: {e}"
+        ) from e
 
 
 def _atexit_cleanup() -> None:
@@ -906,10 +691,16 @@ def invalidate_family_adapter(family_id: str) -> None:
                 _, config_path = entry
                 with contextlib.suppress(Exception):
                     shutil.rmtree(config_path.parent, ignore_errors=True)
-            logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, key[1])
+            logger.info(
+                "[deerflow_cache] invalidated adapter for family=%s config_id=%s",
+                family_id,
+                key[1],
+            )
 
 
-def invalidate_family_adapter_cache(family_id: str, config_id: str | None = None) -> None:
+def invalidate_family_adapter_cache(
+    family_id: str, config_id: str | None = None
+) -> None:
     """清理家庭的缓存实例。
 
     Args:
@@ -919,14 +710,21 @@ def invalidate_family_adapter_cache(family_id: str, config_id: str | None = None
     with _cache_lock:
         if config_id is not None:
             # Remove all 4-tuple entries matching (family_id, config_id, *, *)
-            keys_to_remove = [k for k in _adapter_cache if k[0] == family_id and k[1] == config_id]
+            keys_to_remove = [
+                k for k in _adapter_cache if k[0] == family_id and k[1] == config_id
+            ]
             for key in keys_to_remove:
                 entry = _adapter_cache.pop(key)
                 if entry is not None:
                     _, config_path = entry
                     with contextlib.suppress(Exception):
                         shutil.rmtree(config_path.parent, ignore_errors=True)
-                logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s flags=%s", family_id, config_id, key[2:])
+                logger.info(
+                    "[deerflow_cache] invalidated adapter for family=%s config_id=%s flags=%s",
+                    family_id,
+                    config_id,
+                    key[2:],
+                )
         else:
             keys_to_remove = [k for k in _adapter_cache if k[0] == family_id]
             for key in keys_to_remove:
@@ -935,7 +733,11 @@ def invalidate_family_adapter_cache(family_id: str, config_id: str | None = None
                     _, config_path = entry
                     with contextlib.suppress(Exception):
                         shutil.rmtree(config_path.parent, ignore_errors=True)
-                logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, key[1])
+                logger.info(
+                    "[deerflow_cache] invalidated adapter for family=%s config_id=%s",
+                    family_id,
+                    key[1],
+                )
 
 
 def clear_cache() -> None:

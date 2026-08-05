@@ -7,7 +7,16 @@ Provides:
 """
 
 import json
+import os
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+# system-config.yaml lives at the repo root, but packages.core.system_config
+# resolves project root from pyproject.toml (in server/). Force the env var
+# before any import caches the config so ai_models max_tokens defaults are
+# available in agent unit tests.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+os.environ.setdefault("NUMINA_PROJECT_ROOT", str(_REPO_ROOT))
 
 import pytest
 
@@ -24,17 +33,29 @@ _AI_CONFIG = {
     "member_role": "member",
 }
 
-_DEERFLOW_RESPONSE = json.dumps({
-    "summary": "DeerFlow 测试响应",
-    "scorecards": [
-        {"name": "综合健康", "score": 3.5, "max_score": 5.0, "label": "较好", "color": "green"}
-    ],
-    "risk_flags": [],
-    "recommendations": [],
-    "rule_based_findings": [{"source": "rule", "content": "测试规则结论", "confidence": 1.0}],
-    "ai_inferences": [{"source": "ai", "content": "测试 AI 推断", "confidence": 0.6}],
-    "disclaimers": ["本分析仅供测试"],
-})
+_DEERFLOW_RESPONSE = json.dumps(
+    {
+        "summary": "DeerFlow 测试响应",
+        "scorecards": [
+            {
+                "name": "综合健康",
+                "score": 3.5,
+                "max_score": 5.0,
+                "label": "较好",
+                "color": "green",
+            }
+        ],
+        "risk_flags": [],
+        "recommendations": [],
+        "rule_based_findings": [
+            {"source": "rule", "content": "测试规则结论", "confidence": 1.0}
+        ],
+        "ai_inferences": [
+            {"source": "ai", "content": "测试 AI 推断", "confidence": 0.6}
+        ],
+        "disclaimers": ["本分析仅供测试"],
+    }
+)
 
 
 @pytest.fixture
@@ -44,10 +65,18 @@ def mock_backend_client():
         instance = MockClient.return_value
         instance.get_family_ai_config = AsyncMock(return_value=_AI_CONFIG)
         instance.get_liabilities = AsyncMock(return_value=REDACTED_CONTEXT.liabilities)
-        instance.get_dashboard_overview = AsyncMock(return_value=REDACTED_CONTEXT.dashboard_overview)
-        instance.get_dashboard_allocation = AsyncMock(return_value=REDACTED_CONTEXT.dashboard_allocation)
-        instance.get_dashboard_trend = AsyncMock(return_value=REDACTED_CONTEXT.dashboard_trend)
-        instance.get_dashboard_low_usage = AsyncMock(return_value=REDACTED_CONTEXT.low_usage_assets)
+        instance.get_dashboard_overview = AsyncMock(
+            return_value=REDACTED_CONTEXT.dashboard_overview
+        )
+        instance.get_dashboard_allocation = AsyncMock(
+            return_value=REDACTED_CONTEXT.dashboard_allocation
+        )
+        instance.get_dashboard_trend = AsyncMock(
+            return_value=REDACTED_CONTEXT.dashboard_trend
+        )
+        instance.get_dashboard_low_usage = AsyncMock(
+            return_value=REDACTED_CONTEXT.low_usage_assets
+        )
         yield instance
 
 
@@ -63,4 +92,5 @@ def mock_deerflow_client():
 def test_app():
     """FastAPI test application instance."""
     from apps.agent.app.main import app
+
     return app

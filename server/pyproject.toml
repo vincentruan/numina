@@ -163,6 +163,7 @@ ignore = ["E501", "B008"]
 # Import-existence tests — intentionally import to verify availability
 "tests/agent/unit/test_deerflow_setup.py" = ["F401"]
 "tests/agent/unit/test_family_adapter_cache.py" = ["F401"]
+"tests/agent/conftest.py" = ["E402"]  # env var must be set before pytest/app imports
 # Side-effect import (installs patch at process start)
 "apps/agent/app/main.py" = ["F401"]
 
