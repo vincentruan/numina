@@ -22,8 +22,41 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const store = useChatSessionStore()
-const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession } = useThreadList()
 const { t } = useI18n()
+
+// Source filter state — undefined means "show all"
+const selectedSource = ref<string | undefined>(undefined)
+const filterSheetVisible = ref(false)
+
+const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession, availableSources } = useThreadList(selectedSource)
+
+/** Known source → i18n key mapping. Unknown sources show raw value. */
+const sourceLabelMap: Record<string, string> = {
+  chat: 'aiChat.sourceChat',
+  branch: 'aiChat.sourceBranch',
+  'asset-report': 'aiChat.sourceAssetReport',
+  'import-parse': 'aiChat.sourceImportParse',
+  'finance-coach': 'aiChat.sourceFinanceCoach',
+  'wish-advice': 'aiChat.sourceWishAdvice',
+}
+
+function sourceLabel(source: string | undefined): string {
+  const key = sourceLabelMap[source || 'chat']
+  return key ? t(key) : (source || t('aiChat.sourceChat'))
+}
+
+/** Ordered list of filter options. Always starts with "all", then known types, then dynamic. */
+const filterOptions = computed(() => {
+  const known = ['chat', 'asset-report', 'import-parse', 'finance-coach', 'wish-advice']
+  const dynamic = availableSources.value.filter(s => !known.includes(s) && s !== 'branch')
+  const items = [...known.filter(s => availableSources.value.includes(s)), ...dynamic]
+  return [
+    { value: undefined as string | undefined, label: t('aiChat.filterAllAgents') },
+    ...items.map(s => ({ value: s, label: sourceLabel(s) })),
+  ]
+})
+
+const isFilterActive = computed(() => selectedSource.value !== undefined)
 
 // U4: in-memory cross-join of parent_thread_id -> parent title. The history
 // list is the set of sessions already loaded for this family; if a branch's
@@ -242,6 +275,11 @@ function onExportSelect(action: { key: string }) {
   else if (action.key === 'export-json') handleExport(session.thread_id, 'json')
 }
 
+function selectFilterSource(source: string | undefined) {
+  selectedSource.value = source
+  filterSheetVisible.value = false
+}
+
 
 // Swipe-to-reveal handlers
 function handleTouchStart(e: TouchEvent, _sessionId: string) {
@@ -282,6 +320,18 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
     <div class="history-header">
       <h3 class="history-title">{{ t('aiChat.historyTitle') }}</h3>
       <div class="header-actions">
+        <!-- Filter button -->
+        <button
+          class="filter-btn"
+          :class="{ active: isFilterActive }"
+          :aria-label="t('aiChat.filterByAgent')"
+          @click="filterSheetVisible = true"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+          </svg>
+          <span v-if="isFilterActive" class="filter-dot" />
+        </button>
         <!-- New chat button: only shown in standalone page mode (not overlay) -->
         <button v-if="!overlay" class="new-chat-btn" :aria-label="t('aiChat.newChat')" @click="startNewChat">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -339,7 +389,10 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
                 </div>
               </template>
               <template v-else>
-                <div class="session-title">{{ session.title || t('aiChat.newChat') }}</div>
+                <div class="session-title">
+                  {{ session.title || t('aiChat.newChat') }}
+                  <span v-if="session.source && session.source !== 'chat'" class="session-source-tag">{{ sourceLabel(session.source) }}</span>
+                </div>
                 <div class="session-time">{{ parseApiDate(session.updated_at).toLocaleString() }}</div>
               </template>
             </div>
@@ -411,6 +464,38 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
       close-on-click-action
       @select="onExportSelect"
     />
+
+    <!-- Filter by agent type (bottom sheet) -->
+    <van-popup
+      v-model:show="filterSheetVisible"
+      position="bottom"
+      round
+      :style="{ maxHeight: '60vh' }"
+    >
+      <div class="filter-sheet">
+        <div class="filter-sheet-header">
+          <span class="filter-sheet-title">{{ t('aiChat.filterByAgent') }}</span>
+        </div>
+        <div class="filter-sheet-list">
+          <div
+            v-for="opt in filterOptions"
+            :key="opt.label"
+            class="filter-option"
+            :class="{ selected: selectedSource === opt.value }"
+            role="button"
+            tabindex="0"
+            @click="selectFilterSource(opt.value)"
+            @keydown.enter="selectFilterSource(opt.value)"
+            @keydown.space.prevent="selectFilterSource(opt.value)"
+          >
+            <span class="filter-option-label">{{ opt.label }}</span>
+            <svg v-if="selectedSource === opt.value" class="filter-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -733,5 +818,138 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
 
 :global([data-theme='dark'] .no-more) {
   color: var(--text-secondary);
+}
+
+/* Filter button */
+.filter-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--van-text-color-2, #666);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+
+.filter-btn:hover {
+  background: var(--van-active-color, rgba(0, 0, 0, 0.06));
+  color: var(--van-text-color, #333);
+}
+
+.filter-btn:active {
+  background: var(--van-active-color, rgba(0, 0, 0, 0.1));
+}
+
+.filter-btn.active {
+  color: var(--van-primary-color, #1989fa);
+}
+
+.filter-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--van-primary-color, #1989fa);
+}
+
+/* Session source tag */
+.session-source-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--van-primary-color, #1989fa);
+  background: rgba(25, 137, 250, 0.1);
+  border-radius: 3px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Filter sheet */
+.filter-sheet {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.filter-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--van-border-color, #eee);
+}
+
+.filter-sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--van-text-color, #333);
+}
+
+.filter-sheet-list {
+  max-height: calc(60vh - 56px);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.filter-option:active {
+  background: var(--van-active-color, rgba(0, 0, 0, 0.06));
+}
+
+.filter-option.selected {
+  color: var(--van-primary-color, #1989fa);
+}
+
+.filter-option-label {
+  font-size: 14px;
+  color: var(--van-text-color, #333);
+}
+
+.filter-option.selected .filter-option-label {
+  color: var(--van-primary-color, #1989fa);
+  font-weight: 500;
+}
+
+.filter-check {
+  color: var(--van-primary-color, #1989fa);
+  flex-shrink: 0;
+}
+
+/* Dark mode — filter sheet */
+:global([data-theme='dark'] .filter-sheet-header) {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+:global([data-theme='dark'] .filter-sheet-title) {
+  color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .filter-option-label) {
+  color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .filter-btn:hover) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .session-source-tag) {
+  background: rgba(189, 187, 255, 0.12);
+  color: var(--van-primary-color, #bdbbff);
 }
 </style>

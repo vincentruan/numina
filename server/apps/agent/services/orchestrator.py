@@ -72,6 +72,71 @@ def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str, lis
     return first_provider, fallback_model_id, fallback_caps
 
 
+def _select_stream_run_provider(
+    providers: list[dict],
+) -> dict | None:
+    """Select a provider for stream_run workers, respecting circuit state.
+
+    Unlike ``_select_model`` (used by the numina chat path via
+    ``agent_dispatch.py``), stream_run runners don't do capability-based
+    selection — they just need a working provider for their fixed skill
+    (asset-report / import-parse / finance-coach / wish-advice /
+    dashboard-narrative / literacy-weekly-report). So selection is:
+
+    1. Providers with ``circuit_state == "open"`` are filtered out (defense in
+       depth: the backend's ``/internal/ai/config`` endpoint already excludes
+       open-circuit providers, but we re-check here in case the caller got a
+       stale cache or a concurrent state change slipped through).
+    2. ``circuit_state == "half_open"`` providers are included only ~10% of
+       the time (recovery probe per ``_should_route_to_half_open``). When the
+       random check fails, they are treated as unavailable for this call.
+    3. Return the first surviving provider in ``display_order``, or ``None``
+       when every provider is unavailable. Returning ``None`` surfaces the
+       failure to the caller instead of silently degrading to a broken
+       provider (the previous ``providers[0]`` blind fallback).
+
+    Args:
+        providers: List of provider dicts from BackendClient.get_family_ai_config()
+            (or the backend's ``/internal/ai/config`` response). Each may carry
+            ``circuit_state`` (default "closed") and ``config_id``.
+
+    Returns:
+        A provider dict, or ``None`` when no usable provider remains.
+    """
+    if not providers:
+        return None
+
+    # Split into half_open candidates and normal (closed) providers.
+    half_open: list[dict] = []
+    closed: list[dict] = []
+    for p in providers:
+        state = p.get("circuit_state", "closed")
+        if state == "open":
+            continue  # backend already filters these, but be defensive
+        if state == "half_open":
+            half_open.append(p)
+        else:
+            closed.append(p)
+
+    # 10% chance to probe a half_open provider (recovery test).
+    if half_open and _should_route_to_half_open():
+        return half_open[0]
+
+    # Prefer a closed provider; fall back to a half_open one when no closed
+    # provider is available — better to probe than to fail the run outright.
+    if closed:
+        return closed[0]
+    if half_open:
+        logger.info(
+            "[orchestrator] _select_stream_run_provider: no closed provider available, "
+            "probing half_open provider config_id=%s",
+            half_open[0].get("config_id"),
+        )
+        return half_open[0]
+
+    return None
+
+
 def _is_transient_error(error_type: str) -> bool:
     """Check if error type is transient (can cascade to next provider)."""
     return error_type.startswith("transient_") or error_type in (

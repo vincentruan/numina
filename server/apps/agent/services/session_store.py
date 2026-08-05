@@ -74,6 +74,7 @@ class AiSessionRepository:
         offset: int = 0,
         sort_by: str = "updated_at",
         sort_order: str = "desc",
+        source: str | None = None,
     ) -> tuple[list[dict], int]:
         """Return (sessions, total) for the family, or ([], 0) on error."""
         try:
@@ -87,6 +88,7 @@ class AiSessionRepository:
                 offset=offset,
                 sort_by=sort_by,
                 sort_order=sort_order,
+                source=source,
             )
         except Exception as e:
             logger.warning("session list failed for family %s: %s", family_id, e)

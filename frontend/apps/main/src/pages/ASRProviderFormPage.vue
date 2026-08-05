@@ -302,7 +302,7 @@ onMounted(loadExisting)
 <style scoped>
 .asr-form-page {
   min-height: 100vh;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
 }
 
 .page-body {
@@ -312,8 +312,9 @@ onMounted(loadExisting)
 .test-result-card {
   margin: 16px;
   padding: 12px;
-  background: var(--card-bg, #f5f5ff);
-  border-radius: 8px;
+  background: var(--bg-card, var(--card-bg));
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
 }
 
 .test-result-header {

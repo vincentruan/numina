@@ -48,6 +48,11 @@ from apps.agent.services.message_classifier import (
     extract_tool_calls,
     resolve_tool_metadata,
 )
+
+# Shared provider-selection helper (circuit-state aware). Imported lazily via
+# function scope in each runner to avoid a circular import with orchestrator.py
+# — but the symbol is referenced here at module level for testability.
+from apps.agent.services.orchestrator import _select_stream_run_provider
 from apps.agent.services.pii_redactor import pii_redactor
 from packages.core import get_path_manager
 
@@ -77,6 +82,71 @@ def _track_task(task: asyncio.Task) -> None:
     """Track a background task and auto-remove it when done."""
     _background_tasks.add(task)
     task.add_done_callback(lambda t: _background_tasks.discard(t))
+
+
+async def _report_circuit_on_failure(
+    family_id: str,
+    selected_provider: dict | None,
+    exc: BaseException,
+) -> None:
+    """Report an LLM call failure to the backend circuit-breaker state machine.
+
+    Fire-and-forget: errors here are logged but never propagated, so a failed
+    circuit report can't mask the original error response to the user.
+
+    Args:
+        family_id: family context for the report.
+        selected_provider: the provider dict used for this run (must carry
+            ``config_id``). When None (no provider was selected), this is a
+            no-op — there's nothing to blame.
+        exc: the exception that terminated the run.
+    """
+    if selected_provider is None:
+        return
+    config_id = selected_provider.get("config_id")
+    if not config_id:
+        return
+    try:
+        from apps.agent.core.backend_client import (
+            BackendClient,
+            _extract_llm_error_info,
+            classify_error_type,
+        )
+
+        error_code, error_message = _extract_llm_error_info(exc)
+        error_type = classify_error_type(error_code, error_message)
+        client = BackendClient(family_id=family_id)
+        await client.report_circuit_event(
+            config_id=config_id,
+            error_code=error_code,
+            error_type=error_type,
+            error_message=error_message[:500],  # trim for storage
+        )
+    except Exception as report_exc:
+        # Never let the circuit-report failure propagate — it must not
+        # interfere with the already-failing run's error path.
+        logger.warning(
+            "[worker] report_circuit_event failed family=%s config_id=%s err=%s",
+            family_id,
+            config_id,
+            type(report_exc).__name__,
+        )
+
+
+def _fire_and_forget_circuit_report(
+    family_id: str,
+    selected_provider: dict | None,
+    exc: BaseException,
+) -> None:
+    """Schedule ``_report_circuit_on_failure`` as a fire-and-forget task."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    task = loop.create_task(
+        _report_circuit_on_failure(family_id, selected_provider, exc)
+    )
+    _track_task(task)
 
 
 def _deerflow_default_workspace_md(
@@ -492,13 +562,9 @@ async def _run_asset_report_pipeline(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        # NOTE: ai_config providers carry ai_provider/ai_model_id, not is_active
-        # (DB is_active is not mapped into the config dict). next() falls back
-        # to providers[0]; Demo Family's [0] happens to be active. This is a
-        # pre-existing worker assumption, not introduced here.
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. Fetch enabled MCP servers (same MCP-setup as _run_numina_agent).
         mcp_servers = await _resolve_numina_mcp_servers(
@@ -736,6 +802,13 @@ async def _run_asset_report_pipeline(
             "[_run_asset_report_pipeline] failed run=%s err=%s", run_id, error_type
         )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        # Circuit-breaker reporting: classify the exception and report to the
+        # backend so the provider's circuit_state can transition to open.
+        # locals().get("selected_provider") is safe even when the error fired
+        # before the provider was assigned — returns None and the helper no-ops.
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id,
             "error",
@@ -902,9 +975,9 @@ async def _run_import_parse_agent(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. Fetch enabled MCP servers (same MCP-setup as asset-report).
         mcp_servers = await _resolve_numina_mcp_servers(
@@ -1055,6 +1128,13 @@ async def _run_import_parse_agent(
             "[_run_import_parse_agent] failed run=%s err=%s", run_id, error_type
         )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        # Circuit-breaker reporting: classify the exception and report to the
+        # backend so the provider's circuit_state can transition to open.
+        # locals().get("selected_provider") is safe even when the error fired
+        # before the provider was assigned — returns None and the helper no-ops.
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id,
             "error",
@@ -1155,9 +1235,9 @@ async def _run_finance_coach_agent(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. Fetch enabled MCP servers (same MCP-setup as import-parse).
         mcp_servers = await _resolve_numina_mcp_servers(
@@ -1311,6 +1391,13 @@ async def _run_finance_coach_agent(
             "[_run_finance_coach_agent] failed run=%s err=%s", run_id, error_type
         )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        # Circuit-breaker reporting: classify the exception and report to the
+        # backend so the provider's circuit_state can transition to open.
+        # locals().get("selected_provider") is safe even when the error fired
+        # before the provider was assigned — returns None and the helper no-ops.
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id,
             "error",
@@ -1449,9 +1536,9 @@ async def _run_wish_advice_agent(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. Fetch enabled MCP servers (same MCP-setup as finance-coach).
         mcp_servers = await _resolve_numina_mcp_servers(
@@ -1604,6 +1691,13 @@ async def _run_wish_advice_agent(
             "[_run_wish_advice_agent] failed run=%s err=%s", run_id, error_type
         )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        # Circuit-breaker reporting: classify the exception and report to the
+        # backend so the provider's circuit_state can transition to open.
+        # locals().get("selected_provider") is safe even when the error fired
+        # before the provider was assigned — returns None and the helper no-ops.
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id,
             "error",
@@ -2244,9 +2338,9 @@ async def _run_dashboard_narrative_agent(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. No MCP servers needed (allowed-tools: [] — pure inference)
         mcp_servers: list[dict] = []
@@ -2374,6 +2468,9 @@ async def _run_dashboard_narrative_agent(
             error_type,
         )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id, "error", {"message": str(exc), "name": error_type}
         )
@@ -2473,9 +2570,9 @@ async def _run_numina_agent(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. Fetch enabled MCP servers so the chat skill can query family data
         # via MCP tools (get_family_overview, get_assets, ...). Without this,
@@ -2773,6 +2870,13 @@ async def _run_numina_agent(
         error_type = type(exc).__name__
         logger.warning("[_run_numina_agent] failed run=%s err=%s", run_id, error_type)
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        # Circuit-breaker reporting: classify the exception and report to the
+        # backend so the provider's circuit_state can transition to open.
+        # locals().get("selected_provider") is safe even when the error fired
+        # before the provider was assigned — returns None and the helper no-ops.
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id,
             "error",
@@ -2841,14 +2945,15 @@ async def _run_numina_agent(
             end_payload["usage"] = cumulative_usage
         await bridge.publish(run_id, "end", end_payload)
 
-        if completion_status == "complete" and selected_provider is not None:
-            # Sync / generate the thread title. DeerFlow's TitleMiddleware
-            # writes to the checkpoint, but Numina's adapter runs the sync
-            # ``stream()`` path so only the sync ``after_model`` hook fires -
-            # that returns a local fallback (the raw ``[SKILL:chat]`` wrapper),
-            # never an LLM summary. sync_title_from_checkpoint generates a
-            # proper title via the family provider when the checkpoint title is
-            # a fallback. Best-effort, fire-and-forget.
+        # Thread title: generate for ALL completion states (complete, interrupted,
+        # error) so even cancelled/failed threads get a sidebar title (DeerFlow
+        # ``_ensure_interrupted_title`` pattern). The sync ``after_model`` hook
+        # already produced a fallback title via the values SSE events during the
+        # stream; this post-stream step upgrades it to an LLM-generated title
+        # when possible, then publishes the final title via a values event so
+        # the frontend can update the sidebar without polling.
+        generated_title: str | None = None
+        if selected_provider is not None and user_message:
             task = asyncio.create_task(
                 sync_title_from_checkpoint(
                     thread_id,
@@ -2859,6 +2964,16 @@ async def _run_numina_agent(
                 )
             )
             _track_task(task)
+            try:
+                generated_title = await task
+            except Exception:
+                generated_title = None
+
+        # Publish the generated title via a values event so the frontend updates
+        # the sidebar in real-time (DeerFlow pattern: title flows through the
+        # values SSE channel, not a separate HTTP poll).
+        if generated_title:
+            await bridge.publish(run_id, "values", {"title": generated_title})
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
@@ -2939,9 +3054,9 @@ async def _run_literacy_weekly_report_agent(
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
-        selected_provider = next(
-            (p for p in providers if p.get("is_active")), providers[0]
-        )
+        selected_provider = _select_stream_run_provider(providers)
+        if selected_provider is None:
+            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
         # 3. Fetch enabled MCP servers
         mcp_servers = await _resolve_numina_mcp_servers(
@@ -3071,6 +3186,9 @@ async def _run_literacy_weekly_report_agent(
             error_type,
         )
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
+        _fire_and_forget_circuit_report(
+            family_id, locals().get("selected_provider"), exc
+        )
         await bridge.publish(
             run_id, "error", {"message": str(exc), "name": error_type}
         )

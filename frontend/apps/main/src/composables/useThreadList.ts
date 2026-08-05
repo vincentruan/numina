@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { searchThreads, deleteThread, updateThread, getThreadState } from '@/api/ai-chat'
 import { parseApiDate } from '@/utils/format'
@@ -38,12 +38,22 @@ function downloadFile(filename: string, content: string, mimeType: string): void
   URL.revokeObjectURL(url)
 }
 
-export function useThreadList() {
+export function useThreadList(sourceFilter?: Ref<string | undefined>) {
   const { t } = useI18n()
   const sessions = ref<ThreadSession[]>([])
   const isLoading = ref(false)
   const hasMore = ref(true)
   let offset = 0
+
+  /** Distinct source values observed in loaded sessions (for filter UI). */
+  const availableSources = computed<string[]>(() => {
+    const seen = new Set<string>()
+    for (const s of sessions.value) {
+      const src = s.source || 'chat'
+      if (!seen.has(src)) seen.add(src)
+    }
+    return [...seen].sort()
+  })
 
   function getDateLabel(date: Date): DateGroupLabel {
     const now = new Date()
@@ -86,7 +96,7 @@ export function useThreadList() {
     if (isLoading.value || !hasMore.value) return
     isLoading.value = true
     try {
-      const res = await searchThreads({ limit: PAGE_SIZE, offset })
+      const res = await searchThreads({ limit: PAGE_SIZE, offset, source: sourceFilter?.value })
       sessions.value = [...sessions.value, ...res.items]
       offset += res.items.length
       hasMore.value = offset < res.total
@@ -100,6 +110,13 @@ export function useThreadList() {
     offset = 0
     hasMore.value = true
     await loadMore()
+  }
+
+  // When the source filter changes, reset and reload.
+  if (sourceFilter) {
+    watch(sourceFilter, () => {
+      refresh()
+    })
   }
 
   async function deleteSession(id: string) {
@@ -169,7 +186,7 @@ export function useThreadList() {
   }
 
   return {
-    sessions, isLoading, hasMore, dateGroups,
+    sessions, isLoading, hasMore, dateGroups, availableSources,
     loadMore, refresh, deleteSession, renameSession, togglePin,
     exportSession, shareSession,
   }

@@ -440,6 +440,23 @@ class DeerFlowAdapter:
             if event_type == "messages-tuple" and isinstance(event_data, dict):
                 yield ("messages", event_data)
             elif event_type == "values" and isinstance(event_data, dict):
+                # Clean fallback title (DeerFlow sync after_model produces the
+                # raw JSON context wrapper as title because _build_prompt wraps
+                # user text as JSON; TitleMiddleware truncates that). Replace
+                # with the original user text so the frontend sees a clean
+                # title via the values SSE event — matches DeerFlow's native
+                # title-via-values delivery mechanism.
+                raw_title = event_data.get("title")
+                if raw_title and isinstance(raw_title, str):
+                    from apps.agent.services.runtime.run_extras import (
+                        _is_fallback_title,
+                        _text_fallback_title,
+                    )
+
+                    if _is_fallback_title(raw_title):
+                        clean = _text_fallback_title(context.free_text)
+                        if clean:
+                            event_data = {**event_data, "title": clean}
                 yield ("values", event_data)
             elif event_type == "end":
                 yield ("end", event_data)

@@ -986,6 +986,7 @@ def internal_list_sessions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     agent_id: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     sort_by: str = Query(default="updated_at"),
     sort_order: str = Query(default="desc"),
     family_id: str = Depends(verify_agent_token),
@@ -996,6 +997,12 @@ def internal_list_sessions(
     q = db.query(AIChatSession).filter(AIChatSession.family_id == int(family_id))
     if agent_id:
         q = q.filter(AIChatSession.agent_id == int(agent_id))
+    if source is not None:
+        # "chat" is a frontend sentinel for normal chat sessions (source IS NULL).
+        if source == "chat":
+            q = q.filter(AIChatSession.source.is_(None))
+        else:
+            q = q.filter(AIChatSession.source == source)
     total = q.count()
 
     # Build the sort columns. Pinned sessions always surface first, then the

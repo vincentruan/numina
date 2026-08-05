@@ -124,6 +124,10 @@ class ThreadSearchRequest(BaseModel):
     offset: int = Field(default=0, ge=0, description="Pagination offset")
     sortBy: str | None = Field(default="updated_at", description="Sort column")
     sortOrder: str | None = Field(default="desc", description="Sort order (asc/desc)")
+    source: str | None = Field(
+        default=None,
+        description="Filter by session source (agent/skill type). Pass 'chat' for normal chat sessions (source IS NULL).",
+    )
 
 
 class ThreadStateResponse(BaseModel):
@@ -669,6 +673,7 @@ async def search_threads(
         offset=body.offset,
         sort_by=body.sortBy or "updated_at",
         sort_order=body.sortOrder or "desc",
+        source=body.source,
     )
 
     return [
@@ -690,6 +695,9 @@ async def search_threads(
                 # not mixed in here.
                 "is_branch": r.get("source") == "branch",
                 "parent_thread_id": r.get("parent_thread_id"),
+                # Session source (agent/skill type) for frontend filter UI.
+                # Normalize None→"chat" so the frontend has a stable key.
+                "source": r.get("source") or "chat",
             },
             values={"title": r.get("title", "")} if r.get("title") else {},
             interrupts={},

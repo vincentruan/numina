@@ -44,10 +44,14 @@ async def suggest_asset(
         # not blocked (mirrors the LLM-failure fallback in asset_suggest).
         return dict(_SUGGEST_DEFAULTS)
 
-    # providers come pre-filtered to is_active==True (backend /ai/config L181),
-    # so providers[0] is the active provider. _create_lightweight_llm reads
-    # ai_provider/ai_model_id/api_key/ai_base_url from this dict.
-    selected_provider = providers[0]
+    # Circuit-state aware selection: skip open providers, probe half_open
+    # ~10% of the time. Falls back to None when all providers are unavailable.
+    from apps.agent.services.orchestrator import _select_stream_run_provider
+
+    selected = _select_stream_run_provider(providers)
+    if selected is None:
+        return dict(_SUGGEST_DEFAULTS)
+    selected_provider = selected
     return await suggest_asset_fields(
         name=body.name,
         category=body.category,
