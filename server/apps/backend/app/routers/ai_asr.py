@@ -33,6 +33,10 @@ from apps.backend.app.services.ai_crypto import (
     mask_api_key,
 )
 from apps.backend.app.services.asr_wer import REFERENCE_TEXTS, compute_wer
+from apps.backend.app.services.circuit_breaker.adapters.asr import (
+    ASRAdapter,
+    get_first_usable_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +46,8 @@ router = APIRouter(prefix="/asr", tags=["asr"])
 _ALLOWED_AUDIO_EXTENSIONS = {"webm", "wav", "mp3", "ogg", "m4a", "mp4"}
 _MAX_AUDIO_SIZE = 10 * 1024 * 1024  # 10 MB
 
-# Circuit breaker: auto-disable after this many consecutive failures
-_CIRCUIT_FAILURE_THRESHOLD = 3
+# Circuit breaker: auto-disable after 3 consecutive failures
+# (threshold now defined in ASRAdapter, kept for reference)
 
 # Default base URLs per provider
 _PROVIDER_DEFAULT_BASE_URLS = {
@@ -104,30 +108,9 @@ def _cfg_to_response(cfg: ASRProviderConfig) -> ASRConfigResponse:
     )
 
 
-async def _get_first_usable_config(
-    family_id: int, db: Session
-) -> ASRProviderConfig | None:
-    """Find the first active, enabled, circuit-closed ASR config for a family."""
-    result = db.execute(
-        select(ASRProviderConfig)
-        .where(
-            ASRProviderConfig.family_id == family_id,
-            ASRProviderConfig.is_active == True,  # noqa: E712
-            ASRProviderConfig.circuit_state != "open",
-        )
-        .order_by(ASRProviderConfig.display_order.asc().nulls_last())
-    )
-    return result.scalar_one_or_none()
-
-
-async def _record_failure(cfg: ASRProviderConfig, db: Session) -> None:
-    """Record a transcription failure; auto-disable after threshold."""
-    cfg.failure_count += 1
-    cfg.last_failure_at = datetime.now(UTC)
-    if cfg.failure_count >= _CIRCUIT_FAILURE_THRESHOLD:
-        cfg.circuit_state = "open"
-        cfg.is_active = False
-    db.commit()
+# ── Helpers (now delegated to ASRAdapter) ────────────────────────────────────
+# _get_first_usable_config is now imported from circuit_breaker.adapters.asr
+# _record_failure is now handled via ASRAdapter.record_failure()
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -391,9 +374,10 @@ async def test_asr_config(
     cfg.test_latency_ms = sum(lr.latency_ms or 0 for lr in lang_results)
     cfg.tested_at = datetime.now(UTC)
     if all_passed:
-        cfg.circuit_state = "closed"
-        cfg.failure_count = 0
-    db.commit()
+        # Reset circuit breaker on successful test
+        ASRAdapter(cfg.id).record_success(db)
+    else:
+        db.commit()
 
     return ASRTestResult(
         success=all_passed,
@@ -411,7 +395,7 @@ async def get_asr_status(
     db: Session = Depends(get_db),
 ):
     """Check if ASR is available for the current family."""
-    cfg = await _get_first_usable_config(current_user.family_id, db)
+    cfg = get_first_usable_config(current_user.family_id, db)
     if cfg:
         return ASRStatusResponse(available=True)
     return ASRStatusResponse(available=False, reason="未配置或未启用 ASR 模型")
@@ -443,7 +427,7 @@ async def transcribe_audio(
             details="文件大小超过限制（最大 10MB）",
         )
 
-    cfg = await _get_first_usable_config(current_user.family_id, db)
+    cfg = get_first_usable_config(current_user.family_id, db)
     if not cfg:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
@@ -452,7 +436,7 @@ async def transcribe_audio(
 
     api_key = decrypt_api_key(cfg.api_key_encrypted or "")
     if not api_key:
-        await _record_failure(cfg, db)
+        ASRAdapter(cfg.id).record_failure(db)
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             details="API Key 解密失败",
@@ -474,15 +458,13 @@ async def transcribe_audio(
 
         text = transcription.text.strip() if transcription.text else ""
 
-        # Success → reset failure counter
-        cfg.failure_count = 0
-        cfg.circuit_state = "closed"
-        db.commit()
+        # Success → reset failure counter via adapter
+        ASRAdapter(cfg.id).record_success(db)
 
         return ASRTranscribeResponse(text=text)
     except Exception as e:
         logger.warning("ASR transcribe failed for family %s: %s", current_user.family_id, e)
-        await _record_failure(cfg, db)
+        ASRAdapter(cfg.id).record_failure(db)
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             details=f"语音识别失败: {str(e)[:200]}",

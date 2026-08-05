@@ -4,7 +4,7 @@ R5.2 / R5.4 / D7 人工介入 from
 docs/brainstorms/2026-05-19-async-agent-task-result-persistence-v2-requirements.md
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
@@ -84,7 +84,7 @@ def list_audit(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> AuditResponse:
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
     query = db.query(AIExtractionAudit).filter(AIExtractionAudit.extracted_at >= cutoff)
     if family_id is not None:
         query = query.filter(AIExtractionAudit.family_id == family_id)
@@ -141,4 +141,4 @@ def reset_circuit(
         user_id=current_user.id,
         db=db,
     )
-    return CircuitResetResponse(ok=True, reset_at=datetime.utcnow())
+    return CircuitResetResponse(ok=True, reset_at=datetime.now(UTC).replace(tzinfo=None))

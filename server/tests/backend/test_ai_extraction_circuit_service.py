@@ -1,6 +1,6 @@
 """Tests for AIExtractionCircuitService."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from apps.backend.app.models.ai_extraction_audit import AIExtractionAudit
 from apps.backend.app.models.ai_extraction_circuit import AIExtractionCircuit
@@ -14,7 +14,7 @@ from apps.backend.app.utils.snowflake import next_id
 
 def _insert_fallback_audits(db, family_id, skill_id, count, minutes_ago_start=0):
     """Insert N llm_fallback_hit audit records spread over time."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     for i in range(count):
         audit = AIExtractionAudit(
             id=next_id(),
@@ -46,7 +46,7 @@ class TestIsOpen:
     def test_state_circuit_open_returns_true(self, db):
         circuit = AIExtractionCircuit(
             id=next_id(), family_id=1, skill_id="alerts", state="circuit_open",
-            opened_at=datetime.utcnow(),
+            opened_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(circuit)
         db.commit()
@@ -57,8 +57,8 @@ class TestIsOpen:
     def test_state_rate_limited_not_expired_returns_true(self, db):
         circuit = AIExtractionCircuit(
             id=next_id(), family_id=1, skill_id="disposal", state="rate_limited",
-            opened_at=datetime.utcnow(),
-            opened_until=datetime.utcnow() + timedelta(minutes=20),
+            opened_at=datetime.now(UTC).replace(tzinfo=None),
+            opened_until=datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=20),
         )
         db.add(circuit)
         db.commit()
@@ -69,8 +69,8 @@ class TestIsOpen:
     def test_state_rate_limited_expired_auto_recovers(self, db):
         circuit = AIExtractionCircuit(
             id=next_id(), family_id=1, skill_id="disposal", state="rate_limited",
-            opened_at=datetime.utcnow() - timedelta(minutes=40),
-            opened_until=datetime.utcnow() - timedelta(minutes=10),
+            opened_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=40),
+            opened_until=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=10),
         )
         db.add(circuit)
         db.commit()
@@ -95,7 +95,7 @@ class TestEvaluate:
         assert state == "rate_limited"
         circuit = db.query(AIExtractionCircuit).filter_by(family_id=1, skill_id="alerts").first()
         assert circuit.opened_until is not None
-        assert circuit.opened_until > datetime.utcnow()
+        assert circuit.opened_until > datetime.now(UTC).replace(tzinfo=None)
 
     def test_24h_threshold_triggers_circuit_open(self, db):
         _insert_fallback_audits(db, 1, "disposal", CIRCUIT_OPEN_THRESHOLD)
@@ -128,8 +128,8 @@ class TestEvaluate:
         # Set up an expired rate_limited state
         circuit = AIExtractionCircuit(
             id=next_id(), family_id=1, skill_id="alerts", state="rate_limited",
-            opened_at=datetime.utcnow() - timedelta(minutes=40),
-            opened_until=datetime.utcnow() - timedelta(minutes=10),
+            opened_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=40),
+            opened_until=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=10),
         )
         db.add(circuit)
         db.commit()
@@ -143,7 +143,7 @@ class TestReset:
     def test_reset_circuit_open(self, db):
         circuit = AIExtractionCircuit(
             id=next_id(), family_id=1, skill_id="alerts", state="circuit_open",
-            opened_at=datetime.utcnow(),
+            opened_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(circuit)
         db.commit()

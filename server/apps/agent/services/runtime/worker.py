@@ -379,7 +379,7 @@ async def _run_asset_report_pipeline(
     graph_input: dict | None,
     config: dict[str, Any],
 ) -> None:
-    """Asset-report 3-step pipeline dispatch branch (U4).
+    """Asset-report 3-step pipeline dispatch branch via RunPipeline (U4).
 
     Runs a single ``stream_run`` agent run via ``adapter.typed_stream_dispatch``
     with ``skill_name="asset-report"``. The skill prompt (see
@@ -393,9 +393,7 @@ async def _run_asset_report_pipeline(
     rate = 18/20 (90%) ≥ 80% gate, so the single-run pipeline is viable — no
     fallback to two-skill NDJSON orchestration.
 
-    Mirrors ``_run_numina_agent`` for config/MCP setup + stream forwarding +
-    tool_call/tool_result custom-event synthesis so the frontend reuses the
-    chat renderer. Differences vs chat:
+    Differences vs chat:
     - ``skill_name="asset-report"`` (fixed system flow, KTD-8).
     - Synthetic trigger message ``/asset-report 生成家庭资产报告`` (plan L117:
       report runs have no natural user message; backend-initiated).
@@ -409,70 +407,24 @@ async def _run_asset_report_pipeline(
       middleware ``get_stream_writer()`` emission is preferred but requires
       an adapter middleware-injection point not yet present).
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    completion_status = "error"
-    selected_provider: dict[str, Any] | None = None
-    ai_response_parts: list[str] = []
-    write_file_paths: list[str] = []
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata (DeerFlow pattern)
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id,
-            "metadata",
-            {"run_id": run_id, "thread_id": thread_id},
-        )
+    async with RunPipeline(
+        app_name="asset-report",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=False,
+        subagent_enabled=False,
+        enable_thinking=False,  # Qwen3: avoid empty content (see memory qwen3-enable-thinking-empty-content)
+        timeout_seconds=240,
+    ) as p:
+        # App-specific delta: trigger construction + result extraction
 
-        # 2. Fetch per-family AI config (tenant-isolated) — mirrors _run_numina_agent.
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
-
-        # 3. Fetch enabled MCP servers (same MCP-setup as _run_numina_agent).
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, family_id, user_id, "[_run_asset_report_pipeline]"
-        )
-
-        # 4. Build adapter. plan_mode=False (fixed 3-step flow, no TodoList).
-        # Read the agent's memory_enabled flag from the AgentRegistry (single
-        # source of truth: ai_agents.memory_enabled). asset-report declares
-        # memory_enabled=False on its system-agent row → DeerMem injection +
-        # write are disabled, so each run is stateless and fetches fresh MCP
-        # data (plan U4 Open Question: DeerMem pollution). agent_name is also
-        # passed for DeerMem bucket isolation (per (agent_name, user_id)).
-        from apps.agent.services.agent_registry import get_agent_registry
-
-        agent_meta = await get_agent_registry().get("asset-report", family_id)
-        memory_enabled = (
-            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
-        )
-
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=240,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-            agent_name="asset-report",
-            memory_enabled=memory_enabled,
-            # U4 step 3: middleware path (AssetReportStep2Middleware) was
-            # attempted but get_stream_writer() is no-op on numina's sync
-            # stream() path (plan fallback condition). report.step2_json is
-            # worker-synthesized instead (see step 9 below).
-        )
-
-        # 5. Synthetic trigger message (plan L117): report runs are backend-
+        # Synthetic trigger message (plan L117): report runs are backend-
         # initiated with no natural user message. Use the slash-activation form
         # so the LLM loads asset-report/SKILL.md (not chat/SKILL.md). If the
         # backend already supplied a user message in graph_input, prefer it.
@@ -482,16 +434,9 @@ async def _run_asset_report_pipeline(
         user_message = _SYNTHETIC_TRIGGERS_BY_LANG.get("asset-report", {}).get(
             user_language, _SYNTHETIC_ASSET_REPORT_TRIGGER
         )
-        if graph_input and "messages" in graph_input:
-            msgs = graph_input["messages"]
-            if isinstance(msgs, list) and msgs:
-                last = msgs[-1]
-                if isinstance(last, dict) and last.get("role") in ("user", "human"):
-                    content = last.get("content", "")
-                    if content:
-                        user_message = content
+        user_message = _extract_backend_user_message(graph_input) or user_message
 
-        # 5b. Append language instruction based on user's language preference.
+        # Append language instruction based on user's language preference.
         # SKILL.md is static; the LLM needs an explicit per-run directive to
         # output in the user's chosen language (not always Chinese).
         if user_language:
@@ -500,118 +445,21 @@ async def _run_asset_report_pipeline(
             )
             user_message = f"{user_message}\n\n{lang_instruction}"
 
-        # 6. PII redaction (Key Invariant #1)
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
+        await p.run_skill(user_message)
 
-        # 7. Stream via typed_stream_dispatch → publish to bridge. Set the
-        # active skill so sync_tool_patch filters tools to asset-report's
-        # declared allowed-tools whitelist.
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
-        )
-
-        _skill_token = set_active_skill("asset-report")
-        async for sse_type, data in adapter.typed_stream_dispatch(
-            skill_name="asset-report",
-            context=redacted,
-            thread_id=thread_id,
-            enable_thinking=False,  # Qwen3: avoid empty content (see memory qwen3-enable-thinking-empty-content)
-        ):
-            if record.abort_event.is_set():
-                break
-
-            if sse_type == "end":
-                if isinstance(data, dict) and data.get("usage"):
-                    raw_usage = data["usage"]
-                    cumulative_usage = {
-                        "input_tokens": raw_usage.get("input_tokens", 0),
-                        "output_tokens": raw_usage.get("output_tokens", 0),
-                        "total_tokens": raw_usage.get("total_tokens", 0),
-                    }
-                break
-            if sse_type == "error":
-                await bridge.publish(run_id, "error", data)
-                break
-
-            # Forward the canonical frame (messages / values / custom).
-            await bridge.publish(run_id, sse_type, data)
-
-            # Mirror _run_numina_agent: collect AI text + synthesize tool_call/
-            # tool_result custom events so the frontend reuses the chat renderer.
-            if sse_type == "messages" and isinstance(data, dict):
-                msg_type = data.get("type")
-                if msg_type == "ai":
-                    content = data.get("content")
-                    if content:
-                        ai_response_parts.append(content)
-                    tool_calls = data.get("tool_calls")
-                    if tool_calls:
-                        for tc in extract_tool_calls(data):
-                            raw_name = tc.get("name", "")
-                            # U4 step 3 / R5: capture write_file's args.path so
-                            # step 9 can locate the sandbox markdown for
-                            # persistence (more reliable than the LLM's
-                            # WRITE_FILE: text declaration, which e2e showed is
-                            # often omitted from AI message content).
-                            if raw_name == "write_file":
-                                tc_args = tc.get("args") or {}
-                                wf_path = tc_args.get("path")
-                                if isinstance(wf_path, str) and wf_path:
-                                    write_file_paths.append(wf_path)
-                            tool_type, display_name, icon, display_key = (
-                                resolve_tool_metadata(raw_name)
-                            )
-                            payload: dict[str, Any] = {
-                                "type": "tool_call",
-                                "tool_call_id": tc.get("id", ""),
-                                "tool_name": raw_name,
-                                "args": tc.get("args", {}),
-                                "display_name": display_name,
-                                "icon": icon,
-                                "tool_type": tool_type,
-                            }
-                            if display_key:
-                                payload["display_key"] = display_key
-                            await bridge.publish(run_id, "custom", payload)
-                elif msg_type == "tool":
-                    tool_call_id = str(data.get("tool_call_id") or "")
-                    tool_name = data.get("name") or ""
-                    content = data.get("content")
-                    if tool_call_id:
-                        await bridge.publish(
-                            run_id,
-                            "custom",
-                            {
-                                "type": "tool_result",
-                                "tool_call_id": tool_call_id,
-                                "tool_name": tool_name,
-                                "content": content,
-                            },
-                        )
-
-        # 8. Terminal status.
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-            success = record.status == RunStatus.success
-
-        # 9. Step 3 worker-synthesized report.step2_json emission + persistence.
+        # Step 3: worker-synthesized report.step2_json emission + persistence.
         # The middleware path (AssetReportStep2Middleware via get_stream_writer)
         # was attempted but is no-op on numina's sync stream() path (plan step 3
         # fallback condition: "numina 租户隔离动态加载阻断"). Worker synthesis is
         # the plan-sanctioned fallback — emit exactly one report.step2_json
         # before the end frame (timing contract: strictly precedes end), then
         # persist. Best-effort persistence: a failure must not fail the run.
-        if completion_status == "complete":
-            ai_text = "".join(ai_response_parts)
+        if p.completion_status == "complete":
+            ai_text = p.ai_text
             step2_payload = parse_report_json(ai_text)
             if step2_payload is not None:
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "report.step2_json",
@@ -626,12 +474,13 @@ async def _run_asset_report_pipeline(
                 markdown_file_path = _copy_asset_report_markdown(
                     family_id=family_id,
                     thread_id=thread_id,
-                    run_id=run_id,
+                    run_id=p.run_id,
                     user_id=user_id,
                     ai_text=ai_text,
-                    write_file_paths=write_file_paths,
+                    write_file_paths=p.captured_write_file_paths,
                 )
                 try:
+                    client = BackendClient(family_id=family_id)
                     await client.persist_report_result(
                         report_json=step2_payload,
                         markdown_file_path=markdown_file_path,
@@ -646,85 +495,19 @@ async def _run_asset_report_pipeline(
                     # /runs polling see failure.
                     logger.warning(
                         "[_run_asset_report_pipeline] persist_report_result failed run=%s err=%s",
-                        run_id,
+                        p.run_id,
                         type(persist_exc).__name__,
                     )
-                    completion_status = "error"
-                    error_type = type(persist_exc).__name__
-                    success = False
-                    await run_manager.set_status(
-                        run_id, RunStatus.error, error=str(persist_exc)
-                    )
-                    await bridge.publish(
-                        run_id,
-                        "error",
-                        {
-                            "message": "结构化结果保存失败，可参考上方文本",
-                            "name": error_type,
-                        },
+                    p.set_error(
+                        "结构化结果保存失败，可参考上方文本",
+                        error_type=type(persist_exc).__name__,
                     )
 
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning(
-            "[_run_asset_report_pipeline] failed run=%s err=%s", run_id, error_type
-        )
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        # Circuit-breaker reporting: classify the exception and report to the
-        # backend so the provider's circuit_state can transition to open.
-        # locals().get("selected_provider") is safe even when the error fired
-        # before the provider was assigned — returns None and the helper no-ops.
-        _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
-        )
-        await bridge.publish(
-            run_id,
-            "error",
-            {"message": str(exc), "name": error_type},
-        )
-
-    finally:
-        # Clear the active-skill ContextVar so it cannot leak into a later run.
-        if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
+        # Set report session title (fixed format with timestamp).
+        if p.completion_status == "complete":
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, "家庭资产分析报告")
             )
-
-            reset_active_skill(_skill_token)
-
-        # 10. Audit log (Key Invariant #3)
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="asset-report",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-
-        # 11. Set report session title (fixed format with timestamp).
-        # Unlike chat runs, the report pipeline has no user message for LLM
-        # title generation — use a deterministic timestamp-based title instead.
-        if completion_status == "complete":
-            asyncio.create_task(_set_session_title(thread_id, family_id, "家庭资产分析报告"))
-
-        # 12. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
 
 
 # Synthetic trigger for asset-report runs (plan L117: backend-initiated runs
@@ -773,12 +556,13 @@ _SYNTHETIC_TRIGGERS_BY_LANG = {
 }
 
 
-def _extract_import_parse_document(graph_input: dict | None) -> str | None:
-    """Pull the document text the backend injected as the run's user message.
+def _extract_backend_user_message(graph_input: dict | None) -> str | None:
+    """Pull the backend-injected user message from graph_input.
 
-    backend ``/import/parse-pdf`` extracts PDF text and posts it as the
-    ``messages[-1]`` content of the stream_run input. Returns None when no
-    user message is present (caller falls back to the synthetic trigger).
+    Multiple runners receive domain-specific content (PDF text, finance snapshot,
+    wishes JSON, narrative context, literacy report) as the last user message in
+    ``graph_input["messages"]``. This helper extracts it; callers fall back to a
+    synthetic trigger when None is returned.
     """
     if not graph_input or not isinstance(graph_input, dict):
         return None
@@ -841,7 +625,7 @@ async def _run_import_parse_agent(
     ) as p:
         # App-specific delta: trigger construction + result extraction
         user_message = (
-            _extract_import_parse_document(graph_input)
+            _extract_backend_user_message(graph_input)
             or _SYNTHETIC_IMPORT_PARSE_TRIGGER
         )
         await p.run_skill(user_message)
@@ -917,7 +701,7 @@ async def _run_finance_coach_agent(
     ) as p:
         # App-specific delta: trigger construction + result extraction
         user_message = (
-            _extract_finance_coach_snapshot(graph_input)
+            _extract_backend_user_message(graph_input)
             or _SYNTHETIC_FINANCE_COACH_TRIGGER
         )
         await p.run_skill(user_message)
@@ -942,47 +726,6 @@ async def _run_finance_coach_agent(
                     },
                 )
 
-
-def _extract_finance_coach_snapshot(graph_input: dict | None) -> str | None:
-    """Pull the family finance snapshot JSON the backend injected as the run's
-    user message (mirrors ``_extract_import_parse_document``).
-
-    The backend (Task 8) posts the snapshot as ``messages[-1]`` content of the
-    stream_run input. Returns None when no user message is present (caller falls
-    back to the synthetic trigger).
-    """
-    if not graph_input or not isinstance(graph_input, dict):
-        return None
-    msgs = graph_input.get("messages")
-    if not isinstance(msgs, list) or not msgs:
-        return None
-    last = msgs[-1]
-    if isinstance(last, dict) and last.get("role") in ("user", "human"):
-        content = last.get("content", "")
-        if isinstance(content, str) and content.strip():
-            return content
-    return None
-
-
-def _extract_wish_advice_input(graph_input: dict | None) -> str | None:
-    """Pull the wishes snapshot JSON the backend injected as the run's user
-    message (mirrors ``_extract_finance_coach_snapshot``).
-
-    The backend (Plan B T7) posts the wishes snapshot as ``messages[-1]``
-    content of the stream_run input. Returns None when no user message is
-    present (caller falls back to the synthetic trigger).
-    """
-    if not graph_input or not isinstance(graph_input, dict):
-        return None
-    msgs = graph_input.get("messages")
-    if not isinstance(msgs, list) or not msgs:
-        return None
-    last = msgs[-1]
-    if isinstance(last, dict) and last.get("role") in ("user", "human"):
-        content = last.get("content", "")
-        if isinstance(content, str) and content.strip():
-            return content
-    return None
 
 
 async def _run_wish_advice_agent(
@@ -1030,7 +773,7 @@ async def _run_wish_advice_agent(
     ) as p:
         # App-specific delta: trigger construction + result extraction
         user_message = (
-            _extract_wish_advice_input(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
+            _extract_backend_user_message(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
         )
         await p.run_skill(user_message)
 
@@ -1059,22 +802,6 @@ async def _run_wish_advice_agent(
 _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER = "/dashboard-narrative 生成本月财务叙事"
 
 
-def _extract_dashboard_narrative_context(graph_input: dict | None) -> str | None:
-    """Pull the financial context JSON the backend injected as the run's user
-    message (mirrors ``_extract_finance_coach_snapshot``).
-    """
-    if not graph_input or not isinstance(graph_input, dict):
-        return None
-    msgs = graph_input.get("messages")
-    if not isinstance(msgs, list) or not msgs:
-        return None
-    last = msgs[-1]
-    if isinstance(last, dict) and last.get("role") in ("user", "human"):
-        content = last.get("content", "")
-        if isinstance(content, str) and content.strip():
-            return content
-    return None
-
 
 async def _run_dashboard_narrative_agent(
     *,
@@ -1087,7 +814,7 @@ async def _run_dashboard_narrative_agent(
     graph_input: dict | None,
     config: dict[str, Any],
 ) -> None:
-    """dashboard-narrative (6th stream_run agent) dispatch branch.
+    """dashboard-narrative dispatch branch via RunPipeline.
 
     Runs a single ``stream_run`` agent run with ``skill_name="dashboard-narrative"``.
     The skill prompt drives the LLM to generate 2-3 sentences of financial narrative
@@ -1097,194 +824,43 @@ async def _run_dashboard_narrative_agent(
     Simpler than finance-coach: no MCP tools (allowed-tools: []), no JSON parsing —
     the LLM output IS the narrative text (after stripping code fences if any).
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    completion_status = "error"
-    ai_response_parts: list[str] = []
-    thinking_parts: list[str] = []
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id, "metadata", {"run_id": run_id, "thread_id": thread_id}
-        )
-
-        # 2. Fetch per-family AI config
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
-
-        # 3. No MCP servers needed (allowed-tools: [] — pure inference)
-        mcp_servers: list[dict] = []
-
-        # 4. Build adapter
-        from apps.agent.services.agent_registry import get_agent_registry
-
-        agent_meta = await get_agent_registry().get("dashboard-narrative", family_id)
-        memory_enabled = (
-            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
-        )
-
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=60,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-            agent_name="dashboard-narrative",
-            memory_enabled=memory_enabled,
-        )
-
-        # 5. User message = backend-injected context or synthetic trigger fallback
+    async with RunPipeline(
+        app_name="dashboard-narrative",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=False,
+        subagent_enabled=False,
+        enable_thinking=True,
+        timeout_seconds=60,
+        mcp_servers=[],  # allowed-tools: [] — pure inference
+    ) as p:
         user_message = (
-            _extract_dashboard_narrative_context(graph_input)
+            _extract_backend_user_message(graph_input)
             or _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER
         )
+        await p.run_skill(user_message, enable_reasoning_delta=True)
 
-        # 6. PII redaction (defense-in-depth)
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
-
-        # 7. Stream via typed_stream_dispatch (enable_thinking=True for real reasoning)
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
-        )
-
-        _skill_token = set_active_skill("dashboard-narrative")
-        async for sse_type, data in adapter.typed_stream_dispatch(
-            skill_name="dashboard-narrative",
-            context=redacted,
-            thread_id=thread_id,
-            enable_thinking=True,
-        ):
-            if record.abort_event.is_set():
-                break
-
-            if sse_type == "end":
-                if isinstance(data, dict) and data.get("usage"):
-                    raw_usage = data["usage"]
-                    cumulative_usage = {
-                        "input_tokens": raw_usage.get("input_tokens", 0),
-                        "output_tokens": raw_usage.get("output_tokens", 0),
-                        "total_tokens": raw_usage.get("total_tokens", 0),
-                    }
-                break
-            if sse_type == "error":
-                await bridge.publish(run_id, "error", data)
-                break
-
-            # Extract reasoning from AI messages and emit as reasoning_delta
-            if sse_type == "messages" and isinstance(data, dict):
-                msg_type = data.get("type")
-                if msg_type == "ai":
-                    additional_kwargs = data.get("additional_kwargs") or {}
-                    reasoning = additional_kwargs.get("reasoning_content")
-                    if isinstance(reasoning, str) and reasoning:
-                        thinking_parts.append(reasoning)
-                        await bridge.publish(
-                            run_id,
-                            "custom",
-                            {"type": "reasoning_delta", "content": reasoning},
-                        )
-                    # Forward message without reasoning_content to avoid duplication
-                    content = data.get("content")
-                    if content:
-                        ai_response_parts.append(content)
-                        await bridge.publish(
-                            run_id,
-                            "messages",
-                            {"type": "ai", "content": content},
-                        )
-                    continue
-
-            # Forward other canonical frames (values, etc.)
-            await bridge.publish(run_id, sse_type, data)
-
-        # 8. Terminal status
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-            success = record.status == RunStatus.success
-
-        # 9. Emit dashboard_narrative.result custom event (with thinking)
-        if completion_status == "complete":
-            narrative_text = "".join(ai_response_parts).strip()
-            thinking_text = "".join(thinking_parts).strip()
-
+        # Emit dashboard_narrative.result custom event (with thinking)
+        if p.completion_status == "complete":
+            narrative_text = p.ai_text.strip()
             if narrative_text:
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "dashboard_narrative.result",
                         "payload": {
                             "narrative": narrative_text,
-                            "thinking": thinking_text,
+                            "thinking": p.thinking_text,
                         },
                     },
                 )
-
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning(
-            "[_run_dashboard_narrative_agent] failed run=%s err=%s",
-            run_id,
-            error_type,
-        )
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
-        )
-        await bridge.publish(
-            run_id, "error", {"message": str(exc), "name": error_type}
-        )
-
-    finally:
-        if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
-            )
-
-            reset_active_skill(_skill_token)
-
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="dashboard-narrative",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
 
 
 async def _run_numina_agent(
@@ -1328,6 +904,7 @@ async def _run_numina_agent(
     # are skipped when ``selected_provider`` stays None.
     selected_provider: dict[str, Any] | None = None
     user_message = ""
+    _skill_token = None
     ai_response_parts: list[str] = []
     # Cumulative token usage from the adapter's `end` event (DeerFlow pattern).
     # Captured here so the worker's own `end` frame can include it.
@@ -1653,10 +1230,8 @@ async def _run_numina_agent(
         await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
         # Circuit-breaker reporting: classify the exception and report to the
         # backend so the provider's circuit_state can transition to open.
-        # locals().get("selected_provider") is safe even when the error fired
-        # before the provider was assigned — returns None and the helper no-ops.
         _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
+            family_id, selected_provider, exc
         )
         await bridge.publish(
             run_id,
@@ -1667,9 +1242,9 @@ async def _run_numina_agent(
     finally:
         # Clear the active-skill ContextVar so it cannot leak into a later run
         # reusing this thread/coroutine. Guarded: _skill_token is only set if
-        # dispatch reached the skill-selection step (line ~234), and is None
+        # dispatch reached the skill-selection step, and is None
         # for slash-activated messages (U2) where set_active_skill was skipped.
-        if "_skill_token" in locals() and _skill_token is not None:
+        if _skill_token is not None:
             from apps.agent.services.deerflow_adapter.active_skill_context import (
                 reset_active_skill,
             )
@@ -1765,20 +1340,6 @@ async def _run_numina_agent(
 _SYNTHETIC_LITERACY_REPORT_TRIGGER = "/literacy-weekly-report"
 
 
-def _extract_literacy_report_context(graph_input: dict | None) -> str | None:
-    """Extract backend-injected report context from graph_input messages."""
-    if not graph_input or not isinstance(graph_input, dict):
-        return None
-    msgs = graph_input.get("messages")
-    if not isinstance(msgs, list) or not msgs:
-        return None
-    last = msgs[-1]
-    if isinstance(last, dict) and last.get("role") in ("user", "human"):
-        content = last.get("content", "")
-        if isinstance(content, str) and content.strip():
-            return content
-    return None
-
 
 async def _run_literacy_weekly_report_agent(
     *,
@@ -1791,7 +1352,7 @@ async def _run_literacy_weekly_report_agent(
     graph_input: dict | None,
     config: dict[str, Any],
 ) -> None:
-    """literacy-weekly-report dispatch branch.
+    """literacy-weekly-report dispatch branch via RunPipeline.
 
     Runs a single stream_run agent with skill_name='literacy-weekly-report'.
     The agent calls MCP tools (get_child_literacy_profile, get_literacy_weekly_data)
@@ -1813,197 +1374,44 @@ async def _run_literacy_weekly_report_agent(
     - Result custom event: ``literacy_weekly_report.result`` with
       ``{report, thinking}`` payload for backend persistence.
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    completion_status = "error"
-    ai_response_parts: list[str] = []
-    thinking_parts: list[str] = []
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id, "metadata", {"run_id": run_id, "thread_id": thread_id}
-        )
-
-        # 2. Fetch per-family AI config
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
-
-        # 3. Fetch enabled MCP servers
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, family_id, user_id, "[_run_literacy_weekly_report_agent]"
-        )
-
-        # 4. Build adapter
-        from apps.agent.services.agent_registry import get_agent_registry
-
-        agent_meta = await get_agent_registry().get("literacy-weekly-report", family_id)
-        memory_enabled = (
-            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
-        )
-
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=120,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-            agent_name="literacy-weekly-report",
-            memory_enabled=memory_enabled,
-        )
-
-        # 5. User message = backend-injected context or synthetic trigger fallback
+    async with RunPipeline(
+        app_name="literacy-weekly-report",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=False,
+        subagent_enabled=False,
+        enable_thinking=True,
+        timeout_seconds=120,
+    ) as p:
         user_message = (
-            _extract_literacy_report_context(graph_input)
+            _extract_backend_user_message(graph_input)
             or _SYNTHETIC_LITERACY_REPORT_TRIGGER
         )
+        await p.run_skill(user_message, enable_reasoning_delta=True)
 
-        # 6. PII redaction (defense-in-depth)
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
-
-        # 7. Stream via typed_stream_dispatch (enable_thinking=True to match SKILL.md)
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
-        )
-
-        _skill_token = set_active_skill("literacy-weekly-report")
-        async for sse_type, data in adapter.typed_stream_dispatch(
-            skill_name="literacy-weekly-report",
-            context=redacted,
-            thread_id=thread_id,
-            enable_thinking=True,
-        ):
-            if record.abort_event.is_set():
-                break
-
-            if sse_type == "end":
-                if isinstance(data, dict) and data.get("usage"):
-                    raw_usage = data["usage"]
-                    cumulative_usage = {
-                        "input_tokens": raw_usage.get("input_tokens", 0),
-                        "output_tokens": raw_usage.get("output_tokens", 0),
-                        "total_tokens": raw_usage.get("total_tokens", 0),
-                    }
-                break
-            if sse_type == "error":
-                await bridge.publish(run_id, "error", data)
-                break
-
-            # Extract reasoning from AI messages and emit as reasoning_delta
-            if sse_type == "messages" and isinstance(data, dict):
-                msg_type = data.get("type")
-                if msg_type == "ai":
-                    additional_kwargs = data.get("additional_kwargs") or {}
-                    reasoning = additional_kwargs.get("reasoning_content")
-                    if isinstance(reasoning, str) and reasoning:
-                        thinking_parts.append(reasoning)
-                        await bridge.publish(
-                            run_id,
-                            "custom",
-                            {"type": "reasoning_delta", "content": reasoning},
-                        )
-                    # Forward message without reasoning_content to avoid duplication
-                    content = data.get("content")
-                    if content:
-                        ai_response_parts.append(content)
-                        await bridge.publish(
-                            run_id,
-                            "messages",
-                            {"type": "ai", "content": content},
-                        )
-                    continue
-
-            # Forward other canonical frames (values, etc.)
-            await bridge.publish(run_id, sse_type, data)
-
-        # 8. Terminal status
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-            success = record.status == RunStatus.success
-
-        # 9. Emit literacy_weekly_report.result custom event (with thinking)
-        if completion_status == "complete":
-            report_text = "".join(ai_response_parts).strip()
-            thinking_text = "".join(thinking_parts).strip()
-
+        # Emit literacy_weekly_report.result custom event (with thinking)
+        if p.completion_status == "complete":
+            report_text = p.ai_text.strip()
             if report_text:
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "literacy_weekly_report.result",
                         "payload": {
                             "report": report_text,
-                            "thinking": thinking_text,
+                            "thinking": p.thinking_text,
                         },
                     },
                 )
 
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning(
-            "[_run_literacy_weekly_report_agent] failed run=%s err=%s",
-            run_id,
-            error_type,
-        )
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
-        )
-        await bridge.publish(
-            run_id, "error", {"message": str(exc), "name": error_type}
-        )
-
-    finally:
-        if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
+            # Set literacy weekly report session title (fixed format).
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, "启蒙周报")
             )
-
-            reset_active_skill(_skill_token)
-
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="literacy-weekly-report",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-
-        # Set literacy weekly report session title (fixed format with timestamp).
-        if completion_status == "complete":
-            asyncio.create_task(_set_session_title(thread_id, family_id, "启蒙周报"))
-
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))

@@ -11,14 +11,12 @@ Covers:
 from datetime import UTC, datetime
 from unittest.mock import patch
 
-import pytest
-
 from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.utils.snowflake import next_id
-from packages.security.service_auth.agent_jwt import create_agent_token
 
 # Set SECRET_KEY before create_agent_token calls (singleton settings)
 from packages.core.settings import settings as _core_settings
+from packages.security.service_auth.agent_jwt import create_agent_token
 
 _core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 
@@ -307,16 +305,18 @@ class TestRecoveryScheduleHelper:
     """Tests for recovery schedule pattern matching."""
 
     def test_pattern_matches_minute_suffix(self):
-        from apps.backend.app.routers.ai_internal import _check_recovery_schedule_match
-
-        # Mock current time at minute :01
+        from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
+            _check_recovery_schedule_match,
+        )
         now = datetime(2026, 5, 20, 14, 1, 0)
         assert _check_recovery_schedule_match(":01,:31", now) is True
         assert _check_recovery_schedule_match(":31", now) is False
         assert _check_recovery_schedule_match(None, now) is False
 
     def test_pattern_matches_minute_31(self):
-        from apps.backend.app.routers.ai_internal import _check_recovery_schedule_match
+        from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
+            _check_recovery_schedule_match,
+        )
 
         now = datetime(2026, 5, 20, 14, 31, 0)
         assert _check_recovery_schedule_match(":01,:31", now) is True
