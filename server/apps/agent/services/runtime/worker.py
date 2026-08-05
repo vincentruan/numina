@@ -19,7 +19,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
@@ -28,22 +28,6 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
-from apps.agent.services.goal_evaluator import (
-    GoalEvaluationError,
-    evaluate_goal_completion,
-)
-from apps.agent.services.goal_store import (
-    GoalWriteConflict,
-    attach_goal_evaluation,
-    compute_no_progress_count,
-    goal_thread_lock,
-    latest_visible_assistant_signature,
-    make_goal_continuation_message,
-    read_thread_goal,
-    should_continue_goal,
-    visible_conversation_signature,
-    write_thread_goal,
-)
 from apps.agent.services.message_classifier import (
     extract_tool_calls,
     resolve_tool_metadata,
@@ -58,6 +42,10 @@ from packages.core import get_path_manager
 
 from .asset_report_middleware import parse_report_json
 from .gc import schedule_run_cleanup
+from .goal_continuation import (
+    _get_shared_checkpointer_for_goal,
+    _prepare_goal_continuation_input,
+)
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
 from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
@@ -952,165 +940,37 @@ async def _run_import_parse_agent(
     - Document text is injected by backend as the run's user message (not a
       synthetic trigger); the slash trigger is only the skill-load fallback.
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    completion_status = "error"
-    ai_response_parts: list[str] = []
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata (DeerFlow pattern)
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id,
-            "metadata",
-            {"run_id": run_id, "thread_id": thread_id},
-        )
-
-        # 2. Fetch per-family AI config (tenant-isolated) — mirrors asset-report.
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
-
-        # 3. Fetch enabled MCP servers (same MCP-setup as asset-report).
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, family_id, user_id, "[_run_import_parse_agent]"
-        )
-
-        # 4. Build adapter. plan_mode=False (fixed parse flow, no TodoList).
-        # import-parse is stateless (memory_enabled=False) — each run parses the
-        # injected document fresh, no DeerMem pollution.
-        from apps.agent.services.agent_registry import get_agent_registry
-
-        agent_meta = await get_agent_registry().get("import-parse", family_id)
-        memory_enabled = (
-            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
-        )
-
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=120,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-            agent_name="import-parse",
-            memory_enabled=memory_enabled,
-        )
-
-        # 5. User message = backend-injected document text (preferred) or the
-        # synthetic slash trigger (skill-load fallback).
+    async with RunPipeline(
+        app_name="import-parse",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=False,
+        subagent_enabled=False,
+        memory_enabled=False,  # stateless — each run parses the document fresh
+        enable_thinking=False,  # Qwen3: avoid empty content
+    ) as p:
+        # App-specific delta: trigger construction + result extraction
         user_message = (
             _extract_import_parse_document(graph_input)
             or _SYNTHETIC_IMPORT_PARSE_TRIGGER
         )
+        await p.run_skill(user_message)
 
-        # 6. PII redaction (Key Invariant #1)
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
-
-        # 7. Stream via typed_stream_dispatch → publish to bridge. Set the
-        # active skill so sync_tool_patch filters tools to import-parse's
-        # declared allowed-tools whitelist.
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
-        )
-
-        _skill_token = set_active_skill("import-parse")
-        async for sse_type, data in adapter.typed_stream_dispatch(
-            skill_name="import-parse",
-            context=redacted,
-            thread_id=thread_id,
-            enable_thinking=False,  # Qwen3: avoid empty content
-        ):
-            if record.abort_event.is_set():
-                break
-
-            if sse_type == "end":
-                if isinstance(data, dict) and data.get("usage"):
-                    raw_usage = data["usage"]
-                    cumulative_usage = {
-                        "input_tokens": raw_usage.get("input_tokens", 0),
-                        "output_tokens": raw_usage.get("output_tokens", 0),
-                        "total_tokens": raw_usage.get("total_tokens", 0),
-                    }
-                break
-            if sse_type == "error":
-                await bridge.publish(run_id, "error", data)
-                break
-
-            # Forward the canonical frame (messages / values / custom).
-            await bridge.publish(run_id, sse_type, data)
-
-            # Mirror asset-report: collect AI text + synthesize tool_call/
-            # tool_result custom events so the frontend reuses the chat renderer.
-            if sse_type == "messages" and isinstance(data, dict):
-                msg_type = data.get("type")
-                if msg_type == "ai":
-                    content = data.get("content")
-                    if content:
-                        ai_response_parts.append(content)
-                    tool_calls = data.get("tool_calls")
-                    if tool_calls:
-                        for tc in extract_tool_calls(data):
-                            raw_name = tc.get("name", "")
-                            tool_type, display_name, icon, display_key = (
-                                resolve_tool_metadata(raw_name)
-                            )
-                            payload: dict[str, Any] = {
-                                "type": "tool_call",
-                                "tool_call_id": tc.get("id", ""),
-                                "tool_name": raw_name,
-                                "args": tc.get("args", {}),
-                                "display_name": display_name,
-                                "icon": icon,
-                                "tool_type": tool_type,
-                            }
-                            if display_key:
-                                payload["display_key"] = display_key
-                            await bridge.publish(run_id, "custom", payload)
-                elif msg_type == "tool":
-                    tool_call_id = str(data.get("tool_call_id") or "")
-                    tool_name = data.get("name") or ""
-                    content = data.get("content")
-                    if tool_call_id:
-                        await bridge.publish(
-                            run_id,
-                            "custom",
-                            {
-                                "type": "tool_result",
-                                "tool_call_id": tool_call_id,
-                                "tool_name": tool_name,
-                                "content": content,
-                            },
-                        )
-
-        # 8. Terminal status.
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-            success = record.status == RunStatus.success
-
-        # 9. Worker-synthesized import-parse.result emission (mirrors asset-report
+        # Worker-synthesized import-parse.result emission (mirrors asset-report
         # step-3 worker synthesis — middleware get_stream_writer() path is no-op
         # on numina's sync stream() path). Emit exactly one import-parse.result
         # before the end frame (timing contract: strictly precedes end).
-        if completion_status == "complete":
-            ai_text = "".join(ai_response_parts)
-            parsed = parse_report_json(ai_text)
+        if p.completion_status == "complete":
+            parsed = parse_report_json(p.ai_text)
             if parsed is not None:
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "import-parse.result",
@@ -1118,65 +978,9 @@ async def _run_import_parse_agent(
                     },
                 )
 
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning(
-            "[_run_import_parse_agent] failed run=%s err=%s", run_id, error_type
-        )
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        # Circuit-breaker reporting: classify the exception and report to the
-        # backend so the provider's circuit_state can transition to open.
-        # locals().get("selected_provider") is safe even when the error fired
-        # before the provider was assigned — returns None and the helper no-ops.
-        _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
-        )
-        await bridge.publish(
-            run_id,
-            "error",
-            {"message": str(exc), "name": error_type},
-        )
-
-    finally:
-        # Clear the active-skill ContextVar so it cannot leak into a later run.
-        if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
-            )
-
-            reset_active_skill(_skill_token)
-
-        # 10. Audit log (Key Invariant #3)
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="import-parse",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-
-        # 11. Set import-parse session title (fixed format with timestamp).
-        if completion_status == "complete":
-            asyncio.create_task(_set_session_title(thread_id, family_id, "文件导入解析"))
-
-        # 12. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
+    # Set import-parse session title (fixed format with timestamp)
+    if p.completion_status == "complete":
+        asyncio.create_task(_set_session_title(thread_id, family_id, "文件导入解析"))
 
 
 async def _run_finance_coach_agent(
@@ -1212,160 +1016,33 @@ async def _run_finance_coach_agent(
     - finance-coach is stateless (``memory_enabled=False``) — each run builds a
       fresh snapshot, no DeerMem pollution.
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    completion_status = "error"
-    ai_response_parts: list[str] = []
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata (DeerFlow pattern)
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id,
-            "metadata",
-            {"run_id": run_id, "thread_id": thread_id},
-        )
-
-        # 2. Fetch per-family AI config (tenant-isolated) — mirrors import-parse.
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
-
-        # 3. Fetch enabled MCP servers (same MCP-setup as import-parse).
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, family_id, user_id, "[_run_finance_coach_agent]"
-        )
-
-        # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
-        from apps.agent.services.agent_registry import get_agent_registry
-
-        agent_meta = await get_agent_registry().get("finance-coach", family_id)
-        memory_enabled = (
-            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
-        )
-
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=120,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-            agent_name="finance-coach",
-            memory_enabled=memory_enabled,
-        )
-
-        # 5. User message = backend-injected snapshot (preferred) or synthetic
-        # slash trigger (skill-load fallback). The snapshot is JSON the backend
-        # posts as the run's user message content (see Task 8 backend trigger).
+    async with RunPipeline(
+        app_name="finance-coach",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=False,
+        subagent_enabled=False,
+        memory_enabled=False,  # stateless — fresh snapshot each run
+        enable_thinking=False,
+    ) as p:
+        # App-specific delta: trigger construction + result extraction
         user_message = (
             _extract_finance_coach_snapshot(graph_input)
             or _SYNTHETIC_FINANCE_COACH_TRIGGER
         )
+        await p.run_skill(user_message)
 
-        # 6. PII redaction (Key Invariant #1) — defense-in-depth; backend already
-        # minimized PII (id+category, no name) per spec §7.1.
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
-
-        # 7. Stream via typed_stream_dispatch → publish to bridge. Set the active
-        # skill so sync_tool_patch filters tools to finance-coach's allowed-tools.
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
-        )
-
-        _skill_token = set_active_skill("finance-coach")
-        async for sse_type, data in adapter.typed_stream_dispatch(
-            skill_name="finance-coach",
-            context=redacted,
-            thread_id=thread_id,
-            enable_thinking=False,  # single-run advice, keep latency bounded
-        ):
-            if record.abort_event.is_set():
-                break
-
-            if sse_type == "end":
-                if isinstance(data, dict) and data.get("usage"):
-                    raw_usage = data["usage"]
-                    cumulative_usage = {
-                        "input_tokens": raw_usage.get("input_tokens", 0),
-                        "output_tokens": raw_usage.get("output_tokens", 0),
-                        "total_tokens": raw_usage.get("total_tokens", 0),
-                    }
-                break
-            if sse_type == "error":
-                await bridge.publish(run_id, "error", data)
-                break
-
-            # Forward the canonical frame (messages / values / custom).
-            await bridge.publish(run_id, sse_type, data)
-
-            # Mirror import-parse: collect AI text + synthesize tool_call/
-            # tool_result custom events so the frontend reuses the chat renderer.
-            if sse_type == "messages" and isinstance(data, dict):
-                msg_type = data.get("type")
-                if msg_type == "ai":
-                    content = data.get("content")
-                    if content:
-                        ai_response_parts.append(content)
-                    tool_calls = data.get("tool_calls")
-                    if tool_calls:
-                        for tc in extract_tool_calls(data):
-                            raw_name = tc.get("name", "")
-                            tool_type, display_name, icon, display_key = (
-                                resolve_tool_metadata(raw_name)
-                            )
-                            payload: dict[str, Any] = {
-                                "type": "tool_call",
-                                "tool_call_id": tc.get("id", ""),
-                                "tool_name": raw_name,
-                                "args": tc.get("args", {}),
-                                "display_name": display_name,
-                                "icon": icon,
-                                "tool_type": tool_type,
-                            }
-                            if display_key:
-                                payload["display_key"] = display_key
-                            await bridge.publish(run_id, "custom", payload)
-                elif msg_type == "tool":
-                    tool_call_id = str(data.get("tool_call_id") or "")
-                    tool_name = data.get("name") or ""
-                    content = data.get("content")
-                    if tool_call_id:
-                        await bridge.publish(
-                            run_id,
-                            "custom",
-                            {
-                                "type": "tool_result",
-                                "tool_call_id": tool_call_id,
-                                "tool_name": tool_name,
-                                "content": content,
-                            },
-                        )
-
-        # 8. Terminal status.
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-            success = record.status == RunStatus.success
-
-        # 9. Worker-synthesized finance_coach.result emission (mirrors import-parse
+        # Worker-synthesized finance_coach.result emission (mirrors import-parse
         # worker synthesis). Emit exactly one finance_coach.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
-        if completion_status == "complete":
-            ai_text = "".join(ai_response_parts)
-            parsed = parse_report_json(ai_text)
+        if p.completion_status == "complete":
+            parsed = parse_report_json(p.ai_text)
             if parsed is not None:
                 # Advice baseline (spec §7.1): the worker emits the raw parsed
                 # suggestions. Schema-validation gate (suggested_amount >= 0,
@@ -1373,74 +1050,13 @@ async def _run_finance_coach_agent(
                 # a malformed payload is dropped there, not here (the worker is
                 # transport, not policy).
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "finance_coach.result",
                         "payload": parsed,
                     },
                 )
-
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning(
-            "[_run_finance_coach_agent] failed run=%s err=%s", run_id, error_type
-        )
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        # Circuit-breaker reporting: classify the exception and report to the
-        # backend so the provider's circuit_state can transition to open.
-        # locals().get("selected_provider") is safe even when the error fired
-        # before the provider was assigned — returns None and the helper no-ops.
-        _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
-        )
-        await bridge.publish(
-            run_id,
-            "error",
-            {"message": str(exc), "name": error_type},
-        )
-
-    finally:
-        # Clear the active-skill ContextVar so it cannot leak into a later run.
-        if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
-            )
-
-            reset_active_skill(_skill_token)
-
-        # 10. Audit log (Key Invariant #3)
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="finance-coach",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-
-        # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
-        # Annotated ``dict[str, Any]`` so assigning the ``usage`` dict (typed
-        # ``dict[str, int]``) is type-compatible — the import-parse / asset-report
-        # / numina siblings leave this unannotated and incur the same mypy error;
-        # annotating only here keeps this task's additions mypy-clean without
-        # touching the pre-existing sibling sites (surgical scope).
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
 
 
 def _extract_finance_coach_snapshot(graph_input: dict | None) -> str | None:
@@ -1513,159 +1129,32 @@ async def _run_wish_advice_agent(
       about them by name — unlike finance_coach's id+category PII minimization).
     - stateless (``memory_enabled=False``) — fresh snapshot each run.
     """
-    run_id = record.run_id
-    t_start = time.monotonic()
-    success = False
-    error_type: str | None = None
-    completion_status = "error"
-    ai_response_parts: list[str] = []
-    cumulative_usage: dict[str, int] | None = None
+    from .run_pipeline import RunPipeline
 
-    try:
-        # 1. Mark running + publish metadata (DeerFlow pattern)
-        await run_manager.set_status(run_id, RunStatus.running)
-        await bridge.publish(
-            run_id,
-            "metadata",
-            {"run_id": run_id, "thread_id": thread_id},
-        )
-
-        # 2. Fetch per-family AI config (tenant-isolated) — mirrors finance-coach.
-        client = BackendClient(family_id=family_id)
-        ai_config = await client.get_family_ai_config()
-        providers = ai_config.get("providers", [])
-        if not providers:
-            raise RuntimeError("未配置 AI 供应商")
-        selected_provider = _select_stream_run_provider(providers)
-        if selected_provider is None:
-            raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
-
-        # 3. Fetch enabled MCP servers (same MCP-setup as finance-coach).
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, family_id, user_id, "[_run_wish_advice_agent]"
-        )
-
-        # 4. Build adapter. plan_mode=False (fixed advice flow, no TodoList).
-        from apps.agent.services.agent_registry import get_agent_registry
-
-        agent_meta = await get_agent_registry().get("wish-advice", family_id)
-        memory_enabled = (
-            bool(agent_meta.get("memory_enabled", True)) if agent_meta else True
-        )
-
-        adapter = create_family_adapter(
-            family_id,
-            selected_provider,
-            timeout_seconds=120,
-            subagent_enabled=False,
-            plan_mode=False,
-            mcp_servers=mcp_servers,
-            agent_name="wish-advice",
-            memory_enabled=memory_enabled,
-        )
-
-        # 5. User message = backend-injected wishes snapshot (preferred) or
-        # synthetic slash trigger (skill-load fallback).
+    async with RunPipeline(
+        app_name="wish-advice",
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        plan_mode=False,
+        subagent_enabled=False,
+        memory_enabled=False,  # stateless — fresh snapshot each run
+        enable_thinking=False,
+    ) as p:
+        # App-specific delta: trigger construction + result extraction
         user_message = (
             _extract_wish_advice_input(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
         )
+        await p.run_skill(user_message)
 
-        # 6. PII redaction (Key Invariant #1) — defense-in-depth; the backend
-        # already minimized PII per spec §7.1 (wish name is prompt-required for
-        # the AI to reason about which wish to prioritize, but amounts/ids only).
-        context = FamilyContext(family_id=family_id, free_text=user_message)
-        redacted = pii_redactor.redact(context)
-
-        # 7. Stream via typed_stream_dispatch → publish to bridge. Set the active
-        # skill so sync_tool_patch filters tools to wish-advice's allowed-tools.
-        from apps.agent.services.deerflow_adapter.active_skill_context import (
-            set_active_skill,
-        )
-
-        _skill_token = set_active_skill("wish-advice")
-        async for sse_type, data in adapter.typed_stream_dispatch(
-            skill_name="wish-advice",
-            context=redacted,
-            thread_id=thread_id,
-            enable_thinking=False,  # single-run advice, keep latency bounded
-        ):
-            if record.abort_event.is_set():
-                break
-
-            if sse_type == "end":
-                if isinstance(data, dict) and data.get("usage"):
-                    raw_usage = data["usage"]
-                    cumulative_usage = {
-                        "input_tokens": raw_usage.get("input_tokens", 0),
-                        "output_tokens": raw_usage.get("output_tokens", 0),
-                        "total_tokens": raw_usage.get("total_tokens", 0),
-                    }
-                break
-            if sse_type == "error":
-                await bridge.publish(run_id, "error", data)
-                break
-
-            # Forward the canonical frame (messages / values / custom).
-            await bridge.publish(run_id, sse_type, data)
-
-            # Mirror finance-coach: collect AI text + synthesize tool_call/
-            # tool_result custom events so the frontend reuses the chat renderer.
-            if sse_type == "messages" and isinstance(data, dict):
-                msg_type = data.get("type")
-                if msg_type == "ai":
-                    content = data.get("content")
-                    if content:
-                        ai_response_parts.append(content)
-                    tool_calls = data.get("tool_calls")
-                    if tool_calls:
-                        for tc in extract_tool_calls(data):
-                            raw_name = tc.get("name", "")
-                            tool_type, display_name, icon, display_key = (
-                                resolve_tool_metadata(raw_name)
-                            )
-                            payload: dict[str, Any] = {
-                                "type": "tool_call",
-                                "tool_call_id": tc.get("id", ""),
-                                "tool_name": raw_name,
-                                "args": tc.get("args", {}),
-                                "display_name": display_name,
-                                "icon": icon,
-                                "tool_type": tool_type,
-                            }
-                            if display_key:
-                                payload["display_key"] = display_key
-                            await bridge.publish(run_id, "custom", payload)
-                elif msg_type == "tool":
-                    tool_call_id = str(data.get("tool_call_id") or "")
-                    tool_name = data.get("name") or ""
-                    content = data.get("content")
-                    if tool_call_id:
-                        await bridge.publish(
-                            run_id,
-                            "custom",
-                            {
-                                "type": "tool_result",
-                                "tool_call_id": tool_call_id,
-                                "tool_name": tool_name,
-                                "content": content,
-                            },
-                        )
-
-        # 8. Terminal status.
-        if record.abort_event.is_set():
-            await run_manager.set_status(run_id, RunStatus.interrupted)
-            completion_status = "interrupted"
-        else:
-            await run_manager.set_status(run_id, RunStatus.success)
-            completion_status = "complete"
-            success = record.status == RunStatus.success
-
-        # 9. Worker-synthesized wish_advice.result emission (mirrors finance-coach
+        # Worker-synthesized wish_advice.result emission (mirrors finance-coach
         # worker synthesis). Emit exactly one wish_advice.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
-        if completion_status == "complete":
-            ai_text = "".join(ai_response_parts)
-            parsed = parse_report_json(ai_text)
+        if p.completion_status == "complete":
+            parsed = parse_report_json(p.ai_text)
             if parsed is not None:
                 # Advice baseline (spec §7.1): the worker emits the raw parsed
                 # advice. Schema-validation gate (suggested_amount >= 0, required
@@ -1673,605 +1162,13 @@ async def _run_wish_advice_agent(
                 # + backend validate_advice before any enable; a malformed payload
                 # is dropped there, not here (the worker is transport, not policy).
                 await bridge.publish(
-                    run_id,
+                    p.run_id,
                     "custom",
                     {
                         "type": "wish_advice.result",
                         "payload": parsed,
                     },
                 )
-
-    except asyncio.CancelledError:
-        error_type = "Cancelled"
-        await run_manager.set_status(run_id, RunStatus.interrupted)
-        raise
-    except Exception as exc:
-        error_type = type(exc).__name__
-        logger.warning(
-            "[_run_wish_advice_agent] failed run=%s err=%s", run_id, error_type
-        )
-        await run_manager.set_status(run_id, RunStatus.error, error=str(exc))
-        # Circuit-breaker reporting: classify the exception and report to the
-        # backend so the provider's circuit_state can transition to open.
-        # locals().get("selected_provider") is safe even when the error fired
-        # before the provider was assigned — returns None and the helper no-ops.
-        _fire_and_forget_circuit_report(
-            family_id, locals().get("selected_provider"), exc
-        )
-        await bridge.publish(
-            run_id,
-            "error",
-            {"message": str(exc), "name": error_type},
-        )
-
-    finally:
-        # Clear the active-skill ContextVar so it cannot leak into a later run.
-        if "_skill_token" in locals():
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                reset_active_skill,
-            )
-
-            reset_active_skill(_skill_token)
-
-        # 10. Audit log (Key Invariant #3)
-        audit_logger.log_call(
-            AuditEntry(
-                family_id=family_id,
-                audit_id=run_id,
-                user_id=user_id or "",
-                skill_id="wish-advice",
-                success=success,
-                error_type=error_type,
-                deerflow_attempted=True,
-                duration_ms=int((time.monotonic() - t_start) * 1000),
-            )
-        )
-
-        # 11. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern).
-        end_payload: dict[str, Any] = {"status": completion_status}
-        if cumulative_usage:
-            end_payload["usage"] = cumulative_usage
-        await bridge.publish(run_id, "end", end_payload)
-
-        await bridge.publish_end(run_id)
-        asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
-
-
-# ---------------------------------------------------------------------------
-# U4 goal continuation helpers (D1 — DeerFlow runtime/runs/worker.py:715-1047 parity)
-#
-# These mirror DeerFlow's worker goal-continuation helpers but live here because
-# DeerFlow's versions are private to its ``runtime/runs/worker.py`` module and
-# reference DeerFlow-only objects (``StreamBridge.publish`` of serialized
-# ``values``, DeerFlow ``AppConfig``). Numina's worker drives the same logic
-# against its own ``StreamBridge`` and the family AI config dict.
-#
-# R1 isolation: the entire continuation loop is cleanly separable — removing
-# ``_prepare_goal_continuation_input`` + the ``while`` block in
-# ``_run_numina_agent`` leaves goal set/clear/status (U2) + GoalStatusBar (U5)
-# fully functional, just without auto-continuation.
-# ---------------------------------------------------------------------------
-
-
-def _get_shared_checkpointer_for_goal() -> Any:
-    """Return the shared LangGraph checkpointer used for goal channel reads/writes.
-
-    Thin indirection so tests can patch ``worker._get_shared_checkpointer_for_goal``
-    without touching the family-adapter cache module.
-    """
-    from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-        _get_shared_checkpointer,
-    )
-
-    return _get_shared_checkpointer(None)
-
-
-def _goal_checkpoint_id(checkpoint_tuple: Any) -> str | None:
-    config = getattr(checkpoint_tuple, "config", {}) or {}
-    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
-    checkpoint_id = (
-        configurable.get("checkpoint_id") if isinstance(configurable, dict) else None
-    )
-    if isinstance(checkpoint_id, str):
-        return checkpoint_id
-    checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-    if isinstance(checkpoint, dict):
-        checkpoint_id_value = checkpoint.get("id")
-        if isinstance(checkpoint_id_value, str):
-            return checkpoint_id_value
-    return None
-
-
-def _read_checkpoint_messages(checkpoint_tuple: Any) -> list[Any]:
-    checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-    channel_values = (
-        checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
-    )
-    messages = (
-        channel_values.get("messages", []) if isinstance(channel_values, dict) else []
-    )
-    return messages if isinstance(messages, list) else []
-
-
-def _read_checkpoint_goal(checkpoint_tuple: Any) -> dict[str, Any] | None:
-    import copy
-
-    checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-    channel_values = (
-        checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
-    )
-    raw_goal = channel_values.get("goal") if isinstance(channel_values, dict) else None
-    return copy.deepcopy(raw_goal) if isinstance(raw_goal, dict) else None
-
-
-def _goal_instance_matches(
-    left: dict[str, Any] | None, right: dict[str, Any] | None
-) -> bool:
-    if not left or not right:
-        return False
-    same_status = left.get("status") == right.get("status") == "active"
-    same_objective = left.get("objective") == right.get("objective")
-    same_created_at = left.get("created_at") == right.get("created_at")
-    return bool(same_status and same_objective and same_created_at)
-
-
-def _has_durable_goal_turn_receipt(checkpoint_tuple: Any, messages: list[Any]) -> bool:
-    """Return true when a completed visible assistant turn is safely checkpointed."""
-    if _goal_checkpoint_id(checkpoint_tuple) is None:
-        return False
-    if getattr(checkpoint_tuple, "pending_writes", None):
-        return False
-    from deerflow.runtime.goal import has_visible_assistant_evidence
-
-    if not has_visible_assistant_evidence(messages):
-        return False
-    # Last visible message must be an AI reply (turn completed).
-    last_type: str | None = None
-    for message in messages:
-        mt = _goal_message_type(message)
-        if mt in {"human", "ai"} and _goal_message_text(message).strip():
-            last_type = mt
-    return last_type == "ai"
-
-
-def _goal_message_type(message: Any) -> str | None:
-    value = getattr(message, "type", None)
-    if value is None and isinstance(message, dict):
-        value = message.get("type") or message.get("role")
-    if value == "assistant":
-        return "ai"
-    if value == "user":
-        return "human"
-    return str(value) if value else None
-
-
-def _goal_message_text(message: Any) -> str:
-    content = getattr(message, "content", None)
-    if content is None and isinstance(message, dict):
-        content = message.get("content")
-    if isinstance(content, list):
-        parts = [
-            item["text"]
-            if isinstance(item, dict) and isinstance(item.get("text"), str)
-            else item
-            for item in content
-        ]
-        content = "".join(str(p) for p in parts)
-    if not isinstance(content, str):
-        content = str(content) if content is not None else ""
-    return content.strip()
-
-
-def _stand_down_reason(
-    goal: dict[str, Any], evaluation: dict[str, Any], no_progress_count: int
-) -> str | None:
-    """Mirror DeerFlow goal.py:774-785 stand-down reasons."""
-    if evaluation["satisfied"]:
-        return None
-    if evaluation["blocker"] != "goal_not_met_yet":
-        return f"blocked:{evaluation['blocker']}"
-    if int(goal.get("continuation_count", 0)) >= int(goal.get("max_continuations", 8)):
-        return "max_continuations_reached"
-    if no_progress_count >= int(goal.get("max_no_progress_continuations", 2)):
-        return "no_progress_detected"
-    return None
-
-
-async def _reread_goal_and_checkpoint(
-    checkpointer: Any, thread_id: str
-) -> tuple[dict[str, Any] | None, Any]:
-    goal = await read_thread_goal(checkpointer, thread_id)
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
-        checkpointer, "get_tuple", None
-    )
-    if aget_tuple is None:
-        return goal, None
-    result = aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
-    import inspect
-
-    if inspect.isawaitable(result):
-        result = await result
-    return goal, result
-
-
-async def _prepare_goal_continuation_input(
-    *,
-    checkpointer: Any,
-    thread_id: str,
-    run_id: str,
-    family_ai_config: dict[str, Any],
-    family_id: str,
-    user_id: str | None,
-    abort_event: asyncio.Event,
-) -> dict[str, Any] | None:
-    """Evaluate the active goal and return a hidden continuation input if needed.
-
-    Aligned with DeerFlow ``runtime/runs/worker.py:858-1047``. Returns a dict
-    with the continuation ``context`` (a ``RedactedContext`` whose ``free_text``
-    carries the hidden goal-continuation message) plus the bumped
-    ``continuation_count``, or ``None`` when the loop should stop (satisfied,
-    blocked, capped, raced, aborted, or evaluator error).
-
-    P0 fix: ``missing_evidence`` and any non-``goal_not_met_yet`` blocker stand
-    down (``should_continue_goal`` returns False) — DeerFlow stops on these, it
-    does NOT continue on them.
-
-    Lock scope (P3): the lock is held only across the read-modify-write
-    segment (``goal_thread_lock``), never across the evaluator LLM call — so a
-    racing ``DELETE /goal`` (which acquires the same lock) cannot deadlock
-    against a long continuation evaluation.
-    """
-    if checkpointer is None:
-        return None
-    if abort_event.is_set():
-        return None
-
-    try:
-        goal = await read_thread_goal(checkpointer, thread_id)
-    except Exception:
-        logger.warning(
-            "Could not read goal for thread %s after run %s",
-            thread_id,
-            run_id,
-            exc_info=True,
-        )
-        return None
-    if not goal or goal.get("status") != "active":
-        return None
-
-    # Read the checkpoint for messages + a pre-evaluation signature.
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
-        checkpointer, "get_tuple", None
-    )
-    if aget_tuple is None:
-        return None
-    try:
-        import inspect
-
-        checkpoint_tuple = aget_tuple(
-            {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-        )
-        if inspect.isawaitable(checkpoint_tuple):
-            checkpoint_tuple = await checkpoint_tuple
-    except Exception:
-        logger.warning(
-            "Could not read checkpoint for goal eval thread %s",
-            thread_id,
-            exc_info=True,
-        )
-        return None
-    if checkpoint_tuple is None:
-        return None
-
-    checkpoint_id_before = _goal_checkpoint_id(checkpoint_tuple)
-    messages = _read_checkpoint_messages(checkpoint_tuple)
-    conversation_signature_before = visible_conversation_signature(messages)
-    evidence_signature = latest_visible_assistant_signature(messages)
-
-    if not _has_durable_goal_turn_receipt(checkpoint_tuple, messages):
-        evaluation = {
-            "satisfied": False,
-            "blocker": "run_failed",
-            "reason": "No durable assistant end-of-turn receipt was available.",
-            "evidence_summary": "",
-        }
-        no_progress_count = compute_no_progress_count(
-            goal, evaluation, evidence_signature=evidence_signature
-        )
-        await _persist_goal_evaluation(
-            checkpointer=checkpointer,
-            thread_id=thread_id,
-            run_id=run_id,
-            goal=goal,
-            evaluation=evaluation,
-            no_progress_count=no_progress_count,
-            stand_down_reason="no_durable_end_of_turn",
-            evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
-        )
-        return None
-
-    if abort_event.is_set():
-        return None
-
-    # Evaluate via the non-thinking LLM. On failure stand down (no infinite loop).
-    try:
-        evaluation = await evaluate_goal_completion(
-            goal,
-            messages,
-            family_ai_config=family_ai_config,
-            thread_id=thread_id,
-            user_id=user_id,
-        )
-    except GoalEvaluationError as exc:
-        logger.warning(
-            "Goal evaluator failed for thread %s after run %s: %s",
-            thread_id,
-            run_id,
-            exc,
-        )
-        evaluation = {
-            "satisfied": False,
-            "blocker": "evaluator_error",
-            "reason": str(exc),
-            "evidence_summary": "",
-        }
-        no_progress_count = compute_no_progress_count(
-            goal, evaluation, evidence_signature=evidence_signature
-        )
-        await _persist_goal_evaluation(
-            checkpointer=checkpointer,
-            thread_id=thread_id,
-            run_id=run_id,
-            goal=goal,
-            evaluation=evaluation,
-            no_progress_count=no_progress_count,
-            stand_down_reason="blocked:evaluator_error",
-            evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
-        )
-        return None
-
-    if abort_event.is_set():
-        return None
-
-    no_progress_count = compute_no_progress_count(
-        goal, evaluation, evidence_signature=evidence_signature
-    )
-
-    # Re-check that neither the goal nor the visible conversation changed while
-    # the evaluator ran — a user message or /goal clear racing the evaluation wins.
-    try:
-        current_goal, current_checkpoint_tuple = await _reread_goal_and_checkpoint(
-            checkpointer, thread_id
-        )
-    except Exception:
-        logger.warning(
-            "Could not re-check goal state for thread %s after evaluation",
-            thread_id,
-            exc_info=True,
-        )
-        return None
-    if (
-        not _goal_instance_matches(goal, current_goal)
-        or current_checkpoint_tuple is None
-    ):
-        return None
-    checkpoint_changed = (
-        _goal_checkpoint_id(current_checkpoint_tuple) != checkpoint_id_before
-    )
-    messages_changed = (
-        visible_conversation_signature(
-            _read_checkpoint_messages(current_checkpoint_tuple)
-        )
-        != conversation_signature_before
-    )
-    if checkpoint_changed or messages_changed:
-        await _persist_goal_evaluation(
-            checkpointer=checkpointer,
-            thread_id=thread_id,
-            run_id=run_id,
-            goal=goal,
-            evaluation=evaluation,
-            no_progress_count=no_progress_count,
-            stand_down_reason="thread_changed_after_evaluation",
-            evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
-        )
-        return None
-
-    # Satisfied → clear the goal (inside the lock, with conflict detection).
-    if evaluation["satisfied"]:
-        try:
-            async with goal_thread_lock(thread_id):
-                latest_tuple = await _reread_checkpoint_tuple(checkpointer, thread_id)
-                if latest_tuple is None:
-                    return None
-                latest_goal = _read_checkpoint_goal(latest_tuple)
-                if latest_goal is None or not _goal_instance_matches(goal, latest_goal):
-                    return None
-                await write_thread_goal(
-                    checkpointer,
-                    thread_id,
-                    None,
-                    as_node="goal_evaluator",
-                    expected_checkpoint_id=_goal_checkpoint_id(latest_tuple),
-                )
-        except GoalWriteConflict:
-            return None
-        except Exception:
-            logger.warning(
-                "Could not clear satisfied goal for thread %s", thread_id, exc_info=True
-            )
-        return None
-
-    stand_down_reason = _stand_down_reason(goal, evaluation, no_progress_count)
-    if stand_down_reason is not None or not should_continue_goal(
-        goal, evaluation, no_progress_count=no_progress_count
-    ):
-        await _persist_goal_evaluation(
-            checkpointer=checkpointer,
-            thread_id=thread_id,
-            run_id=run_id,
-            goal=goal,
-            evaluation=evaluation,
-            no_progress_count=no_progress_count,
-            stand_down_reason=stand_down_reason,
-            evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
-        )
-        return None
-
-    # Bump continuation_count (inside the lock, defensive max against a racing bump).
-    next_count = int(goal.get("continuation_count", 0)) + 1
-    updated_goal = await _persist_goal_evaluation(
-        checkpointer=checkpointer,
-        thread_id=thread_id,
-        run_id=run_id,
-        goal=goal,
-        evaluation=evaluation,
-        no_progress_count=no_progress_count,
-        continuation_count=next_count,
-        evidence_signature=evidence_signature,
-        family_ai_config=family_ai_config,
-    )
-    if updated_goal is None:
-        return None
-
-    # Final guard: verify the visible conversation did not change before queuing.
-    try:
-        latest_goal, latest_checkpoint_tuple = await _reread_goal_and_checkpoint(
-            checkpointer, thread_id
-        )
-    except Exception:
-        logger.warning(
-            "Could not verify queued goal continuation for thread %s",
-            thread_id,
-            exc_info=True,
-        )
-        return None
-    if (
-        not _goal_instance_matches(updated_goal, latest_goal)
-        or latest_checkpoint_tuple is None
-    ):
-        return None
-    if (
-        visible_conversation_signature(
-            _read_checkpoint_messages(latest_checkpoint_tuple)
-        )
-        != conversation_signature_before
-    ):
-        assert latest_goal is not None  # _goal_instance_matches guarantees non-None
-        await _persist_goal_evaluation(
-            checkpointer=checkpointer,
-            thread_id=thread_id,
-            run_id=run_id,
-            goal=latest_goal,
-            evaluation=evaluation,
-            no_progress_count=no_progress_count,
-            stand_down_reason="thread_changed_before_continuation",
-            evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
-        )
-        return None
-
-    logger.info(
-        "Run %s continuing thread %s for active goal (%d/%d)",
-        run_id,
-        thread_id,
-        updated_goal.get("continuation_count", next_count),
-        updated_goal.get("max_continuations", 0),
-    )
-    # Build the hidden continuation message and wrap it in a RedactedContext so
-    # the adapter streams it as the next turn's user input. The frontend hides
-    # human messages during active streaming (useThreadChat `!isInitialLoad`
-    # filter), so this continuation is not shown as a duplicate user bubble.
-    continuation_message = make_goal_continuation_message(updated_goal, evaluation)
-    continuation_context = pii_redactor.redact(
-        FamilyContext(family_id=family_id, free_text=continuation_message.content)
-    )
-    return {
-        "context": continuation_context,
-        "continuation_count": updated_goal.get("continuation_count", next_count),
-    }
-
-
-async def _reread_checkpoint_tuple(checkpointer: Any, thread_id: str) -> Any:
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
-        checkpointer, "get_tuple", None
-    )
-    if aget_tuple is None:
-        return None
-    import inspect
-
-    result = aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
-    if inspect.isawaitable(result):
-        result = await result
-    return result
-
-
-async def _persist_goal_evaluation(
-    *,
-    checkpointer: Any,
-    thread_id: str,
-    run_id: str,
-    goal: dict[str, Any],
-    evaluation: dict[str, Any],
-    no_progress_count: int,
-    continuation_count: int | None = None,
-    stand_down_reason: str | None = None,
-    evidence_signature: str = "",
-    family_ai_config: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    """Persist the evaluation against the still-current goal instance.
-
-    Lock scope (P3): the ``goal_thread_lock`` is held only across the
-    read-modify-write (read fresh checkpoint → attach evaluation → write), never
-    across LLM calls — so a racing ``DELETE /goal`` cannot deadlock.
-    """
-    try:
-        async with goal_thread_lock(thread_id):
-            checkpoint_tuple = await _reread_checkpoint_tuple(checkpointer, thread_id)
-            if checkpoint_tuple is None:
-                return None
-            current_goal = _read_checkpoint_goal(checkpoint_tuple)
-            if current_goal is None or not _goal_instance_matches(goal, current_goal):
-                return None
-            # Defensive: compute continuation_count from the fresh current_goal
-            # inside the lock — a racing continuation may have already bumped it.
-            effective_count = continuation_count
-            if effective_count is not None:
-                current_count = int(current_goal.get("continuation_count", 0))
-                effective_count = max(effective_count, current_count + 1)
-            expected_checkpoint_id = _goal_checkpoint_id(checkpoint_tuple)
-            updated_goal = cast(
-                dict[str, Any],
-                attach_goal_evaluation(
-                    current_goal,
-                    evaluation,
-                    run_id=run_id,
-                    continuation_count=effective_count,
-                    no_progress_count=no_progress_count,
-                    stand_down_reason=stand_down_reason,
-                    evidence_signature=evidence_signature,
-                ),
-            )
-            await write_thread_goal(
-                checkpointer,
-                thread_id,
-                updated_goal,
-                as_node="goal_evaluator",
-                expected_checkpoint_id=expected_checkpoint_id,
-            )
-        return updated_goal
-    except GoalWriteConflict:
-        return None
-    except Exception:
-        logger.warning(
-            "Could not persist goal evaluation for thread %s", thread_id, exc_info=True
-        )
-        return None
 
 
 # Synthetic trigger for dashboard-narrative runs (mirrors _SYNTHETIC_FINANCE_COACH_TRIGGER).
