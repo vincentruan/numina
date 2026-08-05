@@ -325,7 +325,7 @@ async def run_agent(
         reset_family_sandbox_context()
 
 
-async def _set_session_title(thread_id: str, family_id: int, title_prefix: str) -> None:
+async def _set_session_title(thread_id: str, family_id: str, title_prefix: str) -> None:
     """Set a fixed-format title on a session.
 
     Best-effort: any failure is logged and swallowed.

@@ -16,7 +16,6 @@ Create Date: 2026-08-04
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e4f5g6h7i8j9"
@@ -30,7 +29,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_ai_agents_name_format",
         "ai_agents",
-        sa.CheckConstraint("agent_name ~ '^[a-z][a-z0-9_-]*$'", name="ck_ai_agents_name_format"),
+        "agent_name ~ '^[a-z][a-z0-9_-]*$'",
     )
 
 
@@ -39,5 +38,5 @@ def downgrade() -> None:
     op.create_check_constraint(
         "ck_ai_agents_name_format",
         "ai_agents",
-        sa.CheckConstraint("agent_name ~ '^[a-z][a-z0-9-]*$'", name="ck_ai_agents_name_format"),
+        "agent_name ~ '^[a-z][a-z0-9-]*$'",
     )

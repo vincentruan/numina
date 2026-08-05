@@ -7,7 +7,7 @@
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
@@ -23,6 +23,9 @@ from apps.backend.app.models.ai_provider_config import (
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.skill_registry import SkillRegistry
+
+if TYPE_CHECKING:
+    from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
@@ -654,7 +657,7 @@ def _session_to_dict(s: "object") -> dict:
 def _find_session_row(
     db: Session,
     session_id: str,
-) -> "object | None":
+) -> "AIChatSession | None":
     """Look up an ai_chat_sessions row by PK (snowflake) or thread_id (UUID).
 
     The ``session_id`` parameter comes from the agent and is either a numeric

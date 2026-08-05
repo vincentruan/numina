@@ -44,7 +44,7 @@ class DraftImport(Base):
         if not self.parsed_items:
             return []
         try:
-            return json.loads(self.parsed_items)
+            return json.loads(self.parsed_items)  # type: ignore[no-any-return]
         except (json.JSONDecodeError, TypeError):
             return []
 
@@ -54,7 +54,7 @@ class DraftImport(Base):
     def get_committed_record_ids(self) -> list[str]:
         if not self.committed_record_ids:
             return []
-        return json.loads(self.committed_record_ids)
+        return json.loads(self.committed_record_ids)  # type: ignore[no-any-return]
 
     def set_committed_record_ids(self, ids: list[str]) -> None:
         self.committed_record_ids = json.dumps(ids, ensure_ascii=False)

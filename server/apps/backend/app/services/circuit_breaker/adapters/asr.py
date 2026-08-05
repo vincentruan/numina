@@ -74,7 +74,7 @@ class ASRAdapter(CircuitBreakerAdapter):
         if transition.new_state.value == "open":
             self._config.is_active = False
 
-    def record_failure(self, db: Session) -> None:
+    def record_failure(self, db: Session) -> None:  # type: ignore[override]
         """Record a transcription failure.
 
         ASR doesn't use failure_type - just increments counter.
@@ -94,7 +94,7 @@ class ASRAdapter(CircuitBreakerAdapter):
 
         db.commit()
 
-    def record_success(self, db: Session) -> None:
+    def record_success(self, db: Session) -> None:  # type: ignore[override]
         """Record a transcription or test success.
 
         Resets failure counter and closes circuit.

@@ -185,7 +185,7 @@ class ExtractionAdapter(CircuitBreakerAdapter):
         # Below thresholds -> maintain/recover to ok
         return self._upsert_state("ok", opened_at=None, opened_until=None, db=db)
 
-    def reset(self, user_id: int, db: Session) -> bool:
+    def reset(self, user_id: int, db: Session) -> bool:  # type: ignore[override]
         """Manual admin reset to ok state.
 
         Records manually_reset_at and reset_by_user_id.

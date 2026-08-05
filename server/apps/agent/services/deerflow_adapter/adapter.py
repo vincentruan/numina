@@ -551,7 +551,7 @@ class DeerFlowAdapter:
                     )
 
                     if _is_fallback_title(raw_title):
-                        clean = _text_fallback_title(context.free_text)
+                        clean = _text_fallback_title(context.free_text or "")
                         if clean:
                             event_data = {**event_data, "title": clean}
                 yield ("values", event_data)

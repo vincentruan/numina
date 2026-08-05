@@ -345,9 +345,10 @@ async def sync_title_from_checkpoint(
         session = await repo.get_session(thread_id)
         db_title = session.get("title") if session else None
         if db_title and not _is_fallback_title(db_title):
-            return db_title
+            return str(db_title)
 
         # 2. Prefer a proper title from the checkpoint (async middleware path).
+        title: str | None = None
         ckpt_title = await _read_checkpoint_title(thread_id)
         if ckpt_title and not _is_fallback_title(ckpt_title):
             title = str(ckpt_title).strip()
@@ -361,7 +362,6 @@ async def sync_title_from_checkpoint(
             return title
 
         # 3. The sync stream() path only wrote a fallback - generate a real title.
-        title = None
         if ai_config and user_message:
             title = await _generate_title_via_llm(user_message, ai_response, ai_config)
 
