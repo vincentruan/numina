@@ -68,11 +68,18 @@ class CircuitBreakerAdapter(ABC):
         """
         entity = self.load_entity(db)
         if entity is None:
-            return {"circuit_state": "closed", "circuit_reason": None, "failure_count": 0}
+            return {
+                "circuit_state": "closed",
+                "circuit_reason": None,
+                "failure_count": 0,
+            }
 
         config = self.get_config()
         transition = CircuitBreakerFSM.record_failure(
-            entity, FailureKind(failure_type), config, datetime.now(UTC).replace(tzinfo=None)
+            entity,
+            FailureKind(failure_type),
+            config,
+            datetime.now(UTC).replace(tzinfo=None),
         )
 
         if transition.changed:
@@ -88,10 +95,16 @@ class CircuitBreakerAdapter(ABC):
         """
         entity = self.load_entity(db)
         if entity is None:
-            return {"circuit_state": "closed", "circuit_reason": None, "failure_count": 0}
+            return {
+                "circuit_state": "closed",
+                "circuit_reason": None,
+                "failure_count": 0,
+            }
 
         config = self.get_config()
-        transition = CircuitBreakerFSM.record_success(entity, config, datetime.now(UTC).replace(tzinfo=None))
+        transition = CircuitBreakerFSM.record_success(
+            entity, config, datetime.now(UTC).replace(tzinfo=None)
+        )
 
         if transition.changed:
             self.on_transition(transition, db)
@@ -109,7 +122,9 @@ class CircuitBreakerAdapter(ABC):
             return False
 
         config = self.get_config()
-        transition = CircuitBreakerFSM.attempt_recovery(entity, config, datetime.now(UTC).replace(tzinfo=None))
+        transition = CircuitBreakerFSM.attempt_recovery(
+            entity, config, datetime.now(UTC).replace(tzinfo=None)
+        )
 
         if transition.changed:
             self.on_transition(transition, db)
@@ -124,7 +139,11 @@ class CircuitBreakerAdapter(ABC):
         """
         entity = self.load_entity(db)
         if entity is None:
-            return {"circuit_state": "closed", "circuit_reason": None, "failure_count": 0}
+            return {
+                "circuit_state": "closed",
+                "circuit_reason": None,
+                "failure_count": 0,
+            }
 
         transition = CircuitBreakerFSM.reset(entity)
 

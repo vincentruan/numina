@@ -141,4 +141,6 @@ def reset_circuit(
         user_id=current_user.id,
         db=db,
     )
-    return CircuitResetResponse(ok=True, reset_at=datetime.now(UTC).replace(tzinfo=None))
+    return CircuitResetResponse(
+        ok=True, reset_at=datetime.now(UTC).replace(tzinfo=None)
+    )

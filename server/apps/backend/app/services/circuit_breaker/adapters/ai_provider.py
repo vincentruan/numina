@@ -93,7 +93,9 @@ class AIProviderAdapter(CircuitBreakerAdapter):
             if failure_type and failure_type.startswith("permanent_"):
                 self._config.circuit_open_until = None  # Manual recovery only
             else:
-                self._config.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1)
+                self._config.circuit_open_until = datetime.now(UTC).replace(
+                    tzinfo=None
+                ) + timedelta(hours=1)
                 # Normalize circuit_reason to "transient" for agent-facing API
                 self._config.circuit_reason = "transient"
         elif new_state == State.CLOSED:
@@ -103,11 +105,18 @@ class AIProviderAdapter(CircuitBreakerAdapter):
         """Record a failure event. Delegates to shared FSM."""
         entity = self.load_entity(db)
         if entity is None:
-            return {"circuit_state": "closed", "circuit_reason": None, "failure_count": 0}
+            return {
+                "circuit_state": "closed",
+                "circuit_reason": None,
+                "failure_count": 0,
+            }
 
         config = self.get_config()
         transition = CircuitBreakerFSM.record_failure(
-            entity, FailureKind(failure_type), config, datetime.now(UTC).replace(tzinfo=None)
+            entity,
+            FailureKind(failure_type),
+            config,
+            datetime.now(UTC).replace(tzinfo=None),
         )
 
         if transition.changed:

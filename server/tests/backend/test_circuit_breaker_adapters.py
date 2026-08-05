@@ -93,7 +93,9 @@ class TestWebSearchAdapter:
         """Success threshold in half_open should close circuit."""
         web_search_provider.circuit_state = "half_open"
         web_search_provider.half_open_success_count = 2
-        web_search_provider.half_open_window_start = datetime.now(UTC).replace(tzinfo=None)
+        web_search_provider.half_open_window_start = datetime.now(UTC).replace(
+            tzinfo=None
+        )
         db.commit()
 
         adapter = WebSearchAdapter(web_search_provider.id)
@@ -109,7 +111,9 @@ class TestWebSearchAdapter:
         """Circuit should recover after cooldown."""
         web_search_provider.circuit_state = "open"
         web_search_provider.circuit_reason = "transient_rate_limit"
-        web_search_provider.last_failure_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=120)
+        web_search_provider.last_failure_at = datetime.now(UTC).replace(
+            tzinfo=None
+        ) - timedelta(seconds=120)
         db.commit()
 
         adapter = WebSearchAdapter(web_search_provider.id)
@@ -177,7 +181,9 @@ class TestAIProviderAdapter:
         ai_provider.circuit_state = "half_open"
         ai_provider.half_open_success_count = 8
         ai_provider.half_open_failure_count = 2
-        ai_provider.half_open_window_start = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=360)
+        ai_provider.half_open_window_start = datetime.now(UTC).replace(
+            tzinfo=None
+        ) - timedelta(seconds=360)
         db.commit()
 
         adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
@@ -201,7 +207,9 @@ class TestAIProviderAdapter:
         ai_provider.circuit_state = "open"
         ai_provider.circuit_reason = "transient_rate_limit"
         ai_provider.recovery_schedule = schedule_suffix
-        ai_provider.last_failure_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=35)
+        ai_provider.last_failure_at = datetime.now(UTC).replace(
+            tzinfo=None
+        ) - timedelta(minutes=35)
         db.commit()
 
         adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
@@ -215,9 +223,7 @@ class TestAIProviderAdapter:
 class TestExtractionAdapter:
     """Tests for ExtractionAdapter with DB."""
 
-    def test_is_open_rate_limited_not_expired(
-        self, db: Session
-    ) -> None:
+    def test_is_open_rate_limited_not_expired(self, db: Session) -> None:
         """Rate-limited circuit should block until expired."""
         circuit = AIExtractionCircuit(
             id=next_id(),
@@ -236,9 +242,7 @@ class TestExtractionAdapter:
         assert blocked is True
         assert reason == "rate_limited"
 
-    def test_is_open_rate_limited_expired_auto_recovers(
-        self, db: Session
-    ) -> None:
+    def test_is_open_rate_limited_expired_auto_recovers(self, db: Session) -> None:
         """Expired rate-limited circuit should auto-recover."""
         circuit = AIExtractionCircuit(
             id=next_id(),
@@ -259,9 +263,7 @@ class TestExtractionAdapter:
         assert reason is None
         assert circuit.state == "ok"
 
-    def test_reset_records_admin_metadata(
-        self, db: Session
-    ) -> None:
+    def test_reset_records_admin_metadata(self, db: Session) -> None:
         """Reset should record manually_reset_at and reset_by_user_id."""
         circuit = AIExtractionCircuit(
             id=next_id(),

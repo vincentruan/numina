@@ -119,7 +119,9 @@ class ExtractionAdapter(CircuitBreakerAdapter):
             return True, "circuit_open"
 
         if circuit.state == "rate_limited":
-            if circuit.opened_until is not None and circuit.opened_until > datetime.now(UTC).replace(tzinfo=None):
+            if circuit.opened_until is not None and circuit.opened_until > datetime.now(
+                UTC
+            ).replace(tzinfo=None):
                 return True, "rate_limited"
             # Rate limit window expired -> auto-recover to ok
             circuit.state = "ok"

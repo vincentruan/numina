@@ -219,7 +219,9 @@ class TestAttemptRecovery:
         assert transition.changed is False
         assert entity.circuit_state == "open"
 
-    def test_before_cooldown_stays_open(self, default_config: CircuitBreakerConfig) -> None:
+    def test_before_cooldown_stays_open(
+        self, default_config: CircuitBreakerConfig
+    ) -> None:
         """Before cooldown elapsed should stay open."""
         entity = MockEntity(
             circuit_state="open",
