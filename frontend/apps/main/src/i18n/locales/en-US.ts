@@ -3501,6 +3501,7 @@ export default {
     saveSuccess: 'Remote backup configuration saved',
     updateSuccess: 'Remote backup configuration updated',
     deleteSuccess: 'Remote backup configuration deleted',
+    deleteFailed: 'Failed to delete remote backup configuration',
     loadFailed: 'Failed to load remote backup configuration',
     saveFailed: 'Failed to save remote backup configuration',
     alreadyExists: 'This family already has a remote backup configured; please remove it first',

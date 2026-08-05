@@ -241,16 +241,24 @@ async function onSave() {
 
 async function onDelete() {
   if (!existingBackend.value) return
+
+  // Confirm dialog — cancellation is expected, swallow silently
   try {
     await showConfirmDialog({
       title: t('storageBackend.delete'),
       message: t('storageBackend.deleteConfirm'),
     })
+  } catch {
+    return
+  }
+
+  // Delete API call — surface errors to the user
+  try {
     await deleteStorageBackend(existingBackend.value.id)
     showSuccessToast(t('storageBackend.deleteSuccess'))
     existingBackend.value = null
   } catch {
-    // User cancelled or delete failed
+    showFailToast(t('storageBackend.deleteFailed'))
   }
 }
 

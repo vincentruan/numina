@@ -62,14 +62,21 @@ async def file_sync_job() -> None:
             return
 
         for backend_row in active_backends:
-            config = decrypt_config(backend_row.config)
-            if config is None:
-                logger.warning(
-                    f"无法解密存储后端配置 (family_id={backend_row.family_id})，跳过"
+            try:
+                config = decrypt_config(backend_row.config)
+                if config is None:
+                    logger.warning(
+                        f"无法解密存储后端配置 (family_id={backend_row.family_id})，跳过"
+                    )
+                    continue
+
+                backend = get_backend_for_type(backend_row.backend_type, config)
+            except Exception as e:
+                logger.exception(
+                    f"无法初始化存储后端 (family_id={backend_row.family_id}, "
+                    f"type={backend_row.backend_type}): {e}"
                 )
                 continue
-
-            backend = get_backend_for_type(backend_row.backend_type, config)
 
             pending = (
                 db.query(FileRemoteLocation)

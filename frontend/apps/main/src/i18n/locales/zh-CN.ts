@@ -3567,6 +3567,7 @@ export default {
     saveSuccess: '远程备份配置已保存',
     updateSuccess: '远程备份配置已更新',
     deleteSuccess: '远程备份配置已删除',
+    deleteFailed: '删除远程备份配置失败',
     loadFailed: '加载远程备份配置失败',
     saveFailed: '保存远程备份配置失败',
     alreadyExists: '当前家庭已配置远程备份，请先删除旧配置',
