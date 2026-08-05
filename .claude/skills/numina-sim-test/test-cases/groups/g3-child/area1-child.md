@@ -84,7 +84,7 @@ After navigating to `/child/` and clicking a child card:
 bsk snapshot --session <id>     # capture emoji buttons as @eN refs
 ```
 
-Assertions (correct PIN for 小宝 = 🐱🌟🌈):
+Assertions (correct PIN for 小宝 = 🐱🐶🌟🌈):
 - [ ] 4 empty PIN slot indicators visible
 - [ ] 12 emoji buttons in 4×3 grid
 - [ ] 删除 and 清除 buttons visible
