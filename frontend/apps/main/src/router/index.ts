@@ -493,9 +493,9 @@ router.afterEach((_to) => {
   // control; pages without async work auto-complete via this timeout.
   // This prevents the flicker caused by start→done→start across router/page.
   //
-  // Timeout must exceed the Transition out-in delay (~150ms leave + ~150ms
-  // enter = ~300ms worst case) so increment() always fires before the timeout.
-  // 500ms covers the transition plus a generous GC / scheduler buffer.
+  // Timeout must exceed the page-mount delay so increment() always fires
+  // before the timeout. 500ms covers a generous GC / scheduler buffer.
+  // (MainLayout no longer uses out-in Transition — removed to fix blank-screen.)
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
   }, 500)
