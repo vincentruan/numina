@@ -208,7 +208,6 @@ async def _persist_goal_evaluation(
     continuation_count: int | None = None,
     stand_down_reason: str | None = None,
     evidence_signature: str = "",
-    family_ai_config: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Persist the evaluation against the still-current goal instance.
 
@@ -308,19 +307,8 @@ async def _prepare_goal_continuation_input(
         return None
 
     # Read the checkpoint for messages + a pre-evaluation signature.
-    aget_tuple = getattr(checkpointer, "aget_tuple", None) or getattr(
-        checkpointer, "get_tuple", None
-    )
-    if aget_tuple is None:
-        return None
     try:
-        import inspect
-
-        checkpoint_tuple = aget_tuple(
-            {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-        )
-        if inspect.isawaitable(checkpoint_tuple):
-            checkpoint_tuple = await checkpoint_tuple
+        checkpoint_tuple = await _reread_checkpoint_tuple(checkpointer, thread_id)
     except Exception:
         logger.warning(
             "Could not read checkpoint for goal eval thread %s",
@@ -355,7 +343,6 @@ async def _prepare_goal_continuation_input(
             no_progress_count=no_progress_count,
             stand_down_reason="no_durable_end_of_turn",
             evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
         )
         return None
 
@@ -396,7 +383,6 @@ async def _prepare_goal_continuation_input(
             no_progress_count=no_progress_count,
             stand_down_reason="blocked:evaluator_error",
             evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
         )
         return None
 
@@ -444,7 +430,6 @@ async def _prepare_goal_continuation_input(
             no_progress_count=no_progress_count,
             stand_down_reason="thread_changed_after_evaluation",
             evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
         )
         return None
 
@@ -486,7 +471,6 @@ async def _prepare_goal_continuation_input(
             no_progress_count=no_progress_count,
             stand_down_reason=stand_down_reason,
             evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
         )
         return None
 
@@ -501,7 +485,6 @@ async def _prepare_goal_continuation_input(
         no_progress_count=no_progress_count,
         continuation_count=next_count,
         evidence_signature=evidence_signature,
-        family_ai_config=family_ai_config,
     )
     if updated_goal is None:
         return None
@@ -539,7 +522,6 @@ async def _prepare_goal_continuation_input(
             no_progress_count=no_progress_count,
             stand_down_reason="thread_changed_before_continuation",
             evidence_signature=evidence_signature,
-            family_ai_config=family_ai_config,
         )
         return None
 

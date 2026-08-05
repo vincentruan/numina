@@ -23,7 +23,6 @@ from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
-from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
@@ -47,6 +46,11 @@ from .goal_continuation import (
     _prepare_goal_continuation_input,
 )
 from .run_extras import generate_suggestions, sync_title_from_checkpoint
+from .run_pipeline import (
+    _fire_and_forget_circuit_report,
+    _resolve_numina_mcp_servers,
+    _track_task,
+)
 from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
 logger = logging.getLogger(__name__)
@@ -61,80 +65,6 @@ _WRITE_FILE_DECL_RE = re.compile(
 # Canonical report filename pattern (mirrors PathManager._REPORT_FILENAME_PATTERN)
 # — used to validate filenames recovered from write_file tool_call args.path.
 _REPORT_FILENAME_RE = re.compile(r"^report_[a-zA-Z0-9_-]+\.md$")
-
-# Track fire-and-forget background tasks so they don't get garbage collected prematurely
-_background_tasks: set[asyncio.Task] = set()
-
-
-def _track_task(task: asyncio.Task) -> None:
-    """Track a background task and auto-remove it when done."""
-    _background_tasks.add(task)
-    task.add_done_callback(lambda t: _background_tasks.discard(t))
-
-
-async def _report_circuit_on_failure(
-    family_id: str,
-    selected_provider: dict | None,
-    exc: BaseException,
-) -> None:
-    """Report an LLM call failure to the backend circuit-breaker state machine.
-
-    Fire-and-forget: errors here are logged but never propagated, so a failed
-    circuit report can't mask the original error response to the user.
-
-    Args:
-        family_id: family context for the report.
-        selected_provider: the provider dict used for this run (must carry
-            ``config_id``). When None (no provider was selected), this is a
-            no-op — there's nothing to blame.
-        exc: the exception that terminated the run.
-    """
-    if selected_provider is None:
-        return
-    config_id = selected_provider.get("config_id")
-    if not config_id:
-        return
-    try:
-        from apps.agent.core.backend_client import (
-            BackendClient,
-            _extract_llm_error_info,
-            classify_error_type,
-        )
-
-        error_code, error_message = _extract_llm_error_info(exc)
-        error_type = classify_error_type(error_code, error_message)
-        client = BackendClient(family_id=family_id)
-        await client.report_circuit_event(
-            config_id=config_id,
-            error_code=error_code,
-            error_type=error_type,
-            error_message=error_message[:500],  # trim for storage
-        )
-    except Exception as report_exc:
-        # Never let the circuit-report failure propagate — it must not
-        # interfere with the already-failing run's error path.
-        logger.warning(
-            "[worker] report_circuit_event failed family=%s config_id=%s err=%s",
-            family_id,
-            config_id,
-            type(report_exc).__name__,
-        )
-
-
-def _fire_and_forget_circuit_report(
-    family_id: str,
-    selected_provider: dict | None,
-    exc: BaseException,
-) -> None:
-    """Schedule ``_report_circuit_on_failure`` as a fire-and-forget task."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return
-    task = loop.create_task(
-        _report_circuit_on_failure(family_id, selected_provider, exc)
-    )
-    _track_task(task)
 
 
 def _deerflow_default_workspace_md(
@@ -278,52 +208,6 @@ def _copy_asset_report_markdown(
             type(exc).__name__,
         )
         return None
-
-
-async def _resolve_numina_mcp_servers(
-    client: BackendClient,
-    family_id: str,
-    user_id: str | None,
-    label: str,
-) -> list[dict[str, Any]]:
-    """Fetch enabled MCP servers and rewrite the Numina Backend MCP entry.
-
-    Shared MCP-setup for every pipeline: locate the "Numina Backend MCP" server,
-    point its URL at the family-scoped SSE endpoint (when not already prefixed),
-    and attach the auth headers the backend MCP SSE handshake requires
-    (``X-Caller-User-Id`` is mandatory; without it the SSE endpoint 403s). Only
-    the Numina Backend MCP entry gets headers, not all servers. Returns ``[]``
-    when the fetch fails so the caller degrades to zero MCP tools.
-    ``label`` is the calling pipeline's log tag (e.g. ``[_run_numina_agent]``).
-    """
-    try:
-        mcp_servers = await client.get_enabled_mcp_servers()
-        for srv in mcp_servers:
-            if srv.get("name") == "Numina Backend MCP":
-                expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                actual_url = (srv.get("url") or "").rstrip("/")
-                if not actual_url.startswith(expected_prefix):
-                    srv["url"] = (
-                        expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
-                    )
-                from packages.security.service_auth.agent_jwt import create_agent_token
-                mcp_headers: dict[str, str] = {
-                    "X-Agent-Token": create_agent_token(family_id),
-                    "X-Family-Id": family_id,
-                }
-                if user_id:
-                    mcp_headers["X-Caller-User-Id"] = user_id
-                srv["headers"] = mcp_headers
-                break
-        return mcp_servers
-    except Exception as exc:
-        logger.warning(
-            "%s get_enabled_mcp_servers failed family=%s err=%s",
-            label,
-            family_id,
-            type(exc).__name__,
-        )
-        return []
 
 
 async def run_agent(
