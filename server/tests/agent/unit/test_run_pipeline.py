@@ -45,7 +45,9 @@ def _make_run_manager() -> MagicMock:
 def _mock_config(providers: list[dict] | None = None) -> dict:
     """Build a mock AI config response."""
     if providers is None:
-        providers = [{"config_id": "cfg-1", "is_active": True, "circuit_state": "closed"}]
+        providers = [
+            {"config_id": "cfg-1", "is_active": True, "circuit_state": "closed"}
+        ]
     return {"providers": providers}
 
 
@@ -91,9 +93,7 @@ class TestRunPipelineEnter:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             async with RunPipeline(
@@ -128,9 +128,7 @@ class TestRunPipelineEnter:
             ) as mock_client_cls,
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value={"providers": []}
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value={"providers": []})
             mock_client_cls.return_value = mock_client
 
             with pytest.raises(RuntimeError, match="未配置 AI 供应商"):
@@ -218,9 +216,7 @@ class TestRunPipelineEnter:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             async with RunPipeline(
@@ -285,9 +281,7 @@ class TestRunPipelineExit:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             async with RunPipeline(
@@ -305,9 +299,7 @@ class TestRunPipelineExit:
         # Verify audit log was called
         mock_audit.log_call.assert_called_once()
         # Verify end frame was published
-        bridge.publish.assert_any_await(
-            "run-1", "end", {"status": "complete"}
-        )
+        bridge.publish.assert_any_await("run-1", "end", {"status": "complete"})
 
     @pytest.mark.asyncio
     async def test_publishes_error_frame_on_exception(self):
@@ -346,9 +338,7 @@ class TestRunPipelineExit:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             with pytest.raises(ValueError, match="test error"):
@@ -404,9 +394,7 @@ class TestRunPipelineExit:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             with pytest.raises(asyncio.CancelledError):
@@ -420,6 +408,142 @@ class TestRunPipelineExit:
                     run_manager=run_manager,
                 ):
                     raise asyncio.CancelledError()
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_still_runs_audit_and_end_frame(self):
+        """Critical #1 fix: CancelledError path must not skip audit/end/cleanup."""
+        from apps.agent.services.runtime.run_pipeline import RunPipeline
+
+        record = _make_record()
+        bridge = _make_bridge()
+        run_manager = _make_run_manager()
+
+        with (
+            patch(
+                "apps.agent.services.runtime.run_pipeline.BackendClient"
+            ) as mock_client_cls,
+            patch(
+                "apps.agent.services.runtime.run_pipeline._resolve_numina_mcp_servers",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "apps.agent.services.runtime.run_pipeline.create_family_adapter",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "apps.agent.services.deerflow_adapter.active_skill_context.set_active_skill",
+                return_value="token-1",
+            ),
+            patch(
+                "apps.agent.services.deerflow_adapter.active_skill_context.reset_active_skill",
+                MagicMock(),
+            ),
+            patch(
+                "apps.agent.services.runtime.run_pipeline.audit_logger"
+            ) as mock_audit,
+            patch(
+                "apps.agent.services.agent_registry.get_agent_registry",
+                return_value=MagicMock(get=AsyncMock(return_value=None)),
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(asyncio.CancelledError):
+                async with RunPipeline(
+                    app_name="finance-coach",
+                    family_id="fam-1",
+                    user_id="user-1",
+                    thread_id="thread-1",
+                    record=record,
+                    bridge=bridge,
+                    run_manager=run_manager,
+                ):
+                    raise asyncio.CancelledError()
+
+        # Verify audit log was called even on cancellation
+        mock_audit.log_call.assert_called_once()
+        # Verify end frame was published with interrupted status
+        bridge.publish.assert_any_await("run-1", "end", {"status": "interrupted"})
+        # Verify run_manager was set to interrupted
+        run_manager.set_status.assert_any_await("run-1", RunStatus.interrupted)
+
+    @pytest.mark.asyncio
+    async def test_set_error_is_state_only_and_publishes_in_aexit(self):
+        """Critical #2 fix: set_error() stores state; __aexit__ publishes error frame."""
+        from apps.agent.services.runtime.run_pipeline import RunPipeline
+
+        record = _make_record()
+        bridge = _make_bridge()
+        run_manager = _make_run_manager()
+
+        with (
+            patch(
+                "apps.agent.services.runtime.run_pipeline.BackendClient"
+            ) as mock_client_cls,
+            patch(
+                "apps.agent.services.runtime.run_pipeline._resolve_numina_mcp_servers",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "apps.agent.services.runtime.run_pipeline.create_family_adapter",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "apps.agent.services.deerflow_adapter.active_skill_context.set_active_skill",
+                return_value="token-1",
+            ),
+            patch(
+                "apps.agent.services.deerflow_adapter.active_skill_context.reset_active_skill",
+                MagicMock(),
+            ),
+            patch(
+                "apps.agent.services.runtime.run_pipeline.audit_logger"
+            ) as mock_audit,
+            patch(
+                "apps.agent.services.agent_registry.get_agent_registry",
+                return_value=MagicMock(get=AsyncMock(return_value=None)),
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
+            mock_client_cls.return_value = mock_client
+
+            async with RunPipeline(
+                app_name="asset-report",
+                family_id="fam-1",
+                user_id="user-1",
+                thread_id="thread-1",
+                record=record,
+                bridge=bridge,
+                run_manager=run_manager,
+            ) as p:
+                # Simulate post-stream error (like asset-report persist failure)
+                p.set_error("结构化结果保存失败", error_type="PersistError")
+                # set_error should be state-only — no tasks scheduled yet
+                assert p._post_stream_error_message == "结构化结果保存失败"
+                assert p._error_type == "PersistError"
+                assert p._completion_status == "error"
+                assert p._success is False
+
+        # After __aexit__: error frame should be published
+        bridge.publish.assert_any_await(
+            "run-1",
+            "error",
+            {"message": "结构化结果保存失败", "name": "PersistError"},
+        )
+        # Run status should be set to error
+        run_manager.set_status.assert_any_await(
+            "run-1", RunStatus.error, error="结构化结果保存失败"
+        )
+        # Audit log should reflect failure
+        mock_audit.log_call.assert_called_once()
+        audit_entry = mock_audit.log_call.call_args[0][0]
+        assert audit_entry.success is False
+        assert audit_entry.error_type == "PersistError"
+        # End frame should have error status
+        bridge.publish.assert_any_await("run-1", "end", {"status": "error"})
 
 
 # ---------------------------------------------------------------------------
@@ -467,21 +591,15 @@ class TestRunPipelineRunSkill:
                 "apps.agent.services.deerflow_adapter.active_skill_context.reset_active_skill",
                 MagicMock(),
             ),
-            patch(
-                "apps.agent.services.runtime.run_pipeline.pii_redactor"
-            ) as mock_pii,
-            patch(
-                "apps.agent.services.runtime.run_pipeline.audit_logger"
-            ),
+            patch("apps.agent.services.runtime.run_pipeline.pii_redactor") as mock_pii,
+            patch("apps.agent.services.runtime.run_pipeline.audit_logger"),
             patch(
                 "apps.agent.services.agent_registry.get_agent_registry",
                 return_value=MagicMock(get=AsyncMock(return_value=None)),
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
             mock_pii.redact.return_value = MagicMock()
 
@@ -508,7 +626,16 @@ class TestRunPipelineRunSkill:
 
         async def mock_stream(*args, **kwargs):
             yield "messages", {"type": "ai", "content": "test"}
-            yield "end", {"usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}}
+            yield (
+                "end",
+                {
+                    "usage": {
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                        "total_tokens": 150,
+                    }
+                },
+            )
 
         mock_adapter = MagicMock()
         mock_adapter.typed_stream_dispatch = mock_stream
@@ -533,21 +660,15 @@ class TestRunPipelineRunSkill:
                 "apps.agent.services.deerflow_adapter.active_skill_context.reset_active_skill",
                 MagicMock(),
             ),
-            patch(
-                "apps.agent.services.runtime.run_pipeline.pii_redactor"
-            ),
-            patch(
-                "apps.agent.services.runtime.run_pipeline.audit_logger"
-            ),
+            patch("apps.agent.services.runtime.run_pipeline.pii_redactor"),
+            patch("apps.agent.services.runtime.run_pipeline.audit_logger"),
             patch(
                 "apps.agent.services.agent_registry.get_agent_registry",
                 return_value=MagicMock(get=AsyncMock(return_value=None)),
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             async with RunPipeline(
@@ -609,9 +730,7 @@ class TestRunPipelineProperties:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             try:
@@ -659,18 +778,14 @@ class TestRunPipelineProperties:
                 "apps.agent.services.deerflow_adapter.active_skill_context.reset_active_skill",
                 MagicMock(),
             ),
-            patch(
-                "apps.agent.services.runtime.run_pipeline.audit_logger"
-            ),
+            patch("apps.agent.services.runtime.run_pipeline.audit_logger"),
             patch(
                 "apps.agent.services.agent_registry.get_agent_registry",
                 return_value=MagicMock(get=AsyncMock(return_value=None)),
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             async with RunPipeline(
@@ -721,9 +836,7 @@ class TestRunPipelineProperties:
             ),
         ):
             mock_client = AsyncMock()
-            mock_client.get_family_ai_config = AsyncMock(
-                return_value=_mock_config()
-            )
+            mock_client.get_family_ai_config = AsyncMock(return_value=_mock_config())
             mock_client_cls.return_value = mock_client
 
             try:

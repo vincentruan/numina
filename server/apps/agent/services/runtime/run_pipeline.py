@@ -59,11 +59,33 @@ class RunPipeline:
     ``__aenter__`` does: set_status(running) + publish metadata, fetch AI config,
     select provider, resolve MCP servers, create adapter, set active skill.
 
-    ``__aexit__`` does: reset active skill, audit log, circuit report on error,
-    publish end frame + deferred cleanup.
+    ``__aexit__`` does: reset active skill, set terminal status, audit log,
+    publish end frame + deferred cleanup.  ALL terminal paths (success, error,
+    cancellation) go through the same cleanup sequence — matching DeerFlow's
+    unified finally pattern in ``run_agent()``.  If ``set_error()`` was called
+    inside the ``async with`` body, the error frame is published before the
+    end frame.
 
     ``run_skill(user_message)`` does: PII redact, typed_stream_dispatch loop,
     collect ai_response_parts + cumulative_usage, forward frames to bridge.
+
+    Design notes (vs DeerFlow reference):
+    - **No lease admission**: DeerFlow's ``run_agent`` uses try_start/ownership
+      tokens for multi-worker lease management.  RunPipeline runs inside a
+      single worker process with RunManager already gating concurrency, so the
+      lease layer is unnecessary here.
+    - **No checkpoint rollback**: DeerFlow persists rollbacks on failure for
+      resume support.  Numina's runs are idempotent single-pass pipelines; the
+      checkpointer retains the last state but resume is not implemented.
+    - **skill_name vs app_name**: ``app_name`` drives config/audit/end-frame
+      metadata; ``skill_name`` is what ``typed_stream_dispatch`` uses for tool
+      filtering via the active-skill ContextVar.  They default to the same
+      value but can differ when the dispatch skill doesn't match the app label.
+    - **BackendClient + mcp_servers override**: Each pipeline creates its own
+      ``BackendClient(family_id=...)`` for tenant-isolated config fetch.  The
+      ``mcp_servers`` parameter overrides MCP resolution — pass ``[]`` to skip
+      MCP entirely (e.g. dashboard-narrative has no tools), or ``None`` (default)
+      to resolve via the standard ``_resolve_numina_mcp_servers`` path.
     """
 
     def __init__(
@@ -85,6 +107,9 @@ class RunPipeline:
         # Optional: override the skill_name passed to typed_stream_dispatch
         # (defaults to app_name)
         skill_name: str | None = None,
+        # Optional: override MCP server resolution. Pass [] to skip MCP entirely
+        # (dashboard-narrative has allowed-tools: []). Default None = resolve.
+        mcp_servers: list[dict[str, Any]] | None = None,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -99,6 +124,7 @@ class RunPipeline:
         self.enable_thinking = enable_thinking
         self.timeout_seconds = timeout_seconds
         self.skill_name = skill_name or app_name
+        self._mcp_servers_override = mcp_servers
 
         # Populated by __aenter__
         self.run_id: str = record.run_id
@@ -107,12 +133,15 @@ class RunPipeline:
         self._skill_token: Any = None
         self._t_start: float = 0.0
 
-        # Populated by run_skill
+        # Populated by run_skill / set_error
         self.ai_response_parts: list[str] = []
+        self.thinking_parts: list[str] = []
         self.cumulative_usage: dict[str, int] | None = None
+        self.captured_tool_calls: list[dict[str, Any]] = []
         self._completion_status: str = "error"
         self._success: bool = False
         self._error_type: str | None = None
+        self._post_stream_error_message: str | None = None
 
     async def __aenter__(self) -> RunPipeline:
         self._t_start = time.monotonic()
@@ -135,10 +164,13 @@ class RunPipeline:
         if self.selected_provider is None:
             raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
 
-        # 3. Fetch enabled MCP servers
-        mcp_servers = await _resolve_numina_mcp_servers(
-            client, self.family_id, self.user_id, f"[{self.app_name}]"
-        )
+        # 3. Fetch enabled MCP servers (or use override)
+        if self._mcp_servers_override is not None:
+            mcp_servers = self._mcp_servers_override
+        else:
+            mcp_servers = await _resolve_numina_mcp_servers(
+                client, self.family_id, self.user_id, f"[{self.app_name}]"
+            )
 
         # 4. Resolve memory_enabled from AgentRegistry (when caller didn't override)
         from apps.agent.services.agent_registry import get_agent_registry
@@ -181,44 +213,59 @@ class RunPipeline:
 
             reset_active_skill(self._skill_token)
 
-        # 2. Handle exception
+        # 2. Handle exception — set terminal state but do NOT return early.
+        #    All paths (success/error/cancellation) share the cleanup below.
         if exc_type is not None:
             if exc_type is asyncio.CancelledError:
                 self._error_type = "Cancelled"
-                await self.run_manager.set_status(self.run_id, RunStatus.interrupted)
                 self._completion_status = "interrupted"
-                # Re-raise CancelledError (don't swallow)
-                return
-            self._error_type = exc_type.__name__
-            logger.warning(
-                "[%s] failed run=%s err=%s",
-                self.app_name,
-                self.run_id,
-                self._error_type,
-            )
-            await self.run_manager.set_status(
-                self.run_id, RunStatus.error, error=str(exc_val)
-            )
-            # Circuit-breaker reporting (fire-and-forget)
-            if exc_val is not None:
-                _fire_and_forget_circuit_report(
-                    self.family_id, self.selected_provider, exc_val
+                await self.run_manager.set_status(self.run_id, RunStatus.interrupted)
+            else:
+                self._error_type = exc_type.__name__
+                self._completion_status = "error"
+                logger.warning(
+                    "[%s] failed run=%s err=%s",
+                    self.app_name,
+                    self.run_id,
+                    self._error_type,
                 )
+                await self.run_manager.set_status(
+                    self.run_id, RunStatus.error, error=str(exc_val)
+                )
+                # Circuit-breaker reporting (fire-and-forget)
+                if exc_val is not None:
+                    _fire_and_forget_circuit_report(
+                        self.family_id, self.selected_provider, exc_val
+                    )
+                await self.bridge.publish(
+                    self.run_id,
+                    "error",
+                    {"message": str(exc_val), "name": self._error_type},
+                )
+                # Don't re-raise — we've published the error frame
+
+        # 3. Success path: set terminal status (only if no exception and no set_error)
+        elif self._post_stream_error_message is not None:
+            # set_error() was called — publish the error frame now.
+            await self.run_manager.set_status(
+                self.run_id,
+                RunStatus.error,
+                error=self._post_stream_error_message,
+            )
             await self.bridge.publish(
                 self.run_id,
                 "error",
-                {"message": str(exc_val), "name": self._error_type},
+                {
+                    "message": self._post_stream_error_message,
+                    "name": self._error_type,
+                },
             )
-            self._completion_status = "error"
-            # Don't re-raise — we've published the error frame
-            return
+        else:
+            await self.run_manager.set_status(self.run_id, RunStatus.success)
+            self._completion_status = "complete"
+            self._success = self.record.status == RunStatus.success
 
-        # 3. Success path: set terminal status
-        await self.run_manager.set_status(self.run_id, RunStatus.success)
-        self._completion_status = "complete"
-        self._success = self.record.status == RunStatus.success
-
-        # 4. Audit log (Key Invariant #3)
+        # 4. Audit log (Key Invariant #3) — runs for ALL terminal paths
         audit_logger.log_call(
             AuditEntry(
                 family_id=self.family_id,
@@ -243,12 +290,16 @@ class RunPipeline:
             schedule_run_cleanup(self.run_manager, self.run_id, delay=300)
         )
 
-    async def run_skill(self, user_message: str) -> None:
+    async def run_skill(
+        self, user_message: str, *, enable_reasoning_delta: bool = False
+    ) -> None:
         """Run the skill via typed_stream_dispatch and forward frames to bridge.
 
-        Collects ``ai_response_parts`` and ``cumulative_usage`` for the caller
-        to read after this method returns. Synthesizes tool_call/tool_result
-        custom events so the frontend can reuse the chat renderer.
+        Collects ``ai_response_parts``, ``thinking_parts`` (when reasoning_delta
+        is enabled), ``cumulative_usage``, and ``captured_tool_calls`` for the
+        caller to read after this method returns. Synthesizes tool_call/tool_result
+        custom events so the frontend can reuse the chat renderer (unless
+        reasoning_delta mode is active, which uses a different message path).
         """
         # PII redaction (Key Invariant #1) — defense-in-depth
         context = FamilyContext(family_id=self.family_id, free_text=user_message)
@@ -277,13 +328,47 @@ class RunPipeline:
                 await self.bridge.publish(self.run_id, "error", data)
                 break
 
-            # Forward the canonical frame (messages / values / custom)
-            await self.bridge.publish(self.run_id, sse_type, data)
-
-            # Collect AI text + synthesize tool_call/tool_result custom events
             if sse_type == "messages" and isinstance(data, dict):
                 msg_type = data.get("type")
                 if msg_type == "ai":
+                    # Reasoning-delta path (dashboard-narrative, literacy-report):
+                    # extract reasoning_content, publish as reasoning_delta custom
+                    # event, forward content-only message (strip reasoning to
+                    # avoid duplication).
+                    if enable_reasoning_delta:
+                        additional_kwargs = data.get("additional_kwargs") or {}
+                        reasoning = additional_kwargs.get("reasoning_content")
+                        if isinstance(reasoning, str) and reasoning:
+                            self.thinking_parts.append(reasoning)
+                            await self.bridge.publish(
+                                self.run_id,
+                                "custom",
+                                {"type": "reasoning_delta", "content": reasoning},
+                            )
+                        content = data.get("content")
+                        if content:
+                            self.ai_response_parts.append(content)
+                            await self.bridge.publish(
+                                self.run_id,
+                                "messages",
+                                {"type": "ai", "content": content},
+                            )
+                        # Defensive: capture tool_calls even in reasoning_delta
+                        # mode (current callers don't use tools, but if they
+                        # ever do the standard path would handle them).
+                        tool_calls = data.get("tool_calls")
+                        if tool_calls:
+                            for tc in extract_tool_calls(data):
+                                raw_name = tc.get("name", "")
+                                tc_args = tc.get("args") or {}
+                                self.captured_tool_calls.append(
+                                    {"name": raw_name, "args": tc_args}
+                                )
+                        continue
+
+                    # Standard path (asset-report, finance-coach, etc.):
+                    # forward the full message + synthesize tool_call/tool_result.
+                    await self.bridge.publish(self.run_id, sse_type, data)
                     content = data.get("content")
                     if content:
                         self.ai_response_parts.append(content)
@@ -291,6 +376,10 @@ class RunPipeline:
                     if tool_calls:
                         for tc in extract_tool_calls(data):
                             raw_name = tc.get("name", "")
+                            tc_args = tc.get("args") or {}
+                            self.captured_tool_calls.append(
+                                {"name": raw_name, "args": tc_args}
+                            )
                             tool_type, display_name, icon, display_key = (
                                 resolve_tool_metadata(raw_name)
                             )
@@ -298,7 +387,7 @@ class RunPipeline:
                                 "type": "tool_call",
                                 "tool_call_id": tc.get("id", ""),
                                 "tool_name": raw_name,
-                                "args": tc.get("args", {}),
+                                "args": tc_args,
                                 "display_name": display_name,
                                 "icon": icon,
                                 "tool_type": tool_type,
@@ -307,6 +396,7 @@ class RunPipeline:
                                 payload["display_key"] = display_key
                             await self.bridge.publish(self.run_id, "custom", payload)
                 elif msg_type == "tool":
+                    await self.bridge.publish(self.run_id, sse_type, data)
                     tool_call_id = str(data.get("tool_call_id") or "")
                     tool_name = data.get("name") or ""
                     content = data.get("content")
@@ -321,6 +411,28 @@ class RunPipeline:
                                 "content": content,
                             },
                         )
+                else:
+                    await self.bridge.publish(self.run_id, sse_type, data)
+            else:
+                # Forward non-messages frames (values, custom, etc.)
+                await self.bridge.publish(self.run_id, sse_type, data)
+
+    def set_error(self, message: str, *, error_type: str | None = None) -> None:
+        """Downgrade the run to error *after* the stream completed normally.
+
+        Used by asset-report when post-stream persistence fails: the step2_json
+        custom event already shipped (frontend shows step 2 finish), but the
+        run must not look complete when the backend has no row.
+
+        This is a **state-only** method: it records the error flags and the
+        message.  ``__aexit__`` reads the flags and publishes the error frame
+        + run status before the end frame, so there is no race between
+        fire-and-forget tasks and the cleanup sequence.
+        """
+        self._error_type = error_type or "PostStreamError"
+        self._completion_status = "error"
+        self._success = False
+        self._post_stream_error_message = message
 
     @property
     def completion_status(self) -> str:
@@ -331,6 +443,22 @@ class RunPipeline:
     def ai_text(self) -> str:
         """Concatenate all collected AI response parts."""
         return "".join(self.ai_response_parts)
+
+    @property
+    def thinking_text(self) -> str:
+        """Concatenate all collected reasoning/thinking parts."""
+        return "".join(self.thinking_parts).strip()
+
+    @property
+    def captured_write_file_paths(self) -> list[str]:
+        """Extract write_file paths from captured tool calls (asset-report)."""
+        paths: list[str] = []
+        for tc in self.captured_tool_calls:
+            if tc.get("name") == "write_file":
+                wf_path = (tc.get("args") or {}).get("path")
+                if isinstance(wf_path, str) and wf_path:
+                    paths.append(wf_path)
+        return paths
 
 
 # ---------------------------------------------------------------------------
