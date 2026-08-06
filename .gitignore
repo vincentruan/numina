@@ -188,6 +188,7 @@ server/apps/backend/data/
 
 # Dogfood audit output (screenshots, reports — local only)
 dogfood-output/
+tests/smoke-results.json
 
 # UI simulation test audit reports (local only; historical reports already
 # tracked remain tracked — new daily reports are not committed)
