@@ -113,6 +113,8 @@ class ExtractionAdapter(CircuitBreakerAdapter):
         """
         circuit = self.load_entity(db)
         if circuit is None or circuit.state == "ok":
+            # Read-only check: release the FOR UPDATE lock immediately
+            db.rollback()
             return False, None
 
         if circuit.state == "circuit_open":
