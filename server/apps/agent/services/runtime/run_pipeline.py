@@ -23,8 +23,12 @@ from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
-from apps.agent.core.backend_client import BackendClient
-from apps.agent.schemas.context import FamilyContext
+from apps.agent.core.backend_client import (
+    BackendClient,
+    _extract_llm_error_info,
+    classify_error_type,
+)
+from apps.agent.schemas.context import FamilyContext, RedactedContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.message_classifier import (
@@ -37,6 +41,30 @@ from apps.agent.services.pii_redactor import pii_redactor
 from .gc import schedule_run_cleanup
 
 logger = logging.getLogger(__name__)
+
+
+def _is_fallback_eligible(error_type: str) -> bool:
+    """Decide whether an error warrants switching to a different provider.
+
+    Includes both transient errors (server down, rate limit, timeout) and
+    provider-specific permanent errors (quota, auth) — because a different
+    provider may not share the same issue.  Pure client errors (bad request,
+    validation failure) are excluded since switching providers won't help.
+    """
+    # Transient: rate-limit, server error, timeout, network
+    if error_type.startswith("transient_"):
+        return True
+    # Provider-specific permanent: quota/billing, auth (invalid key), account
+    # These may be provider-specific — another provider likely has a different
+    # key/subscription, so switching is worthwhile.
+    if error_type in ("permanent_account", "permanent_auth"):
+        return True
+    # DeerFlow-specific exceptions that propagate as generic error names
+    return error_type in (
+        "DeerFlowTimeoutError",
+        "ConnectionError",
+        "TimeoutError",
+    )
 
 
 class RunPipeline:
@@ -134,11 +162,14 @@ class RunPipeline:
         self.enable_thinking = enable_thinking
         self.timeout_seconds = timeout_seconds
         self._skill_name_spec: str | Callable[[dict], str] | None = skill_name
-        self.skill_name: str = (
-            skill_name if isinstance(skill_name, str) else app_name
-        )
+        self.skill_name: str = skill_name if isinstance(skill_name, str) else app_name
         self._mcp_servers_override = mcp_servers
         self._available_skills = available_skills
+
+        # Populated by __aenter__
+        self._providers: list[dict[str, Any]] = []
+        self._adapter_kwargs: dict[str, Any] = {}
+        self._circuit_reported_during_fallback = False
         self._skip_active_skill = skip_active_skill
 
         # Populated by __aenter__
@@ -178,6 +209,8 @@ class RunPipeline:
         self.selected_provider = _select_stream_run_provider(providers)
         if self.selected_provider is None:
             raise RuntimeError("无可用 AI 供应商（所有 provider 均已熔断）")
+        # Store full provider list for transparent fallback in run_skill().
+        self._providers = providers
 
         # 2b. Resolve callable skill_name (e.g. chat runner picks chat vs
         #     chat-search based on web-search capability in ai_config).
@@ -220,6 +253,8 @@ class RunPipeline:
         )
         if self._available_skills is not None:
             adapter_kwargs["available_skills"] = self._available_skills
+        # Store for fallback (run_skill re-creates adapter with new provider)
+        self._adapter_kwargs = adapter_kwargs
         self.adapter = create_family_adapter(
             self.family_id,
             self.selected_provider,
@@ -271,8 +306,10 @@ class RunPipeline:
                 await self.run_manager.set_status(
                     self.run_id, RunStatus.error, error=str(exc_val)
                 )
-                # Circuit-breaker reporting (fire-and-forget)
-                if exc_val is not None:
+                # Circuit-breaker reporting (fire-and-forget).
+                # Skip if run_skill() fallback already reported for this
+                # exception (avoids double-reporting on final exhausted retry).
+                if exc_val is not None and not self._circuit_reported_during_fallback:
                     _fire_and_forget_circuit_report(
                         self.family_id, self.selected_provider, exc_val
                     )
@@ -324,9 +361,11 @@ class RunPipeline:
             end_payload["usage"] = self.cumulative_usage
         await self.bridge.publish(self.run_id, "end", end_payload)
         await self.bridge.publish_end(self.run_id)
-        asyncio.create_task(self.bridge.cleanup(self.run_id, delay=60))
-        asyncio.create_task(
-            schedule_run_cleanup(self.run_manager, self.run_id, delay=300)
+        _track_task(asyncio.create_task(self.bridge.cleanup(self.run_id, delay=60)))
+        _track_task(
+            asyncio.create_task(
+                schedule_run_cleanup(self.run_manager, self.run_id, delay=300)
+            )
         )
 
     async def run_skill(
@@ -347,6 +386,12 @@ class RunPipeline:
         ``enable_thinking`` overrides the pipeline-level setting for this turn
         only (used by the chat runner where the frontend controls thinking
         per-call via ``config.configurable.thinking_enabled``).
+
+        **Transparent provider fallback**: when the selected provider fails with
+        a transient or quota error and no AI content has been sent yet, the
+        method switches to the next available provider and retries.  Circuit
+        events are reported for each failed attempt so the backend can open
+        breakers proactively.
         """
         effective_thinking = (
             enable_thinking if enable_thinking is not None else self.enable_thinking
@@ -355,12 +400,119 @@ class RunPipeline:
         context = FamilyContext(family_id=self.family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
 
+        candidates = self._fallback_candidates()
+
+        for idx, provider in enumerate(candidates):
+            # Swap provider + adapter for this attempt (first iteration keeps
+            # the adapter created in __aenter__).
+            if idx > 0:
+                self.selected_provider = provider
+                self.adapter = create_family_adapter(
+                    self.family_id,
+                    provider,
+                    **self._adapter_kwargs,
+                )
+                logger.info(
+                    "[%s] run=%s falling back to provider config_id=%s (attempt %d)",
+                    self.app_name,
+                    self.run_id,
+                    provider.get("config_id"),
+                    idx + 1,
+                )
+                # Publish a custom event so the frontend can show a notice
+                await self.bridge.publish(
+                    self.run_id,
+                    "custom",
+                    {
+                        "type": "provider_fallback",
+                        "attempt": idx + 1,
+                    },
+                )
+
+            try:
+                await self._dispatch_once(
+                    redacted, effective_thinking, enable_reasoning_delta
+                )
+                return  # success
+            except Exception as exc:
+                # Report circuit event for this failed provider attempt
+                try:
+                    await _report_circuit_on_failure(self.family_id, provider, exc)
+                    self._circuit_reported_during_fallback = True
+                except Exception as report_exc:
+                    logger.warning(
+                        "[run_pipeline] circuit report failed config_id=%s err=%s",
+                        provider.get("config_id"),
+                        type(report_exc).__name__,
+                    )
+
+                # Only fall back if no AI content has been sent yet — once
+                # content frames are on the wire, a retry would produce
+                # duplicate / inconsistent output.
+                if self.ai_response_parts:
+                    logger.warning(
+                        "[%s] run=%s provider failed after partial content, "
+                        "cannot fall back: %s",
+                        self.app_name,
+                        self.run_id,
+                        exc,
+                    )
+                    raise
+
+                if idx >= len(candidates) - 1:
+                    # Last candidate — let the exception propagate to __aexit__
+                    logger.warning(
+                        "[%s] run=%s all %d providers exhausted: %s",
+                        self.app_name,
+                        self.run_id,
+                        len(candidates),
+                        exc,
+                    )
+                    raise
+
+                # Classify the error to decide if fallback is appropriate
+                error_code, error_message = _extract_llm_error_info(exc)
+                error_type = classify_error_type(error_code, error_message)
+                if not _is_fallback_eligible(error_type):
+                    logger.info(
+                        "[%s] run=%s non-retryable error (%s), not falling back",
+                        self.app_name,
+                        self.run_id,
+                        error_type,
+                    )
+                    raise
+
+                logger.info(
+                    "[%s] run=%s transient error on provider config_id=%s (%s), "
+                    "trying next provider",
+                    self.app_name,
+                    self.run_id,
+                    provider.get("config_id"),
+                    error_type,
+                )
+                # Reset collected state before retry
+                self.ai_response_parts.clear()
+                self.thinking_parts.clear()
+                self.captured_tool_calls.clear()
+                self.cumulative_usage = None
+
+    async def _dispatch_once(
+        self,
+        redacted: RedactedContext,
+        enable_thinking: bool,
+        enable_reasoning_delta: bool,
+    ) -> None:
+        """Run a single dispatch attempt and forward frames to bridge.
+
+        Raises on adapter errors so the caller (run_skill) can decide whether
+        to retry with a different provider.
+        """
         # Stream via typed_stream_dispatch → publish to bridge
         async for sse_type, data in self.adapter.typed_stream_dispatch(
             skill_name=self.skill_name,
             context=redacted,
             thread_id=self.thread_id,
-            enable_thinking=effective_thinking,
+            enable_thinking=enable_thinking,
         ):
             if self.record.abort_event.is_set():
                 break
@@ -376,6 +528,16 @@ class RunPipeline:
                 break
             if sse_type == "error":
                 await self.bridge.publish(self.run_id, "error", data)
+                # If the error arrives before any AI content, it may be
+                # retriable (e.g. quota, server error).  Raise a synthetic
+                # exception so run_skill()'s fallback loop can catch it and
+                # try the next provider.  When content has already been sent,
+                # we cannot retry — the error is terminal for this turn.
+                if not self.ai_response_parts:
+                    error_msg = (
+                        data.get("message") if isinstance(data, dict) else str(data)
+                    )
+                    raise RuntimeError(f"Stream error (pre-content): {error_msg}")
                 break
 
             if sse_type == "messages" and isinstance(data, dict):
@@ -466,6 +628,31 @@ class RunPipeline:
             else:
                 # Forward non-messages frames (values, custom, etc.)
                 await self.bridge.publish(self.run_id, sse_type, data)
+
+    def _fallback_candidates(self) -> list[dict[str, Any]]:
+        """Build ordered fallback candidates from the stored provider list.
+
+        Excludes the currently-selected provider (returned first) and providers
+        with circuit_state == 'open'.  The remaining candidates preserve their
+        display_order so the next provider in line is tried next.
+        """
+        if not self._providers or len(self._providers) <= 1:
+            return [self.selected_provider] if self.selected_provider else []
+
+        current_id = (
+            self.selected_provider.get("config_id") if self.selected_provider else None
+        )
+        candidates: list[dict[str, Any]] = []
+        for p in self._providers:
+            if p.get("circuit_state") == "open":
+                continue
+            if p.get("config_id") == current_id:
+                continue
+            candidates.append(p)
+
+        if not self.selected_provider:
+            return candidates
+        return [self.selected_provider] + candidates
 
     def set_error(self, message: str, *, error_type: str | None = None) -> None:
         """Downgrade the run to error *after* the stream completed normally.
