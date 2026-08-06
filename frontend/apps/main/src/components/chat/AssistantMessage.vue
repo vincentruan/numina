@@ -736,6 +736,17 @@ watch(
   border-color: rgba(129, 140, 248, 0.5);
 }
 
+/* Light mode: add subtle tinted background for visibility */
+:global([data-theme='light']) .suggestion-chip {
+  background: rgba(129, 140, 248, 0.08);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+:global([data-theme='light']) .suggestion-chip:hover {
+  background: rgba(129, 140, 248, 0.14);
+  border-color: rgba(129, 140, 248, 0.6);
+}
+
 :global([data-theme='dark']) .suggestion-chip {
   --suggestion-chip-border: rgba(160, 165, 255, 0.3);
 }

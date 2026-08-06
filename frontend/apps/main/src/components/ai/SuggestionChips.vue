@@ -179,6 +179,18 @@ const handleClick = (text: string) => {
   border-color: var(--suggestion-border, rgba(255, 255, 255, 0.2));
 }
 
+/* Light mode: use dark-toned colors for visibility on white background */
+:global([data-theme='light']) .suggestion-chip {
+  --suggestion-bg: rgba(129, 140, 248, 0.08);
+  --suggestion-border: rgba(129, 140, 248, 0.35);
+  color: var(--text-primary, rgba(0, 0, 0, 0.85));
+}
+
+:global([data-theme='light']) .suggestion-chip:hover {
+  --suggestion-bg: rgba(129, 140, 248, 0.14);
+  --suggestion-border: rgba(129, 140, 248, 0.55);
+}
+
 .suggestion-chip:focus-visible {
   outline: 2px solid var(--van-primary-color, #007aff);
   outline-offset: 2px;
