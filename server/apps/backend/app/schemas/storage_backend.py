@@ -1,8 +1,9 @@
 """Schemas for family-scoped remote storage backend configuration."""
+
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -91,15 +92,9 @@ class StorageBackendUpdateRequest(BaseModel):
     display_name: str | None = None
     is_active: bool | None = None
 
-    @model_validator(mode="after")
-    def _config_matches_type(self) -> "StorageBackendUpdateRequest":
-        if self.config is not None and self.backend_type is not None:
-            _validate_config_for_type(self.backend_type, self.config)
-        return self
-
-    # backend_type is not currently accepted on update, but we include this
-    # field so the validator above can be wired if the API is extended later.
-    backend_type: StorageBackendType | None = None
+    # backend_type is not accepted on update — type consistency is enforced
+    # by the service layer when config changes.  Do not add backend_type
+    # here without also wiring _validate_config_for_type in the service.
 
 
 # ---------------------------------------------------------------------------
