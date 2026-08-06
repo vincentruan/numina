@@ -106,7 +106,7 @@ Assertions:
 - [ ] NetWorthCard renders: totalAssets, netWorth, totalLiabilities (via `MoneyDisplay`), totalDailyCost (via `currency.format`)
 - [ ] "新增资产" button → navigates to `/assets/new`
 - [ ] View-mode toggle (card↔list) reflects `authStore.user?.view_mode || 'card'`; toggling persists (calls `updateSetting('view_mode', ...)`)
-- [ ] FAB menu opens → `onFabAction('import')` → `/settings/import-report`; `onFabAction('add')` → `/assets/new`
+- [ ] FAB menu opens → `onFabAction('import')` → `/finance/import`; `onFabAction('add')` → `/assets/new`
 - [ ] Selection mode (`enterSelectionMode`) exposes batch delete / more-actions sheet
 - [ ] Per-asset card/list item → `/assets/${id}`
 - [ ] `[console]` zero errors
@@ -264,7 +264,7 @@ for R in settings settings/categories settings/tags \
          settings/ai settings/ai/provider/new \
          settings/ai/mcp settings/ai/web-search settings/ai/skills settings/ai/agents settings/ai/agents/new \
          settings/devices settings/notifications settings/notifications/threshold \
-         settings/password settings/second-factor settings/import-report settings/family/coin-rates stats; do
+         settings/password settings/second-factor settings/family/coin-rates; do
   bsk navigate ${BASE}${R} --session <id> --wait-until networkidle
   bsk snapshot --session <id>
 done
@@ -278,9 +278,10 @@ Assertions (per route — render + no console error):
 - [ ] `/settings/ai/mcp`, `/settings/ai/web-search` (+`/form`), `/settings/ai/skills`, `/settings/ai/agents` (+`/new`, `/:id/edit`)
 - [ ] `/settings/devices`, `/settings/notifications` (+`/threshold`)
 - [ ] `/settings/password`, `/settings/second-factor`
-- [ ] `/settings/import-report` (ImportReportPage: upload + parse + preview + confirm; `fileTooLarge` toast on `@oversize`)
+- [ ] `/finance/import` (ImportReportPage: upload + parse + preview + confirm; `fileTooLarge` toast on `@oversize`)
 - [ ] `/settings/family/coin-rates` (CoinRatesPage)
-- [ ] `/stats` (DataStatsPage)
+- [ ] `/settings/username` (ChangeUsernamePage: current username, remaining changes counter, cooldown, format validation)
+- [ ] `/settings/family/storage` (FamilyStorageBackendPage: S3/WebDAV config, enable/disable toggle)
 - [ ] **All `/settings/*` + `/family/*` routes show the `settings` tab active**
 - [ ] `[console]` zero errors across all routes
 

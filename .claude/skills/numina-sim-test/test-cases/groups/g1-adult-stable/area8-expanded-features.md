@@ -144,6 +144,23 @@ Assertions:
 - [ ] 配置项可见 (概率、费用等)
 - [ ] `[console]` zero errors
 
+### F.2.5 礼物编辑表单
+
+```
+# 从 F.2.1 列表中获取一个 gift ID (via API 或页面内导航)
+GIFT_ID=$(curl -s -H "Authorization: Bearer $TOKEN" ${API_BASE}/blind-box/gifts \
+  | jq -r '.data[0].id')
+bsk navigate ${BASE}blind-box/gifts/${GIFT_ID}/edit --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] GiftEditPage 渲染 — 标题显示"编辑礼物"
+- [ ] 表单字段预填充为现有值 (名称/描述/emoji/数量)
+- [ ] 修改字段 → 保存 → 返回列表页, 更新生效
+- [ ] 返回按钮 (`router.back()`) 正常工作
+- [ ] `[console]` zero errors
+
 ---
 
 ## F.3 — Baby 儿童管理 (owner-only)
@@ -200,7 +217,9 @@ bsk snapshot --session <id>
 Assertions:
 - [ ] 模板列表渲染
 - [ ] 每个模板显示名称 + 奖励 + 频率
-- [ ] 编辑入口可见 → `/baby/chore-templates/:id/edit`
+- [ ] 编辑入口 → `/baby/chore-templates/:id/edit` 点击可达
+- [ ] ChoreTemplateEditPage 渲染 — 表单字段预填充
+- [ ] 修改字段 (名称/奖励/频率) → 保存 → 返回列表页, 更新生效
 - [ ] `[console]` zero errors
 
 ### F.3.5 Baby 素养报告
@@ -344,13 +363,44 @@ Assertions:
 ### F.4.10 导入报告
 
 ```
-bsk navigate ${BASE}settings/import-report --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance/import --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
 Assertions:
 - [ ] 导入报告页渲染
 - [ ] 如有历史导入 → 列表显示
+- [ ] 点击历史条目 → 详情 popup 打开 (显示 source + report_date + item list)
+- [ ] 详情页含 rollback 按钮 (如有)
+- [ ] `[console]` zero errors
+
+### F.4.11 外部存储后端配置
+
+```
+bsk navigate ${BASE}settings/family/storage --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] FamilyStorageBackendPage 渲染
+- [ ] S3 / WebDAV 配置区域可见
+- [ ] 启用/禁用切换开关可操作
+- [ ] 必填字段 (endpoint, bucket/prefix, access_key 等) 有 placeholder/label
+- [ ] `[console]` zero errors
+
+### F.4.12 用户名修改
+
+```
+bsk navigate ${BASE}settings/username --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] ChangeUsernamePage 渲染 — 显示当前用户名
+- [ ] remaining changes 计数器可见 (如 "剩余 X 次修改机会")
+- [ ] 冷却期提示可见 (如有, 显示 countdown)
+- [ ] 新用户名格式校验 (lowercase/digits/underscore/hyphen/dot)
+- [ ] 确认密码输入框可见
 - [ ] `[console]` zero errors
 
 ---
@@ -516,7 +566,7 @@ Assertions:
 - [ ] 开关/配置可见
 - [ ] `[console]` zero errors
 
-### F.7.3 ASR 语音识别配置
+### F.7.3 ASR 语音识别配置 + CRUD
 
 ```
 bsk navigate ${BASE}settings/ai/asr --session <id> --wait-until networkidle
@@ -526,6 +576,9 @@ bsk snapshot --session <id>
 Assertions:
 - [ ] ASR 配置页渲染
 - [ ] Provider 列表可见
+- [ ] `/settings/ai/asr/new` 新建表单 — provider_name, api_key, endpoint 字段可见
+- [ ] `/settings/ai/asr/:id/edit` 编辑表单 — 字段预填充为现有值
+- [ ] 删除 provider → 确认对话框 → 列表刷新
 - [ ] `[console]` zero errors
 
 ### F.7.4 AI Skills 管理
@@ -551,6 +604,68 @@ Assertions:
 - [ ] Agents 管理页渲染
 - [ ] Agent 列表可见 (数鸣 + 自定义)
 - [ ] 新建 agent 入口可见
+- [ ] `[console]` zero errors
+
+---
+
+## F.11 — FamilyPage 成员管理
+
+覆盖 `/family` 路由下的成员管理功能 (promote/demote/deactivate/activate)。
+
+### F.11.1 家庭页面总览
+
+```
+bsk navigate ${BASE}family --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] FamilyPage 渲染 — 家庭名可编辑 (owner)
+- [ ] 成员列表可见 (每个成员的 display_name + role badge + avatar)
+- [ ] 邀请码/邀请链接入口可见 (复制按钮)
+- [ ] `[console]` zero errors
+
+### F.11.2 成员权限操作 (owner-only)
+
+```
+# 需要 member 角色的成员才能测试 promote/demote
+# 以下断言在有 member 成员时执行, 否则 skip 并注明
+bsk navigate ${BASE}family --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions (skip if no member-role member exists):
+- [ ] 成员操作菜单可见 (⋮ 或 context menu) — 含 promote to admin / demote to member
+- [ ] promote member → admin: 点击 → 确认对话框 → 成员 role 更新为 admin
+- [ ] demote admin → member: 点击 → 确认对话框 → 成员 role 更新为 member
+- [ ] deactivate member: 点击 → 确认对话框 → 成员状态变为 inactive
+- [ ] activate member: 点击 → 成员恢复 active 状态
+- [ ] owner 自身不可被 demote/deactivate
+- [ ] `[console]` zero errors
+
+---
+
+## F.12 — ChildResetPage 儿童密码/PIN 重置
+
+覆盖 `/family/children/:childId/reset` — 安全相关的密码+PIN 双 tab 重置流程。
+
+### F.12.1 儿童重置页
+
+```
+# 先获取一个 child member ID via API
+CHILD_ID=$(curl -s -H "Authorization: Bearer $TOKEN" ${API_BASE}/family/members \
+  | jq -r '[.data[] | select(.role=="child")] | .[0].id')
+bsk navigate ${BASE}family/children/${CHILD_ID}/reset --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] ChildResetPage 渲染 — 顶部显示目标儿童名称
+- [ ] 双 tab 结构: 密码重置 + PIN 重置
+- [ ] 密码 tab: 新密码输入 + 确认密码输入 + 显示/隐藏切换
+- [ ] 确认密码不匹配 → 校验错误提示
+- [ ] PIN tab: 4×3 emoji 网格 (PIN 输入键盘)
+- [ ] 重置成功 → toast 提示
 - [ ] `[console]` zero errors
 
 ---

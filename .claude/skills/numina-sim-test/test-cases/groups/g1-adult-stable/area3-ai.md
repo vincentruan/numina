@@ -107,7 +107,7 @@ Assertions:
 ### C3.5 PDF import / parse (ImportReportPage) — upload → preview → confirm
 
 ```
-bsk navigate ${BASE}settings/import-report --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance/import --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
@@ -120,13 +120,13 @@ bsk evaluate --session <id> --expr "<set input.files via DataTransfer>"
 ```
 
 Assertions:
-- [ ] Upload section shows van-uploader (accept=application/pdf, max 10MB)
+- [ ] Upload section shows van-uploader (accept=application/pdf, max 25MB)
 - [ ] After upload: parsing section shows van-loading
 - [ ] After parse: preview section shows source + report_date + item list
 - [ ] Each preview item: editable name + current_value + action tag (update/create)
 - [ ] Matched asset name shown when item matches existing asset
 - [ ] Warning text shown for ambiguous items
-- [ ] Oversized file (>10MB) → "文件过大" toast
+- [ ] Oversized file (>25MB) → "文件过大" toast
 - [ ] Confirm button → POSTs batch → returns to asset list with updated/created assets
 - [ ] `[console]` zero errors
 
@@ -234,7 +234,7 @@ passed). Skill: `import-parse/SKILL.md`.
 
 ```
 # Upload a digital PDF via the ImportReportPage (C3.5 upload flow)
-bsk navigate ${BASE}settings/import-report --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance/import --session <id> --wait-until networkidle
 # ... set input.files to a digital PDF fixture ...
 bsk wait-ms 8s
 bsk snapshot --session <id>

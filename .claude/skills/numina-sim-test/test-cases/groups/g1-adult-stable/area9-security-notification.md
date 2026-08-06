@@ -144,3 +144,20 @@ Assertions:
 
 > **与 R6 的差异:** R6 验证的是 session 过期后 *立即* 重定向。C9.7 验证
 > 重新登录后 *数据保留* 和 *chat 历史延续* — 端到端恢复流。
+
+### C9.8 用户名修改 (ChangeUsernamePage)
+
+```
+bsk navigate ${BASE}settings/username --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] ChangeUsernamePage 渲染 — 显示当前用户名
+- [ ] remaining changes 计数器可见 (如 "剩余 X 次修改机会")
+- [ ] 冷却期提示 (cooldown): 如在冷却期内, 显示剩余时间倒计时
+- [ ] 新用户名格式校验 (lowercase/digits/underscore/hyphen/dot)
+- [ ] 重复用户名检测 (输入已存在的用户名 → 提示不可用)
+- [ ] 确认密码输入框 — 密码错误 → 提交失败
+- [ ] 成功修改 → toast 提示 + localStorage numina_user.username 更新
+- [ ] `[console]` zero errors
