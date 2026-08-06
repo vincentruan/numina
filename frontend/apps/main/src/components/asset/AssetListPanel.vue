@@ -496,13 +496,13 @@ const moreActions = computed(() => [
 ])
 
 const sectionTitle = computed(() => {
-  const status = activeStatus.value || 'in_use'
-  const pageInfo = dashboardStore.assetPageInfo.get(status)
-  // Use server-side total count when available, fallback to displayed assets count
-  const count = pageInfo ? pageInfo.total : dashboardStore.displayedAssets.length
   if (!activeStatus.value) {
+    // "All" filter: use global total from statesSummary (matches StatusSummaryGrid)
+    const count = dashboardStore.statesSummary?.total_count ?? dashboardStore.displayedAssets.length
     return t('dashboard.section.assetList', { count })
   }
+  const pageInfo = dashboardStore.assetPageInfo.get(activeStatus.value)
+  const count = pageInfo ? pageInfo.total : dashboardStore.displayedAssets.length
   const label = statusLabel(activeStatus.value)
   return `${label} (${count})`
 })
@@ -545,10 +545,15 @@ function onStatusSelect(status: string | null) {
   activeStatus.value = status
   activeCategoryId.value = null
   activeCategoryIndex.value = 0
-  const targetStatus = status || 'in_use'
-  dashboardStore.resetAssetPagination(targetStatus)
-  dashboardStore.fetchAssetsPage(targetStatus, 1, 20, '')
-  dashboardStore.fetchCategoryCounts(targetStatus)
+  if (!status) {
+    // "All" filter: fetch across all statuses
+    dashboardStore.fetchAllAssetsPage(20)
+    dashboardStore.fetchCategoryCounts('in_use')
+  } else {
+    dashboardStore.resetAssetPagination(status)
+    dashboardStore.fetchAssetsPage(status, 1, 20, '')
+    dashboardStore.fetchCategoryCounts(status)
+  }
 }
 
 // Type tab change (ported): map tab index → asset_type filter, reset pagination, refetch page 1
@@ -700,11 +705,17 @@ async function setViewMode(mode: 'card' | 'list') {
 onMounted(() => {
   // Attach scroll listener for freeze/unfreeze logic
   window.addEventListener('scroll', onScroll, { passive: true })
+  const initialStatus = activeStatus.value || 'in_use'
   // Load category counts for secondary filter nav on initial render
-  dashboardStore.fetchCategoryCounts(activeStatus.value || 'in_use')
+  dashboardStore.fetchCategoryCounts(initialStatus)
   // Load initial asset page — required because van-list is gated by
   // v-if="filteredByCategoryAssets.length" and never fires @load on empty list.
-  dashboardStore.fetchAssetsPage(activeStatus.value || 'in_use', 1, 20, '')
+  // When no status filter ("All"), fetch across all statuses.
+  if (!activeStatus.value) {
+    dashboardStore.fetchAllAssetsPage(20)
+  } else {
+    dashboardStore.fetchAssetsPage(initialStatus, 1, 20, '')
+  }
 })
 
 onUnmounted(() => {
