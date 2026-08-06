@@ -139,6 +139,12 @@ class AIConfigTestResult(BaseModel):
     vision_text_success: bool | None = None
     vision_text_message: str | None = None
     vision_text_latency_ms: int | None = None
+    # Fallback 信息：实际使用的 provider 和 model
+    used_config_id: str | None = None  # 实际测试成功的 config id
+    used_provider_name: str | None = None  # 实际使用的 provider 显示名
+    used_model_id: str | None = None  # 实际使用的 model_id
+    used_circuit_state: str | None = None  # 实际使用的 provider 熔断状态
+    fallback_count: int = 0  # fallback 次数（0 = 首个候选就成功）
 
 
 # DeerFlow-aligned model info for frontend execution mode selection

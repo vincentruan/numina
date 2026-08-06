@@ -165,6 +165,13 @@
         <template #icon>
           <SvgIcon name="brain-circuit" :size="16" class="cell-icon" />
         </template>
+        <template #value>
+          <span
+            v-if="aiSystemStatus && aiEnabled"
+            class="ai-status-badge"
+            :style="aiStatusBadgeStyle(aiSystemStatus)"
+          >{{ aiStatusLabel(aiSystemStatus) }}</span>
+        </template>
       </van-cell>
       <van-cell :title="t('settings.chatHistory')" is-link to="/ai/chat/history">
         <template #icon>
@@ -420,6 +427,35 @@ const hasAnyModel = computed(() =>
 )
 const aiEnabled = computed(() => familyStore.aiEnabled)
 
+// AI system health: aggregate circuit state across all active providers
+const aiSystemStatus = computed(() => {
+  const active = aiStore.configs.filter(
+    (c) => c.is_active && c.ai_api_key_masked,
+  )
+  if (active.length === 0) return null
+  const allOpen = active.every((c) => c.circuit_state === 'open')
+  if (allOpen) return 'unavailable'
+  const anyDegraded = active.some(
+    (c) => c.circuit_state === 'half_open' || c.circuit_state === 'open',
+  )
+  if (anyDegraded) return 'degraded'
+  return 'healthy'
+})
+
+function aiStatusBadgeStyle(status: string | null) {
+  if (status === 'unavailable')
+    return { background: 'var(--van-danger-color)', color: '#fff' }
+  if (status === 'degraded')
+    return { background: 'var(--van-warning-color)', color: '#fff' }
+  return { background: 'var(--van-success-color)', color: '#fff' }
+}
+
+function aiStatusLabel(status: string | null) {
+  if (status === 'unavailable') return '不可用'
+  if (status === 'degraded') return '部分降级'
+  return '正常'
+}
+
 async function onToggleAI(val: boolean) {
   if (!hasAnyModel.value) {
     showToast(t('settings.enableAINoModel'))
@@ -458,8 +494,26 @@ async function onToggleAI(val: boolean) {
     if (val && target) {
       try {
         const result = await aiApi.testProviderConfig(target.id)
-        if (!result.data.connected) {
-          showFailToast(result.data.message || t('toast.aiTestFailed'))
+        const data = result.data
+        if (data.connected) {
+          // Build message: show fallback info if any provider fallback was used
+          if (data.fallback_count && data.fallback_count > 0) {
+            const circuitLabel = data.used_circuit_state === 'half_open'
+              ? ' (降级中)'
+              : data.used_circuit_state === 'open'
+                ? ' (熔断中)'
+                : ''
+            showFailToast(
+              `${data.message || '主模型不可用，已自动切换'}${circuitLabel}`
+            )
+          }
+          // else: connected without fallback — no toast needed, AI is enabled
+        } else {
+          // All providers failed — show detailed message with fallback count
+          const fallbackNote = data.fallback_count
+            ? ` (已尝试 ${data.fallback_count + 1} 个候选模型)`
+            : ''
+          showFailToast(`${data.message || t('toast.aiTestFailed')}${fallbackNote}`)
         }
       } catch {
         // Test endpoint itself failed — not critical, the toggle was already saved.
@@ -717,5 +771,15 @@ async function onLogout() {
   10% { opacity: 1; transform: translateY(0); }
   80% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+.ai-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 </style>

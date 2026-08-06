@@ -114,6 +114,12 @@ export interface ModelTestResult {
   connected: boolean
   message: string | null
   latency_ms: number | null
+  // Fallback info: which provider/model was actually used
+  used_config_id: string | null
+  used_provider_name: string | null
+  used_model_id: string | null
+  used_circuit_state: string | null
+  fallback_count: number
 }
 
 export const testProviderConfig = (id: string) =>
