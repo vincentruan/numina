@@ -344,7 +344,9 @@ async def _set_session_title(thread_id: str, family_id: str, title_prefix: str) 
             summary=None,
             title=title,
         )
-        logger.info("[_set_session_title] Set title '%s' for thread %s", title, thread_id)
+        logger.info(
+            "[_set_session_title] Set title '%s' for thread %s", title, thread_id
+        )
     except Exception as e:
         logger.warning("[_set_session_title] Failed for thread %s: %s", thread_id, e)
 
@@ -390,19 +392,21 @@ async def _run_asset_report_pipeline(
     """
     from .run_pipeline import RunPipeline
 
-    async with RunPipeline(
-        app_name="asset-report",
-        family_id=family_id,
-        user_id=user_id,
-        thread_id=thread_id,
-        record=record,
-        bridge=bridge,
-        run_manager=run_manager,
-        plan_mode=False,
-        subagent_enabled=False,
-        enable_thinking=False,  # Qwen3: avoid empty content (see memory qwen3-enable-thinking-empty-content)
-        timeout_seconds=240,
-    ) as p:
+    async with (
+        RunPipeline(
+            app_name="asset-report",
+            family_id=family_id,
+            user_id=user_id,
+            thread_id=thread_id,
+            record=record,
+            bridge=bridge,
+            run_manager=run_manager,
+            plan_mode=False,
+            subagent_enabled=False,
+            enable_thinking=False,  # Qwen3: avoid empty content (see memory qwen3-enable-thinking-empty-content)
+            timeout_seconds=240,
+        ) as p
+    ):
         # App-specific delta: trigger construction + result extraction
 
         # Synthetic trigger message (plan L117): report runs are backend-
@@ -486,8 +490,10 @@ async def _run_asset_report_pipeline(
 
         # Set report session title (fixed format with timestamp).
         if p.completion_status == "complete":
-            asyncio.create_task(
-                _set_session_title(thread_id, family_id, "家庭资产分析报告")
+            _track_task(
+                asyncio.create_task(
+                    _set_session_title(thread_id, family_id, "家庭资产分析报告")
+                )
             )
 
 
@@ -629,7 +635,11 @@ async def _run_import_parse_agent(
 
     # Set import-parse session title (fixed format with timestamp)
     if p.completion_status == "complete":
-        asyncio.create_task(_set_session_title(thread_id, family_id, "文件导入解析"))
+        _track_task(
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, "文件导入解析")
+            )
+        )
 
 
 async def _run_finance_coach_agent(
@@ -708,7 +718,6 @@ async def _run_finance_coach_agent(
                 )
 
 
-
 async def _run_wish_advice_agent(
     *,
     bridge: StreamBridge,
@@ -781,7 +790,6 @@ async def _run_wish_advice_agent(
 
 # Synthetic trigger for dashboard-narrative runs (mirrors _SYNTHETIC_FINANCE_COACH_TRIGGER).
 _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER = "/dashboard-narrative 生成本月财务叙事"
-
 
 
 async def _run_dashboard_narrative_agent(
@@ -889,9 +897,7 @@ async def _run_numina_agent(
     # init-time parameters (not just per-call overrides). The cache key in
     # family_adapter_cache.py includes (subagent_enabled, plan_mode), so
     # different mode combinations get distinct DeerFlowClient instances.
-    configurable = (
-        config.get("configurable", {}) if isinstance(config, dict) else {}
-    )
+    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
     call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
     call_plan_mode = bool(configurable.get("is_plan_mode", False))
     call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
@@ -905,8 +911,7 @@ async def _run_numina_agent(
     # Only use chat-search when actual search capability is configured.
     # Otherwise the model is told it can search but has no tools → hallucinated searches.
     has_search_capability = bool(
-        ai_config.get("web_search_providers")
-        or ai_config.get("web_search_mcp_servers")
+        ai_config.get("web_search_providers") or ai_config.get("web_search_mcp_servers")
     )
 
     def _resolve_skill_name(cfg: dict) -> str:
@@ -964,9 +969,7 @@ async def _run_numina_agent(
             p._skill_token = set_active_skill(p.skill_name)
 
         # 1. First (user-visible) stream turn.
-        await p.run_skill(
-            user_message, enable_thinking=call_thinking_enabled
-        )
+        await p.run_skill(user_message, enable_thinking=call_thinking_enabled)
 
         # 2. U4 goal continuation loop (D1 — DeerFlow worker.py parity).
         # After the user-visible turn, evaluate whether the active goal is
@@ -1012,7 +1015,7 @@ async def _run_numina_agent(
         # Generated BEFORE publishing `end`, because the frontend attaches
         # suggestions to the last AI message in the `end` handler. If
         # suggestions arrive after `end`, they are silently dropped.
-        if p.completion_status == "complete" and p.selected_provider is not None:
+        if p.selected_provider is not None:
             suggestions = await generate_suggestions(
                 p.ai_text, user_message, p.selected_provider
             )
@@ -1046,14 +1049,11 @@ async def _run_numina_agent(
             except Exception:
                 generated_title = None
             if generated_title:
-                await bridge.publish(
-                    p.run_id, "values", {"title": generated_title}
-                )
+                await bridge.publish(p.run_id, "values", {"title": generated_title})
 
 
 # Synthetic trigger for literacy-weekly-report runs.
 _SYNTHETIC_LITERACY_REPORT_TRIGGER = "/literacy-weekly-report"
-
 
 
 async def _run_literacy_weekly_report_agent(
@@ -1127,6 +1127,8 @@ async def _run_literacy_weekly_report_agent(
                 )
 
             # Set literacy weekly report session title (fixed format).
-            asyncio.create_task(
-                _set_session_title(thread_id, family_id, "启蒙周报")
+            _track_task(
+                asyncio.create_task(
+                    _set_session_title(thread_id, family_id, "启蒙周报")
+                )
             )
