@@ -169,7 +169,8 @@ function applyQueryTab() {
   }
 }
 
-async function loadHubData() {  overviewError.value = false
+async function loadHubData() {
+  overviewError.value = false
   try {
     await Promise.all([
       dashboardStore.fetchAll(),

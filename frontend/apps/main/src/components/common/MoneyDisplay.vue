@@ -62,7 +62,7 @@ const props = withDefaults(defineProps<{
   size: 'normal',
   showSign: false,
   colorful: false,
-  sourceCurrency: 'CNY',
+  sourceCurrency: undefined,
   originalValue: 0
 })
 
