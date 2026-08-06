@@ -99,10 +99,13 @@
       <van-cell
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.familyRemoteBackup')"
-        icon="cloud-o"
         is-link
         to="/settings/family/storage"
-      />
+      >
+        <template #icon>
+          <SvgIcon name="cloud-upload" :size="16" class="cell-icon" />
+        </template>
+      </van-cell>
     </van-cell-group>
 
     <!-- 账户安全 -->
