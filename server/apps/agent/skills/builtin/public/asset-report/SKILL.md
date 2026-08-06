@@ -52,6 +52,22 @@ max_tokens: 6000
 4. **JSON 必须合法**：无尾逗号、无注释、字符串正确转义。
 5. **narrative 字段禁止使用 markdown 表格**，必须用列表格式（`-` 无序列表）——表格会导致前端解析失败。
 
+## ⚠️️ 输出语言要求 ⚠️️
+
+**所有用户可见文本必须使用触发消息中指定的语言。** 触发消息末尾会附带 `[LANGUAGE REQUIREMENT]` 或 `[语言要求]` 指令，你必须严格遵守。
+
+- **`label` 字段**：用户语言（如 English → "Asset Efficiency"，中文 → "资产效率分析"）
+- **`narrative` 字段**：用户语言的分析文本，用 `**加粗**` 突出关键结论 + `-` 无序列表
+- **`suggestions` 数组**：用户语言的建议，每条15-40字
+- **`summary` 字段**：用户语言的综合总结
+- **`key` 字段**：始终使用英文 snake_case（如 `asset_efficiency`），不受语言影响
+
+**❌ 错误：触发消息要求 English，但 narrative 输出中文。**
+**✅ 正确：触发消息要求 English，所有 label/narrative/suggestions/summary 均为 English。**
+
+如果你不确定语言要求，检查触发消息末尾的语言指令。当语言指令为 English 时，**整个 JSON 中除 `key` 字段外的所有文本必须是英文**。
+
+
 ## ⚠️⚠️⚠️ 禁止使用 Markdown 表格 ⚠️⚠️⚠️
 
 **绝对禁止**在 `narrative` 字段中使用 Markdown 表格格式。表格会导致前端解析失败，显示"结构化结果落库失败"错误。
@@ -337,7 +353,7 @@ markdown 内容须包含：标题和生成时间、数据完整度、综合评�
 - **最终只输出 JSON**：步骤3的 `read_file` 之后，最终响应只能是 ```json 代码块
 - **narrative 禁止表格**：使用 `**加粗**` + `-` 无序列表，发现自己在写 `|` 分隔符立即停止转换
 - **data 必须用 items 数组**：所有数值型数据（资产配置、负债明细、流动性指标等）必须放入 `data.items` 数组，每项格式 `{"key": "snake_case_key", "zh": "中文", "en": "English", "value": 数字}`。禁止在 `narrative` 中嵌入 JSON 数组字符串
-- **所有用户可见文本必须用用户设定的语言**：`label`、`narrative`、`suggestions`、`summary` 的文本语言必须与用户语言设置一致（见 trigger message 末尾的语言指令）。`key` 字段始终用英文 snake_case
+- **输出语言**：必须严格遵守上方「⚠️ 输出语言要求」章节，所有用户可见文本使用触发消息指定的语言，`key` 字段始终用英文 snake_case
 - 严禁投资建议，使用观察性语言
 
 ## 再次提醒

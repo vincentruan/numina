@@ -143,8 +143,10 @@
                 <van-icon name="info-o" /> {{ s }}
               </div>
             </div>
-            <!-- Dynamic data visualization -->
-            <div v-if="indicator.data && Object.keys(indicator.data).length > 0" class="indicator-data">
+            <!-- Dynamic data visualization: only render when there is actual content
+                 (new-format items array or legacy non-empty flat key-value data).
+                 Prevents a bare "Items" label from showing when data.items is empty. -->
+            <div v-if="hasIndicatorData(indicator)" class="indicator-data">
               <!-- New format: items array with bilingual labels -->
               <template v-if="getIndicatorDataItems(indicator)">
                 <div v-for="item in getIndicatorDataItems(indicator)!" :key="item.key" class="data-row">
@@ -445,6 +447,24 @@ function getIndicatorDataItems(indicator: AIReportIndicator): Array<{ key: strin
       value: Number(item.percentage ?? item.value ?? item.amount ?? 0),
     }
   })
+}
+
+/** Whether an indicator has renderable data. Returns false when data is empty
+ *  or only contains an empty items array — prevents a bare "Items" label from
+ *  showing when the LLM did not generate any data items. */
+function hasIndicatorData(indicator: AIReportIndicator): boolean {
+  const data = indicator.data
+  if (!data || typeof data !== 'object') return false
+
+  // New format: check items array
+  const items = data.items
+  if (Array.isArray(items) && items.length > 0) return true
+
+  // Legacy flat format: any non-empty key-value pairs (excluding empty items)
+  const keys = Object.keys(data).filter((k) => k !== 'items')
+  if (keys.length > 0) return true
+
+  return false
 }
 
 function formatDate(iso: string | null): string {
