@@ -421,14 +421,15 @@ async def _run_asset_report_pipeline(
         )
         user_message = _extract_backend_user_message(graph_input) or user_message
 
-        # Append language instruction based on user's language preference.
-        # SKILL.md is static; the LLM needs an explicit per-run directive to
-        # output in the user's chosen language (not always Chinese).
+        # Prepend language instruction as the first thing the LLM sees.
+        # SKILL.md is static (loaded as the system prompt in Chinese); the
+        # user message must carry a forceful, earliest-visible directive so
+        # the LLM overrides the system prompt's default language.
         if user_language:
             lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
-            user_message = f"{user_message}\n\n{lang_instruction}"
+            user_message = f"{lang_instruction}\n\n{user_message}"
 
         await p.run_skill(user_message)
 
@@ -527,9 +528,19 @@ _SYNTHETIC_WISH_ADVICE_TRIGGER = "/wish-advice 生成心愿储蓄建议"
 # in the user's chosen language. The trigger message itself is also localized
 # so the first user input the LLM sees matches the target language.
 _LANGUAGE_INSTRUCTIONS = {
-    "en-US": "[LANGUAGE REQUIREMENT] Output language: English. All user-visible text fields (label, narrative, suggestions, summary) MUST be in English. Only 'key' fields use snake_case.",
-    "zh-CN": "[语言要求] 输出语言：中文。所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用 snake_case。",
-    "default": "[语言要求] 输出语言：中文。所有用户可见文本字段（label、narrative、suggestions、summary）必须使用中文。仅 key 字段使用 snake_case。",
+    "en-US": ("[LANGUAGE REQUIREMENT] Output language: English.\n\n"
+              "IMPORTANT: The ENTIRE JSON output must use English for ALL user-visible text.\n"
+              "- label fields: English (e.g. \"Net Worth Health\", NOT \"净资产健康度\")\n"
+              "- narrative fields: English analysis text with **bold** + bullet lists\n"
+              "- suggestions arrays: English, 1-2 sentences each\n"
+              "- summary field: English, 100-250 words\n"
+              "- Only 'key' fields use snake_case English (e.g. \"net_worth_health\").\n\n"
+              "DO NOT output Chinese text anywhere except in the 'zh' field of data.items bilingual labels."),
+    "zh-CN": ("[语言要求] 输出语言：中文。\n\n"
+              "所有用户可见文本字段必须使用中文：label、narrative、suggestions、summary。\n"
+              "仅 key 字段使用英文 snake_case。"),
+    "default": ("[语言要求] 输出语言：中文。\n\n"
+                "所有用户可见文本字段必须使用中文。仅 key 字段使用英文 snake_case。"),
 }
 
 # Localized synthetic triggers — the slash prefix loads the skill, the rest
