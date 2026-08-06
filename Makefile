@@ -365,19 +365,22 @@ stop-dev-all:
 	  if [ -z "$$pid" ]; then continue; fi; \
 	  cmdline=$$(ps -p $$pid -o args= 2>/dev/null || echo ""); \
 	  case $$port in \
-	    8000|8001|8002) expect="uvicorn" ;; \
-	    5173|5174)      expect="vite" ;; \
-	    *)              expect="" ;; \
+	    8000|8001|8002) expect="uvicorn"; venv_path="numina/server/.venv" ;; \
+	    5173|5174)      expect="vite";    venv_path="" ;; \
+	    *)              expect="";        venv_path="" ;; \
 	  esac; \
-	  matched=0; \
-	  case "$$cmdline" in *$$expect*) matched=1 ;; esac; \
+	  matched=0; method=""; \
+	  case "$$cmdline" in *$$expect*) matched=1; method="cmdline" ;; esac; \
+	  if [ $$matched -eq 0 ] && [ -n "$$venv_path" ]; then \
+	    case "$$cmdline" in *$$venv_path*) matched=1; method="venv" ;; esac; \
+	  fi; \
 	  if [ $$matched -eq 0 ]; then \
 	    cpid=$$pid; depth=0; \
 	    while [ $$depth -lt 20 ]; do \
 	      ppid=$$(ps -o ppid= -p $$cpid 2>/dev/null | tr -d ' ' || true); \
 	      [ -z "$$ppid" ] || [ "$$ppid" = "0" ] || [ "$$ppid" = "1" ] && break; \
 	      pc=$$(ps -p $$ppid -o args= 2>/dev/null || true); \
-	      case "$$pc" in *$$expect*) matched=1; break ;; esac; \
+	      case "$$pc" in *$$expect*) matched=1; method="ancestor"; break ;; esac; \
 	      cpid=$$ppid; depth=$$((depth + 1)); \
 	    done; \
 	  fi; \
@@ -392,22 +395,37 @@ stop-dev-all:
 	      esac; \
 	      cpid=$$ppid; depth=$$((depth + 1)); \
 	    done; \
-	    echo "  端口 $$port: 终止进程树 (top PID $$top) ✓"; \
+	    echo "  端口 $$port: 终止进程树 (top PID $$top, via $$method) ✓"; \
 	    kill $$pids 2>/dev/null || true; \
 	    pkill -P $$top 2>/dev/null || true; \
 	    sleep 1; \
 	    for kp in $$pids; do kill -0 $$kp 2>/dev/null && kill -9 $$kp 2>/dev/null || true; done; \
 	    found=1; \
 	  else \
-	    echo "✗ 端口 $$port 运行非本项目进程 (PID $$pid):"; \
+	    echo "⚠ 端口 $$port 无法自动识别 (PID $$pid):"; \
 	    echo "    $$cmdline"; \
-	    echo "    预期进程链包含: $$expect (numina dev server)"; \
-	    echo "    跳过终止，请先手动确认"; \
-	    bad=1; \
+	    echo "    预期: $$expect (numina dev server)"; \
+	    if [ -t 0 ]; then \
+	      printf "    是否仍按端口关闭? [y/N] "; \
+	      read -r ans; \
+	      case "$$ans" in \
+	        [yY]*) \
+	          echo "    正在关闭端口 $$port ..."; \
+	          kill $$pid 2>/dev/null || true; \
+	          sleep 1; \
+	          kill -0 $$pid 2>/dev/null && kill -9 $$pid 2>/dev/null || true; \
+	          found=1; \
+	          ;; \
+	        *) echo "    已跳过"; bad=1 ;; \
+	      esac; \
+	    else \
+	      echo "    非交互模式，已跳过"; \
+	      bad=1; \
+	    fi; \
 	  fi; \
 	done; \
 	if [ $$bad -eq 1 ]; then \
-	  echo "✗ 存在非本项目进程，未终止任何服务"; \
+	  echo "⚠ 部分端口未关闭"; \
 	  exit 1; \
 	fi; \
 	if [ $$found -eq 1 ]; then \
