@@ -38,6 +38,7 @@ vi.mock('@/api/auth', () => ({
 // applyAssetFilters / fetchAssetsPage / resetAssetPagination / fetchCategoryCounts.
 const applyAssetFiltersMock = vi.fn()
 const fetchAssetsPageMock = vi.fn()
+const fetchAllAssetsPageMock = vi.fn()
 const resetAssetPaginationMock = vi.fn()
 const fetchCategoryCountsMock = vi.fn()
 const loadNextAssetsPageMock = vi.fn()
@@ -60,6 +61,7 @@ vi.mock('@/stores/dashboard', () => ({
     get assetPageInfo() { return assetPageInfo.value },
     applyAssetFilters: applyAssetFiltersMock,
     fetchAssetsPage: fetchAssetsPageMock,
+    fetchAllAssetsPage: fetchAllAssetsPageMock,
     resetAssetPagination: resetAssetPaginationMock,
     fetchCategoryCounts: fetchCategoryCountsMock,
     loadNextAssetsPage: loadNextAssetsPageMock,

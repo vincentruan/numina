@@ -26,6 +26,9 @@ vi.mock('@/composables/useThreadList', () => ({
     deleteSession: mockDeleteSession,
     renameSession: mockRenameSession,
     togglePin: mockTogglePin,
+    exportSession: vi.fn(),
+    shareSession: vi.fn(),
+    availableSources: { value: [] },
   }),
 }))
 
