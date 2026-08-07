@@ -381,6 +381,33 @@ TOTAL_LIAB=$(echo "$OV" | jq -r '.data.total_liabilities')
 [ "$ASSET_COUNT" -gt 0 ] 2>/dev/null || { echo "GATE FAIL: demouser has no assets (asset_count=$ASSET_COUNT)"; exit 1; }
 echo "$TOTAL_LIAB" | awk '{if ($1+0 <= 0) exit 1}' || echo "  (note: demouser has no liabilities — liability cases C2.5/C2.6 may show empty states)"
 
+# --- 5) AI provider check — warn if not configured (Area 3/6 will SKIP-AI) ---
+AI_STATUS=$(curl -s -H "$AUTH" "$API/ai/config/defaults" 2>/dev/null || echo "{}")
+AI_PROVIDER=$(echo "$AI_STATUS" | jq -r '.data.provider // empty' 2>/dev/null || echo "")
+if [ -z "$AI_PROVIDER" ] || [ "$AI_PROVIDER" = "null" ]; then
+  echo "  (WARNING: AI provider not configured — Area 3/6 cases will be SKIP-AI)"
+else
+  echo "  (AI provider: $AI_PROVIDER)"
+fi
+
+# --- 6) Wish savings data check — warn if no wishes with savings (C2.14 will show empty state) ---
+WISHES=$(curl -s -H "$AUTH" "$API/wishes" 2>/dev/null || echo '{"data":[]}')
+WISH_SAVINGS=$(echo "$WISHES" | jq '[.data[] | select(.saved_amount != null and .saved_amount != "0" and .saved_amount != "0.00")] | length' 2>/dev/null || echo "0")
+if [ "$WISH_SAVINGS" -lt 1 ] 2>/dev/null; then
+  echo "  (WARNING: no wishes with savings data — C2.14 savings log will show empty state)"
+else
+  echo "  (wishes with savings: $WISH_SAVINGS)"
+fi
+
+# --- 7) High-interest liability check — warn if none (C2.15 debt hint won't trigger) ---
+LIABILITIES=$(curl -s -H "$AUTH" "$API/liabilities" 2>/dev/null || echo '{"data":[]}')
+HIGH_RATE=$(echo "$LIABILITIES" | jq '[.data[] | select(.interest_rate != null and (.interest_rate | tonumber) >= 15)] | length' 2>/dev/null || echo "0")
+if [ "$HIGH_RATE" -lt 1 ] 2>/dev/null; then
+  echo "  (WARNING: no high-interest liabilities (rate ≥ 15%) — C2.15 debt warning hint won't trigger)"
+else
+  echo "  (high-interest liabilities: $HIGH_RATE)"
+fi
+
 # Export CHILD_NAMES for downstream phases/report (single source of truth).
 echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
 echo "GATE OK: demouser family present with $CHILD_COUNT child(ren) [$CHILD_NAMES] and $ASSET_COUNT assets."
