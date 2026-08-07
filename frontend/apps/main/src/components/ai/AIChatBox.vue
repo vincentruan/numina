@@ -357,6 +357,20 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
     if (!store.sessions.find(s => s.thread_id === thread.thread_id)) {
       store.sessions.unshift(thread)
     }
+    // Set a temporary title from the user's first message so the header and
+    // sidebar immediately show something meaningful instead of "New Chat".
+    // The LLM-generated title will replace this once it arrives via SSE.
+    const tempTitle = payload.text.length > 40
+      ? payload.text.slice(0, 40) + '…'
+      : payload.text
+    const sessionIdx = store.sessions.findIndex(s => s.thread_id === thread.thread_id)
+    if (sessionIdx !== -1) {
+      store.sessions[sessionIdx] = {
+        ...store.sessions[sessionIdx],
+        title: tempTitle,
+        titleGenerating: true,
+      }
+    }
     // Hide skeleton once thread is created - streaming will show actual content
     initialLoading.value = false
     await chat.sendMessage(payload.text, payload.mode, thread.thread_id, {

@@ -309,6 +309,7 @@ export default {
     noHistory: '暂无历史会话',
     historyHint: '每次对话记录将显示在这里',
     untitledSession: '未命名会话',
+    generatingTitle: '正在生成标题…',
     loadSessionFailed: '加载会话失败，请重试',
     newChat: '新对话',
     newChatAria: '新对话',

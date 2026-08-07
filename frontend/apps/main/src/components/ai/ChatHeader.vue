@@ -49,11 +49,18 @@ const headerTitle = computed(() => {
   return session?.title || t('aiChat.newChat')
 })
 
+// Whether the LLM title is still being generated for the active session.
+const isTitleGenerating = computed(() => {
+  if (!props.activeThreadId) return false
+  const session = props.sessions.find(s => s.thread_id === props.activeThreadId)
+  return session?.titleGenerating === true
+})
+
 // Check if title can be edited - only when there's an active thread AND the
-// title has been generated (not the default "新对话"). Before the first
-// message or while the LLM title is still pending, the edit button is hidden.
+// title has been generated (not the default "新对话") AND not currently generating.
+// Before the first message or while the LLM title is still pending, the edit button is hidden.
 const canEditTitle = computed(() => {
-  return !!props.activeThreadId && headerTitle.value !== t('aiChat.newChat')
+  return !!props.activeThreadId && headerTitle.value !== t('aiChat.newChat') && !isTitleGenerating.value
 })
 
 /**
@@ -80,19 +87,29 @@ const titleNaturalWidth = ref(0)
 
 // Edit button width: 24px icon + 4px gap from title
 const EDIT_BTN_WIDTH = 28
+// Generating indicator width: 3×4px dots + 2×3px gaps + 6px margin-left ≈ 24px
+const GENERATING_INDICATOR_WIDTH = 24
 
-// Whether title + edit button fits in the container
+// Suffix width: whichever inline element follows the title (edit btn or generating dots)
+const suffixWidth = computed(() => {
+  if (isTitleGenerating.value) return GENERATING_INDICATOR_WIDTH
+  if (canEditTitle.value) return EDIT_BTN_WIDTH
+  return 0
+})
+
+// Whether title + suffix fits in the container
 const titleFits = computed(() => {
   if (containerWidth.value === 0 || titleNaturalWidth.value === 0) return true
-  // If no edit button, title always fits (no need to reserve space)
-  if (!canEditTitle.value) return true
-  return titleNaturalWidth.value + EDIT_BTN_WIDTH <= containerWidth.value
+  if (suffixWidth.value === 0) return true
+  return titleNaturalWidth.value + suffixWidth.value <= containerWidth.value
 })
 
 // Whether the title overflows its container (needs scroll animation)
 const titleOverflows = computed(() => {
   if (containerWidth.value === 0 || titleNaturalWidth.value === 0) return false
-  return titleNaturalWidth.value > containerWidth.value
+  // When there's a suffix, the title area is reduced by that amount
+  const availableWidth = containerWidth.value - suffixWidth.value
+  return titleNaturalWidth.value > availableWidth
 })
 
 // How far the title should scroll (text width minus visible width, + padding for breathing room)
@@ -106,18 +123,22 @@ const scrollDistance = computed(() => {
 
 // Dynamic style for title container based on mode
 const titleContainerStyle = computed(() => {
+  const style: Record<string, string> = {}
   if (titleOverflows.value) {
-    return { '--scroll-distance': scrollDistance.value + 'px' }
+    style['--scroll-distance'] = scrollDistance.value + 'px'
   }
-  return {}
+  // Reserve space for the suffix (edit button or generating indicator) in truncate mode
+  if (suffixWidth.value > 0) {
+    style['--suffix-width'] = suffixWidth.value + 'px'
+  }
+  return style
 })
 
 let resizeObserver: ResizeObserver | null = null
 
 function measureTitle() {
   if (measureSpanRef.value && titleTextRef.value) {
-    // Copy the title text to the measurement span (which has no width
-    // constraints) to get the natural text width
+    // Copy only the h1 title text (exclude generating-indicator sibling dots)
     measureSpanRef.value.textContent = titleTextRef.value.textContent || ''
     titleNaturalWidth.value = measureSpanRef.value.offsetWidth
   }
@@ -149,7 +170,8 @@ onBeforeUnmount(() => {
 })
 
 // Re-measure when the title text changes (e.g., LLM-generated title arrives)
-watch(headerTitle, () => {
+// or when the generating indicator appears/disappears (changes available width)
+watch([headerTitle, isTitleGenerating], () => {
   nextTick(measureTitle)
 })
 
@@ -221,6 +243,11 @@ function onNewChat() {
         :style="titleContainerStyle"
       >
         <h1 ref="titleTextRef" class="header-title">{{ headerTitle }}</h1>
+        <span v-if="isTitleGenerating" class="title-generating-indicator" aria-label="t('aiChat.generatingTitle')">
+          <span class="generating-dot"></span>
+          <span class="generating-dot"></span>
+          <span class="generating-dot"></span>
+        </span>
       </div>
       <button
         v-if="canEditTitle"
@@ -340,6 +367,41 @@ function onNewChat() {
   text-align: center;
 }
 
+.title-generating-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.generating-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  animation: generating-pulse 1.2s ease-in-out infinite;
+}
+
+.generating-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.generating-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes generating-pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Mode 1: Title + edit button fit - center both */
 .header-title-container.mode-centered {
   /* No max-width constraint - let content determine width so title + edit
@@ -370,7 +432,7 @@ function onNewChat() {
 
 /* Mode 3: Title doesn't fit but doesn't overflow - truncate */
 .header-title-container.mode-truncate {
-  max-width: calc(100% - 32px); /* Reserve space for edit button */
+  max-width: calc(100% - var(--suffix-width, 0px));
 }
 
 .header-title-container.mode-truncate .header-title {
@@ -465,5 +527,9 @@ function onNewChat() {
 :global([data-theme='dark'] .header-edit-btn:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .generating-dot) {
+  background: var(--text-secondary);
 }
 </style>

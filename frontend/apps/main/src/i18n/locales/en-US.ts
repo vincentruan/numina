@@ -278,6 +278,7 @@ export default {
     noHistory: 'No chat history',
     historyHint: 'Your conversations will appear here',
     untitledSession: 'Untitled session',
+    generatingTitle: 'Generating title…',
     loadSessionFailed: 'Failed to load session, please try again',
     newChat: 'New Chat',
     newChatAria: 'New chat',

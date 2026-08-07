@@ -1207,7 +1207,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               const sessionStore = useChatSessionStore()
               const idx = sessionStore.sessions.findIndex(s => s.thread_id === currentThreadId)
               if (idx !== -1) {
-                sessionStore.sessions[idx] = { ...sessionStore.sessions[idx], title: data.title }
+                sessionStore.sessions[idx] = {
+                  ...sessionStore.sessions[idx],
+                  title: data.title,
+                  titleGenerating: false,
+                }
               }
             }
             // U7 (D5 TodoList): todos channel — replace wholesale (merge_todos
