@@ -115,24 +115,24 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilityChange)
 
   // Load family data for agent API calls (X-Family-Id header)
-  familyStore.fetchFamily()
-
-  // Restore the full user profile (incl. family_id) from the server. The
-  // localStorage-cached user (auth.user) deliberately omits family_id for
-  // security, so on a fresh page load authStore.user.family_id is undefined
-  // until fetchMe() resolves. That left a race window where /ai/chat's
-  // auto-send hit createThread before family data was ready and threw
-  // "Family not loaded" — dropping the user's submitted text. fetchMe()
-  // populates authStore.user.family_id so getAgentHeaders()/getClient()
-  // (api/ai-chat.ts) have a working fallback independent of fetchFamily()'s
-  // timing. Non-blocking: failures (e.g. expired cookie → router guard
-  // redirects to /login) are swallowed.
-  authStore.fetchMe().catch(() => { /* session invalid → router guard handles redirect */ })
-
-  // Load coin config for adult users (children don't have access to /family/settings)
-  if (authStore.user && authStore.user.role !== 'child') {
-    familyStore.loadCoinConfig()
-  }
+  // Must wait for fetchMe() to confirm the session is valid — otherwise these
+  // requests fire before the 401-interceptor has a chance to refresh the token,
+  // producing a wave of 401s that all need individual retry round-trips.
+  // fetchMe() goes through the same interceptor: if access cookie is expired
+  // it triggers /auth/refresh first, then retries /auth/me with the new token.
+  // Either fetchMe() succeeds (session valid → safe to load data) or it rejects
+  // (refresh failed → router guard redirects to /login → catch below).
+  authStore.fetchMe()
+    .then(() => {
+      familyStore.fetchFamily()
+      if (authStore.user && authStore.user.role !== 'child') {
+        familyStore.loadCoinConfig()
+      }
+    })
+    .catch(() => {
+      // Session invalid — interceptor already cleared auth + redirected to /login.
+      // Nothing to do here; router guard will handle navigation.
+    })
 
   // Start proactive token refresh to prevent access cookie expiry
   startProactiveRefresh()
