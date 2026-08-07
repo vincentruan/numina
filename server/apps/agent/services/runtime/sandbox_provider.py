@@ -211,4 +211,4 @@ def acquire_family_sandbox(family_id: str, thread_id: str) -> str:
     and returns the sandbox ID.
     """
     set_family_sandbox_context(family_id)
-    return get_sandbox_provider().acquire(thread_id)
+    return str(get_sandbox_provider().acquire(thread_id))

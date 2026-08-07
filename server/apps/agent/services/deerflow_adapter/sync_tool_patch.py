@@ -361,7 +361,7 @@ def _apply_mcp_httpx_factory_patch() -> None:
         server_name: str, config: object
     ) -> dict:
         """Inject httpx_client_factory for SSE/HTTP servers (trust_env=False)."""
-        params = _orig_build_server_params(server_name, config)
+        params: dict = _orig_build_server_params(server_name, config)
         if params.get("transport") in ("sse", "http"):
             params["httpx_client_factory"] = _no_proxy_httpx_client
         return params
