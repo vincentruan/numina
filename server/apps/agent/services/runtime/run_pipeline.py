@@ -107,51 +107,38 @@ def _sync_agent_soul(agent_name: str, soul_md: str) -> None:
         )
 
 
-# ── Security middlewares (module-level singletons) ───────────────────────────
+# ── Security middlewares ─────────────────────────────────────────────────────
 #
-# Created once and reused across all chat runs so the family_adapter_cache key
-# (which hashes ``id(m)`` for each middleware) stays stable.  Both middlewares
-# track per-run state internally via ``BoundedDict(run_id)`` — safe to share.
+# DeerFlow natively provides both security middlewares we need:
+# - InputSanitizationMiddleware (via _build_runtime_middlewares)
+# - TokenBudgetMiddleware (via build_middlewares when token_budget.enabled=True)
 #
-# Following DeerFlow reference patterns:
-# - TokenBudgetMiddleware: per-run token cap (warn at 80%, hard-stop at 100%)
-# - InputSanitizationMiddleware: neutralize injection tags in user text
-#
-# See CLAUDE.md §Security Rules rule 8 (rate limiting) and rule 3 (injection).
-
-_token_budget_middlewares: list[Any] | None = None
+# We inject token_budget config via _inject_token_budget() in
+# family_adapter_cache.py. No custom middlewares needed.
+# _get_security_middlewares() returns [] — kept as a function so the call
+# site in worker.py remains stable for future additions.
 
 
 def _get_security_middlewares() -> list[Any]:
-    """Return (lazily creating) the security middleware list for chat runs.
+    """Return the security middleware list for chat runs.
 
-    Includes:
-    - ``InputSanitizationMiddleware`` — tag neutralization (DeerFlow pattern)
+    Returns an empty list — both security middlewares we previously injected
+    are now provided natively by DeerFlow's ``build_middlewares``:
 
-    TokenBudgetMiddleware is NOT included here — DeerFlow's native
-    ``build_middlewares`` already adds it when ``token_budget.enabled=True``
-    in the per-family config (injected by ``_inject_token_budget`` in
-    ``family_adapter_cache.py``). Adding it here caused a duplicate-name
-    AssertionError in langchain's middleware validation.
+    - ``InputSanitizationMiddleware`` — added by ``_build_runtime_middlewares``
+      in ``tool_error_handling_middleware.py`` (outer wrapper layer).
+    - ``TokenBudgetMiddleware`` — added by ``build_middlewares`` when
+      ``token_budget.enabled=True`` in the per-family config (injected by
+      ``_inject_token_budget`` in ``family_adapter_cache.py``).
 
-    Called once per worker process; the returned list is reused across runs.
+    Adding either here caused a duplicate-name AssertionError in langchain's
+    middleware validation (``len({m.name for m in middleware}) != len(middleware)``).
+
+    Kept as a function (not deleted) so the call site in ``worker.py`` remains
+    stable — future security middlewares can be added here if DeerFlow does not
+    provide them natively.
     """
-    global _token_budget_middlewares
-    if _token_budget_middlewares is not None:
-        return _token_budget_middlewares
-
-    from deerflow.agents.middlewares.input_sanitization_middleware import (
-        InputSanitizationMiddleware,
-    )
-
-    _token_budget_middlewares = [
-        InputSanitizationMiddleware(),
-    ]
-    logger.info(
-        "[run_pipeline] security middlewares initialized: "
-        "InputSanitization (TokenBudget delegated to DeerFlow native)"
-    )
-    return _token_budget_middlewares
+    return []
 
 
 def _is_fallback_eligible(error_type: str) -> bool:
