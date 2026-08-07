@@ -504,8 +504,8 @@ async def _run_asset_report_pipeline(
 
         # Set report session title (localized by user language).
         if p.completion_status == "complete":
-            _title = _SESSION_TITLES_BY_LANG.get(
-                user_language, _SESSION_TITLES_BY_LANG["default"]
+            _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+                user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
             )
             _track_task(
                 asyncio.create_task(
@@ -573,13 +573,50 @@ _SYNTHETIC_TRIGGERS_BY_LANG = {
         "zh-CN": "/asset-report 生成家庭资产报告",
         "default": "/asset-report 生成家庭资产报告",
     },
+    "import-parse": {
+        "en-US": "/import-parse Parse financial document holdings",
+        "zh-CN": "/import-parse 解析金融文档持仓",
+        "default": "/import-parse 解析金融文档持仓",
+    },
+    "finance-coach": {
+        "en-US": "/finance-coach Generate family financial advice",
+        "zh-CN": "/finance-coach 生成家庭财务建议",
+        "default": "/finance-coach 生成家庭财务建议",
+    },
+    "wish-advice": {
+        "en-US": "/wish-advice Generate wish savings advice",
+        "zh-CN": "/wish-advice 生成心愿储蓄建议",
+        "default": "/wish-advice 生成心愿储蓄建议",
+    },
+    "dashboard-narrative": {
+        "en-US": "/dashboard-narrative Generate monthly financial narrative",
+        "zh-CN": "/dashboard-narrative 生成本月财务叙事",
+        "default": "/dashboard-narrative 生成本月财务叙事",
+    },
+    "literacy-weekly-report": {
+        "en-US": "/literacy-weekly-report Generate weekly literacy report",
+        "zh-CN": "/literacy-weekly-report 生成启蒙周报",
+        "default": "/literacy-weekly-report 生成启蒙周报",
+    },
 }
 
-# Localized session titles for report runs (shown in chat history sidebar).
+# Localized session titles for skill runs (shown in chat history sidebar).
 _SESSION_TITLES_BY_LANG = {
-    "en-US": "Family Asset Report",
-    "zh-CN": "家庭资产分析报告",
-    "default": "家庭资产分析报告",
+    "asset-report": {
+        "en-US": "Family Asset Report",
+        "zh-CN": "家庭资产分析报告",
+        "default": "家庭资产分析报告",
+    },
+    "import-parse": {
+        "en-US": "Document Import",
+        "zh-CN": "文件导入解析",
+        "default": "文件导入解析",
+    },
+    "literacy-weekly-report": {
+        "en-US": "Literacy Weekly Report",
+        "zh-CN": "启蒙周报",
+        "default": "启蒙周报",
+    },
 }
 
 
@@ -651,10 +688,19 @@ async def _run_import_parse_agent(
         enable_thinking=False,  # Qwen3: avoid empty content
     ) as p:
         # App-specific delta: trigger construction + result extraction
+        user_language = (record.metadata or {}).get("language") or "zh"
         user_message = (
             _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_IMPORT_PARSE_TRIGGER
+            or _SYNTHETIC_TRIGGERS_BY_LANG.get("import-parse", {}).get(
+                user_language, _SYNTHETIC_IMPORT_PARSE_TRIGGER
+            )
         )
+        # Prepend language instruction for user-facing output
+        if user_language:
+            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+                user_language, _LANGUAGE_INSTRUCTIONS["default"]
+            )
+            user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
 
         # Worker-synthesized import-parse.result emission (mirrors asset-report
@@ -673,11 +719,14 @@ async def _run_import_parse_agent(
                     },
                 )
 
-    # Set import-parse session title (fixed format with timestamp)
+    # Set import-parse session title (localized by user language)
     if p.completion_status == "complete":
+        _title = _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
+            user_language, _SESSION_TITLES_BY_LANG.get("import-parse", {}).get("default", "文件导入解析")
+        )
         _track_task(
             asyncio.create_task(
-                _set_session_title(thread_id, family_id, "文件导入解析")
+                _set_session_title(thread_id, family_id, _title)
             )
         )
 
@@ -731,10 +780,19 @@ async def _run_finance_coach_agent(
         enable_thinking=False,
     ) as p:
         # App-specific delta: trigger construction + result extraction
+        user_language = (record.metadata or {}).get("language") or "zh"
         user_message = (
             _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_FINANCE_COACH_TRIGGER
+            or _SYNTHETIC_TRIGGERS_BY_LANG.get("finance-coach", {}).get(
+                user_language, _SYNTHETIC_FINANCE_COACH_TRIGGER
+            )
         )
+        # Prepend language instruction for user-facing output
+        if user_language:
+            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+                user_language, _LANGUAGE_INSTRUCTIONS["default"]
+            )
+            user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
 
         # Worker-synthesized finance_coach.result emission (mirrors import-parse
@@ -802,9 +860,19 @@ async def _run_wish_advice_agent(
         enable_thinking=False,
     ) as p:
         # App-specific delta: trigger construction + result extraction
+        user_language = (record.metadata or {}).get("language") or "zh"
         user_message = (
-            _extract_backend_user_message(graph_input) or _SYNTHETIC_WISH_ADVICE_TRIGGER
+            _extract_backend_user_message(graph_input)
+            or _SYNTHETIC_TRIGGERS_BY_LANG.get("wish-advice", {}).get(
+                user_language, _SYNTHETIC_WISH_ADVICE_TRIGGER
+            )
         )
+        # Prepend language instruction for user-facing output
+        if user_language:
+            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+                user_language, _LANGUAGE_INSTRUCTIONS["default"]
+            )
+            user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
 
         # Worker-synthesized wish_advice.result emission (mirrors finance-coach
@@ -869,10 +937,19 @@ async def _run_dashboard_narrative_agent(
         timeout_seconds=60,
         mcp_servers=[],  # allowed-tools: [] — pure inference
     ) as p:
+        user_language = (record.metadata or {}).get("language") or "zh"
         user_message = (
             _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER
+            or _SYNTHETIC_TRIGGERS_BY_LANG.get("dashboard-narrative", {}).get(
+                user_language, _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER
+            )
         )
+        # Prepend language instruction for user-facing output
+        if user_language:
+            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+                user_language, _LANGUAGE_INSTRUCTIONS["default"]
+            )
+            user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message, enable_reasoning_delta=True)
 
         # Emit dashboard_narrative.result custom event (with thinking)
@@ -1145,10 +1222,19 @@ async def _run_literacy_weekly_report_agent(
         enable_thinking=True,
         timeout_seconds=120,
     ) as p:
+        user_language = (record.metadata or {}).get("language") or "zh"
         user_message = (
             _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_LITERACY_REPORT_TRIGGER
+            or _SYNTHETIC_TRIGGERS_BY_LANG.get("literacy-weekly-report", {}).get(
+                user_language, _SYNTHETIC_LITERACY_REPORT_TRIGGER
+            )
         )
+        # Prepend language instruction for user-facing output
+        if user_language:
+            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+                user_language, _LANGUAGE_INSTRUCTIONS["default"]
+            )
+            user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message, enable_reasoning_delta=True)
 
         # Emit literacy_weekly_report.result custom event (with thinking)
@@ -1167,9 +1253,12 @@ async def _run_literacy_weekly_report_agent(
                     },
                 )
 
-            # Set literacy weekly report session title (fixed format).
+            # Set literacy weekly report session title (localized by user language).
+            _lit_title = _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get(
+                user_language, _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get("default", "启蒙周报")
+            )
             _track_task(
                 asyncio.create_task(
-                    _set_session_title(thread_id, family_id, "启蒙周报")
+                    _set_session_title(thread_id, family_id, _lit_title)
                 )
             )

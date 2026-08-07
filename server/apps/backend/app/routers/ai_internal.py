@@ -27,6 +27,7 @@ from apps.backend.app.models.skill_registry import SkillRegistry
 if TYPE_CHECKING:
     from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.routers.ai_config import get_active_configs_with_recovery
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
 from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
@@ -169,19 +170,7 @@ def internal_get_ai_config(
 
     返回 circuit_state 和 circuit_reason 供 agent 路由决策。
     """
-    all_cfgs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-        )
-        .order_by(
-            AIProviderConfig.display_order.asc().nulls_last(),
-            AIProviderConfig.created_at.asc(),
-        )
-        .all()
-    )
+    all_cfgs = get_active_configs_with_recovery(db, int(family_id))
 
     if not all_cfgs:
         # No AI providers configured, but web search providers might exist
@@ -244,21 +233,6 @@ def internal_get_ai_config(
 
     providers = []
     for cfg in all_cfgs:
-        # Delegate circuit breaker state transitions to unified adapter
-        adapter = AIProviderAdapter(cfg.id, int(family_id))
-        adapter.bind(cfg)  # avoid extra query; we already have the object
-
-        if cfg.circuit_state == "open":
-            adapter.attempt_recovery(db)
-            # Still open (recovery didn't trigger)? Skip this provider
-            if cfg.circuit_state == "open":
-                continue
-        elif cfg.circuit_state == "half_open":
-            adapter.evaluate_half_open_window(db)
-            # Half-open window expired and re-opened? Skip this provider
-            if cfg.circuit_state == "open":
-                continue
-
         api_key = decrypt_api_key(cfg.api_key_encrypted or "")
         if not api_key:
             continue

@@ -18,7 +18,6 @@ from typing import Any
 from json_repair import repair_json
 from sqlalchemy.orm import Session
 
-from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.services.ai_crypto import decrypt_api_key
 
 logger = logging.getLogger(__name__)
@@ -509,16 +508,9 @@ async def _llm_fallback_extract(
         - data: extracted structured data or None on failure
         - error_type: specific error type for user messaging (e.g., "quota_exceeded")
     """
-    configs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == family_id,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-            AIProviderConfig.is_active.is_(True),
-        )
-        .order_by(AIProviderConfig.display_order.asc().nulls_last())
-        .all()
-    )
+    from apps.backend.app.routers.ai_config import get_active_configs_with_recovery
+
+    configs = get_active_configs_with_recovery(db, family_id)
 
     if not configs:
         logger.warning(

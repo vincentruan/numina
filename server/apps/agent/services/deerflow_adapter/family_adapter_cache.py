@@ -120,6 +120,23 @@ def _inject_mcp(
         config["mcp_servers"] = mcp_servers
 
 
+def _inject_token_budget(config: dict[str, Any]) -> None:
+    """Inject per-run token budget limits into config (in-place).
+
+    Enables DeerFlow's native ``TokenBudgetMiddleware`` (added by
+    ``build_middlewares`` when ``token_budget.enabled=True``).  Previously
+    this was done by injecting ``TokenBudgetMiddleware`` into
+    ``custom_middlewares``, but that caused a duplicate-name AssertionError
+    because DeerFlow's factory also adds one with the same ``.name``.
+    """
+    if "token_budget" not in config:
+        config["token_budget"] = {}
+    config["token_budget"]["enabled"] = True
+    config["token_budget"].setdefault("max_tokens", 200_000)
+    config["token_budget"].setdefault("warn_threshold", 0.8)
+    config["token_budget"].setdefault("hard_stop_threshold", 1.0)
+
+
 def _inject_web_search(
     config: dict[str, Any],
     ai_config: dict[str, Any],
@@ -458,6 +475,7 @@ def _generate_temp_config(
     _inject_sandbox(config)
     _inject_skills(config)
     _inject_mcp(config, mcp_servers)
+    _inject_token_budget(config)
     web_search_mcp = ai_config.get("web_search_mcp_servers", [])
     _inject_web_search(config, ai_config, mcp_servers, web_search_mcp)
 

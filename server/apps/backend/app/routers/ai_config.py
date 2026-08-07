@@ -37,6 +37,9 @@ from apps.backend.app.services.ai_crypto import (
     encrypt_api_key,
     mask_api_key,
 )
+from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
+    AIProviderAdapter,
+)
 from apps.backend.app.services.security_log import _log_security_event
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
@@ -85,6 +88,48 @@ def _invalidate_agent_cache(family_id: int) -> None:
             )
 
     threading.Thread(target=_call, daemon=True).start()
+
+
+def get_active_configs_with_recovery(
+    db: Session,
+    family_id: int,
+) -> list[AIProviderConfig]:
+    """Query active AI providers and attempt circuit-breaker recovery.
+
+    Returns providers that are usable *right now* — i.e. already closed, or
+    were open but recovered to half_open/closed after calling
+    ``attempt_recovery``.  Providers that remain open (cooldown not expired
+    or recovery schedule not matched yet) are filtered out.
+
+    Also evaluates ``half_open`` windows: if the window expired with
+    insufficient success rate the provider re-opens and is filtered out.
+
+    Used by ``get_tenant_models``, ``_get_active_providers`` (ai_internal),
+    ``_build_test_candidates``, and ``ai_result_parser``.
+    """
+    configs = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.family_id == family_id,
+            AIProviderConfig.is_active,
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .order_by(
+            AIProviderConfig.display_order.asc().nulls_last(),
+            AIProviderConfig.created_at.asc(),
+        )
+        .all()
+    )
+
+    for cfg in configs:
+        adapter = AIProviderAdapter(cfg.id, int(family_id))
+        adapter.bind(cfg)
+        if cfg.circuit_state == "open":
+            adapter.attempt_recovery(db)
+        elif cfg.circuit_state == "half_open":
+            adapter.evaluate_half_open_window(db)
+
+    return [c for c in configs if c.circuit_state != "open"]
 
 
 def _deserialize_capabilities(cap_str: str | None) -> list[str]:
@@ -467,20 +512,7 @@ def _build_test_candidates(
 
     Each candidate = {config, model_id, vision_model_id, slot, display_label}
     """
-    all_cfgs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-            AIProviderConfig.circuit_state != "open",
-        )
-        .order_by(
-            AIProviderConfig.display_order.asc().nulls_last(),
-            AIProviderConfig.created_at.asc(),
-        )
-        .all()
-    )
+    all_cfgs = get_active_configs_with_recovery(db, family_id)
 
     if not all_cfgs:
         return []
@@ -860,18 +892,7 @@ def get_tenant_models(
     - subagent_enabled: Always true — ultra mode availability depends on model's reasoning_effort support
     - websearch_enabled: Whether family has web search provider configured
     """
-    # Query active AI providers for the family
-    configs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-            AIProviderConfig.circuit_state != "open",
-        )
-        .order_by(AIProviderConfig.display_order.asc().nulls_last())
-        .all()
-    )
+    configs = get_active_configs_with_recovery(db, current_user.family_id)
 
     models: list[ModelInfo] = []
     seen_model_ids: set[str] = set()  # Dedup across configs

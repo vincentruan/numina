@@ -126,8 +126,13 @@ def _get_security_middlewares() -> list[Any]:
     """Return (lazily creating) the security middleware list for chat runs.
 
     Includes:
-    - ``TokenBudgetMiddleware`` — per-run token cap (DeerFlow pattern, 200k max)
     - ``InputSanitizationMiddleware`` — tag neutralization (DeerFlow pattern)
+
+    TokenBudgetMiddleware is NOT included here — DeerFlow's native
+    ``build_middlewares`` already adds it when ``token_budget.enabled=True``
+    in the per-family config (injected by ``_inject_token_budget`` in
+    ``family_adapter_cache.py``). Adding it here caused a duplicate-name
+    AssertionError in langchain's middleware validation.
 
     Called once per worker process; the returned list is reused across runs.
     """
@@ -138,26 +143,13 @@ def _get_security_middlewares() -> list[Any]:
     from deerflow.agents.middlewares.input_sanitization_middleware import (
         InputSanitizationMiddleware,
     )
-    from deerflow.agents.middlewares.token_budget_middleware import (
-        TokenBudgetMiddleware,
-    )
-    from deerflow.config.token_budget_config import TokenBudgetConfig
 
-    budget_config = TokenBudgetConfig(
-        enabled=True,
-        max_tokens=200_000,
-        warn_threshold=0.8,
-        hard_stop_threshold=1.0,
-    )
     _token_budget_middlewares = [
-        TokenBudgetMiddleware.from_config(budget_config),
         InputSanitizationMiddleware(),
     ]
     logger.info(
         "[run_pipeline] security middlewares initialized: "
-        "TokenBudget(max=%d, warn=%.1f) + InputSanitization",
-        budget_config.max_tokens,
-        budget_config.warn_threshold,
+        "InputSanitization (TokenBudget delegated to DeerFlow native)"
     )
     return _token_budget_middlewares
 
