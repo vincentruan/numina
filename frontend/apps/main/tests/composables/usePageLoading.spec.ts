@@ -1,6 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
+
+// Mock NProgress at the top level to ensure it's mocked even when the real
+// usePageLoading module is loaded via vi.importActual (which bypasses setup.ts mocks)
+vi.mock('nprogress', () => ({
+  default: {
+    start: vi.fn(),
+    done: vi.fn(),
+    configure: vi.fn(),
+    isStarted: vi.fn(() => false),
+    status: vi.fn(),
+  },
+}))
+vi.mock('nprogress/nprogress.css', () => ({ default: {} }))
+
+// Import the mocked NProgress for assertions
 import NProgress from 'nprogress'
 
 describe('usePageLoading fix verification', () => {

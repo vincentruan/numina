@@ -134,13 +134,14 @@ const showConversionInfo = computed(() => {
 })
 
 // Source currency symbol for popover
-const sourceCurrencySymbol = computed(() =>
-  CURRENCY_SYMBOLS[props.sourceCurrency] || props.sourceCurrency
-)
+const sourceCurrencySymbol = computed(() => {
+  if (!props.sourceCurrency) return ''
+  return CURRENCY_SYMBOLS[props.sourceCurrency] || props.sourceCurrency
+})
 
 // Format original amount display
 const originalAmountDisplay = computed(() => {
-  if (!numOriginalValue.value) return ''
+  if (!numOriginalValue.value || !props.sourceCurrency) return ''
   const formatted = Math.abs(numOriginalValue.value).toLocaleString(
     CURRENCY_LOCALES[props.sourceCurrency] || 'zh-CN',
     { minimumFractionDigits: 2, maximumFractionDigits: 2 }
