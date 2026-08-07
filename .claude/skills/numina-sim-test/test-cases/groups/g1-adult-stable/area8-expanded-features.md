@@ -407,10 +407,21 @@ Assertions:
 
 ## F.5 — Guest 来宾页面
 
-无需认证。使用 **新 bsk session** (不带 adult cookie) 来测试。
+无需认证。使用 **新 bsk session** + **清除 cookie/localStorage** 来测试。
+
+> **重要:** bsk 所有 session 共享同一 browser profile，cookie 按 origin 共享。
+> 新 session 会继承 adult session 的 cookie，导致 route guard 认为用户已认证，
+> 从而将访客页面重定向到 dashboard (页面空白/内容错误)。必须在导航到访客页面前
+> 清除所有 cookie 和 localStorage。
 
 ```bash
+# 1) 启动新 session (与 adult session 隔离状态)
 GUEST_SID=$(bsk session start --json | jq -r .session_id)
+# 2) 导航到 adult origin (先到达目标域名)
+bsk navigate ${BASE} --session $GUEST_SID --wait-until domcontentloaded
+# 3) 清除 cookie + localStorage (消除 adult session 污染)
+bsk evaluate --session $GUEST_SID --expr "document.cookie.split(';').forEach(c => { document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'); }); 'cookies-cleared'"
+bsk evaluate --session $GUEST_SID --expr "localStorage.clear(); 'localStorage-cleared'"
 ```
 
 ### F.5.1 Welcome 页
