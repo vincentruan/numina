@@ -87,11 +87,11 @@ def _run_in_executor_with_context(
     calling task into the pool thread. Numina relies on two coroutine-scoped
     ContextVars set in ``worker.run_agent`` before dispatch:
 
-    - ``sandbox_family_id`` (``set_family_sandbox_context``) —
-      ``NuminaLocalSandboxProvider._build_thread_path_mappings`` reads it to
-      scope sandbox paths under ``AGENT_DATA_DIR/{family_id}/sandboxes/...``.
-      Without propagation the provider sees ``family_id=None`` and returns
-      empty path mappings, so ``write_file`` finds no mapping for
+    - ``sandbox_family_id`` (``set_family_sandbox_context``) — sets DeerFlow's
+      ``_current_user`` to family_id so ``get_effective_user_id()`` returns it,
+      scoping sandbox paths under ``{DEER_FLOW_HOME}/users/{family_id}/...``.
+      Without propagation the provider sees ``user_id="default"`` and paths
+      land in the shared default tree, breaking family isolation.
       ``/mnt/user-data/workspace`` and the file silently never lands on disk
       (the tool still returns ``"OK"`` — fail-open). This is the F2 root cause.
     - ``numina_active_skill_name`` (``set_active_skill``) — runtime tool
@@ -166,14 +166,14 @@ def _maybe_reset_mcp_cache(extensions_path: str) -> None:
 
         from deerflow.mcp.cache import _get_config_signature
     except (ImportError, AttributeError):
-        # Fallback: always reset if signature tracking is unavailable.
+        # Signature tracking unavailable — skip optimization, always reset.
         try:
             from deerflow.config.extensions_config import reset_extensions_config
             from deerflow.mcp.cache import reset_mcp_tools_cache
 
             reset_mcp_tools_cache()
             reset_extensions_config()
-        except ImportError:
+        except (ImportError, AttributeError):
             pass
         return
 
@@ -371,10 +371,10 @@ class DeerFlowAdapter:
         # extensions_config_path is already set by the async caller and
         # propagated via copy_context().  We just need to reset the global
         # MCP cache singleton if the config content changed.
-        from pathlib import Path as _Path
+        from pathlib import Path
 
         extensions_path = (
-            _Path(str(self._config_path)).parent / "extensions_config.json"
+            Path(str(self._config_path)).parent / "extensions_config.json"
         )
         if extensions_path.exists():
             _maybe_reset_mcp_cache(str(extensions_path))

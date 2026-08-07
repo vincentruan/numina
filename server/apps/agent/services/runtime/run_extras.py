@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 # must be replaced by a proper LLM-generated title. (Legacy checkpoints only;
 # the [SKILL:] prefix was removed, but old titles persist in the checkpointer DB.)
 _SKILL_PROMPT_PREFIX = "[SKILL:"
-_FALLBACK_TITLE_MAX_CHARS = 50
+
+# Title generation limits. Mirrors DeerFlow ``TitleConfig`` defaults.
+_TITLE_MAX_WORDS = 6
+_TITLE_MAX_CHARS = 60
 
 
 def _strip_thinking_from_text(text: str) -> str:
@@ -156,13 +159,115 @@ def _is_fallback_title(title: str | None) -> bool:
     return False
 
 
-def _text_fallback_title(text: str) -> str:
-    """Truncate the user's message into a display-safe fallback title."""
+def _message_type(message: object) -> str | None:
+    """Normalize a checkpoint message to a canonical role.
+
+    Mirrors ``TitleMiddleware._message_type`` so title-gating logic stays
+    consistent with DeerFlow. Accepts both LangChain message objects and the
+    dict form stored in checkpoints.
+    """
+    message_type = getattr(message, "type", None)
+    if message_type is None and isinstance(message, dict):
+        message_type = message.get("type") or message.get("role")
+    if message_type == "user":
+        return "human"
+    if message_type == "assistant":
+        return "ai"
+    return message_type if isinstance(message_type, str) else None
+
+
+def _message_content(message: object) -> object:
+    """Return the content payload of a checkpoint message."""
+    if isinstance(message, dict):
+        return message.get("content", "")
+    return getattr(message, "content", "")
+
+
+def _is_user_message_for_title(message: object) -> bool:
+    """Return True for real human messages (excluding hidden system reminders)."""
+    # Numina does not currently inject dynamic-context reminder messages, but
+    # keep the door open: if a human message is marked as a hidden reminder it
+    # should not count as a user turn for title generation.
+    if _message_type(message) != "human":
+        return False
+    if isinstance(message, dict):
+        additional_kwargs = message.get("additional_kwargs") or {}
+        if additional_kwargs.get("dynamic_context_reminder"):
+            return False
+    return True
+
+
+def _should_generate_title(
+    channel_values: dict[str, Any] | None,
+    *,
+    allow_partial_exchange: bool = False,
+) -> bool:
+    """DeerFlow-style gate: title is generated once, after the first exchange.
+
+    Mirrors ``TitleMiddleware._should_generate_title``:
+    - Skip if the checkpoint already carries a real title.
+    - Skip if we are past the first complete exchange (>1 real user messages).
+    - Generate when there is exactly one real user message plus at least one
+      assistant response.
+    - For interrupted first turns, ``allow_partial_exchange=True`` accepts a
+      lone user message so the thread still gets a sidebar title.
+    """
+    if not channel_values:
+        return False
+
+    # If the checkpoint already has a proper title, never overwrite it.
+    existing_title = channel_values.get("title")
+    if existing_title and not _is_fallback_title(existing_title):
+        return False
+
+    messages = channel_values.get("messages") or []
+    if not isinstance(messages, list):
+        return False
+
+    min_messages = 1 if allow_partial_exchange else 2
+    if len(messages) < min_messages:
+        return False
+
+    user_messages = [m for m in messages if _is_user_message_for_title(m)]
+    assistant_messages = [m for m in messages if _message_type(m) == "ai"]
+
+    # Normal path: title only after first complete exchange. Interrupted path
+    # accepts a lone first-turn user message.
+    return len(user_messages) == 1 and (len(assistant_messages) >= 1 or allow_partial_exchange)
+
+
+def _normalize_content(content: object) -> str:
+    """Normalize message content into plain text (lists/dicts/strings)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [_normalize_content(item) for item in content]
+        return "\n".join(part for part in parts if part)
+    if isinstance(content, dict):
+        text_value = content.get("text")
+        if isinstance(text_value, str):
+            return text_value
+        nested_content = content.get("content")
+        if nested_content is not None:
+            return _normalize_content(nested_content)
+    return ""
+
+
+def _text_fallback_title(text: str, max_chars: int = _TITLE_MAX_CHARS) -> str:
+    """Return a display-safe fallback title, mirroring DeerFlow's local path.
+
+    DeerFlow returns the user message truncated to ``max_chars`` (reserving room
+    for the ellipsis). When the input is empty, returns ``"New Chat"`` so the
+    sidebar never shows a blank title.
+    """
     text = (text or "").strip()
     if not text:
-        return ""
-    if len(text) > _FALLBACK_TITLE_MAX_CHARS:
-        return text[:_FALLBACK_TITLE_MAX_CHARS].rstrip() + "..."
+        return "New Chat"
+    fallback_chars = min(max_chars, 50)
+    if len(text) > fallback_chars:
+        ellipsis = "..."
+        body = min(fallback_chars, max_chars - len(ellipsis))
+        return text[:body].rstrip() + ellipsis
     return text
 
 
@@ -254,6 +359,24 @@ def _create_lightweight_llm(
     return ChatOpenAI(**kwargs)
 
 
+def _build_title_prompt(user_message: str, ai_response: str) -> tuple[str, str]:
+    """Build the LLM title prompt and return the trimmed user message.
+
+    Mirrors DeerFlow's default ``TitleConfig.prompt_template`` and strips
+    ``<think>...</think>`` blocks from the assistant response before including
+    it in the prompt.
+    """
+    user_msg = user_message.strip()[:500]
+    assistant_msg = _strip_thinking_from_text(ai_response)[:500]
+    prompt = (
+        f"Generate a concise title (max {_TITLE_MAX_WORDS} words) for this conversation.\n"
+        f"User: {user_msg}\n"
+        f"Assistant: {assistant_msg}\n\n"
+        "Return ONLY the title, no quotes, no explanation."
+    )
+    return prompt, user_msg
+
+
 async def _generate_title_via_llm(
     user_message: str,
     ai_response: str,
@@ -268,30 +391,22 @@ async def _generate_title_via_llm(
     if not user_message or len(user_message.strip()) < 2:
         return None
     try:
-        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_core.messages import SystemMessage
 
         llm = _create_lightweight_llm(ai_config, temperature=0.3, max_tokens=60)
+        prompt, _ = _build_title_prompt(user_message, ai_response)
 
-        system = SystemMessage(content=(
-            "Generate a concise title (max 6 words, in the user's language) for this conversation. "
-            "Return ONLY the title, no quotes, no explanation."
-        ))
-        human = HumanMessage(content=(
-            f"User: {user_message[:300]}\n\n"
-            f"Assistant: {_strip_thinking_from_text(ai_response)[:300]}\n\n"
-            "Title:"
-        ))
-
-        response = await llm.ainvoke([system, human])
+        system = SystemMessage(content=prompt)
+        response = await llm.ainvoke([system])
         title = _parse_title_content(response.content)
-        return title[:60] if title else None
+        return title[:_TITLE_MAX_CHARS] if title else None
     except Exception as e:
         logger.warning("[run_extras] LLM title generation failed: %s", e)
         return None
 
 
-async def _read_checkpoint_title(thread_id: str) -> str | None:
-    """Read ``channel_values["title"]`` from the latest checkpoint (best-effort)."""
+async def _read_checkpoint(thread_id: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Read the latest checkpoint tuple and its channel_values for a thread."""
     try:
         from apps.agent.services.deerflow_adapter.family_adapter_cache import (
             _get_shared_checkpointer,
@@ -301,11 +416,12 @@ async def _read_checkpoint_title(thread_id: str) -> str | None:
         config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
         checkpoint_tuple = await checkpointer.aget_tuple(config)
         if checkpoint_tuple is None:
-            return None
+            return None, None
         checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-        return (checkpoint.get("channel_values", {}) or {}).get("title")
+        channel_values = checkpoint.get("channel_values") or {}
+        return checkpoint, channel_values
     except Exception:
-        return None
+        return None, None
 
 
 async def sync_title_from_checkpoint(
@@ -314,6 +430,8 @@ async def sync_title_from_checkpoint(
     ai_config: dict[str, Any] | None = None,
     user_message: str = "",
     ai_response: str = "",
+    *,
+    allow_partial_exchange: bool = False,
 ) -> str | None:
     """Persist a proper conversation title into the ``ai_chat_sessions`` row.
 
@@ -322,19 +440,21 @@ async def sync_title_from_checkpoint(
     (``astream``) that title is an LLM-generated summary; but Numina's adapter
     uses the sync ``stream()`` path, so the sync ``after_model`` hook runs and
     only writes a local fallback (the raw ``[SKILL:chat]`` prompt wrapper). This
-    function bridges that gap:
+    function bridges that gap while mirroring DeerFlow's interaction semantics:
 
-    1. If the session row already has a proper (non-fallback) title, keep it
-       (the user may have renamed the thread).
-    2. If the checkpoint has a proper title (async middleware path), use it.
-    3. Otherwise generate a title via the family's AI provider (the sync stream
-       path only produced a fallback).
-    4. If the LLM call fails, fall back to a truncated form of the user message.
+    1. Title is generated **once**, after the first user/assistant exchange.
+    2. If the session already has a proper title (DB or checkpoint), keep it.
+    3. If the first exchange produced a fallback/prompt-wrapper title, replace it
+       with an LLM-generated summary or a clean local fallback.
+    4. For interrupted first turns, ``allow_partial_exchange=True`` mirrors
+       DeerFlow's ``_ensure_interrupted_title`` and permits a title from a lone
+       user message so the thread still gets a sidebar label.
 
-    Best-effort: any failure is logged and swallowed. Only writes when the
-    session is still untitled or the existing title is a recognisable fallback.
-
-    Returns the title that was persisted, or ``None`` when no title was written.
+    Returns the newly persisted title string so the worker can publish it to the
+    frontend, or ``None`` when no new title was written. Callers should only emit
+    a ``values`` title event when the return value is non-None; this keeps the
+    sidebar stable across follow-up messages and matches DeerFlow's
+    ``TitleMiddleware._should_generate_title`` gating.
     """
     try:
         from apps.agent.services.session_store import AiSessionRepository
@@ -345,11 +465,16 @@ async def sync_title_from_checkpoint(
         session = await repo.get_session(thread_id)
         db_title = session.get("title") if session else None
         if db_title and not _is_fallback_title(db_title):
-            return str(db_title)
+            return None
 
-        # 2. Prefer a proper title from the checkpoint (async middleware path).
-        title: str | None = None
-        ckpt_title = await _read_checkpoint_title(thread_id)
+        # 2. Read the latest checkpoint and its channel_values.
+        _, channel_values = await _read_checkpoint(thread_id)
+        if not channel_values:
+            return None
+
+        # 3. If the checkpoint already carries a proper title (e.g. async middleware
+        # path or a prior successful run), persist it and return it.
+        ckpt_title = channel_values.get("title")
         if ckpt_title and not _is_fallback_title(ckpt_title):
             title = str(ckpt_title).strip()
             await repo.update_summary(
@@ -361,15 +486,24 @@ async def sync_title_from_checkpoint(
             logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
             return title
 
-        # 3. The sync stream() path only wrote a fallback - generate a real title.
+        # 4. DeerFlow gate: only generate a title on the first exchange. On follow-up
+        # messages the checkpoint has >1 real user messages, so this returns False
+        # and the function returns None (no re-publish).
+        if not _should_generate_title(channel_values, allow_partial_exchange=allow_partial_exchange):
+            return None
+
+        # 5. Generate a real title via the family's AI provider. The sync stream()
+        # path only wrote a fallback, so we run the async LLM path here.
+        generated_title: str | None = None
         if ai_config and user_message:
-            title = await _generate_title_via_llm(user_message, ai_response, ai_config)
+            generated_title = await _generate_title_via_llm(user_message, ai_response, ai_config)
 
-        # 4. Final fallback: truncated user message (NOT the raw [SKILL:chat] wrapper).
-        if not title:
-            title = _text_fallback_title(user_message)
+        # 6. Final fallback: truncated user message (NOT the raw [SKILL:chat] wrapper).
+        if not generated_title:
+            generated_title = _text_fallback_title(user_message)
 
-        if title:
+        if generated_title and generated_title.strip():
+            title = generated_title.strip()
             await repo.update_summary(
                 session_id=thread_id,
                 family_id=family_id,

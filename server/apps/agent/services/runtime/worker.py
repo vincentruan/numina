@@ -20,7 +20,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from deerflow.runtime import RunManager, RunRecord, StreamBridge
+from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
 from apps.agent.core.backend_client import BackendClient
 from packages.core import get_path_manager
@@ -995,7 +995,7 @@ async def _run_numina_agent(
     ``cumulative_usage`` across turns, so the post-stream hooks (suggestions,
     title) see the full conversation.
     """
-    from .run_pipeline import RunPipeline, _get_security_middlewares
+    from .run_pipeline import RunPipeline
 
     # Pre-pipeline setup: resolve dynamic parameters that depend on the
     # family AI config (web-search capability, custom skills) or on the
@@ -1075,7 +1075,7 @@ async def _run_numina_agent(
         skill_name=_resolve_skill_name,
         available_skills=available_skills,
         skip_active_skill=is_slash_message,
-        middlewares=_get_security_middlewares(),
+        middlewares=None,
     ) as p:
         # For slash-activated skills (U2), set the skill context manually
         # after the pipeline's __aenter__ (which skipped set_active_skill).
@@ -1150,8 +1150,11 @@ async def _run_numina_agent(
         # 4. Post-stream: LLM-generated thread title.
         # Generated for ALL completion states (complete, interrupted, error)
         # so even cancelled/failed threads get a sidebar title (DeerFlow
-        # ``_ensure_interrupted_title`` pattern).
+        # ``_ensure_interrupted_title`` pattern).  Interrupted first turns pass
+        # ``allow_partial_exchange=True`` so a lone user message still yields a
+        # fallback title, matching DeerFlow's behaviour.
         if p.selected_provider is not None and user_message:
+            was_interrupted = record.status == RunStatus.interrupted
             task = asyncio.create_task(
                 sync_title_from_checkpoint(
                     thread_id,
@@ -1159,6 +1162,7 @@ async def _run_numina_agent(
                     ai_config=p.selected_provider,
                     user_message=user_message,
                     ai_response=p.ai_text,
+                    allow_partial_exchange=was_interrupted,
                 )
             )
             _track_task(task)

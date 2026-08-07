@@ -115,30 +115,6 @@ def _sync_agent_soul(agent_name: str, soul_md: str) -> None:
 #
 # We inject token_budget config via _inject_token_budget() in
 # family_adapter_cache.py. No custom middlewares needed.
-# _get_security_middlewares() returns [] — kept as a function so the call
-# site in worker.py remains stable for future additions.
-
-
-def _get_security_middlewares() -> list[Any]:
-    """Return the security middleware list for chat runs.
-
-    Returns an empty list — both security middlewares we previously injected
-    are now provided natively by DeerFlow's ``build_middlewares``:
-
-    - ``InputSanitizationMiddleware`` — added by ``_build_runtime_middlewares``
-      in ``tool_error_handling_middleware.py`` (outer wrapper layer).
-    - ``TokenBudgetMiddleware`` — added by ``build_middlewares`` when
-      ``token_budget.enabled=True`` in the per-family config (injected by
-      ``_inject_token_budget`` in ``family_adapter_cache.py``).
-
-    Adding either here caused a duplicate-name AssertionError in langchain's
-    middleware validation (``len({m.name for m in middleware}) != len(middleware)``).
-
-    Kept as a function (not deleted) so the call site in ``worker.py`` remains
-    stable — future security middlewares can be added here if DeerFlow does not
-    provide them natively.
-    """
-    return []
 
 
 def _is_fallback_eligible(error_type: str) -> bool:

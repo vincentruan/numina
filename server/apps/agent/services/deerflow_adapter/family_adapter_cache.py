@@ -225,6 +225,16 @@ def _write_extensions_config(
             "url": srv.get("url", ""),
             "headers": srv.get("headers", {}),
             "enabled": True,
+            # tool_name_prefix=False: MCP tools keep their base names (e.g.
+            # ``get_assets``) instead of ``{server_name}_get_assets`` (e.g.
+            # ``Numina Backend MCP_get_assets``). Skill ``allowed-tools``
+            # declarations use base names, and ``filter_tools_by_skill_allowed_tools``
+            # (deerflow/skills/tool_policy.py:65) matches by full name — a prefixed
+            # name would never match the base-name allowlist, silently filtering
+            # out every business tool (root cause of "all records empty" and
+            # asset-report Recursion-100). DeerFlow honours this per-server via
+            # ``McpServerConfig.tool_name_prefix`` (native get_mcp_tools:696).
+            "tool_name_prefix": False,
         }
     extensions_data = {"mcpServers": mcp_servers_dict}
     extensions_path = temp_dir / "extensions_config.json"

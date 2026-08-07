@@ -41,7 +41,7 @@ original_line = '"run_id": runtime.context.get("run_id"),'
 fixed_line = '"run_id": context.get("run_id"),'
 
 if original_line not in content:
-    # Upstream may have already applied the equivalent fix: deerflow 10890e10+
+    # Upstream may have already applied the equivalent fix: deerflow 6556d09d+
     # uses context.get("run_id") directly (the very change this patch makes).
     # Treat that as a successful no-op so the build stays idempotent across
     # harness upgrades.

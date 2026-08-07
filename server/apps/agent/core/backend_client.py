@@ -380,13 +380,8 @@ def _extract_llm_error_info(exc: BaseException) -> tuple[int, str]:
     msg = str(exc) or type(exc).__name__
 
     # httpx exceptions
-    try:
-        import httpx as _httpx  # local import to avoid cycle
-
-        if isinstance(exc, _httpx.HTTPStatusError):
-            return exc.response.status_code, msg
-    except Exception:
-        pass
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code, msg
 
     # OpenAI / Anthropic SDK exceptions expose ``status_code`` attribute
     status = getattr(exc, "status_code", None)

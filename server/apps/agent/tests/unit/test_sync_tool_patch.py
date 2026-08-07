@@ -1,28 +1,13 @@
-"""Regression tests for the DeerFlow sync-tool compatibility patch.
-
-The pinned ``deerflow-harness`` only wraps config-loaded tools with
-``_ensure_sync_invocable_tool``; built-in ``SUBAGENT_TOOLS`` (the ``task``
-tool used in ultra mode) are left unwrapped. Because ``DeerFlowClient.stream``
-runs the LangGraph graph synchronously, the unwrapped async-only ``task``
-StructuredTool raises ``NotImplementedError: StructuredTool does not support
-sync invocation`` when the LLM delegates to a subagent.
-
-These tests pin two requirements on the patch:
-
-1. The ``task`` tool returned through the patched ``get_available_tools`` has
-   ``func`` set (sync-invocable), not just ``coroutine``.
-2. The patch reaches the **package-level** binding
-   (``deerflow.tools.get_available_tools``), which is the import path
-   ``DeerFlowClient._get_tools()`` actually uses. Patching only the submodule
-   (``deerflow.tools.tools.get_available_tools``) leaves the package re-export
-   pointing at the original unwrapped function, so the client never sees the
-   patch - this was the real regression behind the recurring
-   ``StructuredTool does not support sync invocation`` error.
-"""
+"""Regression tests for the DeerFlow sync-tool compatibility patch."""
 
 from __future__ import annotations
 
 import pytest
+
+from apps.agent.services.runtime.sandbox_provider import (
+    reset_family_sandbox_context,
+    set_family_sandbox_context,
+)
 
 
 @pytest.fixture()
@@ -225,11 +210,16 @@ def test_active_skill_filter_chat_keeps_only_declared_tools_and_builtins(_fresh_
         _T("tool_search"),
         _T("task"),
     ]
+    # Provide a family_id so the active-skill filter can discover custom skills
+    # and resolve the allowlist; without it the filter logs a warning and returns
+    # all tools unchanged.
+    set_family_sandbox_context("family-test")
     token = set_active_skill("chat")
     try:
         filtered = mod._apply_active_skill_tool_filter(list(all_tools))
     finally:
         reset_active_skill(token)
+        reset_family_sandbox_context()
     kept = sorted(t.name for t in filtered)
     # Declared allowed-tools (base names — 1a27f076 unified MCP tool_name_prefix=False)
     assert "get_family_overview" in kept
@@ -275,11 +265,13 @@ def test_active_skill_filter_chat_search_keeps_web_tools(_fresh_patch, monkeypat
         _T("read_file"),
         _T("task"),
     ]
+    set_family_sandbox_context("family-test")
     token = set_active_skill("chat-search")
     try:
         filtered = mod._apply_active_skill_tool_filter(list(all_tools))
     finally:
         reset_active_skill(token)
+        reset_family_sandbox_context()
     kept = sorted(t.name for t in filtered)
     assert "web_search" in kept
     assert "web_fetch" in kept
