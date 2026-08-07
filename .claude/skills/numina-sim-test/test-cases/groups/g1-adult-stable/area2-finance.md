@@ -266,6 +266,8 @@ Covers W5 (high-interest liability ↔ wish linkage hint) and L1/L2
 
 ### C2.15 Debt-warning hint bar — threshold linkage
 
+**注意:** 债务警告提示条仅在心愿列表页显示，不在详情页显示（避免重复提示）。
+
 ```
 bsk navigate ${BASE}finance?tab=wishes --session <id> --wait-until networkidle
 bsk snapshot --session <id>
@@ -275,11 +277,12 @@ Prerequisite: demouser has a high-interest liability (interest_rate ≥ category
 threshold in `FamilyDebtThresholds`).
 
 Assertions:
-- [ ] Debt warning hint bar appears ABOVE the WishAdviceCard (W5) for wishes in categories exceeding the family debt threshold
+- [ ] Debt warning hint bar appears ABOVE the WishAdviceCard (W5) **in the wish list page** for wishes in categories exceeding the family debt threshold
 - [ ] Hint text references the high-interest liability (e.g. "建议优先还债 利率 18%")
 - [ ] "忽略" button hides the hint (persists via T3 backend route)
 - [ ] After "忽略", hint does NOT reappear on reload for that wish
 - [ ] Wishes in categories BELOW the threshold show no hint bar
+- [ ] **Wish detail page does NOT show debt warning hint bar** (avoid duplicate hints)
 - [ ] `[console]` zero errors
 
 ### C2.16 Debt thresholds config — owner GET/PUT
@@ -488,8 +491,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/currencies/rates" | jq .
 ```
 
 Assertions:
-- [ ] 返回 200 + 汇率表 (base=CNY, targets=[USD,EUR,JPY,...])
+- [ ] 返回 200 + 全量汇率表 (每个币种包含 `rate` 和 `fetched_at` 字段)
 - [ ] 所有汇率 > 0 (非 0 / 非 null / 非 1:1 fallback)
-- [ ] `updated_at` 时间戳在 24 小时内 (非过期数据)
-- [ ] `GET /currencies` 返回支持的货币列表 (含代码 + 名称 + 符号)
+- [ ] 每个币种的 `fetched_at` 时间戳在 24 小时内 (非过期数据)
+- [ ] `GET /currencies` 返回支持的货币列表 (含代码 + 名称 + 符号 + flag_emoji + is_favorite + sort_order)
 - [ ] `[console]` zero errors (curl 不适用, 但前端调用 /rates 时不应报 console 错误)
