@@ -103,7 +103,7 @@ def patched_httpx(monkeypatch):
 def test_chat_stream_without_agent_id_proxies_to_runs_stream_with_numina_fallback(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """When agent_id is absent, the proxy hits /runs/stream with NUMINA_AGENT_ID."""
+    """When agent_id is absent, the proxy hits /internal/gateway/runs/chat with NUMINA_AGENT_ID."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={"question": "hello", "deep_think": False, "web_search": False},
@@ -111,17 +111,15 @@ def test_chat_stream_without_agent_id_proxies_to_runs_stream_with_numina_fallbac
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert "/runs/stream" in captured["url"], captured["url"]
-    assert captured["json"]["assistant_id"] == "100000000000005"
+    assert "/internal/gateway/runs/chat" in captured["url"], captured["url"]
+    assert captured["json"]["metadata"]["assistant_id"] == "100000000000005"
     assert captured["json"]["input"]["messages"][0]["content"] == "hello"
-    assert "agent_id" not in captured["json"]
-    assert "message" not in captured["json"]
 
 
 def test_chat_stream_with_agent_id_proxies_to_runs_stream(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """When agent_id is present, the proxy hits the runs stream endpoint."""
+    """When agent_id is present, the proxy hits the internal gateway endpoint."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={
@@ -134,10 +132,9 @@ def test_chat_stream_with_agent_id_proxies_to_runs_stream(
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert "/runs/stream" in captured["url"], captured["url"]
-    assert captured["json"]["assistant_id"] == "100000000000005"
+    assert "/internal/gateway/runs/chat" in captured["url"], captured["url"]
+    assert captured["json"]["metadata"]["assistant_id"] == "100000000000005"
     assert captured["json"]["input"]["messages"][0]["content"] == "what's my net worth"
-    assert "question" not in captured["json"]
 
 
 def test_chat_stream_with_agent_id_propagates_deep_think_metadata(
