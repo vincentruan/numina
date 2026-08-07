@@ -87,6 +87,12 @@ def assert_run_context_complete(stage: str) -> None:
     read all 5 ContextVars in a single snapshot, so the error message can
     report exactly which ones are missing.
 
+    .. warning:: When adding a new ContextVar, it MUST be added to BOTH
+       set-points (async caller in ``worker.py`` and executor thread in
+       ``sync_tool_patch.py``) and to :class:`RunContext`.  A ContextVar
+       that only gets set at one lifecycle point will silently be ``None``
+       at the other — repeating the F2 sandbox fail-open bug.
+
     Raises :class:`RuntimeError` with a diagnostic message — replacing the
     silent "all records empty" / "MCP tools: 0" failure mode.
     """
