@@ -422,14 +422,20 @@ async def _run_asset_report_pipeline(
         user_message = _extract_backend_user_message(graph_input) or user_message
 
         # Prepend language instruction as the first thing the LLM sees.
-        # SKILL.md is static (loaded as the system prompt in Chinese); the
-        # user message must carry a forceful, earliest-visible directive so
-        # the LLM overrides the system prompt's default language.
+        # SKILL.md is language-neutral (all English); the user message carries
+        # a forceful, earliest-visible directive so the LLM outputs in the
+        # user's chosen language regardless of prompt content.
         if user_language:
             lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
+
+        logger.info(
+            "[_run_asset_report_pipeline] language=%s trigger_preview=%s",
+            user_language,
+            user_message[:80],
+        )
 
         await p.run_skill(user_message)
 
@@ -496,11 +502,14 @@ async def _run_asset_report_pipeline(
                         error_type=type(persist_exc).__name__,
                     )
 
-        # Set report session title (fixed format with timestamp).
+        # Set report session title (localized by user language).
         if p.completion_status == "complete":
+            _title = _SESSION_TITLES_BY_LANG.get(
+                user_language, _SESSION_TITLES_BY_LANG["default"]
+            )
             _track_task(
                 asyncio.create_task(
-                    _set_session_title(thread_id, family_id, "家庭资产分析报告")
+                    _set_session_title(thread_id, family_id, _title)
                 )
             )
 
@@ -564,6 +573,13 @@ _SYNTHETIC_TRIGGERS_BY_LANG = {
         "zh-CN": "/asset-report 生成家庭资产报告",
         "default": "/asset-report 生成家庭资产报告",
     },
+}
+
+# Localized session titles for report runs (shown in chat history sidebar).
+_SESSION_TITLES_BY_LANG = {
+    "en-US": "Family Asset Report",
+    "zh-CN": "家庭资产分析报告",
+    "default": "家庭资产分析报告",
 }
 
 
