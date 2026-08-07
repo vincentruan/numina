@@ -285,6 +285,43 @@ max_tokens: 6000
 
 All endpoints use `X-Agent-Token` header with JWT tokens issued by `create_agent_token()`. The JWT is verified by `verify_service_token` in `packages/security/service_auth/agent_token_verify.py`.
 
+## Security Rules for AI/Agent Inputs
+
+These rules are mandatory for every AI/agent change in this module. When adding
+or modifying a runner, router, skill, MCP tool, or agent configuration endpoint,
+update this section and add adversarial test cases to `numina-sim-test` Area 11.
+
+1. **All user-facing free text is untrusted.** `ChatRequest.question`,
+   `InputPolishRequest.text`, custom agent `system_prompt`, and thread goal text
+   must be filtered, length-limited, and/or wrapped before reaching any LLM.
+2. **PII redaction is mandatory but not sufficient.** `pii_redactor.redact()`
+   must run on every `FamilyContext` passed to a DeerFlow multi-step LLM, but it
+   only strips phone / ID / bank-card / address patterns. It does **not** prevent
+   prompt injection.
+3. **Direct prompt injection defense on `/ai/chat`.** The chat path currently
+   relies on PII redaction only. New changes must not make this worse; the
+   preferred fix is control-character filtering plus XML/structural wrapping of
+   the user message (see `asset_suggest.py:_sanitize_user_text()` and
+   `input_polish.py` `<draft>` wrapping for patterns).
+4. **Indirect injection via DB fields.** MCP tool results include
+   user-controlled names (assets, wishes, member names). Skill prompts must
+   instruct the model to treat such data as untrusted and never follow embedded
+   instructions.
+5. **Custom agent `system_prompt` safety prefix.** Any owner-defined
+   `system_prompt` must be prefixed with an immutable system safety block that
+   cannot be overridden by the owner text.
+6. **Custom agent `allowed-tools` is mandatory.** A custom agent / skill must
+   declare `allowed-tools`. `None` / missing is forbidden and defaults to a
+   minimal read-only set.
+7. **Thread goal sanitization.** `ThreadGoalRequest.objective` must be filtered
+   for control characters and wrapped before being evaluated by the goal LLM.
+8. **Agent-layer rate limiting.** All external AI endpoints must have
+   per-family + per-user rate limits. Until a centralized limiter exists, add
+   in-memory sliding windows in `runs_stream.py` / `sse_gateway.py`.
+9. **No new AI path without security review.** When adding a new runner,
+   router, skill, or MCP tool, update this section and add adversarial test
+   cases to `numina-sim-test` Area 11.
+
 ## Gotchas
 
 - **`orchestrator.py` is not an orchestrator** — the file holds only provider-selection / retry / fire-and-forget helpers (`_select_model`, `_select_provider_with_retry`, `_is_transient_error`, `_should_route_to_half_open`, `_fire_and_forget`), imported by the legacy `agent_dispatch.py`. Multi-app dispatch lives in `runtime/worker.py`, not here.

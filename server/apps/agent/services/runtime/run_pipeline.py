@@ -43,6 +43,125 @@ from .gc import schedule_run_cleanup
 logger = logging.getLogger(__name__)
 
 
+# ── Agent soul sync (DeerFlow SOUL.md bridge) ────────────────────────────────
+#
+# DeerFlow natively loads SOUL.md from {base_dir}/users/{user_id}/agents/{name}/
+# and injects it as <soul>...</soul> in the system prompt.  Numina stores
+# soul_md in the DB (ai_agents table) but historically never wrote it to the
+# filesystem path DeerFlow expects — the value was dead code end-to-end.
+#
+# _sync_agent_soul() bridges this gap: it writes the DB value to DeerFlow's
+# expected path so load_agent_soul() picks it up on the next run.
+# Following DeerFlow reference: agents_config.py:load_agent_soul() +
+# lead_agent/prompt.py:get_agent_soul() (HTML-escape + <soul> wrapping).
+
+
+def _sync_agent_soul(agent_name: str, soul_md: str) -> None:
+    """Write agent soul to the filesystem path DeerFlow expects.
+
+    DeerFlow's ``load_agent_soul(agent_name, user_id=family_id)`` reads from
+    ``{base_dir}/users/{family_id}/agents/{agent_name}/SOUL.md``.  The
+    ``family_id`` comes from ``get_effective_user_id()`` which reads the
+    ``set_current_user()`` ContextVar — already set by ``worker.run_agent``
+    before ``typed_stream_dispatch()`` is called.
+
+    This function is idempotent: skips the write when the file already contains
+    the same content (avoids unnecessary disk I/O on every chat turn).
+    """
+    try:
+        from deerflow.config.paths import get_paths
+
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_family_sandbox_context,
+        )
+
+        family_id = get_family_sandbox_context()
+        if not family_id:
+            logger.debug("[run_pipeline] agent soul sync skipped: no sandbox family_id")
+            return
+        agent_dir = get_paths().user_agent_dir(str(family_id), agent_name)
+        soul_path = agent_dir / "SOUL.md"
+        # Skip if already present with same content (avoid per-turn disk I/O).
+        if soul_path.exists():
+            try:
+                if soul_path.read_text(encoding="utf-8") == soul_md:
+                    return
+            except OSError:
+                pass  # Read failed — rewrite below.
+        soul_path.parent.mkdir(parents=True, exist_ok=True)
+        soul_path.write_text(soul_md, encoding="utf-8")
+        logger.info(
+            "[run_pipeline] agent soul synced: agent=%s path=%s (%d chars)",
+            agent_name,
+            soul_path,
+            len(soul_md),
+        )
+    except Exception:
+        # Non-fatal: if DeerFlow's paths API is unavailable or the write fails,
+        # the run continues without a soul (DeerFlow's load_agent_soul returns
+        # None, and the system prompt simply lacks the <soul> block).
+        logger.debug(
+            "[run_pipeline] agent soul sync skipped (non-fatal): agent=%s",
+            agent_name,
+            exc_info=True,
+        )
+
+
+# ── Security middlewares (module-level singletons) ───────────────────────────
+#
+# Created once and reused across all chat runs so the family_adapter_cache key
+# (which hashes ``id(m)`` for each middleware) stays stable.  Both middlewares
+# track per-run state internally via ``BoundedDict(run_id)`` — safe to share.
+#
+# Following DeerFlow reference patterns:
+# - TokenBudgetMiddleware: per-run token cap (warn at 80%, hard-stop at 100%)
+# - InputSanitizationMiddleware: neutralize injection tags in user text
+#
+# See CLAUDE.md §Security Rules rule 8 (rate limiting) and rule 3 (injection).
+
+_token_budget_middlewares: list[Any] | None = None
+
+
+def _get_security_middlewares() -> list[Any]:
+    """Return (lazily creating) the security middleware list for chat runs.
+
+    Includes:
+    - ``TokenBudgetMiddleware`` — per-run token cap (DeerFlow pattern, 200k max)
+    - ``InputSanitizationMiddleware`` — tag neutralization (DeerFlow pattern)
+
+    Called once per worker process; the returned list is reused across runs.
+    """
+    global _token_budget_middlewares
+    if _token_budget_middlewares is not None:
+        return _token_budget_middlewares
+
+    from deerflow.agents.middlewares.input_sanitization_middleware import (
+        InputSanitizationMiddleware,
+    )
+    from deerflow.agents.middlewares.token_budget_middleware import (
+        TokenBudgetMiddleware,
+    )
+    from deerflow.config.token_budget_config import TokenBudgetConfig
+
+    budget_config = TokenBudgetConfig(
+        enabled=True,
+        max_tokens=200_000,
+        warn_threshold=0.8,
+        hard_stop_threshold=1.0,
+    )
+    _token_budget_middlewares = [
+        TokenBudgetMiddleware.from_config(budget_config),
+        InputSanitizationMiddleware(),
+    ]
+    logger.info(
+        "[run_pipeline] security middlewares initialized: "
+        "TokenBudget(max=%d, warn=%.1f) + InputSanitization",
+        budget_config.max_tokens,
+        budget_config.warn_threshold,
+    )
+    return _token_budget_middlewares
+
+
 def _is_fallback_eligible(error_type: str) -> bool:
     """Decide whether an error warrants switching to a different provider.
 
@@ -148,6 +267,12 @@ class RunPipeline:
         # the chat runner for slash-activated messages where DeerFlow's
         # SkillActivationMiddleware handles skill selection instead.
         skip_active_skill: bool = False,
+        # Optional: DeerFlow AgentMiddleware list to mount on the adapter.
+        # Created once by the caller and reused across fallback attempts so
+        # the family_adapter_cache key (which includes ``tuple(id(m) for m
+        # in middlewares)``) stays stable.  Pass ``None`` (default) for no
+        # middleware — used by fixed-flow runners (asset-report, etc.).
+        middlewares: list[Any] | None = None,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -165,6 +290,7 @@ class RunPipeline:
         self.skill_name: str = skill_name if isinstance(skill_name, str) else app_name
         self._mcp_servers_override = mcp_servers
         self._available_skills = available_skills
+        self._middlewares = middlewares
 
         # Populated by __aenter__
         self._providers: list[dict[str, Any]] = []
@@ -242,6 +368,17 @@ class RunPipeline:
         if agent_meta and "memory_enabled" in agent_meta:
             self.memory_enabled = bool(agent_meta["memory_enabled"])
 
+        # 4b. Sync agent soul to DeerFlow's expected filesystem path.
+        # DeerFlow's load_agent_soul() reads SOUL.md from
+        # {DEER_FLOW_HOME}/users/{family_id}/agents/{agent_name}/SOUL.md
+        # and injects it as <soul>...</soul> in the system prompt.
+        # Numina stores soul_md in the DB (ai_agents table) but never wrote
+        # it to disk — so DeerFlow's native soul mechanism was dead code.
+        # Fix: write the DB value to the path DeerFlow expects before the
+        # adapter's first stream call (which triggers apply_prompt_template).
+        if agent_meta and agent_meta.get("soul_md"):
+            _sync_agent_soul(self.app_name, agent_meta["soul_md"])
+
         # 5. Build adapter
         adapter_kwargs: dict[str, Any] = dict(
             timeout_seconds=self.timeout_seconds,
@@ -253,6 +390,8 @@ class RunPipeline:
         )
         if self._available_skills is not None:
             adapter_kwargs["available_skills"] = self._available_skills
+        if self._middlewares:
+            adapter_kwargs["middlewares"] = self._middlewares
         # Store for fallback (run_skill re-creates adapter with new provider)
         self._adapter_kwargs = adapter_kwargs
         self.adapter = create_family_adapter(

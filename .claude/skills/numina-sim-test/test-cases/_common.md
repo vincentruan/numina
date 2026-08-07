@@ -9,6 +9,8 @@ Shared conventions used by all area case files:
 - [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) — AI chat DeerFlow-fidelity parity (输入/输出/集成+设计出入 D1–D7)
 - [`area7-regression.md`](./area7-regression.md) — Regression sweep (历史缺陷回归 R1–R9)
 - [`area8-expanded-features.md`](./area8-expanded-features.md) — Expanded coverage (Manifesto/盲盒/Baby/Settings/Guest F.1–F.8)
+- [`area9-security-notification.md`](./area9-security-notification.md) — Account security + notification (WebAuthn/2FA/devices/notifications)
+- [`area11-ai-security-adversarial.md`](./area11-ai-security-adversarial.md) — AI/agent adversarial security testing (prompt injection, tenant isolation, tool escalation)
 
 **角色能力矩阵 (Role Capabilities Matrix):** [`role-capabilities.md`](./role-capabilities.md)
 — 每个角色 (owner/member/child) 的权限边界和可见页面清单。

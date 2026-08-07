@@ -773,8 +773,28 @@ class DeerFlowAdapter:
         prefix had no consumer. Skill content is injected by DeerFlow's native
         ``<skill_system>`` system-prompt section (filtered by ``available_skills``
         passed to ``DeerFlowClient``), so the user message only needs the context.
+
+        Security: ``free_text`` (user input) is wrapped in ``<user_message>`` XML
+        delimiters so the LLM treats it as untrusted data, not as system-level
+        instructions. Defense against direct prompt injection (CLAUDE.md §Security
+        Rules rule 3). The chat SKILL.md instructs the model to never follow
+        instructions embedded inside ``<user_message>`` tags.
+
+        Additionally, any existing ``<user_message>`` tags within the free_text
+        are neutralized (``&lt;`` → ``&amp;lt;``) to prevent nested wrapping
+        that could break the delimiter contract.  Broader tag neutralization
+        (system, instruction, override, etc.) is handled by DeerFlow's
+        ``InputSanitizationMiddleware`` at the LangGraph message level.
         """
         ctx_dict = context.model_dump(exclude={"redaction_log"}, exclude_defaults=True)
+        # Wrap user free_text in <user_message> XML delimiters so the LLM treats
+        # it as untrusted data (defense against prompt injection).
+        if "free_text" in ctx_dict and ctx_dict["free_text"]:
+            raw_text = ctx_dict["free_text"]
+            # Neutralize any existing <user_message> tags to prevent nesting.
+            raw_text = raw_text.replace("<user_message>", "&lt;user_message&gt;")
+            raw_text = raw_text.replace("</user_message>", "&lt;/user_message&gt;")
+            ctx_dict["free_text"] = f"<user_message>\n{raw_text}\n</user_message>"
         return json.dumps(ctx_dict, ensure_ascii=False, indent=2)
 
 

@@ -444,6 +444,13 @@ async def _run_asset_report_pipeline(
             ai_text = p.ai_text
             step2_payload = parse_report_json(ai_text)
             if step2_payload is not None:
+                logger.info(
+                    "[_run_asset_report_pipeline] Extracted report JSON: "
+                    "overall_score=%s indicators_count=%d ai_text_length=%d",
+                    step2_payload.get("overall_score"),
+                    len(step2_payload.get("indicators", [])),
+                    len(ai_text),
+                )
                 await bridge.publish(
                     p.run_id,
                     "custom",
@@ -528,19 +535,25 @@ _SYNTHETIC_WISH_ADVICE_TRIGGER = "/wish-advice 生成心愿储蓄建议"
 # in the user's chosen language. The trigger message itself is also localized
 # so the first user input the LLM sees matches the target language.
 _LANGUAGE_INSTRUCTIONS = {
-    "en-US": ("[LANGUAGE REQUIREMENT] Output language: English.\n\n"
-              "IMPORTANT: The ENTIRE JSON output must use English for ALL user-visible text.\n"
-              "- label fields: English (e.g. \"Net Worth Health\", NOT \"净资产健康度\")\n"
-              "- narrative fields: English analysis text with **bold** + bullet lists\n"
-              "- suggestions arrays: English, 1-2 sentences each\n"
-              "- summary field: English, 100-250 words\n"
-              "- Only 'key' fields use snake_case English (e.g. \"net_worth_health\").\n\n"
-              "DO NOT output Chinese text anywhere except in the 'zh' field of data.items bilingual labels."),
-    "zh-CN": ("[语言要求] 输出语言：中文。\n\n"
-              "所有用户可见文本字段必须使用中文：label、narrative、suggestions、summary。\n"
-              "仅 key 字段使用英文 snake_case。"),
-    "default": ("[语言要求] 输出语言：中文。\n\n"
-                "所有用户可见文本字段必须使用中文。仅 key 字段使用英文 snake_case。"),
+    "en-US": (
+        "[LANGUAGE REQUIREMENT] Output language: English.\n\n"
+        "IMPORTANT: The ENTIRE JSON output must use English for ALL user-visible text.\n"
+        '- label fields: English (e.g. "Net Worth Health", NOT "净资产健康度")\n'
+        "- narrative fields: English analysis text with **bold** + bullet lists\n"
+        "- suggestions arrays: English, 1-2 sentences each\n"
+        "- summary field: English, 100-250 words\n"
+        "- Only 'key' fields use snake_case English (e.g. \"net_worth_health\").\n\n"
+        "DO NOT output Chinese text anywhere except in the 'zh' field of data.items bilingual labels."
+    ),
+    "zh-CN": (
+        "[语言要求] 输出语言：中文。\n\n"
+        "所有用户可见文本字段必须使用中文：label、narrative、suggestions、summary。\n"
+        "仅 key 字段使用英文 snake_case。"
+    ),
+    "default": (
+        "[语言要求] 输出语言：中文。\n\n"
+        "所有用户可见文本字段必须使用中文。仅 key 字段使用英文 snake_case。"
+    ),
 }
 
 # Localized synthetic triggers — the slash prefix loads the skill, the rest
@@ -889,7 +902,7 @@ async def _run_numina_agent(
     ``cumulative_usage`` across turns, so the post-stream hooks (suggestions,
     title) see the full conversation.
     """
-    from .run_pipeline import RunPipeline
+    from .run_pipeline import RunPipeline, _get_security_middlewares
 
     # Pre-pipeline setup: resolve dynamic parameters that depend on the
     # family AI config (web-search capability, custom skills) or on the
@@ -969,6 +982,7 @@ async def _run_numina_agent(
         skill_name=_resolve_skill_name,
         available_skills=available_skills,
         skip_active_skill=is_slash_message,
+        middlewares=_get_security_middlewares(),
     ) as p:
         # For slash-activated skills (U2), set the skill context manually
         # after the pipeline's __aenter__ (which skipped set_active_skill).

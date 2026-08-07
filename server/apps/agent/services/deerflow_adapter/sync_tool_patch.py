@@ -211,6 +211,13 @@ def _apply_active_skill_tool_filter(tools):
     all tools (``allowed_tool_names_for_skills`` returns None for undeclared
     skills, meaning allow-all). Only skills that declare ``allowed-tools`` (even
     ``[]``) restrict the tool set.
+
+    Security: ``UserScopedSkillStorage`` is used instead of bare
+    ``LocalSkillStorage`` so custom skills stored under
+    ``users/{family_id}/skills/custom/`` are discoverable. Without the
+    user-scoped storage the filter cannot find custom skills and the fallback
+    path returns all tools unfiltered — granting custom skills full tool access
+    (R4 allowed-tools bypass).
     """
     try:
         from apps.agent.services.deerflow_adapter.active_skill_context import (
@@ -223,10 +230,16 @@ def _apply_active_skill_tool_filter(tools):
     if not active_skill_name:
         return tools
     try:
-        from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
+        from deerflow.skills.storage.user_scoped_skill_storage import (
+            UserScopedSkillStorage,
+        )
         from deerflow.skills.tool_policy import (
             ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES,
             filter_tools_by_skill_allowed_tools,
+        )
+
+        from apps.agent.services.runtime.sandbox_provider import (
+            get_family_sandbox_context,
         )
 
         # review_skill_package is a DeerFlow built-in that only works inside
@@ -237,13 +250,25 @@ def _apply_active_skill_tool_filter(tools):
         _numina_always_available = ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES - {
             "review_skill_package",
         }
-        storage = LocalSkillStorage()
+        # Use UserScopedSkillStorage so custom skills under
+        # users/{family_id}/skills/custom/ are discoverable. Bare
+        # LocalSkillStorage() scans only the builtin directory and fails to
+        # find custom skills — the fallback returns all tools unfiltered.
+        family_id = get_family_sandbox_context()
+        if not family_id:
+            logger.warning(
+                "[sync_tool_patch] no sandbox family_id; skipping tool filter for skill %r",
+                active_skill_name,
+            )
+            return tools
+        storage = UserScopedSkillStorage(user_id=str(family_id))
         all_skills = storage.load_skills(enabled_only=True)
         active_skills = [s for s in all_skills if s.name == active_skill_name]
         if not active_skills:
             logger.warning(
-                "[sync_tool_patch] active skill %r not found in skill storage; skipping tool filter",
+                "[sync_tool_patch] active skill %r not found in skill storage (family=%s); skipping tool filter",
                 active_skill_name,
+                family_id,
             )
             return tools
         filtered = filter_tools_by_skill_allowed_tools(
