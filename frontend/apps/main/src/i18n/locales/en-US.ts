@@ -467,6 +467,7 @@ export default {
     tenantUltraDisabled: '当前家庭资源不支持旗舰模式',
     modelsLoading: '模型加载中，请稍候再发送',
     aiNotEnabled: 'AI assistant not enabled. Please configure it in Settings',
+    noAvailableModel: 'No available AI models. Please check provider status or reset circuit breaker',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     selectModel: '选择模型',

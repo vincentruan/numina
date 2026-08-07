@@ -468,6 +468,9 @@ export default {
     // Shown when the user tries to send a message but no models are available
     // (AI assistant not enabled for the family tenant).
     aiNotEnabled: 'AI 助手未启用，请先在设置中配置',
+    // Shown when /ai/models returns empty — all providers are inactive or
+    // circuit-open. Different from aiNotEnabled (feature toggle off).
+    noAvailableModel: '当前无可用 AI 模型，请检查供应商状态或重置熔断',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     // DeerFlow InputBox keys

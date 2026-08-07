@@ -327,9 +327,14 @@ watch(currentModelSupportsThinking, (supports) => {
   }
 })
 
-// Initialize default model
+// Initialize default model — resolves the 'default' sentinel from AIChatBox
+// to the family's actual default model once /ai/models returns.  When the
+// endpoint returns an empty list (all providers inactive or circuit-open),
+// clear the model name so onSubmit can show a targeted error instead of
+// silently sending 'default' to the agent.
 watch(() => models.value, (newModels) => {
-  if (newModels.length > 0 && !context.value.model_name) {
+  const needsDefault = !context.value.model_name || context.value.model_name === 'default'
+  if (newModels.length > 0 && needsDefault) {
     const defaultModel = newModels.find(m => m.is_default) ?? newModels[0]
     context.value.model_name = defaultModel.name
     const resolved = getResolvedMode(context.value.mode, defaultModel.supports_thinking ?? false, supportsSubagent.value)
@@ -337,6 +342,9 @@ watch(() => models.value, (newModels) => {
       context.value.mode = resolved
     }
     emitContextChange()
+  } else if (newModels.length === 0 && !_resourcesLoading.value && context.value.model_name === 'default') {
+    // All providers inactive / circuit-open — no model can be used.
+    context.value.model_name = ''
   }
 }, { immediate: true })
 
@@ -420,6 +428,9 @@ function onSubmit() {
   if (!context.value.model_name) {
     if (_resourcesLoading.value) {
       showToast(t('aiChat.modelsLoading'))
+    } else if (models.value.length === 0) {
+      // /ai/models returned empty: all providers are inactive or circuit-open.
+      showToast(t('aiChat.noAvailableModel'))
     } else {
       showToast(t('aiChat.aiNotEnabled'))
     }
