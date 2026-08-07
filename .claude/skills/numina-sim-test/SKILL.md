@@ -408,6 +408,27 @@ else
   echo "  (high-interest liabilities: $HIGH_RATE)"
 fi
 
+# --- 8) Child app auth bootstrap check — warn if child cannot authenticate in dev mode ---
+# In dev mode adult (:5173) and child (:5174) are different origins; child app has
+# no standalone login pages and redirects to adult login on 401. Verify that the
+# child step1/step2 auth endpoints exist and can return a temp_token for the first
+# discovered child, so the skill can establish a child session when Phase 5 runs.
+FIRST_CHILD_NAME=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .display_name] | first // empty')
+FIRST_CHILD_USER=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .username] | first // empty')
+CHILD_USERNAME=${FIRST_CHILD_USER:-"$FIRST_CHILD_NAME"}
+CHILD_PASSWORD="DemoPass123"
+STEP1=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login/step1" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$CHILD_USERNAME\",\"password\":\"$CHILD_PASSWORD\"}")
+STEP1_CODE=$(echo "$STEP1" | tail -1)
+STEP1_BODY=$(echo "$STEP1" | sed '$d')
+if [ "$STEP1_CODE" != "200" ]; then
+  echo "  (WARNING: child auth step1 returned HTTP $STEP1_CODE — Area 1/5 cases will be SKIP-CHILD)"
+  echo "    body: $STEP1_BODY"
+else
+  echo "  (child auth step1 OK for user=$CHILD_USERNAME)"
+fi
+
 # Export CHILD_NAMES for downstream phases/report (single source of truth).
 echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
 echo "GATE OK: demouser family present with $CHILD_COUNT child(ren) [$CHILD_NAMES] and $ASSET_COUNT assets."
@@ -594,9 +615,11 @@ cookies + localStorage (see [`area1-child.md`](./test-cases/groups/g3-child/area
 fresh session, then inject the child session via step1/step2 PIN login.
 
 **dev mode:** adult (:5173) and child (:5174) are different origins — the
-adult cookie does NOT carry over. Start a fresh session and navigate to
-`$CHILD_BASE` first; the child PIN/select flow re-establishes auth for that
-origin.
+adult cookie does NOT carry over. Start a fresh session and inject the child
+session via the two-step emoji PIN API from the child origin's page context
+(see `test-cases/_common.md` "Child session injection (dev mode — password-manager
+fallback)"). The child app has no standalone login pages; auth is cookie-based
+and the router guard checks `GET /auth/child/me`.
 
 ```bash
 # docker: clear cookies → stop adult session → start fresh → child injection
@@ -616,7 +639,7 @@ Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./te
 
 - C1.1 Child home — hero, balance, today's chores, wish preview
 - C1.2 Child ledger — transaction list + sibling gift popup
-- C1.3 Child PIN auth — correct PIN (auto-submit) + wrong PIN (shake)
+- C1.3 Child session verification — confirm auth injection landed on child home
 - C1.4 Child wishes — list + status variants
 - C1.5 Child wish create — form submission + validation
 - C1.6 Child tasks — chore list + completion → 待审批
@@ -624,10 +647,10 @@ Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./te
 - C1.8 Child asset detail — no adult-only field leak
 - C1.9 Child settings — child-role-scoped only
 
-**PIN input (C1.3):** snapshot the 4×3 emoji grid, then click the 4 correct
-emoji `@eN` refs **in order**. Refs may shift after each click — re-snapshot
-between clicks if a click causes DOM change. Wrong PIN → assert shake animation
-+ cleared slots + error message.
+**Auth injection (C1.3):** after step1/step2 fetch completes, assert the child
+home page renders with `display_name` from the authenticated child. There is no
+emoji-grid PIN UI in the child app; the PIN is consumed only via the step2 API
+call.
 
 ### End the bsk session(s)
 
