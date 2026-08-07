@@ -406,9 +406,16 @@ def get_system_default_session(
     )
     if session is None:
         return SessionDefaultWrapper(session=None)
+    # Return the checkpointer key as session_id, not the Snowflake PK.
+    # Since the agent switched to UUID thread_ids (commit 09d12ab7),
+    # session.id is the auto-generated Snowflake PK while the checkpointer
+    # stores messages under session.thread_id (UUID). Returning session.id
+    # causes loadHistory to query a checkpointer key that has no data — the
+    # state comes back empty and the conversation appears blank.
+    checkpointer_key = session.thread_id or str(session.id)
     return SessionDefaultWrapper(
         session=SessionDefaultResponse(
-            session_id=str(session.id),
+            session_id=checkpointer_key,
             status=session.status,
             created_at=session.created_at.isoformat() if session.created_at else None,
             updated_at=session.updated_at.isoformat() if session.updated_at else None,

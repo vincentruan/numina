@@ -1,5 +1,6 @@
 import logging
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -159,6 +160,35 @@ from apps.backend.app.services.storage.base import StorageError
 logger = logging.getLogger(__name__)
 
 
+def _wait_for_database(max_retries: int = 10, base_delay: float = 1.0) -> None:
+    """Wait for database to become available with exponential backoff.
+
+    Retries the initial connection to handle transient failures when
+    PostgreSQL is starting up or temporarily unreachable.  SQLite is
+    always available locally so the check is skipped entirely.
+    """
+    if engine.dialect.name == "sqlite":
+        return
+
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return
+        except OperationalError:
+            if attempt == max_retries:
+                logger.error(f"数据库连接失败，已重试 {max_retries} 次，放弃启动")
+                raise
+            delay = min(base_delay * (2 ** (attempt - 1)), 30)
+            logger.warning(
+                f"数据库连接失败 (尝试 {attempt}/{max_retries})，{delay:.1f}s 后重试..."
+            )
+            time.sleep(delay)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize Snowflake ID generator before any DB operations
@@ -192,6 +222,9 @@ async def lifespan(app: FastAPI):
                 f"SQLite {sqlite3.sqlite_version} too old; partial unique indexes "
                 f"require ≥ 3.8.0. Upgrade libsqlite3 in the runtime image."
             )
+
+    # Wait for database to become available (handles transient connection failures)
+    _wait_for_database()
 
     # Run schema migration with distributed locking (handles all DB types)
     logger.info("执行数据库结构对齐检查...")

@@ -97,6 +97,10 @@ def parse_report_json(ai_text: str) -> dict | None:
     incomplete => 0 events). Shared by the worker (in-graph emission) and
     the router (harvest) — kept here to avoid a circular import.
 
+    The AI output may contain multiple JSON blocks (e.g. tool results, intermediate
+    steps). We prefer the one with the "indicators" key (canonical asset report schema).
+    If none has "indicators", fall back to the first valid dict.
+
     On success the parsed dict is passed through ``normalize_report_json``
     to ensure ``data.items`` uses the canonical ``{key, zh, en, value}``
     format regardless of the LLM's output shape.
@@ -110,11 +114,22 @@ def parse_report_json(ai_text: str) -> dict | None:
     fence_re = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
     candidates: list[str] = [m.group(1) for m in fence_re.finditer(ai_text)]
     candidates.append(ai_text)
+
+    first_valid: dict | None = None
     for cand in candidates:
         try:
             parsed = json_repair.repair_json(cand, return_objects=True)
             if isinstance(parsed, dict):
-                return normalize_report_json(parsed)
+                # Prefer JSON with "indicators" key (canonical asset report schema)
+                if "indicators" in parsed:
+                    return normalize_report_json(parsed)
+                # Otherwise remember the first valid dict as fallback
+                if first_valid is None:
+                    first_valid = parsed
         except Exception:
             continue
+
+    # No JSON with "indicators" found — return the first valid dict (if any)
+    if first_valid is not None:
+        return normalize_report_json(first_valid)
     return None

@@ -291,6 +291,8 @@ async def async_init_checkpointer(db_path: str | None = None) -> None:
                     kwargs={"autocommit": True},
                     min_size=2,
                     max_size=10,
+                    open=False,  # defer to await .open() — avoids psycopg_pool
+                    # RuntimeWarning about constructor-time auto-open
                 )
                 await _checkpointer_pool.open()
                 _shared_checkpointer = AsyncPostgresSaver(
