@@ -17,6 +17,13 @@ let routerNprogressActive: boolean = false
 // case increment must NOT restart NProgress — the bar was already completed.
 let routerDone: boolean = false
 
+// Track whether completeGlobalLoading() or complete() already force-cleared
+// all pending state. When true, subsequent decrement() calls are expected
+// (the async work completed after the force-complete) and should be silently
+// ignored rather than warn about "unknown instance". Reset by increment()
+// when a new loading cycle starts (e.g. KeepAlive re-activation).
+let forceCompleted: boolean = false
+
 // Track router's safety timeout ID so increment() can clear it (prevents TOCTOU race)
 let routerTimeoutId: ReturnType<typeof setTimeout> | null = null
 
@@ -49,6 +56,9 @@ export function usePageLoading() {
       clearTimeout(routerTimeoutId)
       routerTimeoutId = null
     }
+
+    // Reset force-completed flag — new loading cycle starting
+    forceCompleted = false
 
     const instance = pendingInstances.get(instanceId)
     if (!instance || !instance.active) {
@@ -101,6 +111,12 @@ export function usePageLoading() {
 
     // Guard: instance must exist, be active, and have pending increments
     if (!instance || !instance.active || instance.count === 0) {
+      // If completeGlobalLoading() or complete() already force-cleared all
+      // state (e.g. stuck-timeout fired while fetchMe()/refresh was still
+      // in flight), subsequent decrement() calls are expected — the async
+      // work just finished late. Silently ignore instead of warning.
+      if (forceCompleted) return
+
       if (import.meta.env.DEV) {
         if (!instance) {
           console.warn('[usePageLoading] decrement() called on unknown instance')
@@ -151,6 +167,7 @@ export function usePageLoading() {
     // so we must complete NProgress unconditionally
     NProgress.done()
     nprogressStarted = false
+    forceCompleted = true
   }
 
   // Shared cleanup: withdraw this instance's pending contributions and
@@ -222,6 +239,7 @@ export function completeGlobalLoading(): void {
   NProgress.done()
   nprogressStarted = false
   routerNprogressActive = false
+  forceCompleted = true
   // Signal to increment() that the router timeout already fired. If a page
   // mounts later (e.g. Transition out-in delay pushed it past the timeout),
   // increment() will NOT restart NProgress — the bar was already completed.
@@ -264,6 +282,7 @@ export function _resetForTesting(): void {
   nprogressStarted = false
   routerNprogressActive = false
   routerDone = false
+  forceCompleted = false
   if (stuckTimeoutId !== null) {
     clearTimeout(stuckTimeoutId)
     stuckTimeoutId = null
