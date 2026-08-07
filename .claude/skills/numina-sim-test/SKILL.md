@@ -777,6 +777,13 @@ case's outcome, then write the report.
 > P0–P3 severity grading, effort estimates, fix plans, or UI/UX visual-audit
 > dimensions (color/spacing/contrast). This skill records test results —
 > fixing is out of scope and handled separately if the user requests it.
+>
+> **Case-UI consistency check:** before writing "expected vs actual", verify the
+> case's asserted route/label still matches the current source tree. If a case
+> asserts `/settings/notification` but the router defines `/settings/notifications`,
+> record it as a case defect (not a product bug) and note the correct route in the
+> report. Use the same sources that grounded the test-cases (router files, i18n
+> keys, API response schemas) to resolve mismatches.
 
 ### Output path
 
