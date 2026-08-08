@@ -212,6 +212,17 @@ export function useTenantAiResources(): {
   // 自动加载
   onMounted(loadResources)
 
+  // Race-condition fix: onMounted(loadResources) can fire before the Pinia
+  // family store is populated (App.vue fetchMe()→fetchFamily() is async and
+  // not awaited). In that case loadResources() bails out at the !familyId
+  // check and never retries. Watch familyId so that when it eventually lands
+  // we retry — but only if we haven't already loaded models.
+  watch(familyId, (newId) => {
+    if (newId && models.value.length === 0 && !loading.value) {
+      loadResources()
+    }
+  })
+
   return {
     models,
     tenantConfig,
