@@ -187,7 +187,11 @@ jobs:
           # DOCKER_BUILDKIT=1 enables layer caching for faster rebuilds
           docker compose build backend frontend-main frontend-child nginx
           # Start PostgreSQL (compose postgres service uses a profile not supported by the runner's docker compose version)
-          docker compose create-network 2>/dev/null || docker network create numina_default 2>/dev/null || true
+          docker network rm numina_default 2>/dev/null || true
+          docker network create \
+            --label com.docker.compose.project=numina \
+            --label com.docker.compose.network=default \
+            numina_default
           docker run -d --name numina-postgres \
             --network numina_default \
             -e POSTGRES_USER=numina \
