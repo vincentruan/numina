@@ -334,6 +334,7 @@ import { useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
+import { useExchangeRate } from '@/composables/useExchangeRate'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
 import { updateSettings } from '@/api/auth'
 
@@ -351,6 +352,7 @@ const { increment, decrement } = usePageLoading()
 
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
+const { ensureRate } = useExchangeRate()
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
 const updatingViewMode = ref(false)
 const activeStatus = ref<string | null>(null)
@@ -446,6 +448,14 @@ interface AssetGroup {
 
 const groupedByCategory = computed<AssetGroup[]>(() => {
   const assets = filteredByCategoryAssets.value
+  // Build a map of category_id → server-converted amount from allocation data.
+  // This ensures category subtotals display in the user's default_currency
+  // rather than raw CNY values with a swapped symbol.
+  const allocationByCategory = new Map<string, number>()
+  for (const item of dashboardStore.allocation || []) {
+    allocationByCategory.set(item.category_id, item.amount)
+  }
+
   const map = new Map<string, { category: Category | undefined; items: Asset[]; subtotal: number }>()
 
   for (const asset of assets) {
@@ -456,8 +466,19 @@ const groupedByCategory = computed<AssetGroup[]>(() => {
       map.set(key, group)
     }
     group.items.push(asset)
-    const val = Number(asset.current_value ?? 0)
-    group.subtotal += isNaN(val) ? 0 : val
+  }
+
+  // Use server-converted allocation amounts for subtotals (fallback to raw sum
+  // only when allocation data is not yet available, e.g. during initial load).
+  for (const [key, group] of map) {
+    if (key !== UNCATEGORIZED_KEY && allocationByCategory.has(key)) {
+      group.subtotal = allocationByCategory.get(key)!
+    } else {
+      for (const asset of group.items) {
+        const val = Number(asset.current_value ?? 0)
+        group.subtotal += isNaN(val) ? 0 : val
+      }
+    }
   }
 
   // Sort by subtotal descending (highest value category first)
@@ -496,13 +517,13 @@ const moreActions = computed(() => [
 ])
 
 const sectionTitle = computed(() => {
-  const status = activeStatus.value || 'in_use'
-  const pageInfo = dashboardStore.assetPageInfo.get(status)
-  // Use server-side total count when available, fallback to displayed assets count
-  const count = pageInfo ? pageInfo.total : dashboardStore.displayedAssets.length
   if (!activeStatus.value) {
+    // "All" filter: use global total from statesSummary (matches StatusSummaryGrid)
+    const count = dashboardStore.statesSummary?.total_count ?? dashboardStore.displayedAssets.length
     return t('dashboard.section.assetList', { count })
   }
+  const pageInfo = dashboardStore.assetPageInfo.get(activeStatus.value)
+  const count = pageInfo ? pageInfo.total : dashboardStore.displayedAssets.length
   const label = statusLabel(activeStatus.value)
   return `${label} (${count})`
 })
@@ -545,10 +566,15 @@ function onStatusSelect(status: string | null) {
   activeStatus.value = status
   activeCategoryId.value = null
   activeCategoryIndex.value = 0
-  const targetStatus = status || 'in_use'
-  dashboardStore.resetAssetPagination(targetStatus)
-  dashboardStore.fetchAssetsPage(targetStatus, 1, 20, '')
-  dashboardStore.fetchCategoryCounts(targetStatus)
+  if (!status) {
+    // "All" filter: fetch across all statuses
+    dashboardStore.fetchAllAssetsPage(20)
+    dashboardStore.fetchCategoryCounts('in_use')
+  } else {
+    dashboardStore.resetAssetPagination(status)
+    dashboardStore.fetchAssetsPage(status, 1, 20, '')
+    dashboardStore.fetchCategoryCounts(status)
+  }
 }
 
 // Type tab change (ported): map tab index → asset_type filter, reset pagination, refetch page 1
@@ -700,12 +726,42 @@ async function setViewMode(mode: 'card' | 'list') {
 onMounted(() => {
   // Attach scroll listener for freeze/unfreeze logic
   window.addEventListener('scroll', onScroll, { passive: true })
+  const initialStatus = activeStatus.value || 'in_use'
   // Load category counts for secondary filter nav on initial render
-  dashboardStore.fetchCategoryCounts(activeStatus.value || 'in_use')
+  dashboardStore.fetchCategoryCounts(initialStatus)
   // Load initial asset page — required because van-list is gated by
   // v-if="filteredByCategoryAssets.length" and never fires @load on empty list.
-  dashboardStore.fetchAssetsPage(activeStatus.value || 'in_use', 1, 20, '')
+  // When no status filter ("All"), fetch across all statuses.
+  if (!activeStatus.value) {
+    dashboardStore.fetchAllAssetsPage(20)
+  } else {
+    dashboardStore.fetchAssetsPage(initialStatus, 1, 20, '')
+  }
 })
+
+// Prefetch exchange rates for all unique currencies in displayed assets
+// AND the user's target currency, so formatConverted() in child components
+// (AssetListItem, AssetCard) can show converted amounts on first render.
+watch(
+  [() => filteredByCategoryAssets.value, () => authStore.user?.default_currency],
+  ([assets, targetCurrency]) => {
+    const currencies = new Set<string>()
+    // Prefetch target currency rate (user's default_currency)
+    if (targetCurrency && targetCurrency !== 'CNY') {
+      currencies.add(targetCurrency)
+    }
+    // Prefetch source currency rates for non-CNY assets
+    for (const asset of assets) {
+      if (asset.currency && asset.currency !== 'CNY') {
+        currencies.add(asset.currency)
+      }
+    }
+    for (const code of currencies) {
+      ensureRate(code)
+    }
+  },
+  { immediate: true },
+)
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)

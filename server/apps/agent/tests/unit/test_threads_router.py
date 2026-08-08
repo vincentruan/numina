@@ -17,10 +17,12 @@ from fastapi import HTTPException
 
 from apps.agent.routers.threads import (
     ThreadSearchRequest,
+    ThreadStateUpdateRequest,
     delete_thread,
     get_thread,
     get_thread_state,
     search_threads,
+    update_thread_state,
 )
 
 
@@ -225,3 +227,81 @@ async def test_get_thread_state_falls_back_to_session_when_no_checkpoint():
         assert result.parent_checkpoint_id is None
         assert result.metadata["title"] == "孤儿会话"
         assert result.created_at  # coerced ISO timestamp, not empty
+
+
+async def test_update_thread_state_rejects_fallback_title():
+    """update_thread_state must refuse to persist a malformed fallback title.
+
+    Regression: thinking-block repr like ``[{'signature': '', 'thinking': '...'}]``
+    leaks into the session title because the DeerFlow state update endpoint wrote
+    the checkpoint title value directly to the backend without validation.
+    """
+    import langgraph.checkpoint.base as cb
+
+    checkpoint = cb.empty_checkpoint()
+    checkpoint["channel_values"] = {"title": "old-title"}
+
+    fake_tuple = SimpleNamespace(
+        checkpoint=checkpoint,
+        metadata={"family_id": "family-1"},
+        config={"configurable": {"thread_id": "thread-1"}},
+        parent_config=None,
+    )
+
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+    ):
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value=None)
+        repo.update_summary = AsyncMock()
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=fake_tuple)
+        checkpointer.aput = AsyncMock(
+            return_value={"configurable": {"checkpoint_id": "new-checkpoint-id"}}
+        )
+
+        bad_title = "[{'signature': '', 'thinking': '用户希望为一段对话生成一个简洁的标题...'}]"
+        body = ThreadStateUpdateRequest(values={"title": bad_title})
+        result = await update_thread_state(
+            "thread-1", body, "family-1", verified=_verified()
+        )
+
+        # Checkpoint is updated as requested (DeerFlow semantics)
+        assert result.values["title"] == bad_title
+        # But the session row must NOT be updated with the fallback title
+        repo.update_summary.assert_not_awaited()
+
+
+async def test_update_thread_state_accepts_proper_title():
+    """update_thread_state must persist a clean, non-fallback title to the session."""
+    import langgraph.checkpoint.base as cb
+
+    checkpoint = cb.empty_checkpoint()
+    checkpoint["channel_values"] = {"title": "old-title"}
+
+    fake_tuple = SimpleNamespace(
+        checkpoint=checkpoint,
+        metadata={"family_id": "family-1"},
+        config={"configurable": {"thread_id": "thread-1"}},
+        parent_config=None,
+    )
+
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+    ):
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value=None)
+        repo.update_summary = AsyncMock()
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=fake_tuple)
+        checkpointer.aput = AsyncMock(
+            return_value={"configurable": {"checkpoint_id": "new-checkpoint-id"}}
+        )
+
+        body = ThreadStateUpdateRequest(values={"title": "家庭资产总览"})
+        await update_thread_state("thread-1", body, "family-1", verified=_verified())
+
+        repo.update_summary.assert_awaited_once()
+        assert repo.update_summary.call_args.kwargs["title"] == "家庭资产总览"

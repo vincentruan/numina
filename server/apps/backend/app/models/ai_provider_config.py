@@ -20,7 +20,7 @@ class AIProviderConfig(Base):
     vision_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True, default=60)
     thinking_supported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Per-response output token cap. NULL → resolved by agent's _resolve_max_tokens
     # via system-config.yaml prefix table; explicit non-NULL overrides the default.
     max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

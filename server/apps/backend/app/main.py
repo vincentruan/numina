@@ -1,5 +1,6 @@
 import logging
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -147,8 +148,8 @@ from apps.backend.app.routers import (
     notification_channels as notification_channels_router,
 )
 from apps.backend.app.routers import notification_config as notification_config_router
-from apps.backend.app.routers import notifications as notifications_router
 from apps.backend.app.routers import reminders as reminders_router
+from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
@@ -157,6 +158,35 @@ from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
 
 logger = logging.getLogger(__name__)
+
+
+def _wait_for_database(max_retries: int = 10, base_delay: float = 1.0) -> None:
+    """Wait for database to become available with exponential backoff.
+
+    Retries the initial connection to handle transient failures when
+    PostgreSQL is starting up or temporarily unreachable.  SQLite is
+    always available locally so the check is skipped entirely.
+    """
+    if engine.dialect.name == "sqlite":
+        return
+
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return
+        except OperationalError:
+            if attempt == max_retries:
+                logger.error(f"数据库连接失败，已重试 {max_retries} 次，放弃启动")
+                raise
+            delay = min(base_delay * (2 ** (attempt - 1)), 30)
+            logger.warning(
+                f"数据库连接失败 (尝试 {attempt}/{max_retries})，{delay:.1f}s 后重试..."
+            )
+            time.sleep(delay)
 
 
 @asynccontextmanager
@@ -193,6 +223,9 @@ async def lifespan(app: FastAPI):
                 f"require ≥ 3.8.0. Upgrade libsqlite3 in the runtime image."
             )
 
+    # Wait for database to become available (handles transient connection failures)
+    _wait_for_database()
+
     # Run schema migration with distributed locking (handles all DB types)
     logger.info("执行数据库结构对齐检查...")
     migration_summary = run_schema_migration(engine)
@@ -213,6 +246,20 @@ async def lifespan(app: FastAPI):
         ]
     ):
         logger.info("数据库结构已完整，无需迁移")
+
+    # Refuse to boot if legacy storage env vars are still set. This check lives
+    # in lifespan (not module import time) so the Alembic CLI can still run
+    # migrations while legacy vars are present.
+    from packages.core.settings import check_legacy_storage_env_vars
+
+    legacy_storage_vars = check_legacy_storage_env_vars()
+    if legacy_storage_vars:
+        raise RuntimeError(
+            "检测到已废弃的远程存储环境变量: "
+            f"{', '.join(legacy_storage_vars)}。\n"
+            "远程备份已改为按家庭维度配置，请在「设置 → 家庭管理 → 家庭远程备份」中配置，"
+            "并删除上述环境变量后重新启动。"
+        )
 
     db = SessionLocal()
     try:
@@ -476,7 +523,6 @@ app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")
 app.include_router(child_wishes_router.router, prefix="/api/v1")
 app.include_router(milestones_router.router, prefix="/api/v1")
-app.include_router(notifications_router.router, prefix="/api/v1")
 app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(blind_box_router.router, prefix="/api/v1")
@@ -500,6 +546,7 @@ app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
 app.include_router(ai_web_search_router.router, prefix="/api/v1")
 app.include_router(ai_wish_advice_router.router, prefix="/api/v1")
 app.include_router(family_config_router.router, prefix="/api/v1")
+app.include_router(storage_backend_router.router, prefix="/api/v1")
 app.include_router(user_config_router.router, prefix="/api/v1")
 app.include_router(manifesto_router.router, prefix="/api/v1")
 app.include_router(child_manifesto_router.router, prefix="/api/v1")

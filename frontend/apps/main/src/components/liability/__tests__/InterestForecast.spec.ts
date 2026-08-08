@@ -33,7 +33,7 @@ vi.mock('vant', () => ({
 }))
 
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ format: (n: number) => String(n), formatPercent: (n: number) => String(n) }),
+  useCurrency: () => ({ format: (n: number) => String(n), formatPercent: (n: number) => String(n), formatConverted: (n: number | string) => '¥' + n }),
 }))
 
 import * as liabilityApi from '@/api/liabilities'

@@ -626,7 +626,7 @@ def list_assets_for_family(
         Asset.family_id == family_id, Asset.is_archived.is_(False)
     )
     if category:
-        q = q.filter(Asset.category == category)
+        q = q.filter(Asset.category.has(name=category))
     rows = q.limit(limit).all()
 
     dc = (user.default_currency or "CNY") if user else None

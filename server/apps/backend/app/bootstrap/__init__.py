@@ -28,12 +28,10 @@ def run_bootstrap(db: Session) -> None:
     )
     from apps.backend.app.bootstrap.invitation_codes import bootstrap_invitation_codes
     from apps.backend.app.bootstrap.skills import bootstrap_skills
-    from apps.backend.app.bootstrap.storage_backends import bootstrap_storage_backends
 
     bootstrap_categories(db)
     bootstrap_currencies(db)
     bootstrap_invitation_codes(db)
-    bootstrap_storage_backends(db)
     bootstrap_category_financial_defaults(db)
     bootstrap_agents(db)
     bootstrap_skills(db)

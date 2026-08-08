@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as aiApi from '@/api/ai'
-import type { AIConfig, ProviderConfig, AITaskStatus } from '@/api/ai'
+import type { ProviderConfig, AITaskStatus } from '@/api/ai'
 
 /** Background task registry entry for tracking tasks across navigation. */
 export interface BackgroundTask {
@@ -14,7 +14,6 @@ export interface BackgroundTask {
 }
 
 export const useAIStore = defineStore('ai', () => {
-  const config = ref<AIConfig | null>(null)
   const configs = ref<ProviderConfig[]>([])
   const loading = ref(false)
   const draftQuery = ref('')
@@ -22,8 +21,6 @@ export const useAIStore = defineStore('ai', () => {
   const webSearchEnabled = ref(false)
   const backgroundTasks = ref<Map<string, BackgroundTask>>(new Map())
 
-  const aiEnabled = computed(() => config.value?.ai_enabled ?? false)
-  const aiProvider = computed(() => config.value?.ai_provider ?? null)
   const activeConfigs = computed(() =>
     configs.value.filter((c) => !c.circuit_open),
   )
@@ -59,16 +56,6 @@ export const useAIStore = defineStore('ai', () => {
     backgroundTasks.value.clear()
   }
 
-  async function fetchConfig() {
-    loading.value = true
-    try {
-      const res = await aiApi.getAIConfig()
-      config.value = res.data
-    } finally {
-      loading.value = false
-    }
-  }
-
   async function fetchConfigs() {
     loading.value = true
     try {
@@ -77,12 +64,6 @@ export const useAIStore = defineStore('ai', () => {
     } finally {
       loading.value = false
     }
-  }
-
-  async function updateConfig(data: aiApi.AIConfigUpdate) {
-    const res = await aiApi.updateAIConfig(data)
-    config.value = res.data
-    return res.data
   }
 
   async function reorderConfigs(order: string[]) {
@@ -129,14 +110,11 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   return {
-    config,
     configs,
     loading,
     draftQuery,
     deepThinkEnabled,
     webSearchEnabled,
-    aiEnabled,
-    aiProvider,
     activeConfigs,
     backgroundTasks,
     runningBackgroundTasks,
@@ -146,9 +124,7 @@ export const useAIStore = defineStore('ai', () => {
     getBackgroundTask,
     clearBackgroundTask,
     clearAllBackgroundTasks,
-    fetchConfig,
     fetchConfigs,
-    updateConfig,
     reorderConfigs,
     resetCircuit,
     testConnection,

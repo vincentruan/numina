@@ -18,7 +18,6 @@ from typing import Any
 from json_repair import repair_json
 from sqlalchemy.orm import Session
 
-from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.services.ai_crypto import decrypt_api_key
 
 logger = logging.getLogger(__name__)
@@ -232,6 +231,40 @@ def _validate_json(data: Any, skill_id: str) -> bool:
         if not all(k in data for k in required):
             return False
 
+    return True
+
+
+def _validate_report_data_items(data: dict) -> bool:
+    """Deep-validate report ``data.items`` structure.
+
+    If any indicator carries ``data.items``, each item must be an object with
+    at least ``key`` and ``value`` fields. Items missing ``zh``/``en`` labels
+    are still accepted (the worker normalization fills them in), but items
+    that are not dicts or lack both ``key`` and a numeric ``value`` fail
+    validation — this catches LLM outputs like ``data.items: [1, 2, 3]``.
+    """
+    indicators = data.get("indicators", [])
+    if not isinstance(indicators, list):
+        return True  # Let _validate_json handle the type error
+    for indicator in indicators:
+        if not isinstance(indicator, dict):
+            continue
+        indicator_data = indicator.get("data")
+        if not isinstance(indicator_data, dict):
+            continue
+        items = indicator_data.get("items")
+        if items is None:
+            continue
+        if not isinstance(items, list):
+            return False
+        for item in items:
+            if not isinstance(item, dict):
+                return False
+            # Must have at least a key or a value to be useful
+            has_key = "key" in item or "name" in item or "category_name" in item
+            has_value = "value" in item or "percentage" in item or "amount" in item
+            if not (has_key or has_value):
+                return False
     return True
 
 
@@ -475,16 +508,9 @@ async def _llm_fallback_extract(
         - data: extracted structured data or None on failure
         - error_type: specific error type for user messaging (e.g., "quota_exceeded")
     """
-    configs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == family_id,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-            AIProviderConfig.is_active.is_(True),
-        )
-        .order_by(AIProviderConfig.display_order.asc().nulls_last())
-        .all()
-    )
+    from apps.backend.app.routers.ai_config import get_active_configs_with_recovery
+
+    configs = get_active_configs_with_recovery(db, family_id)
 
     if not configs:
         logger.warning(

@@ -9,6 +9,8 @@ Shared conventions used by all area case files:
 - [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) — AI chat DeerFlow-fidelity parity (输入/输出/集成+设计出入 D1–D7)
 - [`area7-regression.md`](./area7-regression.md) — Regression sweep (历史缺陷回归 R1–R9)
 - [`area8-expanded-features.md`](./area8-expanded-features.md) — Expanded coverage (Manifesto/盲盒/Baby/Settings/Guest F.1–F.8)
+- [`area9-security-notification.md`](./area9-security-notification.md) — Account security + notification (WebAuthn/2FA/devices/notifications)
+- [`area11-ai-security-adversarial.md`](./area11-ai-security-adversarial.md) — AI/agent adversarial security testing (prompt injection, tenant isolation, tool escalation)
 
 **角色能力矩阵 (Role Capabilities Matrix):** [`role-capabilities.md`](./role-capabilities.md)
 — 每个角色 (owner/member/child) 的权限边界和可见页面清单。
@@ -21,7 +23,7 @@ Shared conventions used by all area case files:
 - `demouser` / `DemoPass123` is the adult demo account. Child display_names
   under it are **discovered at gate time** (Phase 1.5 reads `/family/members`
   where `role=="child"`) — they are NOT hard-coded. Docker seed default:
-  小宝 (`xiaobao`) + 大宝 (`dabao`), PIN `🌟🌈`. Dev/other deployments may
+  小宝 (`xiaobao`) + 大宝 (`dabao`), PIN `🐱🐶🌟🌈`. Dev/other deployments may
   differ (e.g. `demochild`, 小明); always use the names the gate printed, not
   a fixed string. See "Child account names" below.
 - Assertions marked `[console]` are checked via `bsk evaluate` reading
@@ -119,7 +121,7 @@ driven from the child origin's page context. This is the dev-mode analog of
 the adult cookie+localStorage injection in SKILL.md "Phase 2 fallback".
 
 The child PIN is **not always known** for dev/other deployments (docker seed
-defaults `🌟🌈` for 小宝/大宝; dev may use `demochild`/小明 with a different
+defaults `🐱🐶🌟🌈` for 小宝/大宝; dev may use `demochild`/小明 with a different
 or unknown PIN). If the PIN is unknown, reset it out-of-band via sqlite
 before this step (bcrypt hash, NFC-normalized joined emoji sequence) — this
 skill does not reset credentials.

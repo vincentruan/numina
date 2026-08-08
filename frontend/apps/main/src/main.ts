@@ -25,4 +25,9 @@ configureAuthHttp(http)
 const currencyStore = useCurrencyStore()
 currencyStore.fetchCurrencies()
 
+// Vue Router 4: wait for initial route resolution before mounting.
+// Without this, direct navigation to non-root URLs (e.g. /finance) can result
+// in a blank page because router-view renders before the route is resolved.
+await router.isReady()
+
 app.mount('#app')

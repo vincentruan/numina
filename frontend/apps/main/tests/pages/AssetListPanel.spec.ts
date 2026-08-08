@@ -73,6 +73,7 @@ const defaultStore = () => ({
   assetPageInfo: new Map(),
   fetchAll: vi.fn(() => Promise.resolve()),
   fetchAssetsPage: vi.fn(() => Promise.resolve()),
+  fetchAllAssetsPage: vi.fn(() => Promise.resolve()),
   fetchCategoryCounts: vi.fn(() => Promise.resolve()),
   fetchTrend: vi.fn(() => Promise.resolve()),
   loadNextAssetsPage: vi.fn(() => Promise.resolve()),

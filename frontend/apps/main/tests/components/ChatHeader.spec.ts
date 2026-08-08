@@ -268,6 +268,61 @@ describe('ChatHeader', () => {
       expect(vm.canEditTitle).toBe(false)
       expect(wrapper.find('.header-edit-btn').exists()).toBe(false)
     })
+
+    it('cannot edit when titleGenerating is true (LLM title still pending)', async () => {
+      wrapper = mount(ChatHeader, {
+        props: {
+          activeThreadId: 'thread-gen',
+          sessions: [
+            { thread_id: 'thread-gen', title: 'User input as temp title', titleGenerating: true, updated_at: Date.now() } as any,
+          ],
+        },
+        global: { stubs: vantStubs },
+      })
+
+      await nextTick()
+
+      const vm = wrapper.vm as any
+      expect(vm.isTitleGenerating).toBe(true)
+      expect(vm.canEditTitle).toBe(false)
+      expect(wrapper.find('.header-edit-btn').exists()).toBe(false)
+    })
+
+    it('shows generating indicator when titleGenerating is true', async () => {
+      wrapper = mount(ChatHeader, {
+        props: {
+          activeThreadId: 'thread-gen2',
+          sessions: [
+            { thread_id: 'thread-gen2', title: 'My temp title', titleGenerating: true, updated_at: Date.now() } as any,
+          ],
+        },
+        global: { stubs: vantStubs },
+      })
+
+      await nextTick()
+
+      const indicator = wrapper.find('.title-generating-indicator')
+      expect(indicator.exists()).toBe(true)
+      expect(indicator.findAll('.generating-dot').length).toBe(3)
+    })
+
+    it('hides generating indicator when titleGenerating is false', async () => {
+      wrapper = mount(ChatHeader, {
+        props: {
+          activeThreadId: 'thread-done',
+          sessions: [
+            { thread_id: 'thread-done', title: 'Final Title', titleGenerating: false, updated_at: Date.now() } as any,
+          ],
+        },
+        global: { stubs: vantStubs },
+      })
+
+      await nextTick()
+
+      expect(wrapper.find('.title-generating-indicator').exists()).toBe(false)
+      // Edit button should now be visible
+      expect(wrapper.find('.header-edit-btn').exists()).toBe(true)
+    })
   })
 
   describe('Navigation Functions', () => {

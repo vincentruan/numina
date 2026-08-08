@@ -59,9 +59,6 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 
 ## Cross-Cutting Conventions
 
-- **i18n required for all UI strings** — every user-facing string (toasts, dialogs, labels, status text) must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings directly in `.vue` files or `.ts` logic — not even in template ternaries. Applies to both `frontend/apps/main` and `frontend/apps/child`.
-- **Toast 使用 Vant 图标** — 根据 `frontend/CLAUDE.md` §Key Invariants 选择正确的 toast 函数（`showSuccessToast`/`showFailToast`/`showLoadingToast`），i18n 文案不含 emoji。
-- **Error messages in Chinese** — backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
 
@@ -83,22 +80,34 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 | `ui-bugs/` | UI 问题 | 深色模式 CSS 特异性、Vant4 Field 绑定 |
 | `developer-experience/` | 开发体验 | CodeGraph 使用、CLAUDE.md 模块化、i18n 切换 |
 
-### 进度文档
-
-`docs/deerflow-integration/` 存放 DeerFlow 集成的进度跟踪文档（核对清单、验收报告、差距分析），不属于经验教训，但可作为功能对比参考。
-
 ## CodeGraph
 
-Prefer CodeGraph MCP (`codegraph_*` tools) over grep/read for structural code queries. See [`codegraph-structural-code-search-2026-06-10.md`](./docs/solutions/developer-experience/codegraph-structural-code-search-2026-06-10.md) for setup and edge cases.
+CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file in this project. Reads are sub-millisecond and return structural information grep cannot. Prefer `codegraph_*` tools over grep/read for structural queries. See [`codegraph-structural-code-search-2026-06-10.md`](./docs/solutions/developer-experience/codegraph-structural-code-search-2026-06-10.md) for setup and edge cases.
 
-| Query | Tool | Example |
-|-------|------|---------|
-| "Where is X defined?" | `codegraph_search` | Find symbol by name |
-| "What calls Y?" | `codegraph_callers` | Trace upstream deps |
-| "How does X reach Y?" | `codegraph_trace` | Full call path in one call |
-| "What breaks if Z changes?" | `codegraph_impact` | Change impact analysis |
-| "Context for a task" | `codegraph_context` | Search + callers + callees |
-| "Multiple symbols' source" | `codegraph_explore` | Batch retrieval |
+| Query | Tool |
+|-------|------|
+| "Where is X defined?" / "Find symbol named X" | `codegraph_search` |
+| "What calls function Y?" | `codegraph_callers` |
+| "What does Y call?" | `codegraph_callees` |
+| "How does X reach Y? / trace the flow" | `codegraph_trace` (one call = whole path, incl. dynamic hops) |
+| "What breaks if Z changes?" | `codegraph_impact` |
+| "Show me Y's signature / source / docstring" | `codegraph_node` |
+| "Context for a task/area" | `codegraph_context` |
+| "Multiple symbols' source at once" | `codegraph_explore` |
+| "What files exist under path/" | `codegraph_files` |
+| "Is the index healthy?" | `codegraph_status` |
+
+### Rules of thumb
+
+- **Trust codegraph results.** They come from a full AST parse. Do NOT re-verify with grep — slower, less accurate, wastes context.
+- **Don't grep first** when looking up a symbol by name. `codegraph_search` returns kind + location + signature in one call.
+- **Don't chain `codegraph_search` + `codegraph_node`** for context — `codegraph_context` is one call.
+- **Don't loop `codegraph_node`** over many symbols — one `codegraph_explore` returns several symbols' source in a single capped call.
+- **Index lag**: file watcher debounces ~500ms behind writes; don't re-query immediately after editing.
+
+### If `.codegraph/` doesn't exist
+
+The MCP server returns "not initialized." Ask: *"Want me to run `codegraph init -i` to build the index?"*
 
 ## Module Documentation
 
@@ -106,6 +115,7 @@ For module-specific dev commands, conventions, and patterns:
 
 | Module | CLAUDE.md | README |
 |--------|-----------|--------|
+| Server workspace | [`server/CLAUDE.md`](./server/CLAUDE.md) | — |
 | Backend | [`server/apps/backend/CLAUDE.md`](./server/apps/backend/CLAUDE.md) | [`server/apps/backend/README.md`](./server/apps/backend/README.md) |
 | Agent | [`server/apps/agent/CLAUDE.md`](./server/apps/agent/CLAUDE.md) | [`server/apps/agent/README.md`](./server/apps/agent/README.md) |
 | Scheduler Worker | [`server/apps/scheduler_worker/CLAUDE.md`](./server/apps/scheduler_worker/CLAUDE.md) | [`server/apps/scheduler_worker/README.md`](./server/apps/scheduler_worker/README.md) |
@@ -125,52 +135,11 @@ This is a `pnpm` workspace (`pnpm-workspace.yaml`) for the frontend, and a `uv` 
 
 ### Frontend
 
-```bash
-# Main app (adult-facing) — http://localhost:5173
-cd frontend/apps/main
-pnpm dev --host 0.0.0.0  # Vite dev server, 支持局域网访问
-pnpm typecheck           # vue-tsc --noEmit -p tsconfig.app.json (checks src; NOT root tsconfig — that one has files:[] and is a no-op)
-pnpm typecheck:test      # vue-tsc --noEmit -p tsconfig.vitest.json (also checks tests/)
-pnpm test:run            # vitest run (no watch)
-pnpm lint                # ESLint
-pnpm build               # Production build
+See [`frontend/CLAUDE.md`](./frontend/CLAUDE.md) §Commands.
 
-# Child app — http://localhost:5174
-cd frontend/apps/child
-pnpm dev --host 0.0.0.0
-pnpm typecheck
-pnpm test:run
+### Server
 
-# Workspace-wide (from frontend/)
-pnpm -r typecheck  # type-check all apps + packages
-pnpm -r test:run   # run vitest in every workspace
-```
-
-### Server (backend, agent, scheduler_worker — single uv workspace)
-
-Run from `server/`:
-
-```bash
-# Backend API (监听 0.0.0.0 支持局域网访问)
-uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000
-
-# AI agent
-uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001
-
-# Scheduler worker
-uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002
-
-# Tests + lint + typecheck (scope to a path)
-uv run pytest tests/backend/ -v
-uv run ruff check apps/backend/
-uv run mypy apps/backend/
-
-# Migrations (backend only)
-cd apps/backend
-uv run alembic upgrade head        # apply all pending
-uv run alembic revision --autogenerate -m "description"
-uv run alembic downgrade -1
-```
+See [`server/CLAUDE.md`](./server/CLAUDE.md) §Quality Commands.
 
 ### Docker (all services)
 

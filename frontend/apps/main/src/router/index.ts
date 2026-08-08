@@ -143,6 +143,19 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
+          // Redirect finance sub-routes to their standalone paths.
+          path: 'finance/assets/new',
+          redirect: '/assets/new',
+        },
+        {
+          path: 'finance/liabilities/new',
+          redirect: '/liabilities/new',
+        },
+        {
+          path: 'finance/wishes/new',
+          redirect: '/wishes/new',
+        },
+        {
           // Multi-format intelligent import — R16: moved from settings/import-report.
           path: 'finance/import',
           name: 'ImportReport',
@@ -305,11 +318,6 @@ const router = createRouter({
           redirect: '/finance/import',
         },
         {
-          path: 'settings/family/coin-rates',
-          name: 'CoinRates',
-          component: () => import('@/pages/CoinRatesPage.vue'),
-        },
-        {
           path: 'settings/family/config',
           name: 'FamilyConfig',
           component: () => import('@/pages/FamilyConfigPage.vue'),
@@ -323,6 +331,11 @@ const router = createRouter({
           path: 'settings/family/manifesto',
           name: 'ManifestoSettings',
           component: () => import('@/pages/ManifestoSettingsPage.vue'),
+        },
+        {
+          path: 'settings/family/storage',
+          name: 'FamilyStorageBackend',
+          component: () => import('@/pages/FamilyStorageBackendPage.vue'),
         },
         {
           path: 'settings/user/config',
@@ -493,9 +506,9 @@ router.afterEach((_to) => {
   // control; pages without async work auto-complete via this timeout.
   // This prevents the flicker caused by start→done→start across router/page.
   //
-  // Timeout must exceed the Transition out-in delay (~150ms leave + ~150ms
-  // enter = ~300ms worst case) so increment() always fires before the timeout.
-  // 500ms covers the transition plus a generous GC / scheduler buffer.
+  // Timeout must exceed the page-mount delay so increment() always fires
+  // before the timeout. 500ms covers a generous GC / scheduler buffer.
+  // (MainLayout no longer uses out-in Transition — removed to fix blank-screen.)
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
   }, 500)

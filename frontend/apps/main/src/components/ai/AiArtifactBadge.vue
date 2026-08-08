@@ -36,8 +36,8 @@ const { t } = useI18n()
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--suggestion-bg);
-  border: 1px solid var(--suggestion-border);
+  background: var(--suggestion-bg, rgba(129, 140, 248, 0.1));
+  border: 1px solid var(--suggestion-border, rgba(129, 140, 248, 0.25));
   color: var(--text-secondary);
   display: flex;
   align-items: center;

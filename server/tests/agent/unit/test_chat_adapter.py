@@ -16,7 +16,7 @@ def adapter():
 
 def test_default_prompt_loaded_from_file(adapter):
     prompt = adapter._load_default_prompt()
-    assert "Numina（数鸣）家庭资产智能助手" in prompt
+    assert "You are Numina, a family asset intelligence assistant" in prompt
     # frontmatter must be stripped
     assert "---" not in prompt.splitlines()[0]
 
@@ -32,14 +32,14 @@ async def test_resolve_prompt_uses_family_override_when_present(adapter):
 async def test_resolve_prompt_falls_back_to_default_when_no_override(adapter):
     with patch.object(adapter, "_fetch_family_prompt", new=AsyncMock(return_value=None)):
         result = await adapter._resolve_prompt("100")
-        assert "Numina（数鸣）家庭资产智能助手" in result
+        assert "You are Numina, a family asset intelligence assistant" in result
 
 
 @pytest.mark.asyncio
 async def test_resolve_prompt_falls_back_on_fetch_error(adapter):
     with patch.object(adapter, "_fetch_family_prompt", new=AsyncMock(side_effect=Exception("net err"))):
         result = await adapter._resolve_prompt("100")
-        assert "Numina（数鸣）家庭资产智能助手" in result
+        assert "You are Numina, a family asset intelligence assistant" in result
 
 
 def test_mcp_url_contains_family_id(adapter):

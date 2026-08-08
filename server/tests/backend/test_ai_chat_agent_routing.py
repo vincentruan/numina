@@ -9,26 +9,19 @@ selected, so _resolve_skills was unreachable from production traffic.
 
 import pytest
 
-from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.models.user import User
 
 
 @pytest.fixture
 def ai_enabled(db, auth_headers):
-    """require_ai_enabled gates the chat endpoint — seed a provider config so
-    the family registers as AI-enabled."""
+    """require_ai_enabled gates the chat endpoint — enable the family-level
+    AI switch so the family registers as AI-enabled."""
     user = db.query(User).filter_by(username="testuser").first()
     assert user is not None
-    db.add(
-        AIProviderConfig(
-            family_id=user.family_id,
-            name="测试配置",
-            provider="anthropic",
-            api_key_encrypted="test_encrypted_key",
-            model_id="claude-3-5-sonnet-20241022",
-            is_active=True,
-        )
-    )
+    from apps.backend.app.models.family import Family
+    family = db.query(Family).filter_by(id=user.family_id).first()
+    assert family is not None
+    family.ai_enabled = True
     db.commit()
 
 
@@ -110,7 +103,7 @@ def patched_httpx(monkeypatch):
 def test_chat_stream_without_agent_id_proxies_to_runs_stream_with_numina_fallback(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """When agent_id is absent, the proxy hits /runs/stream with NUMINA_AGENT_ID."""
+    """When agent_id is absent, the proxy hits /internal/gateway/runs/chat with NUMINA_AGENT_ID."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={"question": "hello", "deep_think": False, "web_search": False},
@@ -118,17 +111,15 @@ def test_chat_stream_without_agent_id_proxies_to_runs_stream_with_numina_fallbac
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert "/runs/stream" in captured["url"], captured["url"]
-    assert captured["json"]["assistant_id"] == "100000000000005"
+    assert "/internal/gateway/runs/chat" in captured["url"], captured["url"]
+    assert captured["json"]["metadata"]["assistant_id"] == "100000000000005"
     assert captured["json"]["input"]["messages"][0]["content"] == "hello"
-    assert "agent_id" not in captured["json"]
-    assert "message" not in captured["json"]
 
 
 def test_chat_stream_with_agent_id_proxies_to_runs_stream(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """When agent_id is present, the proxy hits the runs stream endpoint."""
+    """When agent_id is present, the proxy hits the internal gateway endpoint."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={
@@ -141,10 +132,9 @@ def test_chat_stream_with_agent_id_proxies_to_runs_stream(
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert "/runs/stream" in captured["url"], captured["url"]
-    assert captured["json"]["assistant_id"] == "100000000000005"
+    assert "/internal/gateway/runs/chat" in captured["url"], captured["url"]
+    assert captured["json"]["metadata"]["assistant_id"] == "100000000000005"
     assert captured["json"]["input"]["messages"][0]["content"] == "what's my net worth"
-    assert "question" not in captured["json"]
 
 
 def test_chat_stream_with_agent_id_propagates_deep_think_metadata(

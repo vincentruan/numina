@@ -1,5 +1,5 @@
 <template>
-  <van-cell-group v-if="childMembers.length > 0 && aiStore.aiEnabled" inset class="chart-section literacy-status-card">
+  <van-cell-group v-if="childMembers.length > 0 && familyStore.aiEnabled" inset class="chart-section literacy-status-card">
     <van-collapse v-model="expanded">
       <van-collapse-item name="literacy">
         <template #title>
@@ -63,13 +63,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
-import { useAIStore } from '@/stores/ai'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
 import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
-const aiStore = useAIStore()
 
 const statusMap = ref<Record<string, ReportStatus>>({})
 const loading = ref(true)
@@ -84,7 +82,7 @@ const readyCount = computed(() =>
 )
 
 async function loadStatuses() {
-  if (!aiStore.aiEnabled || !childMembers.value.length) return
+  if (!familyStore.aiEnabled || !childMembers.value.length) return
   loading.value = true
   for (const child of childMembers.value) {
     try {

@@ -24,6 +24,9 @@ class Family(Base):
     report_auto_generate_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    ai_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -33,3 +36,9 @@ class Family(Base):
     categories = relationship("Category", back_populates="family")
     tags = relationship("Tag", back_populates="family")
     snapshots = relationship("AssetSnapshot", back_populates="family")
+    storage_backend = relationship(
+        "StorageBackend",
+        back_populates="family",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

@@ -22,23 +22,35 @@ def get_backend_for_type(backend_type: str, config: dict) -> StorageBackend:
 
     if backend_type == "github":
         from packages.storage.github import GitHubStorageBackend
-        key = f"github:{config.get('repo')}:{config.get('branch', 'main')}"
+        # Compose repo from repo_owner/repo_name (new schema) or use repo directly (legacy)
+        repo = config.get("repo") or f"{config.get('repo_owner', '')}/{config.get('repo_name', '')}"
+        token = config.get("token", "")
+        # Include a token hash in the cache key so credential rotation invalidates
+        # the cached instance.
+        token_hash = hash(token) & 0xFFFFFFFF
+        key = f"github:{repo}:{config.get('branch', 'main')}:{token_hash}"
         if key not in _instances:
             _instances[key] = GitHubStorageBackend(
-                token=config["token"],
-                repo=config["repo"],
+                token=token,
+                repo=repo,
                 branch=config.get("branch", "main"),
             )
         return _instances[key]  # type: ignore[return-value]
 
     if backend_type == "webdav":
         from packages.storage.webdav import WebDAVStorageBackend
-        key = f"webdav:{config.get('url')}:{config.get('username')}"
+        # Accept both url (legacy) and base_url (new schema)
+        url = config.get("url") or config.get("base_url", "")
+        password = config.get("password", "")
+        # Include a password hash in the cache key so credential rotation invalidates
+        # the cached instance.
+        password_hash = hash(password) & 0xFFFFFFFF
+        key = f"webdav:{url}:{config.get('username')}:{password_hash}"
         if key not in _instances:
             _instances[key] = WebDAVStorageBackend(
-                base_url=config["url"],
+                base_url=url,
                 username=config["username"],
-                password=config["password"],
+                password=password,
                 verify_ssl=config.get("verify_ssl", True),
             )
         return _instances[key]  # type: ignore[return-value]

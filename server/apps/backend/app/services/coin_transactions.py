@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from apps.backend.app.models.coin_transaction import CoinTransaction
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.chore import GrantRequest
-from apps.backend.app.services.notification_bus import fire_notification
 
 
 def get_total_earned(
@@ -112,16 +111,6 @@ def gift_coins(
     db.commit()
     db.refresh(debit)
     db.refresh(credit)
-    fire_notification(
-        sender.family_id,
-        {
-            "type": "coins_received",
-            "amount": amount,
-            "from_name": sender.display_name,
-            "message": f"收到来自 {sender.display_name} 的 {amount} 颗星币赠送 {narrative}",
-            "target_user_id": to_child_id,
-        },
-    )
     return debit, credit, recipient.display_name
 
 

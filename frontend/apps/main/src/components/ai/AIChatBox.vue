@@ -68,9 +68,7 @@ const activeAgent = computed(() => {
   return agentStore.systemAgents.find(a => a.agent_name === NUMINA_AGENT_NAME) || agentStore.systemAgents[0] || null
 })
 
-const chat = useThreadChat({
-  onStreamEnd: scheduleTitleRefresh,
-})
+const chat = useThreadChat()
 const {
   selectedArtifact,
   open: artifactPreviewOpen,
@@ -109,54 +107,6 @@ const realtimeTokenUsage = computed(() => {
   }
 })
 
-/** Title generation is async on the backend — poll twice after stream ends */
-const titleRefreshTimeouts = new Set<ReturnType<typeof setTimeout>>()
-
-function scheduleTitleRefresh(threadId: string) {
-  const doRefresh = async () => {
-    // Guard: skip if user switched threads
-    if (store.activeThreadId !== threadId) return
-    try {
-      const thread = await getThread(threadId)
-      // Skip empty titles and the raw [SKILL:chat] prompt wrapper (sync
-      // after_model fallback) - wait for the LLM-generated title.
-      if (!thread.title || thread.title.startsWith('[SKILL:')) return
-      if (store.activeThreadId !== threadId) return
-      const idx = store.sessions.findIndex(s => s.thread_id === threadId)
-      if (idx !== -1) {
-        store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
-      } else {
-        // New thread not yet in sessions list (e.g. created from /ai page)
-        store.sessions.unshift(thread)
-      }
-    } catch {
-      // Title may not be ready yet — ignore
-    }
-  }
-  // First attempt after 3s, second after 8s (title gen can take a few seconds)
-  const timeout1 = setTimeout(() => {
-    titleRefreshTimeouts.delete(timeout1)
-    doRefresh()
-  }, 3000)
-  titleRefreshTimeouts.add(timeout1)
-  const timeout2 = setTimeout(() => {
-    titleRefreshTimeouts.delete(timeout2)
-    doRefresh()
-  }, 8000)
-  titleRefreshTimeouts.add(timeout2)
-  // Third attempt at 15s - safety margin for slow LLM title generation
-  const timeout3 = setTimeout(() => {
-    titleRefreshTimeouts.delete(timeout3)
-    doRefresh()
-  }, 15000)
-  titleRefreshTimeouts.add(timeout3)
-}
-
-function cancelTitleRefresh() {
-  titleRefreshTimeouts.forEach(id => clearTimeout(id))
-  titleRefreshTimeouts.clear()
-}
-
 /** Ensure the active thread's metadata (especially title) is in store.sessions.
  *  On page refresh or route navigation, store.sessions is empty and loadHistory
  *  only fetches messages via client.threads.getState - the thread title would
@@ -165,7 +115,7 @@ async function ensureThreadInSessions(threadId: string) {
   if (store.sessions.find(s => s.thread_id === threadId)) return
   try {
     const thread = await getThread(threadId)
-    // Re-check: a concurrent scheduleTitleRefresh may have added it already
+    // Re-check: a concurrent values event may have added it already
     if (!store.sessions.find(s => s.thread_id === threadId)) {
       store.sessions.unshift(thread)
     }
@@ -331,7 +281,6 @@ onUnmounted(() => {
   // timers don't keep mutating refs / firing network requests for up to 120s
   // after navigation away from the chat page.
   chat.cancelStream()
-  cancelTitleRefresh()
 })
 
 // When handleStartChat creates a new thread and calls setActiveThread, the
@@ -352,8 +301,6 @@ watch(
         skipNextHistoryLoadFor.value = null
         return
       }
-      // Cancel pending title refreshes for old thread
-      cancelTitleRefresh()
       // Load messages and thread metadata in parallel - loadHistory only
       // fetches checkpoint messages, ensureThreadInSessions fetches the title.
       await Promise.all([
@@ -409,6 +356,20 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
     // Add to sessions so ChatHeader can display the title once generated
     if (!store.sessions.find(s => s.thread_id === thread.thread_id)) {
       store.sessions.unshift(thread)
+    }
+    // Set a temporary title from the user's first message so the header and
+    // sidebar immediately show something meaningful instead of "New Chat".
+    // The LLM-generated title will replace this once it arrives via SSE.
+    const tempTitle = payload.text.length > 40
+      ? payload.text.slice(0, 40) + '…'
+      : payload.text
+    const sessionIdx = store.sessions.findIndex(s => s.thread_id === thread.thread_id)
+    if (sessionIdx !== -1) {
+      store.sessions[sessionIdx] = {
+        ...store.sessions[sessionIdx],
+        title: tempTitle,
+        titleGenerating: true,
+      }
     }
     // Hide skeleton once thread is created - streaming will show actual content
     initialLoading.value = false

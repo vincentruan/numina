@@ -21,7 +21,7 @@ vi.mock('vant', () => ({
 }))
 
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ format: (n: number) => `¥${n}` }),
+  useCurrency: () => ({ format: (n: number) => `¥${n}`, formatConverted: (n: number | string) => '¥' + n }),
 }))
 vi.mock('@/composables/usePageLoading', () => ({
   usePageLoading: () => ({ increment: vi.fn(), decrement: vi.fn() }),

@@ -14,6 +14,8 @@ export const useFamilyStore = defineStore('family', () => {
   // Education reward (family-level opt-in: convert chore star coins to yuan in activity feed)
   const educationRewardEnabled = ref(false)
   const coinToYuanRate = ref(1)
+  // AI assistant master switch (family-level toggle, independent of provider configs)
+  const aiEnabled = ref(false)
 
   async function fetchFamily() {
     loading.value = true
@@ -38,6 +40,7 @@ export const useFamilyStore = defineStore('family', () => {
       coinSilverToGold.value = res.data.coin_silver_to_gold
       educationRewardEnabled.value = res.data.education_reward_enabled
       coinToYuanRate.value = res.data.coin_to_yuan_rate
+      aiEnabled.value = res.data.ai_enabled
     } catch {
       // Keep defaults on failure — non-critical
     }
@@ -70,7 +73,7 @@ export const useFamilyStore = defineStore('family', () => {
   return {
     family, members, loading,
     coinCopperToSilver, coinSilverToGold,
-    educationRewardEnabled, coinToYuanRate,
+    educationRewardEnabled, coinToYuanRate, aiEnabled,
     fetchFamily, fetchMembers, loadCoinConfig,
     regenerateInviteCode, updateMemberRole, removeMember, updateFamilyTitle,
   }

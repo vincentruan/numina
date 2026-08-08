@@ -366,8 +366,6 @@ def _try_record_streak_cycle(
     """
     from apps.backend.app.models.chore import ChoreInstance
 
-    _threshold = {v: k for k, v in _STREAK_MILESTONES.items()}[milestone_type]  # noqa: F841
-
     last = (
         db.query(ChildMilestone)
         .filter(

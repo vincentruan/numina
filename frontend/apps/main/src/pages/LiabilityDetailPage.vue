@@ -8,7 +8,7 @@
         <div class="value-label">{{ t('liability.detailRemainingPrincipal') }}</div>
         <MoneyDisplay :amount="Number(liability.remaining_amount)" size="large" :source-currency="liability.currency" />
         <div class="progress-info">
-          {{ t('liability.detailPaidAmount') }} {{ currency.formatIn(paidAmount, liability.currency) }} / {{ t('liability.detailTotalAmount') }} {{ currency.formatIn(Number(liability.original_amount), liability.currency) }}
+          {{ t('liability.detailPaidAmount') }} {{ currency.formatConverted(paidAmount, liability.currency) }} / {{ t('liability.detailTotalAmount') }} {{ currency.formatConverted(Number(liability.original_amount), liability.currency) }}
         </div>
         <van-progress
           :percentage="paidPercent"
@@ -74,12 +74,12 @@
         <div class="collateral-row">
           <div class="collateral-col">
             <div class="collateral-label">{{ t('liability.collateralCurrentValue') }}</div>
-            <div class="collateral-value">{{ currency.formatIn(Number(liability.linked_asset.current_value), liability.currency) }}</div>
+            <div class="collateral-value">{{ currency.formatConverted(Number(liability.linked_asset.current_value), liability.currency) }}</div>
           </div>
           <div class="collateral-vs">vs</div>
           <div class="collateral-col">
             <div class="collateral-label">{{ t('liability.collateralRemainingLoan') }}</div>
-            <div class="collateral-value">{{ currency.formatIn(Number(liability.remaining_amount), liability.currency) }}</div>
+            <div class="collateral-value">{{ currency.formatConverted(Number(liability.remaining_amount), liability.currency) }}</div>
           </div>
         </div>
         <div class="collateral-coverage">
@@ -157,9 +157,11 @@ import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
 import InterestForecast from '@/components/liability/InterestForecast.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useCurrency } from '@/composables/useCurrency'
+import { useExchangeRate } from '@/composables/useExchangeRate'
 
 const { t } = useI18n()
 const currency = useCurrency()
+const { ensureRate } = useExchangeRate()
 
 const route = useRoute()
 const router = useRouter()
@@ -266,6 +268,11 @@ onMounted(async () => {
   try {
     const id = route.params.id as string
     await liabilityStore.fetchLiability(id)
+    // Prefetch exchange rate for this liability's currency so converted amounts
+    // render synchronously on first paint.
+    if (liability.value?.currency && liability.value.currency !== 'CNY') {
+      void ensureRate(liability.value.currency)
+    }
   } finally {
     decrement()
   }

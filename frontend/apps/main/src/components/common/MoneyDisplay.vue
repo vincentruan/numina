@@ -62,7 +62,7 @@ const props = withDefaults(defineProps<{
   size: 'normal',
   showSign: false,
   colorful: false,
-  sourceCurrency: 'CNY',
+  sourceCurrency: undefined,
   originalValue: 0
 })
 
@@ -71,8 +71,8 @@ const props = withDefaults(defineProps<{
 const numAmount = computed(() => Number(props.amount) || 0)
 const numOriginalValue = computed(() => Number(props.originalValue) || 0)
 
-const { currency } = useCurrency()
-const { getRateInfo } = useExchangeRate()
+const { currency, convertAmount } = useCurrency()
+const { getCachedRate, getRateInfo } = useExchangeRate()
 
 const popoverVisible = ref(false)
 const rateInfo = ref<{ rate: number; fetched_at: string } | null>(null)
@@ -119,29 +119,38 @@ const CURRENCY_LOCALES: Record<string, string> = {
   HKD: 'zh-HK',
 }
 
-// Display currency: use sourceCurrency when explicitly provided (the amount is
-// in its native currency), otherwise fall back to user's default_currency (the
-// amount was already converted server-side, e.g. dashboard aggregates).
-const displayCurrency = computed(() => props.sourceCurrency || currency.value)
-const currencySymbol = computed(() => CURRENCY_SYMBOLS[displayCurrency.value] || displayCurrency.value)
-const locale = computed(() => CURRENCY_LOCALES[displayCurrency.value] || 'zh-CN')
+// Display currency: when sourceCurrency differs from user's default currency,
+// convert using the cached exchange rate so the UI is consistent across pages.
+const needsConversion = computed(() => {
+  return props.sourceCurrency && props.sourceCurrency !== currency.value
+})
+
+const convertedAmount = computed(() => {
+  if (!needsConversion.value) return numAmount.value
+  return convertAmount(numAmount.value, props.sourceCurrency!)
+})
+
+const currencySymbol = computed(() => CURRENCY_SYMBOLS[currency.value] || currency.value)
+const locale = computed(() => CURRENCY_LOCALES[currency.value] || 'zh-CN')
 
 // Show conversion info only when actual currency conversion is happening
 const showConversionInfo = computed(() => {
-  return props.sourceCurrency &&
-    props.sourceCurrency !== currency.value &&
+  return needsConversion.value &&
     numOriginalValue.value > 0
 })
 
 // Source currency symbol for popover
-const sourceCurrencySymbol = computed(() =>
-  CURRENCY_SYMBOLS[props.sourceCurrency] || props.sourceCurrency
-)
+const sourceCurrencySymbol = computed(() => {
+  if (!props.sourceCurrency) return ''
+  return CURRENCY_SYMBOLS[props.sourceCurrency] || props.sourceCurrency
+})
 
-// Format original amount display
+// Format original amount display (the value in sourceCurrency)
 const originalAmountDisplay = computed(() => {
-  if (!numOriginalValue.value) return ''
-  const formatted = Math.abs(numOriginalValue.value).toLocaleString(
+  if (!props.sourceCurrency) return ''
+  const raw = numOriginalValue.value || numAmount.value
+  if (!raw) return ''
+  const formatted = Math.abs(raw).toLocaleString(
     CURRENCY_LOCALES[props.sourceCurrency] || 'zh-CN',
     { minimumFractionDigits: 2, maximumFractionDigits: 2 }
   )
@@ -151,10 +160,18 @@ const originalAmountDisplay = computed(() => {
 // Format rate display
 const rateDisplay = computed(() => {
   if (!rateInfo.value) return '-'
-  // Rate is stored as "1 CNY = rate foreign_currency"
-  // For display, we need "1 foreign_currency = (1/rate) CNY"
-  const invertedRate = 1 / rateInfo.value.rate
-  return `1 ${props.sourceCurrency} = ${invertedRate.toFixed(2)} ${currency.value}`
+  const sourceRate = rateInfo.value.rate // 1 CNY = sourceRate sourceCurrency
+  const targetRate = getCachedRate(currency.value)
+
+  // When target is CNY or target rate not available, show source-to-CNY rate
+  if (!targetRate || currency.value === 'CNY') {
+    const invertedRate = 1 / sourceRate
+    return `1 ${props.sourceCurrency} = ${invertedRate.toFixed(4)} CNY`
+  }
+
+  // Show effective cross-rate: 1 source = (targetRate / sourceRate) target
+  const crossRate = targetRate.rate / sourceRate
+  return `1 ${props.sourceCurrency} = ${crossRate.toFixed(4)} ${currency.value}`
 })
 
 // Format fetch time - compact format
@@ -169,10 +186,10 @@ const formattedFetchTime = computed(() => {
 })
 
 const displayValue = computed(() => {
-  const abs = Math.abs(numAmount.value)
+  const abs = Math.abs(convertedAmount.value)
 
   // CNY使用万/亿单位
-  if (displayCurrency.value === 'CNY') {
+  if (currency.value === 'CNY') {
     if (abs >= 100000000) {
       return `${(abs / 100000000).toFixed(2)}亿`
     } else if (abs >= 10000) {
@@ -189,12 +206,12 @@ const displayValue = computed(() => {
 
 const sign = computed(() => {
   if (!props.showSign) return ''
-  return numAmount.value >= 0 ? '+' : '-'
+  return convertedAmount.value >= 0 ? '+' : '-'
 })
 
 const colorClass = computed(() => {
   if (!props.colorful) return ''
-  return numAmount.value >= 0 ? 'money-positive' : 'money-negative'
+  return convertedAmount.value >= 0 ? 'money-positive' : 'money-negative'
 })
 
 const sizeClass = computed(() => `money-${props.size}`)
@@ -224,6 +241,14 @@ function handleKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  // Pre-fetch target currency rate on mount
+  if (currency.value && currency.value !== 'CNY') {
+    void getRateInfo(currency.value)
+  }
+  // Also pre-fetch source rate when present and non-CNY
+  if (props.sourceCurrency && props.sourceCurrency !== 'CNY' && props.sourceCurrency !== currency.value) {
+    void getRateInfo(props.sourceCurrency)
+  }
 })
 
 onUnmounted(() => {

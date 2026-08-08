@@ -114,16 +114,16 @@ def get_file_url(
     """
     cached_file = _get_owned_file(file_id, user, db)
 
-    # Try default backend first
-    default_backend = (
+    # Try the family's remote backend first
+    family_backend = (
         db.query(StorageBackendModel)
-        .filter_by(is_default=True, is_active=True)
+        .filter_by(family_id=user.family_id, is_active=True)
         .first()
     )
-    if default_backend is not None:
+    if family_backend is not None:
         loc = (
             db.query(FileRemoteLocation)
-            .filter_by(file_id=file_id, backend_id=default_backend.id, sync_status="synced")
+            .filter_by(file_id=file_id, backend_id=family_backend.id, sync_status="synced")
             .first()
         )
         if loc is not None and loc.remote_url:

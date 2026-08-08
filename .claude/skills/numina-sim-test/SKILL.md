@@ -22,7 +22,7 @@ flows → screenshot capture → test report (success summary + failure details)
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **eight** feature areas (detailed cases split by area under
+Covers **eleven** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -33,7 +33,10 @@ Covers **eight** feature areas (detailed cases split by area under
 5. **Child app navigation coverage** (`$CHILD_BASE`) — 每个页签 + 子页面 ([`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md))
 6. **AI chat DeerFlow-fidelity parity** — 输入/输出/系统集成 + 设计出入 ([`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md))
 7. **Regression sweep** — 历史缺陷回归 (R1–R9) ([`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md))
-8. **Expanded feature coverage** — Manifesto / 盲盒 / Baby / Settings / Guest / 权限边界 (F.1–F.8) ([`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md))
+8. **Expanded feature coverage** — Manifesto / 盲盒 / Baby / Settings / Guest / 权限边界 (F.1–F.10) ([`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md))
+9. **Account security + notification** — WebAuthn / 2FA / 设备管理 / 通知规则 (C9.1–C9.7) ([`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md))
+10. **Guest 端到端注册 + 加入家庭** — 注册 / 邀请码 / 已登录守卫 (C10.1–C10.4) ([`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md))
+11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -63,15 +66,17 @@ schedule + verified bsk concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
-| **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
+| **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area8 → area3 → area6 → area7. Area 7
-> (regression) runs last because R6 (auth expiry) destroys the session.
+> **G1 internal order:** area2 → area8 → area3 → area6 → area7 → area11. Area 7
+> (regression) runs just before Area 11, with R6 (auth expiry) destroying the
+> session **last** so earlier areas have a live session. Area 11 uses adult
+> session read-only probes and should run before R6 clears the session.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
 > → G3 is NOT parallel-safe with G1/G2 (shared cookie + localStorage). The
@@ -101,19 +106,20 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–8 (所有用例) | ~60-90 min |
-| **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2 | ~15-20 min |
+| **full** | "run sim test", "全量测试" | Area 1–11 (所有用例) | ~75-105 min |
+| **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
-| **finance** | "finance test", "财务测试" | Area 2 only (G1 subset) | ~15-20 min |
+| **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
 | **ai** | "ai test", "AI测试" | Area 3 + Area 6 (G1 subset, AI 必须启用) | ~25-35 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
+| **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
 1. 用户未指定模式 → 默认 `full`
-2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 9 个用例)
+2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 10 个用例)
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
-4. `smoke` 模式跳过 Area 1/5/7/8，仅验证核心 adult 功能 + 币种回归
+4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11, 仅验证核心 adult 功能 + 币种回归 + 通知触发
 
 ---
 
@@ -188,12 +194,12 @@ export BASE=http://localhost:5173/ CHILD_BASE=http://localhost:5174/child/ API_B
 - **Child accounts** (under demouser family):
   - Display_names are **discovered at gate time** (Phase 1.5) via
     `/family/members` where `role=="child"` — not hard-coded.
-  - Docker seed default: 小宝 (`xiaobao`), 大宝 (`dabao`), PIN `🐱🌟🌈`.
+  - Docker seed default: 小宝 (`xiaobao`), 大宝 (`dabao`), PIN `🐱🐶🌟🌈`.
   - Dev/other deployments may differ (e.g. `demochild`, 小明). See
     [`test-cases/_common.md`](./test-cases/_common.md) for the convention.
 - **Regression test accounts**:
   - `test_rich` / `TestRich123!` — full data (assets + liabilities + wishes + children)
-  - `test_child`: `testchild`, PIN `🐱🌟` (under test_rich family)
+  - `test_child`: `testchild`, PIN `🐱🐶🌟🌈` (under test_rich family)
 - **Frontend**: Vue 3 + TypeScript + Vant 4 + ECharts, mobile-first (375×812)
 - **UI language**: 简体中文
 - **Output paths** (gitignored — local only):
@@ -374,6 +380,54 @@ ASSET_COUNT=$(echo "$OV" | jq -r '.data.asset_count')
 TOTAL_LIAB=$(echo "$OV" | jq -r '.data.total_liabilities')
 [ "$ASSET_COUNT" -gt 0 ] 2>/dev/null || { echo "GATE FAIL: demouser has no assets (asset_count=$ASSET_COUNT)"; exit 1; }
 echo "$TOTAL_LIAB" | awk '{if ($1+0 <= 0) exit 1}' || echo "  (note: demouser has no liabilities — liability cases C2.5/C2.6 may show empty states)"
+
+# --- 5) AI provider check — warn if not configured (Area 3/6 will SKIP-AI) ---
+AI_STATUS=$(curl -s -H "$AUTH" "$API/ai/config/defaults" 2>/dev/null || echo "{}")
+AI_PROVIDER=$(echo "$AI_STATUS" | jq -r '.data.provider // empty' 2>/dev/null || echo "")
+if [ -z "$AI_PROVIDER" ] || [ "$AI_PROVIDER" = "null" ]; then
+  echo "  (WARNING: AI provider not configured — Area 3/6 cases will be SKIP-AI)"
+else
+  echo "  (AI provider: $AI_PROVIDER)"
+fi
+
+# --- 6) Wish savings data check — warn if no wishes with savings (C2.14 will show empty state) ---
+WISHES=$(curl -s -H "$AUTH" "$API/wishes" 2>/dev/null || echo '{"data":[]}')
+WISH_SAVINGS=$(echo "$WISHES" | jq '[.data[] | select(.saved_amount != null and .saved_amount != "0" and .saved_amount != "0.00")] | length' 2>/dev/null || echo "0")
+if [ "$WISH_SAVINGS" -lt 1 ] 2>/dev/null; then
+  echo "  (WARNING: no wishes with savings data — C2.14 savings log will show empty state)"
+else
+  echo "  (wishes with savings: $WISH_SAVINGS)"
+fi
+
+# --- 7) High-interest liability check — warn if none (C2.15 debt hint won't trigger) ---
+LIABILITIES=$(curl -s -H "$AUTH" "$API/liabilities" 2>/dev/null || echo '{"data":[]}')
+HIGH_RATE=$(echo "$LIABILITIES" | jq '[.data[] | select(.interest_rate != null and (.interest_rate | tonumber) >= 15)] | length' 2>/dev/null || echo "0")
+if [ "$HIGH_RATE" -lt 1 ] 2>/dev/null; then
+  echo "  (WARNING: no high-interest liabilities (rate ≥ 15%) — C2.15 debt warning hint won't trigger)"
+else
+  echo "  (high-interest liabilities: $HIGH_RATE)"
+fi
+
+# --- 8) Child app auth bootstrap check — warn if child cannot authenticate in dev mode ---
+# In dev mode adult (:5173) and child (:5174) are different origins; child app has
+# no standalone login pages and redirects to adult login on 401. Verify that the
+# child step1/step2 auth endpoints exist and can return a temp_token for the first
+# discovered child, so the skill can establish a child session when Phase 5 runs.
+FIRST_CHILD_NAME=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .display_name] | first // empty')
+FIRST_CHILD_USER=$(echo "$MEMBERS" | jq -r '[.data[] | select(.role=="child") | .username] | first // empty')
+CHILD_USERNAME=${FIRST_CHILD_USER:-"$FIRST_CHILD_NAME"}
+CHILD_PASSWORD="DemoPass123"
+STEP1=$(curl -s -w "\n%{http_code}" -X POST "$API/auth/login/step1" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$CHILD_USERNAME\",\"password\":\"$CHILD_PASSWORD\"}")
+STEP1_CODE=$(echo "$STEP1" | tail -1)
+STEP1_BODY=$(echo "$STEP1" | sed '$d')
+if [ "$STEP1_CODE" != "200" ]; then
+  echo "  (WARNING: child auth step1 returned HTTP $STEP1_CODE — Area 1/5 cases will be SKIP-CHILD)"
+  echo "    body: $STEP1_BODY"
+else
+  echo "  (child auth step1 OK for user=$CHILD_USERNAME)"
+fi
 
 # Export CHILD_NAMES for downstream phases/report (single source of truth).
 echo "export SIM_CHILD_NAMES=\"$CHILD_NAMES\""
@@ -561,9 +615,11 @@ cookies + localStorage (see [`area1-child.md`](./test-cases/groups/g3-child/area
 fresh session, then inject the child session via step1/step2 PIN login.
 
 **dev mode:** adult (:5173) and child (:5174) are different origins — the
-adult cookie does NOT carry over. Start a fresh session and navigate to
-`$CHILD_BASE` first; the child PIN/select flow re-establishes auth for that
-origin.
+adult cookie does NOT carry over. Start a fresh session and inject the child
+session via the two-step emoji PIN API from the child origin's page context
+(see `test-cases/_common.md` "Child session injection (dev mode — password-manager
+fallback)"). The child app has no standalone login pages; auth is cookie-based
+and the router guard checks `GET /auth/child/me`.
 
 ```bash
 # docker: clear cookies → stop adult session → start fresh → child injection
@@ -583,7 +639,7 @@ Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./te
 
 - C1.1 Child home — hero, balance, today's chores, wish preview
 - C1.2 Child ledger — transaction list + sibling gift popup
-- C1.3 Child PIN auth — correct PIN (auto-submit) + wrong PIN (shake)
+- C1.3 Child session verification — confirm auth injection landed on child home
 - C1.4 Child wishes — list + status variants
 - C1.5 Child wish create — form submission + validation
 - C1.6 Child tasks — chore list + completion → 待审批
@@ -591,10 +647,10 @@ Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./te
 - C1.8 Child asset detail — no adult-only field leak
 - C1.9 Child settings — child-role-scoped only
 
-**PIN input (C1.3):** snapshot the 4×3 emoji grid, then click the 4 correct
-emoji `@eN` refs **in order**. Refs may shift after each click — re-snapshot
-between clicks if a click causes DOM change. Wrong PIN → assert shake animation
-+ cleared slots + error message.
+**Auth injection (C1.3):** after step1/step2 fetch completes, assert the child
+home page renders with `display_name` from the authenticated child. There is no
+emoji-grid PIN UI in the child app; the PIN is consumed only via the step2 API
+call.
 
 ### End the bsk session(s)
 
@@ -721,6 +777,13 @@ case's outcome, then write the report.
 > P0–P3 severity grading, effort estimates, fix plans, or UI/UX visual-audit
 > dimensions (color/spacing/contrast). This skill records test results —
 > fixing is out of scope and handled separately if the user requests it.
+>
+> **Case-UI consistency check:** before writing "expected vs actual", verify the
+> case's asserted route/label still matches the current source tree. If a case
+> asserts `/settings/notification` but the router defines `/settings/notifications`,
+> record it as a case defect (not a product bug) and note the correct route in the
+> report. Use the same sources that grounded the test-cases (router files, i18n
+> keys, API response schemas) to resolve mismatches.
 
 ### Output path
 
@@ -751,7 +814,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.20, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.8)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -810,9 +873,118 @@ the skill log.
 Tell the user the report path and the pass/fail/skip counts:
 > 报告已生成: `tests/audit-reports/ui-audit-{date}.md`
 > 通过 X / 失败 Y / 跳过 Z (共 N)
+>
+> 如需跟进修复, 说 "修复" 或 "按分类提交" 进入 Phase 7 (Checklist Todo + Categorized Fix Commits).
 
-This is the end of the skill. Do not proceed to fix issues unless the user
-explicitly asks in a follow-up — this skill only records results.
+---
+
+## Phase 7 — Checklist Todo + Categorized Fix Commits (OPTIONAL)
+
+> **触发:** 用户看到 Phase 6 报告后说 "修复" / "fix" / "按分类提交" /
+> "跟进失败项"。默认不执行 — 仅记录结果。
+
+### Step 1 — 解析报告, 提取失败项
+
+读取 `tests/audit-reports/ui-audit-{date}.md` 的 "失败详情" 段, 提取每个
+失败用例的:
+- Case ID (C2.3 / R4 / F.3.6 / ...)
+- 分类代码 (RENDER / NAV / AUTH / DATA / I18N / AI / INTERACT / PERF / REGRESS)
+- 路由
+- 初步判断
+
+### Step 2 — 生成 Checklist Todo
+
+按 **分类代码** 分组, 为每个失败项创建一条 todo:
+
+```markdown
+## 修复 Checklist — {date} 仿真测试
+
+### 🔴 RENDER (渲染错误) — N 项
+- [ ] C2.3 — 心愿详情页 dialog 未挂载 → `WishDetailPage.vue` 检查 v-model:show 绑定
+- [ ] F.3.1 — Baby 总览页空白 → 检查数据加载 + 空态处理
+
+### 🟠 NAV (导航/路由) — N 项
+- [ ] C4.12 — activeTab 高亮错误 → 检查 route metadata 的 activeTab 映射
+
+### 🟡 AUTH (认证/权限) — N 项
+- [ ] (none)
+
+### 🔵 DATA (数据/显示) — N 项
+- [ ] C2.20 — 金额科学计数法 → 检查 MoneyDisplay 的 Number() 转换
+
+### 🟣 AI (AI 功能) — N 项
+- [ ] C3.4 — AI 报告 step1 卡住 → 检查 agent stream 终结帧
+
+### 🟤 INTERACT (交互) — N 项
+- [ ] C2.4 — 储蓄记录 dialog 提交无反应 → 检查 form submit handler
+
+### ⚫ REGRESS (回归) — N 项
+- [ ] R4 — NProgress 再次卡住 → 检查 out-in transition race 修复是否被回退
+```
+
+每个 todo 行的格式:
+```
+- [ ] {Case ID} — {简短描述} → `{修复线索 (文件/组件/方向)}`
+```
+
+修复线索来自报告中的 "初步判断" 段, 加上 agent 自己的代码定位 (grep /
+codegraph 找到相关文件)。
+
+### Step 3 — 按分类逐个修复 + 提交
+
+**提交顺序:** 按分类代码批量提交, 一个分类 = 一个 commit (除非单分类内
+有多个不相关的修复, 可拆为多个 commit)。
+
+**Commit message 模板:**
+```
+fix({scope}): {分类} — {N} 项仿真测试失败修复
+
+- {Case ID}: {修复内容} ({file}:{line})
+- {Case ID}: {修复内容} ({file}:{line})
+
+Ref: tests/audit-reports/ui-audit-{date}.md
+```
+
+**scope 选择:**
+- RENDER → `ui` 或具体组件名 (如 `wish-detail`)
+- NAV → `router`
+- AUTH → `auth`
+- DATA → `display` 或 `money`
+- I18N → `i18n`
+- AI → `ai`
+- INTERACT → `ui` 或具体组件名
+- PERF → `perf`
+- REGRESS → `regression`
+
+**单分类多 commit 的拆分条件:**
+- 涉及不同模块 (如一个改 backend router, 一个改 frontend component)
+- 修复量差异大 (一个一行 fix, 一个需要重构)
+- 有依赖关系 (A 修复后 B 才能验证)
+
+### Step 4 — 验证 + 更新 Checklist
+
+每个 commit 后:
+1. 跑对应的 sim-test case (单 case 模式: `area-N` 或直接 bsk 驱动该路由)
+2. 通过 → 在 checklist 打勾: `- [x] C2.3 — ...`
+3. 未通过 → 保留 `[ ]`, 在行末追加 `(retry {N}: {新发现})`
+4. 全部修复完 → 跑一次 `smoke` 模式全量回归, 确认无引入新 bug
+
+### Step 5 — 最终报告
+
+```markdown
+## 修复结果 — {date}
+- 总失败: {N} 项
+- 已修复: {X} 项 ({commits} commits)
+- 遗留: {Y} 项 (原因: {需产品决策 / 需后端配合 / ...})
+- 回归测试: smoke 模式 {通过/失败}
+```
+
+按分类汇总:
+| 分类 | 失败 | 已修 | 遗留 |
+|------|------|------|------|
+| RENDER | 3 | 3 | 0 |
+| NAV | 1 | 0 | 1 (需路由重构) |
+| AI | 2 | 1 | 1 (需 LLM provider 排查) |
 
 ---
 
@@ -849,7 +1021,7 @@ bsk session stop "$SID"
 # demouser family: child display_names DISCOVERED at gate time (Phase 1.5)
 #   docker seed default: 小宝 / 大宝  (PIN per test-cases/_common.md)
 #   dev/other deployments may differ (e.g. demochild, 小明) — gate reads actual names
-# test_rich family: test_child (testchild / 🐱🌈)
+# test_rich family: test_child (testchild / 🐱🐶🌟🌈)
 ```
 
 ## Test Case Index
@@ -857,13 +1029,15 @@ bsk session stop "$SID"
 | Area | Group | Cases | File |
 |------|-------|-------|------|
 | 1 — Child app (儿童页面) | G3 | C1.1–C1.17 | [`test-cases/groups/g3-child/area1-child.md`](./test-cases/groups/g3-child/area1-child.md) |
-| 2 — Financial management (财务管理) | G1 | C2.1–C2.20 | [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) |
+| 2 — Financial management (财务管理) | G1 | C2.1–C2.25 | [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) |
 | 3 — AI (PDF/报告/数鸣/对话) | G1 | C3.1–C3.23 | [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md) |
 | 4 — Main app nav coverage (页签+币种切换) | G2 | C4.0–C4.16 | [`test-cases/groups/g2-adult-currency/area4-navigation.md`](./test-cases/groups/g2-adult-currency/area4-navigation.md) |
 | 5 — Child app nav coverage (页签+子页面) | G3 | C5.1–C5.10 | [`test-cases/groups/g3-child/area5-child-navigation.md`](./test-cases/groups/g3-child/area5-child-navigation.md) |
 | 6 — AI chat DeerFlow parity (输入/输出/集成+设计出入) | G1 | C6.1–C6.27 (D1–D7) | [`test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md`](./test-cases/groups/g1-adult-stable/area6-ai-chat-parity.md) |
 | **7 — Regression sweep (历史缺陷回归)** | **G1** | **R1–R9** | [`test-cases/groups/g1-adult-stable/area7-regression.md`](./test-cases/groups/g1-adult-stable/area7-regression.md) |
-| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings)** | **G1** | **F.1–F.8** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
+| **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings/Gift)** | **G1** | **F.1–F.10** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
+| **9 — Security + notification (WebAuthn/2FA/通知)** | **G1** | **C9.1–C9.7** | [`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md) |
+| **10 — Guest 端到端 (注册/邀请码/加入家庭)** | **G1** | **C10.1–C10.4** | [`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md) |
 
 ### Supporting References
 
@@ -903,5 +1077,5 @@ bsk session stop "$SID"
 | Running Area 7 R6 (auth expiry) before other cases → breaks remaining session | Run R6 as the **very last** regression case; it clears localStorage and destroys the session |
 | Testing Baby tab / family settings as non-owner → 403 | `demouser` is owner by default — these work. For member-role testing, see Area 8 F.8 (deferred: requires separate member account) |
 | Manifesto wizard state lost between pages | `useManifestoWizard` persists via `sessionStorage` — do not clear storage mid-flow; the wizard state resets only on explicit cancel |
-| Smoke mode accidentally running full suite | Smoke mode runs only 9 cases (C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2). Verify the mode before starting |
+| Smoke mode accidentally running full suite | Smoke mode runs only 10 cases (C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4). Verify the mode before starting |
 | Guest pages tested with authenticated session → redirected past welcome | Use a **fresh bsk session** without cookies for F.5.x guest page tests |

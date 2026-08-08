@@ -7,10 +7,11 @@
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import verify_agent_token
@@ -22,9 +23,16 @@ from apps.backend.app.models.ai_provider_config import (
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.skill_registry import SkillRegistry
+
+if TYPE_CHECKING:
+    from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.routers.ai_config import get_active_configs_with_recovery
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
+from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
+    AIProviderAdapter,
+)
 from apps.backend.app.services.web_search_provider_registry import get_provider_template
 from packages.core.roles import UserRole
 
@@ -148,32 +156,6 @@ def internal_get_liabilities(
     ]
 
 
-def _check_recovery_schedule_match(
-    recovery_schedule: str | None, now: datetime
-) -> bool:
-    """Check if current time matches recovery schedule pattern.
-
-    Recovery schedule format: comma-separated time patterns like ":01,:31"
-    Pattern matches when the current minute equals the specified value exactly.
-    """
-    if not recovery_schedule:
-        return False
-    current_minute = now.strftime("%M")
-    for pattern in recovery_schedule.split(","):
-        pattern = pattern.strip()
-        if pattern.startswith(":") and current_minute == pattern[1:].zfill(2):
-            return True
-    return False
-
-
-def _calculate_half_open_success_rate(cfg: AIProviderConfig) -> float:
-    """Calculate success rate during half-open window."""
-    total = cfg.half_open_success_count + cfg.half_open_failure_count
-    if total == 0:
-        return 0.0
-    return cfg.half_open_success_count / total
-
-
 @router.get("/ai/config")
 def internal_get_ai_config(
     family_id: str = Depends(verify_agent_token),
@@ -188,23 +170,7 @@ def internal_get_ai_config(
 
     返回 circuit_state 和 circuit_reason 供 agent 路由决策。
     """
-    from datetime import UTC, timedelta
-
-    now = datetime.now(UTC).replace(tzinfo=None)
-
-    all_cfgs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-        )
-        .order_by(
-            AIProviderConfig.display_order.asc().nulls_last(),
-            AIProviderConfig.created_at.asc(),
-        )
-        .all()
-    )
+    all_cfgs = get_active_configs_with_recovery(db, int(family_id))
 
     if not all_cfgs:
         # No AI providers configured, but web search providers might exist
@@ -266,60 +232,7 @@ def internal_get_ai_config(
         }
 
     providers = []
-    state_changed = False
     for cfg in all_cfgs:
-        # Handle state transitions based on three-state model
-        if cfg.circuit_state == "open":
-            # Check recovery schedule to trigger half_open transition
-            if _check_recovery_schedule_match(cfg.recovery_schedule, now):
-                cfg.circuit_state = "half_open"
-                cfg.half_open_window_start = now
-                cfg.half_open_success_count = 0
-                cfg.half_open_failure_count = 0
-                state_changed = True
-            elif cfg.circuit_open_until and cfg.circuit_open_until <= now:
-                # Legacy: expired circuit_open_until → half_open
-                cfg.circuit_state = "half_open"
-                cfg.half_open_window_start = now
-                cfg.half_open_success_count = 0
-                cfg.half_open_failure_count = 0
-                cfg.circuit_open_until = None
-                state_changed = True
-            else:
-                # Still in open state, skip provider
-                continue
-
-        elif cfg.circuit_state == "half_open":
-            # Check if 5-minute window expired and calculate success rate
-            window_start = cfg.half_open_window_start
-            if window_start and (now - window_start).total_seconds() >= 300:
-                success_rate = _calculate_half_open_success_rate(cfg)
-                # Success: close circuit (>=80% success)
-                # Failure: re-open circuit (<80% success)
-                if success_rate >= 0.8:
-                    cfg.circuit_state = "closed"
-                    cfg.circuit_reason = None
-                    cfg.failure_count = 0
-                    cfg.circuit_open = False
-                    cfg.half_open_window_start = None
-                    cfg.half_open_success_count = 0
-                    cfg.half_open_failure_count = 0
-                    state_changed = True
-                else:
-                    cfg.circuit_state = "open"
-                    cfg.circuit_reason = "transient"
-                    cfg.circuit_open = True
-                    cfg.circuit_open_until = now + timedelta(hours=1)
-                    cfg.half_open_window_start = None
-                    state_changed = True
-                    continue  # Skip provider
-
-        # Legacy boolean migration: sync circuit_open with circuit_state
-        new_circuit_open = cfg.circuit_state in ("open", "half_open")
-        if cfg.circuit_open != new_circuit_open:
-            cfg.circuit_open = new_circuit_open
-            state_changed = True
-
         api_key = decrypt_api_key(cfg.api_key_encrypted or "")
         if not api_key:
             continue
@@ -347,9 +260,7 @@ def internal_get_ai_config(
             }
         )
 
-    # Single commit for all state transitions across all providers
-    if state_changed:
-        db.commit()
+    # Adapter methods commit internally on each state transition
 
     # Query enabled web search providers (exclude open circuit state)
     family_id_int = int(family_id)
@@ -445,8 +356,6 @@ def internal_circuit_event(
     - permanent_account (410/账号删除): 立即熔断，无自动恢复时间
     - transient_*: 累计失败次数，达到阈值后熔断，设置恢复时间
     """
-    from datetime import UTC, timedelta
-
     cfg = (
         db.query(AIProviderConfig)
         .filter(
@@ -458,38 +367,10 @@ def internal_circuit_event(
     if not cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
-    now = datetime.now(UTC).replace(tzinfo=None)
-    cfg.last_failure_at = now
-    cfg.last_failure_type = body.error_type
-
-    # Permanent errors: immediate circuit open, no scheduled recovery
-    if body.error_type in ("permanent_auth", "permanent_account"):
-        cfg.circuit_state = "open"
-        cfg.circuit_reason = body.error_type
-        cfg.circuit_open = True
-        cfg.circuit_open_until = None  # Manual recovery only
-        cfg.failure_count = 0  # Reset for clean state
-    else:
-        # Transient errors: increment failure count
-        cfg.failure_count = (cfg.failure_count or 0) + 1
-
-        if cfg.failure_count >= 5:
-            cfg.circuit_state = "open"
-            cfg.circuit_reason = "transient"
-            cfg.circuit_open = True
-            # Align recovery to schedule or default 1 hour
-            if cfg.recovery_schedule:
-                # Recovery schedule handled by U3 (internal_get_ai_config)
-                cfg.circuit_open_until = now + timedelta(hours=1)
-            else:
-                cfg.circuit_open_until = now + timedelta(hours=1)
-
-    db.commit()
-    return {
-        "circuit_state": cfg.circuit_state,
-        "circuit_reason": cfg.circuit_reason,
-        "failure_count": cfg.failure_count,
-    }
+    adapter = AIProviderAdapter(config_id, int(family_id))
+    adapter.bind(cfg)
+    result = adapter.record_failure(body.error_type, db)
+    return result
 
 
 @router.post("/ai/config/{config_id}/circuit-reset")
@@ -510,17 +391,9 @@ def internal_circuit_reset(
     if not cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
-    # Clear all circuit breaker state
-    cfg.circuit_state = "closed"
-    cfg.circuit_reason = None
-    cfg.failure_count = 0
-    cfg.circuit_open = False
-    cfg.circuit_open_until = None
-    cfg.last_failure_type = None
-    cfg.half_open_success_count = 0
-    cfg.half_open_failure_count = 0
-    cfg.half_open_window_start = None
-    db.commit()
+    adapter = AIProviderAdapter(config_id, int(family_id))
+    adapter.bind(cfg)
+    adapter.reset(db)
     return {"ok": True, "circuit_state": "closed"}
 
 
@@ -590,8 +463,6 @@ def internal_half_open_result(
     Agent 在 half_open 状态调用供应商后，通过此端点报告结果。
     Backend 累计计数，下次 /ai/config 请求时计算成功率决定是否关闭熔断。
     """
-    from datetime import UTC, timedelta
-
     cfg = (
         db.query(AIProviderConfig)
         .filter(
@@ -604,34 +475,15 @@ def internal_half_open_result(
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
     # Only accept results when in half_open state — return 409 Conflict otherwise
-    # so the caller can distinguish "recorded" from "ignored" rather than
-    # treating an ignored result as success.
     if cfg.circuit_state != "half_open":
         raise AppError(
             ErrorCode.AI_TASK_IN_PROGRESS,
             f"Provider not in half_open state (current: {cfg.circuit_state})",
         )
 
-    if body.success:
-        cfg.half_open_success_count = (cfg.half_open_success_count or 0) + 1
-    else:
-        cfg.half_open_failure_count = (cfg.half_open_failure_count or 0) + 1
-        # Immediate re-open on failure during half_open
-        cfg.circuit_state = "open"
-        cfg.circuit_reason = "transient"
-        cfg.circuit_open = True
-        cfg.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(
-            hours=1
-        )
-        cfg.half_open_window_start = None
-
-    db.commit()
-    return {
-        "ok": True,
-        "half_open_success_count": cfg.half_open_success_count,
-        "half_open_failure_count": cfg.half_open_failure_count,
-        "circuit_state": cfg.circuit_state,
-    }
+    adapter = AIProviderAdapter(config_id, int(family_id))
+    adapter.bind(cfg)
+    return adapter.record_half_open_result(body.success, db)
 
 
 @router.get("/ai/enabled-families")
@@ -642,20 +494,16 @@ def internal_get_enabled_families(
     """返回所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。
 
     注意：verify_agent_token 要求 X-Family-Id header，定时任务调用时传入任意有效 family_id 即可。
-    实际返回所有有激活 AIProviderConfig 的家庭，不受 family_id 过滤。
+    实际返回所有 Family.ai_enabled=true 的家庭，不受 family_id 过滤。
     """
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
+    from apps.backend.app.models.family import Family
 
     rows = (
-        db.query(AIProviderConfig.family_id)
-        .filter(
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-        )
-        .distinct()
+        db.query(Family.id)
+        .filter(Family.ai_enabled.is_(True))
         .all()
     )
-    return [r.family_id for r in rows]
+    return [r.id for r in rows]
 
 
 @router.get("/skill-registry/{family_id}")
@@ -763,6 +611,7 @@ class ReportResultRequest(BaseModel):
 def _session_to_dict(s: "object") -> dict:
     return {
         "session_id": str(s.id),  # type: ignore[attr-defined]
+        "thread_id": s.thread_id,  # type: ignore[attr-defined]
         "family_id": str(s.family_id),  # type: ignore[attr-defined]
         "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
         "agent_id": str(s.agent_id) if s.agent_id else None,  # type: ignore[attr-defined]
@@ -779,6 +628,31 @@ def _session_to_dict(s: "object") -> dict:
     }
 
 
+def _find_session_row(
+    db: Session,
+    session_id: str,
+) -> "AIChatSession | None":
+    """Look up an ai_chat_sessions row by PK (snowflake) or thread_id (UUID).
+
+    The ``session_id`` parameter comes from the agent and is either a numeric
+    snowflake string (Path A: backend chat_stream) or a LangGraph UUID string
+    (Path B: frontend createThread).  Numeric IDs match the ``id`` PK; UUIDs
+    match the ``thread_id`` column.
+    """
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+
+    try:
+        int_id = int(session_id)
+        return db.query(AIChatSession).filter(AIChatSession.id == int_id).first()
+    except (ValueError, TypeError):
+        # UUID format — look up by the thread_id column
+        return (
+            db.query(AIChatSession)
+            .filter(AIChatSession.thread_id == session_id)
+            .first()
+        )
+
+
 @router.post("/ai/sessions/upsert")
 def internal_upsert_session(
     body: SessionUpsertRequest,
@@ -786,18 +660,41 @@ def internal_upsert_session(
     db: Session = Depends(get_db),
 ):
     from apps.backend.app.models.ai_chat_session import AIChatSession
+    from apps.backend.app.utils.snowflake import next_id
 
-    row = db.query(AIChatSession).filter(AIChatSession.id == body.session_id).first()
+    # Determine whether the caller passed a snowflake PK or a UUID thread_id.
+    is_uuid = False
+    try:
+        int(body.session_id)
+    except (ValueError, TypeError):
+        is_uuid = True
+
+    row = _find_session_row(db, body.session_id)
     if row is None:
-        row = AIChatSession(
-            id=body.session_id,
-            family_id=int(family_id),
-            user_id=int(body.user_id) if body.user_id else None,
-            agent_id=int(body.agent_id) if body.agent_id else None,
-            last_model=body.last_model,
-            source=body.source,
-            parent_thread_id=body.parent_thread_id,
-        )
+        if is_uuid:
+            # Path B: agent generated a UUID thread_id.  Generate a snowflake
+            # PK and store the UUID in the thread_id column so subsequent
+            # lookups by UUID can find this row.
+            row = AIChatSession(
+                id=next_id(),
+                thread_id=body.session_id,
+                family_id=int(family_id),
+                user_id=int(body.user_id) if body.user_id else None,
+                agent_id=int(body.agent_id) if body.agent_id else None,
+                last_model=body.last_model,
+                source=body.source,
+                parent_thread_id=body.parent_thread_id,
+            )
+        else:
+            row = AIChatSession(
+                id=int(body.session_id),
+                family_id=int(family_id),
+                user_id=int(body.user_id) if body.user_id else None,
+                agent_id=int(body.agent_id) if body.agent_id else None,
+                last_model=body.last_model,
+                source=body.source,
+                parent_thread_id=body.parent_thread_id,
+            )
         db.add(row)
     else:
         if row.family_id != int(family_id):
@@ -814,7 +711,18 @@ def internal_upsert_session(
         # branch's parent.
         if body.parent_thread_id and not row.parent_thread_id:
             row.parent_thread_id = body.parent_thread_id
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Concurrent insert detected — fetch the existing row
+        logger.info(
+            "[internal] IntegrityError on session upsert for %s, checking existing row",
+            body.session_id,
+        )
+        row = _find_session_row(db, body.session_id)
+        if row is None:
+            raise
     return {"ok": True}
 
 
@@ -827,8 +735,6 @@ def internal_update_session_summary(
 ):
     import logging
 
-    from apps.backend.app.models.ai_chat_session import AIChatSession
-
     logger = logging.getLogger(__name__)
 
     logger.info(
@@ -840,11 +746,11 @@ def internal_update_session_summary(
         repr(body.model),
     )
 
-    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != int(family_id):
+    row = _find_session_row(db, session_id)
+    if row is None or row.family_id != int(family_id):  # type: ignore[attr-defined]
         raise AppError(ErrorCode.NOT_FOUND)
     if body.summary:
-        row.last_message_summary = body.summary[:200]
+        row.last_message_summary = body.summary[:200]  # type: ignore[attr-defined]
     if body.title:
         # Preserve the existing (auto-generated) title on the first manual
         # rename so the original TitleMiddleware-produced title is never lost.
@@ -898,6 +804,7 @@ def internal_persist_report(
     from apps.backend.app.services.ai_result_parser import (
         _contains_markdown_table,
         _validate_json,
+        _validate_report_data_items,
     )
     from apps.backend.app.services.ai_result_writer import write_report_results
 
@@ -908,6 +815,7 @@ def internal_persist_report(
         isinstance(report_json, dict)
         and _validate_json(report_json, "report")
         and not _contains_markdown_table(report_json)
+        and _validate_report_data_items(report_json)
     ):
         logger.warning(
             "[internal_persist_report] rejected unvalidated report_json family=%s",
@@ -929,6 +837,7 @@ def internal_list_sessions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     agent_id: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     sort_by: str = Query(default="updated_at"),
     sort_order: str = Query(default="desc"),
     family_id: str = Depends(verify_agent_token),
@@ -939,6 +848,12 @@ def internal_list_sessions(
     q = db.query(AIChatSession).filter(AIChatSession.family_id == int(family_id))
     if agent_id:
         q = q.filter(AIChatSession.agent_id == int(agent_id))
+    if source is not None:
+        # "chat" is a frontend sentinel for normal chat sessions (source IS NULL).
+        if source == "chat":
+            q = q.filter(AIChatSession.source.is_(None))
+        else:
+            q = q.filter(AIChatSession.source == source)
     total = q.count()
 
     # Build the sort columns. Pinned sessions always surface first, then the
@@ -966,12 +881,10 @@ def internal_get_session(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    from apps.backend.app.models.ai_chat_session import AIChatSession
-
-    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != int(family_id):
+    row = _find_session_row(db, session_id)
+    if row is None or row.family_id != int(family_id):  # type: ignore[attr-defined]
         raise AppError(ErrorCode.NOT_FOUND)
-    return _session_to_dict(row)
+    return _session_to_dict(row)  # type: ignore[arg-type]
 
 
 @router.delete("/ai/sessions/{session_id}")
@@ -981,15 +894,13 @@ def internal_delete_session(
     db: Session = Depends(get_db),
 ):
     """Delete a session row (agent-facing). Checkpointer cleanup is the caller's responsibility."""
-    from apps.backend.app.models.ai_chat_session import AIChatSession
-
     try:
         family_id_int = int(family_id)
     except ValueError:
         raise AppError(ErrorCode.NOT_FOUND) from None
 
-    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != family_id_int:
+    row = _find_session_row(db, session_id)
+    if row is None or row.family_id != family_id_int:  # type: ignore[attr-defined]
         raise AppError(ErrorCode.NOT_FOUND)
     db.delete(row)
     db.commit()
@@ -1078,15 +989,12 @@ async def auto_generate_reports(
 
     条件：
     1. Family.report_auto_generate_enabled == True
-    2. 有激活的 AIProviderConfig（AI 功能已开启）
+    2. Family.ai_enabled=true（AI 功能已开启）
     3. 最近 1 小时内没有已完成的报告
     4. 没有正在运行中的 AI 任务
 
     对每个符合条件的家庭，创建 session + task 并触发 agent 生成。
     """
-    from apps.backend.app.models.ai_provider_config import (
-        AIProviderConfig,
-    )
     from apps.backend.app.models.ai_report import AIReport
     from apps.backend.app.services.agent_client import AgentClient
     from apps.backend.app.services.ai_task_service import AITaskService
@@ -1109,14 +1017,15 @@ async def auto_generate_reports(
     if not family_ids:
         return {"triggered": 0, "skipped": 0, "message": "没有开启自动生成的家庭"}
 
-    # 2. 过滤出有激活 AIProviderConfig 的家庭
+    # 2. 过滤出 Family.ai_enabled=true 的家庭
+    from apps.backend.app.models.family import Family
+
     ai_enabled_ids = set(
-        r.family_id
-        for r in db.query(AIProviderConfig.family_id)
+        r.id
+        for r in db.query(Family.id)
         .filter(
-            AIProviderConfig.family_id.in_(family_ids),
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
+            Family.id.in_(family_ids),
+            Family.ai_enabled.is_(True),
         )
         .all()
     )

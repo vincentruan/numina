@@ -45,7 +45,7 @@ INVITATION_CODES ?=
 
 .PHONY: help check install \
         setup setup-keys setup-env setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
-        dev-backend dev-agent dev-worker dev-frontend dev-child dev-all \
+        dev-backend dev-agent dev-worker dev-frontend dev-child dev-all stop-dev-all \
         build build-main build-child \
         typecheck lint format \
         test test-backend test-agent test-worker test-server test-frontend test-e2e \
@@ -83,6 +83,7 @@ help:
 	@echo "  make dev-frontend  - 主端 (成人) :5173"
 	@echo "  make dev-child     - 子端       :5174"
 	@echo "  make dev-all       - 同时启动以上 5 个 dev server (Ctrl-C 统一停止)"
+	@echo "  make stop-dev-all  - 停止以上全部 dev server (按端口查找并终止)"
 	@echo ""
 	@echo "编译 / 构建:"
 	@echo "  make build         - 构建主端 + 子端 (生产产物)"
@@ -355,6 +356,83 @@ dev-all:
 	cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0 & \
 	trap 'echo; echo "停止全部 dev server..."; kill $$(jobs -p) 2>/dev/null; wait 2>/dev/null; echo "✓ 已全部停止"; exit 0' INT TERM; \
 	wait
+
+stop-dev-all:
+	@echo "停止全部 dev server (端口 8000/8001/8002/5173/5174)..."
+	@bad=0; found=0; \
+	for port in 8000 8001 8002 5173 5174; do \
+	  pid=$$(lsof -tiTCP:$$port -sTCP:LISTEN -P -n 2>/dev/null | head -1); \
+	  if [ -z "$$pid" ]; then continue; fi; \
+	  cmdline=$$(ps -p $$pid -o args= 2>/dev/null || echo ""); \
+	  case $$port in \
+	    8000|8001|8002) expect="uvicorn"; venv_path="numina/server/.venv" ;; \
+	    5173|5174)      expect="vite";    venv_path="" ;; \
+	    *)              expect="";        venv_path="" ;; \
+	  esac; \
+	  matched=0; method=""; \
+	  case "$$cmdline" in *$$expect*) matched=1; method="cmdline" ;; esac; \
+	  if [ $$matched -eq 0 ] && [ -n "$$venv_path" ]; then \
+	    case "$$cmdline" in *$$venv_path*) matched=1; method="venv" ;; esac; \
+	  fi; \
+	  if [ $$matched -eq 0 ]; then \
+	    cpid=$$pid; depth=0; \
+	    while [ $$depth -lt 20 ]; do \
+	      ppid=$$(ps -o ppid= -p $$cpid 2>/dev/null | tr -d ' ' || true); \
+	      [ -z "$$ppid" ] || [ "$$ppid" = "0" ] || [ "$$ppid" = "1" ] && break; \
+	      pc=$$(ps -p $$ppid -o args= 2>/dev/null || true); \
+	      case "$$pc" in *$$expect*) matched=1; method="ancestor"; break ;; esac; \
+	      cpid=$$ppid; depth=$$((depth + 1)); \
+	    done; \
+	  fi; \
+	  if [ $$matched -eq 1 ]; then \
+	    top=$$pid; cpid=$$pid; pids="$$pid"; depth=0; \
+	    while [ $$depth -lt 20 ]; do \
+	      ppid=$$(ps -o ppid= -p $$cpid 2>/dev/null | tr -d ' ' || true); \
+	      [ -z "$$ppid" ] || [ "$$ppid" = "0" ] || [ "$$ppid" = "1" ] && break; \
+	      pc=$$(ps -p $$ppid -o args= 2>/dev/null || true); \
+	      case "$$pc" in *$$expect*) top=$$ppid; pids="$$pids $$ppid" ;; \
+	        *) break ;; \
+	      esac; \
+	      cpid=$$ppid; depth=$$((depth + 1)); \
+	    done; \
+	    echo "  端口 $$port: 终止进程树 (top PID $$top, via $$method) ✓"; \
+	    kill $$pids 2>/dev/null || true; \
+	    pkill -P $$top 2>/dev/null || true; \
+	    sleep 1; \
+	    for kp in $$pids; do kill -0 $$kp 2>/dev/null && kill -9 $$kp 2>/dev/null || true; done; \
+	    found=1; \
+	  else \
+	    echo "⚠ 端口 $$port 无法自动识别 (PID $$pid):"; \
+	    echo "    $$cmdline"; \
+	    echo "    预期: $$expect (numina dev server)"; \
+	    if [ -t 0 ]; then \
+	      printf "    是否仍按端口关闭? [y/N] "; \
+	      read -r ans; \
+	      case "$$ans" in \
+	        [yY]*) \
+	          echo "    正在关闭端口 $$port ..."; \
+	          kill $$pid 2>/dev/null || true; \
+	          sleep 1; \
+	          kill -0 $$pid 2>/dev/null && kill -9 $$pid 2>/dev/null || true; \
+	          found=1; \
+	          ;; \
+	        *) echo "    已跳过"; bad=1 ;; \
+	      esac; \
+	    else \
+	      echo "    非交互模式，已跳过"; \
+	      bad=1; \
+	    fi; \
+	  fi; \
+	done; \
+	if [ $$bad -eq 1 ]; then \
+	  echo "⚠ 部分端口未关闭"; \
+	  exit 1; \
+	fi; \
+	if [ $$found -eq 1 ]; then \
+	  echo "✓ 全部 dev server 已停止"; \
+	else \
+	  echo "✓ 没有运行中的 dev server"; \
+	fi
 
 # ══════════════════════════════════════════════════════════
 # 编译 / 构建

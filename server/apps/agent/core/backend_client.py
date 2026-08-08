@@ -11,7 +11,7 @@ backend 端点验证这两个 header，强制以 family_id 为边界过滤数据
 
 import logging
 import re
-from typing import cast
+from typing import Any, cast
 
 import httpx
 
@@ -257,6 +257,7 @@ class BackendClient:
         offset: int = 0,
         sort_by: str = "updated_at",
         sort_order: str = "desc",
+        source: str | None = None,
     ) -> tuple[list[dict], int]:
         return await list_sessions(
             self.family_id,
@@ -264,6 +265,7 @@ class BackendClient:
             offset=offset,
             sort_by=sort_by,
             sort_order=sort_order,
+            source=source,
         )
 
     async def get_session(self, session_id: str) -> dict | None:
@@ -310,7 +312,7 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
     Returns:
         错误类型字符串：
         - permanent_auth: 401, 403 (认证错误，需手动恢复)
-        - permanent_account: 410 或账号删除相关消息
+        - permanent_account: 410 或账号删除/配额耗尽相关消息
         - transient_rate_limit: 429 (速率限制)
         - transient_server: 500, 502, 503, 504 (服务器错误)
         - transient_timeout: timeout 异常 (error_code = 0 或特殊标识)
@@ -325,9 +327,38 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
         for keyword in ["invalid key", "invalid api key", "api key expired"]
     ):
         return "permanent_auth"
+    # Quota/billing exhaustion is a provider-account issue (user must top up
+    # or switch providers) — treat as permanent_account so the circuit opens
+    # immediately instead of waiting for the transient failure threshold.
+    if error_message:
+        msg_lower = error_message.lower()
+        if any(
+            kw in msg_lower
+            for kw in [
+                "out of quota",
+                "quota exceeded",
+                "insufficient quota",
+                "allocated quota",
+                "billing unavailable",
+                "billing limit",
+                "billing exceeded",
+                "insufficient balance",
+                "usage is restricted",
+                "usage limit",
+                "usage cap",
+                "capacity exceeded",
+            ]
+        ):
+            return "permanent_account"
     if error_message and any(
         keyword in error_message.lower()
-        for keyword in ["deleted", "suspended", "account"]
+        for keyword in [
+            "deleted",
+            "suspended",
+            "account disabled",
+            "account blocked",
+            "account deactivated",
+        ]
     ):
         return "permanent_account"
     if error_code == 429:
@@ -338,6 +369,46 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
         return "transient_timeout"
     # Default to transient for unknown codes
     return "transient_network"
+
+
+def _extract_llm_error_info(exc: BaseException) -> tuple[int, str]:
+    """Extract (error_code, error_message) from an LLM/HTTP exception.
+
+    Walks common exception attributes to find an HTTP status code and a
+    human-readable message. Falls back to (0, str(exc)) when the exception
+    type is unknown.
+
+    Returns:
+        (error_code, error_message): ``error_code`` is an int (HTTP status
+        code, or 0 when unknown). ``error_message`` is a non-empty string
+        suitable for ``classify_error_type`` keyword matching.
+    """
+    msg = str(exc) or type(exc).__name__
+
+    # httpx exceptions
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code, msg
+
+    # OpenAI / Anthropic SDK exceptions expose ``status_code`` attribute
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status, msg
+
+    # LangChain APIStatusError wraps the underlying SDK exception
+    inner = getattr(exc, "__cause__", None) or getattr(exc, "error", None)
+    if inner is not None and inner is not exc:
+        inner_status = getattr(inner, "status_code", None)
+        if isinstance(inner_status, int):
+            return inner_status, msg
+
+    # Last-ditch: parse a 3-digit HTTP code from the message
+    import re
+
+    match = re.search(r"\b([45]\d{2})\b", msg)
+    if match:
+        return int(match.group(1)), msg
+
+    return 0, msg
 
 
 def _make_headers(family_id: str) -> dict[str, str]:
@@ -685,17 +756,21 @@ async def list_sessions(
     offset: int = 0,
     sort_by: str = "updated_at",
     sort_order: str = "desc",
+    source: str | None = None,
 ) -> tuple[list[dict], int]:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
+    params: dict[str, Any] = {
+        "limit": limit,
+        "offset": offset,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
+    }
+    if source is not None:
+        params["source"] = source
     resp = await client.get(
         "/api/v1/internal/ai/sessions",
-        params={
-            "limit": limit,
-            "offset": offset,
-            "sort_by": sort_by,
-            "sort_order": sort_order,
-        },
+        params=params,
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()

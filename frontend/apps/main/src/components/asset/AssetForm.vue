@@ -289,7 +289,7 @@ import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
 import { suggestAssetFields } from '@/api/ai'
-import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
@@ -310,7 +310,7 @@ const props = withDefaults(defineProps<{
   categories: () => []
 })
 
-const aiStore = useAIStore()
+const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 
 // Form ref for validation
@@ -466,7 +466,7 @@ async function onNameBlur() {
   if (props.isEdit) return
   const name = form.value.name.trim()
   if (!name || name.length < 2) return
-  if (!aiStore.aiEnabled) return
+  if (!familyStore.aiEnabled) return
 
   const categoryName = props.categories.find(c => c.id === form.value.category_id)?.name ?? ''
 

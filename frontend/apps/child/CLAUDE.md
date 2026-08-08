@@ -39,7 +39,6 @@ src/
 
 ### Gotchas
 
-- **van-list in pull-refresh**: `van-list` must be inside `van-pull-refresh`, not sibling
 - **Route cache**: ChildHome, ChildTasks, ChildLedger, ChildWishes, ChildTreasures
 - **Canvas warm cream**: `#fffaf0` (light), `#0a1a1a` (dark) — NOT pure white/black
 
@@ -64,6 +63,16 @@ src/
 | Primary text | `#0a0a0a` | `#f0ece0` | `--color-ink` |
 | Secondary text | `#3d3d3d` | `#c0bcb0` | `--color-body` |
 | CTA | `#0a0a0a` | `#e8b94a` | `--color-primary` |
+
+## Child App 问题排查指南
+
+遇到以下问题时，参考对应的 solution 文档：
+
+| 问题场景 | 参考文档 |
+|---------|---------|
+| NProgress 进度条卡住不消失 / guard flag 问题 | [`nprogress-stuck-child`](../../../docs/solutions/ui-bugs/nprogress-stuck-spinning-bypassed-guard.md) |
+| 设备指纹稳定性 / 认证相关 | [`device-fingerprint-stability`](../../../docs/solutions/integration-issues/device-fingerprint-stability.md) |
+| 儿童游戏化系统架构 | [`gamified-child-system`](../../../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) |
 
 ## Links
 

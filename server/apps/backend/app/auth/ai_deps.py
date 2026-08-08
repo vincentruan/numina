@@ -1,5 +1,7 @@
 """AI 功能相关的 FastAPI dependencies。"""
 
+import logging
+
 import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
 from jwt.exceptions import PyJWTError
@@ -9,29 +11,47 @@ from apps.backend.app.auth.deps import ALGORITHM, get_current_user
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.ai_provider_config import AIProviderConfig
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.services.audit_log import write_audit_log
+
+logger = logging.getLogger(__name__)
 
 
 def require_ai_enabled(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> User:
-    """要求当前家庭已开启 AI 功能（有激活的 AIProviderConfig）。"""
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
+    """要求当前家庭已开启 AI 功能（Family.ai_enabled 开关）。
 
-    active_config = (
+    When ai_enabled is True but no active provider is configured, log a
+    warning so the misconfiguration surfaces in diagnostics rather than
+    failing later with an opaque LLM error.
+    """
+    family = (
+        db.query(Family)
+        .filter(Family.id == current_user.family_id)
+        .first()
+    )
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+    # Secondary check: warn when the flag is on but no provider exists.
+    # Does not block the request — the agent will fail with a clear
+    # "未配置 AI 供应商" error from RunPipeline.__aenter__.
+    provider_count = (
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
+            AIProviderConfig.is_active.is_(True),
         )
-        .first()
+        .count()
     )
-    if not active_config:
-        raise AppError(ErrorCode.AI_NOT_ENABLED)
+    if provider_count == 0:
+        logger.warning(
+            "family_id=%s has ai_enabled=True but no active AIProviderConfig",
+            current_user.family_id,
+        )
     return current_user
 
 

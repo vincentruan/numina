@@ -45,9 +45,12 @@ async def input_polish(
         # composer is not blocked (mirrors suggest.py's safe-default fallback).
         return InputPolishResponse(rewritten_text=body.text, changed=False)
 
-    # providers come pre-filtered to is_active==True (backend /ai/config),
-    # so providers[0] is the active provider. _create_lightweight_llm reads
-    # ai_provider/ai_model_id/api_key/ai_base_url from this dict.
-    selected_provider = providers[0]
-    rewritten, changed = await polish_draft(body.text, selected_provider)
+    # Circuit-state aware selection: skip open providers, probe half_open
+    # ~10% of the time. Falls back to None when all providers are unavailable.
+    from apps.agent.services.orchestrator import _select_stream_run_provider
+
+    selected = _select_stream_run_provider(providers)
+    if selected is None:
+        return InputPolishResponse(rewritten_text=body.text, changed=False)
+    rewritten, changed = await polish_draft(body.text, selected)
     return InputPolishResponse(rewritten_text=rewritten, changed=changed)

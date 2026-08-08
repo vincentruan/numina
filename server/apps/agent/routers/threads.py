@@ -38,6 +38,7 @@ from apps.agent.services.goal_store import (
     write_thread_goal,
 )
 from apps.agent.services.runtime.lifespan import get_run_manager
+from apps.agent.services.runtime.run_extras import _is_fallback_title
 from apps.agent.services.session_store import AiSessionRepository
 
 
@@ -123,6 +124,10 @@ class ThreadSearchRequest(BaseModel):
     offset: int = Field(default=0, ge=0, description="Pagination offset")
     sortBy: str | None = Field(default="updated_at", description="Sort column")
     sortOrder: str | None = Field(default="desc", description="Sort order (asc/desc)")
+    source: str | None = Field(
+        default=None,
+        description="Filter by session source (agent/skill type). Pass 'chat' for normal chat sessions (source IS NULL).",
+    )
 
 
 class ThreadStateResponse(BaseModel):
@@ -668,11 +673,17 @@ async def search_threads(
         offset=body.offset,
         sort_by=body.sortBy or "updated_at",
         sort_order=body.sortOrder or "desc",
+        source=body.source,
     )
 
     return [
         ThreadResponse(
-            thread_id=str(r.get("session_id", "")),
+            # Prefer the LangGraph UUID thread_id when present; fall back to
+            # the snowflake session_id for sessions created via chat_stream.
+            # Frontend code should use thread_id as the canonical key — it is
+            # stable for both UUID-created and snowflake-created sessions.
+            # Changing a session's thread_id after creation is not supported.
+            thread_id=str(r.get("thread_id") or r.get("session_id", "")),
             status=r.get("status", "idle"),
             created_at=coerce_iso(r.get("created_at", "")),
             updated_at=coerce_iso(r.get("updated_at", "")),
@@ -687,6 +698,9 @@ async def search_threads(
                 # not mixed in here.
                 "is_branch": r.get("source") == "branch",
                 "parent_thread_id": r.get("parent_thread_id"),
+                # Session source (agent/skill type) for frontend filter UI.
+                # Normalize None→"chat" so the frontend has a stable key.
+                "source": r.get("source") or "chat",
             },
             values={"title": r.get("title", "")} if r.get("title") else {},
             interrupts={},
@@ -705,12 +719,14 @@ async def patch_thread(
     repo = AiSessionRepository(x_family_id)
     # Handle metadata-based title updates (legacy path)
     if "title" in body.metadata:
-        await repo.update_summary(
-            session_id=thread_id,
-            family_id=x_family_id,
-            summary=None,
-            title=body.metadata["title"],
-        )
+        new_title = body.metadata["title"]
+        if new_title and not _is_fallback_title(str(new_title)):
+            await repo.update_summary(
+                session_id=thread_id,
+                family_id=x_family_id,
+                summary=None,
+                title=str(new_title).strip()[:256],
+            )
     # Handle top-level title/is_pinned updates
     if body.title is not None or body.is_pinned is not None:
         await repo.update_session(
@@ -947,12 +963,12 @@ async def update_thread_state(
 
     if body.values and "title" in body.values:
         new_title = body.values["title"]
-        if new_title:
+        if new_title and not _is_fallback_title(str(new_title)):
             await repo.update_summary(
                 session_id=thread_id,
                 family_id=x_family_id,
                 summary=None,
-                title=new_title,
+                title=str(new_title).strip()[:256],
             )
 
     return ThreadStateResponse(

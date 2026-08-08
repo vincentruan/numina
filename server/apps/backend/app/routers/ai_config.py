@@ -37,6 +37,9 @@ from apps.backend.app.services.ai_crypto import (
     encrypt_api_key,
     mask_api_key,
 )
+from apps.backend.app.services.circuit_breaker.adapters.ai_provider import (
+    AIProviderAdapter,
+)
 from apps.backend.app.services.security_log import _log_security_event
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
@@ -85,6 +88,48 @@ def _invalidate_agent_cache(family_id: int) -> None:
             )
 
     threading.Thread(target=_call, daemon=True).start()
+
+
+def get_active_configs_with_recovery(
+    db: Session,
+    family_id: int,
+) -> list[AIProviderConfig]:
+    """Query active AI providers and attempt circuit-breaker recovery.
+
+    Returns providers that are usable *right now* — i.e. already closed, or
+    were open but recovered to half_open/closed after calling
+    ``attempt_recovery``.  Providers that remain open (cooldown not expired
+    or recovery schedule not matched yet) are filtered out.
+
+    Also evaluates ``half_open`` windows: if the window expired with
+    insufficient success rate the provider re-opens and is filtered out.
+
+    Used by ``get_tenant_models``, ``_get_active_providers`` (ai_internal),
+    ``_build_test_candidates``, and ``ai_result_parser``.
+    """
+    configs = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.family_id == family_id,
+            AIProviderConfig.is_active,
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .order_by(
+            AIProviderConfig.display_order.asc().nulls_last(),
+            AIProviderConfig.created_at.asc(),
+        )
+        .all()
+    )
+
+    for cfg in configs:
+        adapter = AIProviderAdapter(cfg.id, int(family_id))
+        adapter.bind(cfg)
+        if cfg.circuit_state == "open":
+            adapter.attempt_recovery(db)
+        elif cfg.circuit_state == "half_open":
+            adapter.evaluate_half_open_window(db)
+
+    return [c for c in configs if c.circuit_state != "open"]
 
 
 def _deserialize_capabilities(cap_str: str | None) -> list[str]:
@@ -430,14 +475,178 @@ def reset_circuit_breaker(
     return AICircuitResetResponse(ok=True)
 
 
+# ── Model fallback helpers for test_ai_config ────────────────────────────────
+
+
+def _is_transient_test_error(message: str) -> bool:
+    """Detect transient errors (429 rate limit, 5xx server, timeout) that warrant fallback."""
+    msg_lower = message.lower()
+    if "429" in message:
+        return True
+    if "502" in message or "503" in message or "504" in message:
+        return True
+    if "throttl" in msg_lower or "quota" in msg_lower or "rate limit" in msg_lower:
+        return True
+    return "timeout" in msg_lower or "timed out" in msg_lower
+
+
+def _parse_caps(raw: str | None) -> list[str]:
+    """Parse capabilities JSON string from DB column to list."""
+    if not raw:
+        return []
+    try:
+        val = json.loads(raw)
+        return val if isinstance(val, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _build_test_candidates(
+    db: Session, family_id: int, target_config_id: int
+) -> list[dict]:
+    """Build ordered fallback candidates across all active providers.
+
+    Priority:
+    1. Target config (the one user toggled), slots 1→2→3
+    2. Other active configs ordered by display_order, slots 1→2→3
+
+    Each candidate = {config, model_id, vision_model_id, slot, display_label}
+    """
+    all_cfgs = get_active_configs_with_recovery(db, family_id)
+
+    if not all_cfgs:
+        return []
+
+    # Partition: target first, rest sorted by display_order
+    target_cfg = None
+    other_cfgs = []
+    for cfg in all_cfgs:
+        if cfg.id == target_config_id:
+            target_cfg = cfg
+        else:
+            other_cfgs.append(cfg)
+
+    ordered: list[AIProviderConfig] = []
+    if target_cfg:
+        ordered.append(target_cfg)
+    ordered.extend(other_cfgs)
+
+    candidates: list[dict] = []
+    seen: set[tuple[int, str]] = set()
+
+    for cfg in ordered:
+        api_key = decrypt_api_key(cfg.api_key_encrypted) if cfg.api_key_encrypted else None
+        if not api_key:
+            continue
+        api_key = api_key.strip()
+        if not api_key:
+            continue
+
+        cfg_name = cfg.provider_name or cfg.name or "Unknown"
+        caps_1 = _parse_caps(cfg.model_1_capabilities)
+        caps_2 = _parse_caps(cfg.model_2_capabilities)
+
+        # Slot 1: primary model
+        if cfg.model_id:
+            key = (cfg.id, cfg.model_id)
+            if key not in seen:
+                seen.add(key)
+                candidates.append({
+                    "config": cfg,
+                    "model_id": cfg.model_id,
+                    "vision_model_id": cfg.vision_model_id or cfg.model_id,
+                    "slot": 1,
+                    "api_key": api_key,
+                    "display_label": f"{cfg_name} ({cfg.model_id})",
+                    "has_vision_cap": "vision_understanding" in caps_1,
+                })
+
+        # Slot 2: alternate model (only if different from slot 1)
+        if cfg.model_2_id and cfg.model_2_id != cfg.model_id:
+            key = (cfg.id, cfg.model_2_id)
+            if key not in seen:
+                seen.add(key)
+                candidates.append({
+                    "config": cfg,
+                    "model_id": cfg.model_2_id,
+                    "vision_model_id": cfg.vision_model_id or cfg.model_2_id,
+                    "slot": 2,
+                    "api_key": api_key,
+                    "display_label": f"{cfg_name} ({cfg.model_2_id})",
+                    "has_vision_cap": "vision_understanding" in caps_2,
+                })
+
+        # Slot 3: third model (only if different from slot 1 & 2)
+        if cfg.model_3_id and cfg.model_3_id not in (cfg.model_id, cfg.model_2_id):
+            key = (cfg.id, cfg.model_3_id)
+            if key not in seen:
+                seen.add(key)
+                candidates.append({
+                    "config": cfg,
+                    "model_id": cfg.model_3_id,
+                    "vision_model_id": cfg.vision_model_id or cfg.model_3_id,
+                    "slot": 3,
+                    "api_key": api_key,
+                    "display_label": f"{cfg_name} ({cfg.model_3_id})",
+                    "has_vision_cap": "vision_understanding" in _parse_caps(cfg.model_3_capabilities),
+                })
+
+        # Vision fallback: vision_model_id if different from slot 1 model
+        if (
+            cfg.vision_model_id
+            and cfg.vision_model_id != cfg.model_id
+            and cfg.vision_model_id != cfg.model_2_id
+        ):
+            key = (cfg.id, cfg.vision_model_id)
+            if key not in seen:
+                seen.add(key)
+                candidates.append({
+                    "config": cfg,
+                    "model_id": cfg.vision_model_id,
+                    "vision_model_id": cfg.vision_model_id,
+                    "slot": "vision",
+                    "api_key": api_key,
+                    "display_label": f"{cfg_name} vision ({cfg.vision_model_id})",
+                    "has_vision_cap": True,
+                })
+
+    return candidates
+
+
+def _call_agent_model_test(
+    agent_client: AgentClient, candidate: dict, test_types: list[str]
+) -> dict:
+    """Call agent's /test/model with a single candidate. Returns the JSON response dict."""
+    # For vision-only slot, only run vision tests
+    actual_test_types = test_types
+    if candidate["slot"] == "vision":
+        actual_test_types = [t for t in test_types if t in ("vision", "vision_ocr")]
+        if not actual_test_types:
+            actual_test_types = ["vision"]
+
+    return {
+        "provider": candidate["config"].provider,
+        "api_key": candidate["api_key"],
+        "model_id": candidate["model_id"],
+        "base_url": candidate["config"].base_url,
+        "vision_model_id": candidate["vision_model_id"],
+        "test_types": actual_test_types,
+    }
+
+
 @router.post("/config/{config_id}/test", response_model=AIConfigTestResult)
 async def test_ai_config(
     config_id: int,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> AIConfigTestResult:
-    """测试指定 AI 配置的连通性和模型能力（仅 owner）。"""
-    cfg = (
+    """测试 AI 配置的连通性和模型能力（仅 owner）。
+
+    支持跨 provider fallback：当首选模型因限流 (429) / 超时 / 5xx 等瞬时错误失败时，
+    自动尝试同 provider 的其他模型槽位或其他 provider 的模型。
+    """
+    # Validate target config exists and belongs to this family
+    target_cfg = (
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.id == config_id,
@@ -445,55 +654,159 @@ async def test_ai_config(
         )
         .first()
     )
-    if not cfg:
+    if not target_cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
-    if not cfg.api_key_encrypted:
+    if not target_cfg.api_key_encrypted:
         return AIConfigTestResult(connected=False, message="未配置 API Key")
 
-    api_key = decrypt_api_key(cfg.api_key_encrypted)
-    if not api_key:
+    target_api_key = decrypt_api_key(target_cfg.api_key_encrypted)
+    if not target_api_key:
         return AIConfigTestResult(
             connected=False, message="API Key 解密失败，请重新配置"
         )
 
-    api_key = api_key.strip()
-    if not cfg.model_id:
+    target_api_key = target_api_key.strip()
+    if not target_cfg.model_id:
         return AIConfigTestResult(connected=False, message="未配置主模型 ID")
 
     agent_client = AgentClient(current_user.family_id, current_user.id, timeout=300.0)
-    try:
-        resp = await agent_client.post(
-            "/test/model",
-            headers={"Content-Type": "application/json"},
-            json={
-                "provider": cfg.provider,
-                "api_key": api_key,
-                "model_id": cfg.model_id,
-                "base_url": cfg.base_url,
-                "vision_model_id": cfg.vision_model_id,
-                "test_types": ["connection", "thinking", "vision", "vision_ocr"],
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except httpx.HTTPStatusError as e:
+
+    # Build fallback candidates across all active providers
+    candidates = _build_test_candidates(db, current_user.family_id, config_id)
+
+    if not candidates:
+        return AIConfigTestResult(connected=False, message="无可用 AI 供应商")
+
+    test_types = ["connection", "thinking", "vision", "vision_ocr"]
+    last_result: dict | None = None
+    last_failure_msg: str = ""
+    fallback_count = 0
+
+    for idx, candidate in enumerate(candidates):
+        try:
+            payload = _call_agent_model_test(agent_client, candidate, test_types)
+            resp = await agent_client.post(
+                "/test/model",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPStatusError as e:
+            last_result = None
+            last_failure_msg = f"Agent 服务返回错误: HTTP {e.response.status_code}"
+            if idx < len(candidates) - 1:
+                fallback_count += 1
+            continue
+        except Exception:
+            logger.exception("agent model-test call failed")
+            last_result = None
+            last_failure_msg = "无法连接 Agent 服务，请检查 Agent 服务状态"
+            break  # Agent unreachable, no point trying more candidates
+
+        # Check if connection succeeded
+        if data.get("connected", False):
+            # Connection OK — store results against the successful config
+            used_cfg = candidate["config"]
+            _upsert_test_results(db, used_cfg.id, data)
+            db.commit()
+
+            result = AIConfigTestResult(
+                connected=data.get("connected", False),
+                message=data.get("message", "测试完成"),
+                latency_ms=data.get("latency_ms"),
+                thinking_success=data.get("thinking_success"),
+                thinking_message=data.get("thinking_message"),
+                thinking_latency_ms=data.get("thinking_latency_ms"),
+                vision_success=data.get("vision_success"),
+                vision_message=data.get("vision_message"),
+                vision_latency_ms=data.get("vision_latency_ms"),
+                vision_text_success=data.get("vision_text_success"),
+                vision_text_message=data.get("vision_text_message"),
+                vision_text_latency_ms=data.get("vision_text_latency_ms"),
+                used_config_id=str(used_cfg.id),
+                used_provider_name=used_cfg.provider_name or used_cfg.name,
+                used_model_id=candidate["model_id"],
+                used_circuit_state=used_cfg.circuit_state,
+                fallback_count=fallback_count,
+            )
+
+            # Annotate message if fallback was used
+            if fallback_count > 0:
+                result.message = (
+                    f"主模型不可用，已自动切换至 {candidate['display_label']}"
+                )
+
+            return result
+
+        # Connection failed — check if transient → try next candidate
+        msg = data.get("message", "")
+        if _is_transient_test_error(msg) and idx < len(candidates) - 1:
+            last_failure_msg = msg
+            fallback_count += 1
+            logger.info(
+                "[test_ai_config] transient error on model=%s config_id=%s, "
+                "falling back (attempt %d): %s",
+                candidate["model_id"],
+                candidate["config"].id,
+                fallback_count,
+                msg,
+            )
+            continue
+
+        # Permanent error — stop fallback, record and return
+        _upsert_test_results(db, candidate["config"].id, data)
+        db.commit()
         return AIConfigTestResult(
             connected=False,
-            message=f"Agent 服务返回错误: HTTP {e.response.status_code}",
+            message=msg,
+            latency_ms=data.get("latency_ms"),
+            thinking_success=data.get("thinking_success"),
+            thinking_message=data.get("thinking_message"),
+            thinking_latency_ms=data.get("thinking_latency_ms"),
+            vision_success=data.get("vision_success"),
+            vision_message=data.get("vision_message"),
+            vision_latency_ms=data.get("vision_latency_ms"),
+            vision_text_success=data.get("vision_text_success"),
+            vision_text_message=data.get("vision_text_message"),
+            vision_text_latency_ms=data.get("vision_text_latency_ms"),
+            used_config_id=str(candidate["config"].id),
+            used_provider_name=candidate["config"].provider_name or candidate["config"].name,
+            used_model_id=candidate["model_id"],
+            used_circuit_state=candidate["config"].circuit_state,
+            fallback_count=fallback_count,
         )
-    except Exception:
-        logger.exception("agent model-test call failed")
+
+    # All candidates exhausted (all transient failures)
+    # Record last failure against target config
+    if last_result is None and last_failure_msg:
+        _upsert_test_results(
+            db,
+            config_id,
+            {"connected": False, "message": last_failure_msg},
+        )
+        db.commit()
         return AIConfigTestResult(
-            connected=False, message="无法连接 Agent 服务，请检查 Agent 服务状态"
+            connected=False,
+            message=(
+                f"所有 {fallback_count + 1} 个候选模型均不可用: {last_failure_msg}"
+            ),
         )
+
+    # Should not reach here, but handle gracefully
+    return AIConfigTestResult(connected=False, message="测试异常，请重试")
+
+
+def _upsert_test_results(db: Session, config_id: int, data: dict) -> None:
+    """Store test results against the given config."""
 
     def _upsert_test(
         test_type: str, success: bool | None, message: str, latency_ms: int | None
     ) -> None:
         existing = (
             db.query(AIProviderTestResult)
-            .filter_by(config_id=cfg.id, test_type=test_type)
+            .filter_by(config_id=config_id, test_type=test_type)
             .first()
         )
         if existing:
@@ -504,7 +817,7 @@ async def test_ai_config(
         else:
             db.add(
                 AIProviderTestResult(
-                    config_id=cfg.id,
+                    config_id=config_id,
                     test_type=test_type,
                     success=success,
                     message=message,
@@ -539,22 +852,6 @@ async def test_ai_config(
             data.get("vision_text_message", ""),
             data.get("vision_text_latency_ms"),
         )
-    db.commit()
-
-    return AIConfigTestResult(
-        connected=data.get("connected", False),
-        message=data.get("message", "测试完成"),
-        latency_ms=data.get("latency_ms"),
-        thinking_success=data.get("thinking_success"),
-        thinking_message=data.get("thinking_message"),
-        thinking_latency_ms=data.get("thinking_latency_ms"),
-        vision_success=data.get("vision_success"),
-        vision_message=data.get("vision_message"),
-        vision_latency_ms=data.get("vision_latency_ms"),
-        vision_text_success=data.get("vision_text_success"),
-        vision_text_message=data.get("vision_text_message"),
-        vision_text_latency_ms=data.get("vision_text_latency_ms"),
-    )
 
 
 @router.get("/config/defaults", response_model=dict)
@@ -595,18 +892,7 @@ def get_tenant_models(
     - subagent_enabled: Always true — ultra mode availability depends on model's reasoning_effort support
     - websearch_enabled: Whether family has web search provider configured
     """
-    # Query active AI providers for the family
-    configs = (
-        db.query(AIProviderConfig)
-        .filter(
-            AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.is_active,
-            AIProviderConfig.api_key_encrypted.isnot(None),
-            AIProviderConfig.circuit_state != "open",
-        )
-        .order_by(AIProviderConfig.display_order.asc().nulls_last())
-        .all()
-    )
+    configs = get_active_configs_with_recovery(db, current_user.family_id)
 
     models: list[ModelInfo] = []
     seen_model_ids: set[str] = set()  # Dedup across configs

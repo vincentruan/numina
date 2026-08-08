@@ -30,7 +30,7 @@ vi.mock('vant', () => ({
 }))
 
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ format: (n: number) => `¥${n}` }),
+  useCurrency: () => ({ format: (n: number) => `¥${n}`, formatConverted: (n: number | string) => '¥' + n }),
 }))
 
 // --- Liability store mock ---

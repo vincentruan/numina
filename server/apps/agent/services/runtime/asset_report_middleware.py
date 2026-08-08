@@ -24,6 +24,70 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def normalize_indicator_data_items(items: list) -> list[dict]:
+    """Normalize non-standard data.items formats to canonical {key, zh, en, value}.
+
+    The LLM may output alternative shapes such as:
+    - ``{category_name, percentage}`` (from the asset-report pilot)
+    - ``{name, value}`` with no labels
+    - ``{label, value}`` with no bilingual labels
+
+    All are mapped to the canonical format so the frontend can rely on a single
+    rendering path. Labels that can't be bilingualized get ``zh = en = label``.
+    """
+    result: list[dict] = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        # Extract label (prefer explicit bilingual, fall back to generic name fields)
+        zh = item.get("zh") or item.get("category_name") or item.get("name") or item.get("label")
+        en = item.get("en") or item.get("category_name") or item.get("name") or item.get("label")
+        if not zh:
+            zh = f"item_{idx}"
+        if not en:
+            en = zh
+        key = item.get("key") or item.get("category_name") or item.get("name") or f"item_{idx}"
+        if isinstance(key, str):
+            # Normalize to snake_case key for consistency
+            key = key.lower().replace(" ", "_").replace("-", "_")
+        value = item.get("value") or item.get("percentage") or item.get("amount") or 0
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0
+        result.append({"key": str(key), "zh": str(zh), "en": str(en), "value": value})
+    return result
+
+
+def normalize_report_json(data: dict) -> dict:
+    """Normalize report JSON after parsing — ensures data.items use canonical format.
+
+    Iterates ``indicators[].data.items`` and transforms non-standard shapes
+    (``{category_name, percentage}``, ``{name, value}``, etc.) into the canonical
+    ``{key, zh, en, value}`` shape that the frontend expects.
+    """
+    if not isinstance(data, dict):
+        return data
+    indicators = data.get("indicators")
+    if not isinstance(indicators, list):
+        return data
+    for indicator in indicators:
+        if not isinstance(indicator, dict):
+            continue
+        data_obj = indicator.get("data")
+        if not isinstance(data_obj, dict):
+            continue
+        items = data_obj.get("items")
+        if isinstance(items, list) and items:
+            # Check if items already use canonical format
+            first = items[0]
+            if isinstance(first, dict) and "zh" in first and "en" in first:
+                continue  # Already canonical, skip
+            # Non-standard format → normalize
+            indicator["data"]["items"] = normalize_indicator_data_items(items)
+    return data
+
+
 def parse_report_json(ai_text: str) -> dict | None:
     """Parse the indicators JSON from the asset-report AI output.
 
@@ -32,6 +96,14 @@ def parse_report_json(ai_text: str) -> dict | None:
     so the caller can skip emitting report.step2_json (plan F8: step2
     incomplete => 0 events). Shared by the worker (in-graph emission) and
     the router (harvest) — kept here to avoid a circular import.
+
+    The AI output may contain multiple JSON blocks (e.g. tool results, intermediate
+    steps). We prefer the one with the "indicators" key (canonical asset report schema).
+    If none has "indicators", fall back to the first valid dict.
+
+    On success the parsed dict is passed through ``normalize_report_json``
+    to ensure ``data.items`` uses the canonical ``{key, zh, en, value}``
+    format regardless of the LLM's output shape.
     """
     if not ai_text:
         return None
@@ -42,11 +114,22 @@ def parse_report_json(ai_text: str) -> dict | None:
     fence_re = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
     candidates: list[str] = [m.group(1) for m in fence_re.finditer(ai_text)]
     candidates.append(ai_text)
+
+    first_valid: dict | None = None
     for cand in candidates:
         try:
             parsed = json_repair.repair_json(cand, return_objects=True)
             if isinstance(parsed, dict):
-                return parsed
+                # Prefer JSON with "indicators" key (canonical asset report schema)
+                if "indicators" in parsed:
+                    return normalize_report_json(parsed)
+                # Otherwise remember the first valid dict as fallback
+                if first_valid is None:
+                    first_valid = parsed
         except Exception:
             continue
+
+    # No JSON with "indicators" found — return the first valid dict (if any)
+    if first_valid is not None:
+        return normalize_report_json(first_valid)
     return None

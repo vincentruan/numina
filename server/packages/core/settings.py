@@ -1,3 +1,4 @@
+import os
 import secrets
 from pathlib import Path
 
@@ -74,24 +75,6 @@ class Settings(BaseSettings):
     WORKSPACE_ROOT: str = "./data/workspaces"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
     STORAGE_ENCRYPTION_KEY: str = ""
-
-    # Remote storage backend configuration (seeded on startup)
-    # Supports one remote backend: "github" or "webdav"
-    STORAGE_BACKEND_TYPE: str = ""  # "github", "webdav", or empty (no remote backend)
-    STORAGE_BACKEND_NAME: str = ""  # Display name for the backend
-    STORAGE_BACKEND_IS_DEFAULT: bool = False
-    STORAGE_BACKEND_IS_ACTIVE: bool = True
-
-    # GitHub storage backend credentials
-    STORAGE_GITHUB_REPO_OWNER: str = ""
-    STORAGE_GITHUB_REPO_NAME: str = ""
-    STORAGE_GITHUB_BRANCH: str = "main"
-    STORAGE_GITHUB_TOKEN: str = ""  # Personal access token with repo scope
-
-    # WebDAV storage backend credentials
-    STORAGE_WEBDAV_BASE_URL: str = ""
-    STORAGE_WEBDAV_USERNAME: str = ""
-    STORAGE_WEBDAV_PASSWORD: str = ""
 
     # Chat session storage configuration
     CHAT_DIR: str = "./data/workspaces"  # Base dir; sessions stored under tenants/{fid}/chat/
@@ -223,26 +206,32 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
         "避免与 SECRET_KEY 共用导致密钥轮换风险。"
     )
 
-# Storage backend credentials validation for production
-if settings.ENVIRONMENT == "production" and settings.STORAGE_BACKEND_TYPE:
-    if settings.STORAGE_BACKEND_TYPE == "github" and not all([
-        settings.STORAGE_GITHUB_REPO_OWNER,
-        settings.STORAGE_GITHUB_REPO_NAME,
-        settings.STORAGE_GITHUB_TOKEN,
-    ]):
-        raise RuntimeError(
-            "GitHub 存储后端缺少必要配置！生产环境必须设置 "
-            "STORAGE_GITHUB_REPO_OWNER、STORAGE_GITHUB_REPO_NAME 和 STORAGE_GITHUB_TOKEN。"
-        )
-    elif settings.STORAGE_BACKEND_TYPE == "webdav" and not all([
-        settings.STORAGE_WEBDAV_BASE_URL,
-        settings.STORAGE_WEBDAV_USERNAME,
-        settings.STORAGE_WEBDAV_PASSWORD,
-    ]):
-        raise RuntimeError(
-            "WebDAV 存储后端缺少必要配置！生产环境必须设置 "
-                "STORAGE_WEBDAV_BASE_URL、STORAGE_WEBDAV_USERNAME 和 STORAGE_WEBDAV_PASSWORD。"
-            )
+# Legacy storage backend environment variables check
+# NOTE: We do NOT raise at import time because that would block the Alembic CLI
+# from running the migration that cleans up legacy backends. The guard is exposed
+# as a callable checked during app startup instead.
+_LEGACY_STORAGE_ENV_KEYS = (
+    "STORAGE_BACKEND_TYPE",
+    "STORAGE_BACKEND_NAME",
+    "STORAGE_BACKEND_IS_DEFAULT",
+    "STORAGE_BACKEND_IS_ACTIVE",
+    "STORAGE_GITHUB_REPO_OWNER",
+    "STORAGE_GITHUB_REPO_NAME",
+    "STORAGE_GITHUB_BRANCH",
+    "STORAGE_GITHUB_TOKEN",
+    "STORAGE_WEBDAV_BASE_URL",
+    "STORAGE_WEBDAV_USERNAME",
+    "STORAGE_WEBDAV_PASSWORD",
+)
+
+
+def check_legacy_storage_env_vars() -> list[str]:
+    """Return a list of legacy storage env vars that are still set.
+
+    This is called during application startup (FastAPI lifespan), NOT at module
+    import time, so the Alembic CLI can still import settings and run migrations.
+    """
+    return [k for k in _LEGACY_STORAGE_ENV_KEYS if os.environ.get(k)]
 
 # CHAT_DIR validation - must not be a strict subdirectory of UPLOAD_DIR
 # (UPLOAD_DIR subtree is served as static files; equality is OK because

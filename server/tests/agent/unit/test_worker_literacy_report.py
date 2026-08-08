@@ -33,24 +33,24 @@ async def test_worker_dispatches_literacy_weekly_report():
 
 
 @pytest.mark.asyncio
-async def test_extract_literacy_report_context_with_valid_input():
-    """_extract_literacy_report_context pulls content from last user message."""
-    from apps.agent.services.runtime.worker import _extract_literacy_report_context
+async def test_extract_backend_user_message_with_valid_input():
+    """_extract_backend_user_message pulls content from last user message."""
+    from apps.agent.services.runtime.worker import _extract_backend_user_message
 
     graph_input = {
         "messages": [
             {"role": "user", "content": '{"child_id": "123", "week": "2026-W30"}'},
         ]
     }
-    result = _extract_literacy_report_context(graph_input)
+    result = _extract_backend_user_message(graph_input)
     assert result == '{"child_id": "123", "week": "2026-W30"}'
 
 
 @pytest.mark.asyncio
-async def test_extract_literacy_report_context_empty():
-    """_extract_literacy_report_context returns None for empty/missing input."""
-    from apps.agent.services.runtime.worker import _extract_literacy_report_context
+async def test_extract_backend_user_message_empty():
+    """_extract_backend_user_message returns None for empty/missing input."""
+    from apps.agent.services.runtime.worker import _extract_backend_user_message
 
-    assert _extract_literacy_report_context(None) is None
-    assert _extract_literacy_report_context({}) is None
-    assert _extract_literacy_report_context({"messages": []}) is None
+    assert _extract_backend_user_message(None) is None
+    assert _extract_backend_user_message({}) is None
+    assert _extract_backend_user_message({"messages": []}) is None

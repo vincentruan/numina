@@ -46,13 +46,13 @@ def _make_cached_file(db, family_id, user_id, local_path="/tmp/test.jpg"):
     return cf
 
 
-def _make_backend(db, is_default=True):
+def _make_backend(db, family_id):
     backend = StorageBackendModel(
         id="webdav-test",
+        family_id=family_id,
         backend_type="webdav",
         display_name="Test WebDAV",
         config='{"url": "http://localhost", "username": "user", "password": "pass"}',
-        is_default=is_default,
         is_active=True,
     )
     db.add(backend)
@@ -77,7 +77,7 @@ def _make_location(db, file_id, backend_id, sync_status="pending", retry_count=0
 # ── Sync job tests ────────────────────────────────────────────────────────────
 
 class TestFileSyncJob:
-    def test_sync_job_processes_pending_row(self, db, tmp_path):
+    def test_sync_job_processes_pending_row(self, client, db, tmp_path):
         """Sync job calls backend.save() and updates sync_status to synced."""
         from apps.scheduler_worker.jobs import file_sync_job
 
@@ -85,12 +85,9 @@ class TestFileSyncJob:
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"fake-image-data")
 
-        _user_id, _family_id = "user-1", "family-1"
-        # Insert family/user stubs directly — use existing db fixture
-        # Instead, use a real registered user via the db fixture
-        # We'll patch SessionLocal to return our test db
-        backend = _make_backend(db)
-        cf = _make_cached_file(db, family_id="fam-sync", user_id="usr-sync", local_path=str(local_file))
+        user_id, family_id, _ = _register_and_get_ids(client)
+        backend = _make_backend(db, family_id=family_id)
+        cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="pending")
 
         mock_backend = AsyncMock()
@@ -109,15 +106,17 @@ class TestFileSyncJob:
         assert loc_updated.remote_path == "20260410/test.jpg"
         mock_backend.save.assert_called_once()
 
-    def test_sync_job_marks_failed_on_storage_error(self, db, tmp_path):
+    def test_sync_job_marks_failed_on_storage_error(self, client, db, tmp_path):
         """Sync job increments retry_count on StorageError; marks failed after 3 attempts."""
         from apps.scheduler_worker.jobs import file_sync_job
 
+
+        user_id, family_id, _ = _register_and_get_ids(client)
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
 
-        backend = _make_backend(db)
-        cf = _make_cached_file(db, family_id="fam-err", user_id="usr-err", local_path=str(local_file))
+        backend = _make_backend(db, family_id=family_id)
+        cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="pending")
 
         mock_backend = AsyncMock()
@@ -135,15 +134,17 @@ class TestFileSyncJob:
         assert loc_updated.retry_count == 1
         assert "connection refused" in (loc_updated.last_error or "")
 
-    def test_sync_job_marks_failed_after_max_retries(self, db, tmp_path):
+    def test_sync_job_marks_failed_after_max_retries(self, client, db, tmp_path):
         """Sync job marks status=failed when retry_count reaches 3."""
         from apps.scheduler_worker.jobs import file_sync_job
 
+
+        user_id, family_id, _ = _register_and_get_ids(client)
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
 
-        backend = _make_backend(db)
-        cf = _make_cached_file(db, family_id="fam-max2", user_id="usr-max2", local_path=str(local_file))
+        backend = _make_backend(db, family_id=family_id)
+        cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="pending", retry_count=2)
 
         mock_backend = AsyncMock()
@@ -160,15 +161,17 @@ class TestFileSyncJob:
         assert loc_updated.sync_status == "failed"
         assert loc_updated.retry_count == 3
 
-    def test_sync_job_skips_rows_with_max_retries(self, db, tmp_path):
+    def test_sync_job_skips_rows_with_max_retries(self, client, db, tmp_path):
         """Rows with retry_count >= 3 are skipped."""
         from apps.scheduler_worker.jobs import file_sync_job
 
+
+        user_id, family_id, _ = _register_and_get_ids(client)
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
 
-        backend = _make_backend(db)
-        cf = _make_cached_file(db, family_id="fam-max", user_id="usr-max", local_path=str(local_file))
+        backend = _make_backend(db, family_id=family_id)
+        cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="pending", retry_count=3)
 
         mock_backend = AsyncMock()
@@ -185,33 +188,36 @@ class TestFileSyncJob:
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
         assert loc_updated.sync_status == "pending"  # unchanged
 
-    def test_sync_job_no_default_backend_does_nothing(self, db):
+    def test_sync_job_no_default_backend_does_nothing(self, client, db):
         """If no default backend, sync job exits early."""
+        # No backend configured — sync job should be a no-op
         from apps.scheduler_worker.jobs import file_sync_job
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db):
             run(file_sync_job())  # Should not raise
 
-    def test_sync_job_github_backend_uses_longer_jitter(self, db, tmp_path):
+    def test_sync_job_github_backend_uses_longer_jitter(self, client, db, tmp_path):
         """GitHub backend triggers write_delay_range of (1.0, 3.0) for jitter."""
         from apps.scheduler_worker.jobs import file_sync_job
 
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"fake-image-data")
 
+        user_id, family_id, _ = _register_and_get_ids(client)
+
         github_backend = StorageBackendModel(
             id="github-test",
+            family_id=family_id,
             backend_type="github",
             display_name="Test GitHub",
             config='{"token": "ghp_test", "repo": "user/repo", "branch": "main"}',
-            is_default=True,
             is_active=True,
         )
         db.add(github_backend)
         db.commit()
         db.refresh(github_backend)
 
-        cf = _make_cached_file(db, family_id="fam-gh", user_id="usr-gh", local_path=str(local_file))
+        cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, github_backend.id, sync_status="pending")
         loc_id = loc.id
 
@@ -236,15 +242,17 @@ class TestFileSyncJob:
         assert len(sleep_calls) == 1
         assert 1.0 <= sleep_calls[0] <= 3.0
 
-    def test_sync_job_save_timeout_increments_retry(self, db, tmp_path):
+    def test_sync_job_save_timeout_increments_retry(self, client, db, tmp_path):
         """backend.save() timeout increments retry_count and records error."""
         from apps.scheduler_worker.jobs import file_sync_job
 
+
+        user_id, family_id, _ = _register_and_get_ids(client)
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
 
-        backend = _make_backend(db)
-        cf = _make_cached_file(db, family_id="fam-timeout", user_id="usr-timeout", local_path=str(local_file))
+        backend = _make_backend(db, family_id=family_id)
+        cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="pending")
         loc_id = loc.id
 
@@ -325,7 +333,7 @@ class TestDeleteFileEndpoint:
         local_file = local_dir / "photo.jpg"
         local_file.write_bytes(b"data")
 
-        backend = _make_backend(db, is_default=False)
+        backend = _make_backend(db, family_id=family_id)
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="synced")
 
@@ -369,7 +377,7 @@ class TestGetFileUrlEndpoint:
         local_file = tmp_path / "photo.jpg"
         local_file.write_bytes(b"data")
 
-        backend = _make_backend(db, is_default=True)
+        backend = _make_backend(db, family_id=family_id)
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
         loc = _make_location(db, cf.id, backend.id, sync_status="synced")
         loc.remote_url = "http://localhost/20260410/photo.jpg"

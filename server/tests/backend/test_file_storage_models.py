@@ -8,13 +8,13 @@ from apps.backend.app.models.storage_backend import StorageBackend
 from apps.backend.app.models.sync_event import SyncEvent
 
 
-def _make_backend(db, id="github-main", backend_type="github", is_default=False):
+def _make_backend(db, family_id, id="github-main", backend_type="github"):
     backend = StorageBackend(
         id=id,
+        family_id=family_id,
         backend_type=backend_type,
         display_name="Test GitHub",
         config='{"token": "encrypted"}',
-        is_default=is_default,
         is_active=True,
     )
     db.add(backend)
@@ -56,16 +56,18 @@ def _register_user_and_get_ids(client):
 
 
 class TestStorageBackendModel:
-    def test_create_and_query(self, db):
-        _backend = _make_backend(db, id="local-main", backend_type="local", is_default=True)
+    def test_create_and_query(self, client, db):
+        user_id, family_id = _register_user_and_get_ids(client)
+        _backend = _make_backend(db, family_id=family_id, id="local-main", backend_type="local")
         fetched = db.query(StorageBackend).filter_by(id="local-main").first()
         assert fetched is not None
         assert fetched.backend_type == "local"
-        assert fetched.is_default is True
+        assert fetched.family_id == int(family_id)
         assert fetched.is_active is True
 
-    def test_created_at_auto_set(self, db):
-        backend = _make_backend(db)
+    def test_created_at_auto_set(self, client, db):
+        user_id, family_id = _register_user_and_get_ids(client)
+        backend = _make_backend(db, family_id=family_id)
         assert backend.created_at is not None
 
 
@@ -112,7 +114,7 @@ class TestCachedFileModel:
 class TestFileRemoteLocationModel:
     def test_create_and_query(self, client, db):
         user_id, family_id = _register_user_and_get_ids(client)
-        backend = _make_backend(db)
+        backend = _make_backend(db, family_id=family_id)
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id)
 
         loc = FileRemoteLocation(
@@ -132,7 +134,7 @@ class TestFileRemoteLocationModel:
 
     def test_unique_file_backend_constraint(self, client, db):
         user_id, family_id = _register_user_and_get_ids(client)
-        backend = _make_backend(db)
+        backend = _make_backend(db, family_id=family_id)
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id)
 
         db.add(FileRemoteLocation(file_id=cf.id, backend_id=backend.id, sync_status="pending"))
@@ -144,7 +146,7 @@ class TestFileRemoteLocationModel:
 
     def test_sync_status_transition(self, client, db):
         user_id, family_id = _register_user_and_get_ids(client)
-        backend = _make_backend(db)
+        backend = _make_backend(db, family_id=family_id)
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id)
 
         loc = FileRemoteLocation(file_id=cf.id, backend_id=backend.id, sync_status="pending")
@@ -160,7 +162,7 @@ class TestFileRemoteLocationModel:
 class TestSyncEventModel:
     def test_create_and_query(self, client, db):
         user_id, family_id = _register_user_and_get_ids(client)
-        backend = _make_backend(db)
+        backend = _make_backend(db, family_id=family_id)
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id)
 
         event = SyncEvent(

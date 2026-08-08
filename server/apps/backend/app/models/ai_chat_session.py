@@ -40,6 +40,14 @@ class AIChatSession(Base):
     last_message_summary: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # LangGraph thread_id (UUID) — populated when the session originates from
+    # the frontend createThread path (agent generates UUID).  Null for sessions
+    # created via the backend chat_stream path (thread_id == str(id)).
+    # Lookup must check this column when the caller passes a UUID string,
+    # because the PK ``id`` is BigInteger and cannot store UUIDs.
+    thread_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Thread this session was branched from (UUID string of the parent thread).
     # No FK: the parent thread may live in a different family's checkpoint

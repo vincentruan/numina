@@ -89,7 +89,7 @@ class TestAiSessionRepository:
         sessions = [{"session_id": "s1"}]
         with patch.object(repo._client, "list_sessions", new_callable=AsyncMock, return_value=(sessions, 1)) as mock_list:
             await repo.list_sessions(FAMILY_ID, limit=20, offset=0, sort_by="updated_at", sort_order="desc")
-            mock_list.assert_awaited_once_with(limit=20, offset=0, sort_by="updated_at", sort_order="desc")
+            mock_list.assert_awaited_once_with(limit=20, offset=0, sort_by="updated_at", sort_order="desc", source=None)
 
     async def test_list_sessions_backend_error_returns_empty(self, repo):
         with patch.object(repo._client, "list_sessions", new_callable=AsyncMock, side_effect=Exception("timeout")):

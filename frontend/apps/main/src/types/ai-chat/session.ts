@@ -10,6 +10,10 @@ export interface ThreadSession {
   is_branch?: boolean
   /** Thread id this session was branched from; undefined for non-branch sessions. */
   parent_thread_id?: string
+  /** Session source (agent/skill type). Normalized: "chat" for regular chat, "branch" for branches, or skill id (e.g. "asset-report"). */
+  source?: string
+  /** Transient: true while the LLM title is being generated for this session. */
+  titleGenerating?: boolean
   created_at: string
   updated_at: string
 }

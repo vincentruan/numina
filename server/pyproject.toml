@@ -25,6 +25,7 @@ dependencies = [
     "altcha>=1.0.0",
     "pymupdf>=1.28.0",
     "openpyxl>=3.1.5",
+    "jiwer>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -109,7 +110,7 @@ dev = [
 members = []
 
 [tool.uv.sources]
-deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "10890e10" }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "6556d09d" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -162,6 +163,7 @@ ignore = ["E501", "B008"]
 # Import-existence tests — intentionally import to verify availability
 "tests/agent/unit/test_deerflow_setup.py" = ["F401"]
 "tests/agent/unit/test_family_adapter_cache.py" = ["F401"]
+"tests/agent/conftest.py" = ["E402"]  # env var must be set before pytest/app imports
 # Side-effect import (installs patch at process start)
 "apps/agent/app/main.py" = ["F401"]
 

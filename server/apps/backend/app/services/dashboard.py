@@ -853,7 +853,6 @@ def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsR
 
 def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
     """S0 智能发现 - 5项统计卡片"""
-    _default_currency = user.default_currency or "CNY"  # noqa: F841
     family_id = user.family_id
     today = date.today()
 
@@ -958,7 +957,6 @@ def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
 
 def get_goal_progress(db: Session, user: User) -> GoalProgressResponse:
     """S2 目标进度总览"""
-    _default_currency = user.default_currency or "CNY"  # noqa: F841
     family_id = user.family_id
     today = date.today()
 
@@ -1027,7 +1025,6 @@ def get_goal_progress(db: Session, user: User) -> GoalProgressResponse:
 
 def get_type_distribution(db: Session, user: User) -> TypeDistributionResponse:
     """S3 资产类型分布"""
-    _default_currency = user.default_currency or "CNY"  # noqa: F841
     family_id = user.family_id
 
     allocation = get_allocation(db, user)

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, File, UploadFile
 from openai import AsyncOpenAI
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
@@ -33,6 +33,10 @@ from apps.backend.app.services.ai_crypto import (
     mask_api_key,
 )
 from apps.backend.app.services.asr_wer import REFERENCE_TEXTS, compute_wer
+from apps.backend.app.services.circuit_breaker.adapters.asr import (
+    ASRAdapter,
+    get_first_usable_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +46,14 @@ router = APIRouter(prefix="/asr", tags=["asr"])
 _ALLOWED_AUDIO_EXTENSIONS = {"webm", "wav", "mp3", "ogg", "m4a", "mp4"}
 _MAX_AUDIO_SIZE = 10 * 1024 * 1024  # 10 MB
 
-# Circuit breaker: auto-disable after this many consecutive failures
-_CIRCUIT_FAILURE_THRESHOLD = 3
+# Circuit breaker: auto-disable after 3 consecutive failures
+# (threshold now defined in ASRAdapter, kept for reference)
+
+# Default base URLs per provider
+_PROVIDER_DEFAULT_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "siliconflow": "https://api.siliconflow.cn/v1",
+}
 
 # Test audio files and their reference languages
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
@@ -54,6 +64,19 @@ _TEST_AUDIO_FILES = {
 
 # WER threshold: above this percentage, test is considered failed
 _WER_FAIL_THRESHOLD = 50.0
+
+
+def _resolve_base_url(cfg: ASRProviderConfig) -> str:
+    """Return the base_url for an ASR config, falling back to provider defaults."""
+    if cfg.base_url:
+        return cfg.base_url
+    url = _PROVIDER_DEFAULT_BASE_URLS.get(cfg.provider)
+    if url is None:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            details=f"provider '{cfg.provider}' 需要配置 base_url",
+        )
+    return url
 
 
 def _cfg_to_response(cfg: ASRProviderConfig) -> ASRConfigResponse:
@@ -85,30 +108,9 @@ def _cfg_to_response(cfg: ASRProviderConfig) -> ASRConfigResponse:
     )
 
 
-async def _get_first_usable_config(
-    family_id: int, db: AsyncSession
-) -> ASRProviderConfig | None:
-    """Find the first active, enabled, circuit-closed ASR config for a family."""
-    result = await db.execute(
-        select(ASRProviderConfig)
-        .where(
-            ASRProviderConfig.family_id == family_id,
-            ASRProviderConfig.is_active == True,  # noqa: E712
-            ASRProviderConfig.circuit_state != "open",
-        )
-        .order_by(ASRProviderConfig.display_order.asc().nulls_last())
-    )
-    return result.scalar_one_or_none()
-
-
-async def _record_failure(cfg: ASRProviderConfig, db: AsyncSession) -> None:
-    """Record a transcription failure; auto-disable after threshold."""
-    cfg.failure_count += 1
-    cfg.last_failure_at = datetime.now(UTC)
-    if cfg.failure_count >= _CIRCUIT_FAILURE_THRESHOLD:
-        cfg.circuit_state = "open"
-        cfg.is_active = False
-    await db.commit()
+# ── Helpers (now delegated to ASRAdapter) ────────────────────────────────────
+# _get_first_usable_config is now imported from circuit_breaker.adapters.asr
+# _record_failure is now handled via ASRAdapter.record_failure()
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -117,9 +119,9 @@ async def _record_failure(cfg: ASRProviderConfig, db: AsyncSession) -> None:
 @router.get("/config", response_model=ASRConfigListResponse)
 async def list_asr_configs(
     current_user: User = Depends(require_adult),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    result = await db.execute(
+    result = db.execute(
         select(ASRProviderConfig)
         .where(ASRProviderConfig.family_id == current_user.family_id)
         .order_by(ASRProviderConfig.display_order.asc().nulls_last())
@@ -132,7 +134,7 @@ async def list_asr_configs(
 async def create_asr_config(
     payload: ASRConfigCreate,
     current_user: User = Depends(require_owner),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     api_key_encrypted = None
     if payload.ai_api_key:
@@ -151,8 +153,8 @@ async def create_asr_config(
         is_active=False,  # must pass test first
     )
     db.add(cfg)
-    await db.commit()
-    await db.refresh(cfg)
+    db.commit()
+    db.refresh(cfg)
     return _cfg_to_response(cfg)
 
 
@@ -161,9 +163,9 @@ async def update_asr_config(
     config_id: str,
     payload: ASRConfigUpdate,
     current_user: User = Depends(require_owner),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    result = await db.execute(
+    result = db.execute(
         select(ASRProviderConfig).where(
             ASRProviderConfig.id == int(config_id),
             ASRProviderConfig.family_id == current_user.family_id,
@@ -209,8 +211,8 @@ async def update_asr_config(
     if payload.is_active is not None:
         cfg.is_active = payload.is_active
 
-    await db.commit()
-    await db.refresh(cfg)
+    db.commit()
+    db.refresh(cfg)
     return _cfg_to_response(cfg)
 
 
@@ -218,9 +220,9 @@ async def update_asr_config(
 async def delete_asr_config(
     config_id: str,
     current_user: User = Depends(require_owner),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    result = await db.execute(
+    result = db.execute(
         select(ASRProviderConfig).where(
             ASRProviderConfig.id == int(config_id),
             ASRProviderConfig.family_id == current_user.family_id,
@@ -230,8 +232,8 @@ async def delete_asr_config(
     if not cfg:
         raise AppError(ErrorCode.NOT_FOUND, details="ASR 配置不存在")
 
-    await db.delete(cfg)
-    await db.commit()
+    db.delete(cfg)
+    db.commit()
     return {"ok": True}
 
 
@@ -262,10 +264,10 @@ async def _transcribe_file(
 async def test_asr_config(
     config_id: str,
     current_user: User = Depends(require_owner),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """Test ASR config with bilingual audio files and WER comparison."""
-    result = await db.execute(
+    result = db.execute(
         select(ASRProviderConfig).where(
             ASRProviderConfig.id == int(config_id),
             ASRProviderConfig.family_id == current_user.family_id,
@@ -279,14 +281,14 @@ async def test_asr_config(
         cfg.test_passed = False
         cfg.test_message = "未配置 API Key"
         cfg.tested_at = datetime.now(UTC)
-        await db.commit()
+        db.commit()
         return ASRTestResult(success=False, message="未配置 API Key")
 
     if not cfg.model_id:
         cfg.test_passed = False
         cfg.test_message = "未配置模型 ID"
         cfg.tested_at = datetime.now(UTC)
-        await db.commit()
+        db.commit()
         return ASRTestResult(success=False, message="未配置模型 ID")
 
     api_key = decrypt_api_key(cfg.api_key_encrypted)
@@ -294,7 +296,7 @@ async def test_asr_config(
         cfg.test_passed = False
         cfg.test_message = "API Key 解密失败"
         cfg.tested_at = datetime.now(UTC)
-        await db.commit()
+        db.commit()
         return ASRTestResult(success=False, message="API Key 解密失败")
 
     # Check which test audio files exist
@@ -308,10 +310,10 @@ async def test_asr_config(
         cfg.test_passed = False
         cfg.test_message = "测试音频文件不存在，请联系管理员"
         cfg.tested_at = datetime.now(UTC)
-        await db.commit()
+        db.commit()
         return ASRTestResult(success=False, message="测试音频文件不存在，请联系管理员")
 
-    client = AsyncOpenAI(api_key=api_key, base_url=cfg.base_url)
+    client = AsyncOpenAI(api_key=api_key, base_url=_resolve_base_url(cfg))
     lang_results: list[ASRLangTestResult] = []
 
     for lang, audio_path in available_tests.items():
@@ -372,9 +374,10 @@ async def test_asr_config(
     cfg.test_latency_ms = sum(lr.latency_ms or 0 for lr in lang_results)
     cfg.tested_at = datetime.now(UTC)
     if all_passed:
-        cfg.circuit_state = "closed"
-        cfg.failure_count = 0
-    await db.commit()
+        # Reset circuit breaker on successful test
+        ASRAdapter(cfg.id).record_success(db)
+    else:
+        db.commit()
 
     return ASRTestResult(
         success=all_passed,
@@ -389,10 +392,10 @@ async def test_asr_config(
 @router.get("/status", response_model=ASRStatusResponse)
 async def get_asr_status(
     current_user: User = Depends(require_adult),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """Check if ASR is available for the current family."""
-    cfg = await _get_first_usable_config(current_user.family_id, db)
+    cfg = get_first_usable_config(current_user.family_id, db)
     if cfg:
         return ASRStatusResponse(available=True)
     return ASRStatusResponse(available=False, reason="未配置或未启用 ASR 模型")
@@ -405,7 +408,7 @@ async def get_asr_status(
 async def transcribe_audio(
     audio: UploadFile = File(...),
     current_user: User = Depends(require_adult),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """Transcribe audio using the family's active ASR config."""
     # Validate file extension
@@ -424,7 +427,7 @@ async def transcribe_audio(
             details="文件大小超过限制（最大 10MB）",
         )
 
-    cfg = await _get_first_usable_config(current_user.family_id, db)
+    cfg = get_first_usable_config(current_user.family_id, db)
     if not cfg:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
@@ -433,7 +436,7 @@ async def transcribe_audio(
 
     api_key = decrypt_api_key(cfg.api_key_encrypted or "")
     if not api_key:
-        await _record_failure(cfg, db)
+        ASRAdapter(cfg.id).record_failure(db)
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             details="API Key 解密失败",
@@ -445,7 +448,7 @@ async def transcribe_audio(
             tmp.write(content)
             tmp_path = tmp.name
 
-        client = AsyncOpenAI(api_key=api_key, base_url=cfg.base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=_resolve_base_url(cfg))
         asr_model = cfg.model_id or "whisper-1"
         with open(tmp_path, "rb") as f:
             transcription = await client.audio.transcriptions.create(
@@ -455,15 +458,13 @@ async def transcribe_audio(
 
         text = transcription.text.strip() if transcription.text else ""
 
-        # Success → reset failure counter
-        cfg.failure_count = 0
-        cfg.circuit_state = "closed"
-        await db.commit()
+        # Success → reset failure counter via adapter
+        ASRAdapter(cfg.id).record_success(db)
 
         return ASRTranscribeResponse(text=text)
     except Exception as e:
         logger.warning("ASR transcribe failed for family %s: %s", current_user.family_id, e)
-        await _record_failure(cfg, db)
+        ASRAdapter(cfg.id).record_failure(db)
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             details=f"语音识别失败: {str(e)[:200]}",

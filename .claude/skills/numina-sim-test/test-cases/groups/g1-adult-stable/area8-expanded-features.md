@@ -144,6 +144,23 @@ Assertions:
 - [ ] 配置项可见 (概率、费用等)
 - [ ] `[console]` zero errors
 
+### F.2.5 礼物编辑表单
+
+```
+# 从 F.2.1 列表中获取一个 gift ID (via API 或页面内导航)
+GIFT_ID=$(curl -s -H "Authorization: Bearer $TOKEN" ${API_BASE}/blind-box/gifts \
+  | jq -r '.data[0].id')
+bsk navigate ${BASE}blind-box/gifts/${GIFT_ID}/edit --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] GiftEditPage 渲染 — 标题显示"编辑礼物"
+- [ ] 表单字段预填充为现有值 (名称/描述/emoji/数量)
+- [ ] 修改字段 → 保存 → 返回列表页, 更新生效
+- [ ] 返回按钮 (`router.back()`) 正常工作
+- [ ] `[console]` zero errors
+
 ---
 
 ## F.3 — Baby 儿童管理 (owner-only)
@@ -200,7 +217,9 @@ bsk snapshot --session <id>
 Assertions:
 - [ ] 模板列表渲染
 - [ ] 每个模板显示名称 + 奖励 + 频率
-- [ ] 编辑入口可见 → `/baby/chore-templates/:id/edit`
+- [ ] 编辑入口 → `/baby/chore-templates/:id/edit` 点击可达
+- [ ] ChoreTemplateEditPage 渲染 — 表单字段预填充
+- [ ] 修改字段 (名称/奖励/频率) → 保存 → 返回列表页, 更新生效
 - [ ] `[console]` zero errors
 
 ### F.3.5 Baby 素养报告
@@ -344,23 +363,65 @@ Assertions:
 ### F.4.10 导入报告
 
 ```
-bsk navigate ${BASE}settings/import-report --session <id> --wait-until networkidle
+bsk navigate ${BASE}finance/import --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 ```
 
 Assertions:
 - [ ] 导入报告页渲染
 - [ ] 如有历史导入 → 列表显示
+- [ ] 点击历史条目 → 详情 popup 打开 (显示 source + report_date + item list)
+- [ ] 详情页含 rollback 按钮 (如有)
+- [ ] `[console]` zero errors
+
+### F.4.11 外部存储后端配置
+
+```
+bsk navigate ${BASE}settings/family/storage --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] FamilyStorageBackendPage 渲染
+- [ ] S3 / WebDAV 配置区域可见
+- [ ] 启用/禁用切换开关可操作
+- [ ] 必填字段 (endpoint, bucket/prefix, access_key 等) 有 placeholder/label
+- [ ] `[console]` zero errors
+
+### F.4.12 用户名修改
+
+```
+bsk navigate ${BASE}settings/username --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] ChangeUsernamePage 渲染 — 显示当前用户名
+- [ ] remaining changes 计数器可见 (如 "剩余 X 次修改机会")
+- [ ] 冷却期提示可见 (如有, 显示 countdown)
+- [ ] 新用户名格式校验 (lowercase/digits/underscore/hyphen/dot)
+- [ ] 确认密码输入框可见
 - [ ] `[console]` zero errors
 
 ---
 
 ## F.5 — Guest 来宾页面
 
-无需认证。使用 **新 bsk session** (不带 adult cookie) 来测试。
+无需认证。使用 **新 bsk session** + **清除 cookie/localStorage** 来测试。
+
+> **重要:** bsk 所有 session 共享同一 browser profile，cookie 按 origin 共享。
+> 新 session 会继承 adult session 的 cookie，导致 route guard 认为用户已认证，
+> 从而将访客页面重定向到 dashboard (页面空白/内容错误)。必须在导航到访客页面前
+> 清除所有 cookie 和 localStorage。
 
 ```bash
+# 1) 启动新 session (与 adult session 隔离状态)
 GUEST_SID=$(bsk session start --json | jq -r .session_id)
+# 2) 导航到 adult origin (先到达目标域名)
+bsk navigate ${BASE} --session $GUEST_SID --wait-until domcontentloaded
+# 3) 清除 cookie + localStorage (消除 adult session 污染)
+bsk evaluate --session $GUEST_SID --expr "document.cookie.split(';').forEach(c => { document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'); }); 'cookies-cleared'"
+bsk evaluate --session $GUEST_SID --expr "localStorage.clear(); 'localStorage-cleared'"
 ```
 
 ### F.5.1 Welcome 页
@@ -516,7 +577,7 @@ Assertions:
 - [ ] 开关/配置可见
 - [ ] `[console]` zero errors
 
-### F.7.3 ASR 语音识别配置
+### F.7.3 ASR 语音识别配置 + CRUD
 
 ```
 bsk navigate ${BASE}settings/ai/asr --session <id> --wait-until networkidle
@@ -526,6 +587,9 @@ bsk snapshot --session <id>
 Assertions:
 - [ ] ASR 配置页渲染
 - [ ] Provider 列表可见
+- [ ] `/settings/ai/asr/new` 新建表单 — provider_name, api_key, endpoint 字段可见
+- [ ] `/settings/ai/asr/:id/edit` 编辑表单 — 字段预填充为现有值
+- [ ] 删除 provider → 确认对话框 → 列表刷新
 - [ ] `[console]` zero errors
 
 ### F.7.4 AI Skills 管理
@@ -555,6 +619,68 @@ Assertions:
 
 ---
 
+## F.11 — FamilyPage 成员管理
+
+覆盖 `/family` 路由下的成员管理功能 (promote/demote/deactivate/activate)。
+
+### F.11.1 家庭页面总览
+
+```
+bsk navigate ${BASE}family --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] FamilyPage 渲染 — 家庭名可编辑 (owner)
+- [ ] 成员列表可见 (每个成员的 display_name + role badge + avatar)
+- [ ] 邀请码/邀请链接入口可见 (复制按钮)
+- [ ] `[console]` zero errors
+
+### F.11.2 成员权限操作 (owner-only)
+
+```
+# 需要 member 角色的成员才能测试 promote/demote
+# 以下断言在有 member 成员时执行, 否则 skip 并注明
+bsk navigate ${BASE}family --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions (skip if no member-role member exists):
+- [ ] 成员操作菜单可见 (⋮ 或 context menu) — 含 promote to admin / demote to member
+- [ ] promote member → admin: 点击 → 确认对话框 → 成员 role 更新为 admin
+- [ ] demote admin → member: 点击 → 确认对话框 → 成员 role 更新为 member
+- [ ] deactivate member: 点击 → 确认对话框 → 成员状态变为 inactive
+- [ ] activate member: 点击 → 成员恢复 active 状态
+- [ ] owner 自身不可被 demote/deactivate
+- [ ] `[console]` zero errors
+
+---
+
+## F.12 — ChildResetPage 儿童密码/PIN 重置
+
+覆盖 `/family/children/:childId/reset` — 安全相关的密码+PIN 双 tab 重置流程。
+
+### F.12.1 儿童重置页
+
+```
+# 先获取一个 child member ID via API
+CHILD_ID=$(curl -s -H "Authorization: Bearer $TOKEN" ${API_BASE}/family/members \
+  | jq -r '[.data[] | select(.role=="child")] | .[0].id')
+bsk navigate ${BASE}family/children/${CHILD_ID}/reset --session <id> --wait-until networkidle
+bsk snapshot --session <id>
+```
+
+Assertions:
+- [ ] ChildResetPage 渲染 — 顶部显示目标儿童名称
+- [ ] 双 tab 结构: 密码重置 + PIN 重置
+- [ ] 密码 tab: 新密码输入 + 确认密码输入 + 显示/隐藏切换
+- [ ] 确认密码不匹配 → 校验错误提示
+- [ ] PIN tab: 4×3 emoji 网格 (PIN 输入键盘)
+- [ ] 重置成功 → toast 提示
+- [ ] `[console]` zero errors
+
+---
+
 ## F.8 — Owner vs Member 权限边界
 
 > **前提:** 需要一个 `member` 角色的测试账户。
@@ -580,6 +706,107 @@ Assertions (如果 member 账户可用):
 
 ---
 
+## New cases — Baby 家务审批端到端 +  sibling 赠币
+
+Reverse-engineered from backend `test_chores.py` (43 tests, full lifecycle:
+create/assign/complete/approve/reject/abandon), `test_chore_assignment.py`
+(9 tests), `test_coin_gifting.py` (sibling coin transfer). 之前 F.3.6 仅
+验证审批页 *渲染*; F.9 验证 *端到端流转* (child 完成 → parent 审批 → 币
+到账)。F.10 验证 sibling 赠币的 *实际交易*。
+
+### F.9.1 家务审批端到端 — child 完成 + parent 批准
+
+> **前置:** 需 demouser family 有 ≥1 child + ≥1 chore 已分配给该 child。
+
+```
+# Step 1: child 端登录, 完成一条家务
+bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
+bsk snapshot --session "$SID_CHILD"
+# 找到一条 chore, 点击 "完成"
+bsk click @eN --session "$SID_CHILD"   # 完成按钮
+bsk wait-ms 2s
+bsk snapshot --session "$SID_CHILD"
+# 应看到 "待审批" / "pending" 状态
+
+# Step 2: adult 端登录, 进入审批页
+bsk navigate ${BASE}baby/chores/approvals --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+```
+
+Assertions:
+- [ ] 审批页显示 ≥1 条待审批的家务完成记录
+- [ ] 每条记录显示: child 名称 + chore 名称 + 完成时间 + 请求的 coin 数
+- [ ] "批准" 按钮可点 → 弹出确认框 → 确认
+- [ ] 批准后: 该记录从 "待审批" 列表消失
+- [ ] child 端刷新 → coin balance 增加对应数量
+- [ ] Activity 记录中出现一条 "chore_reward" 类型的入账
+- [ ] `[console]` zero errors
+
+### F.9.2 家务审批 — parent 拒绝 + 反馈
+
+```
+# 接续 F.9.1, child 再完成一条 chore
+# adult 端进入审批页
+bsk navigate ${BASE}baby/chores/approvals --session "$SID" --wait-until networkidle
+bsk snapshot --session "$SID"
+bsk click @eN --session "$SID"   # "拒绝" 按钮
+```
+
+Assertions:
+- [ ] "拒绝" 按钮可点 → 弹出确认框 (可含拒绝理由输入框)
+- [ ] 拒绝后: 该记录从 "待审批" 列表消失
+- [ ] child 端刷新 → coin balance 不变
+- [ ] child 端该 chore 状态变为 "rejected" 或 "abandoned"
+- [ ] Activity 记录中 **无** chore_reward 入账
+- [ ] `[console]` zero errors
+
+### F.9.3 家务完成庆祝动画 — FlyToTarget + coin bump
+
+> **与 C1.10 的差异:** C1.10 仅验证动画 *触发*; F.9.3 验证 审批通过
+> 后的 *完整庆祝链路* (动画 + coin bump + 音效)。
+
+```
+# 接续 F.9.1 的批准操作, 在 child 端观察
+bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
+bsk screenshot --session "$SID_CHILD" --out dogfood-output/f9.3-celebration.png
+```
+
+Assertions:
+- [ ] 批准后 child 端首页/ledger 出现 coin bump 动画 (数字跳动 + 增加)
+- [ ] FlyToTarget 粒子效果 (coin 从 chore 卡片飞向 balance 显示)
+- [ ] 触感反馈 (mobile: navigator.vibrate; desktop: 跳过)
+- [ ] reduced-motion 模式下: 动画降级为静态 (无 FlyToTarget, 仅数字变化)
+- [ ] `[console]` zero errors
+
+---
+
+### F.10 — Sibling 赠币端到端
+
+Reverse-engineered from backend `test_coin_gifting.py`. C1.2 渲染了赠币按钮;
+F.10 验证 *实际交易*: sender 扣币 + receiver 加币 + Activity 记录。
+
+> **前置:** demouser family 有 ≥2 child 账户, 且 sender 有 ≥1 coin。
+
+```
+# 以 sender child 登录
+bsk navigate "$CHILD_BASE"ledger --session "$SID_CHILD" --wait-until networkidle
+bsk snapshot --session "$SID_CHILD"
+# 找到 "赠送" 按钮 / sibling 头像
+bsk click @eN --session "$SID_CHILD"
+```
+
+Assertions:
+- [ ] 弹出赠币对话框, 显示可选的 sibling 列表 (不含自己)
+- [ ] 选择 receiver + 输入金额 → 提交
+- [ ] 金额 > sender balance → 校验错误 ("余额不足")
+- [ ] 金额 ≤ 0 → 校验错误
+- [ ] 合法金额提交 → sender ledger 出现一条 "gift_sent" 扣币记录
+- [ ] receiver ledger 出现一条 "gift_received" 加币记录 (切换 child 登录验证)
+- [ ] sender coin balance 减少, receiver coin balance 增加
+- [ ] `[console]` zero errors
+
+---
+
 ## Quick Reference
 
 | Case | 功能模块 | 路由 | 角色要求 |
@@ -592,3 +819,5 @@ Assertions (如果 member 账户可用):
 | F.6.1–F.6.5 | Child 扩展 | `/scenario`, `/badges`, ... | child |
 | F.7.1–F.7.5 | AI 设置深度 | `/settings/ai/*` | owner |
 | F.8.1 | 权限边界 | owner-only 页面 | member (deferred) |
+| F.9.1–F.9.3 | 家务审批端到端 | `/baby/chores/approvals` | owner + child |
+| F.10 | Sibling 赠币端到端 | `/ledger` (child) | child |

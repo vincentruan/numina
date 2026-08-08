@@ -35,6 +35,8 @@ export interface ThreadSearchParams {
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   filter?: Record<string, string>
+  /** Filter by session source (agent/skill type). */
+  source?: string
 }
 
 export interface ThreadSearchResponse {
@@ -95,6 +97,7 @@ function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
     is_pinned: (r.metadata?.is_pinned as boolean) || false,
     is_branch: (r.metadata?.is_branch as boolean) || false,
     parent_thread_id: (r.metadata?.parent_thread_id as string) || undefined,
+    source: (r.metadata?.source as string) || 'chat',
     created_at: r.created_at,
     updated_at: r.updated_at,
   }
@@ -154,12 +157,13 @@ export async function getThreadState(id: string): Promise<ThreadState> {
   return asThreadState(await res.json())
 }
 
-export async function searchThreads(params: ThreadSearchParams): Promise<ThreadSearchResponse> {
+export async function searchThreads(params: ThreadSearchParams, signal?: AbortSignal): Promise<ThreadSearchResponse> {
   const res = await fetch(`${getAgentApiBase()}/api/threads/search`, {
     method: 'POST',
     headers: getAgentHeaders(),
     credentials: 'include',
     body: JSON.stringify(params),
+    signal,
   })
   if (!res.ok) throw new Error(`Failed to search threads: ${res.status}`)
   const list = await res.json() as ThreadApiResponse[]

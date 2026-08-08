@@ -273,7 +273,6 @@ def _check_rate_limit(username: str) -> None:
         count = cache.get(key)
         if count is not None and int(count) >= max_attempts:
             ttl = cache.get_ttl(key) or 0
-            remaining = max(1, (ttl // 60) + 1)  # noqa: F841
             _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, ttl))
     except Exception:

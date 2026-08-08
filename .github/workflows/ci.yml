@@ -186,7 +186,32 @@ jobs:
           # Build only essential services (skip agent which requires vendor/deerflow-harness)
           # DOCKER_BUILDKIT=1 enables layer caching for faster rebuilds
           docker compose build backend frontend-main frontend-child nginx
-          # Bring up core services (SQLite fallback — no external DB needed)
+          # Start PostgreSQL (compose postgres service uses a profile not supported by the runner's docker compose version)
+          docker network rm numina_default 2>/dev/null || true
+          docker network create \
+            --label com.docker.compose.project=numina \
+            --label com.docker.compose.network=default \
+            numina_default
+          docker run -d --name numina-postgres \
+            --network numina_default \
+            -e POSTGRES_USER=numina \
+            -e POSTGRES_PASSWORD=numinapass \
+            -e POSTGRES_DB=numina \
+            postgres:17
+          echo "等待 PostgreSQL 就绪..."
+          for i in $(seq 1 20); do
+            if docker exec numina-postgres pg_isready -U numina > /dev/null 2>&1; then
+              echo "✓ PostgreSQL 就绪"
+              break
+            fi
+            if [ $i -eq 20 ]; then
+              echo "✗ PostgreSQL 在 40 秒内未就绪"
+              docker logs numina-postgres
+              exit 1
+            fi
+            sleep 2
+          done
+          # Bring up core services
           docker compose up -d --no-deps backend frontend-main frontend-child
           docker compose up -d --no-deps nginx
 
@@ -237,7 +262,9 @@ jobs:
 
       - name: Stop Docker stack
         if: always()
-        run: docker compose down -v
+        run: |
+          docker compose down -v
+          docker rm -f numina-postgres 2>/dev/null || true
 
   # ──────────────────────────────────────────────────────────────────────────
   # Job 5: Build & push Docker images to GHCR (main branch only)

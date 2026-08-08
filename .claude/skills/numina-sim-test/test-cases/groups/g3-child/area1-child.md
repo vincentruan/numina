@@ -77,24 +77,35 @@ Assertions:
 - [ ] Selecting a sibling + confirming does NOT error (gift flow)
 - [ ] `[console]` zero errors
 
-### C1.3 Child PIN auth (ChildAuthPage) — correct + wrong PIN
+### C1.3 Child auth flow — verify session injection works
 
-After navigating to `/child/` and clicking a child card:
+> **注意:** 儿童 app **没有独立的登录页面** (`frontend/apps/child/src/api/index.ts:38` 注释
+> "child app has no auth pages")。认证流程是通过 adult app 的登录页面完成，或通过
+> `_common.md` "Child session injection (dev mode)" 中的 API 注入流程完成。
+>
+> Docker 模式: adult + child 共享 origin (:80)，adult cookie 可以直接使用（但需清除后重注入）。
+> Dev 模式: adult (:5173) + child (:5174) 不同 origin，必须通过 API 注入 child session。
+>
+> 本案例验证 child session 是否已成功建立，而非测试 PIN 输入 UI。
+
 ```
-bsk snapshot --session <id>     # capture emoji buttons as @eN refs
+# 假设已通过 _common.md "Child session injection" 流程完成认证
+bsk navigate ${CHILD_BASE} --session <id> --wait-until networkidle
+bsk snapshot --session <id>
 ```
 
-Assertions (correct PIN for 小宝 = 🐱🌟🌈):
-- [ ] 4 empty PIN slot indicators visible
-- [ ] 12 emoji buttons in 4×3 grid
-- [ ] 删除 and 清除 buttons visible
-- [ ] Click the 4 correct emojis in order → auto-submits → navigates to `/child/` (home)
-- [ ] Wrong PIN (e.g. 🐱🐱🐱) → shake animation + PIN cleared + error message
-- [ ] `[console]` zero errors
+Assertions:
+- [ ] 儿童首页渲染 (ChildHomePage)，显示 child display_name
+- [ ] `[console]` zero errors (401 on first auth refresh is expected, not an error)
+- [ ] localStorage 中 `numina_user` 存在且 `role === 'child'`
+- [ ] API 调用使用 child session (cookie 包含 `child_access_token`)
+- [ ] **如果首页重定向到 adult login 页面** — child session 注入失败，需检查:
+  - dev 模式: 是否通过 step1/step2 API 获取 child_access_token
+  - docker 模式: 是否清除 adult cookie 后重注入 child session
 
-**Emoji click order note:** snapshot the grid, then click each emoji's `@eN` ref
-in sequence. Do NOT assume a fixed layout — re-snapshot if a click causes any
-DOM change before the next.
+> **PIN 验证:** 儿童 PIN 的正确性在 `_common.md` "Child session injection" 的 step2
+> 中验证。如果 step2 返回 401，说明 PIN 错误。正确的 PIN 定义见 `seed_data.py`
+> `_CHILD_CREDENTIALS`。
 
 ### C1.4 Child wishes (ChildWishesPage) — list + status variants
 

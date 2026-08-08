@@ -118,13 +118,6 @@ def _db_seed_resources() -> list[Resource]:
         bootstrap_invitation_codes(db)
         return None
 
-    def _check_storage_backends(db: Session) -> ResourceResult | None:
-        from apps.backend.app.bootstrap.storage_backends import (
-            bootstrap_storage_backends,
-        )
-        bootstrap_storage_backends(db)
-        return None
-
     def _check_category_financial_defaults(db: Session) -> ResourceResult | None:
         from apps.backend.app.models.category_financial_default import (
             CategoryFinancialDefault,
@@ -229,13 +222,6 @@ def _db_seed_resources() -> list[Resource]:
             check_fn=_check_invitation_codes,
         ),
         DatabaseSeedResource(
-            name="seed_storage_backends",
-            desired_version="1",
-            critical=False,
-            failure_action=FailureAction.WARN_ONLY,
-            check_fn=_check_storage_backends,
-        ),
-        DatabaseSeedResource(
             name="seed_category_financial_defaults",
             desired_version="1",
             critical=False,
@@ -276,9 +262,6 @@ def _feature_flag_resources() -> list[Resource]:
     def _check_ai_available(db) -> bool:
         return bool(settings.AI_ENCRYPTION_KEY)
 
-    def _check_storage_configured(db) -> bool:
-        return bool(settings.STORAGE_BACKEND_TYPE)
-
     return [
         FeatureFlagResource(
             name="flag_ai_features",
@@ -286,13 +269,6 @@ def _feature_flag_resources() -> list[Resource]:
             condition_fn=_check_ai_available,
             disable_reason="AI_ENCRYPTION_KEY not configured",
             recovery_hint="Set AI_ENCRYPTION_KEY in environment to enable AI features.",
-        ),
-        FeatureFlagResource(
-            name="flag_remote_storage",
-            flag_name="remote_storage",
-            condition_fn=_check_storage_configured,
-            disable_reason="No STORAGE_BACKEND_TYPE configured",
-            recovery_hint="Set STORAGE_BACKEND_TYPE to 'github' or 'webdav' to enable remote storage sync.",
         ),
     ]
 

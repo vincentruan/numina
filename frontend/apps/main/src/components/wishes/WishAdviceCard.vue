@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showFailToast, showDialog, showToast } from 'vant'
 import { getWishAdvice, adoptWishAdvice } from '@/api/wishes'
 import { useWishStore } from '@/stores/wish'
-import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -17,7 +17,7 @@ const router = useRouter()
 const { t } = useI18n()
 const currency = useCurrency()
 const wishStore = useWishStore()
-const aiStore = useAIStore()
+const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 
@@ -58,7 +58,7 @@ function validateAdvice(a: WishAdvice): boolean {
 }
 
 async function load(): Promise<void> {
-  if (!aiStore.aiEnabled) return
+  if (!familyStore.aiEnabled) return
   if (isSuppressed()) {
     closed.value = true
     return
@@ -120,7 +120,7 @@ async function onAdopt(): Promise<void> {
 }
 
 function onFullAdvice(): void {
-  if (!aiStore.aiEnabled) {
+  if (!familyStore.aiEnabled) {
     showToast(t('toast.aiNotEnabled'))
     return
   }
@@ -130,14 +130,20 @@ function onFullAdvice(): void {
 const shouldShow = computed(() => !closed.value && visible.value && advice.value !== null)
 
 onMounted(() => {
-  if (aiStore.aiEnabled) {
+  if (familyStore.aiEnabled) {
+    void load()
+  }
+})
+
+watch(() => familyStore.aiEnabled, (enabled) => {
+  if (enabled && !advice.value) {
     void load()
   }
 })
 </script>
 
 <template>
-  <div v-if="!aiStore.aiEnabled" class="wish-advice-card">
+  <div v-if="!familyStore.aiEnabled" class="wish-advice-card">
     <AiGatedInline
       :title="t('wish.advice.title')"
       :is-owner="isOwner"

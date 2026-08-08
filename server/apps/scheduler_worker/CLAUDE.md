@@ -61,9 +61,7 @@ The worker has no `routers/` — it exposes only liveness/readiness probes from 
 
 ## Don't Do
 
-- **Don't import from `apps/backend` or `apps/agent`** — import direction rule: `apps/` must not import sibling `apps/`. Use `packages/` for shared logic.
 - **Don't add module-level imports of domain services** — breaks the lazy-import pattern and causes import errors at startup.
-- **Don't run commands from the module directory** — quality commands and `uvicorn` must be invoked from `server/`, not from `apps/scheduler_worker/`.
 - **Don't use `SyncScheduler`** — the worker uses `AsyncIOScheduler` so async jobs run natively. Switching would require wrapping async jobs.
 
 ## Watch Out

@@ -143,24 +143,33 @@
                 <van-icon name="info-o" /> {{ s }}
               </div>
             </div>
-            <!-- Dynamic data visualization -->
-            <div v-if="indicator.data && Object.keys(indicator.data).length > 0" class="indicator-data">
-              <!-- Allocation items -->
-              <div v-if="indicator.data.items && Array.isArray(indicator.data.items)" class="alloc-bars">
-                <div v-for="item in indicator.data.items" :key="item.category_name" class="alloc-bar-row">
-                  <span class="alloc-name">{{ item.category_name }}</span>
-                  <div class="alloc-bar-bg">
-                    <div class="alloc-bar-fill" :style="{ width: `${item.percentage}%` }" />
-                  </div>
-                  <span class="alloc-pct">{{ item.percentage.toFixed(1) }}%</span>
+            <!-- Dynamic data visualization: only render when there is actual content
+                 (new-format items array or legacy non-empty flat key-value data).
+                 Prevents a bare "Items" label from showing when data.items is empty. -->
+            <div v-if="hasIndicatorData(indicator)" class="indicator-data">
+              <!-- New format: items array with bilingual labels -->
+              <template v-if="getIndicatorDataItems(indicator)">
+                <div v-for="item in getIndicatorDataItems(indicator)!" :key="item.key" class="data-row">
+                  <span>{{ item.zh === item.en ? item.zh : (locale === 'en-US' ? item.en : item.zh) }}</span>
+                  <span v-if="typeof item.value === 'number'">{{ formatValue(item.key, item.value) }}</span>
+                  <span v-else>{{ item.value }}</span>
                 </div>
-              </div>
-              <!-- Generic data rows -->
+              </template>
+              <!-- Legacy fallback: flat key-value object -->
               <template v-else>
                 <div v-for="(value, key) in indicator.data" :key="key" class="data-row">
-                  <span>{{ getDataLabel(key) }}</span>
-                  <span v-if="typeof value === 'number'">{{ formatValue(key, value) }}</span>
-                  <span v-else>{{ value }}</span>
+                  <span>{{ getDataLabel(String(key)) }}</span>
+                  <!-- Array value: render each element as a sub-row -->
+                  <template v-if="Array.isArray(value)">
+                    <div v-for="(item, itemIdx) in (value as unknown[])" :key="itemIdx" class="data-sub-row">
+                      <span v-if="typeof item === 'object' && item !== null">{{ Array.isArray(item) ? item.join(', ') : Object.entries(item as Record<string, unknown>).map(([k, v]) => `${getDataLabel(k)}: ${typeof v === 'number' ? formatValue(k, v) : String(v)}`).join(', ') }}</span>
+                      <span v-else>{{ typeof item === 'number' ? formatValue(String(key), item) : String(item) }}</span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span v-if="typeof value === 'number'">{{ formatValue(String(key), value) }}</span>
+                    <span v-else>{{ String(value) }}</span>
+                  </template>
                 </div>
               </template>
             </div>
@@ -196,6 +205,7 @@ import { marked } from 'marked'
 import { parseApiDate } from '@/utils/format'
 import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import { getAIReport, getAIReportMarkdown, getAITask } from '@/api/ai'
 import type { AIReport, AIReportIndicator } from '@/types'
@@ -215,6 +225,7 @@ const { t, locale } = useI18n()
 const { formatIn } = useCurrency()
 
 const aiStore = useAIStore()
+const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 
 const currentReport = ref<AIReport | null>(null)
@@ -384,6 +395,21 @@ const DATA_LABEL_KEYS = new Set([
   'total_assets', 'total_liabilities', 'net_worth', 'mom_change_pct',
   'liability_ratio', 'count', 'low_usage_count', 'total_daily_cost',
   'real_net_worth',
+  // Liability-related
+  'mortgage_amount', 'consumer_loan_amount', 'credit_card_debt',
+  'monthly_payment', 'interest_rate', 'remaining_term_months',
+  'debt_to_income_ratio', 'credit_utilization_ratio',
+  // Asset category names (when used as flat key-value pair)
+  'real_estate', 'cash', 'liquid_assets', 'financial_assets',
+  'investments', 'crypto', 'insurance', 'consumer_goods',
+  // Growth / liquidity
+  'asset_growth_rate', 'income_growth_rate', 'liquid_asset_ratio',
+  'financial_asset_ratio', 'real_estate_concentration',
+  'emergency_months', 'liquidity_ratio', 'monthly_expense',
+  // Risk / diversification
+  'concentration_ratio', 'diversification_score', 'insurance_coverage',
+  'insurance_coverage_ratio', 'monthly_payment_ratio',
+  'low_yield_asset_ratio', 'non_productive_asset_ratio',
 ])
 
 function getDataLabel(key: string): string {
@@ -397,6 +423,50 @@ function getDataLabel(key: string): string {
   return key
 }
 
+/** Extract bilingual data items from indicator.data (new SKILL.md v2 format).
+ * Returns null when the data uses the legacy flat key-value format. */
+function getIndicatorDataItems(indicator: AIReportIndicator): Array<{ key: string; zh: string; en: string; value: number }> | null {
+  const items = indicator.data?.items
+  if (!items || !Array.isArray(items)) return null
+  if (items.length === 0) return null
+
+  // Standard bilingual format: { key, zh, en, value }
+  const first = items[0]
+  if (typeof first === 'object' && first !== null && 'zh' in first && 'en' in first) {
+    return items as Array<{ key: string; zh: string; en: string; value: number }>
+  }
+
+  // Fallback: model emitted { category_name, percentage } or similar flat objects
+  // Normalize into bilingual items so the same rendering path works.
+  return items.map((item: Record<string, unknown>, idx: number) => {
+    const label = String(item.category_name ?? item.name ?? item.label ?? `item_${idx}`)
+    return {
+      key: String(item.key ?? idx),
+      zh: label,
+      en: label,
+      value: Number(item.percentage ?? item.value ?? item.amount ?? 0),
+    }
+  })
+}
+
+/** Whether an indicator has renderable data. Returns false when data is empty
+ *  or only contains an empty items array — prevents a bare "Items" label from
+ *  showing when the LLM did not generate any data items. */
+function hasIndicatorData(indicator: AIReportIndicator): boolean {
+  const data = indicator.data
+  if (!data || typeof data !== 'object') return false
+
+  // New format: check items array
+  const items = data.items
+  if (Array.isArray(items) && items.length > 0) return true
+
+  // Legacy flat format: any non-empty key-value pairs (excluding empty items)
+  const keys = Object.keys(data).filter((k) => k !== 'items')
+  if (keys.length > 0) return true
+
+  return false
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
   const loc = locale.value === 'en-US' ? 'en-US' : 'zh-CN'
@@ -404,7 +474,7 @@ function formatDate(iso: string | null): string {
 }
 
 async function onGenerate(force = false) {
-  if (!aiStore.config?.ai_enabled) {
+  if (!familyStore.aiEnabled) {
     showToast(t('toast.aiNotEnabled'))
     return
   }
@@ -497,7 +567,6 @@ async function onExportPdf() {
 }
 
 onMounted(async () => {
-  await aiStore.fetchConfig()
   await loadExistingReport()
 
   // If a report task is still running (possibly from a previous session or
@@ -659,6 +728,14 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--text-secondary);
   padding: 3px 0;
+}
+.data-sub-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 1px 0 1px 12px;
+  opacity: 0.85;
 }
 .positive { color: #f44336; }
 .negative { color: #4caf50; }

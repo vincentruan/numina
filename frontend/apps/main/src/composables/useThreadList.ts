@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { searchThreads, deleteThread, updateThread, getThreadState } from '@/api/ai-chat'
 import { parseApiDate } from '@/utils/format'
@@ -38,12 +38,24 @@ function downloadFile(filename: string, content: string, mimeType: string): void
   URL.revokeObjectURL(url)
 }
 
-export function useThreadList() {
+export function useThreadList(sourceFilter?: Ref<string | undefined>) {
   const { t } = useI18n()
   const sessions = ref<ThreadSession[]>([])
   const isLoading = ref(false)
   const hasMore = ref(true)
   let offset = 0
+  // AbortController to cancel in-flight searchThreads on rapid filter change.
+  let currentAbort: AbortController | null = null
+
+  /** Distinct source values observed in loaded sessions (for filter UI). */
+  const availableSources = computed<string[]>(() => {
+    const seen = new Set<string>()
+    for (const s of sessions.value) {
+      const src = s.source || 'chat'
+      if (!seen.has(src)) seen.add(src)
+    }
+    return [...seen].sort()
+  })
 
   function getDateLabel(date: Date): DateGroupLabel {
     const now = new Date()
@@ -85,21 +97,41 @@ export function useThreadList() {
   async function loadMore() {
     if (isLoading.value || !hasMore.value) return
     isLoading.value = true
+    // Create a fresh AbortController for this page load so it can be
+    // cancelled if the filter changes before the response arrives.
+    currentAbort = new AbortController()
     try {
-      const res = await searchThreads({ limit: PAGE_SIZE, offset })
+      const res = await searchThreads(
+        { limit: PAGE_SIZE, offset, source: sourceFilter?.value },
+        currentAbort.signal,
+      )
       sessions.value = [...sessions.value, ...res.items]
       offset += res.items.length
       hasMore.value = offset < res.total
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      throw err
     } finally {
+      currentAbort = null
       isLoading.value = false
     }
   }
 
   async function refresh() {
+    // Cancel any in-flight request to prevent stale data from appending
+    // to the new filter's result set.
+    currentAbort?.abort()
     sessions.value = []
     offset = 0
     hasMore.value = true
     await loadMore()
+  }
+
+  // When the source filter changes, reset and reload.
+  if (sourceFilter) {
+    watch(sourceFilter, () => {
+      refresh()
+    })
   }
 
   async function deleteSession(id: string) {
@@ -169,7 +201,7 @@ export function useThreadList() {
   }
 
   return {
-    sessions, isLoading, hasMore, dateGroups,
+    sessions, isLoading, hasMore, dateGroups, availableSources,
     loadMore, refresh, deleteSession, renameSession, togglePin,
     exportSession, shareSession,
   }

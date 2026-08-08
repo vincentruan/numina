@@ -21,6 +21,7 @@ Three-tier priority via ``_resolve_max_tokens``:
   2. ``system-config.yaml`` prefix-matched default
   3. ``None`` — key omitted; SDK / vendor defaults take over
 """
+
 from __future__ import annotations
 
 import logging
@@ -108,8 +109,14 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
     model_1_caps = ai_provider.get("model_1_capabilities")
     if model_1_caps is not None:
         thinking_supported = "deep_thinking" in model_1_caps
+        vision_supported = (
+            "vision" in model_1_caps
+            or "vision_understanding" in model_1_caps
+            or bool(ai_provider.get("vision_model_id"))
+        )
     else:
         thinking_supported = bool(ai_provider.get("thinking_supported", False))
+        vision_supported = bool(ai_provider.get("vision_model_id"))
 
     # Pick LangChain class. Native OpenAI uses the stock class because
     # reasoning is delivered via standard top-level fields (not vendor
@@ -131,6 +138,7 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
         "model": model_id,
         "api_key": api_key,
         "supports_thinking": thinking_supported,
+        "supports_vision": vision_supported,
     }
 
     if base_url:
@@ -148,37 +156,25 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
         entry["output_version"] = "responses/v1"
 
     if thinking_supported:
-        entry.update(_build_thinking_config(provider, base_url, model_id, resolved_max_tokens))
+        entry.update(
+            _build_thinking_config(provider, base_url, model_id, resolved_max_tokens)
+        )
 
-    # ── DeerFlow factory.py parity: stream_usage + stream_chunk_timeout ──
-    # DeerFlow's factory.create_chat_model() auto-injects these for all
-    # OpenAI-compatible models. Without them:
-    #   - stream_usage: LangChain only auto-enables when no custom base_url
-    #     is set, so third-party endpoints silently lose token usage data
-    #     (TokenUsage shows 0/0/0).
-    #   - stream_chunk_timeout: LangChain default is 60s, too aggressive for
-    #     reasoning models (DeepSeek-R1, QwQ) whose first chunk can take
-    #     90~150s. We use the user-configured timeout_seconds from DB.
-    _openai_compat_use_paths = (
-        "langchain_openai:ChatOpenAI",
-        "deerflow.models.patched_openai:PatchedChatOpenAI",
-    )
-    if use_class in _openai_compat_use_paths:
-        entry.setdefault("stream_usage", True)
-        db_timeout = ai_provider.get("timeout_seconds")
-        if isinstance(db_timeout, int) and db_timeout > 0:
-            entry.setdefault("stream_chunk_timeout", float(db_timeout))
+    # NOTE: We deliberately do NOT inject ``stream_usage=True`` or normalize
+    # ``api_base → base_url`` here. DeerFlow's ``create_chat_model()`` factory
+    # handles both generically at runtime:
+    #   - ``stream_usage``: factory.py:304-306 auto-injects for any model class
+    #     whose ``model_fields`` includes ``stream_usage``.
+    #   - ``api_base``: factory.py:45-73 (``_normalize_openai_base_url``)
+    #     renames ``api_base`` → ``base_url`` for ``BaseChatOpenAI`` subclasses
+    #     that don't declare ``api_base`` themselves (e.g. ChatDeepSeek does).
 
-    # ── api_base → base_url normalisation ──
-    # langchain_openai.ChatOpenAI accepts the endpoint override as ``base_url``
-    # (with ``openai_api_base`` as a legacy alias). If a caller passes
-    # ``api_base`` (a common mistake copied from other model classes),
-    # LangChain silently diverts it into ``model_kwargs``, which then gets
-    # spread into every Completions.create() call and rejected by the OpenAI
-    # SDK with "unexpected keyword argument 'api_base'". Normalise here so
-    # the endpoint override works as the user intended.
-    if "api_base" in entry and "base_url" not in entry:
-        entry["base_url"] = entry.pop("api_base")
+    # stream_chunk_timeout: per-family DB override (Numina value-add).
+    # DeerFlow's factory injects 240s default when absent; here we override
+    # with the user-configured timeout_seconds from the family's DB row.
+    db_timeout = ai_provider.get("timeout_seconds")
+    if isinstance(db_timeout, int) and db_timeout > 0:
+        entry.setdefault("stream_chunk_timeout", float(db_timeout))
 
     return entry
 
@@ -197,7 +193,9 @@ def _build_thinking_config(
         # DeepSeek R1 thinking is intrinsic; both branches set extra_body.thinking.type.
         return {
             "when_thinking_enabled": {"extra_body": {"thinking": {"type": "enabled"}}},
-            "when_thinking_disabled": {"extra_body": {"thinking": {"type": "disabled"}}},
+            "when_thinking_disabled": {
+                "extra_body": {"thinking": {"type": "disabled"}}
+            },
         }
     if provider == "openai" and not base_url:
         # Native OpenAI: top-level reasoning_effort. DeerFlow harness emits

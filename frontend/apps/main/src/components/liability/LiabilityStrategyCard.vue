@@ -4,15 +4,15 @@ import { useRouter } from 'vue-router'
 import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
-import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import type { Liability } from '@/types'
 
 const props = defineProps<{ liabilities: Liability[] }>()
 const emit = defineEmits<{ (e: 'adopt', strategy: 'avalanche' | 'snowball' | null): void }>()
 const router = useRouter()
 const { t } = useI18n()
-const { format } = useCurrency()
-const aiStore = useAIStore()
+const { formatConverted } = useCurrency()
+const familyStore = useFamilyStore()
 
 // spec §6.2: only render when ≥2 active liabilities.
 const activeLiabilities = computed(() => (props.liabilities || []).filter((l) => l.is_active))
@@ -88,7 +88,7 @@ function resetStrategy() {
 }
 
 function askAi() {
-  if (!aiStore.aiEnabled) return
+  if (!familyStore.aiEnabled) return
   router.push({ name: 'AIChat', query: { source: 'liability_strategy' } })
 }
 </script>
@@ -121,16 +121,16 @@ function askAi() {
             <span class="strat-badge">{{ t('liability.strategy.recommended') }}</span>
           </div>
           <div class="strat-method-desc">{{ t('liability.strategy.avalancheDesc') }}</div>
-          <div class="strat-interest">≈ {{ format(avalancheInterest) }}</div>
+          <div class="strat-interest">≈ {{ formatConverted(avalancheInterest, 'CNY') }}</div>
         </div>
         <div class="strat-method">
           <div class="strat-method-name">{{ t('liability.strategy.snowball') }}</div>
           <div class="strat-method-desc">{{ t('liability.strategy.snowballDesc') }}</div>
-          <div class="strat-interest">≈ {{ format(snowballInterest) }}</div>
+          <div class="strat-interest">≈ {{ formatConverted(snowballInterest, 'CNY') }}</div>
         </div>
       </div>
       <div v-if="savedByAvalanche > 0" class="strat-save">
-        {{ t('liability.strategy.saveByAvalanche', { amount: format(savedByAvalanche) }) }}
+        {{ t('liability.strategy.saveByAvalanche', { amount: formatConverted(savedByAvalanche, 'CNY') }) }}
       </div>
       <div class="strat-actions">
         <van-button size="small" type="primary" @click="adoptStrategy('avalanche')">
@@ -142,13 +142,13 @@ function askAi() {
         <van-button
           size="small"
           plain
-          :disabled="!aiStore.aiEnabled"
+          :disabled="!familyStore.aiEnabled"
           @click="askAi"
         >
           {{ t('liability.strategy.askAi') }}
         </van-button>
         <span
-          v-if="!aiStore.aiEnabled"
+          v-if="!familyStore.aiEnabled"
           class="strat-ai-disabled-hint"
           role="note"
           aria-label="AI 助手未启用"

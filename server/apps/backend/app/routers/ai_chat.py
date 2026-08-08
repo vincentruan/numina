@@ -135,7 +135,11 @@ def _get_session_for_family(
     family_id: int | str,
     db: Session,
 ) -> AIChatSession | None:
-    """Load a session by ID, enforcing family_id ownership (security invariant)."""
+    """Load a session by ID, enforcing family_id ownership (security invariant).
+
+    Accepts both numeric snowflake IDs (matched against ``id`` PK) and UUID
+    strings (matched against ``thread_id`` column).
+    """
     if session_id is None:
         return None
     try:
@@ -150,10 +154,15 @@ def _get_session_for_family(
             .first()
         )
     except (ValueError, TypeError):
-        # UUID format — query as string (DeerFlow agent creates UUID thread_ids)
+        # UUID format — query by thread_id column (LangGraph agent creates
+        # UUID thread_ids that are stored in the thread_id column, not the
+        # BigInteger PK).
         return (
             db.query(AIChatSession)
-            .filter(AIChatSession.id == str(session_id), AIChatSession.family_id == fid)
+            .filter(
+                AIChatSession.thread_id == str(session_id),
+                AIChatSession.family_id == fid,
+            )
             .first()
         )
 
@@ -269,16 +278,18 @@ async def chat_stream(
                 + b"\n"
             )
 
-        # Route to the runs.py endpoint (LangGraph SSE format).
+        # Route to the internal gateway endpoint (X-Agent-Token auth, bypasses R1 409 gate).
         # When agent_id is absent, fall back to the 小鸣 system agent (NUMINA_AGENT_ID).
         agent_id = body.agent_id or str(NUMINA_AGENT_ID)
-        agent_url = f"/api/threads/{session_id}/runs/stream"
+        agent_url = f"/internal/gateway/runs/chat/{session_id}"
         request_json = {
-            "assistant_id": agent_id,
+            "family_id": str(current_user.family_id),
+            "user_id": str(current_user.id),
             "input": {
                 "messages": [{"role": "user", "content": body.question}],
             },
             "metadata": {
+                "assistant_id": agent_id,
                 "deep_think": body.deep_think,
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
@@ -395,9 +406,16 @@ def get_system_default_session(
     )
     if session is None:
         return SessionDefaultWrapper(session=None)
+    # Return the checkpointer key as session_id, not the Snowflake PK.
+    # Since the agent switched to UUID thread_ids (commit 09d12ab7),
+    # session.id is the auto-generated Snowflake PK while the checkpointer
+    # stores messages under session.thread_id (UUID). Returning session.id
+    # causes loadHistory to query a checkpointer key that has no data — the
+    # state comes back empty and the conversation appears blank.
+    checkpointer_key = session.thread_id or str(session.id)
     return SessionDefaultWrapper(
         session=SessionDefaultResponse(
-            session_id=str(session.id),
+            session_id=checkpointer_key,
             status=session.status,
             created_at=session.created_at.isoformat() if session.created_at else None,
             updated_at=session.updated_at.isoformat() if session.updated_at else None,
@@ -487,7 +505,9 @@ def submit_message_feedback(
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    thread_id = str(session.id)
+    # Prefer the LangGraph thread_id (UUID) when set; fall back to the
+    # snowflake PK for sessions created via the backend chat_stream path.
+    thread_id = session.thread_id or str(session.id)
     row = (
         db.query(AIChatMessageFeedback)
         .filter(
@@ -530,7 +550,9 @@ def get_session_feedback(
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    thread_id = str(session.id)
+    # Prefer the LangGraph thread_id (UUID) when set; fall back to the
+    # snowflake PK for sessions created via the backend chat_stream path.
+    thread_id = session.thread_id or str(session.id)
     rows = (
         db.query(AIChatMessageFeedback)
         .filter(

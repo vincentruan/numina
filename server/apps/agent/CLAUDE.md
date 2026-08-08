@@ -3,27 +3,7 @@
 Module-specific guidance for the Python FastAPI AI agent microservice.
 See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
 
-## Quality Commands
-
-Run from `server/` (the uv workspace root):
-
-```bash
-uv run ruff check apps/agent/              # lint
-uv run ruff check apps/agent/ --fix        # lint + auto-fix
-uv run ruff format apps/agent/             # format (only files you touch)
-uv run mypy apps/agent/ --exclude vendor   # type check
-uv run pytest tests/agent/ -v              # run all agent tests (canonical root; auto-collected by `testpaths=["tests"]`)
-uv run pytest tests/agent/ -v -k "keyword" # run tests matching keyword
-```
-
-> **Test root:** The canonical agent test root is `tests/agent/` (mirrors `tests/backend/`; auto-collected by bare `pytest` via `testpaths = ["tests"]`). The legacy `apps/agent/tests/` directory still exists with **stale, partially-failing** tests (`test_branch_endpoint.py`, `test_threads_router.py` — 404 on thread lookup) and is **not** collected by default — do not add new tests there. When in doubt, run `uv run pytest tests/ -v` to run the full server suite.
-
-## Tooling
-
-- **ruff:** lint + format. Config in `pyproject.toml` under `[tool.ruff]`. Rules: E, F, I, UP, B, SIM. E501 is ignored — no line length enforcement.
-- **mypy:** type checker. `ignore_missing_imports = true` is intentional — LangChain and DeerFlow stubs are incomplete. Use `# type: ignore[<code>]` with an inline comment explaining why when suppressing.
-- **pytest + pytest-asyncio:** async test runner. `asyncio_mode = "auto"` is set in `pyproject.toml`.
-- **uv:** package manager. `deerflow-harness` is a workspace member from `vendor/deerflow-harness/` — always installed from local source, never from PyPI.
+> **Test root:** `tests/agent/` (canonical; auto-collected). Legacy `apps/agent/tests/` has stale tests — do not add new tests there.
 
 ## Key Invariants (Risk Control)
 
@@ -34,14 +14,29 @@ These must hold in every code path — never bypass them:
 3. **Audit logging:** Every agent run emits an audit event via `audit_logger.log_call()` in the `finally` block of each per-app runner in `runtime/worker.py` (e.g. `_run_numina_agent`). Both success and error paths are covered — the `finally` placement guarantees it.
 4. **DeerFlow-only execution:** All multi-step agent orchestration goes through `DeerFlowAdapter.typed_stream_dispatch` (in `services/deerflow_adapter/`). Never implement a custom runtime, tool registry, skill loader, memory manager, orchestrator, or workflow engine. Lightweight single-call LLM paths (`suggest`, `input_polish`) use `core/llm.py` directly — these are explicitly exempt (no DeerFlow dispatch needed for one-shot calls).
 
+## DeerFlow 问题排查指南
+
+遇到以下问题时，参考对应的 solution 文档：
+
+| 问题场景 | 参考文档 |
+|---------|---------|
+| DeerFlow stream 类型不匹配 / SSE 安全问题 | [`deerflow-stream-type-mismatch`](../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
+| GLM5 thinking provider endpoint 错误 | [`deerflow-glm5-thinking-mismatch`](../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
+| DeerFlow harness 静默 fallback / 并发问题 | [`deerflow-harness-fixes`](../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
+| MCP tools 加载失败 / 跨线程 asyncio.Lock 死锁 | [`mcp-cache-asyncio-lock-threading-deadlock`](../../../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) |
+| 会话标题显示 thinking-block 原始内容 | [`thinking-block-content-leaking-into-titles`](../../../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) |
+| stream 提前关闭 / 连接中断 | [`stream-closure-fix`](../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
+| 多 provider 熔断 / cascade retry | [`three-state-circuit-breaker`](../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
+| MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
+| MCP chat adapter 架构 | [`mcp-chat-adapter-architecture`](../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
+| 多 app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
+
 ## Cross-Cutting Invariants
 
-These apply across the whole server monorepo. An agent loading only this file must still know them.
+1. **DeerFlow-only execution** — covered in §Key Invariants above.
+2. **Auth** — agent uses `X-Agent-Token` (shared secret), not JWT auth endpoints.
 
-1. **Router decorator style** — see root [CLAUDE.md](../../CLAUDE.md) §URL Style for the `redirect_slashes=False` rule
-2. **Snowflake ID serialization** — if this service ever returns IDs in API responses, use `SnowflakeBase` not plain `BaseModel`. JS loses precision on integers > 2⁵³. See `server/apps/backend/CLAUDE.md` for the full pattern.
-3. **Auth return codes** — the agent uses `X-Agent-Token` (shared secret), not JWT auth endpoints. If auth-style endpoints are ever added, they return `200` not `201`.
-4. **Import direction** — this service must never import from `apps/backend` or `apps/scheduler_worker` directly. All backend data access goes through `core/backend_client.py` (HTTP). Use `packages/` for shared logic.
+See [server/CLAUDE.md](../../CLAUDE.md) for import direction, URL style, Snowflake ID, and other cross-module conventions.
 
 ## DeerFlow Execution
 
@@ -206,7 +201,7 @@ agent/
 │   ├── prod/config.yaml
 │   └── agents/family-finance-agent/profile.yaml
 ├── prompts/chat/default_system_prompt.md
-├── tests/                   # ⚠️ legacy dir — see §Quality Commands; canonical root is tests/agent/
+├── tests/                   # ⚠️ legacy dir — canonical root is tests/agent/
 │   ├── integration/           # gateway, runs-cancel, u2-app-dispatch, v2-sse-contract
 │   └── unit/                  # worker_*, adapter_contextvar, sync_tool_patch, threads routers, etc.
 │   # Canonical tests live in tests/agent/ (unit/ ~26 files, integration/, golden/) — see top of file.
@@ -219,7 +214,6 @@ agent/
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `BACKEND_BASE_URL` | `http://backend:8000` | Backend service address |
 | `BACKEND_BASE_URL` | `http://backend:8000` | Backend service address |
 | `AI_ENCRYPTION_KEY` | — | Fernet key shared with backend for decrypting per-family stored API keys |
 | `DATA_ROOT` | `~/.numina/data` | Unified data root — other path vars derive from this |
@@ -287,29 +281,46 @@ max_tokens: 6000
 
 `skill-creator` and `skill-installer` are internal-only skills excluded from agent dispatch via `_INTERNAL_ONLY_SKILLS` in `agent_dispatch.py`. Per-family custom skill overrides are fetched from the backend (not stored under `skills/`).
 
-### Pydantic v2
-
-```python
-# ✅ ConfigDict
-from pydantic import BaseModel, ConfigDict
-class MyModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-# ✅ model_validate
-obj = MyModel.model_validate(data)
-
-# ✅ field_validator
-from pydantic import field_validator
-class MyModel(BaseModel):
-    @field_validator("field")
-    @classmethod
-    def check(cls, v: str) -> str:
-        return v.strip()
-```
-
 ### Authentication
 
 All endpoints use `X-Agent-Token` header with JWT tokens issued by `create_agent_token()`. The JWT is verified by `verify_service_token` in `packages/security/service_auth/agent_token_verify.py`.
+
+## Security Rules for AI/Agent Inputs
+
+These rules are mandatory for every AI/agent change in this module. When adding
+or modifying a runner, router, skill, MCP tool, or agent configuration endpoint,
+update this section and add adversarial test cases to `numina-sim-test` Area 11.
+
+1. **All user-facing free text is untrusted.** `ChatRequest.question`,
+   `InputPolishRequest.text`, custom agent `system_prompt`, and thread goal text
+   must be filtered, length-limited, and/or wrapped before reaching any LLM.
+2. **PII redaction is mandatory but not sufficient.** `pii_redactor.redact()`
+   must run on every `FamilyContext` passed to a DeerFlow multi-step LLM, but it
+   only strips phone / ID / bank-card / address patterns. It does **not** prevent
+   prompt injection.
+3. **Direct prompt injection defense on `/ai/chat`.** The chat path currently
+   relies on PII redaction only. New changes must not make this worse; the
+   preferred fix is control-character filtering plus XML/structural wrapping of
+   the user message (see `asset_suggest.py:_sanitize_user_text()` and
+   `input_polish.py` `<draft>` wrapping for patterns).
+4. **Indirect injection via DB fields.** MCP tool results include
+   user-controlled names (assets, wishes, member names). Skill prompts must
+   instruct the model to treat such data as untrusted and never follow embedded
+   instructions.
+5. **Custom agent `system_prompt` safety prefix.** Any owner-defined
+   `system_prompt` must be prefixed with an immutable system safety block that
+   cannot be overridden by the owner text.
+6. **Custom agent `allowed-tools` is mandatory.** A custom agent / skill must
+   declare `allowed-tools`. `None` / missing is forbidden and defaults to a
+   minimal read-only set.
+7. **Thread goal sanitization.** `ThreadGoalRequest.objective` must be filtered
+   for control characters and wrapped before being evaluated by the goal LLM.
+8. **Agent-layer rate limiting.** All external AI endpoints must have
+   per-family + per-user rate limits. Until a centralized limiter exists, add
+   in-memory sliding windows in `runs_stream.py` / `sse_gateway.py`.
+9. **No new AI path without security review.** When adding a new runner,
+   router, skill, or MCP tool, update this section and add adversarial test
+   cases to `numina-sim-test` Area 11.
 
 ## Gotchas
 

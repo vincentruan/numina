@@ -94,16 +94,16 @@ class StorageService:
         db.add(cached_file)
         db.flush()  # Generate Snowflake ID before using cached_file.id below
 
-        # Optionally queue sync to default remote backend
-        default_backend = (
+        # Optionally queue sync to the family's remote backend (if configured)
+        family_backend = (
             db.query(StorageBackendModel)
-            .filter_by(is_default=True, is_active=True)
+            .filter_by(family_id=user.family_id, is_active=True)
             .first()
         )
-        if default_backend is not None:
+        if family_backend is not None:
             remote_loc = FileRemoteLocation(
                 file_id=cached_file.id,
-                backend_id=default_backend.id,
+                backend_id=family_backend.id,
                 sync_status="pending",
             )
             db.add(remote_loc)

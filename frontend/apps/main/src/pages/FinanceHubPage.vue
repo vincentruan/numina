@@ -32,19 +32,6 @@
           <span>{{ debtWishHint }}</span>
         </div>
 
-        <!-- R17: Import action button in page header area -->
-        <div class="finance-hub-header">
-          <van-button
-            icon="upload"
-            type="primary"
-            size="small"
-            plain
-            @click="$router.push('/finance/import')"
-          >
-            {{ t('financeHub.importButton') }}
-          </van-button>
-        </div>
-
         <!-- Three sub-tabs: 资产 / 负债 / 心愿 -->
         <van-tabs v-model:active="activeTab" shrink class="finance-tabs">
           <van-tab name="assets">
@@ -151,7 +138,7 @@ const debtWishHint = computed(() => {
   if (monthlySaving <= 0) return ''
   const delayedMonths = Math.ceil(totalMonthlyInterest / monthlySaving)
   return t('financeHub.debtWishHint', {
-    interest: currency.format(totalMonthlyInterest),
+    interest: currency.formatConverted(totalMonthlyInterest, 'CNY'),
     wish: candidate.name,
     months: delayedMonths,
   })
@@ -182,7 +169,8 @@ function applyQueryTab() {
   }
 }
 
-async function loadHubData() {  overviewError.value = false
+async function loadHubData() {
+  overviewError.value = false
   try {
     await Promise.all([
       dashboardStore.fetchAll(),
@@ -252,12 +240,6 @@ onActivated(async () => {
 .debt-wish-hint .van-icon {
   flex-shrink: 0;
   font-size: 16px;
-}
-
-.finance-hub-header {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 12px 0;
 }
 
 .hub-error {

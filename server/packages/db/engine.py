@@ -54,7 +54,14 @@ class _PostgreSQLBackend(_DatabaseBackend):
         return {}
 
     def get_pool_config(self) -> dict:
-        return {"pool_size": 10, "pool_pre_ping": True, "pool_reset_on_return": "rollback"}
+        return {
+            "pool_size": 20,
+            "max_overflow": 20,
+            "pool_timeout": 10,
+            "pool_recycle": 300,
+            "pool_pre_ping": True,
+            "pool_reset_on_return": "rollback",
+        }
 
 
 _BACKEND_MAP: dict[str, type[_DatabaseBackend]] = {

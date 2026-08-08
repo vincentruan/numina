@@ -122,7 +122,7 @@
     </div>
 
     <!-- AI disabled state: shown when family has not enabled AI -->
-    <AiGatedCard v-else-if="!aiStore.aiEnabled" :is-owner="isOwner" />
+    <AiGatedCard v-else-if="!familyStore.aiEnabled" :is-owner="isOwner" />
 
     <div v-else class="report-empty-card" role="button" tabindex="0" :aria-label="t('aiHub.generateFirstReport')" @click="generateReport" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
       <div class="report-empty-icon" aria-hidden="true">
@@ -259,7 +259,7 @@
     <!-- Chat input directly rendered (InputBox handles its own fixed bottom positioning) -->
     <!-- Hidden when AI assistant is not enabled — the AiGatedCard above explains why. -->
     <InputBox
-      v-if="aiStore.aiEnabled"
+      v-if="familyStore.aiEnabled"
       v-model="chatInput"
       v-model:web-search="webSearch"
       :disabled="!selectedAgent"
@@ -315,6 +315,7 @@ import { parseApiDate } from '@/utils/format'
 import { getAIReport, getAITask } from '@/api/ai'
 import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
+import { useFamilyStore } from '@/stores/family'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
 import { showToast, showFailToast } from 'vant'
@@ -344,6 +345,7 @@ const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const aiStore = useAIStore()
+const familyStore = useFamilyStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
 const stream = useReportStream()
@@ -399,7 +401,7 @@ const analysisApps = computed(() => [
 // Guard: show toast and return true when AI is not enabled, so callers can
 // bail out of navigation early.  Keeps the message in one place.
 function guardAiEnabled(): boolean {
-  if (aiStore.aiEnabled) return false
+  if (familyStore.aiEnabled) return false
   showToast({ message: t('aiHub.aiNotEnabled'), icon: 'warning-o' })
   return true
 }
@@ -775,7 +777,6 @@ function navigateToTimeMachine() {
 async function loadPageData() {
   increment()
   try {
-    await aiStore.fetchConfig()
     await agentStore.loadAgents()
     await loadReport()
   } finally {

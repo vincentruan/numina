@@ -252,7 +252,7 @@ async def _call_agent_parse(
         payload["image_paths"] = image_paths
     resp = await agent_client.post("/import/parse", json=payload)
     resp.raise_for_status()
-    return resp.json()
+    return resp.json()  # type: ignore[no-any-return]
 
 
 def _match_asset(name: str, family_id: str, db: Session) -> Asset | None:

@@ -87,6 +87,7 @@
       v-model:show="pickerVisible"
       :actions="actionTypeOptions"
       :cancel-text="t('common.cancel')"
+      teleport="body"
       @select="onActionTypeSelect"
     />
   </div>

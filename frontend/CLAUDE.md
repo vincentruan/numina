@@ -49,15 +49,13 @@ components/ (reusable UI, no direct api calls)
 
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`
 - **Vant auto-import** — 不手动 import Vant 组件，仅 import functional API (`showToast`, `showDialog`)
-- **i18n** — 见 root [`CLAUDE.md`](../CLAUDE.md) §Cross-Cutting Conventions
+- **i18n required** — every user-facing string must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings in `.vue` or `.ts` — not even in template ternaries.
 - **Toast 使用 Vant 内置图标** — 根据场景选择正确的 toast 函数：
   - ✅ 成功操作 → `showSuccessToast(message)` (自带成功图标)
   - ❌ 失败/错误 → `showFailToast(message)` (自带失败图标)
   - ⏳ 加载中 → `showLoadingToast(message)` (自带加载图标)
   - ℹ️ 提示信息 → `showToast({ message })` (无图标纯文本)
   - ⚠️ 警告提示 → `showToast({ message, icon: 'warning-o' })`
-- **i18n 文案不含 emoji** — toast 文案仅纯文本，图标由 toast 函数控制
-- **Type safety** — 禁止 `any`，接口类型必须显式声明
 - **Path alias** — `@/` maps to `src/`
 
 ## Vant 4 Patterns
@@ -87,19 +85,12 @@ components/ (reusable UI, no direct api calls)
 
 ## 模板参考基线
 
-**主模板**: [yulimchen/vue3-h5-template](https://github.com/yulimchen/vue3-h5-template)
-**补充模板**: [xiangshu233/vue3-vant4-mobile](https://github.com/xiangshu233/vue3-vant4-mobile)
-
-> **注意**: 模板是"参考"，不是"依赖"。本文件已吸收模板实践，开发时无需读取模板文件。
+**主模板**: [yulimchen/vue3-h5-template](https://github.com/yulimchen/vue3-h5-template)（参考，非依赖）
 
 | 原则 | 说明 |
 |------|------|
 | 已有优先 | 当前项目已有实现直接复用 |
-| 主模板优先 | 补充模板仅用于增强 |
 | Vant 优先 | 官方实践 > 个人封装 |
-| 简单优先 | 统一/可维护 > 复杂迁移 |
-
-**禁止:** 第二套工程体系、不一致规范混用、不需要的能力强行引入
 
 ## ECharts 规范
 

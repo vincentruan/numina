@@ -19,7 +19,6 @@ from apps.backend.app.models.coin_transaction import CoinTransaction
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.chore import ChoreTemplateCreate, ChoreTemplateUpdate
-from apps.backend.app.services.notification_bus import fire_notification
 
 logger = logging.getLogger(__name__)
 
@@ -298,16 +297,6 @@ def mark_complete(db: Session, child_user: User, instance_id: str) -> ChoreInsta
         instance.child_user_id == instance.family_id
         and instance.assigned_by_user_id is None
     )
-    fire_notification(
-        child_user.family_id,
-        {
-            "type": "chore_pending_approval",
-            "instance_id": instance.id,
-            "chore_name": instance.chore_name,
-            "child_name": child_user.display_name,
-            "message": f"{child_user.display_name} 完成了「{instance.chore_name}」，待审批",
-        },
-    )
     return instance
 
 
@@ -478,18 +467,6 @@ async def approve_instance_async(
         and instance.assigned_by_user_id is None
     )
 
-    fire_notification(
-        parent_user.family_id,
-        {
-            "type": "chore_approved",
-            "instance_id": instance_id,
-            "chore_name": instance.chore_name,
-            "coins_earned": actual_amount,
-            "message": f"任务「{instance.chore_name}」已批准，获得 {actual_amount} 颗星币！",
-            "target_user_id": coin_recipient_id,
-        },
-    )
-
     return instance
 
 
@@ -631,16 +608,6 @@ def abandon_instance(db: Session, child_user: User, instance_id: str) -> ChoreIn
         instance.child_user_id == instance.family_id
         and instance.assigned_by_user_id is None
     )
-    fire_notification(
-        child_user.family_id,
-        {
-            "type": "chore_abandoned",
-            "instance_id": instance.id,
-            "chore_name": instance.chore_name,
-            "child_name": child_user.display_name,
-            "message": f"{child_user.display_name} 放弃了「{instance.chore_name}」，任务已回到任务池",
-        },
-    )
     return instance
 
 
@@ -667,17 +634,6 @@ def reject_instance(
     instance._is_pool_unclaimed = (  # type: ignore[misc]
         instance.child_user_id == instance.family_id
         and instance.assigned_by_user_id is None
-    )
-    recipient_id = instance.submitted_by_user_id or instance.child_user_id
-    fire_notification(
-        parent_user.family_id,
-        {
-            "type": "chore_rejected",
-            "instance_id": instance_id,
-            "chore_name": instance.chore_name,
-            "message": f"任务「{instance.chore_name}」被退回，请重新完成。",
-            "target_user_id": recipient_id,
-        },
     )
     return instance
 

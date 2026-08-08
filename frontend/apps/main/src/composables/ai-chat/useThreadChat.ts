@@ -16,6 +16,7 @@ import { submitMessageFeedback, getSessionFeedback } from '@/api/sessions'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
+import { useChatSessionStore } from '@/stores/chatSession'
 
 export type { ChatMessage }
 
@@ -1194,6 +1195,25 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             if (data.messages) {
               mergeValuesMessages(data.messages)
             }
+            // Title channel (DeerFlow pattern): TitleMiddleware writes title to
+            // the checkpoint, LangGraph streams it as a values event. The
+            // adapter cleans the sync fallback (JSON wrapper → user text) before
+            // yielding, so any non-empty title here is display-safe.
+            // Updates the session store in-place so the sidebar reflects the
+            // title without HTTP polling.
+            if (data.title && currentThreadId) {
+              // Lazy store access — avoids requiring Pinia at composable
+              // creation time (tests create useThreadChat without Pinia).
+              const sessionStore = useChatSessionStore()
+              const idx = sessionStore.sessions.findIndex(s => s.thread_id === currentThreadId)
+              if (idx !== -1) {
+                sessionStore.sessions[idx] = {
+                  ...sessionStore.sessions[idx],
+                  title: data.title,
+                  titleGenerating: false,
+                }
+              }
+            }
             // U7 (D5 TodoList): todos channel — replace wholesale (merge_todos
             // reducer semantics: new non-None wins over existing).
             if (data.todos !== undefined) {
@@ -1374,7 +1394,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // Finalize: mark all AI messages done, attach suggestions, mark planning steps done
             finalizeStreamSuccess(userMsg.id)
 
-            // Notify caller that stream ended (for title refresh)
+            // Notify caller that stream ended
             if (currentThreadId) {
               options.onStreamEnd?.(currentThreadId)
             }

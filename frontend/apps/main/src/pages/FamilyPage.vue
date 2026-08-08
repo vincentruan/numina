@@ -77,18 +77,19 @@
               </div>
             </div>
           </div>
-          <van-button
-            v-if="isOwner"
-            block
-            plain
-            type="primary"
-            size="small"
-            :loading="regenerating"
-            style="margin: 12px 16px 0"
-            @click="onRegenerate"
-          >
-            {{ t('family.regenerateInviteCode') }}
-          </van-button>
+          <div class="section-action">
+            <van-button
+              v-if="isOwner"
+              block
+              plain
+              type="primary"
+              size="small"
+              :loading="regenerating"
+              @click="onRegenerate"
+            >
+              {{ t('family.regenerateInviteCode') }}
+            </van-button>
+          </div>
         </div>
 
         <!-- Children management dashboard (owner only) -->
@@ -155,26 +156,29 @@
             </div>
           </div>
           <!-- Add child button -->
-          <van-button
-            v-if="isOwner"
-            block
-            plain
-            type="primary"
-            size="small"
-            style="margin-top: 12px"
-            @click="showAddChildSheet = true"
-          >{{ t('family.addChild') }}</van-button>
+          <div class="section-action section-action--spaced">
+            <van-button
+              v-if="isOwner"
+              block
+              plain
+              type="primary"
+              size="small"
+              @click="showAddChildSheet = true"
+            >{{ t('family.addChild') }}</van-button>
+          </div>
         </div>
 
         <!-- Add child sheet (also shown when no children yet) -->
         <div v-if="isOwner && childMembers.length === 0" class="section">
-          <van-button
-            block
-            plain
-            type="primary"
-            size="small"
-            @click="showAddChildSheet = true"
-          >{{ t('family.addChild') }}</van-button>
+          <div class="section-action">
+            <van-button
+              block
+              plain
+              type="primary"
+              size="small"
+              @click="showAddChildSheet = true"
+            >{{ t('family.addChild') }}</van-button>
+          </div>
         </div>
 
         <!-- Edit child info bottom sheet -->
@@ -823,6 +827,14 @@ onActivated(async () => {
 
 .member-disabled {
   opacity: 0.55;
+}
+
+.section-action {
+  padding: 12px 16px 0;
+}
+
+.section-action--spaced {
+  margin-top: 12px;
 }
 
 .sheet-title {

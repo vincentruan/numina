@@ -97,14 +97,19 @@ def test_upload_no_remote_backend(client, auth_headers, db):
 
 
 # ---------------------------------------------------------------------------
-# Test 7: with default remote backend → FileRemoteLocation row with sync_status="pending"
+# Test 7: with configured family remote backend → FileRemoteLocation row with sync_status="pending"
 # ---------------------------------------------------------------------------
 def test_upload_with_remote_backend(client, auth_headers, db):
+    # Get the user's family_id via /me
+    me_resp = client.get("/api/v1/auth/me", headers=auth_headers)
+    assert me_resp.status_code == 200
+    family_id = me_resp.json()["data"]["family_id"]
+
     backend = StorageBackend(
         id="test-backend-1",
+        family_id=family_id,
         backend_type="local",
         display_name="Test Backend",
-        is_default=True,
         is_active=True,
     )
     db.add(backend)
@@ -117,7 +122,7 @@ def test_upload_with_remote_backend(client, auth_headers, db):
     loc = db.query(FileRemoteLocation).filter_by(file_id=file_id).first()
     assert loc is not None
     assert loc.sync_status == "pending"
-    assert loc.backend_id == "test-backend-1"
+    assert loc.backend_id == backend.id
 
 
 # ---------------------------------------------------------------------------

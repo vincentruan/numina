@@ -28,14 +28,14 @@ vi.mock('vant', () => ({
 }))
 
 const aiEnabledMock = { value: true }
-vi.mock('@/stores/ai', () => ({
-  useAIStore: () => ({
+vi.mock('@/stores/family', () => ({
+  useFamilyStore: () => ({
     aiEnabled: computed(() => aiEnabledMock.value),
   }),
 }))
 
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ format: (n: number) => `¥${n}` }),
+  useCurrency: () => ({ format: (n: number) => `¥${n}`, formatConverted: (n: number | string) => '¥' + n }),
 }))
 
 import LiabilityStrategyCard from '../LiabilityStrategyCard.vue'

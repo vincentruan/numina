@@ -45,7 +45,7 @@
         <span class="select-cancel" role="button" tabindex="0" @click="exitSelectMode" @keydown.enter="exitSelectMode" @keydown.space.prevent="exitSelectMode">{{ t('liability.cancelSelect') }}</span>
       </div>
 
-      <!-- L1 (Plan B T9): payoff strategy card (only when ≥2 active liabilities). -->
+      <!-- Payoff strategy card (only when ≥2 active liabilities). -->
       <LiabilityStrategyCard :liabilities="liabilityStore.liabilities" @adopt="onStrategyAdopt" />
 
       <!-- Summary Banner -->
@@ -53,7 +53,7 @@
         <div class="summary-top">
           <div class="summary-main">
             <div class="summary-label">{{ activeTab === 'active' ? t('liability.summaryTotal') : t('liability.summarySettled') }}</div>
-            <div class="summary-amount">{{ formatAmountDisplay(totalAmount) }}</div>
+            <div class="summary-amount">{{ formatConverted(totalAmount, 'CNY') }}</div>
           </div>
           <div class="summary-count">
             <span class="count-num">{{ filteredLiabilities.length }}</span>
@@ -77,7 +77,7 @@
         class="monthly-payment-banner"
       >
         <span class="mp-label">{{ t('liability.monthlyPaymentTotal') }}</span>
-        <span class="mp-amount">{{ formatCurrencyAmount(totalMonthlyPayment) }}</span>
+        <span class="mp-amount">{{ formatConverted(totalMonthlyPayment, 'CNY') }}</span>
         <span v-if="hasEstimatedItems" class="mp-estimated">{{ t('liability.monthlyPaymentEstimated') }}</span>
       </div>
 
@@ -139,7 +139,7 @@
         @confirm="submitPayment"
       >
         <div class="pay-dialog-body">
-          <div class="pay-hint">{{ t('liability.payRemainingHint', { amount: payTarget ? formatAmountDisplay(payTarget.remaining_amount) : '' }) }}</div>
+          <div class="pay-hint">{{ t('liability.payRemainingHint', { amount: payTarget ? formatConverted(payTarget.remaining_amount, 'CNY') : '' }) }}</div>
           <van-field
             v-model="payAmount"
             type="number"
@@ -196,6 +196,7 @@ import { showToast, showSuccessToast } from 'vant'
 import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
+import { useExchangeRate } from '@/composables/useExchangeRate'
 import { useLiabilityStore } from '@/stores/liability'
 import type { Liability } from '@/types'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -206,7 +207,8 @@ import EducationRewardCard from '@/components/finance/EducationRewardCard.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 
 const { t } = useI18n()
-const { format: formatCurrencyAmount } = useCurrency()
+const { format: formatCurrencyAmount, formatConverted } = useCurrency()
+const { ensureRate } = useExchangeRate()
 const router = useRouter()
 const route = useRoute()
 const liabilityStore = useLiabilityStore()
@@ -435,10 +437,21 @@ async function executeBatchDelete() {
   batchDeleteSheet.value.show = false
 }
 
-liabilityStore.fetchLiabilities({ is_active: true })
+liabilityStore.fetchLiabilities({ is_active: true }).then(() => {
+  // Prefetch exchange rates for non-CNY liability currencies.
+  const currencies = new Set<string>()
+  for (const l of liabilityStore.liabilities) {
+    if (l.currency && l.currency !== 'CNY') {
+      currencies.add(l.currency)
+    }
+  }
+  for (const code of currencies) {
+    void ensureRate(code)
+  }
+})
 
-// W5 (Plan B T8): handle the ?focus=liability_strategy deep link (spec §5.3: avoid
-// 断链). Migrated from LiabilityListPage — FinanceHubPage now hosts this panel under
+// Handle the ?focus=liability_strategy deep link. Migrated from LiabilityListPage
+// — FinanceHubPage now hosts this panel under
 // /finance?tab=liabilities&focus=liability_strategy. Scroll to the L1 strategy card.
 onMounted(() => {
   if (route.query.focus !== 'liability_strategy') return

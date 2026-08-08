@@ -170,7 +170,7 @@ def install() -> None:
         except ImportError:
             continue
         if hasattr(mod, "get_memory_config"):
-            mod.get_memory_config = _contextual_get_memory_config
+            mod.get_memory_config = _contextual_get_memory_config  # type: ignore[attr-defined]
 
     # 2. Snapshot the family config at enqueue time.
     _orig_add = _queue_mod.MemoryUpdateQueue.add

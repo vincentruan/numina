@@ -18,7 +18,7 @@ export interface HighInterestLiability extends Liability {
 }
 
 /**
- * W5 (Plan B T8): high-interest-debt ↔ wish linkage (pure computation, spec §5).
+ * High-interest-debt ↔ wish linkage (pure computation, spec §5).
  *
  * A liability is "high-interest" when its annual interest_rate >= its category's
  * threshold. The monthly_interest formula matches L1 (T4: remaining × monthly_rate).

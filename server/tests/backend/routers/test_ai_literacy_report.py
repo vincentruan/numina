@@ -54,18 +54,12 @@ def _make_child(db, family_id: int, username: str = "lr7_child") -> User:
 
 
 def _enable_ai(db, family_id: int):
-    """Enable AI for the family by creating an active AIProviderConfig."""
-    from apps.backend.app.models.ai_provider_config import AIProviderConfig
+    """Enable AI for the family via the family-level ai_enabled flag."""
+    from apps.backend.app.models.family import Family
 
-    cfg = AIProviderConfig(
-        family_id=family_id,
-        name="LR7 AI Config",
-        provider="anthropic",
-        api_key_encrypted="test_encrypted_key",
-        model_id="claude-3-5-sonnet-20241022",
-        is_active=True,
-    )
-    db.add(cfg)
+    family = db.query(Family).filter_by(id=family_id).first()
+    assert family is not None
+    family.ai_enabled = True
     db.commit()
 
 

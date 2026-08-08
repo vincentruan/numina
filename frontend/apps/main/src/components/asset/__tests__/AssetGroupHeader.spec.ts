@@ -17,6 +17,7 @@ vi.mock('@/composables/useCurrency', () => ({
   useCurrency: () => ({
     format: (amount: number | string) => `¥${Number(amount).toFixed(2)}`,
     formatPercent: (v: number) => `${v}%`,
+    formatConverted: (n: number | string) => '¥' + n,
   }),
 }))
 

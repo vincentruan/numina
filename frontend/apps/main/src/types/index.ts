@@ -466,7 +466,10 @@ export interface AIReportIndicator {
   score: number  // 1-5 scale
   narrative: string
   suggestions: string[]
-  data?: Record<string, unknown>
+  data?: Record<string, unknown> & {
+    // New bilingual items format (SKILL.md v2): items with zh/en labels
+    items?: Array<{ key: string; zh: string; en: string; value: number }>
+  }
 }
 
 export interface AIReport {

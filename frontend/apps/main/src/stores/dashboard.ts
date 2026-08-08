@@ -186,6 +186,50 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   /**
+   * Fetch first page of assets for ALL statuses and merge into displayedAssets.
+   * Used by FinanceHub "All" filter tab — backend has no single "all" endpoint,
+   * so we fan out to each status and merge client-side.
+   */
+  async function fetchAllAssetsPage(pageSize: number = DEFAULT_PAGE_SIZE): Promise<void> {
+    if (assetListLoading.value) return
+    const statuses = ['in_use', 'idle', 'sold', 'retired']
+    assetListLoading.value = true
+    activeAssetStatus.value = ''  // empty = "All" (no single status)
+    try {
+      const results = await Promise.all(
+        statuses.map(s =>
+          dashboardApi.getHomeAssetsPaginated(s, 1, pageSize, null, {
+            search: assetSearch.value || undefined,
+            sortBy: assetSortBy.value || undefined,
+            sortOrder: assetSortOrder.value,
+            assetType: activeAssetType.value || undefined,
+          }).catch(() => ({ data: { items: [], total: 0, total_pages: 0, has_next: false } } as any))
+        )
+      )
+      // Store each status in cache and merge all items
+      const allItems: Asset[] = []
+      let grandTotal = 0
+      statuses.forEach((s, i) => {
+        const data = results[i].data
+        assetPagesCache.value.set(s, new Map([[1, data.items]]))
+        assetPageInfo.value.set(s, { total: data.total, total_pages: data.total_pages, has_next: data.has_next, current: 1 })
+        allItems.push(...data.items)
+        grandTotal += data.total
+      })
+      displayedAssets.value = allItems
+      assetPageInfo.value.set('', { total: grandTotal, total_pages: 0, has_next: false, current: 1 })
+      assetPage.value = 1
+      assetListFinished.value = true
+    } catch (error) {
+      console.error('[fetchAllAssetsPage] Failed:', error)
+      showFailToast(i18n.global.t('toast.assetLoadFailed'))
+      assetListFinished.value = true
+    } finally {
+      assetListLoading.value = false
+    }
+  }
+
+  /**
    * Fetch a specific page of assets for a given status
    * Implements server-side pagination with client-side cache management
    */
@@ -349,8 +393,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
     if (filters.assetType !== undefined) activeAssetType.value = filters.assetType
     if (filters.resetCategory) activeAssetCategoryId.value = null
     const status = activeAssetStatus.value
-    resetAssetPagination(status)
-    await fetchAssetsPage(status, 1, assetPageSize, activeAssetCategoryId.value || undefined)
+    if (!status) {
+      // "All" filter: refetch across all statuses
+      await fetchAllAssetsPage(assetPageSize)
+    } else {
+      resetAssetPagination(status)
+      await fetchAssetsPage(status, 1, assetPageSize, activeAssetCategoryId.value || undefined)
+    }
   }
 
   /**
@@ -395,7 +444,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchNewAssets, fetchHomeAssets, fetchAll,
     fetchEducationRewardSummary, fetchLiabilityAllocation,
-    fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets, applyAssetFilters,
+    fetchAssetsPage, fetchAllAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets, applyAssetFilters,
     fetchCategoryCounts, invalidateDashboard,
   }
 })
