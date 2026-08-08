@@ -1,4 +1,9 @@
-"""ASR Provider circuit breaker adapter."""
+"""ASR Provider circuit breaker adapter.
+
+Inherits CircuitBreakerAdapter for the ``on_transition`` hook and ``bind``
+interface, but uses a simpler two-state model (no half_open) with custom
+record_failure/record_success logic — does NOT delegate to CircuitBreakerFSM.
+"""
 
 from datetime import UTC, datetime
 

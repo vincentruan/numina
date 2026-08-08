@@ -58,6 +58,7 @@ vi.mock('@/stores/auth', () => ({
 vi.mock('@/composables/useCurrency', () => ({
   useCurrency: () => ({
     format: (n: number) => `¥${n}`,
+    formatConverted: (n: number | string) => '¥' + n,
   }),
 }))
 

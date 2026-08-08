@@ -71,7 +71,7 @@
       <div class="card-row-bottom">
         <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
           <van-icon name="clock-o" size="12" aria-hidden="true" />
-          {{ t('assetCard.dailyCost', { cost: formatCurrency(asset.daily_cost, asset.currency) }) }}
+          {{ t('assetCard.dailyCost', { cost: currency.formatConverted(asset.daily_cost, asset.currency) }) }}
         </span>
         <span v-else class="card-daily-cost-placeholder" />
       </div>
@@ -86,6 +86,7 @@ import type { Asset } from '@/types'
 import { formatCurrency, parseLocalDate } from '@/utils/format'
 import { useAssetStore } from '@/stores/asset'
 import { getIconId } from '@/utils/icon'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   asset: Asset
@@ -101,6 +102,7 @@ const emit = defineEmits<{
 
 const assetStore = useAssetStore()
 const { t } = useI18n()
+const currency = useCurrency()
 const imageError = ref(false)
 
 // Check if this asset is currently syncing
@@ -166,7 +168,7 @@ const daysUsed = computed(() => {
 
 function formatPrice(price: number | string | null | undefined): string {
   if (price == null) return '-'
-  return formatCurrency(price, props.asset.currency)
+  return currency.formatConverted(price, props.asset.currency)
 }
 
 const statusMap = computed<

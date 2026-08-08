@@ -36,7 +36,7 @@
           <div class="hero-value-item">
             <div class="hero-value-label">{{ t('wish.expectedPrice') }}</div>
             <div class="hero-value-num">
-              <span v-if="wish.expected_price">{{ currency.formatIn(wish.expected_price, wish.currency) }}</span>
+              <span v-if="wish.expected_price">{{ currency.formatConverted(wish.expected_price, wish.currency) }}</span>
               <span v-else class="hero-value-unset">{{ t('wish.unset') }}</span>
             </div>
           </div>
@@ -62,7 +62,7 @@
         <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
 
-      <!-- W1 (Plan B T9): savings progress + record/log dialogs. -->
+      <!-- Savings progress + record/log dialogs. -->
       <WishSavingsProgress
         v-if="wish.status === 'pending'"
         :wish="wish"
@@ -103,7 +103,7 @@
           <van-button v-if="wish.converts_to_asset" block type="primary" @click="showRealizeDialog = true">
             {{ t('wish.convertToAsset') }}
           </van-button>
-          <!-- A1b (Plan B T6/T9): passive '问 AI 规划储蓄' button → /ai/chat?source=wish_detail&id= -->
+          <!-- Passive '问 AI 规划储蓄' button → /ai/chat?source=wish_detail&id= -->
           <van-button block type="default" plain @click="router.push({ name: 'AIChat', query: { source: 'wish_detail', id: wish.id } })">
             {{ t('wish.advice.askPlanSavings') }}
           </van-button>
@@ -132,7 +132,7 @@
         </van-button>
       </div>
 
-      <!-- W5 (Plan B T8): high-interest-debt hint + 忽略 button (only when the
+      <!-- High-interest-debt hint + 忽略 button (only when the
            current wish has monthly_saving>0 + high-interest debt + not ignored). -->
       <div v-if="showDebtWarning" class="debt-warning-bar">
         <van-icon name="warning-o" />
@@ -241,6 +241,7 @@ import WishSavingsLogDialog from '@/components/wishes/WishSavingsLogDialog.vue'
 import { getIconId } from '@/utils/icon'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useCurrency } from '@/composables/useCurrency'
+import { useExchangeRate } from '@/composables/useExchangeRate'
 
 const { t, locale } = useI18n()
 
@@ -253,6 +254,7 @@ const deleting = ref(false)
 const acting = ref(false)
 const { increment, decrement } = usePageLoading()
 const currency = useCurrency()
+const { ensureRate } = useExchangeRate()
 
 // Realize dialog
 const showRealizeDialog = ref(false)
@@ -260,7 +262,7 @@ const realizing = ref(false)
 const showDatePicker = ref(false)
 const showCategoryPicker = ref(false)
 
-// W1 (Plan B T9): savings record + log dialogs.
+// Savings record + log dialogs.
 const recordShow = ref(false)
 const logShow = ref(false)
 
@@ -279,7 +281,7 @@ const categories = ref<Category[]>([])
 
 const wish = computed(() => wishStore.currentWish)
 
-// W5 (Plan B T8): high-interest-debt ↔ wish linkage hint + 忽略 button.
+// High-interest-debt ↔ wish linkage hint + 忽略 button.
 // Pass a single-element wishes ref so shouldWarnForWish + ignore_debt_warning
 // work on the current wish; the composable only needs liabilities + hasHighInterestDebt.
 const wishesRef = ref<Wish[]>([])
@@ -405,7 +407,13 @@ onMounted(async () => {
     await wishStore.fetchWish(id)
     wishesRef.value = wishStore.currentWish ? [wishStore.currentWish] : []
 
-    // W5: load debt thresholds + liabilities so the high-interest hint can render.
+    // Prefetch exchange rate for this wish's currency so converted amounts render
+    // synchronously on first paint.
+    if (wish.value?.currency && wish.value.currency !== 'CNY') {
+      void ensureRate(wish.value.currency)
+    }
+
+    // load debt thresholds + liabilities so the high-interest hint can render.
     void debtWarning.loadThresholds()
     liabilityStore.fetchLiabilities().catch(() => {})
 

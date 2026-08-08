@@ -44,6 +44,8 @@ export function useThreadList(sourceFilter?: Ref<string | undefined>) {
   const isLoading = ref(false)
   const hasMore = ref(true)
   let offset = 0
+  // AbortController to cancel in-flight searchThreads on rapid filter change.
+  let currentAbort: AbortController | null = null
 
   /** Distinct source values observed in loaded sessions (for filter UI). */
   const availableSources = computed<string[]>(() => {
@@ -95,17 +97,30 @@ export function useThreadList(sourceFilter?: Ref<string | undefined>) {
   async function loadMore() {
     if (isLoading.value || !hasMore.value) return
     isLoading.value = true
+    // Create a fresh AbortController for this page load so it can be
+    // cancelled if the filter changes before the response arrives.
+    currentAbort = new AbortController()
     try {
-      const res = await searchThreads({ limit: PAGE_SIZE, offset, source: sourceFilter?.value })
+      const res = await searchThreads(
+        { limit: PAGE_SIZE, offset, source: sourceFilter?.value },
+        currentAbort.signal,
+      )
       sessions.value = [...sessions.value, ...res.items]
       offset += res.items.length
       hasMore.value = offset < res.total
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      throw err
     } finally {
+      currentAbort = null
       isLoading.value = false
     }
   }
 
   async function refresh() {
+    // Cancel any in-flight request to prevent stale data from appending
+    // to the new filter's result set.
+    currentAbort?.abort()
     sessions.value = []
     offset = 0
     hasMore.value = true

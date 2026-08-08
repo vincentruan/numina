@@ -25,8 +25,7 @@
     </div>
 
     <div class="list-content">
-      <!-- W5 (Plan B T8): high-interest-debt hint bar (spec §5.4: 先止血再储蓄,
-           rendered ABOVE the W4 advice card). -->
+      <!-- High-interest-debt hint bar (spec §5.4) -->
       <div
         v-if="debtWarning.hasHighInterestDebt.value && wishes.length"
         class="debt-warning-bar"
@@ -34,7 +33,7 @@
         <van-icon name="warning-o" />
         <span>{{
           t('wish.debtWarning.listHint', {
-            amount: Number(debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0),
+            amount: currency.format(debtWarning.highInterestLiabilities.value[0]?.remaining_amount ?? 0),
             rate: debtWarning.highInterestLiabilities.value[0]?.interest_rate ?? 0,
           })
         }}</span>
@@ -43,7 +42,7 @@
         </van-button>
       </div>
 
-      <!-- W4 (Plan B T7): AI wish-priority advice card. Hides itself when the
+      <!-- AI wish-priority advice card. Hides itself when the
            backend returns empty (<2 wishes / no monthly_saving / LLM unavailable). -->
       <WishAdviceCard :wishes="wishes.map((w) => ({ id: w.id, name: w.name, monthly_saving: w.monthly_saving ?? '0' }))" />
 
@@ -59,7 +58,7 @@
             class="wish-item"
             :class="`priority-${wish.priority}`"
             tabindex="0"
-            :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? t('wish.aria.priceFormat', { price: Number(wish.expected_price).toLocaleString() }) : '' })"
+            :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? currency.formatConverted(wish.expected_price, wish.currency) : '' })"
             @click="$router.push(`/wishes/${wish.id}`)"
             @keydown.enter="$router.push(`/wishes/${wish.id}`)"
           >
@@ -80,7 +79,7 @@
                 <span class="wish-name">{{ wish.name }}</span>
                 <div class="wish-right">
                   <span v-if="wish.expected_price" class="wish-price">
-                    {{ formatCurrency(wish.expected_price, wish.currency) }}
+                    {{ currency.formatConverted(wish.expected_price, wish.currency) }}
                   </span>
                   <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
                   <van-icon name="arrow" size="12" class="card-arrow" />
@@ -95,7 +94,7 @@
                 <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
               </div>
 
-              <!-- W2 (Plan B T9): afford bar — single-line compact (spec §3.2). -->
+              <!-- Per-wish afford bar -->
               <div
                 v-if="wish.expected_price"
                 class="afford-bar"
@@ -196,6 +195,8 @@ import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { useAffordBar } from '@/composables/useAffordBar'
 import { formatCurrency } from '@/utils/format'
+import { useCurrency } from '@/composables/useCurrency'
+import { useExchangeRate } from '@/composables/useExchangeRate'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import WishAdviceCard from '@/components/wishes/WishAdviceCard.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
@@ -206,10 +207,12 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const wishStore = useWishStore()
 const liabilityStore = useLiabilityStore()
+const currency = useCurrency()
+const { ensureRate } = useExchangeRate()
 
 const wishes = ref<Wish[]>([])
 
-// W5 (Plan B T8): high-interest-debt ↔ wish linkage. Warn before saving (spec §5.4).
+// High-interest-debt ↔ wish linkage. Warn before saving.
 const debtWarning = useDebtWarning(
   toRef(liabilityStore, 'liabilities'),
   wishes,
@@ -254,7 +257,7 @@ function toggleSort(value: typeof sortBy.value) {
   }
 }
 
-// W2 (Plan B T9): per-wish afford-bar logic. Cache by wish.id to avoid recompute
+// Per-wish afford-bar logic. Cache by wish.id to avoid recompute
 // churn across re-renders (spec §3.2 list single-line compact).
 const affordCache = new Map<string, ReturnType<typeof useAffordBar>>()
 function affordFor(w: Wish) {
@@ -294,7 +297,17 @@ async function loadWishes() {
   if (!dashboardStore.overview) {
     dashboardStore.fetchOverview().catch(() => {})
   }
-  // W5: load debt thresholds + liabilities so the high-interest hint can render.
+  // Prefetch exchange rates for non-CNY wish currencies.
+  const currencies = new Set<string>()
+  for (const wish of wishes.value) {
+    if (wish.currency && wish.currency !== 'CNY') {
+      currencies.add(wish.currency)
+    }
+  }
+  for (const code of currencies) {
+    void ensureRate(code)
+  }
+  // load debt thresholds + liabilities so the high-interest hint can render.
   void debtWarning.loadThresholds()
   liabilityStore.fetchLiabilities().catch(() => {})
 }
@@ -320,7 +333,7 @@ defineExpose({
 </script>
 
 <style scoped>
-/* ── W5 debt-warning bar (Plan B T8) ── */
+/* ── Debt-warning bar ── */
 .debt-warning-bar {
   display: flex;
   align-items: center;

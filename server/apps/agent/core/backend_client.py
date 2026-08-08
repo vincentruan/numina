@@ -352,7 +352,13 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
             return "permanent_account"
     if error_message and any(
         keyword in error_message.lower()
-        for keyword in ["deleted", "suspended"]
+        for keyword in [
+            "deleted",
+            "suspended",
+            "account disabled",
+            "account blocked",
+            "account deactivated",
+        ]
     ):
         return "permanent_account"
     if error_code == 429:

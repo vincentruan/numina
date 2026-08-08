@@ -1076,15 +1076,12 @@ async def _run_numina_agent(
         available_skills=available_skills,
         skip_active_skill=is_slash_message,
         middlewares=None,
+        preloaded_ai_config=ai_config,
     ) as p:
         # For slash-activated skills (U2), set the skill context manually
         # after the pipeline's __aenter__ (which skipped set_active_skill).
         if is_slash_message:
-            from apps.agent.services.deerflow_adapter.active_skill_context import (
-                set_active_skill,
-            )
-
-            p._skill_token = set_active_skill(p.skill_name)
+            p.set_skill_token()
 
         # 1. First (user-visible) stream turn.
         await p.run_skill(user_message, enable_thinking=call_thinking_enabled)

@@ -35,7 +35,7 @@ vi.mock('@/stores/family', () => ({
 }))
 
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ format: (n: number) => `¥${n}` }),
+  useCurrency: () => ({ format: (n: number) => `¥${n}`, formatConverted: (n: number | string) => '¥' + n }),
 }))
 
 import LiabilityStrategyCard from '../LiabilityStrategyCard.vue'

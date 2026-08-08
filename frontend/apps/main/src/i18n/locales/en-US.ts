@@ -998,7 +998,7 @@ export default {
       askPlanSavings: 'Ask AI to plan savings',
     },
     debtWarning: {
-      listHint: 'You have ¥{amount} in high-interest debt (rate {rate}%) with hefty monthly interest. Paying it down first beats saving for a wish.',
+      listHint: 'You have {amount} in high-interest debt (rate {rate}%) with hefty monthly interest. Paying it down first beats saving for a wish.',
       viewStrategy: 'View repayment advice',
       detailHint: 'High-interest debt detected — paying it down first is recommended',
       ignore: 'Ignore',

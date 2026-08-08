@@ -9,11 +9,16 @@ import MoneyDisplay from '../MoneyDisplay.vue'
 
 // Display currency is CNY; no conversion unless sourceCurrency differs.
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ currency: ref('CNY') }),
+  useCurrency: () => ({
+    currency: ref('CNY'),
+    formatConverted: (n: number | string) => '¥' + n,
+    convertAmount: (n: number | string) => Number(n) || 0,
+  }),
 }))
 const getRateInfoMock = vi.fn(() => Promise.resolve(null))
+const getCachedRateMock = vi.fn(() => null)
 vi.mock('@/composables/useExchangeRate', () => ({
-  useExchangeRate: () => ({ getRateInfo: getRateInfoMock }),
+  useExchangeRate: () => ({ getRateInfo: getRateInfoMock, getCachedRate: getCachedRateMock }),
 }))
 
 describe('MoneyDisplay (string money-as-str coercion)', () => {
@@ -74,5 +79,13 @@ describe('MoneyDisplay (string money-as-str coercion)', () => {
       props: { amount: '3500', sourceCurrency: 'CNY', originalValue: '500' },
     })
     expect(sameCurrency.find('.conversion-info-icon').exists()).toBe(false)
+  })
+
+  it('falls back to raw amount when conversion is not needed', () => {
+    const wrapper = mount(MoneyDisplay, {
+      props: { amount: '1500', sourceCurrency: 'CNY' },
+    })
+    // No conversion needed (same currency), should show raw amount
+    expect(wrapper.find('.money-value').text()).toBe('1,500')
   })
 })

@@ -42,14 +42,14 @@
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
             <div class="hero-value-label">{{ t('asset.dailyCostLabel') }}</div>
-            <div class="hero-daily-cost">{{ currency.formatIn(asset.daily_cost, asset.currency) }}</div>
+            <div class="hero-daily-cost">{{ currency.formatConverted(asset.daily_cost, asset.currency) }}</div>
           </div>
         </div>
         <div v-if="asset.status !== 'sold'" class="hero-change" :class="returnClass">
           {{ returnText }}
         </div>
         <div v-if="asset.status === 'sold'" class="sell-summary">
-          {{ t('assetDetail.netRecovery', { amount: currency.formatIn(Number(asset.sell_price!) - Number(asset.sell_fee || 0), asset.currency) }) }}
+          {{ t('assetDetail.netRecovery', { amount: currency.formatConverted(Number(asset.sell_price!) - Number(asset.sell_fee || 0), asset.currency) }) }}
           <span v-if="asset.sell_date"> · {{ asset.sell_date }}</span>
         </div>
       </div>
@@ -103,12 +103,12 @@
         <van-cell v-if="asset.usage_frequency" :title="t('assetDetail.fieldUsageFrequency')" :value="usageText" />
         <van-cell v-if="asset.daily_cost" :title="t('assetDetail.fieldDailyCost')">
           <template #value>
-            <span class="daily-cost">{{ currency.formatIn(asset.daily_cost, asset.currency) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="daily-cost">{{ currency.formatConverted(asset.daily_cost, asset.currency) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
         <van-cell v-if="asset.target_daily_cost" :title="t('assetDetail.fieldTargetDailyCost')">
           <template #value>
-            <span class="target-cost">{{ currency.formatIn(Number(asset.target_daily_cost), asset.currency) }}{{ t('assetDetail.perDay') }}</span>
+            <span class="target-cost">{{ currency.formatConverted(Number(asset.target_daily_cost), asset.currency) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
       </van-cell-group>
@@ -188,7 +188,7 @@
         <van-cell
           v-for="v in valuations"
           :key="v.id"
-          :title="currency.formatIn(Number(v.value), asset.currency)"
+          :title="currency.formatConverted(Number(v.value), asset.currency)"
           :value="v.valued_at.slice(0, 10)"
         />
       </van-cell-group>
@@ -235,7 +235,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -250,6 +250,7 @@ import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getIconId } from '@/utils/icon'
 import { useCurrency } from '@/composables/useCurrency'
+import { useExchangeRate } from '@/composables/useExchangeRate'
 import { parseApiDate, parseLocalDate } from '@/utils/format'
 
 const { t } = useI18n()
@@ -264,8 +265,21 @@ const valuations = ref<AssetValuation[]>([])
 const imageError = ref(false)
 const { increment, decrement } = usePageLoading()
 const currency = useCurrency()
+const { ensureRate } = useExchangeRate()
 
 const asset = computed(() => assetStore.currentAsset)
+
+// Prefetch exchange rate for this asset's currency so converted amounts render
+// synchronously on first paint.
+watch(
+  () => asset.value?.currency,
+  (c) => {
+    if (c && c !== 'CNY') {
+      ensureRate(c)
+    }
+  },
+  { immediate: true },
+)
 
 // Check if this asset is currently syncing
 const syncing = computed(() => asset.value ? assetStore.isSyncing(asset.value.id) : false)
@@ -347,7 +361,7 @@ const returnText = computed(() => {
   if (!asset.value?.purchase_price || !asset.value?.current_value) return ''
   const diff = Number(asset.value.current_value) - Number(asset.value.purchase_price)
   const sign = diff >= 0 ? '+' : ''
-  return `${sign}${currency.formatIn(diff, asset.value.currency)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
+  return `${sign}${currency.formatConverted(diff, asset.value.currency)} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
 })
 
 // D8: interval return rate (preset intervals vs current_value).
@@ -398,8 +412,8 @@ const intervalReturnText = computed(() => {
   const sign = r.rate >= 0 ? '+' : '-'
   return t('assetDetail.intervalReturnDetail', {
     date: r.startDate,
-    start: currency.formatIn(r.startValue, asset.value!.currency),
-    end: currency.formatIn(r.endValue, asset.value!.currency),
+    start: currency.formatConverted(r.startValue, asset.value!.currency),
+    end: currency.formatConverted(r.endValue, asset.value!.currency),
     rate: `${sign}${Math.abs(r.rate).toFixed(2)}%`,
   })
 })

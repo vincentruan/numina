@@ -23,7 +23,7 @@ vi.mock('vue-router', () => ({
 
 // useCurrency → useAuthStore needs an active Pinia; stub to a plain formatter.
 vi.mock('@/composables/useCurrency', () => ({
-  useCurrency: () => ({ format: (n: number) => `¥${n}` }),
+  useCurrency: () => ({ format: (n: number) => `¥${n}`, formatConverted: (n: number | string) => '¥' + n }),
 }))
 
 // --- Store mocks ---

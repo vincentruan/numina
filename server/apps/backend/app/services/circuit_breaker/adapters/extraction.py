@@ -1,8 +1,11 @@
 """AI Extraction Circuit breaker adapter.
 
-This adapter bridges the unified FSM with the AIExtractionCircuit entity
-which uses a different vocabulary (ok/rate_limited/circuit_open) and
-threshold-driven evaluation (audit table counting).
+This adapter uses threshold-driven evaluation (audit table counting) and
+manages its own state transitions directly on the AIExtractionCircuit entity.
+It inherits CircuitBreakerAdapter for the ``on_transition`` hook and ``bind``
+interface, but does NOT delegate to CircuitBreakerFSM — the extraction domain
+uses a different vocabulary (ok/rate_limited/circuit_open) and counts failures
+via the audit table rather than recording individual events.
 """
 
 from datetime import UTC, datetime, timedelta

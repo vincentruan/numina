@@ -1,7 +1,9 @@
 """Schemas for family-scoped remote storage backend configuration."""
 
+import ipaddress
 from datetime import datetime
 from enum import Enum
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -52,6 +54,39 @@ class WebDAVStorageConfig(BaseModel):
     def _valid_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):
             raise ValueError("base_url must start with http:// or https://")
+        # SSRF guard: reject loopback, link-local, and private RFC 1918 ranges.
+        # Accepts public hostnames and cloud-provider FQDNs only.
+        try:
+            parsed = urlparse(v)
+            hostname = parsed.hostname or ""
+            if not hostname:
+                raise ValueError("base_url must include a hostname")
+            # Resolve literal IP addresses against private ranges
+            try:
+                addr = ipaddress.ip_address(hostname)
+                if addr.is_loopback or addr.is_private or addr.is_link_local:
+                    raise ValueError(
+                        "base_url must not point to a private or loopback address"
+                    )
+            except ValueError as exc:
+                if "private" in str(exc) or "loopback" in str(exc):
+                    raise
+                # Not an IP literal — treat as hostname.
+                # Reject well-known internal hostnames.
+                lower = hostname.lower()
+                if lower in (
+                    "localhost",
+                    "127.0.0.1",
+                    "0.0.0.0",
+                    "metadata.google.internal",
+                ) or lower.endswith(".internal"):
+                    raise ValueError(
+                        "base_url must not point to a private or loopback address"
+                    )
+        except ValueError as exc:
+            if "base_url" in str(exc) or "private" in str(exc) or "loopback" in str(exc):
+                raise
+            raise ValueError(f"Invalid base_url: {exc}") from exc
         return v
 
 

@@ -3,7 +3,7 @@
     class="asset-list-item"
     :class="{ 'selection-mode': selectable, selected: selected }"
     role="listitem"
-    :aria-label="`${asset.name}, ${statusText}, ${formatCurrency(asset.purchase_price || 0, asset.currency)}购入`"
+    :aria-label="`${asset.name}, ${statusText}, ${currency.formatConverted(asset.purchase_price || 0, asset.currency)}购入`"
     :aria-selected="selected"
     tabindex="0"
     @click="$emit('click')"
@@ -44,12 +44,12 @@
         </div>
         <div class="item-meta">
           <span class="item-price-days"
-            >{{ formatCurrency(asset.purchase_price || 0, asset.currency) }} | {{ daysUsed }}天</span
+            >{{ currency.formatConverted(asset.purchase_price || 0, asset.currency) }} | {{ daysUsed }}天</span
           >
         </div>
         <div class="item-cost">
           <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="item-daily">
-            {{ formatCurrency(asset.daily_cost, asset.currency) }}/天
+            {{ currency.formatConverted(asset.daily_cost, asset.currency) }}/天
           </span>
         </div>
 
@@ -85,6 +85,7 @@ import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
 import { formatCurrency, parseLocalDate } from '@/utils/format'
 import { getIconId } from '@/utils/icon'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   asset: Asset
@@ -99,6 +100,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const imageError = ref(false)
 

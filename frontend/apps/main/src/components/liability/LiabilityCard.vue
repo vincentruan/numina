@@ -89,6 +89,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Liability } from '@/types'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   liability: Liability
@@ -105,6 +106,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const currency = useCurrency()
 
 const categoryMap = computed<Record<string, { text: string; icon: string; color: string }>>(() => ({
   mortgage: { text: t('liability.mortgage'), icon: 'icon-mortgage', color: '#d97706' },
@@ -127,11 +129,7 @@ const repaidPercent = computed(() => {
 })
 
 function formatAmountDisplay(amount: number | string): string {
-  const n = Number(amount)
-  if (n >= 100000000) return (n / 100000000).toFixed(2) + t('common.unitHundredMillion')
-  if (n >= 10000) return (n / 10000).toFixed(1) + t('common.unitTenThousand')
-  if (n >= 1000) return (n / 1000).toFixed(1) + t('common.unitThousand')
-  return n.toLocaleString('zh-CN')
+  return currency.formatConverted(amount, 'CNY')
 }
 
 // Long-press detection

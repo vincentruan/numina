@@ -25,13 +25,13 @@ export function realizeWish(id: string, data: WishRealizeRequest) {
   return http.post(`/wishes/${id}/realize`, data)
 }
 
-// W5 (Plan B T8): per-wish opt-out of the high-interest-debt linkage hint.
+// Per-wish opt-out of the high-interest-debt linkage hint.
 // T3 added the backend route (PATCH /wishes/{id}/ignore-debt-warning, body {ignore}).
 export function setIgnoreDebtWarning(id: string, ignore: boolean) {
   return http.patch<Wish>(`/wishes/${id}/ignore-debt-warning`, { ignore })
 }
 
-// W1 savings CRUD (Plan B T9 frontend). T3 added the backend routes.
+// W1 savings CRUD. T3 added the backend routes.
 export function recordSaving(wishId: string, amount: string, logDate?: string, note?: string) {
   return http.post<SavingsLog>(`/wishes/${wishId}/savings`, { amount, log_date: logDate, note })
 }
@@ -44,7 +44,7 @@ export function deleteSavingsLog(wishId: string, logId: string) {
   return http.delete(`/wishes/${wishId}/savings/${logId}`)
 }
 
-// W4 wish-priority advice (Plan B T7). The endpoint returns a bare
+// W4 wish-priority advice. The endpoint returns a bare
 // JSONResponse {status, generated_at?, report} (NOT EnvelopeResponse-wrapped),
 // so the http interceptor passes it through unchanged.
 export function getWishAdvice(force = false) {

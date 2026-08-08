@@ -138,7 +138,7 @@ const debtWishHint = computed(() => {
   if (monthlySaving <= 0) return ''
   const delayedMonths = Math.ceil(totalMonthlyInterest / monthlySaving)
   return t('financeHub.debtWishHint', {
-    interest: currency.format(totalMonthlyInterest),
+    interest: currency.formatConverted(totalMonthlyInterest, 'CNY'),
     wish: candidate.name,
     months: delayedMonths,
   })

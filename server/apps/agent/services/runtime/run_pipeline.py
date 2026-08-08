@@ -228,6 +228,12 @@ class RunPipeline:
         # in middlewares)``) stays stable.  Pass ``None`` (default) for no
         # middleware — used by fixed-flow runners (asset-report, etc.).
         middlewares: list[Any] | None = None,
+        # Optional: pre-fetched AI config dict.  When provided, __aenter__
+        # skips the ``get_family_ai_config()`` HTTP call (the chat runner
+        # already fetches config before constructing the pipeline to resolve
+        # web-search capability and custom skills — accepting it here avoids
+        # a redundant round-trip).
+        preloaded_ai_config: dict[str, Any] | None = None,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -246,6 +252,7 @@ class RunPipeline:
         self._mcp_servers_override = mcp_servers
         self._available_skills = available_skills
         self._middlewares = middlewares
+        self._preloaded_ai_config = preloaded_ai_config
 
         # Populated by __aenter__
         self._providers: list[dict[str, Any]] = []
@@ -282,8 +289,12 @@ class RunPipeline:
         )
 
         # 2. Fetch per-family AI config (tenant-isolated)
+        #    Skip the HTTP call when the caller already fetched it.
         client = BackendClient(family_id=self.family_id)
-        ai_config = await client.get_family_ai_config()
+        if self._preloaded_ai_config is not None:
+            ai_config = self._preloaded_ai_config
+        else:
+            ai_config = await client.get_family_ai_config()
         providers = ai_config.get("providers", [])
         if not providers:
             raise RuntimeError("未配置 AI 供应商")
@@ -461,6 +472,22 @@ class RunPipeline:
                 schedule_run_cleanup(self.run_manager, self.run_id, delay=300)
             )
         )
+
+    def set_skill_token(self, skill_name: str | None = None) -> None:
+        """Set the active skill token for this pipeline.
+
+        Public alternative to mutating ``_skill_token`` directly.  Used by
+        the chat runner for slash-activated messages where
+        ``skip_active_skill=True`` was passed to the constructor but the
+        caller still needs to activate a skill after ``__aenter__``.
+
+        The token is tracked so ``__aexit__`` resets it correctly.
+        """
+        from apps.agent.services.deerflow_adapter.active_skill_context import (
+            set_active_skill,
+        )
+
+        self._skill_token = set_active_skill(skill_name or self.skill_name)
 
     async def run_skill(
         self,

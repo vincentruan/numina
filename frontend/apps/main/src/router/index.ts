@@ -143,6 +143,19 @@ const router = createRouter({
           meta: { hasSkeleton: true }
         },
         {
+          // Redirect finance sub-routes to their standalone paths.
+          path: 'finance/assets/new',
+          redirect: '/assets/new',
+        },
+        {
+          path: 'finance/liabilities/new',
+          redirect: '/liabilities/new',
+        },
+        {
+          path: 'finance/wishes/new',
+          redirect: '/wishes/new',
+        },
+        {
           // Multi-format intelligent import — R16: moved from settings/import-report.
           path: 'finance/import',
           name: 'ImportReport',

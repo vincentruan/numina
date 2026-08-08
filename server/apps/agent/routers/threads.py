@@ -680,6 +680,9 @@ async def search_threads(
         ThreadResponse(
             # Prefer the LangGraph UUID thread_id when present; fall back to
             # the snowflake session_id for sessions created via chat_stream.
+            # Frontend code should use thread_id as the canonical key — it is
+            # stable for both UUID-created and snowflake-created sessions.
+            # Changing a session's thread_id after creation is not supported.
             thread_id=str(r.get("thread_id") or r.get("session_id", "")),
             status=r.get("status", "idle"),
             created_at=coerce_iso(r.get("created_at", "")),

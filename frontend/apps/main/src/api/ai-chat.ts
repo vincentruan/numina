@@ -157,12 +157,13 @@ export async function getThreadState(id: string): Promise<ThreadState> {
   return asThreadState(await res.json())
 }
 
-export async function searchThreads(params: ThreadSearchParams): Promise<ThreadSearchResponse> {
+export async function searchThreads(params: ThreadSearchParams, signal?: AbortSignal): Promise<ThreadSearchResponse> {
   const res = await fetch(`${getAgentApiBase()}/api/threads/search`, {
     method: 'POST',
     headers: getAgentHeaders(),
     credentials: 'include',
     body: JSON.stringify(params),
+    signal,
   })
   if (!res.ok) throw new Error(`Failed to search threads: ${res.status}`)
   const list = await res.json() as ThreadApiResponse[]
