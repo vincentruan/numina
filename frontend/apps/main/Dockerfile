@@ -1,5 +1,5 @@
 # Build stage — includes vite-plugin-svg-icons-ng for SVG sprite generation
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 # Copy shared packages first
 COPY frontend/packages/auth ./frontend/packages/auth

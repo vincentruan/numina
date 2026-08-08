@@ -21,7 +21,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'src')
     },
-    dedupe: ['vue', 'pinia', '@vue/runtime-dom', '@vue/runtime-core']
+    dedupe: ['vue', 'pinia', '@vue/runtime-dom', '@vue/runtime-core', 'vue-i18n', '@intlify/core-base', '@intlify/shared']
   },
   server: {
     port: 5174,
