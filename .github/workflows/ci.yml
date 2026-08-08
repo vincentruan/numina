@@ -186,7 +186,22 @@ jobs:
           # Build only essential services (skip agent which requires vendor/deerflow-harness)
           # DOCKER_BUILDKIT=1 enables layer caching for faster rebuilds
           docker compose build backend frontend-main frontend-child nginx
-          # Bring up core services (SQLite fallback — no external DB needed)
+          # Start PostgreSQL first (required — compose has hardcoded postgresql:// URLs)
+          docker compose up -d --profile postgres postgres
+          echo "等待 PostgreSQL 就绪..."
+          for i in $(seq 1 15); do
+            if docker compose exec -T postgres pg_isready -U numina > /dev/null 2>&1; then
+              echo "✓ PostgreSQL 就绪"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "✗ PostgreSQL 在 30 秒内未就绪"
+              docker compose logs postgres
+              exit 1
+            fi
+            sleep 2
+          done
+          # Bring up core services
           docker compose up -d --no-deps backend frontend-main frontend-child
           docker compose up -d --no-deps nginx
 
@@ -237,7 +252,7 @@ jobs:
 
       - name: Stop Docker stack
         if: always()
-        run: docker compose down -v
+        run: docker compose --profile postgres down -v
 
   # ──────────────────────────────────────────────────────────────────────────
   # Job 5: Build & push Docker images to GHCR (main branch only)
