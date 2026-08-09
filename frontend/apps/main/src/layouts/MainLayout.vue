@@ -4,7 +4,7 @@
       {{ t('toast.networkError') }}
     </div>
     <router-view v-slot="{ Component }">
-      <Transition mode="out-in">
+      <Transition>
         <KeepAlive :include="cachedTabs">
           <component :is="Component" />
         </KeepAlive>
