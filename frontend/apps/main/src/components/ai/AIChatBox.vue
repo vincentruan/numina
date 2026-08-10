@@ -511,6 +511,26 @@ function handleNewChat() {
   draftText.value = undefined
 }
 
+/**
+ * WelcomePage suggestion card tapped. Fills in the default mode/model config
+ * before delegating to handleStartChat — same defaults as the A1b auto-send
+ * path. The raw prompt is what the user sees as the question title, but the
+ * full prompt text (from the i18n pool) is sent to the agent.
+ */
+async function handleWelcomeSuggestion(prompt: string) {
+  const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = 'pro'
+  const modeConfig = INPUT_MODE_CONFIGS[mode]
+  await handleStartChat({
+    text: prompt,
+    model_name: DEFAULT_MODEL,
+    mode,
+    thinking_enabled: modeConfig.thinking_enabled,
+    is_plan_mode: modeConfig.is_plan_mode,
+    subagent_enabled: modeConfig.subagent_enabled,
+    reasoning_effort: modeConfig.reasoning_effort,
+  })
+}
+
 // Branch conversation state and handler
 const branchingMessageId = ref<string | null>(null)
 const canBranch = computed(() => !!store.activeThreadId && !chat.isLoading.value)
@@ -592,11 +612,13 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         <WelcomePage
           :model-value="draftText"
           :agent-id="activeAgent?.id"
+          :agent-name="activeAgent?.agent_name"
           :agents="activeAgent ? [{ id: activeAgent.id, display_name: activeAgent.display_name, agent_name: activeAgent.agent_name, icon: activeAgent.icon, color: activeAgent.color, description: activeAgent.description }] : []"
           :agent-icon="activeAgent?.icon"
           :agent-label="activeAgent?.display_name"
           readonly
           @start-chat="handleStartChat"
+          @select-suggestion="handleWelcomeSuggestion"
         />
       </template>
       <template v-else>
