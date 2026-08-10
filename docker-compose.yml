@@ -37,6 +37,10 @@ services:
       dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
+    # Allow containers to reach host services (e.g. PostgreSQL on host:5432)
+    # via the special DNS name "host.docker.internal".
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./system-config.yaml:/app/system-config.yaml:ro
