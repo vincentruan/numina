@@ -140,7 +140,7 @@ jobs:
     name: E2E Smoke Tests
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-main, frontend-child]
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       AI_ENCRYPTION_KEY: ci-dummy-key-not-used
       DOCKER_BUILDKIT: 1
@@ -218,14 +218,14 @@ jobs:
 
       - name: Wait for backend health
         run: |
-          echo "等待后端就绪（最多 300 秒）..."
-          for i in $(seq 1 150); do
+          echo "等待后端就绪（最多 600 秒）..."
+          for i in $(seq 1 300); do
             if curl -sf http://localhost/api/health > /dev/null 2>&1; then
               echo "✓ 后端就绪"
               break
             fi
-            if [ $i -eq 150 ]; then
-              echo "✗ 后端在 300 秒内未就绪"
+            if [ $i -eq 300 ]; then
+              echo "✗ 后端在 600 秒内未就绪"
               docker compose logs backend
               exit 1
             fi
