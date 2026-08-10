@@ -239,12 +239,12 @@ const finalPayload = computed(() => {
 })
 
 // ── Agent display ──
-const selectedAgent = computed(() =>
+const activeAgentOption = computed(() =>
   props.agents?.find((a) => a.id === props.agentId) ?? props.agents?.[0] ?? null,
 )
-const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.icon || undefined)
-const displayAgentLabel = computed(() => props.agentLabel || selectedAgent.value?.display_name || '')
-const isNuminaAgent = computed(() => selectedAgent.value?.agent_name === NUMINA_AGENT_NAME)
+const displayAgentIcon = computed(() => props.agentIcon || activeAgentOption.value?.icon || undefined)
+const displayAgentLabel = computed(() => props.agentLabel || activeAgentOption.value?.display_name || '')
+const isNuminaAgent = computed(() => activeAgentOption.value?.agent_name === NUMINA_AGENT_NAME)
 
 // Agent info popup state (for chat mode)
 const showAgentInfo = ref(false)
@@ -859,7 +859,7 @@ onUnmounted(() => {
                 <span v-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
                   {{ getAgentIcon(displayAgentIcon) }}
                 </span>
-                <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+                <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="20" :color="activeAgentOption?.color || 'var(--van-primary-color)'" />
                 <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <rect x="3" y="3" width="18" height="18" rx="4"/>
                   <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
@@ -882,7 +882,7 @@ onUnmounted(() => {
                 <span v-if="isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
                   {{ getAgentIcon(displayAgentIcon) }}
                 </span>
-                <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+                <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="activeAgentOption?.color || 'var(--van-primary-color)'" />
               </template>
             </button>
 
@@ -989,7 +989,7 @@ onUnmounted(() => {
       </div>
     </div>
     <!-- Agent info popup - teleported to body to escape stacking context -->
-    <Teleport v-if="showAgentInfo && selectedAgent" to="body">
+    <Teleport v-if="showAgentInfo && activeAgentOption" to="body">
       <div
         class="agent-info-backdrop"
         @click="showAgentInfo = false"
@@ -1006,7 +1006,7 @@ onUnmounted(() => {
             <span v-else-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))">
               {{ getAgentIcon(displayAgentIcon) || '🤖' }}
             </span>
-            <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="24" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+            <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="24" :color="activeAgentOption?.color || 'var(--van-primary-color)'" />
             <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="3" width="18" height="18" rx="4"/>
               <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
@@ -1016,7 +1016,7 @@ onUnmounted(() => {
           </span>
           <span class="agent-info-name">{{ displayAgentLabel }}</span>
         </div>
-        <p class="agent-info-description">{{ selectedAgent.description || t('aiChat.agentNoDescription') }}</p>
+        <p class="agent-info-description">{{ activeAgentOption.description || t('aiChat.agentNoDescription') }}</p>
       </div>
     </Teleport>
     <!-- Hidden file inputs for panel actions -->

@@ -14,7 +14,7 @@
  * - 如果后端返回降级结果，前端要显示提示
  */
 
-import { ref, computed, onMounted, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, onMounted, type Ref, type ComputedRef } from 'vue'
 import { showFailToast } from 'vant'
 import i18n from '@/i18n'
 import http from '@/api'
@@ -217,7 +217,7 @@ export function useTenantAiResources(): {
   // not awaited). In that case loadResources() bails out at the !familyId
   // check and never retries. Watch familyId so that when it eventually lands
   // we retry — but only if we haven't already loaded models.
-  watch(familyId, (newId) => {
+  watch(familyId, (newId: string | undefined) => {
     if (newId && models.value.length === 0 && !loading.value) {
       loadResources()
     }
