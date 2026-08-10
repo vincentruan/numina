@@ -44,7 +44,7 @@ INVITATION_CODE_COUNT ?= 20
 INVITATION_CODES ?=
 
 .PHONY: help check install \
-        setup setup-keys setup-env setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
+        setup setup-keys setup-env setup-env-db setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
         dev-backend dev-agent dev-worker dev-frontend dev-child dev-all stop-dev-all \
         build build-main build-child \
         typecheck lint format \
@@ -68,6 +68,7 @@ help:
 	@echo "  make setup         - 交互式初始化 (生成密钥 + .env + 数据目录 + 邀请码)"
 	@echo "  make setup-keys    - 仅生成所有安全密钥 (SECRET_KEY, 加密密钥等)"
 	@echo "  make setup-env     - 生成 .env 配置文件 (从模板)"
+	@echo "  make setup-env-db  - 切换数据库配置 (交互式选择 SQLite/PostgreSQL 模板)"
 	@echo "  make setup-data    - 创建数据目录 (.numina/data/{db,uploads})"
 	@echo "  make setup-db      - 初始化数据库 (默认 SQLite; 可选 NUMINA_DB=mysql|postgres)"
 	@echo "  make setup-db-mysql     - 启动 MySQL 容器并初始化"
@@ -233,6 +234,107 @@ _validate-env:
 	else \
 		echo "✓ .env 配置完整"; \
 	fi
+
+# ── DB 模式切换 ──────────────────────────────────────────
+# 自动检测当前 .env 的 DB 模式，交互式选择新模板
+# 用法: make setup-env-db [NUMINA_DB_MODE=docker-pgsql-host]
+#
+# 模式列表:
+#   dev-sqlite          本地开发 + SQLite
+#   dev-pgsql-local     本地开发 + 本地 PostgreSQL (localhost)
+#   dev-pgsql-remote    本地开发 + 远程 PostgreSQL
+#   docker-sqlite       Docker 部署 + SQLite
+#   docker-pgsql-docker Docker 部署 + PostgreSQL 容器 (compose 网络)
+#   docker-pgsql-host   Docker 部署 + 宿主机/远程 PostgreSQL
+
+setup-env-db:
+	@CURRENT_MODE=$$( \
+		if [ -f .env ]; then \
+			DB_URL=$$(grep '^DATABASE_URL=' .env 2>/dev/null | head -1 | cut -d= -f2-); \
+			if echo "$$DB_URL" | grep -q 'sqlite'; then \
+				if echo "$$DB_URL" | grep -q '/app/'; then echo "docker-sqlite"; \
+				else echo "dev-sqlite"; fi; \
+			elif echo "$$DB_URL" | grep -q 'numina-postgres'; then \
+				echo "docker-pgsql-docker"; \
+			elif echo "$$DB_URL" | grep -q 'host.docker.internal'; then \
+				echo "docker-pgsql-host"; \
+			elif echo "$$DB_URL" | grep -q 'localhost'; then \
+				echo "dev-pgsql-local"; \
+			else \
+				echo "dev-pgsql-remote"; \
+			fi; \
+		else echo "none"; fi \
+	); \
+	echo ""; \
+	echo "═══════════════════════════════════════════════"; \
+	echo "  Numina 数据库配置切换"; \
+	echo "═══════════════════════════════════════════════"; \
+	echo ""; \
+	echo "当前模式: $$CURRENT_MODE"; \
+	echo ""; \
+	echo "可用模板:"; \
+	echo "  1) dev-sqlite          — 本地开发 + SQLite (最简)"; \
+	echo "  2) dev-pgsql-local     — 本地开发 + 本地 PostgreSQL"; \
+	echo "  3) dev-pgsql-remote    — 本地开发 + 远程 PostgreSQL"; \
+	echo "  4) docker-sqlite       — Docker 部署 + SQLite"; \
+	echo "  5) docker-pgsql-docker — Docker 部署 + PostgreSQL 容器"; \
+	echo "  6) docker-pgsql-host   — Docker 部署 + 宿主机 PostgreSQL"; \
+	echo "  7) 保持当前 ($$CURRENT_MODE)"; \
+	echo ""; \
+	if [ -n "$(NUMINA_DB_MODE)" ]; then \
+		CHOSEN="$(NUMINA_DB_MODE)"; \
+		echo "使用 NUMINA_DB_MODE=$$CHOSEN"; \
+	else \
+		read -p "选择 [1-7] (默认 7): " NUM; \
+		NUM=$${NUM:-7}; \
+		case "$$NUM" in \
+			1) CHOSEN="dev-sqlite" ;; \
+			2) CHOSEN="dev-pgsql-local" ;; \
+			3) CHOSEN="dev-pgsql-remote" ;; \
+			4) CHOSEN="docker-sqlite" ;; \
+			5) CHOSEN="docker-pgsql-docker" ;; \
+			6) CHOSEN="docker-pgsql-host" ;; \
+			*) CHOSEN="$$CURRENT_MODE" ;; \
+		esac; \
+	fi; \
+	echo ""; \
+	TEMPLATE=".env.examples/.env.$$CHOSEN"; \
+	if [ ! -f "$$TEMPLATE" ]; then \
+		echo "✗ 模板不存在: $$TEMPLATE"; \
+		echo "  可用模板: $$(ls .env.examples/.env.* 2>/dev/null | xargs -I{} basename {} | tr '\n' ' ')"; \
+		exit 1; \
+	fi; \
+	if [ -f .env ]; then \
+		cp .env .env.bak; \
+		echo "已备份当前 .env → .env.bak"; \
+	fi; \
+	cp "$$TEMPLATE" .env; \
+	echo "✓ 根 .env 已切换为: $$CHOSEN"; \
+	echo ""; \
+	\
+	# server/.env 处理 (仅本地开发模式需要)
+	case "$$CHOSEN" in \
+		dev-*) \
+			SERVER_TEMPLATE=""; \
+			case "$$CHOSEN" in \
+				dev-sqlite) SERVER_TEMPLATE=".env.examples/server.env.dev-sqlite" ;; \
+				dev-pgsql-local|dev-pgsql-remote) SERVER_TEMPLATE=".env.examples/server.env.dev-pgsql" ;; \
+			esac; \
+			if [ -n "$$SERVER_TEMPLATE" ] && [ -f "$$SERVER_TEMPLATE" ]; then \
+				if [ -f server/.env ]; then cp server/.env server/.env.bak; fi; \
+				cp "$$SERVER_TEMPLATE" server/.env; \
+				echo "✓ server/.env 已切换为对应模板"; \
+			fi; \
+			;; \
+		docker-*) \
+			echo "ℹ Docker 模式无需 server/.env (容器使用根 .env)"; \
+			;; \
+	esac; \
+	echo ""; \
+	echo "═══════════════════════════════════════════════"; \
+	echo "  ⚠ 请检查 .env 中的安全密钥 (CHANGE_ME_*) 并替换为随机值"; \
+	echo "  提示: make setup-env 可自动生成安全密钥"; \
+	echo "═══════════════════════════════════════════════"
 
 setup-data:
 	@echo "创建数据目录..."
