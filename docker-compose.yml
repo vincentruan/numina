@@ -6,6 +6,8 @@ services:
       dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./system-config.yaml:/app/system-config.yaml:ro

@@ -220,7 +220,7 @@ jobs:
         run: |
           echo "等待后端就绪..."
           for i in $(seq 1 60); do
-            if curl -sf http://localhost/api/health > /dev/null 2>&1; then
+            if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
               echo "✓ 后端就绪"
               break
             fi
