@@ -20,15 +20,17 @@ DIFFICULTY_MAP = {
 DEFAULT_DIFFICULTY = 50000  # Backward compatible default
 
 
-@router.get("/config")
+@router.get("/config", response_class=JSONResponse)
 def get_captcha_config():
-    """Return whether captcha is enabled for the current environment."""
-    try:
-        return {"captcha_enabled": settings.ENVIRONMENT == "production" and not settings.DISABLE_CAPTCHA}
-    except Exception as e:
-        import logging
-        logging.exception(f"get_captcha_config error: {e}")
-        raise
+    """Return whether captcha is enabled for the current environment.
+
+    NOTE: Uses JSONResponse directly (not EnvelopeResponse) because the frontend
+    fetches this URL via raw fetch() and expects {captcha_enabled: bool},
+    not the standard {code, data} envelope format.
+    """
+    return JSONResponse(
+        content={"captcha_enabled": settings.ENVIRONMENT == "production" and not settings.DISABLE_CAPTCHA}
+    )
 
 
 @router.get("/challenge", response_class=JSONResponse)

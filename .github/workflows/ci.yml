@@ -5,6 +5,13 @@ on:
     branches: [main, feat/*, fix/*]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run-e2e:
+        description: "Run E2E smoke tests (slow, ~5min)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -138,6 +145,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   e2e-smoke:
     name: E2E Smoke Tests
+    # Run only when explicitly requested: workflow_dispatch with run-e2e, or commit message contains [e2e]
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.run-e2e == true) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[e2e]'))
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-main, frontend-child]
     timeout-minutes: 15
