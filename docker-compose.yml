@@ -23,6 +23,7 @@ services:
       - AGENT_BASE_URL=http://numina-agent:8001
       - BACKEND_BASE_URL=http://numina-backend:8000
       - NUMINA_PROJECT_ROOT=/app
+      - SKIP_INITIAL_EXCHANGE_RATE_FETCH=${SKIP_INITIAL_EXCHANGE_RATE_FETCH:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
