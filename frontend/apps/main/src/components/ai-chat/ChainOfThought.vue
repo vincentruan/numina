@@ -27,6 +27,7 @@ import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'
 import FlipDisplay from './FlipDisplay.vue'
 import LiveTimer from './LiveTimer.vue'
+import StreamingIndicator from './StreamingIndicator.vue'
 import IIcon from '@/components/IIcon.vue'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
 
@@ -246,6 +247,12 @@ const runningStep = computed(() =>
 // 是否显示 loading 状态
 const showLoading = computed(() =>
   props.isLoading && runningStep.value?.status === 'running'
+)
+
+// 步骤全部完成但仍在等待模型生成（gap: 最后一步 done → 正文流式到达前）
+// 此时无 running step，showLoading=false，但 isLoading 仍为 true
+const allStepsDone = computed(() =>
+  props.isLoading && steps.value.length > 0 && !runningStep.value
 )
 
 // 工具图标获取
@@ -761,6 +768,9 @@ function getFetchDomain(url: string): string {
         <MarkdownContent :content="lastReasoningStep.content || ''" />
       </div>
     </template>
+
+    <!-- 步骤已完成但模型仍在生成（消除 tool→text 间的加载指示器空白期） -->
+    <StreamingIndicator :visible="allStepsDone" />
   </div>
 </template>
 

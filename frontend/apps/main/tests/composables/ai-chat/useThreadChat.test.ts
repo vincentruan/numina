@@ -3,7 +3,7 @@ import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 
 // Mock dependencies
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh-CN' } }),
 }))
 
 vi.mock('@/api/ai-chat', () => ({

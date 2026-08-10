@@ -499,7 +499,7 @@ export interface UseThreadChatOptions {
 }
 
 export function useThreadChat(options: UseThreadChatOptions = {}) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { handleTaskEvent } = useUpdateSubtask()
   const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
@@ -1138,9 +1138,15 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
           if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
         }
+        // Prepend language directive so the backend LLM responds in the
+        // user's UI language (SKILL.md: output language is controlled by user
+        // message, not system prompt). Default to English for any non-zh locale.
+        const langPrefix = (locale.value ?? '').startsWith('zh')
+          ? '[语言要求] 输出语言：中文。\n'
+          : '[LANGUAGE REQUIREMENT] Output language: English.\n'
         const inputMessage: Record<string, unknown> = {
           role: 'user',
-          content: text,
+          content: `${langPrefix}${text}`,
         }
         const mergedKwargs: Record<string, unknown> = { ...additionalKwargs }
         if (files && files.length > 0) {
