@@ -182,17 +182,19 @@ watch(
 
 async function maybeShowOnboarding() {
   if (router.currentRoute.value.path !== '/') return
-  if (!userConfig) {
-    try {
-      const res = await getUserConfig()
-      userConfig = res.data
-    } catch {
-      return
-    }
+  // Always re-fetch — KeepAlive caches `userConfig` across navigation,
+  // so after a reset the stale value (version=N) would block the guide.
+  let config: UserConfigValues
+  try {
+    const res = await getUserConfig()
+    config = res.data
+    userConfig = config
+  } catch {
+    return
   }
-  const { shouldShow } = shouldShowGuide(userConfig, GUIDE_VERSION)
+  const { shouldShow } = shouldShowGuide(config, GUIDE_VERSION)
   if (!shouldShow) return
-  await recordGuideAttempt(userConfig)
+  await recordGuideAttempt(config)
   recordGuideShown()
   guide.start()
 }

@@ -47,7 +47,11 @@ export async function recordGuideCompletion(config: UserConfigValues, version: n
 }
 
 export async function resetGuideState(): Promise<void> {
-  localStorage.removeItem(LAST_SHOWN_KEY)
+  // Clear all guide-related localStorage keys (includes step-guide completion
+  // markers like 'guide_main-onboarding-v2' that useStepGuide.start() checks).
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('guide_'))
+    .forEach(k => localStorage.removeItem(k))
   await updateUserConfig({
     onboarding_guide_version: 0,
     onboarding_attempts: 0,
