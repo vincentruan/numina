@@ -39,6 +39,8 @@
   "FAMILY_MEMBER_NOT_FOUND": "Member not found",
   "FAMILY_NO_ACTIVE_MEMBERS": "No active members in this family",
   "FAMILY_MEMBER_LIMIT_EXCEEDED": "Family member limit reached (maximum 50 members)",
+  "SHARE_LINK_NOT_CONFIGURED": "Share feature is not available",
+  "SHARE_LINK_CREATION_FAILED": "Failed to create share link, please try again later",
   "FILE_NOT_FOUND": "File not found",
   "FILE_PATH_INVALID": "Invalid file path",
   "FILE_SIZE_EXCEEDED": "File size exceeds the limit (max 5MB)",

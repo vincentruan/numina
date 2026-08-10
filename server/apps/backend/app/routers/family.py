@@ -66,6 +66,8 @@ def get_family(
         .first()
     )
     creator_code = invitation_record.code if invitation_record else None
+    from packages.core.settings import settings
+    share_link_enabled = bool(settings.SHORTIO_API_KEY and settings.SHORTIO_DOMAIN)
     return FamilyResponse(
         id=family.id,
         name=family.name,
@@ -74,6 +76,7 @@ def get_family(
         creator_code=creator_code,
         created_by=family.created_by,
         members=[UserResponse.model_validate(m) for m in members],
+        share_link_enabled=share_link_enabled,
     )
 
 
@@ -91,6 +94,8 @@ def update_family_title(
         .first()
     )
     creator_code = invitation_record.code if invitation_record else None
+    from packages.core.settings import settings
+    share_link_enabled = bool(settings.SHORTIO_API_KEY and settings.SHORTIO_DOMAIN)
     return FamilyResponse(
         id=family.id,
         name=family.name,
@@ -99,6 +104,7 @@ def update_family_title(
         creator_code=creator_code,
         created_by=family.created_by,
         members=[UserResponse.model_validate(m) for m in members],
+        share_link_enabled=share_link_enabled,
     )
 
 
@@ -273,6 +279,71 @@ def regenerate_invite_code(
     _check_invite_code_rate_limit(str(user.id))
     family = family_service.regenerate_invite_code(db, user)
     return {"invite_code": family.invite_code}
+
+
+@router.post("/share-link")
+async def create_share_link(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Generate a short.io share link for the family invite code."""
+    from short_io_api_client import AuthenticatedClient
+    from short_io_api_client.api.link_management import post_links
+    from short_io_api_client.models import PostLinksBody
+
+    from packages.core.settings import settings
+
+    if not settings.SHORTIO_API_KEY or not settings.SHORTIO_DOMAIN:
+        raise AppError(ErrorCode.SHARE_LINK_NOT_CONFIGURED)
+
+    family = db.query(Family).filter(Family.id == user.family_id).first()
+    if not family:
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
+
+    # Derive the public base URL from CORS_ORIGINS (first entry, typically the production domain)
+    base_url = ""
+    if settings.CORS_ORIGINS:
+        import re
+        match = re.match(r"(https?://[^/]+)", settings.CORS_ORIGINS[0])
+        if match:
+            base_url = match.group(1)
+    if not base_url:
+        raise AppError(ErrorCode.SHARE_LINK_NOT_CONFIGURED)
+
+    original_url = f"{base_url}/join-family?code={family.invite_code}"
+
+    client = AuthenticatedClient(
+        base_url="https://api.short.io",
+        token=settings.SHORTIO_API_KEY,
+        prefix="",
+    )
+
+    try:
+        result = await post_links.asyncio(
+            client=client,
+            body=PostLinksBody(
+                original_url=original_url,
+                domain=settings.SHORTIO_DOMAIN,
+            ),
+        )
+    except Exception as exc:
+        raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED) from exc
+
+    if result is None:
+        raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED)
+
+    # The auto-generated response model stores most fields in additional_properties
+    short_url = None
+    if hasattr(result, "additional_properties"):
+        short_url = (
+            result.additional_properties.get("shortURL")
+            or result.additional_properties.get("secureShortURL")
+        )
+
+    if not short_url:
+        raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED)
+
+    return {"short_url": short_url}
 
 
 @router.post("/snapshots/generate")

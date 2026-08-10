@@ -82,8 +82,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -92,6 +92,7 @@ import AltchaWidget from '@/components/common/AltchaWidget.vue'
 const { t } = useI18n()
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const loading = ref(false)
 const confirmPassword = ref('')
@@ -111,6 +112,14 @@ const form = ref({
 function formatInviteCode(value: string): string {
   return value.toUpperCase()
 }
+
+// Pre-fill invite code from share link (?code=XXXXXX)
+onMounted(() => {
+  const code = route.query.code
+  if (typeof code === 'string' && code.length > 0) {
+    form.value.invite_code = code.toUpperCase()
+  }
+})
 
 // Formatter for username (auto-lowercase)
 function formatUsername(value: string): string {

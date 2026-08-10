@@ -23,6 +23,10 @@ export function regenerateInviteCode() {
   return http.post<{ invite_code: string }>('/family/invite-code')
 }
 
+export function createShareLink() {
+  return http.post<{ short_url: string }>('/family/share-link')
+}
+
 export function updateMemberRole(userId: string, role: 'owner' | 'member') {
   return http.patch(`/family/members/${userId}/role`, { role })
 }

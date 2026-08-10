@@ -2805,6 +2805,7 @@ dependencies = [
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
+    { name = "short-io-api-client" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "webauthn" },
@@ -2908,6 +2909,7 @@ requires-dist = [
     { name = "pyyaml", marker = "extra == 'agent'", specifier = ">=6.0.3" },
     { name = "pyyaml", marker = "extra == 'backend'", specifier = ">=6.0.0" },
     { name = "redis", marker = "extra == 'backend'", specifier = ">=5.0.0" },
+    { name = "short-io-api-client", specifier = ">=1.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "user-agents", marker = "extra == 'backend'", specifier = ">=2.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
@@ -4476,6 +4478,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4f/db/cfac1baf10650ab4d1c111714410d2fbb77ac5a616db26775db562c8fab2/setuptools-82.0.1.tar.gz", hash = "sha256:7d872682c5d01cfde07da7bccc7b65469d3dca203318515ada1de5eda35efbf9", size = 1152316, upload-time = "2026-03-09T12:47:17.221Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl", hash = "sha256:a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", size = 1006223, upload-time = "2026-03-09T12:47:15.026Z" },
+]
+
+[[package]]
+name = "short-io-api-client"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "httpx" },
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1c/2e/d82360f3cb564a79322d46f815338f4657c8ba42b5a2402c739453f34b42/short_io_api_client-1.0.0.tar.gz", hash = "sha256:d3311f683fee5e9b9461c3bccd35922c231983a727f1f78feffc674c8e1a318b", size = 71014, upload-time = "2026-01-26T20:43:01.237Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/7a/a294ce3d395eec67bb3e45235058c3bea91c678b169df7014a353f501c12/short_io_api_client-1.0.0-py3-none-any.whl", hash = "sha256:4a717b892ad4eef0f11136b8dd03c5417851dde5c9bf87b4d9883ef465761ee7", size = 249176, upload-time = "2026-01-26T20:42:59.73Z" },
 ]
 
 [[package]]

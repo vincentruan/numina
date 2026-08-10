@@ -12,6 +12,7 @@ class FamilyResponse(SnowflakeBase):
     creator_code: str | None = None
     created_by: int
     members: list[UserResponse] = []
+    share_link_enabled: bool = False
 
 class UpdateFamilyTitleRequest(BaseModel):
     custom_title: str | None

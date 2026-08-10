@@ -9,6 +9,7 @@ export interface Family {
   creator_code?: string
   created_by: string
   members: _AuthUser[]
+  share_link_enabled?: boolean
 }
 
 export interface Category {

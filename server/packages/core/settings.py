@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     AI_ENCRYPTION_KEY: str = ""
     AGENT_BASE_URL: str = "http://agent:8001"
 
+    # Short.io URL shortener (for invite-code share links)
+    SHORTIO_API_KEY: str = ""  # e.g. sk_...
+    SHORTIO_DOMAIN: str = ""  # e.g. numina.xiaoshutiao.space
+
     # Backend external URL (for constructing internal MCP SSE endpoint URLs)
     BACKEND_BASE_URL: str = "http://localhost:8000"
 

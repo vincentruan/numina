@@ -10,6 +10,12 @@
           <van-cell :title="t('family.inviteCode')" :value="familyStore.family.invite_code" is-link @click="copyInviteCode">
             <template #right-icon>
               <van-icon name="description" />
+              <van-icon
+                v-if="shareLinkEnabled"
+                name="share-o"
+                class="invite-share-btn"
+                @click.stop="openSharePopup"
+              />
             </template>
           </van-cell>
         </van-cell-group>
@@ -278,6 +284,39 @@
           >{{ t('family.confirmResetPassword') }}</van-button>
         </van-popup>
 
+        <!-- Share invite link popup -->
+        <van-popup v-model:show="sharePopupVisible" position="bottom" round :style="{ padding: '24px 16px 40px' }">
+          <p class="sheet-title">{{ t('family.shareInviteTitle') }}</p>
+          <div class="share-popup-body">
+            <div v-if="shareLoading" class="share-loading">
+              <van-loading size="24" />
+              <span>{{ t('family.shareInviteLoading') }}</span>
+            </div>
+            <template v-else-if="shareShortUrl">
+              <div class="share-qr-wrapper">
+                <img v-if="shareQrDataUrl" :src="shareQrDataUrl" alt="QR Code" class="share-qr-img" />
+              </div>
+              <van-field
+                :model-value="shareShortUrl"
+                readonly
+                :label="t('family.shareInviteLink')"
+                class="share-url-field"
+              />
+              <van-button
+                block
+                type="primary"
+                icon="link-o"
+                style="margin-top: 16px; border-radius: 12px"
+                @click="copyShareLink"
+              >{{ t('family.shareInviteCopyLink') }}</van-button>
+            </template>
+            <div v-else class="share-error">
+              <span>{{ t('family.shareInviteFailed') }}</span>
+              <van-button size="small" plain type="primary" @click="openSharePopup">{{ t('common.retry') || '重试' }}</van-button>
+            </div>
+          </div>
+        </van-popup>
+
 
       </template>
 
@@ -293,13 +332,14 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemberPassword, updateMemberStatus, type ChoreStats } from '@/api/family'
+import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemberPassword, updateMemberStatus, createShareLink, type ChoreStats } from '@/api/family'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useMemberNotify } from '@/composables/useMemberNotify'
 import { copyToClipboard } from '@/utils/ai-chat/tableUtils'
+import QRCode from 'qrcode'
 
 const { t } = useI18n()
 
@@ -401,6 +441,43 @@ async function copyInviteCode() {
     } else {
       showSuccessToast(t('toast.newInviteCode', { code }))
     }
+  }
+}
+
+// Share invite link (controlled by backend config — SHORTIO_API_KEY + SHORTIO_DOMAIN)
+const shareLinkEnabled = computed(() =>
+  familyStore.family?.share_link_enabled === true,
+)
+const sharePopupVisible = ref(false)
+const shareShortUrl = ref('')
+const shareQrDataUrl = ref('')
+const shareLoading = ref(false)
+
+async function openSharePopup() {
+  sharePopupVisible.value = true
+  shareShortUrl.value = ''
+  shareQrDataUrl.value = ''
+  shareLoading.value = true
+  try {
+    const res = await createShareLink()
+    shareShortUrl.value = res.data.short_url
+    shareQrDataUrl.value = await QRCode.toDataURL(res.data.short_url, {
+      width: 220,
+      margin: 1,
+      color: { dark: '#333333', light: '#ffffff' },
+    })
+  } catch {
+    shareShortUrl.value = ''
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+async function copyShareLink() {
+  if (!shareShortUrl.value) return
+  const ok = await copyToClipboard(shareShortUrl.value)
+  if (ok) {
+    showSuccessToast(t('family.shareInviteLinkCopied'))
   }
 }
 
@@ -913,6 +990,64 @@ onActivated(async () => {
 .color-swatch.selected {
   border-color: #333;
   transform: scale(1.15);
+}
+
+.invite-share-btn {
+  margin-left: 16px;
+  color: var(--van-primary-color);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.share-popup-body {
+  min-height: 120px;
+}
+
+.share-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.share-qr-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+.share-qr-img {
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .share-qr-img {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.share-url-field {
+  margin-top: 8px;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+[data-theme='dark'] .share-url-field {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.share-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 </style>
