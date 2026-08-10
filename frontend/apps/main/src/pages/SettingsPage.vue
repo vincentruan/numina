@@ -264,7 +264,35 @@
         :model-value="[authStore.user?.language || 'zh-CN']"
         @confirm="onLanguageConfirm"
         @cancel="showLanguagePicker = false"
-      />
+      >
+        <template #option="{ text, value }">
+          <div class="lang-option">
+            <!-- Chinese flag -->
+            <svg v-if="value === 'zh-CN'" class="lang-flag" width="22" height="16" viewBox="0 0 30 20">
+              <rect width="30" height="20" rx="2" fill="#DE2910" />
+              <polygon points="5,3 5.9,5.8 8.5,4.2 6.5,6.5 9,8 5.8,7.5 5,10.5 4.2,7.5 1,8 3.5,6.5 1.5,4.2 4.1,5.8" fill="#FFDE00" />
+            </svg>
+            <!-- US flag -->
+            <svg v-else class="lang-flag" width="22" height="16" viewBox="0 0 30 20">
+              <rect width="30" height="20" rx="2" fill="#B22234" />
+              <rect y="3" width="30" height="2" fill="#fff" />
+              <rect y="7" width="30" height="2" fill="#fff" />
+              <rect y="11" width="30" height="2" fill="#fff" />
+              <rect y="15" width="30" height="2" fill="#fff" />
+              <rect width="12" height="10" fill="#3C3B6E" />
+              <circle cx="3" cy="2.5" r="0.7" fill="#fff" />
+              <circle cx="6" cy="2.5" r="0.7" fill="#fff" />
+              <circle cx="9" cy="2.5" r="0.7" fill="#fff" />
+              <circle cx="4.5" cy="5" r="0.7" fill="#fff" />
+              <circle cx="7.5" cy="5" r="0.7" fill="#fff" />
+              <circle cx="3" cy="7.5" r="0.7" fill="#fff" />
+              <circle cx="6" cy="7.5" r="0.7" fill="#fff" />
+              <circle cx="9" cy="7.5" r="0.7" fill="#fff" />
+            </svg>
+            <span>{{ text }}</span>
+          </div>
+        </template>
+      </van-picker>
     </van-popup>
 
     <!-- Currency Picker -->
@@ -742,6 +770,16 @@ async function onLogout() {
 .theme-option-icon {
   flex-shrink: 0;
   color: var(--van-text-color, var(--van-gray-8));
+}
+.lang-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lang-flag {
+  flex-shrink: 0;
+  border-radius: 2px;
+  overflow: hidden;
 }
 .cell-icon {
   margin-right: 4px;

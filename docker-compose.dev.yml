@@ -14,7 +14,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
+      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
       - SECRET_KEY=${SECRET_KEY:-}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -37,6 +37,8 @@ services:
       dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
@@ -49,6 +51,8 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - NUMINA_PROJECT_ROOT=/app
+      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DEERFLOW_DB_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina_deerflow
     command: uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent
     depends_on:
       backend:
@@ -75,7 +79,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
+      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
       - SECRET_KEY=${SECRET_KEY:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
