@@ -98,44 +98,50 @@ launch_tmux() {
     tmux select-pane -t "$SESSION:0.4" -T "backend :8000"
     tmux send-keys -t "$SESSION:0.4" \
         "echo '═══ backend :8000 ═══'" Enter \
-        "uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000" Enter
+        "cd '$server_dir' && uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000" Enter
 
     # Pane 3 (top-center) — agent :8001
     tmux select-pane -t "$SESSION:0.3" -T "agent :8001"
     tmux send-keys -t "$SESSION:0.3" \
         "echo '═══ agent :8001 ═══'" Enter \
-        "uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001" Enter
+        "cd '$server_dir' && uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001" Enter
 
     # Pane 0 (top-left) — worker :8002
     tmux select-pane -t "$SESSION:0.0" -T "worker :8002"
     tmux send-keys -t "$SESSION:0.0" \
         "echo '═══ worker :8002 ═══'" Enter \
-        "uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002" Enter
+        "cd '$server_dir' && uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002" Enter
 
     # Pane 2 (bottom-left) — frontend :5173
     tmux select-pane -t "$SESSION:0.2" -T "frontend :5173"
     tmux send-keys -t "$SESSION:0.2" \
         "echo '═══ frontend :5173 ═══'" Enter \
-        "pnpm dev --host 0.0.0.0" Enter
+        "cd '$main_dir' && pnpm dev --host 0.0.0.0" Enter
 
     # Pane 1 (bottom-right) — child :5174
     tmux select-pane -t "$SESSION:0.1" -T "child :5174"
     tmux send-keys -t "$SESSION:0.1" \
         "echo '═══ child :5174 ═══'" Enter \
-        "pnpm dev --host 0.0.0.0" Enter
+        "cd '$child_dir' && pnpm dev --host 0.0.0.0" Enter
 
     # Select backend pane (top-right)
     tmux select-pane -t "$SESSION:0.4"
 
-    # Attach (foreground — Ctrl-C kills all services)
+    # Attach / keep-alive
+    # Trap kills session on SIGINT/SIGTERM (Ctrl-C or external kill)
+    trap 'tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
+
     if [ -n "${TMUX:-}" ]; then
-        # Inside existing tmux → switch; keep script alive for trap
-        tmux switch-client -t "$SESSION"
-        trap 'tmux kill-session -t "$SESSION" 2>/dev/null || true' EXIT
-        echo "[numina-dev] 在 tmux 中运行。Ctrl-D 退出或 :detach 分离。"
-        echo "  另一个终端: make stop-dev-all 停止全部"
-        wait
+        # Inside existing tmux → try to switch; keep script alive
+        if tmux switch-client -t "$SESSION" 2>/dev/null; then
+            echo "[numina-dev] 在 tmux 中运行。Ctrl-D 退出或 :detach 分离。"
+        else
+            echo "[numina-dev] session 已创建。运行 tmux attach -t $SESSION 连接。"
+        fi
+        echo "  停止: make stop-dev-all"
+        sleep 3600 & wait $!
     else
+        # Outside tmux → exec replaces shell; tmux owns signal handling
         exec tmux attach-session -t "$SESSION"
     fi
 }
