@@ -573,7 +573,7 @@ async function handleBranch(messageId: string, messageIds: string[]) {
 function branchCloneWarnKey(mode?: WorkspaceCloneMode): string | undefined {
   switch (mode) {
     case 'skipped_historical_turn': return 'aiChat.branchCloneSkippedHistorical'
-    case 'not_found': return 'aiChat.branchCloneNotFound'
+    case 'not_found': return undefined
     case 'failed': return 'aiChat.branchCloneFailed'
     default: return undefined
   }

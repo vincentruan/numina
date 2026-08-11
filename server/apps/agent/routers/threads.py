@@ -526,6 +526,14 @@ def _copy_branch_sandbox_sync(
     # DeerFlow layout: {DEER_FLOW_HOME}/users/{family_id}/threads/{tid}/
     source = Path(paths.host_thread_dir(source_thread_id, user_id=family_id))
     target = Path(paths.host_thread_dir(target_thread_id, user_id=family_id))
+    logger.info(
+        "[branch-sandbox] base_dir=%s source=%s exists=%s family_id=%s thread_id=%s",
+        paths.base_dir,
+        source,
+        source.exists(),
+        family_id,
+        source_thread_id,
+    )
     if not source.exists():
         return "not_found"
     if target.exists():
