@@ -164,12 +164,15 @@ make deploy
 
 ## 域名与 HTTPS
 
-### 方案一：Cloudflare 代理（推荐）
+### 方案一：Cloudflare 代理 + 源站 Origin 证书（推荐）
 
 1. 将域名 DNS 托管到 Cloudflare
-2. 添加 A 记录指向服务器 IP（代理状态：已代理）
-3. SSL/TLS 加密模式设为 **Flexible**
-4. 编辑 `.env`，更新 `CORS_ORIGINS`：
+2. 添加 A 记录指向服务器 IP（代理状态：已代理 / Proxied）
+3. 在 Cloudflare 控制台生成源站证书（**SSL/TLS -> Origin Server -> Create Certificate**）：
+   - 下载证书并保存为 `.numina/data/secrets/origin.crt`
+   - 下载私钥并保存为 `.numina/data/secrets/origin.key`
+4. SSL/TLS 加密模式设为 **Full (strict)**（源站配置 443 SSL 证书）
+5. 编辑 `.env`，更新 `CORS_ORIGINS`：
    ```
    CORS_ORIGINS=["https://numina.example.com"]
    ```

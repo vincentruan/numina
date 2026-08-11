@@ -220,3 +220,5 @@ logs/page-agent-e2e/run.log
 reports/page-agent-e2e/*.json
 reports/page-agent-e2e/*.md
 scripts/page-agent-e2e/.env
+
+.deployment/
