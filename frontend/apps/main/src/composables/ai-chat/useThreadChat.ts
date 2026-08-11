@@ -183,25 +183,63 @@ function parseArgs(args: string | object): Record<string, unknown> {
  * Recover the user's original input text from a backend-stored human message.
  *
  * The agent adapter (server/apps/agent/services/deerflow_adapter/adapter.py
- * `_build_prompt`) wraps the user message as ``[SKILL:chat]\n{json}`` so the
- * DeerFlow harness knows which skill to dispatch. That wrapper is an internal
- * prompt string — it must never be shown to the user. LangGraph persists it as
- * the human message content and replays it via ``values`` events and thread
- * history, so strip the wrapper here and recover ``free_text`` (the user's
- * original text, PII-redacted) for display. If ``free_text`` is empty/missing
- * (e.g. the wrapper arrived without user text), return an empty string rather
- * than leaking the raw JSON to the UI.
+ * `_build_prompt`) serializes the context as JSON ``{"free_text": ...}``
+ * (previously prefixed with ``[SKILL:chat]``). LangGraph persists this JSON
+ * as the human message content and replays it via ``values`` events and thread
+ * history. Strip the wrapper and recover ``free_text`` for display.
+ *
+ * Also strips ``<user_message>`` XML delimiters (injection-defense wrapping)
+ * and the ``[LANGUAGE REQUIREMENT]`` / ``[语言要求]`` prefix the frontend
+ * prepends for locale routing — neither should ever reach the user.
+ *
+ * If ``free_text`` is empty/missing, return an empty string rather than
+ * leaking the raw JSON to the UI.
  */
-function unwrapSkillPrompt(content: string): string {
-  const match = content.match(/^\[SKILL:[^\]]+\]\s*\n?([\s\S]*)$/)
-  if (!match) return content
+/** @internal Exported for unit testing. */
+export function unwrapSkillPrompt(content: string): string {
+  // Legacy format: ``[SKILL:chat]\n{json}`` — kept for backward compat with
+  // sessions created before the prefix was removed.
+  const skillMatch = content.match(/^\[SKILL:[^\]]+\]\s*\n?([\s\S]*)$/)
+  const jsonText = skillMatch ? skillMatch[1] : content
+
+  let parsed: { free_text?: unknown } | null = null
   try {
-    const ctx = JSON.parse(match[1]) as { free_text?: unknown }
-    if (typeof ctx.free_text === 'string' && ctx.free_text.length > 0) {
-      return ctx.free_text
+    const obj = JSON.parse(jsonText)
+    if (obj && typeof obj === 'object' && 'free_text' in obj) {
+      parsed = obj
     }
-  } catch { /* not valid JSON — fall through to empty */ }
-  return ''
+  } catch {
+    // Not JSON — if the legacy regex matched but the body isn't valid JSON,
+    // the content is a wrapper without usable text → return ''.
+    if (skillMatch) return ''
+    // No prefix and not JSON → plain user text, return as-is.
+    return content
+  }
+
+  if (!parsed || typeof parsed.free_text !== 'string' || parsed.free_text.length === 0) {
+    return ''
+  }
+
+  let text = parsed.free_text
+  // Strip <user_message> XML delimiters (prompt-injection defense wrapping).
+  text = text.replace(/^<user_message>\s*/, '').replace(/\s*<\/user_message>$/, '')
+  // Strip language-instruction prefix the frontend prepends for locale routing.
+  text = stripLanguagePrefix(text)
+  return text
+}
+
+/** @internal Exported for unit testing. */
+export function stripLanguagePrefix(text: string): string {
+  const prefixes = [
+    '[LANGUAGE REQUIREMENT] Output language: English.',
+    '[语言要求] 输出语言：中文。',
+  ]
+  for (const prefix of prefixes) {
+    if (text.startsWith(prefix)) {
+      return text.slice(prefix.length).replace(/^[\n\r]+/, '').trimStart()
+    }
+  }
+  return text
 }
 
 // ---------------------------------------------------------------------------

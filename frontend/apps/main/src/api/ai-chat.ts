@@ -85,10 +85,12 @@ interface ThreadApiResponse {
 function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
   const metadataTitle = (r.metadata?.title as string) || ''
   const valuesTitle = (r.values?.title as string) || ''
-  // values.title is the raw [SKILL:chat] prompt wrapper on the sync stream
-  // path (sync after_model fallback) - never display it as a title.
+  // values.title may be the raw prompt wrapper (legacy ``[SKILL:chat]`` prefix
+  // or bare ``{"free_text":...}`` JSON) — never display it as a title.
+  const isWrapper = valuesTitle.startsWith('[SKILL:')
+    || valuesTitle.startsWith('{')
   const title = metadataTitle
-    || (valuesTitle && !valuesTitle.startsWith('[SKILL:') ? valuesTitle : '')
+    || (valuesTitle && !isWrapper ? valuesTitle : '')
   return {
     thread_id: r.thread_id,
     title,

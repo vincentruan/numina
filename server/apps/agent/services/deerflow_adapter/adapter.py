@@ -790,7 +790,12 @@ class DeerFlowAdapter:
         (system, instruction, override, etc.) is handled by DeerFlow's
         ``InputSanitizationMiddleware`` at the LangGraph message level.
         """
-        ctx_dict = context.model_dump(exclude={"redaction_log"}, exclude_defaults=True)
+        ctx_dict = context.model_dump(exclude={"redaction_log", "family_id"}, exclude_defaults=True)
+        # family_id is excluded from the serialized prompt for security: the
+        # JSON becomes the HumanMessage.content persisted in checkpoints, and
+        # user-facing history display could expose it. MCP tools already receive
+        # family_id via the sandbox ContextVar (caller-bound principal), so the
+        # LLM does not need it in the user message.
         # Wrap user free_text in <user_message> XML delimiters so the LLM treats
         # it as untrusted data (defense against prompt injection).
         if "free_text" in ctx_dict and ctx_dict["free_text"]:
