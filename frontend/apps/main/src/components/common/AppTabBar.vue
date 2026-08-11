@@ -31,7 +31,7 @@ const activeTab = computed(() => {
   const path = route.path
   if (path === '/ai' || path.startsWith('/ai/')) return 'ai'
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings'
-  if (path === '/family' || path.startsWith('/family/')) return 'settings'
+  // /family/* now lives under /settings/family/* — covered by the /settings check above.
   if (path === '/baby' || path.startsWith('/baby/')) return 'baby'
   if (path.startsWith('/blind-box/')) return 'baby'
   if (path === '/chore-approvals') return 'baby'

@@ -74,7 +74,7 @@
       :title="t('settings.familyManagement')"
       class="section"
     >
-      <van-cell :title="t('settings.familyMembers')" icon="friends-o" is-link to="/family" />
+      <van-cell :title="t('settings.familyMembers')" icon="friends-o" is-link to="/settings/family/members" />
       <van-cell
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.familyAdvancedConfig')"
@@ -176,7 +176,7 @@
           >{{ aiStatusLabel(aiSystemStatus) }}</span>
         </template>
       </van-cell>
-      <van-cell :title="t('settings.chatHistory')" is-link to="/ai/chat/history">
+      <van-cell :title="t('settings.chatHistory')" is-link to="/settings/ai/chat-history">
         <template #icon>
           <SvgIcon name="documentation" :size="16" class="cell-icon" />
         </template>

@@ -187,14 +187,13 @@ const router = createRouter({
           component: () => import('@/pages/BlindBoxConfigPage.vue')
         },
         {
+          // Migrated under /settings/family/members — old path redirects for backward compat.
           path: 'family',
-          name: 'Family',
-          component: () => import('@/pages/FamilyPage.vue')
+          redirect: '/settings/family/members',
         },
         {
           path: 'family/children/:childId/reset',
-          name: 'ChildReset',
-          component: () => import('@/pages/ChildResetPage.vue')
+          redirect: (to) => `/settings/family/children/${to.params.childId}/reset`,
         },
         {
           path: 'baby',
@@ -333,9 +332,24 @@ const router = createRouter({
           component: () => import('@/pages/ManifestoSettingsPage.vue'),
         },
         {
+          path: 'settings/family/members',
+          name: 'Family',
+          component: () => import('@/pages/FamilyPage.vue'),
+        },
+        {
+          path: 'settings/family/children/:childId/reset',
+          name: 'ChildReset',
+          component: () => import('@/pages/ChildResetPage.vue'),
+        },
+        {
           path: 'settings/family/storage',
           name: 'FamilyStorageBackend',
           component: () => import('@/pages/FamilyStorageBackendPage.vue'),
+        },
+        {
+          path: 'settings/ai/chat-history',
+          name: 'ChatHistory',
+          component: () => import('@/pages/ChatHistoryPage.vue'),
         },
         {
           path: 'settings/user/config',
@@ -348,9 +362,9 @@ const router = createRouter({
           component: () => import('@/pages/AIReportPage.vue')
         },
         {
+          // Migrated under /settings/ai/chat-history — old path redirects for backward compat.
           path: 'ai/chat/history',
-          name: 'ChatHistory',
-          component: () => import('@/pages/ChatHistoryPage.vue')
+          redirect: '/settings/ai/chat-history',
         },
         {
           path: 'ai/chat',

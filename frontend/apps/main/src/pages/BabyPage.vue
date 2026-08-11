@@ -10,7 +10,7 @@
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <!-- No Children State -->
       <EmptyState v-if="childMembers.length === 0" :description="t('baby.noChildren')">
-        <van-button type="primary" size="small" @click="$router.push('/family')">
+        <van-button type="primary" size="small" @click="$router.push('/settings/family/members')">
           {{ t('baby.addChildren') }}
         </van-button>
       </EmptyState>
