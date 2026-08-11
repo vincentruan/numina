@@ -343,6 +343,10 @@ async def create_share_link(
     if not short_url:
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED)
 
+    # Force HTTPS — our domain uses Cloudflare SSL, Short.io may return http://
+    if short_url.startswith("http://"):
+        short_url = "https://" + short_url[7:]
+
     return {"short_url": short_url}
 
 
