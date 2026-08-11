@@ -642,8 +642,10 @@ shell:
 	@$(COMPOSE) exec backend bash
 
 # Production compose (docker-compose.production.yml)
+# Pulls GHCR images — never builds locally. See SKILL: deploy-production.
 up-prod:
-	@$(COMPOSE) -f docker-compose.production.yml up -d --build
+	@$(COMPOSE) -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child
+	@$(COMPOSE) -f docker-compose.production.yml up -d
 
 down-prod:
 	@$(COMPOSE) -f docker-compose.production.yml down
@@ -699,17 +701,17 @@ deploy-images: setup-data setup-env
 		echo "FRONTEND_CHILD_IMAGE=ghcr.io/vincentruan/numina/frontend-child:latest" >> .env; \
 		echo "✓ 已写入 .env (如需自定义镜像地址，请编辑 .env 中的 *_IMAGE 变量)"; \
 	fi
-	@echo "拉取预构建镜像..."
-	@$(COMPOSE) pull backend agent scheduler_worker frontend-main frontend-child
+	@echo "拉取预构建镜像 (GHCR)..."
+	@$(COMPOSE) -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child
 	@echo "重启服务..."
-	@$(COMPOSE) down --remove-orphans 2>/dev/null || true
-	@$(COMPOSE) up -d --no-deps backend agent scheduler_worker frontend-main frontend-child nginx
+	@$(COMPOSE) -f docker-compose.production.yml down --remove-orphans 2>/dev/null || true
+	@$(COMPOSE) -f docker-compose.production.yml up -d --no-deps backend agent scheduler_worker frontend-main frontend-child nginx
 	@echo "等待服务启动..."
 	@for i in $$(seq 1 30); do \
-		if $(COMPOSE) ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
+		if $(COMPOSE) -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy"; then break; fi; \
 		sleep 2; \
 	done
-	@$(COMPOSE) ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend 启动超时"; exit 1; }
+	@$(COMPOSE) -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend 启动超时"; exit 1; }
 	@echo "验证 API 健康检查..."
 	@curl -sf http://localhost/api/health >/dev/null || { echo "✗ API 健康检查失败"; exit 1; }
 	@echo ""
@@ -717,9 +719,9 @@ deploy-images: setup-data setup-env
 	@echo "   Numina 预构建镜像部署完成"
 	@echo "========================================"
 	@echo ""
-	@$(COMPOSE) ps
+	@$(COMPOSE) -f docker-compose.production.yml ps
 	@echo ""
-	@echo "访问地址: http://localhost"
+	@echo "访问地址: https://localhost (HTTPS) / http://localhost (HTTP)"
 	@echo ""
 
 deploy-dev: setup-data

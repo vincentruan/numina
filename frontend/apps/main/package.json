@@ -23,6 +23,7 @@
     "@numina/auth": "workspace:*",
     "@numina/math": "workspace:*",
     "@types/nprogress": "^0.2.3",
+    "@vant/icons": "^3.0.1",
     "@vant/touch-emulator": "^1.5.0",
     "axios": "^1.13.6",
     "dompurify": "^3.4.1",
