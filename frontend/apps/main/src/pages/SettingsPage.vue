@@ -176,7 +176,7 @@
           >{{ aiStatusLabel(aiSystemStatus) }}</span>
         </template>
       </van-cell>
-      <van-cell :title="t('settings.chatHistory')" is-link to="/settings/ai/chat-history">
+      <van-cell :title="t('settings.chatHistory')" is-link to="/ai/chat/history">
         <template #icon>
           <SvgIcon name="documentation" :size="16" class="cell-icon" />
         </template>

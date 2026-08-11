@@ -83,7 +83,7 @@ help:
 	@echo "  make dev-worker    - 调度 worker :8002"
 	@echo "  make dev-frontend  - 主端 (成人) :5173"
 	@echo "  make dev-child     - 子端       :5174"
-	@echo "  make dev-all       - 同时启动以上 5 个 dev server (Ctrl-C 统一停止)"
+	@echo "  make dev-all       - 同时启动以上 5 个 dev server (tmux 分屏 / 多终端窗口)"
 	@echo "  make stop-dev-all  - 停止以上全部 dev server (按端口查找并终止)"
 	@echo ""
 	@echo "编译 / 构建:"
@@ -442,28 +442,18 @@ dev-child:
 	@cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0
 
 dev-all:
-	@for port in 8000 8001 8002 5173 5174; do \
-	  if lsof -iTCP:$$port -sTCP:LISTEN -P -n >/dev/null 2>&1; then \
-	    echo "✗ 端口 $$port 已被占用:"; \
-	    lsof -iTCP:$$port -sTCP:LISTEN -P -n 2>/dev/null | grep LISTEN; \
-	    echo "请先释放端口再运行 make dev-all"; \
-	    exit 1; \
-	  fi; \
-	done
-	@echo "启动全部 dev server (Ctrl-C 停止)..."
-	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000 & \
-	cd $(SERVER_DIR) && $(UV) run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001 & \
-	cd $(SERVER_DIR) && $(UV) run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002 & \
-	cd $(MAIN_APP) && $(PNPM) dev --host 0.0.0.0 & \
-	cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0 & \
-	trap 'echo; echo "停止全部 dev server..."; kill $$(jobs -p) 2>/dev/null; wait 2>/dev/null; echo "✓ 已全部停止"; exit 0' INT TERM; \
-	wait
+	@bash scripts/dev/dev-all.sh
 
 stop-dev-all:
 	@echo "停止全部 dev server (端口 8000/8001/8002/5173/5174)..."
+	@if command -v tmux >/dev/null 2>&1 && tmux has-session -t numina-dev 2>/dev/null; then \
+	  echo "  终止 tmux session 'numina-dev'..."; \
+	  tmux kill-session -t numina-dev 2>/dev/null || true; \
+	  sleep 1; \
+	fi
 	@bad=0; found=0; \
 	for port in 8000 8001 8002 5173 5174; do \
-	  pid=$$(lsof -tiTCP:$$port -sTCP:LISTEN -P -n 2>/dev/null | head -1); \
+	  pid=$$(lsof -tiTCP:$$port -P -n 2>/dev/null | head -1); \
 	  if [ -z "$$pid" ]; then continue; fi; \
 	  cmdline=$$(ps -p $$pid -o args= 2>/dev/null || echo ""); \
 	  case $$port in \

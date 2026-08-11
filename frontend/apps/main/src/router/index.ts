@@ -347,11 +347,6 @@ const router = createRouter({
           component: () => import('@/pages/FamilyStorageBackendPage.vue'),
         },
         {
-          path: 'settings/ai/chat-history',
-          name: 'ChatHistory',
-          component: () => import('@/pages/ChatHistoryPage.vue'),
-        },
-        {
           path: 'settings/user/config',
           name: 'UserConfig',
           component: () => import('@/pages/UserConfigPage.vue'),
@@ -362,9 +357,9 @@ const router = createRouter({
           component: () => import('@/pages/AIReportPage.vue')
         },
         {
-          // Migrated under /settings/ai/chat-history — old path redirects for backward compat.
           path: 'ai/chat/history',
-          redirect: '/settings/ai/chat-history',
+          name: 'ChatHistory',
+          component: () => import('@/pages/ChatHistoryPage.vue')
         },
         {
           path: 'ai/chat',
