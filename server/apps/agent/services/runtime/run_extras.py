@@ -34,6 +34,31 @@ _TITLE_MAX_WORDS = 6
 _TITLE_MAX_CHARS = 60
 
 
+# Language-instruction prefixes used by the frontend (useThreadChat.ts) and
+# backend runners. Stripped from user-visible outputs (titles, suggestions)
+# so the internal language directive doesn't leak into the UI.
+_LANGUAGE_PREFIXES: tuple[str, ...] = (
+    "[LANGUAGE REQUIREMENT] Output language: English.",
+    "[语言要求] 输出语言：中文。",
+)
+
+
+def strip_language_prefix(text: str) -> str:
+    """Remove a leading language-instruction prefix from *text*.
+
+    The frontend prepends ``[LANGUAGE REQUIREMENT]...`` / ``[语言要求]...`` to
+    every user message so the LLM responds in the correct language. That prefix
+    must stay in the prompt sent to the LLM but must **not** appear in
+    user-facing outputs like the session title or follow-up suggestions.
+    """
+    for prefix in _LANGUAGE_PREFIXES:
+        if text.startswith(prefix):
+            remainder = text[len(prefix):]
+            # Consume leading newlines / whitespace that may follow the prefix.
+            return remainder.lstrip("\n").lstrip()
+    return text
+
+
 def _strip_thinking_from_text(text: str) -> str:
     """Remove ``<think>...</think>`` blocks from text (reasoning model output)."""
     import re
@@ -359,17 +384,24 @@ def _create_lightweight_llm(
     return ChatOpenAI(**kwargs)
 
 
-def _build_title_prompt(user_message: str, ai_response: str) -> tuple[str, str]:
+def _build_title_prompt(
+    user_message: str, ai_response: str, target_language: str = "English"
+) -> tuple[str, str]:
     """Build the LLM title prompt and return the trimmed user message.
 
     Mirrors DeerFlow's default ``TitleConfig.prompt_template`` and strips
     ``<think>...</think>`` blocks from the assistant response before including
     it in the prompt.
+
+    ``target_language`` controls the output language of the generated title so
+    that a Chinese user message with an English locale still produces an
+    English title (LLM handles the cross-language generation natively).
     """
     user_msg = user_message.strip()[:500]
     assistant_msg = _strip_thinking_from_text(ai_response)[:500]
     prompt = (
         f"Generate a concise title (max {_TITLE_MAX_WORDS} words) for this conversation.\n"
+        f"The title MUST be written in {target_language}.\n"
         f"User: {user_msg}\n"
         f"Assistant: {assistant_msg}\n\n"
         "Return ONLY the title, no quotes, no explanation."
@@ -381,6 +413,7 @@ async def _generate_title_via_llm(
     user_message: str,
     ai_response: str,
     ai_config: dict[str, Any],
+    target_language: str = "English",
 ) -> str | None:
     """Generate a concise conversation title via the family's AI provider.
 
@@ -394,7 +427,7 @@ async def _generate_title_via_llm(
         from langchain_core.messages import SystemMessage
 
         llm = _create_lightweight_llm(ai_config, temperature=0.3, max_tokens=60)
-        prompt, _ = _build_title_prompt(user_message, ai_response)
+        prompt, _ = _build_title_prompt(user_message, ai_response, target_language)
 
         system = SystemMessage(content=prompt)
         response = await llm.ainvoke([system])
@@ -432,6 +465,7 @@ async def sync_title_from_checkpoint(
     ai_response: str = "",
     *,
     allow_partial_exchange: bool = False,
+    target_language: str = "English",
 ) -> str | None:
     """Persist a proper conversation title into the ``ai_chat_sessions`` row.
 
@@ -496,7 +530,7 @@ async def sync_title_from_checkpoint(
         # path only wrote a fallback, so we run the async LLM path here.
         generated_title: str | None = None
         if ai_config and user_message:
-            generated_title = await _generate_title_via_llm(user_message, ai_response, ai_config)
+            generated_title = await _generate_title_via_llm(user_message, ai_response, ai_config, target_language)
 
         # 6. Final fallback: truncated user message (NOT the raw [SKILL:chat] wrapper).
         if not generated_title:

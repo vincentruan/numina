@@ -30,7 +30,11 @@ from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
     _prepare_goal_continuation_input,
 )
-from .run_extras import generate_suggestions, sync_title_from_checkpoint
+from .run_extras import (
+    generate_suggestions,
+    strip_language_prefix,
+    sync_title_from_checkpoint,
+)
 from .run_pipeline import _track_task
 from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
@@ -565,6 +569,7 @@ _LANGUAGE_INSTRUCTIONS = {
     ),
 }
 
+
 # Localized synthetic triggers — the slash prefix loads the skill, the rest
 # sets the language tone for the LLM.
 _SYNTHETIC_TRIGGERS_BY_LANG = {
@@ -1051,6 +1056,10 @@ async def _run_numina_agent(
 
     # Extract user message for suggestions and title generation.
     user_message = _extract_backend_user_message(graph_input) or ""
+    # Strip the language-instruction prefix ([LANGUAGE REQUIREMENT] / [语言要求])
+    # for user-facing outputs (title, suggestions). The LLM prompt in DeerFlow
+    # still receives the prefixed version via the checkpoint messages.
+    title_user_message = strip_language_prefix(user_message)
 
     # Determine whether this is a slash-activated skill message. For slash
     # messages, skip set_active_skill so DeerFlow's SkillActivationMiddleware
@@ -1132,7 +1141,7 @@ async def _run_numina_agent(
         # suggestions arrive after `end`, they are silently dropped.
         if p.selected_provider is not None:
             suggestions = await generate_suggestions(
-                p.ai_text, user_message, p.selected_provider
+                p.ai_text, title_user_message, p.selected_provider
             )
             if suggestions:
                 await bridge.publish(
@@ -1150,16 +1159,30 @@ async def _run_numina_agent(
         # ``_ensure_interrupted_title`` pattern).  Interrupted first turns pass
         # ``allow_partial_exchange=True`` so a lone user message still yields a
         # fallback title, matching DeerFlow's behaviour.
-        if p.selected_provider is not None and user_message:
+        if p.selected_provider is not None and title_user_message:
             was_interrupted = record.status == RunStatus.interrupted
+            # Detect target language from the original (unstripped) user message.
+            # If it starts with the English prefix, generate an English title;
+            # otherwise default to Chinese.
+            title_target_language = "Chinese"
+            for _prefix in (
+                "[LANGUAGE REQUIREMENT]",
+                "[语言要求]",
+            ):
+                if user_message.startswith(_prefix):
+                    title_target_language = (
+                        "English" if _prefix == "[LANGUAGE REQUIREMENT]" else "Chinese"
+                    )
+                    break
             task = asyncio.create_task(
                 sync_title_from_checkpoint(
                     thread_id,
                     family_id,
                     ai_config=p.selected_provider,
-                    user_message=user_message,
+                    user_message=title_user_message,
                     ai_response=p.ai_text,
                     allow_partial_exchange=was_interrupted,
+                    target_language=title_target_language,
                 )
             )
             _track_task(task)

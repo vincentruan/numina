@@ -548,10 +548,14 @@ class DeerFlowAdapter:
                     from apps.agent.services.runtime.run_extras import (
                         _is_fallback_title,
                         _text_fallback_title,
+                        strip_language_prefix,
                     )
 
                     if _is_fallback_title(raw_title):
-                        clean = _text_fallback_title(context.free_text or "")
+                        # Strip language prefix so the fallback title shows
+                        # the user's actual message, not the internal directive.
+                        clean_text = strip_language_prefix(context.free_text or "")
+                        clean = _text_fallback_title(clean_text)
                         if clean:
                             event_data = {**event_data, "title": clean}
                 yield ("values", event_data)
