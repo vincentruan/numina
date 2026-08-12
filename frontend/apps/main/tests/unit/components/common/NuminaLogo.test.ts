@@ -93,6 +93,7 @@ describe('NuminaLogo', () => {
     expect(paths.length).toBeGreaterThan(10)
 
     const circles = wrapper.findAll('circle')
-    expect(circles.length).toBe(3) // three family-member dots
+    // 3 visible family-member dots + 3 shimmer-mask flourish dots = 6
+    expect(circles.length).toBe(6)
   })
 })
