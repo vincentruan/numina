@@ -72,7 +72,7 @@ const ids = computed(() => ({
 
       <!-- Shimmer mask: re-renders the logo paths as opaque white shapes so the
            shimmer rect is visible only on the strokes / flourish. -->
-      <mask :id="ids.shimmerMask" maskContentUnits="objectBoundingBox">
+      <mask :id="ids.shimmerMask">
         <!-- N stem + diagonal -->
         <path d="M 4,56 C 4,50 4,30 5,18 C 5.5,14 7,12 9,13 C 11,14 13,17 15,22 C 22,36 28,48 31,54 C 32,57 33,58 34,57 C 35,56 36,40 36,18 C 36,14 37,12 39,12 M 39,12 C 41,11 44,14 45,20" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
         <!-- u -->
@@ -170,8 +170,11 @@ const ids = computed(() => ({
     <circle cx="178" cy="2" r="2" :fill="`url(#${ids.flourishGrad})`" opacity="0.6" :filter="`url(#${ids.logoGlow})`" />
 
     <!-- Shimmer overlay: animated gradient that sweeps left→right across the logo,
-         clipped by the SVG mask so only strokes/flourish glow. -->
-    <rect :mask="`url(#${ids.shimmerMask})`" x="-60" y="-20" width="50" height="100" :fill="`url(#${ids.shimmerGrad})`" class="numina-logo__shimmer" />
+         clipped by the SVG mask so only strokes/flourish glow. Uses SMIL animate
+         instead of CSS animation for reliable SVG support. -->
+    <rect :mask="`url(#${ids.shimmerMask})`" y="-20" width="50" height="100" :fill="`url(#${ids.shimmerGrad})`" class="numina-logo__shimmer">
+      <animate attributeName="x" from="-60" to="310" dur="3s" repeatCount="indefinite" />
+    </rect>
   </svg>
 </template>
 
@@ -190,23 +193,13 @@ const ids = computed(() => ({
   filter: drop-shadow(0 0 1px rgba(1, 1, 32, 0.35));
 }
 
-/* Shimmer sweep animation — light band glides left → right across the logo. */
+/* Shimmer rect: styled but animation handled by SMIL <animate> for SVG compatibility */
 .numina-logo__shimmer {
-  animation: numina-shimmer 3s ease-in-out infinite;
-}
-
-@keyframes numina-shimmer {
-  0% {
-    transform: translateX(-10px);
-  }
-  100% {
-    transform: translateX(360px);
-  }
+  /* SMIL animate element handles x-position animation */
 }
 
 @media (prefers-reduced-motion: reduce) {
   .numina-logo__shimmer {
-    animation: none;
     display: none;
   }
 }
