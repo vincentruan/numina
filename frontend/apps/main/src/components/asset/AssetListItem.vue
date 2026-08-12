@@ -259,6 +259,7 @@ const remainingLabel = computed(() =>
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: linear-gradient(
     115deg,
     transparent 30%,

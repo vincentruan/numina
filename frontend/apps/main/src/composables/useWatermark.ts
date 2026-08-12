@@ -3,8 +3,9 @@ import { ref } from 'vue'
 /**
  * Watermark engine composable for asset logo images.
  *
- * Draws a two-line watermark (userName + "numina" brand) in the bottom-right
- * corner of a canvas. Uses Dancing Script font for the brand line.
+ * Draws two separated elements:
+ *   - "numina" brand in top-left corner (Dancing Script, slanted)
+ *   - userName in bottom-right corner (Dancing Script, smaller)
  */
 export function useWatermark() {
   const isApplying = ref(false)
@@ -49,41 +50,44 @@ export function useWatermark() {
       const width = canvas.width
       const height = canvas.height
 
-      // Font sizes proportional to canvas dimensions (name line uses smaller cursive)
+      // Font sizes proportional to canvas dimensions
       const nameFontSize = Math.max(12, Math.round(height * 0.03))
       const brandFontSize = Math.max(18, Math.round(height * 0.055))
-
-      // Position: bottom-right with padding
       const padding = Math.max(10, Math.round(width * 0.03))
-      const rightX = width - padding
-      const bottomY = height - padding
 
-      // Save context state
+      // Common shadow settings
+      const shadowColor = 'rgba(0, 0, 0, 0.3)'
+      const shadowBlur = 2
+
+      // ── "numina" brand — top-left, slanted ─────────────────────────
+      ctx.save()
+      ctx.globalAlpha = 0.45
+      ctx.textAlign = 'left'
+      ctx.font = `italic ${brandFontSize}px ${brandFontFamily}`
+      ctx.fillStyle = '#ffffff'
+      ctx.shadowColor = shadowColor
+      ctx.shadowBlur = shadowBlur
+      // Slight leftward skew for a dynamic slant
+      ctx.transform(1, 0, -0.25, 1, 0, 0)
+      const brandX = padding
+      const brandY = padding + brandFontSize
+      ctx.fillText('numina', brandX, brandY)
+      ctx.restore()
+
+      // ── userName — bottom-right ────────────────────────────────────
       ctx.save()
       ctx.globalAlpha = 0.45
       ctx.textAlign = 'right'
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
-      ctx.shadowBlur = 2
-      ctx.shadowOffsetX = 1
-      ctx.shadowOffsetY = 1
-
-      // Line 1: userName (Dancing Script cursive, smaller than brand line)
       ctx.font = `${nameFontSize}px ${brandFontFamily}`
       ctx.fillStyle = '#ffffff'
+      ctx.shadowColor = shadowColor
+      ctx.shadowBlur = shadowBlur
+      ctx.shadowOffsetX = 1
+      ctx.shadowOffsetY = 1
       const nameText = userName || ''
-      const brandLineHeight = brandFontSize * 1.2
-      const nameLineY = bottomY - brandLineHeight
-
       if (nameText) {
-        ctx.fillText(nameText, rightX, nameLineY)
+        ctx.fillText(nameText, width - padding, height - padding)
       }
-
-      // Line 2: "numina" brand (Dancing Script)
-      ctx.font = `${brandFontSize}px ${brandFontFamily}`
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText('numina', rightX, bottomY)
-
-      // Restore context state
       ctx.restore()
 
       return canvas
