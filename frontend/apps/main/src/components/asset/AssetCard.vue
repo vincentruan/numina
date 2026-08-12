@@ -180,8 +180,8 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 .asset-mini-card {
   position: relative;
   background: var(--card-bg);
-  border-radius: 16px;
-  padding: 14px;
+  border-radius: 14px;
+  padding: 12px;
   border: 1px solid var(--color-card-border);
   cursor: pointer;
   transition:
@@ -216,8 +216,8 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 .syncing-badge {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   z-index: 10;
 }
 
@@ -226,14 +226,14 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .card-image {
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -262,9 +262,9 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 
 .card-icon {
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -288,8 +288,8 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 .icon-svg {
   position: relative;
   z-index: 1;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   fill: white;
   color: white;
 }
@@ -315,10 +315,10 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 .card-status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background: var(--bg-secondary);
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 3px 8px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 [data-theme='dark'] .card-status {
@@ -326,8 +326,8 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -345,7 +345,7 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 
 .status-text {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   font-weight: 500;
   white-space: nowrap;
@@ -353,10 +353,10 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 
 /* Name */
 .card-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -366,11 +366,11 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 .card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 5px;
+  margin-bottom: 8px;
 }
 .meta-price {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-tertiary);
 }
 .meta-days {
@@ -383,19 +383,38 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 
 /* Daily cost */
 .card-daily {
-  min-height: 24px;
+  min-height: 22px;
   display: flex;
   align-items: flex-end;
 }
 .daily-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.2;
 }
 .daily-unit {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 400;
   color: var(--text-tertiary);
+}
+
+/* Responsive: very narrow screens (< 360px) */
+@media (max-width: 359px) {
+  .card-image,
+  .card-icon {
+    width: 42px;
+    height: 42px;
+  }
+  .icon-svg {
+    width: 20px;
+    height: 20px;
+  }
+  .card-name {
+    font-size: 13px;
+  }
+  .daily-value {
+    font-size: 14px;
+  }
 }
 </style>
