@@ -1,0 +1,14 @@
+{
+  "name": "@numina/assets",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./icons": "./src/icons/index.ts",
+    "./images": "./src/images/index.ts",
+    "./empty-states": "./src/empty-states/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

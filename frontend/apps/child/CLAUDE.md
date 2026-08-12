@@ -64,6 +64,27 @@ src/
 | Secondary text | `#3d3d3d` | `#c0bcb0` | `--color-body` |
 | CTA | `#0a0a0a` | `#e8b94a` | `--color-primary` |
 
+## Shared Assets (`@numina/assets`)
+
+Shared image/icon package — `@numina/assets` — tree-shaken at the module boundary. Only `import`-referenced assets enter the build.
+
+| Category | Subpath | Import kind | Notes |
+|----------|---------|-------------|-------|
+| Shared icons (SVG/PNG) | `@numina/assets/icons` | `?url` → string URL | Cross-app icons only |
+| Shared images | `@numina/assets/images` | `?url` → string URL | PNG, JPG, WebP |
+| Empty-state illustrations | `@numina/assets/empty-states` | `?raw` → string | For `v-html` rendering ✅ already migrated |
+
+### Child-app-local icons
+
+- **`@iconify/vue`** — via `IIcon.vue` wrapper (`@/components/IIcon.vue`)
+- **Empty-states** → migrated to `@numina/assets/empty-states`; import from shared package, not `@/assets/`
+
+### Rules
+
+- New cross-app images → add to `@numina/assets/images/` + named export in `index.ts`
+- Child-only illustrations → prefer `@numina/assets/empty-states` (shared), unless truly child-specific
+- `src/assets/` → avoid new files here; prefer shared package or `public/`
+
 ## Child App 问题排查指南
 
 遇到以下问题时，参考对应的 solution 文档：

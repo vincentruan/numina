@@ -33,7 +33,7 @@ import { usePageLoading } from '@/composables/usePageLoading'
 import { getBadges, type BadgeDimensionData } from '@/api/literacy'
 import BadgeWall from '@/components/literacy/BadgeWall.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import noRecordsSvg from '@/assets/empty-states/no-records.svg?raw'
+import { noRecordsSvg } from '@numina/assets/empty-states'
 
 const { t } = useI18n()
 const { increment, decrement } = usePageLoading()

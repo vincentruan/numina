@@ -302,8 +302,7 @@ import StepGuideOverlay from '@/components/common/StepGuideOverlay.vue'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
 import EmptyState from '@/components/EmptyState.vue'
-import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
-import allDoneSvgRaw from '@/assets/empty-states/all-done.svg?raw'
+import { noTasksSvg as noTasksSvgRaw, allDoneSvg as allDoneSvgRaw } from '@numina/assets/empty-states'
 
 const noTasksSvg = noTasksSvgRaw
 const allDoneSvg = allDoneSvgRaw

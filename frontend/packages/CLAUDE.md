@@ -10,6 +10,7 @@ Code changes here affect both `apps/main` and `apps/child`.
 |---------|---------|----------------|
 | `@numina/auth` | Auth components, stores, axios wiring | Yes |
 | `@numina/math` | Pure math/business-logic functions | No — framework-free |
+| `@numina/assets` | Shared icons, images, empty-state illustrations | No — URL/raw exports |
 
 ## `@numina/auth` Exports
 
@@ -49,6 +50,32 @@ Import from `@numina/math`:
 - **Trust-contract math** — identical results in both apps; changing semantics is breaking
 - **Test-first** — colocated `*.test.ts`, failing test before impl
 - **No framework imports** — `package.json` has no `peerDependencies`
+
+## `@numina/assets` Exports
+
+Subpath exports — each category is tree-shaken independently by Vite. Only imported assets are included in the build.
+
+| Subpath | Import kind | Purpose |
+|---------|-------------|---------|
+| `@numina/assets/icons` | `?url` → string URL | Shared SVG/PNG icons |
+| `@numina/assets/images` | `?url` → string URL | Shared raster images (PNG, JPG) |
+| `@numina/assets/empty-states` | `?raw` → string | Empty-state SVG illustrations (for `v-html`) |
+
+### Assets Usage
+
+```ts
+// URL import → <img :src="iconUrl" />
+import { someIcon } from '@numina/assets/icons'
+
+// Raw SVG → <div v-html="someSvg" />
+import { noTasksSvg } from '@numina/assets/empty-states'
+```
+
+### Assets Key Invariants
+
+- **Tree-shaken** — only referenced assets enter the build; unreferenced ones cost zero
+- **Git LFS** — all binary assets tracked via existing `.gitattributes` rules
+- **No build step** — like auth/math, exports raw TS + Vite `?url`/`?raw` suffixes
 
 ## Links
 
