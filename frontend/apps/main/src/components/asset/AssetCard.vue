@@ -228,12 +228,30 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   margin-right: 12px;
 }
 .card-image {
+  position: relative;
   width: 88px;
   height: 88px;
   border-radius: 10px;
   overflow: hidden;
 }
+.card-image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  animation: icon-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
 .card-image img {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -280,7 +298,8 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .card-icon::before {
+  .card-icon::before,
+  .card-image::before {
     animation: none;
     display: none;
   }
