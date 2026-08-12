@@ -3167,6 +3167,7 @@ export default {
     purchaseLabel: '购入',
     currentLabel: '当前',
     dailyCost: '日均 {cost}',
+    dayUnit: '天',
     selectAriaLabel: '选择 {name}',
     ariaLabel: '{name}, {status}, 当前价值 {value}',
     ariaSyncing: ' (同步中)',

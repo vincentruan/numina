@@ -3313,8 +3313,9 @@ export default {
     daysUsed: '已使用 {days} 天',
     purchaseLabel: '购入',
     currentLabel: '当前',
-    dailyCost: '日均 {cost}',
-    selectAriaLabel: '选择 {name}',
+    dailyCost: 'Daily avg {cost}',
+    dayUnit: 'day',
+    selectAriaLabel: 'Select {name}',
     ariaLabel: '{name}, {status}, 当前价值 {value}',
     ariaSyncing: ' (同步中)'
   },
