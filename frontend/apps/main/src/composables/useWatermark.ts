@@ -34,9 +34,10 @@ export function useWatermark() {
    *
    * @param canvas - The canvas to watermark (typically from cropperjs getCroppedCanvas)
    * @param userName - Display name of the current user
+   * @param operatorLabel - Localized "Operator:" prefix (e.g. t('assetForm.operatorPrefix'))
    * @returns The same canvas with watermark applied
    */
-  async function applyWatermark(canvas: HTMLCanvasElement, userName: string): Promise<HTMLCanvasElement> {
+  async function applyWatermark(canvas: HTMLCanvasElement, userName: string, operatorLabel: string): Promise<HTMLCanvasElement> {
     isApplying.value = true
     try {
       const ctx = canvas.getContext('2d')
@@ -70,7 +71,7 @@ export function useWatermark() {
       // Line 1: userName (system font)
       ctx.font = `${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
       ctx.fillStyle = '#ffffff'
-      const nameText = userName ? `操作人: ${userName}` : ''
+      const nameText = userName ? `${operatorLabel}${userName}` : ''
       const brandLineHeight = brandFontSize * 1.2
       const nameLineY = bottomY - brandLineHeight
 

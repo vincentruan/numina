@@ -311,7 +311,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UploaderAfterRead, FormInstance } from 'vant'
-import { showImagePreview, showConfirmDialog, showToast } from 'vant'
+import { showImagePreview, showConfirmDialog, showLoadingToast, showSuccessToast, showFailToast, showToast } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
@@ -679,21 +679,22 @@ async function onCropperConfirm(canvas: HTMLCanvasElement) {
   try {
     // Apply watermark
     const userName = authStore.user?.display_name || ''
-    await applyWatermark(canvas, userName)
+    const operatorLabel = t('assetForm.operatorPrefix')
+    await applyWatermark(canvas, userName, operatorLabel)
 
     // Convert to Blob
     const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92)
 
     // Upload via existing API
-    showToast({ message: '...', type: 'loading', duration: 0, forbidClick: true })
+    showLoadingToast({ message: t('common.loading'), forbidClick: true, duration: 0 })
     const res = await uploadImage(new File([blob], 'logo.jpg', { type: 'image/jpeg' }))
 
     // Update form and file list
     form.value.image_url = res.data.url
     fileList.value = [{ url: res.data.url, content: res.data.url, status: 'done' }]
-    showToast({ message: t('toast.addSuccess'), type: 'success' })
+    showSuccessToast(t('assetForm.uploadSuccess'))
   } catch {
-    showToast({ message: t('assetForm.watermarkFailed'), type: 'fail' })
+    showFailToast(t('assetForm.watermarkFailed'))
   } finally {
     cropperSource.value = null
   }
