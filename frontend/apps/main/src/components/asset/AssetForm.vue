@@ -9,7 +9,10 @@
         :max-count="1"
         :max-size="5 * 1024 * 1024"
         :after-read="afterRead as UploaderAfterRead"
+        :accept="'image/jpeg,image/png,image/webp'"
         @delete="onDelete"
+        @oversize="onOversize"
+        @click-preview="onClickPreview"
       >
         <template #default>
           <div v-if="!fileList.length" class="image-placeholder">
@@ -18,6 +21,14 @@
           </div>
         </template>
       </van-uploader>
+      <!-- Hidden file input for edit-mode replace -->
+      <input
+        ref="replaceFileInput"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        @change="onReplaceFile"
+      />
     </div>
 
     <!-- P1: Asset type — SegmentedControl -->
@@ -279,12 +290,28 @@
     </div>
     </div>
   </van-form>
+
+  <!-- Logo cropper popup -->
+  <LogoCropper
+    v-model:show="showCropper"
+    :source="cropperSource"
+    @confirm="onCropperConfirm"
+  />
+
+  <!-- Edit-mode logo action sheet -->
+  <van-action-sheet
+    v-model:show="showLogoActionSheet"
+    :actions="logoActions"
+    :cancel-text="t('assetForm.cropCancel')"
+    @select="onLogoActionSelect"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UploaderAfterRead, FormInstance } from 'vant'
+import { showImagePreview, showConfirmDialog, showToast } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
@@ -294,6 +321,8 @@ import { useAuthStore } from '@/stores/auth'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
+import LogoCropper from './LogoCropper.vue'
+import { useWatermark } from '@/composables/useWatermark'
 import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
@@ -440,6 +469,21 @@ function selectCategory(id: string) {
 
 // Image upload state
 const fileList = ref<{ url: string; content?: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
+
+// Logo cropper state
+const { applyWatermark, canvasToBlob } = useWatermark()
+const showCropper = ref(false)
+const cropperSource = ref<File | string | null>(null)
+
+// Edit-mode ActionSheet state
+const showLogoActionSheet = ref(false)
+const replaceFileInput = ref<HTMLInputElement>()
+const logoActions = computed(() => [
+  { name: t('assetForm.actionViewFull'), action: 'view' as const },
+  { name: t('assetForm.actionRecrop'), action: 'recrop' as const },
+  { name: t('assetForm.actionReplace'), action: 'replace' as const },
+  { name: t('assetForm.actionDelete'), action: 'delete' as const, color: '#ee0a24' },
+])
 
 // Tags state
 const availableTags = ref<Tag[]>([])
@@ -622,18 +666,94 @@ function onStatusConfirm({ selectedOptions }: { selectedOptions: { value: string
 }
 
 // Image upload handlers
-async function afterRead(file: { file: File; url?: string; content?: string; status?: string; message?: string }) {
-  file.status = 'uploading'
+// New flow: file → cropper → watermark → upload
+function afterRead(file: { file: File; url?: string; content?: string; status?: string; message?: string }) {
+  // Open cropper with the selected file
+  cropperSource.value = file.file
+  showCropper.value = true
+}
+
+// Called when cropper confirms — applies watermark then uploads
+async function onCropperConfirm(canvas: HTMLCanvasElement) {
+  showCropper.value = false
   try {
-    const res = await uploadImage(file.file)
-    file.status = 'done'
-    file.url = res.data.url
-    file.content = res.data.url
+    // Apply watermark
+    const userName = authStore.user?.display_name || ''
+    await applyWatermark(canvas, userName)
+
+    // Convert to Blob
+    const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92)
+
+    // Upload via existing API
+    showToast({ message: '...', type: 'loading', duration: 0, forbidClick: true })
+    const res = await uploadImage(new File([blob], 'logo.jpg', { type: 'image/jpeg' }))
+
+    // Update form and file list
     form.value.image_url = res.data.url
+    fileList.value = [{ url: res.data.url, content: res.data.url, status: 'done' }]
+    showToast({ message: t('toast.addSuccess'), type: 'success' })
   } catch {
-    file.status = 'failed'
-    file.message = t('assetForm.uploadFailed')
+    showToast({ message: t('assetForm.watermarkFailed'), type: 'fail' })
+  } finally {
+    cropperSource.value = null
   }
+}
+
+// Oversize handler
+function onOversize() {
+  showToast({ message: t('assetForm.fileTooLarge'), icon: 'warning-o' })
+}
+
+// Edit mode: click preview → show ActionSheet instead of default behavior
+function onClickPreview() {
+  if (props.isEdit && fileList.value.length > 0) {
+    showLogoActionSheet.value = true
+  }
+}
+
+// ActionSheet action handler
+function onLogoActionSelect(action: { action: string }) {
+  showLogoActionSheet.value = false
+
+  switch (action.action) {
+    case 'view':
+      if (form.value.image_url) {
+        showImagePreview({ images: [form.value.image_url] })
+      }
+      break
+    case 'recrop':
+      if (form.value.image_url) {
+        cropperSource.value = form.value.image_url
+        showCropper.value = true
+      }
+      break
+    case 'replace':
+      replaceFileInput.value?.click()
+      break
+    case 'delete':
+      showConfirmDialog({
+        title: t('assetForm.actionDelete'),
+        message: t('assetForm.deleteConfirmMsg'),
+      }).then(() => {
+        form.value.image_url = ''
+        fileList.value = []
+      }).catch(() => {
+        // User cancelled
+      })
+      break
+  }
+}
+
+// Replace file input handler
+function onReplaceFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  // Reset input so same file can be selected again
+  input.value = ''
+  // Open cropper with the new file
+  cropperSource.value = file
+  showCropper.value = true
 }
 
 function onDelete() {

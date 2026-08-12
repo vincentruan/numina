@@ -26,6 +26,7 @@
     "@vant/icons": "^3.0.1",
     "@vant/touch-emulator": "^1.5.0",
     "axios": "^1.13.6",
+    "cropperjs": "^1.6.2",
     "dompurify": "^3.4.1",
     "echarts": "^6.0.0",
     "html2canvas": "^1.4.1",
