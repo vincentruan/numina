@@ -849,7 +849,6 @@ export default {
     currentValueRequired: 'Please enter current value',
     uploadFailed: 'Upload failed',
     uploadSuccess: 'Upload success',
-    operatorPrefix: 'Operator: ',
     cropTitle: 'Crop Image',
     cropConfirm: 'Confirm',
     cropCancel: 'Cancel',

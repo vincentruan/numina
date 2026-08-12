@@ -305,9 +305,6 @@ const remainingLabel = computed(() =>
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   pointer-events: none;
 }
-.item-icon.has-image::before {
-  display: none;
-}
 @keyframes icon-shimmer {
   0% {
     transform: translateX(-150%);

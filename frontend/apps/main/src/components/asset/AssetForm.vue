@@ -679,8 +679,7 @@ async function onCropperConfirm(canvas: HTMLCanvasElement) {
   try {
     // Apply watermark
     const userName = authStore.user?.display_name || ''
-    const operatorLabel = t('assetForm.operatorPrefix')
-    await applyWatermark(canvas, userName, operatorLabel)
+    await applyWatermark(canvas, userName)
 
     // Convert to Blob
     const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92)

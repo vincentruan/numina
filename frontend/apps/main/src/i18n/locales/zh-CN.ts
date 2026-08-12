@@ -961,7 +961,6 @@ export default {
     currentValueRequired: '请输入当前价值',
     uploadFailed: '上传失败',
     uploadSuccess: '上传成功',
-    operatorPrefix: '操作人: ',
     cropTitle: '裁剪图片',
     cropConfirm: '确定',
     cropCancel: '取消',
