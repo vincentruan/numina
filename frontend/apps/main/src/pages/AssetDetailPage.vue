@@ -295,9 +295,6 @@ async function navigateTo(path: string, action: 'edit' | 'sell') {
 
 const imageUrl = computed(() => {
   if (!asset.value?.image_url) return ''
-  if (asset.value.image_url.startsWith('/')) {
-    return `/api/v1${asset.value.image_url}`
-  }
   return asset.value.image_url
 })
 

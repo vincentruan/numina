@@ -551,8 +551,7 @@ watch(() => props.initialData, (data) => {
     // Image preview
     const imageUrl = data.image_url
     if (imageUrl) {
-      const fullUrl = imageUrl.startsWith('/api/v1') ? imageUrl : `/api/v1${imageUrl}`
-      fileList.value = [{ url: fullUrl, content: fullUrl, status: 'done' }]
+      fileList.value = [{ url: imageUrl, content: imageUrl, status: 'done' }]
     }
 
     // Edit mode: auto-expand sections that have data
@@ -628,9 +627,8 @@ async function afterRead(file: { file: File; url?: string; content?: string; sta
   try {
     const res = await uploadImage(file.file)
     file.status = 'done'
-    const fullUrl = `/api/v1${res.data.url}`
-    file.url = fullUrl
-    file.content = fullUrl
+    file.url = res.data.url
+    file.content = res.data.url
     form.value.image_url = res.data.url
   } catch {
     file.status = 'failed'

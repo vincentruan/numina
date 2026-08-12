@@ -148,9 +148,6 @@ onUnmounted(() => {
 
 const imageUrl = computed(() => {
   if (!props.asset.image_url) return ''
-  if (props.asset.image_url.startsWith('/')) {
-    return `/api/v1${props.asset.image_url}`
-  }
   return props.asset.image_url
 })
 
