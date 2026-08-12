@@ -7,7 +7,7 @@
 #              → 5 separate terminal windows
 #   3. Background + log files (last resort, no live view)
 #
-# Layout (tmux):
+# Layout (tmux, 上三下二):
 #   ┌──────────┬──────────┬──────────┐
 #   │ backend  │  agent   │  worker  │
 #   │  :8000   │  :8001   │  :8002   │
@@ -45,103 +45,128 @@ check_ports() {
 # ── tmux mode ────────────────────────────────────────────────────────
 
 launch_tmux() {
-    echo "启动 tmux session '$SESSION' (3+2 布局)..."
-
-    # Already exists → reattach / switch
-    if tmux has-session -t "$SESSION" 2>/dev/null; then
-        echo "  session 已存在，连接中..."
-        if [ -n "${TMUX:-}" ]; then
-            tmux switch-client -t "$SESSION"
-        else
+    # ── If already inside tmux, create a new window (not a nested session) ──
+    local target window_flag=""
+    if [ -n "${TMUX:-}" ]; then
+        local cur_session
+        cur_session="$(tmux display-message -p '#{session_name}')"
+        target="$cur_session"
+        echo "在当前 tmux session '$cur_session' 中创建新 window..."
+    else
+        if tmux has-session -t "$SESSION" 2>/dev/null; then
+            echo "  session 已存在，连接中..."
             exec tmux attach-session -t "$SESSION"
         fi
-        return
+        tmux new-session -d -s "$SESSION" -x "$(tput cols)" -y "$(tput lines)"
+        target="$SESSION"
+        echo "启动 tmux session '$SESSION' (上三下二布局)..."
     fi
 
-    local server_dir
+    # Create window (inside existing session) or use initial window
+    if [ -n "${TMUX:-}" ]; then
+        tmux new-window -t "$target" -n "numina-dev"
+        window_flag=1
+    fi
+
+    local server_dir main_dir child_dir
     server_dir="$(cd "$SERVER_DIR" && pwd)"
-    local main_dir child_dir
     main_dir="$(cd "$MAIN_APP" && pwd)"
     child_dir="$(cd "$CHILD_APP" && pwd)"
 
-    # Create session (detached) — pane %base
-    tmux new-session -d -s "$SESSION" -x "$(tput cols)" -y "$(tput lines)"
     local base
-    base="$(tmux list-panes -t "$SESSION" -F '#{pane_id}' | head -1)"
+    base="$(tmux list-panes -t "$target" -F '#{pane_id}' | head -1)"
 
-    # ── Top row: 3 equal panes ──────────────────────────────────────
-    tmux split-window -h -t "$base" -c "$server_dir"
-    tmux split-window -h -t "$base" -c "$server_dir"
-    # base → P3(left), P2(mid), P1(right)
+    # ── Split: 上三下二 (top 3, bottom 2) ────────────────────────────
+    # Step 1: split vertically → P0 top (60%h) / P1 bottom (40%h)
+    tmux split-window -v -l "60%" -t "$base"
+    local bottom
+    bottom="$(tmux list-panes -t "$target" -F '#{pane_id}' | tail -1)"
 
-    # ── Bottom row: split base vertically → 2 panes ─────────────────
-    tmux split-window -v -t "$base" -l "60%" -c "$main_dir"
-    tmux split-window -h -t "$base" -c "$child_dir"
-    # base → P4(bottom-left), P5(bottom-right)
+    # Step 2: split top (-h) into 3 equal columns
+    #   -l 33% → P2 new (33% of P0), P0 keeps 67%
+    tmux split-window -h -l "33%" -t "$base"
+    #   -l 50% → P3 new (50% of remaining), P0 = 50%
+    tmux split-window -h -l "50%" -t "$base"
+    #   P3≈P2≈P0 ≈ 33% each of top row width
 
-    # Session options
-    tmux set-option -t "$SESSION" remain-on-exit on
-    tmux set-option -t "$SESSION" mouse on
-    tmux set-option -t "$SESSION" pane-border-status top
-    tmux set-option -t "$SESSION" pane-border-format \
+    # Step 3: split bottom (-h) into 2 equal columns
+    #   -l 50% → P4 new (50% of P1), P1 keeps 50%
+    tmux split-window -h -l "50%" -t "$bottom"
+
+    # ── Final layout ─────────────────────────────────────────────────
+    #   ┌──────────┬──────────┬──────────┐
+    #   │ backend  │  agent   │  worker  │
+    #   │  P0      │  P2      │  P3      │
+    #   ├───────────┴────┬─────┴──────────┤
+    #   │   frontend     │     child      │
+    #   │   P4           │     P1         │
+    #   └────────────────┴────────────────┘
+
+    # Session / window options
+    local tw="$target"
+    [ -n "${TMUX:-}" ] && tw="$target:$(tmux display-message -p '#{window_index}')"
+    tmux set-option -t "$tw" remain-on-exit on
+    tmux set-option -t "$tw" mouse on
+    tmux set-option -t "$tw" pane-border-status top
+    tmux set-option -t "$tw" pane-border-format \
         '#{?pane_active,#[fg=green bold]#{pane_title},#[fg=default]#{pane_title}}'
 
     # ── Send commands to each pane ──────────────────────────────────
-    # Pane creation order (by split sequence):
-    #   Pane 4 (top-right)   = first created   → backend
-    #   Pane 3 (top-center)  = second created   → agent
-    #   Pane 0 (top-left)    = base (remainder)  → worker
-    #   Pane 2 (bottom-left) = third created     → frontend
-    #   Pane 1 (bottom-right)= fourth created    → child
+    # Pane mapping:
+    #   P0 = top-left   → backend :8000
+    #   P2 = top-center → agent :8001
+    #   P3 = top-right  → worker :8002
+    #   P4 = bot-left   → frontend :5173
+    #   P1 = bot-right  → child :5174
 
-    # Pane 4 (top-right) — backend :8000
-    tmux select-pane -t "$SESSION:0.4" -T "backend :8000"
-    tmux send-keys -t "$SESSION:0.4" \
+    # Pane 0 (top-left) — backend :8000
+    tmux select-pane -t "$tw.0" -T "backend :8000"
+    tmux send-keys -t "$tw.0" \
         "echo '═══ backend :8000 ═══'" Enter \
         "cd '$server_dir' && uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000" Enter
 
-    # Pane 3 (top-center) — agent :8001
-    tmux select-pane -t "$SESSION:0.3" -T "agent :8001"
-    tmux send-keys -t "$SESSION:0.3" \
+    # Pane 2 (top-center) — agent :8001
+    tmux select-pane -t "$tw.2" -T "agent :8001"
+    tmux send-keys -t "$tw.2" \
         "echo '═══ agent :8001 ═══'" Enter \
         "cd '$server_dir' && uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001" Enter
 
-    # Pane 0 (top-left) — worker :8002
-    tmux select-pane -t "$SESSION:0.0" -T "worker :8002"
-    tmux send-keys -t "$SESSION:0.0" \
+    # Pane 3 (top-right) — worker :8002
+    tmux select-pane -t "$tw.3" -T "worker :8002"
+    tmux send-keys -t "$tw.3" \
         "echo '═══ worker :8002 ═══'" Enter \
         "cd '$server_dir' && uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002" Enter
 
-    # Pane 2 (bottom-left) — frontend :5173
-    tmux select-pane -t "$SESSION:0.2" -T "frontend :5173"
-    tmux send-keys -t "$SESSION:0.2" \
+    # Pane 4 (bot-left) — frontend :5173
+    tmux select-pane -t "$tw.4" -T "frontend :5173"
+    tmux send-keys -t "$tw.4" \
         "echo '═══ frontend :5173 ═══'" Enter \
         "cd '$main_dir' && pnpm dev --host 0.0.0.0" Enter
 
-    # Pane 1 (bottom-right) — child :5174
-    tmux select-pane -t "$SESSION:0.1" -T "child :5174"
-    tmux send-keys -t "$SESSION:0.1" \
+    # Pane 1 (bot-right) — child :5174
+    tmux select-pane -t "$tw.1" -T "child :5174"
+    tmux send-keys -t "$tw.1" \
         "echo '═══ child :5174 ═══'" Enter \
         "cd '$child_dir' && pnpm dev --host 0.0.0.0" Enter
 
-    # Select backend pane (top-right)
-    tmux select-pane -t "$SESSION:0.4"
+    # Select backend pane (top-left)
+    tmux select-pane -t "$tw.0"
 
-    # Attach / keep-alive
-    # Trap kills session on SIGINT/SIGTERM (Ctrl-C or external kill)
-    trap 'tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
+    # ── Attach / keep-alive ─────────────────────────────────────────
+    trap '
+        if [ -n "${TMUX:-}" ] && [ -n "${window_flag:-}" ]; then
+            tmux kill-window -t "'"$tw"'" 2>/dev/null || true
+        else
+            tmux kill-session -t "'"$SESSION"'" 2>/dev/null || true
+        fi
+    ' INT TERM
 
     if [ -n "${TMUX:-}" ]; then
-        # Inside existing tmux → try to switch; keep script alive
-        if tmux switch-client -t "$SESSION" 2>/dev/null; then
-            echo "[numina-dev] 在 tmux 中运行。Ctrl-D 退出或 :detach 分离。"
-        else
-            echo "[numina-dev] session 已创建。运行 tmux attach -t $SESSION 连接。"
-        fi
+        tmux select-window -t "$tw"
+        echo "[numina-dev] 在 tmux window 中运行。"
         echo "  停止: make stop-dev-all"
         sleep 3600 & wait $!
     else
-        # Outside tmux → exec replaces shell; tmux owns signal handling
         exec tmux attach-session -t "$SESSION"
     fi
 }
