@@ -77,29 +77,26 @@ launch_tmux() {
     base="$(tmux list-panes -t "$target" -F '#{pane_id}' | head -1)"
 
     # ── Split: 上三下二 (top 3, bottom 2) ────────────────────────────
-    # Step 1: split vertically → P0 top (60%h) / P1 bottom (40%h)
-    tmux split-window -v -l "60%" -t "$base"
-    local bottom
-    bottom="$(tmux list-panes -t "$target" -F '#{pane_id}' | tail -1)"
 
-    # Step 2: split top (-h) into 3 equal columns
-    #   -l 33% → P2 new (33% of P0), P0 keeps 67%
-    tmux split-window -h -l "33%" -t "$base"
-    #   -l 50% → P3 new (50% of remaining), P0 = 50%
-    tmux split-window -h -l "50%" -t "$base"
-    #   P3≈P2≈P0 ≈ 33% each of top row width
+    # Step 1: split vertically → top 60% / bottom 40%
+    tmux split-window -v -l "60%" -t "$base"
+
+    # Step 2: split top (-h) into 3 columns
+    #   -l 67% → new right 67%, base keeps left 33%
+    tmux split-window -h -l "67%" -t "$base"
+    #   -l 50% of right → center 33.5%, right keeps 33.5%
+    tmux split-window -h -l "50%" -t "$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_left}' | sort -k2 -n | tail -1 | awk '{print $1}')"
 
     # Step 3: split bottom (-h) into 2 equal columns
-    #   -l 50% → P4 new (50% of P1), P1 keeps 50%
-    tmux split-window -h -l "50%" -t "$bottom"
+    tmux split-window -h -l "50%" -t "$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_top}' | sort -k2 -n | tail -1 | awk '{print $1}')"
 
     # ── Final layout ─────────────────────────────────────────────────
     #   ┌──────────┬──────────┬──────────┐
     #   │ backend  │  agent   │  worker  │
-    #   │  P0      │  P2      │  P3      │
+    #   │ p_left   │ p_center │ p_right  │
     #   ├───────────┴────┬─────┴──────────┤
     #   │   frontend     │     child      │
-    #   │   P4           │     P1         │
+    #   │   p_bot        │     p_br       │
     #   └────────────────┴────────────────┘
 
     # Session / window options
@@ -111,46 +108,55 @@ launch_tmux() {
     tmux set-option -t "$tw" pane-border-format \
         '#{?pane_active,#[fg=green bold]#{pane_title},#[fg=default]#{pane_title}}'
 
-    # ── Send commands to each pane ──────────────────────────────────
-    # Pane mapping:
-    #   P0 = top-left   → backend :8000
-    #   P2 = top-center → agent :8001
-    #   P3 = top-right  → worker :8002
-    #   P4 = bot-left   → frontend :5173
-    #   P1 = bot-right  → child :5174
+    # ── Send commands to each pane (position-based) ──────────────────
+    # Query pane positions and assign services by (left, top) coordinates.
+    local pane_info
+    pane_info="$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_left} #{pane_top}')"
 
-    # Pane 0 (top-left) — backend :8000
-    tmux select-pane -t "$tw.0" -T "backend :8000"
-    tmux send-keys -t "$tw.0" \
+    # Top-left: min top, min left → backend
+    local p_backend; p_backend="$(echo "$pane_info" | sort -k3,3n -k2,2n | head -1 | awk '{print $1}')"
+    # Top-right: min top, max left → worker
+    local p_worker; p_worker="$(echo "$pane_info" | sort -k3,3n -k2,2nr | head -1 | awk '{print $1}')"
+    # Top-center: min top, middle left → agent
+    local p_agent; p_agent="$(echo "$pane_info" | sort -k3,3n -k2,2n | sed -n '2p' | awk '{print $1}')"
+
+    # Bottom-left: max top, min left → frontend
+    local p_frontend; p_frontend="$(echo "$pane_info" | sort -k3,3nr -k2,2n | head -1 | awk '{print $1}')"
+    # Bottom-right: max top, max left → child
+    local p_child; p_child="$(echo "$pane_info" | sort -k3,3nr -k2,2nr | head -1 | awk '{print $1}')"
+
+    # Top-left — backend :8000
+    tmux select-pane -t "$p_backend" -T "backend :8000"
+    tmux send-keys -t "$p_backend" \
         "echo '═══ backend :8000 ═══'" Enter \
         "cd '$server_dir' && uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000" Enter
 
-    # Pane 2 (top-center) — agent :8001
-    tmux select-pane -t "$tw.2" -T "agent :8001"
-    tmux send-keys -t "$tw.2" \
+    # Top-center — agent :8001
+    tmux select-pane -t "$p_agent" -T "agent :8001"
+    tmux send-keys -t "$p_agent" \
         "echo '═══ agent :8001 ═══'" Enter \
         "cd '$server_dir' && uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001" Enter
 
-    # Pane 3 (top-right) — worker :8002
-    tmux select-pane -t "$tw.3" -T "worker :8002"
-    tmux send-keys -t "$tw.3" \
+    # Top-right — worker :8002
+    tmux select-pane -t "$p_worker" -T "worker :8002"
+    tmux send-keys -t "$p_worker" \
         "echo '═══ worker :8002 ═══'" Enter \
         "cd '$server_dir' && uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002" Enter
 
-    # Pane 4 (bot-left) — frontend :5173
-    tmux select-pane -t "$tw.4" -T "frontend :5173"
-    tmux send-keys -t "$tw.4" \
+    # Bottom-left — frontend :5173
+    tmux select-pane -t "$p_frontend" -T "frontend :5173"
+    tmux send-keys -t "$p_frontend" \
         "echo '═══ frontend :5173 ═══'" Enter \
         "cd '$main_dir' && pnpm dev --host 0.0.0.0" Enter
 
-    # Pane 1 (bot-right) — child :5174
-    tmux select-pane -t "$tw.1" -T "child :5174"
-    tmux send-keys -t "$tw.1" \
+    # Bottom-right — child :5174
+    tmux select-pane -t "$p_child" -T "child :5174"
+    tmux send-keys -t "$p_child" \
         "echo '═══ child :5174 ═══'" Enter \
         "cd '$child_dir' && pnpm dev --host 0.0.0.0" Enter
 
     # Select backend pane (top-left)
-    tmux select-pane -t "$tw.0"
+    tmux select-pane -t "$p_backend"
 
     # ── Attach / keep-alive ─────────────────────────────────────────
     trap '
