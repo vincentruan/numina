@@ -1,5 +1,7 @@
 FROM python:3.13-slim
 
+LABEL org.opencontainers.image.source="https://github.com/vincentruan/numina"
+
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata git && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
 ENV DEER_FLOW_CONFIG_PATH=/app/apps/agent/deerflow_config/base/config.yaml

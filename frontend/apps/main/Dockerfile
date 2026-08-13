@@ -25,6 +25,8 @@ COPY frontend/apps/main/ .
 RUN npx vite build
 
 FROM nginx:1.27-alpine
+
+LABEL org.opencontainers.image.source="https://github.com/vincentruan/numina"
 COPY --from=build /app/frontend/apps/main/dist /usr/share/nginx/html
 RUN chmod -R a+rX /usr/share/nginx/html
 COPY frontend/apps/main/nginx.conf /etc/nginx/conf.d/default.conf

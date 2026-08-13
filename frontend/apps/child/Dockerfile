@@ -27,6 +27,8 @@ ENV VITE_MAIN_APP_URL=$VITE_MAIN_APP_URL
 RUN npx vite build
 
 FROM nginx:1.27-alpine
+
+LABEL org.opencontainers.image.source="https://github.com/vincentruan/numina"
 COPY --from=build /app/frontend/apps/child/dist /usr/share/nginx/html
 RUN chmod -R a+rX /usr/share/nginx/html
 COPY frontend/apps/child/nginx.conf /etc/nginx/conf.d/default.conf
