@@ -268,11 +268,21 @@ def _upsert_builtin_agent(db: Session, spec: dict) -> None:
         ))
         logger.info("已初始化系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
     else:
-        # Keep soul_md / description / memory_enabled in sync with code on updates.
-        if existing.soul_md != spec["soul_md"] or existing.memory_enabled != spec.get("memory_enabled", True):
+        # Keep soul_md / description / display_name / memory_enabled in sync with code on updates.
+        updated = False
+        if existing.soul_md != spec["soul_md"]:
             existing.soul_md = spec["soul_md"]
+            updated = True
+        if existing.description != spec["description"]:
             existing.description = spec["description"]
+            updated = True
+        if existing.display_name != spec["display_name"]:
+            existing.display_name = spec["display_name"]
+            updated = True
+        if existing.memory_enabled != spec.get("memory_enabled", True):
             existing.memory_enabled = spec.get("memory_enabled", True)
+            updated = True
+        if updated:
             logger.info("已更新系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
 
 
