@@ -847,7 +847,7 @@ function onSubmit() {
 .asset-preview img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 .image-placeholder {
   width: 120px;

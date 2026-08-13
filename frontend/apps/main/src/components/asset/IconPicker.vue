@@ -299,7 +299,7 @@ void totalIcons
   width: 72px;
   height: 72px;
   border-radius: 12px;
-  object-fit: contain;
+  object-fit: cover;
   background: var(--van-background-2);
 }
 .delete-btn {
