@@ -312,7 +312,7 @@
             </template>
             <div v-else class="share-error">
               <span>{{ t('family.shareInviteFailed') }}</span>
-              <van-button size="small" plain type="primary" @click="openSharePopup">{{ t('common.retry') || '重试' }}</van-button>
+              <van-button size="small" plain type="primary" @click="openSharePopup">{{ t('common.retry') }}</van-button>
             </div>
           </div>
         </van-popup>

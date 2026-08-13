@@ -29,6 +29,7 @@ export default {
     totalLiabilities: '总负债',
     monthsSuffix: '+{months}月',
     submit: 'Submit',
+    retry: 'Retry',
   },
   nav: {
     dashboard: 'Dashboard',

@@ -29,6 +29,7 @@ export default {
     totalLiabilities: '总负债',
     monthsSuffix: '+{months}月',
     submit: '提交',
+    retry: '重试',
   },
   model: {
     selectTitle: '选择模型',
