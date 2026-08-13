@@ -29,10 +29,8 @@ jobs:
         with:
           lfs: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # Note: setup-python skipped — self-hosted macOS runner has Python pre-installed,
+      # and uv manages its own Python environment via uv sync.
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
