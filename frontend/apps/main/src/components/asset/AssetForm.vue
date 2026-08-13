@@ -4,30 +4,38 @@
 
     <!-- P1: Image upload — top independent section -->
     <div class="image-upload-section">
-      <van-uploader
-        v-model="fileList"
-        :max-count="1"
-        :max-size="5 * 1024 * 1024"
-        :after-read="afterRead as UploaderAfterRead"
-        :accept="'image/jpeg,image/png,image/webp'"
-        @delete="onDelete"
-        @oversize="onOversize"
-        @click-preview="onClickPreview"
-      >
-        <template #default>
-          <div v-if="!fileList.length" class="image-placeholder">
-            <van-icon name="photograph" size="32" color="var(--van-text-color-3)" />
-            <span class="image-hint">{{ t('assetForm.imageUploadHint') }}</span>
-          </div>
-        </template>
-      </van-uploader>
-      <!-- Hidden file input for edit-mode replace -->
+      <div class="avatar-area">
+        <!-- Current icon / placeholder -->
+        <div v-if="form.image_url" class="asset-preview" @click="showIconPicker = true">
+          <img :src="form.image_url" />
+        </div>
+        <div v-else class="image-placeholder" @click="showIconPicker = true">
+          <van-icon name="photograph" size="32" color="var(--van-text-color-3)" />
+          <span class="image-hint">{{ t('assetForm.imageUploadHint') }}</span>
+        </div>
+        <!-- Change icon button -->
+        <van-button
+          size="small"
+          icon="exchange"
+          class="change-icon-btn"
+          @click="showIconPicker = true"
+        >{{ t('iconPicker.changeIcon') }}</van-button>
+      </div>
+      <!-- Hidden file inputs for gallery/camera selection (triggered by IconPicker) -->
       <input
-        ref="replaceFileInput"
+        ref="galleryFileInput"
         type="file"
         accept="image/jpeg,image/png,image/webp"
         hidden
-        @change="onReplaceFile"
+        @change="onFileSelected"
+      />
+      <input
+        ref="cameraFileInput"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        capture="environment"
+        hidden
+        @change="onFileSelected"
       />
     </div>
 
@@ -298,20 +306,22 @@
     @confirm="onCropperConfirm"
   />
 
-  <!-- Edit-mode logo action sheet -->
-  <van-action-sheet
-    v-model:show="showLogoActionSheet"
-    :actions="logoActions"
-    :cancel-text="t('assetForm.cropCancel')"
-    @select="onLogoActionSelect"
+  <!-- Icon picker popup (gallery + 3D icons) -->
+  <IconPicker
+    v-model:show="showIconPicker"
+    :current-image-url="form.image_url"
+    @select-image="onIconPickerSelectImage"
+    @request-gallery="onIconPickerRequestGallery"
+    @request-camera="onIconPickerRequestCamera"
+    @delete="onIconPickerDelete"
   />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { UploaderAfterRead, FormInstance } from 'vant'
-import { showImagePreview, showConfirmDialog, showLoadingToast, showSuccessToast, showFailToast, showToast } from 'vant'
+import type { FormInstance } from 'vant'
+import { showLoadingToast, showSuccessToast, showFailToast, showToast } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
@@ -322,6 +332,7 @@ import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
 import LogoCropper from './LogoCropper.vue'
+import IconPicker from './IconPicker.vue'
 import { useWatermark } from '@/composables/useWatermark'
 import { getIconId } from '@/utils/icon'
 
@@ -467,7 +478,7 @@ function selectCategory(id: string) {
   showCategoryPicker.value = false
 }
 
-// Image upload state
+// Image upload state - tracks current image URL for preview
 const fileList = ref<{ url: string; content?: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
 
 // Logo cropper state
@@ -475,15 +486,10 @@ const { applyWatermark, canvasToBlob } = useWatermark()
 const showCropper = ref(false)
 const cropperSource = ref<File | string | null>(null)
 
-// Edit-mode ActionSheet state
-const showLogoActionSheet = ref(false)
-const replaceFileInput = ref<HTMLInputElement>()
-const logoActions = computed(() => [
-  { name: t('assetForm.actionViewFull'), action: 'view' as const },
-  { name: t('assetForm.actionRecrop'), action: 'recrop' as const },
-  { name: t('assetForm.actionReplace'), action: 'replace' as const },
-  { name: t('assetForm.actionDelete'), action: 'delete' as const, color: '#ee0a24' },
-])
+// IconPicker state
+const showIconPicker = ref(false)
+const galleryFileInput = ref<HTMLInputElement>()
+const cameraFileInput = ref<HTMLInputElement>()
 
 // Tags state
 const availableTags = ref<Tag[]>([])
@@ -666,14 +672,13 @@ function onStatusConfirm({ selectedOptions }: { selectedOptions: { value: string
 }
 
 // Image upload handlers
-// New flow: file → cropper → watermark → upload
-function afterRead(file: { file: File; url?: string; content?: string; status?: string; message?: string }) {
-  // Open cropper with the selected file
-  cropperSource.value = file.file
-  showCropper.value = true
-}
+// Flow: IconPicker -> gallery/camera file input -> cropper -> watermark -> upload
+//   or: IconPicker -> 3D icon select -> direct image_url set (no watermark)
 
-// Called when cropper confirms — applies watermark then uploads
+// File size check (5MB max, matching previous van-uploader constraint)
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+
+// Called when cropper confirms - applies watermark then uploads
 async function onCropperConfirm(canvas: HTMLCanvasElement) {
   showCropper.value = false
   try {
@@ -699,65 +704,46 @@ async function onCropperConfirm(canvas: HTMLCanvasElement) {
   }
 }
 
-// Oversize handler
-function onOversize() {
-  showToast({ message: t('assetForm.fileTooLarge'), icon: 'warning-o' })
+// IconPicker event handlers
+function onIconPickerSelectImage(url: string) {
+  form.value.image_url = url
+  fileList.value = [{ url, content: url, status: 'done' }]
+  showIconPicker.value = false
 }
 
-// Edit mode: click preview → show ActionSheet instead of default behavior
-function onClickPreview() {
-  if (props.isEdit && fileList.value.length > 0) {
-    showLogoActionSheet.value = true
-  }
+function onIconPickerRequestGallery() {
+  showIconPicker.value = false
+  galleryFileInput.value?.click()
 }
 
-// ActionSheet action handler
-function onLogoActionSelect(action: { action: string }) {
-  showLogoActionSheet.value = false
-
-  switch (action.action) {
-    case 'view':
-      if (form.value.image_url) {
-        showImagePreview({ images: [form.value.image_url] })
-      }
-      break
-    case 'recrop':
-      if (form.value.image_url) {
-        cropperSource.value = form.value.image_url
-        showCropper.value = true
-      }
-      break
-    case 'replace':
-      replaceFileInput.value?.click()
-      break
-    case 'delete':
-      showConfirmDialog({
-        title: t('assetForm.actionDelete'),
-        message: t('assetForm.deleteConfirmMsg'),
-      }).then(() => {
-        form.value.image_url = ''
-        fileList.value = []
-      }).catch(() => {
-        // User cancelled
-      })
-      break
-  }
+function onIconPickerRequestCamera() {
+  showIconPicker.value = false
+  cameraFileInput.value?.click()
 }
 
-// Replace file input handler
-function onReplaceFile(event: Event) {
+function onIconPickerDelete() {
+  form.value.image_url = ''
+  fileList.value = []
+  showIconPicker.value = false
+}
+
+// Gallery/camera file selected -> check size -> cropper flow
+function onFileSelected(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
   // Reset input so same file can be selected again
   input.value = ''
-  // Open cropper with the new file
+
+  // Size check (replaces @oversize handler)
+  if (file.size > MAX_FILE_SIZE) {
+    showToast({ message: t('assetForm.fileTooLarge'), icon: 'warning-o' })
+    return
+  }
+
+  // Open cropper with the selected file
   cropperSource.value = file
   showCropper.value = true
-}
-
-function onDelete() {
-  form.value.image_url = ''
 }
 
 // Map field names to their collapsible section
@@ -835,9 +821,33 @@ function onSubmit() {
 /* P1: Image upload section */
 .image-upload-section {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 24px 16px 16px;
   background: var(--van-background);
+  gap: 12px;
+}
+.avatar-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.asset-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--van-background-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.asset-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .image-placeholder {
   width: 120px;
@@ -850,15 +860,16 @@ function onSubmit() {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  cursor: pointer;
 }
 .image-hint {
   font-size: 12px;
   color: var(--van-text-color-3);
 }
-:deep(.van-uploader__preview-image) {
-  width: 120px;
-  height: 120px;
-  border-radius: 16px;
+.change-icon-btn {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
 }
 
 /* P1: Type segmented control */

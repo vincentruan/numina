@@ -3667,4 +3667,16 @@ export default {
     alreadyExists: '当前家庭已配置远程备份，请先删除旧配置',
     encryptionRequired: '存储加密密钥未配置，请联系系统管理员',
   },
+  iconPicker: {
+    tabGallery: '相册',
+    tab3dIcons: '3D 图标',
+    fromGallery: '从相册选择',
+    fromCamera: '拍照',
+    searchPlaceholder: '搜索图标',
+    allCategories: '全部',
+    noResults: '没有找到匹配的图标',
+    loading: '加载中...',
+    recentAlbum: '最近项目',
+    changeIcon: '更换图标',
+  },
 }

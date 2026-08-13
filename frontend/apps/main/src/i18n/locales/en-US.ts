@@ -3600,4 +3600,16 @@ export default {
     alreadyExists: 'This family already has a remote backup configured; please remove it first',
     encryptionRequired: 'Storage encryption key is not configured; please contact the system administrator',
   },
+  iconPicker: {
+    tabGallery: 'Gallery',
+    tab3dIcons: '3D Icons',
+    fromGallery: 'Choose from Gallery',
+    fromCamera: 'Take Photo',
+    searchPlaceholder: 'Search icons',
+    allCategories: 'All',
+    noResults: 'No matching icons',
+    loading: 'Loading...',
+    recentAlbum: 'Recent',
+    changeIcon: 'Change Icon',
+  },
 }

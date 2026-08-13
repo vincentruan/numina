@@ -5,7 +5,18 @@
   "type": "module",
   "exports": {
     "./icons": "./src/icons/index.ts",
+    "./icons/manifest": "./src/icons/icon-manifest.ts",
     "./icons/3d-things/*": "./src/icons/3d-things/*",
+    "./icons/3d-things/vehicles/*": "./src/icons/3d-things/vehicles/*",
+    "./icons/3d-things/electronics/*": "./src/icons/3d-things/electronics/*",
+    "./icons/3d-things/furniture/*": "./src/icons/3d-things/furniture/*",
+    "./icons/3d-things/clothing-accessories/*": "./src/icons/3d-things/clothing-accessories/*",
+    "./icons/3d-things/tools/*": "./src/icons/3d-things/tools/*",
+    "./icons/3d-things/sports/*": "./src/icons/3d-things/sports/*",
+    "./icons/3d-things/kitchenware/*": "./src/icons/3d-things/kitchenware/*",
+    "./icons/3d-things/entertainment/*": "./src/icons/3d-things/entertainment/*",
+    "./icons/3d-things/instruments/*": "./src/icons/3d-things/instruments/*",
+    "./icons/3d-things/office-stationery/*": "./src/icons/3d-things/office-stationery/*",
     "./icons/cartoon-consumer/*": "./src/icons/cartoon-consumer/*",
     "./images": "./src/images/index.ts",
     "./empty-states": "./src/empty-states/index.ts"

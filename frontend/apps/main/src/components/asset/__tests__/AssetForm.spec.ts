@@ -14,8 +14,6 @@ vi.mock('vant', async () => {
     showSuccessToast: vi.fn(),
     showFailToast: vi.fn(),
     showToast: vi.fn(),
-    showConfirmDialog: vi.fn(() => Promise.resolve()),
-    showImagePreview: vi.fn(),
   }
 })
 
@@ -103,6 +101,9 @@ const i18n = createI18n({
         sold: 'Sold',
         retired: 'Retired',
       },
+      iconPicker: {
+        changeIcon: 'Change Icon',
+      },
     },
   },
 })
@@ -141,7 +142,6 @@ function mountForm(props: Record<string, unknown> = {}) {
         },
         VanButton: { template: '<button><slot /></button>' },
         VanIcon: { template: '<i />' },
-        VanUploader: { template: '<div class="van-uploader"><slot /></div>' },
         VanPopup: { template: '<div class="van-popup"><slot /></div>' },
         VanDatePicker: { template: '<div class="van-date-picker" />' },
         VanPicker: { template: '<div class="van-picker" />' },
@@ -150,6 +150,7 @@ function mountForm(props: Record<string, unknown> = {}) {
         UsageFreqSelector: { template: '<div class="usage-freq" />' },
         TagSelector: { template: '<div class="tag-selector" />' },
         SvgIcon: { template: '<i />' },
+        IconPicker: { template: '<div class="icon-picker-stub" />' },
       },
     },
   })
