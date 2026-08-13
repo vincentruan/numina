@@ -355,6 +355,40 @@ async def _set_session_title(thread_id: str, family_id: str, title_prefix: str) 
         logger.warning("[_set_session_title] Failed for thread %s: %s", thread_id, e)
 
 
+def _persist_session_status(
+    *, thread_id: str, family_id: str, status: str,
+) -> None:
+    """Best-effort write of terminal session status to ai_chat_sessions.
+
+    DeerFlow pattern: the worker's finally block always persists the terminal
+    status so the DB row reflects the actual run outcome.  Numina runs this
+    synchronously at the end of _run_numina_agent (not fire-and-forget) because
+    it is a single HTTP call and we want the status to be durable before the
+    SSE end frame reaches the frontend.  All failures are logged and swallowed.
+    """
+    try:
+        from apps.agent.services.session_store import AiSessionRepository
+
+        repo = AiSessionRepository(family_id)
+        # update_summary default status="completed" — pass explicit value so
+        # error/interrupted outcomes are persisted correctly.
+        repo_update = repo.update_summary(
+            session_id=thread_id,
+            family_id=family_id,
+            summary=None,
+            status=status,
+        )
+        # Fire-and-forget: we don't await so a slow backend doesn't block
+        # the SSE end frame.  Errors are caught inside update_summary.
+        import asyncio
+        asyncio.ensure_future(repo_update)
+    except Exception as e:
+        logger.warning(
+            "[_persist_session_status] Failed for thread %s status=%s: %s",
+            thread_id, status, e,
+        )
+
+
 async def _run_asset_report_pipeline(
     *,
     bridge: StreamBridge,
@@ -1192,6 +1226,19 @@ async def _run_numina_agent(
                 generated_title = None
             if generated_title:
                 await bridge.publish(p.run_id, "values", {"title": generated_title})
+
+        # 5. Post-stream: persist terminal session status to DB.
+        #    DeerFlow pattern (worker.py finally block): guarantee the session
+        #    row reflects the actual run outcome.  sync_title_from_checkpoint
+        #    writes status="completed" as a side-effect, but if it was skipped
+        #    (no selected_provider, no user_message, or fire-and-forget task
+        #    failed), the DB row stays at its initial value.  This call is
+        #    best-effort — all failures are logged and swallowed.
+        _persist_session_status(
+            thread_id=thread_id,
+            family_id=family_id,
+            status=record.status.value if hasattr(record.status, "value") else str(record.status),
+        )
 
 
 # Synthetic trigger for literacy-weekly-report runs.

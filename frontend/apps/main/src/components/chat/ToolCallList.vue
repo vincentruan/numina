@@ -167,8 +167,15 @@ function formatTime(ms?: number): string {
         </div>
       </transition>
 
-      <!-- Running shimmer -->
+      <!-- Running shimmer overlay -->
       <div v-if="step.status === 'running'" class="running-shimmer" aria-hidden="true" />
+
+      <!-- Running dot loading bar (bottom of card) -->
+      <div v-if="step.status === 'running'" class="running-dot-bar" aria-hidden="true">
+        <span class="running-dot" />
+        <span class="running-dot running-dot--delay-1" />
+        <span class="running-dot running-dot--delay-2" />
+      </div>
     </div>
   </div>
 </template>
@@ -314,18 +321,76 @@ function formatTime(ms?: number): string {
   background: transparent;
 }
 
-/* Running shimmer */
+/* Running shimmer — visible sweep animation */
 .running-shimmer {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(129, 140, 248, 0.08) 50%,
+    rgba(129, 140, 248, 0.18) 40%,
+    rgba(129, 140, 248, 0.22) 50%,
+    rgba(129, 140, 248, 0.18) 60%,
     transparent 100%
   );
-  animation: shimmer 2s infinite linear;
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
   pointer-events: none;
+}
+
+/* Dark mode: shimmer needs higher opacity against dark bg */
+:global([data-theme='dark'] .running-shimmer) {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(160, 165, 255, 0.12) 40%,
+    rgba(160, 165, 255, 0.16) 50%,
+    rgba(160, 165, 255, 0.12) 60%,
+    transparent 100%
+  );
+}
+
+/* Dot loading bar at bottom of running card */
+.running-dot-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 5px;
+  background: linear-gradient(to top, rgba(129, 140, 248, 0.08), transparent);
+  pointer-events: none;
+}
+
+.running-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--van-primary-color, #818cf8);
+  opacity: 0.4;
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+
+.running-dot--delay-1 {
+  animation-delay: 0.15s;
+}
+
+.running-dot--delay-2 {
+  animation-delay: 0.3s;
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.7);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
 }
 
 /* Transitions */
@@ -341,8 +406,8 @@ function formatTime(ms?: number): string {
 }
 
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @keyframes spin {
