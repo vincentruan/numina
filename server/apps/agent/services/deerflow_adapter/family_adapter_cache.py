@@ -313,11 +313,17 @@ async def async_init_checkpointer(db_path: str | None = None) -> None:
                     db_url,
                 )
 
+                # prepare_threshold=None: Supabase pooler (port 6543) runs PgBouncer
+                # in transaction mode — connections recycled between transactions,
+                # so prepared statements are lost ("_pgN_X does not exist").
+                # Pool sizing (1-3) aligned with backend SQLAlchemy pool
+                # (abc21d7c: pool_size=3, max_overflow=2). All three services
+                # share the same pooler — total must stay under ~15 connections.
                 _checkpointer_pool = AsyncConnectionPool(
                     conninfo=pg_conninfo,
-                    kwargs={"autocommit": True},
-                    min_size=2,
-                    max_size=10,
+                    kwargs={"autocommit": True, "prepare_threshold": None},
+                    min_size=1,
+                    max_size=3,
                     open=False,  # defer to await .open() — avoids psycopg_pool
                     # RuntimeWarning about constructor-time auto-open
                 )
