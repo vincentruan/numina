@@ -82,6 +82,10 @@
 
         <!-- Icon grid with infinite scroll -->
         <div class="icon-grid-scroll">
+          <!-- Grid loading overlay (shown on tab switch / category change) -->
+          <div v-if="gridLoading && paginatedIcons.length === 0" class="grid-loading">
+            <van-loading size="24px" />
+          </div>
           <van-list
             :finished="!hasMore"
             :finished-text="searchQuery ? '' : undefined"
@@ -103,6 +107,8 @@
                   <img
                     :src="getThumbUrl(icon)"
                     loading="lazy"
+                    class="thumb-img"
+                    @load="onThumbLoad($event)"
                     @error="onThumbError"
                   />
                   <!-- Magnify button: preview original (doesn't select) -->
@@ -121,7 +127,14 @@
 
         <!-- Enlarge preview overlay -->
         <div v-if="enlargedUrl" class="enlarge-overlay" @click="enlargedUrl = ''">
-          <img :src="enlargedUrl" class="enlarge-img" />
+          <van-loading v-if="enlargeLoading" class="enlarge-spinner" size="36px" />
+          <img
+            :src="enlargedUrl"
+            class="enlarge-img"
+            :class="{ visible: !enlargeLoading }"
+            @load="enlargeLoading = false"
+            @error="enlargeLoading = false"
+          />
         </div>
       </div>
     </div>
@@ -152,6 +165,8 @@ const emit = defineEmits<{
 const activeTab = ref<'gallery' | '3d'>('gallery')
 const showSearchInput = ref(false)
 const enlargedUrl = ref<string>('')
+const enlargeLoading = ref(false)
+const gridLoading = ref(false)
 
 const {
   categories,
@@ -182,6 +197,27 @@ watch(
   { immediate: true },
 )
 
+// Show grid loading when switching to 3D tab, changing category, or searching.
+watch(
+  () => [activeTab.value, activeCategory.value, isSearchMode.value],
+  () => {
+    if (activeTab.value === '3d') {
+      gridLoading.value = true
+    }
+  },
+)
+
+// Mark individual thumbnail as loaded; clear grid loading when all visible are done.
+function onThumbLoad(event: Event) {
+  const img = event.target as HTMLImageElement
+  img.classList.add('loaded')
+  const allImgs = document.querySelectorAll<HTMLImageElement>('.icon-thumb .thumb-img')
+  const allDone = Array.from(allImgs).every(
+    (i) => i.classList.contains('loaded') || i.complete,
+  )
+  if (allDone) gridLoading.value = false
+}
+
 function isSelected(icon: IconEntry): boolean {
   return selectedIconUrl.value === getThumbUrl(icon)
 }
@@ -196,6 +232,7 @@ function selectIcon(icon: IconEntry) {
 function enlargeIcon(icon: IconEntry) {
   // Load original full-size image for preview
   enlargedUrl.value = getOriginalUrl(icon)
+  enlargeLoading.value = true
 }
 
 function toggleSearch() {
@@ -209,16 +246,20 @@ function onSearchInput(val: string) {
   search(val)
 }
 
-// Fallback for broken thumbnail: hide the img so the cell stays tappable.
+// Fallback for broken thumbnail: hide the img, stop skeleton animation.
 function onThumbError(event: Event) {
   const img = event.target as HTMLImageElement
-  img.style.display = 'none'
+  img.style.visibility = 'hidden'
+  img.classList.add('loaded')
 }
 
 // Reset state when popup closes.
 function onClosed() {
   activeTab.value = 'gallery'
   showSearchInput.value = false
+  enlargedUrl.value = ''
+  enlargeLoading.value = false
+  gridLoading.value = false
   reset()
 }
 
@@ -378,6 +419,15 @@ void totalIcons
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+.grid-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
 }
 
 /* Icon grid */
@@ -423,6 +473,46 @@ void totalIcons
   justify-content: center;
   min-width: 0;
   min-height: 0;
+}
+/* Skeleton shimmer until the <img> fires its load event */
+.icon-thumb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--van-background-2) 0%,
+    var(--van-background-3, #f0f0f0) 50%,
+    var(--van-background-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: icon-skeleton 1.5s ease-in-out infinite;
+}
+[data-theme='dark'] .icon-thumb::before {
+  background: linear-gradient(
+    90deg,
+    var(--van-background-2) 0%,
+    #2a2a40 50%,
+    var(--van-background-2) 100%
+  );
+  background-size: 200% 100%;
+}
+.icon-thumb:has(.loaded)::before {
+  display: none;
+}
+@keyframes icon-skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.thumb-img {
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.thumb-img.loaded {
+  opacity: 1;
 }
 .icon-thumb img {
   max-width: 80%;
@@ -475,14 +565,24 @@ void totalIcons
   z-index: 9999;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
+}
+.enlarge-spinner {
+  position: absolute;
+  color: #fff;
 }
 .enlarge-img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.enlarge-img.visible {
+  opacity: 1;
 }
 </style>
