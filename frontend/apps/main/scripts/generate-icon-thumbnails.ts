@@ -1,8 +1,11 @@
 /**
- * Generate 128×128 WebP thumbnails for all 3D icons.
+ * Generate 256×256 WebP thumbnails for all 3D icons.
  *
  * Input:  public/icons/3d/{category}/*.png|webp
- * Output: public/icons/3d-thumbs/{category}/{filename}.webp (128×128, quality 80)
+ * Output: public/icons/3d-thumbs/{category}/{filename}.webp (256×256, quality 90)
+ *
+ * 256px balances file size (~20-50KB) with clarity at mobile detail-page sizes.
+ * Original full-size images are loaded only on user request (lightbox/enlarge).
  *
  * Features:
  * - Incremental: skips already-generated thumbnails
@@ -21,8 +24,8 @@ const PUBLIC_DIR = resolve(import.meta.dirname, '../public')
 const SOURCE_DIR = resolve(PUBLIC_DIR, 'icons/3d')
 const THUMB_DIR = resolve(PUBLIC_DIR, 'icons/3d-thumbs')
 
-const THUMB_SIZE = 128
-const WEBP_QUALITY = 80
+const THUMB_SIZE = 256
+const WEBP_QUALITY = 90
 const BATCH_SIZE = 50
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.webp', '.jpg', '.jpeg'])

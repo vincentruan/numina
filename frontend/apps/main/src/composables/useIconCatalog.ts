@@ -14,10 +14,9 @@ import type { IconCategory, IconEntry } from '@numina/assets/icons/manifest'
 const PAGE_SIZE = 40
 const ALL_CATEGORY_ID = '__all__'
 
-// Phase 1 (false) -> serve original images from /icons/3d/
-// Phase 2 (true)  -> serve WebP thumbnails from /icons/3d-thumbs/
-// Switch after running `pnpm generate:thumbs` and committing the output.
-const USE_THUMBS = false
+// Phase 1: serve 256×256 WebP thumbnails (good quality for list + detail pages)
+// Full originals available via getOriginalUrl() for lightbox/enlarge.
+const USE_THUMBS = true
 
 function stripExt(fileName: string): string {
   const dot = fileName.lastIndexOf('.')

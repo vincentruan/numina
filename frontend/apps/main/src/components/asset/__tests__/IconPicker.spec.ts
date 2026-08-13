@@ -188,7 +188,7 @@ describe('IconPicker', () => {
     expect(cells.length).toBe(2)
   })
 
-  it('emits select-image with original URL when icon clicked', async () => {
+  it('emits select-image with thumbnail URL when icon clicked', async () => {
     const wrapper = mountPicker()
     const tabs = wrapper.findAll('.tab')
     await tabs[1].trigger('click') // 3D tab
@@ -198,7 +198,7 @@ describe('IconPicker', () => {
 
     const emitted = wrapper.emitted('select-image')
     expect(emitted).toBeTruthy()
-    expect(emitted![0][0]).toContain('/icons/3d/vehicles/')
+    expect(emitted![0][0]).toContain('/icons/3d-thumbs/vehicles/')
     expect(emitted![0][0]).toContain('Car')
   })
 })

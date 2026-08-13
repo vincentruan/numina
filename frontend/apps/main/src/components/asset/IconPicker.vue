@@ -105,11 +105,23 @@
                     loading="lazy"
                     @error="onThumbError"
                   />
+                  <!-- Magnify button: preview original (doesn't select) -->
+                  <van-icon
+                    name="zoom-in"
+                    class="magnify-btn"
+                    @click.stop="enlargeIcon(icon)"
+                  />
+                  <!-- Selected checkmark -->
                   <van-icon v-if="isSelected(icon)" name="success" class="check-overlay" />
                 </div>
               </div>
             </div>
           </van-list>
+        </div>
+
+        <!-- Enlarge preview overlay -->
+        <div v-if="enlargedUrl" class="enlarge-overlay" @click="enlargedUrl = ''">
+          <img :src="enlargedUrl" class="enlarge-img" />
         </div>
       </div>
     </div>
@@ -139,6 +151,7 @@ const emit = defineEmits<{
 
 const activeTab = ref<'gallery' | '3d'>('gallery')
 const showSearchInput = ref(false)
+const enlargedUrl = ref<string>('')
 
 const {
   categories,
@@ -170,13 +183,19 @@ watch(
 )
 
 function isSelected(icon: IconEntry): boolean {
-  return selectedIconUrl.value === getOriginalUrl(icon)
+  return selectedIconUrl.value === getThumbUrl(icon)
 }
 
 function selectIcon(icon: IconEntry) {
-  const url = getOriginalUrl(icon)
+  // Store thumbnail URL for display (256px WebP, good quality for list + detail)
+  const url = getThumbUrl(icon)
   selectedIconUrl.value = url
   emit('select-image', url)
+}
+
+function enlargeIcon(icon: IconEntry) {
+  // Load original full-size image for preview
+  enlargedUrl.value = getOriginalUrl(icon)
 }
 
 function toggleSearch() {
@@ -415,7 +434,7 @@ void totalIcons
 }
 .check-overlay {
   position: absolute;
-  top: 2px;
+  bottom: 2px;
   right: 2px;
   width: 18px;
   height: 18px;
@@ -426,5 +445,44 @@ void totalIcons
   align-items: center;
   justify-content: center;
   font-size: 12px;
+}
+.magnify-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: pointer;
+}
+.icon-cell:hover .magnify-btn,
+.icon-cell:active .magnify-btn {
+  opacity: 1;
+}
+
+/* Enlarge preview overlay */
+.enlarge-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.enlarge-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
 }
 </style>
