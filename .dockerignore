@@ -5,3 +5,5 @@
 **/__pycache__
 **/.pytest_cache
 **/.venv
+# Generated thumbnail cache — produced during Docker build, not copied from host
+**/public/icons/3d-thumbs

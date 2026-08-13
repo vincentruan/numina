@@ -13,6 +13,7 @@
  * - Preserves category subdirectory structure
  *
  * Usage: npx tsx scripts/generate-icon-thumbnails.ts
+ * Env:   THUMB_OUTPUT_DIR — override output directory (used in Docker builds)
  * Run from: frontend/apps/main/
  *
  * Prerequisite: sharp must be installed (npm i -D sharp)
@@ -22,7 +23,9 @@ import { resolve, basename, extname } from 'node:path'
 
 const PUBLIC_DIR = resolve(import.meta.dirname, '../public')
 const SOURCE_DIR = resolve(PUBLIC_DIR, 'icons/3d')
-const THUMB_DIR = resolve(PUBLIC_DIR, 'icons/3d-thumbs')
+// Allow overriding output dir — Docker builds use THUMB_OUTPUT_DIR pointing to
+// a BuildKit cache mount so thumbnails survive across image rebuilds.
+const THUMB_DIR = resolve(process.env.THUMB_OUTPUT_DIR || resolve(PUBLIC_DIR, 'icons/3d-thumbs'))
 
 const THUMB_SIZE = 256
 const WEBP_QUALITY = 90

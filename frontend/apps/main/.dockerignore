@@ -2,3 +2,5 @@ node_modules
 dist
 .vite
 *.local
+# Generated thumbnail cache — produced during Docker build, not copied from host
+public/icons/3d-thumbs
