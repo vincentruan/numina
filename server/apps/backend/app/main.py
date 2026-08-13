@@ -70,7 +70,6 @@ from apps.backend.app.models.manifesto import (
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
-from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.notification_subscription import (
     NotificationSubscription,
 )
@@ -156,6 +155,7 @@ from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
+from packages.db.models.notification_config import NotificationConfig
 
 logger = logging.getLogger(__name__)
 

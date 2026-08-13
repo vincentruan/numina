@@ -250,10 +250,10 @@ async def reset_password(
     import string
 
     from apps.backend.app.models.notification_channel import NotificationChannel
-    from apps.backend.app.models.notification_channel_config import (
+    from apps.backend.app.services.notification.sender import NotificationSender
+    from packages.db.models.notification_channel_config import (
         NotificationChannelConfig,
     )
-    from apps.backend.app.services.notification.sender import NotificationSender
 
     # Check notification channels exist
     channels = (

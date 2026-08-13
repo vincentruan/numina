@@ -61,10 +61,6 @@ from apps.backend.app.models.manifesto import (
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
-from apps.backend.app.models.notification_channel_config import (
-    NotificationChannelConfig,
-)
-from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.notification_subscription import (
     NotificationSubscription,
 )
@@ -83,3 +79,7 @@ from apps.backend.app.models.tag import Tag
 from apps.backend.app.models.user import User
 from apps.backend.app.models.valuation import AssetValuation
 from apps.backend.app.models.wish import Wish
+from packages.db.models.notification_channel_config import (
+    NotificationChannelConfig,
+)
+from packages.db.models.notification_config import NotificationConfig
