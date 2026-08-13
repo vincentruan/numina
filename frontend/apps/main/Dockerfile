@@ -4,10 +4,13 @@ WORKDIR /app
 # Copy shared packages first
 COPY frontend/packages/auth ./frontend/packages/auth
 COPY frontend/packages/math ./frontend/packages/math
+COPY frontend/packages/assets ./frontend/packages/assets
 # Install packages devDependencies so vue-tsc can type-check them
 WORKDIR /app/frontend/packages/auth
 RUN npm install
 WORKDIR /app/frontend/packages/math
+RUN npm install
+WORKDIR /app/frontend/packages/assets
 RUN npm install
 # Copy and install frontend app
 COPY frontend/apps/main/package*.json /app/frontend/apps/main/
@@ -16,6 +19,7 @@ WORKDIR /app/frontend/apps/main
 ARG CACHE_BUST=default
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
+    sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
     npm install
 COPY frontend/apps/main/ .
 RUN npx vite build
