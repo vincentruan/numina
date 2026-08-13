@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import case
@@ -34,6 +36,8 @@ from apps.backend.app.services import family as family_service
 from apps.backend.app.services.snapshot import generate_snapshots
 from packages.core.roles import UserRole
 from packages.db.models.family import Family
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -327,9 +331,22 @@ async def create_share_link(
             ),
         )
     except Exception as exc:
+        logger.warning("short.io API call failed: %s", exc)
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED) from exc
 
     if result is None:
+        raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED)
+
+    # short.io returns error responses (403, 400, etc.) as typed result objects
+    # rather than raising exceptions. Detect these and log the actual error.
+    result_class_name = type(result).__name__
+    if "Response4" in result_class_name or "Response5" in result_class_name:
+        error_msg = getattr(result, "message", None) or str(result)
+        logger.warning(
+            "short.io rejected link creation: %s (domain=%s)",
+            error_msg,
+            settings.SHORTIO_DOMAIN,
+        )
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED)
 
     # The auto-generated response model stores most fields in additional_properties
@@ -341,6 +358,10 @@ async def create_share_link(
         )
 
     if not short_url:
+        logger.warning(
+            "short.io response had no shortURL field: %s",
+            result_class_name,
+        )
         raise AppError(ErrorCode.SHARE_LINK_CREATION_FAILED)
 
     return {"short_url": short_url}
