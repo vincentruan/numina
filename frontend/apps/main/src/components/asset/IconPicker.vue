@@ -408,6 +408,7 @@ void totalIcons
   justify-content: center;
   cursor: pointer;
   transition: transform 0.15s;
+  overflow: hidden;
 }
 .icon-cell:active {
   transform: scale(0.95);
@@ -422,11 +423,16 @@ void totalIcons
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  min-height: 0;
 }
 .icon-thumb img {
-  width: 80%;
-  height: 80%;
+  max-width: 80%;
+  max-height: 80%;
+  width: auto;
+  height: auto;
   object-fit: contain;
+  display: block;
 }
 .check-overlay {
   position: absolute;

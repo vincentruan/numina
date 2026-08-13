@@ -17,7 +17,7 @@ const ALL_CATEGORY_ID = '__all__'
 // Phase 1 (false) -> serve original images from /icons/3d/
 // Phase 2 (true)  -> serve WebP thumbnails from /icons/3d-thumbs/
 // Switch after running `pnpm generate:thumbs` and committing the output.
-const USE_THUMBS = true
+const USE_THUMBS = false
 
 function stripExt(fileName: string): string {
   const dot = fileName.lastIndexOf('.')
