@@ -1,18 +1,22 @@
 ---
 name: deploy-production
 description: >
-  Use when deploying Numina to the production Linux Docker server, pulling
-  latest GHCR images, running database migrations, or performing server
-  maintenance (health check, disk cleanup, rollback). Triggers: "部署到生产",
-  "deploy to production", "上线", "发布", "deploy prod", "服务器更新",
-  "make deploy-images", "拉取最新镜像", "health check", "disk cleanup",
-  "database migration", "rollback".
+  Use when deploying Numina to the production Linux Docker server.
+  Two modes: (A) GHCR images — pull pre-built images, no git needed;
+  (B) Source build — git pull + docker compose build.
+  Triggers: "部署到生产", "deploy to production", "上线", "发布",
+  "deploy prod", "服务器更新", "拉取最新镜像", "health check",
+  "disk cleanup", "database migration", "rollback".
 ---
 
 # Production Deployment
 
-Deploy Numina to the production Docker server via pre-built GHCR images.
-The server never builds locally — it pulls images built by GitHub Actions CI on push to `main`.
+Deploy Numina to the production Docker server. Two modes:
+
+| Mode | When | Git needed on server? |
+|------|------|----------------------|
+| **A: GHCR (default)** | CI built images on push to main | No |
+| **B: Source build** | Custom changes not yet on main | Yes |
 
 ## Prerequisites
 
@@ -32,240 +36,213 @@ DEPLOY_REMOTE_DIR=~/data/numina
 set -a && source .claude/deploy.env && set +a
 ```
 
-Without this, variables expand to empty strings and SSH fails silently.
+**Docker permissions** — prepend `sudo` if the deploy user is not in the `docker` group.
 
-**Docker permissions** — the deploy user may not be in the `docker` group. If you get "permission denied" on docker commands, prepend `sudo`.
+## Server Directory Layout
 
-**SSH proxy** — if `git` or `ssh` commands fail with "Connection closed by UNKNOWN port 65535", the global `core.sshcommand` may route through a SOCKS proxy that isn't running. Bypass with `GIT_SSH_COMMAND="ssh"` for git operations.
+The production server's deploy directory needs only these files (not a full git clone for Mode A):
 
-## Compose File
+```
+~/data/numina/
+├── .env                              # Secrets + *_IMAGE vars (manual, not in git)
+├── docker-compose.production.yml     # Compose config (synced from repo)
+├── nginx.production.conf             # Nginx config (synced from repo)
+├── system-config.yaml                # AI model metadata (synced from repo)
+└── .numina/data/
+    ├── uploads/                      # User uploads (persistent)
+    └── secrets/
+        ├── origin.crt                # SSL cert
+        └── origin.key                # SSL key
+```
 
-**Always use `docker-compose.production.yml`** for production deployments:
+---
+
+## Mode A: GHCR Deploy (Default)
+
+No git on the server. CI builds images on push to `main`; server just pulls them.
+
+### Step 1: Verify CI Completed
 
 ```bash
-# Correct — uses production compose
-docker compose -f docker-compose.production.yml pull
-docker compose -f docker-compose.production.yml up -d
-
-# WRONG — uses default compose (may not have production nginx config)
-docker compose pull
-docker compose up -d
+gh run list --limit 1 --workflow=ci.yml --json conclusion,status,headBranch --jq '.[0] | "\(.headBranch) \(.status) \(.conclusion)"'
 ```
 
-The production compose:
-- Pulls GHCR images via `image: ${*_IMAGE:-}` (falls back to build only if image var is empty)
-- Uses `.env` (not `.env.production`)
-- Mounts `nginx.production.conf` (HTTPS 443 + HTTP 80 + SSL certs)
-- Mounts `.numina/data/secrets/` for SSL certificates
-- Mounts `.numina/data/uploads/` for user uploads
-
-## SSL Certificates
-
-SSL certs are required for HTTPS (port 443). Place in `.numina/data/secrets/`:
-
-```
-.numina/data/secrets/origin.crt   # SSL certificate (PEM)
-.numina/data/secrets/origin.key   # Private key (PEM)
-```
-
-**Options:**
-- **Cloudflare Origin CA** (recommended) — generate from Cloudflare Dashboard → SSL/TLS → Origin Server. Works with "Full (Strict)" SSL mode.
-- **Self-signed** — `openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout origin.key -out origin.crt -subj "/CN=your-domain"`. Works with Cloudflare "Full" mode (not "Full (Strict)").
-
-**Cloudflare SSL mode:**
-- **Flexible** → connects to origin via HTTP (port 80). Self-signed not needed but origin traffic unencrypted.
-- **Full** → connects via HTTPS, accepts self-signed certs. ✅ Recommended with self-signed.
-- **Full (Strict)** → connects via HTTPS, requires CA-signed cert. Use Cloudflare Origin CA.
-
-## Deployment Checklist
-
-Copy and track progress:
-
-```
-Deploy Progress:
-- [ ] Phase 1: Connect & assess
-- [ ] Phase 2: Disk space check (clean if >85% or <2GB free)
-- [ ] Phase 3: Verify CI built images (ghcr.io/.../backend:latest exists)
-- [ ] Phase 4: Pull latest code (git pull origin main)
-- [ ] Phase 5: Deploy images (docker compose -f docker-compose.production.yml)
-- [ ] Phase 6: Database migration (if new migrations exist)
-- [ ] Phase 7: Health check (all 6 services healthy)
-```
-
-## Phase 1: Connect & Assess
-
-```bash
-set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
-  'cd ~/data/numina && \
-   echo "=== GIT ===" && git log --oneline -3 && \
-   echo "=== DISK ===" && df -h / | tail -1 && \
-   echo "=== DOCKER ===" && sudo docker system df && \
-   echo "=== CONTAINERS ===" && sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}" && \
-   echo "=== COMPOSE FILE ===" && sudo docker inspect numina-nginx --format "{{index .Config.Labels \"com.docker.compose.project.config_files\"}}" 2>/dev/null'
-```
-
-**Important:** Verify the running containers use `docker-compose.production.yml`. If the label shows `docker-compose.yml`, the server is using the wrong compose file — switch with `docker compose down` then `docker compose -f docker-compose.production.yml up -d`.
-
-## Phase 2: Disk Space Check
-
-**Threshold: 85% usage or < 2GB free.** Clean before deploying (cleanup during deploy fails with "No space left on device"):
-
-```bash
-sudo docker builder prune -af                    # Build cache first (usually 2-4GB)
-sudo docker image prune -af --filter "until=48h" # Unused images if still tight
-df -h /                                           # Verify — abort if < 1GB free
-```
-
-## Phase 3: Verify CI Built Images
-
-Images are built on push to `main` only. Verify before deploying:
-
-```bash
-# Check locally that CI completed — images must exist in GHCR
-gh run list --limit 1 --workflow=ci.yml --json conclusion,headBranch
-# Should show "SUCCESS" on "main". If not, wait for CI or push to main first.
-```
-
-**Waiting for CI:** If CI is still `in_progress`, poll until completed:
+Must show `main completed success`. If `in_progress`, poll:
 
 ```bash
 bash -c 'while true; do
-  result=$(gh run list --limit 1 --workflow=ci.yml --json conclusion,status,headSha --jq ".[0] | \"\(.headSha[0:7])|\(.status)|\(.conclusion)\"")
-  run_status=$(echo "$result" | cut -d"|" -f2)
-  echo "[$(date +%H:%M:%S)] status=$run_status"
-  [ "$run_status" = "completed" ] && break
-  sleep 30
+  result=$(gh run list --limit 1 --workflow=ci.yml --json conclusion,status --jq ".[0] | \"\(.status)|\(.conclusion)\"")
+  [ "$(echo $result | cut -d"|" -f1)" = "completed" ] && echo "✓ CI done" && break
+  echo "[$(date +%H:%M:%S)] waiting for CI..."; sleep 30
 done'
 ```
 
-**5 GHCR images** (tagged `:latest` + `:<sha>`):
-`backend`, `agent`, `scheduler-worker`, `frontend-main`, `frontend-child`
+### Step 2: Sync Config Files
 
-## Phase 4: Pull Latest Code
+Push config changes from local repo to server (skip if no config file changes since last deploy):
+
+```bash
+set -a && source .claude/deploy.env && set +a
+rsync -avz --progress -e "ssh -p ${DEPLOY_SSH_PORT:-22}" \
+  docker-compose.production.yml \
+  nginx.production.conf \
+  system-config.yaml \
+  ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_DIR}/
+```
+
+**What to sync:** Only config files that compose/nginx/system need. Never sync `.env` (secrets) or source code.
+
+**When to skip:** If the only changes are Python/Vue code (no config file changes), skip this step and go directly to Step 3.
+
+### Step 3: Check Disk Space
 
 ```bash
 set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
-  'cd ~/data/numina && GIT_SSH_COMMAND="ssh" git pull origin main'
+  'df -h / | tail -1 && echo "---" && sudo docker system df'
 ```
 
-If conflicts → stop and report. Never resolve conflicts on the server.
+**Threshold: 85% usage or < 2GB free.** Clean before deploying:
 
-## Phase 5: Deploy Images
+```bash
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
+  'sudo docker builder prune -af && sudo docker image prune -af --filter "until=48h"'
+```
 
-**Always use `-f docker-compose.production.yml`:**
+### Step 4: Pull Images & Recreate
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
-  'cd ~/data/numina && \
-   echo "=== Pull GHCR images ===" && \
-   sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child && \
-   echo "=== Recreate services ===" && \
-   sudo docker compose -f docker-compose.production.yml up -d && \
-   echo "=== Wait for backend healthy ===" && \
-   for i in $(seq 1 30); do \
-     if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy"; then echo "✓ Backend healthy"; break; fi; \
-     sleep 2; \
-   done && \
-   sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend startup timeout"; exit 1; }'
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd $DEPLOY_REMOTE_DIR &&
+  echo "=== Pull GHCR images ===" &&
+  sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child &&
+  echo "=== Recreate services ===" &&
+  sudo docker compose -f docker-compose.production.yml up -d &&
+  echo "=== Wait for backend healthy ===" &&
+  for i in $(seq 1 30); do
+    if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy"; then
+      echo "✓ Backend healthy"; break
+    fi
+    sleep 2
+  done &&
+  sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend startup timeout"; exit 1; }
+'
 ```
 
-**If it fails:**
-- **Pull errors** → GHCR auth or network. Check `.env` has correct `*_IMAGE` URLs.
-- **Space errors** → return to Phase 2, clean more aggressively.
-- **Health timeout** → `sudo docker compose -f docker-compose.production.yml logs --tail 50 backend`
-- **SSL/cert errors** → check `.numina/data/secrets/origin.crt` and `origin.key` exist.
-- **Building instead of pulling** → `.env` is missing `*_IMAGE` vars. Add them (see Prerequisites).
+### Step 5: Database Migration (if needed)
 
-## Phase 6: Database Migration
-
-Only needed when new alembic migrations exist (check `server/apps/backend/alembic/versions/` for new files since last deploy):
+Check for new migrations since last deploy:
 
 ```bash
-# Check for new migrations
 git log --oneline <last-deploy-sha>..HEAD -- server/apps/backend/alembic/versions/
 ```
 
-**Full guide:** See [db-migration.md](db-migration.md) for the complete decision tree.
+If new migrations exist → follow [db-migration.md](db-migration.md).
 
-**Quick path** — if DB was bootstrapped (tables exist but `alembic_version` empty):
+### Step 6: Health Check
 
 ```bash
-sudo docker compose -f docker-compose.production.yml exec -T backend sh -c \
-  'cd /app && uv run alembic -c /app/apps/backend/alembic.ini stamp head'
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  echo "=== CONTAINERS ===" &&
+  sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" &&
+  echo "" &&
+  echo "=== HTTPS HEALTH ===" &&
+  curl -sk https://localhost/api/health && echo "" &&
+  echo "" &&
+  echo "=== FRONTEND ===" &&
+  curl -sk -o /dev/null -w "HTTP %{http_code}" https://localhost/ && echo ""
+'
 ```
 
-If new tables/columns were added after bootstrap, check and create them manually before stamping (see db-migration.md Step 2).
+**Success:** 6 services running, backend `(healthy)`, `/api/health` returns `{"status":"ok"}`.
 
-## Phase 7: Health Check
+---
+
+## Mode B: Source Build
+
+Use when you need custom changes not yet merged to main, or CI hasn't built images.
+
+### Step 1: Pull Latest Code on Server
 
 ```bash
 set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
-  'cd ~/data/numina && \
-   echo "=== CONTAINERS ===" && \
-   sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" && \
-   echo "" && \
-   echo "=== HTTPS HEALTH ===" && \
-   curl -sk https://localhost/api/health && echo "" && \
-   echo "" && \
-   echo "=== HTTP HEALTH ===" && \
-   curl -sf http://localhost/api/health && echo "" && \
-   echo "" && \
-   echo "=== FRONTEND ===" && \
-   curl -sk -o /dev/null -w "HTTP %{http_code}" https://localhost/ && echo "" && \
-   echo "" && \
-   echo "=== DISK ===" && \
-   df -h / | tail -1'
+  'cd ~/data/numina && GIT_SSH_COMMAND="ssh" git fetch origin && GIT_SSH_COMMAND="ssh" git checkout main && GIT_SSH_COMMAND="ssh" git pull origin main'
 ```
 
-**Success criteria:**
-- 6 services running: backend, agent, scheduler_worker, frontend-main, frontend-child, nginx
-- backend/agent/scheduler_worker/frontend-child show `(healthy)`
-- nginx shows ports `0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp`
-- `/api/health` returns `{"status":"ok"}` on both HTTP and HTTPS
-- Frontend HTTPS 200
-- Test from external: `curl -sI https://numina.xiaoshutiao.space/` should return HTTP 200 (not 526)
+If conflicts → **stop and report**. Never resolve conflicts on the server.
+
+### Step 2: Build & Deploy
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd ~/data/numina &&
+  echo "=== Build images ===" &&
+  sudo docker compose -f docker-compose.production.yml build &&
+  echo "=== Recreate services ===" &&
+  sudo docker compose -f docker-compose.production.yml up -d &&
+  echo "=== Wait for backend ===" &&
+  sleep 15 &&
+  sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}"
+'
+```
+
+### Step 3: Health Check
+
+Same as Mode A Step 6.
+
+---
 
 ## Rollback
 
-Only works for commits pushed to main (CI must have built GHCR images):
+### Mode A Rollback (GHCR — pin to specific SHA)
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
-  'cd ~/data/numina && \
-   GIT_SSH_COMMAND="ssh" git checkout <commit-sha> && \
-   sudo docker compose -f docker-compose.production.yml pull && \
-   sudo docker compose -f docker-compose.production.yml up -d'
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd ~/data/numina &&
+  # Temporarily pin images to previous SHA in .env
+  # e.g. BACKEND_IMAGE=ghcr.io/vincentruan/numina/backend:<old-sha>
+  sudo docker compose -f docker-compose.production.yml pull &&
+  sudo docker compose -f docker-compose.production.yml up -d
+'
 ```
 
-Then restore main: `GIT_SSH_COMMAND="ssh" git checkout main`.
+Then restore `.env` image tags to `:latest` after verifying.
+
+### Mode B Rollback (source)
+
+```bash
+ssh ... 'cd ~/data/numina && git checkout <commit-sha> && sudo docker compose -f docker-compose.production.yml build && sudo docker compose -f docker-compose.production.yml up -d'
+```
+
+Then restore: `git checkout main`.
+
+---
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
-| Full deploy | Phases 1–7 above |
-| Pull images only | Phase 5 only |
-| Run migrations | Phase 6 (see [db-migration.md](db-migration.md)) |
-| Health check | Phase 7 only |
+| Task | Mode A (GHCR) | Mode B (Source) |
+|------|---------------|-----------------|
+| Full deploy | Steps 1-6 | Steps 1-3 |
+| Config change only | Step 2 + Step 4 | Step 1 + Step 2 |
+| Code change only | Step 4 (skip Step 2) | Steps 1-2 |
+| Health check | Step 6 | Step 3 |
 | View logs | `sudo docker compose -f docker-compose.production.yml logs --tail 100 -f <service>` |
 | Restart service | `sudo docker compose -f docker-compose.production.yml restart <service>` |
-| Emergency rollback | `git checkout <sha>` + Phase 5 |
 
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
 | `No space left on device` | `sudo docker builder prune -af && sudo docker image prune -af` |
-| `DuplicateTable`/`DuplicateColumn` | DB bootstrapped → use `stamp head` (see db-migration.md) |
+| `DuplicateTable`/`DuplicateColumn` | DB bootstrapped → use `stamp head` (see [db-migration.md](db-migration.md)) |
 | Container unhealthy | `sudo docker compose -f docker-compose.production.yml logs --tail 50 <service>` |
 | GHCR pull fails | Verify `*_IMAGE` in `.env`. Auth: `echo "$TOKEN" \| docker login ghcr.io -u <user> --password-stdin` |
 | CI didn't build images | Only builds on push to `main`. Check `gh run list --workflow=ci.yml` |
-| Cloudflare 526 (Invalid SSL) | SSL mode is "Full (Strict)" but cert is self-signed → change to "Full" in Cloudflare dashboard, or use Cloudflare Origin CA cert |
-| Wrong compose file running | Check: `sudo docker inspect numina-nginx --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'` — if not `docker-compose.production.yml`, do `docker compose down` then `docker compose -f docker-compose.production.yml up -d` |
-| SSH connection refused / proxy error | Bypass proxy: `GIT_SSH_COMMAND="ssh" git pull` |
+| Cloudflare 526 (Invalid SSL) | SSL mode "Full (Strict)" + self-signed cert → change to "Full" in Cloudflare, or use Origin CA cert |
 | Services building instead of pulling | `.env` missing `*_IMAGE` vars — add `BACKEND_IMAGE=ghcr.io/vincentruan/numina/backend:latest` etc. |
+| Double CSP headers (browser console) | Outer nginx must NOT add CSP — inner nginx (frontend container) handles it with nonce injection |
