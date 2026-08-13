@@ -22,6 +22,16 @@ RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../package
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
     npm install
 COPY frontend/apps/main/ .
+# Create symlinks: public/icons/3d/{cat} → @numina/assets 3d-things (LFS originals).
+# Then generate 256×256 WebP thumbnails into public/icons/3d-thumbs/.
+# Both steps run before vite build so the files land in dist/.
+RUN mkdir -p public/icons/3d && \
+    for cat in animals art-culture buildings clothing-accessories electronics \
+               entertainment furniture healthcare instruments kitchenware \
+               office-stationery plants science-tech sports tools vehicles; do \
+      ln -sf /app/frontend/packages/assets/src/icons/3d-things/$cat public/icons/3d/$cat; \
+    done && \
+    npx tsx scripts/generate-icon-thumbnails.ts
 RUN npx vite build
 
 FROM nginx:1.27-alpine
