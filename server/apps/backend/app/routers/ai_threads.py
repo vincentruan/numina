@@ -38,6 +38,17 @@ async def _proxy_to_agent(
         if h in request.headers:
             forward_headers[h] = request.headers[h]
 
+    # 转发用户的 access token，以便 agent 端的 verify_family_token 能通过 JWT 认证。
+    # AgentClient 只发送 X-Agent-Token (service token)，但 agent 的 threads 端点
+    # 需要 Authorization: Bearer <access_token> 或 access_token cookie。
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        forward_headers["authorization"] = auth_header
+    else:
+        access_cookie = request.cookies.get("access_token")
+        if access_cookie:
+            forward_headers["authorization"] = f"Bearer {access_cookie}"
+
     method = request.method
     agent_client = AgentClient(current_user.family_id, current_user.id)
     target_path = f"/api/threads/{path}" if path else "/api/threads"
