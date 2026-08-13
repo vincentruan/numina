@@ -19,7 +19,7 @@ All verified landed in `server/apps/agent/skills/builtin/public/`.
 
 ## Existing cases — core AI flows
 
-### C3.1 AI Hub (AIHubPage) — report card + 小鸣 + agents + entry
+### C3.1 AI Hub (AIHubPage) — report card + 数鸣 + agents + entry
 
 ```
 bsk navigate ${BASE}ai --session <id> --wait-until networkidle
@@ -32,7 +32,7 @@ Assertions:
 - [ ] If report exists: report-summary-card renders summary + "查看完整报告" → `/ai/report`
 - [ ] If no report + AI enabled: report-empty-card with "生成第一份报告" CTA
 - [ ] If AI disabled: ai-disabled-card with CTA → `/settings/ai`
-- [ ] NuminaAgentCard (小鸣 featured card) renders, emits `@consult`
+- [ ] NuminaAgentCard (数鸣 featured card) renders, emits `@consult`
 - [ ] 我的智能体 section (collapsible) lists enabled custom agents
 - [ ] 分析应用 section lists Time Machine → `/ai/time-machine`
 - [ ] Chat input box (InputBox component) at bottom with mode selector (flash/thinking/pro/ultra)
@@ -62,7 +62,7 @@ Assertions:
 ### C3.3 AI chat — agent consult (数鸣智能体 / custom agent)
 
 ```
-# From AIHubPage, click 小鸣 (NuminaAgentCard) or a custom AgentCard
+# From AIHubPage, click 数鸣 (NuminaAgentCard) or a custom AgentCard
 bsk navigate ${BASE}ai --session <id> --wait-until networkidle
 bsk snapshot --session <id>
 bsk click @eN --session <id>   # consult button
@@ -407,7 +407,7 @@ Assertions:
 ### C3.20 Chat — agent consult thread context
 
 ```
-# From AIHubPage consult 小鸣 (C3.3), then send a follow-up
+# From AIHubPage consult 数鸣 (C3.3), then send a follow-up
 bsk navigate ${BASE}ai/chat?agentId=<numina-agent-id> --session <id> --wait-until networkidle
 bsk fill @eN --value 接着上次的思路 --session <id>
 bsk click @eM --session <id>

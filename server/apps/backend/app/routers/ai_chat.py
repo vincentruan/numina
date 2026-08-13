@@ -279,7 +279,7 @@ async def chat_stream(
             )
 
         # Route to the internal gateway endpoint (X-Agent-Token auth, bypasses R1 409 gate).
-        # When agent_id is absent, fall back to the 小鸣 system agent (NUMINA_AGENT_ID).
+        # When agent_id is absent, fall back to the 数鸣 system agent (NUMINA_AGENT_ID).
         agent_id = body.agent_id or str(NUMINA_AGENT_ID)
         agent_url = f"/internal/gateway/runs/chat/{session_id}"
         request_json = {

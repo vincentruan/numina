@@ -585,7 +585,7 @@ first — if `aiStore.aiEnabled` is false, configure a provider at
 
 Run the **Area 3** cases from [`test-cases/groups/g1-adult-stable/area3-ai.md`](./test-cases/groups/g1-adult-stable/area3-ai.md):
 
-- C3.1 AI Hub — report card + 小鸣 (NuminaAgentCard) + agents + chat input
+- C3.1 AI Hub — report card + 数鸣 (NuminaAgentCard) + agents + chat input
 - C3.2 AI chat — send message + stream response (assert no blank/duplicate/error-stuck)
 - C3.3 AI chat — agent consult (数鸣 / custom agent → `/ai/chat?agentId=`)
 - C3.4 AI asset report — 3-step timeline generation (cached + fresh + failure fallback)
