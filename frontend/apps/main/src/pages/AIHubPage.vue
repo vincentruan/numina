@@ -134,9 +134,9 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent sections: 小鸣 featured card → My Agents → Analysis Apps -->
+    <!-- Agent sections: 数鸣 featured card → My Agents → Analysis Apps -->
     <div class="feature-section">
-      <!-- 小鸣 featured card (full width) -->
+      <!-- 数鸣 featured card (full width) -->
       <NuminaAgentCard @consult="handleNuminaConsult" />
 
       <!-- 我的智能体 Section -->
@@ -428,13 +428,13 @@ const numinaAgent = computed(() =>
 )
 
 // Agent choices for picker - only actual agents, not apps like Time Machine
-// Built-in agents: only 小鸣 (numina) is suitable for chat; ignore other system agents.
+// Built-in agents: only 数鸣 (numina) is suitable for chat; ignore other system agents.
 const agentChoices = computed<Agent[]>(() => [
   ...agentStore.systemAgents.filter((a) => a.is_enabled && a.agent_name === NUMINA_AGENT_NAME),
   ...agentStore.customAgents.filter((a) => a.is_enabled),
 ])
 
-// Default selected agent to 小鸣 once loaded
+// Default selected agent to 数鸣 once loaded
 watch(
   () => agentStore.systemAgents,
   () => {

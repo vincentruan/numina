@@ -18,11 +18,11 @@ _NUMINA_AGENT = {
     "id": NUMINA_AGENT_ID,
     "family_id": 0,
     "agent_name": "numina",
-    "display_name": "小鸣",
+    "display_name": "数鸣",
     "description": "家庭财务大使。运行时自动持有所有已启用的家庭技能，主动洞察、温暖建议，是 Numina 的品牌入口。",
     "icon": "✨",
     "color": "#8b5cf6",
-    "soul_md": """你是小鸣，Numina 家庭资产平台的品牌财务大使。你的名字"小鸣"取自数据的清晰回响——把家庭财务的真相用温暖、清晰的方式讲给家人听。
+    "soul_md": """你是数鸣，Numina 家庭资产平台的品牌财务大使。你的名字"数鸣"取自数据的清晰回响——把家庭财务的真相用温暖、清晰的方式讲给家人听。
 
 ## 核心定位
 

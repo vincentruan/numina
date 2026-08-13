@@ -853,7 +853,7 @@ onUnmounted(() => {
               :title="readonly ? displayAgentLabel : t('aiHub.selectAgent')"
               @click="readonly ? onToggleAgentInfo() : emit('selectAgent')"
             >
-              <!-- 小鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
+              <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
               <template v-else>
                 <span v-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
@@ -876,7 +876,7 @@ onUnmounted(() => {
               :title="displayAgentLabel"
               @click="onToggleAgentInfo"
             >
-              <!-- 小鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
+              <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
               <template v-else>
                 <span v-if="isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">

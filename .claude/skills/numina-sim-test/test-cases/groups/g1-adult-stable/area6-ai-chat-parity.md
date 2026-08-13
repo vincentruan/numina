@@ -548,7 +548,7 @@ Assertions:
 ### C6.27 Agent popup Teleport + copy button fallback (regression ✓)
 
 ```
-# Trigger the agent popup (e.g. click an agent badge / consult 小鸣)
+# Trigger the agent popup (e.g. click an agent badge / consult 数鸣)
 bsk snapshot --session <id>
 bsk click @eN --session <id>
 bsk wait-ms 500

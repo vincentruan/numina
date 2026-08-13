@@ -205,7 +205,7 @@ def test_c28_asset_list(page: Page):
 
 
 def test_c31_ai_hub(page: Page):
-    """C3.1 AI Hub — report card + 小鸣 + chat input."""
+    """C3.1 AI Hub — report card + 数鸣 + chat input."""
     # Try clicking AI tab (may be labeled AI or shown as brain emoji)
     ai_clicked = click_tab(page, "AI")
     if not ai_clicked:

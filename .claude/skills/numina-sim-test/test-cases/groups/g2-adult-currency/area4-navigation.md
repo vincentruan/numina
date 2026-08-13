@@ -180,7 +180,7 @@ done
 ```
 
 Assertions:
-- [ ] `/ai` → AIHubPage renders (report card + 小鸣 + agents + analysis apps + chat input)
+- [ ] `/ai` → AIHubPage renders (report card + 数鸣 + agents + analysis apps + chat input)
 - [ ] `/ai/report` → AIReportPage renders (3-step timeline OR cached report OR empty CTA)
 - [ ] `/ai/chat` → AIChatPage/AIChatBox renders (message list + input)
 - [ ] `/ai/chat/history` → ChatHistoryPage renders (date-grouped thread list)
