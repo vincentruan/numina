@@ -124,8 +124,6 @@ services:
     restart: unless-stopped
     expose:
       - "80"
-    volumes:
-      - ${NUMINA_DATA_DIR:-./.numina/data}/icons:/usr/share/nginx/html/icons:ro
 
   frontend-child:
     image: ${FRONTEND_CHILD_IMAGE:-}

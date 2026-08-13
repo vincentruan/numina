@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Build stage — includes vite-plugin-svg-icons-ng for SVG sprite generation
 FROM node:22-alpine AS build
 WORKDIR /app
@@ -21,17 +22,25 @@ RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../package
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
     npm install
-COPY frontend/apps/main/ .
-# Create symlinks: public/icons/3d/{cat} → @numina/assets 3d-things (LFS originals).
-# Then generate 256×256 WebP thumbnails into public/icons/3d-thumbs/.
-# Both steps run before vite build so the files land in dist/.
+# Generate 256×256 WebP thumbnails BEFORE copying full app source.
+# This layer only re-runs when packages/assets icons or the script change —
+# not when app code changes. BuildKit cache mount further speeds up the case
+# where icons do change by persisting previously generated thumbnails.
+COPY frontend/apps/main/scripts/generate-icon-thumbnails.ts ./scripts/
 RUN mkdir -p public/icons/3d && \
     for cat in animals art-culture buildings clothing-accessories electronics \
                entertainment furniture healthcare instruments kitchenware \
                office-stationery plants science-tech sports tools vehicles; do \
       ln -sf /app/frontend/packages/assets/src/icons/3d-things/$cat public/icons/3d/$cat; \
-    done && \
-    npx tsx scripts/generate-icon-thumbnails.ts
+    done
+# Generate thumbnails with BuildKit cache mount — persists across builds so
+# the script's stat() check can skip already-generated files. The generated
+# files are copied into public/ within the same RUN (cache mount is ephemeral).
+RUN --mount=type=cache,target=/tmp/icon-thumbs \
+    THUMB_OUTPUT_DIR=/tmp/icon-thumbs npx tsx scripts/generate-icon-thumbnails.ts && \
+    cp -r /tmp/icon-thumbs public/icons/3d-thumbs
+# Copy full app source (3d-thumbs excluded via .dockerignore to preserve cache)
+COPY frontend/apps/main/ .
 RUN npx vite build
 
 FROM nginx:1.27-alpine
