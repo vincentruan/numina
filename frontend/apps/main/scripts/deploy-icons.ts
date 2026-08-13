@@ -24,6 +24,12 @@ const CATEGORIES = [
   'entertainment',
   'instruments',
   'office-stationery',
+  'animals',
+  'buildings',
+  'art-culture',
+  'plants',
+  'science-tech',
+  'healthcare',
 ] as const
 
 async function deploy(): Promise<void> {

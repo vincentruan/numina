@@ -17,6 +17,12 @@
     "./icons/3d-things/entertainment/*": "./src/icons/3d-things/entertainment/*",
     "./icons/3d-things/instruments/*": "./src/icons/3d-things/instruments/*",
     "./icons/3d-things/office-stationery/*": "./src/icons/3d-things/office-stationery/*",
+    "./icons/3d-things/animals/*": "./src/icons/3d-things/animals/*",
+    "./icons/3d-things/buildings/*": "./src/icons/3d-things/buildings/*",
+    "./icons/3d-things/art-culture/*": "./src/icons/3d-things/art-culture/*",
+    "./icons/3d-things/plants/*": "./src/icons/3d-things/plants/*",
+    "./icons/3d-things/science-tech/*": "./src/icons/3d-things/science-tech/*",
+    "./icons/3d-things/healthcare/*": "./src/icons/3d-things/healthcare/*",
     "./icons/cartoon-consumer/*": "./src/icons/cartoon-consumer/*",
     "./images": "./src/images/index.ts",
     "./empty-states": "./src/empty-states/index.ts"

@@ -33,6 +33,12 @@ const CATEGORY_DEFS: CategoryDef[] = [
   { folder: 'entertainment',       nameZh: '娱乐休闲',   nameEn: 'Entertainment',         sortOrder: 7, assetCategoryHints: ['entertainment'] },
   { folder: 'instruments',         nameZh: '音乐乐器',   nameEn: 'Musical Instruments',   sortOrder: 8, assetCategoryHints: ['instrument'] },
   { folder: 'office-stationery',   nameZh: '办公文具',   nameEn: 'Office & Stationery',   sortOrder: 9, assetCategoryHints: ['office'] },
+  { folder: 'animals',             nameZh: '动物生物',   nameEn: 'Animals',               sortOrder: 10, assetCategoryHints: ['pet', 'animal'] },
+  { folder: 'buildings',           nameZh: '建筑地点',   nameEn: 'Buildings',             sortOrder: 11, assetCategoryHints: ['home', 'building'] },
+  { folder: 'art-culture',         nameZh: '艺术文化',   nameEn: 'Art & Culture',         sortOrder: 12, assetCategoryHints: ['luxury', 'art'] },
+  { folder: 'plants',              nameZh: '植物花卉',   nameEn: 'Plants & Flowers',      sortOrder: 13, assetCategoryHints: ['plant'] },
+  { folder: 'science-tech',        nameZh: '科学技术',   nameEn: 'Science & Technology',  sortOrder: 14, assetCategoryHints: ['digital', 'tech'] },
+  { folder: 'healthcare',          nameZh: '医疗健康',   nameEn: 'Healthcare',            sortOrder: 15, assetCategoryHints: ['medical'] },
 ]
 
 // ── parsing ──────────────────────────────────────────────────────────────────
