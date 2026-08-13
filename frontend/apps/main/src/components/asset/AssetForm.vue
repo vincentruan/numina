@@ -4,20 +4,39 @@
 
     <!-- P1: Image upload — top independent section -->
     <div class="image-upload-section">
-      <van-uploader
-        v-model="fileList"
-        :max-count="1"
-        :max-size="5 * 1024 * 1024"
-        :after-read="afterRead as UploaderAfterRead"
-        @delete="onDelete"
-      >
-        <template #default>
-          <div v-if="!fileList.length" class="image-placeholder">
-            <van-icon name="photograph" size="32" color="var(--van-text-color-3)" />
-            <span class="image-hint">{{ t('assetForm.imageUploadHint') }}</span>
-          </div>
-        </template>
-      </van-uploader>
+      <div class="avatar-area">
+        <!-- Current icon / placeholder -->
+        <div v-if="form.image_url" class="asset-preview" @click="showIconPicker = true">
+          <img :src="form.image_url" />
+        </div>
+        <div v-else class="image-placeholder" @click="showIconPicker = true">
+          <van-icon name="photograph" size="32" color="var(--van-text-color-3)" />
+          <span class="image-hint">{{ t('assetForm.imageUploadHint') }}</span>
+        </div>
+        <!-- Change icon button -->
+        <van-button
+          size="small"
+          icon="exchange"
+          class="change-icon-btn"
+          @click="showIconPicker = true"
+        >{{ t('iconPicker.changeIcon') }}</van-button>
+      </div>
+      <!-- Hidden file inputs for gallery/camera selection (triggered by IconPicker) -->
+      <input
+        ref="galleryFileInput"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        @change="onFileSelected"
+      />
+      <input
+        ref="cameraFileInput"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        capture="environment"
+        hidden
+        @change="onFileSelected"
+      />
     </div>
 
     <!-- P1: Asset type — SegmentedControl -->
@@ -279,12 +298,30 @@
     </div>
     </div>
   </van-form>
+
+  <!-- Logo cropper popup -->
+  <LogoCropper
+    v-model:show="showCropper"
+    :source="cropperSource"
+    @confirm="onCropperConfirm"
+  />
+
+  <!-- Icon picker popup (gallery + 3D icons) -->
+  <IconPicker
+    v-model:show="showIconPicker"
+    :current-image-url="form.image_url"
+    @select-image="onIconPickerSelectImage"
+    @request-gallery="onIconPickerRequestGallery"
+    @request-camera="onIconPickerRequestCamera"
+    @delete="onIconPickerDelete"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { UploaderAfterRead, FormInstance } from 'vant'
+import type { FormInstance } from 'vant'
+import { showLoadingToast, showSuccessToast, showFailToast, showToast } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags } from '@/api/tags'
@@ -294,6 +331,9 @@ import { useAuthStore } from '@/stores/auth'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
+import LogoCropper from './LogoCropper.vue'
+import IconPicker from './IconPicker.vue'
+import { useWatermark } from '@/composables/useWatermark'
 import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
@@ -438,8 +478,18 @@ function selectCategory(id: string) {
   showCategoryPicker.value = false
 }
 
-// Image upload state
+// Image upload state - tracks current image URL for preview
 const fileList = ref<{ url: string; content?: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
+
+// Logo cropper state
+const { applyWatermark, canvasToBlob } = useWatermark()
+const showCropper = ref(false)
+const cropperSource = ref<File | string | null>(null)
+
+// IconPicker state
+const showIconPicker = ref(false)
+const galleryFileInput = ref<HTMLInputElement>()
+const cameraFileInput = ref<HTMLInputElement>()
 
 // Tags state
 const availableTags = ref<Tag[]>([])
@@ -551,8 +601,7 @@ watch(() => props.initialData, (data) => {
     // Image preview
     const imageUrl = data.image_url
     if (imageUrl) {
-      const fullUrl = imageUrl.startsWith('/api/v1') ? imageUrl : `/api/v1${imageUrl}`
-      fileList.value = [{ url: fullUrl, content: fullUrl, status: 'done' }]
+      fileList.value = [{ url: imageUrl, content: imageUrl, status: 'done' }]
     }
 
     // Edit mode: auto-expand sections that have data
@@ -623,23 +672,78 @@ function onStatusConfirm({ selectedOptions }: { selectedOptions: { value: string
 }
 
 // Image upload handlers
-async function afterRead(file: { file: File; url?: string; content?: string; status?: string; message?: string }) {
-  file.status = 'uploading'
+// Flow: IconPicker -> gallery/camera file input -> cropper -> watermark -> upload
+//   or: IconPicker -> 3D icon select -> direct image_url set (no watermark)
+
+// File size check (5MB max, matching previous van-uploader constraint)
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+
+// Called when cropper confirms - applies watermark then uploads
+async function onCropperConfirm(canvas: HTMLCanvasElement) {
+  showCropper.value = false
   try {
-    const res = await uploadImage(file.file)
-    file.status = 'done'
-    const fullUrl = `/api/v1${res.data.url}`
-    file.url = fullUrl
-    file.content = fullUrl
+    // Apply watermark
+    const userName = authStore.user?.display_name || ''
+    await applyWatermark(canvas, userName)
+
+    // Convert to Blob
+    const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92)
+
+    // Upload via existing API
+    showLoadingToast({ message: t('common.loading'), forbidClick: true, duration: 0 })
+    const res = await uploadImage(new File([blob], 'logo.jpg', { type: 'image/jpeg' }))
+
+    // Update form and file list
     form.value.image_url = res.data.url
+    fileList.value = [{ url: res.data.url, content: res.data.url, status: 'done' }]
+    showSuccessToast(t('assetForm.uploadSuccess'))
   } catch {
-    file.status = 'failed'
-    file.message = t('assetForm.uploadFailed')
+    showFailToast(t('assetForm.watermarkFailed'))
+  } finally {
+    cropperSource.value = null
   }
 }
 
-function onDelete() {
+// IconPicker event handlers
+function onIconPickerSelectImage(url: string) {
+  form.value.image_url = url
+  fileList.value = [{ url, content: url, status: 'done' }]
+  showIconPicker.value = false
+}
+
+function onIconPickerRequestGallery() {
+  showIconPicker.value = false
+  galleryFileInput.value?.click()
+}
+
+function onIconPickerRequestCamera() {
+  showIconPicker.value = false
+  cameraFileInput.value?.click()
+}
+
+function onIconPickerDelete() {
   form.value.image_url = ''
+  fileList.value = []
+  showIconPicker.value = false
+}
+
+// Gallery/camera file selected -> check size -> cropper flow
+function onFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  // Reset input so same file can be selected again
+  input.value = ''
+
+  // Size check (replaces @oversize handler)
+  if (file.size > MAX_FILE_SIZE) {
+    showToast({ message: t('assetForm.fileTooLarge'), icon: 'warning-o' })
+    return
+  }
+
+  // Open cropper with the selected file
+  cropperSource.value = file
+  showCropper.value = true
 }
 
 // Map field names to their collapsible section
@@ -717,9 +821,33 @@ function onSubmit() {
 /* P1: Image upload section */
 .image-upload-section {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 24px 16px 16px;
   background: var(--van-background);
+  gap: 12px;
+}
+.avatar-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.asset-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--van-background-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.asset-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .image-placeholder {
   width: 120px;
@@ -732,15 +860,16 @@ function onSubmit() {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  cursor: pointer;
 }
 .image-hint {
   font-size: 12px;
   color: var(--van-text-color-3);
 }
-:deep(.van-uploader__preview-image) {
-  width: 120px;
-  height: 120px;
-  border-radius: 16px;
+.change-icon-btn {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
 }
 
 /* P1: Type segmented control */

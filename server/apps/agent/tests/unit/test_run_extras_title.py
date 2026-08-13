@@ -267,7 +267,9 @@ async def test_sync_title_allows_partial_exchange_for_interrupted_run():
 
 
 async def test_sync_title_no_save_without_checkpoint_or_message():
-    """No save when checkpoint is absent and no user_message is provided."""
+    """When checkpoint is absent and no user_message is provided, fall back to
+    DeerFlow's _text_fallback_title which returns 'New Chat' — the sidebar is
+    never left with a blank or placeholder title."""
     with (
         patch(
             "apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer"
@@ -283,9 +285,11 @@ async def test_sync_title_no_save_without_checkpoint_or_message():
 
         result = await sync_title_from_checkpoint("thread-1", "family-1")
 
-    repo.update_summary.assert_not_called()
-    # No title source available — returns None, worker will not publish.
-    assert result is None
+    # DeerFlow robustness: even with no checkpoint and no user message, a
+    # fallback title is persisted so the sidebar is never blank.
+    repo.update_summary.assert_called_once()
+    assert repo.update_summary.call_args.kwargs["title"] == "New Chat"
+    assert result == "New Chat"
 
 
 def test_is_fallback_title_detects_truncated_context_json():

@@ -31,7 +31,6 @@
             class="icon-img"
             @error="onImageError"
           />
-          <span class="icon-label">{{ asset.name }}</span>
         </template>
         <SvgIcon v-else :name="getIconId(asset.category?.icon)" class="icon-svg" />
       </div>
@@ -106,9 +105,6 @@ const imageError = ref(false)
 
 const imageUrl = computed(() => {
   if (!props.asset.image_url) return ''
-  if (props.asset.image_url.startsWith('/')) {
-    return `/api/v1${props.asset.image_url}`
-  }
   return props.asset.image_url
 })
 
@@ -249,9 +245,9 @@ const remainingLabel = computed(() =>
 
 .item-icon {
   position: relative;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -262,6 +258,7 @@ const remainingLabel = computed(() =>
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: linear-gradient(
     115deg,
     transparent 30%,
@@ -275,8 +272,8 @@ const remainingLabel = computed(() =>
 .icon-svg {
   position: relative;
   z-index: 1;
-  width: 20px;
-  height: 20px;
+  width: 36px;
+  height: 36px;
   fill: white;
   color: white;
 }
@@ -287,29 +284,6 @@ const remainingLabel = computed(() =>
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-.icon-label {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  font-size: 8px;
-  font-weight: 500;
-  line-height: 1.1;
-  color: #fff;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: rgba(0, 0, 0, 0.28);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-}
-.item-icon.has-image::before {
-  display: none;
 }
 @keyframes icon-shimmer {
   0% {

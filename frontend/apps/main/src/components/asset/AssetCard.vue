@@ -1,6 +1,6 @@
 <template>
   <div
-    class="asset-card"
+    class="asset-mini-card"
     :class="{ 'selection-mode': selectable, selected: selected, syncing: syncing }"
     :aria-disabled="syncing ? 'true' : undefined"
     role="listitem"
@@ -24,6 +24,7 @@
     <div v-if="syncing" class="syncing-badge" aria-hidden="true">
       <van-tag type="warning">{{ t('assetCard.syncing') }}</van-tag>
     </div>
+
     <input
       v-if="selectable"
       type="checkbox"
@@ -33,7 +34,9 @@
       tabindex="-1"
       @change="$emit('update:selected', ($event.target as HTMLInputElement).checked)"
     />
-    <div class="card-left">
+
+    <!-- Top row: icon + status -->
+    <div class="card-top">
       <div v-if="asset.image_url && !imageError" class="card-image">
         <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
       </div>
@@ -44,37 +47,29 @@
       >
         <SvgIcon :name="getIconId(asset.category?.icon)" class="icon-svg" />
       </div>
+      <div class="card-status">
+        <span class="status-dot" :class="`status-dot--${statusType}`" />
+        <span class="status-text">{{ statusText }}</span>
+      </div>
     </div>
-    <div class="card-right">
-      <div class="card-row-top">
-        <span class="card-name">{{ asset.name }}</span>
-        <van-tag :type="statusType" size="medium">{{ statusText }}</van-tag>
-      </div>
-      <div class="card-row-category">
-        <span class="card-category-text">{{
-          asset.category?.name || t('assetCard.uncategorized')
-        }}</span>
-        <span v-if="daysUsed > 0" class="card-days">{{
-          t('assetCard.daysUsed', { days: daysUsed })
-        }}</span>
-      </div>
-      <div class="card-row-prices">
-        <div class="price-item">
-          <span class="price-label">{{ t('assetCard.purchaseLabel') }}</span>
-          <span class="price-value">{{ formatPrice(asset.purchase_price) }}</span>
-        </div>
-        <div class="price-item">
-          <span class="price-label">{{ t('assetCard.currentLabel') }}</span>
-          <span class="price-value current">{{ formatPrice(asset.current_value) }}</span>
-        </div>
-      </div>
-      <div class="card-row-bottom">
-        <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
-          <van-icon name="clock-o" size="12" aria-hidden="true" />
-          {{ t('assetCard.dailyCost', { cost: currency.formatConverted(asset.daily_cost, asset.currency) }) }}
-        </span>
-        <span v-else class="card-daily-cost-placeholder" />
-      </div>
+
+    <!-- Name -->
+    <div class="card-name">{{ asset.name }}</div>
+
+    <!-- Price + days -->
+    <div class="card-meta">
+      <span class="meta-price">{{ formatPrice(asset.purchase_price) }}</span>
+      <span v-if="daysUsed > 0" class="meta-days">{{
+        t('assetCard.daysUsed', { days: daysUsed })
+      }}</span>
+    </div>
+
+    <!-- Daily cost -->
+    <div class="card-daily">
+      <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="daily-value">
+        {{ currency.formatConverted(asset.daily_cost, asset.currency) }}
+        <span class="daily-unit">/{{ t('assetCard.dayUnit') }}</span>
+      </span>
     </div>
   </div>
 </template>
@@ -83,7 +78,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
-import { formatCurrency, parseLocalDate } from '@/utils/format'
+import { parseLocalDate } from '@/utils/format'
 import { useAssetStore } from '@/stores/asset'
 import { getIconId } from '@/utils/icon'
 import { useCurrency } from '@/composables/useCurrency'
@@ -148,9 +143,6 @@ onUnmounted(() => {
 
 const imageUrl = computed(() => {
   if (!props.asset.image_url) return ''
-  if (props.asset.image_url.startsWith('/')) {
-    return `/api/v1${props.asset.image_url}`
-  }
   return props.asset.image_url
 })
 
@@ -172,12 +164,12 @@ function formatPrice(price: number | string | null | undefined): string {
 }
 
 const statusMap = computed<
-  Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }>
+  Record<string, { text: string; type: 'success' | 'warning' | 'danger' | 'default' }>
 >(() => ({
   in_use: { text: t('asset.inUse'), type: 'success' },
   idle: { text: t('asset.idle'), type: 'warning' },
-  sold: { text: t('asset.sold'), type: 'default' },
-  retired: { text: t('asset.retired'), type: 'danger' },
+  sold: { text: t('asset.sold'), type: 'danger' },
+  retired: { text: t('asset.retired'), type: 'default' },
 }))
 
 const statusText = computed(() => statusMap.value[props.asset.status]?.text || props.asset.status)
@@ -185,71 +177,99 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 </script>
 
 <style scoped>
-.asset-card {
+.asset-mini-card {
   position: relative;
-  display: flex;
   background: var(--card-bg);
-  border-radius: var(--radius-sm);
-  padding: 14px 12px;
-  margin-bottom: 8px;
+  border-radius: 14px;
+  padding: 12px;
   border: 1px solid var(--color-card-border);
   cursor: pointer;
   transition:
     transform 0.15s,
-    border-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
-[data-theme='dark'] .asset-card {
+[data-theme='dark'] .asset-mini-card {
   border-color: var(--color-hairline);
 }
-.asset-card:active {
-  transform: scale(0.985);
+.asset-mini-card:active {
+  transform: scale(0.97);
   border-color: var(--color-hairline);
 }
+
 /* Selection mode styles */
-.asset-card.selection-mode.selected {
+.asset-mini-card.selection-mode.selected {
   outline: 2px solid var(--van-primary-color);
   outline-offset: -1px;
 }
+
 /* Accessibility - Focus styles */
-.asset-card:focus-visible {
+.asset-mini-card:focus-visible {
   outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
+
 /* Syncing state styles */
-.asset-card.syncing {
+.asset-mini-card.syncing {
   opacity: 0.7;
   pointer-events: none;
 }
 .syncing-badge {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 6px;
+  right: 6px;
   z-index: 10;
 }
-.card-left {
-  flex-shrink: 0;
-  margin-right: 12px;
+
+/* Top row: icon + status */
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
 }
+
 .card-image {
-  width: 88px;
-  height: 88px;
+  position: relative;
+  width: 48px;
+  height: 48px;
   border-radius: 10px;
   overflow: hidden;
+  flex-shrink: 0;
+}
+.card-image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  animation: icon-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
 }
 .card-image img {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
+
 .card-icon {
   position: relative;
-  width: 88px;
-  height: 88px;
+  width: 48px;
+  height: 48px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .card-icon::before {
   content: '';
@@ -268,11 +288,12 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 .icon-svg {
   position: relative;
   z-index: 1;
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
   fill: white;
   color: white;
 }
+
 @keyframes icon-shimmer {
   0% {
     transform: translateX(-150%);
@@ -283,83 +304,117 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .card-icon::before {
+  .card-icon::before,
+  .card-image::before {
     animation: none;
     display: none;
   }
 }
-.card-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-width: 0;
-  gap: 3px;
-}
-.card-row-top {
-  display: flex;
-  justify-content: space-between;
+
+/* Status badge */
+.card-status {
+  display: inline-flex;
   align-items: center;
+  gap: 3px;
+  background: var(--bg-secondary);
+  padding: 3px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
 }
+[data-theme='dark'] .card-status {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot--success {
+  background: #52c41a;
+}
+.status-dot--warning {
+  background: #faad14;
+}
+.status-dot--danger {
+  background: #f5222d;
+}
+.status-dot--default {
+  background: var(--text-tertiary);
+}
+
+.status-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Name */
 .card-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+  margin-bottom: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 60%;
 }
-.card-row-category {
+
+/* Price + days */
+.card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  margin-bottom: 8px;
 }
-.card-category-text {
-  font-size: 12px;
+.meta-price {
+  font-size: 11px;
   color: var(--text-tertiary);
 }
-.card-days {
+.meta-days {
   font-size: 11px;
   color: var(--color-body-muted);
-  background: var(--bg-secondary);
-  padding: 2px 8px;
-  border-radius: 4px;
-  line-height: 1.4;
 }
-[data-theme='dark'] .card-days {
+[data-theme='dark'] .meta-days {
   color: var(--color-muted);
-  background: rgba(255, 255, 255, 0.06);
 }
-.card-row-prices {
+
+/* Daily cost */
+.card-daily {
+  min-height: 22px;
   display: flex;
-  gap: 14px;
+  align-items: flex-end;
 }
-.price-item {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
+.daily-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
 }
-.price-label {
+.daily-unit {
   font-size: 11px;
+  font-weight: 400;
   color: var(--text-tertiary);
 }
-.price-value {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-.price-value.current {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-.card-row-bottom {
-  display: flex;
-  align-items: center;
-}
-.card-daily-cost {
-  font-size: 12px;
-  color: #ff976a;
-  font-weight: 500;
+
+/* Responsive: very narrow screens (< 360px) */
+@media (max-width: 359px) {
+  .card-image,
+  .card-icon {
+    width: 42px;
+    height: 42px;
+  }
+  .icon-svg {
+    width: 20px;
+    height: 20px;
+  }
+  .card-name {
+    font-size: 13px;
+  }
+  .daily-value {
+    font-size: 14px;
+  }
 }
 </style>

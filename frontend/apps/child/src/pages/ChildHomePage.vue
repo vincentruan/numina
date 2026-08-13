@@ -231,7 +231,7 @@ import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import ChallengeCard from '@/components/ChallengeCard.vue'
 import HackerGreeting from '@/components/HackerGreeting.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
+import { noTasksSvg as noTasksSvgRaw } from '@numina/assets/empty-states'
 import { useFamilyStore } from '@/stores/family'
 
 const noTasksSvg = noTasksSvgRaw

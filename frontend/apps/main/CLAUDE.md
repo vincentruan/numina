@@ -70,6 +70,28 @@ src/
 
 **核心约束**: 除 AI 场景外，整体 UI 组件尽量复用 Vant 4。AI 场景使用自定义组件复刻 DeerFlow 交互。
 
+## Shared Assets (`@numina/assets`)
+
+Shared image/icon package — `@numina/assets` — tree-shaken at the module boundary. Only `import`-referenced assets enter the build.
+
+| Category | Subpath | Import kind | Notes |
+|----------|---------|-------------|-------|
+| Shared icons (SVG/PNG) | `@numina/assets/icons` | `?url` → string URL | Cross-app icons only |
+| Shared images | `@numina/assets/images` | `?url` → string URL | PNG, JPG, WebP |
+| Empty-state illustrations | `@numina/assets/empty-states` | `?raw` → string | For `v-html` rendering |
+
+### Main-app-local icons
+
+- **SVG sprites** (47 category icons in `src/icons/svg/`) — remain app-local; used via `SvgIcon` component + `vite-plugin-svg-icons-ng`
+- **IIcon** (`@/components/IIcon.vue`) — wraps `@iconify/vue` for Iconify icons
+- **Game characters** (`public/images/*.svg`) — loaded via `fetch()` URL in `useDeerField.ts`, not importable
+
+### Rules
+
+- New cross-app images → add to `@numina/assets/images/` + named export in `index.ts`
+- Main-only SVG category icons → stay in `src/icons/svg/`
+- `src/assets/` → avoid new files here; prefer shared package or `public/`
+
 ## UI 问题排查指南
 
 遇到以下问题时，参考对应的 solution 文档：

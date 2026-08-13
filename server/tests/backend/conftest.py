@@ -41,7 +41,6 @@ from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_setting import FamilySetting
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.notification_channel import NotificationChannel
-from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.notification_subscription import NotificationSubscription
 from apps.backend.app.models.payment_record import PaymentRecord
 from apps.backend.app.models.reminder import Reminder
@@ -56,6 +55,7 @@ from apps.backend.app.services.cache import (
     reset_captcha_payload_cache,
     reset_rate_limit_cache,
 )
+from packages.db.models.notification_config import NotificationConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Session-scoped engine + table creation (create once, reuse across all tests)

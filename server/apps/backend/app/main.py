@@ -3,13 +3,11 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from apps.backend.app.bootstrap import run_bootstrap
@@ -72,7 +70,6 @@ from apps.backend.app.models.manifesto import (
 from apps.backend.app.models.notification_channel import (
     NotificationChannel,
 )
-from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.notification_subscription import (
     NotificationSubscription,
 )
@@ -152,11 +149,13 @@ from apps.backend.app.routers import notification_config as notification_config_
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
+from apps.backend.app.routers import uploads as uploads_serve_router
 from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
+from packages.db.models.notification_config import NotificationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -554,12 +553,8 @@ app.include_router(user_config_router.router, prefix="/api/v1")
 app.include_router(manifesto_router.router, prefix="/api/v1")
 app.include_router(child_manifesto_router.router, prefix="/api/v1")
 
-# Serve uploaded files
-# Serve uploaded files — mount only the uploads subtree, not the entire workspace
-# (workspace also contains chat JSONL which must not be publicly accessible)
-upload_static_dir = Path(settings.UPLOAD_DIR) / "uploads"
-upload_static_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(upload_static_dir)), name="uploads")
+# Serve uploaded files — authenticated endpoint with tenant isolation
+app.include_router(uploads_serve_router.router)
 
 
 @app.get("/api/health")

@@ -502,37 +502,54 @@ async def sync_title_from_checkpoint(
             return None
 
         # 2. Read the latest checkpoint and its channel_values.
+        #    DeerFlow robustness pattern: if the checkpoint read fails (DB locked,
+        #    corruption, etc.), still produce a title from the user message so the
+        #    sidebar never shows a blank or placeholder title.
         _, channel_values = await _read_checkpoint(thread_id)
-        if not channel_values:
-            return None
+        if channel_values:
+            # 3. If the checkpoint already carries a proper title (e.g. async
+            # middleware path or a prior successful run), persist it and return.
+            ckpt_title = channel_values.get("title")
+            if ckpt_title and not _is_fallback_title(ckpt_title):
+                title = str(ckpt_title).strip()
+                await repo.update_summary(
+                    session_id=thread_id,
+                    family_id=family_id,
+                    summary=None,
+                    title=title,
+                )
+                logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
+                return title
 
-        # 3. If the checkpoint already carries a proper title (e.g. async middleware
-        # path or a prior successful run), persist it and return it.
-        ckpt_title = channel_values.get("title")
-        if ckpt_title and not _is_fallback_title(ckpt_title):
-            title = str(ckpt_title).strip()
-            await repo.update_summary(
-                session_id=thread_id,
-                family_id=family_id,
-                summary=None,
-                title=title,
+            # 4. DeerFlow gate: only generate a title on the first exchange.
+            # On follow-up messages the checkpoint has >1 user messages, so
+            # this returns False.  We still fall through to generate a title
+            # from the user message if the DB row has a fallback title (i.e.
+            # the first-exchange title generation failed previously).
+            if (
+                not _should_generate_title(
+                    channel_values, allow_partial_exchange=allow_partial_exchange,
+                )
+                and not (db_title and _is_fallback_title(db_title))
+            ):
+                return None
+        else:
+            # Checkpoint read failed — log at info level (not warning, since this
+            # can happen transiently during DB compaction or right after a fresh
+            # session where the first checkpoint hasn't flushed yet).
+            logger.info(
+                "[run_extras] Checkpoint read returned no channel_values for "
+                "thread %s; falling back to user-message title",
+                thread_id,
             )
-            logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
-            return title
 
-        # 4. DeerFlow gate: only generate a title on the first exchange. On follow-up
-        # messages the checkpoint has >1 real user messages, so this returns False
-        # and the function returns None (no re-publish).
-        if not _should_generate_title(channel_values, allow_partial_exchange=allow_partial_exchange):
-            return None
-
-        # 5. Generate a real title via the family's AI provider. The sync stream()
-        # path only wrote a fallback, so we run the async LLM path here.
+        # 5. Generate a real title via the family's AI provider.
         generated_title: str | None = None
         if ai_config and user_message:
             generated_title = await _generate_title_via_llm(user_message, ai_response, ai_config, target_language)
 
-        # 6. Final fallback: truncated user message (NOT the raw [SKILL:chat] wrapper).
+        # 6. Final fallback: truncated user message (DeerFlow _fallback_title pattern).
+        #    This ALWAYS produces a non-empty title so the sidebar is never blank.
         if not generated_title:
             generated_title = _text_fallback_title(user_message)
 

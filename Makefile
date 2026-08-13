@@ -446,9 +446,16 @@ dev-all:
 
 stop-dev-all:
 	@echo "停止全部 dev server (端口 8000/8001/8002/5173/5174)..."
-	@if command -v tmux >/dev/null 2>&1 && tmux has-session -t numina-dev 2>/dev/null; then \
-	  echo "  终止 tmux session 'numina-dev'..."; \
-	  tmux kill-session -t numina-dev 2>/dev/null || true; \
+	@if command -v tmux >/dev/null 2>&1; then \
+	  if tmux has-session -t numina-dev 2>/dev/null; then \
+	    echo "  终止 tmux session 'numina-dev'..."; \
+	    tmux kill-session -t numina-dev 2>/dev/null || true; \
+	  else \
+	    for w in $$(tmux list-windows -a -F '#{session_name}:#{window_index} #{window_name}' 2>/dev/null | grep ' numina-dev$$' | awk '{print $$1}'); do \
+	      echo "  终止 tmux window '$$w'..."; \
+	      tmux kill-window -t "$$w" 2>/dev/null || true; \
+	    done; \
+	  fi; \
 	  sleep 1; \
 	fi
 	@bad=0; found=0; \

@@ -6,9 +6,6 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.notification_channel import NotificationChannel
-from apps.backend.app.models.notification_channel_config import (
-    NotificationChannelConfig,
-)
 from apps.backend.app.models.notification_subscription import NotificationSubscription
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.notification_channel import (
@@ -18,6 +15,9 @@ from apps.backend.app.schemas.notification_channel import (
 )
 from apps.backend.app.services.storage.config_crypto import encrypt_config
 from apps.backend.app.utils.snowflake import next_id
+from packages.db.models.notification_channel_config import (
+    NotificationChannelConfig,
+)
 
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
 

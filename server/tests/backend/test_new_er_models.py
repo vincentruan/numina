@@ -3,11 +3,11 @@ from datetime import date
 from apps.backend.app.models.asset_lifecycle_event import AssetLifecycleEvent
 from apps.backend.app.models.child_economy_config import ChildEconomyConfig
 from apps.backend.app.models.child_wish_cost_history import ChildWishCostHistory
-from apps.backend.app.models.notification_channel_config import (
-    NotificationChannelConfig,
-)
 from apps.backend.app.models.reminder_notification import ReminderNotification
 from apps.backend.app.utils.snowflake import next_id
+from packages.db.models.notification_channel_config import (
+    NotificationChannelConfig,
+)
 
 
 def test_child_economy_config(db):

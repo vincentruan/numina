@@ -191,7 +191,7 @@ import BalanceHero from '@/components/BalanceHero.vue'
 import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ChildInlineError from '@/components/ChildInlineError.vue'
-import noWishesSvgRaw from '@/assets/empty-states/no-wishes.svg?raw'
+import { noWishesSvg as noWishesSvgRaw } from '@numina/assets/empty-states'
 
 const noWishesSvg = noWishesSvgRaw
 

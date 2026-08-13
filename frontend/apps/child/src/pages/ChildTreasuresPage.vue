@@ -67,7 +67,7 @@ import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
 import { parseLocalDate } from '@/utils/format'
 import EmptyState from '@/components/EmptyState.vue'
-import noTreasuresSvgRaw from '@/assets/empty-states/no-treasures.svg?raw'
+import { noTreasuresSvg as noTreasuresSvgRaw } from '@numina/assets/empty-states'
 
 const noTreasuresSvg = noTreasuresSvgRaw
 

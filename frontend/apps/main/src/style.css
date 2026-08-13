@@ -1,3 +1,12 @@
+/* Dancing Script — watermark font for asset logo */
+@font-face {
+  font-family: 'Dancing Script';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dancing-script-latin.woff2') format('woff2');
+}
+
 /* Screen-reader only utility — visually hidden but accessible to AT */
 .sr-only {
   position: absolute;

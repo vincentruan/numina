@@ -137,7 +137,7 @@
                   @toggle="toggleGroup(group.key)"
                 />
                 <Transition name="collapse">
-                  <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+                  <div v-if="!collapsedGroups.has(group.key)" class="group-items group-items--grid">
                     <AssetCard
                       v-for="asset in group.items"
                       :key="asset.id"
@@ -221,7 +221,7 @@
               @toggle="toggleGroup(group.key)"
             />
             <Transition name="collapse">
-              <div v-if="!collapsedGroups.has(group.key)" class="group-items">
+              <div v-if="!collapsedGroups.has(group.key)" class="group-items group-items--grid">
                 <AssetCard
                   v-for="asset in group.items"
                   :key="asset.id"
@@ -1016,6 +1016,14 @@ defineExpose({
 /* Group items wrapper for collapse transition */
 .group-items {
   overflow: hidden;
+}
+
+/* Card mode: 2-column grid */
+.group-items--grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding-bottom: 4px;
 }
 
 /* Collapse transition */

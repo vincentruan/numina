@@ -14,18 +14,22 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
-    "typecheck:test": "vue-tsc --noEmit -p tsconfig.vitest.json"
+    "typecheck:test": "vue-tsc --noEmit -p tsconfig.vitest.json",
+    "deploy:icons": "tsx scripts/deploy-icons.ts",
+    "generate:thumbs": "tsx scripts/generate-icon-thumbnails.ts"
   },
   "dependencies": {
     "@iconify/json": "^2.2.508",
     "@iconify/vue": "^4.3.0",
     "@langchain/langgraph-sdk": "^1.9.22",
+    "@numina/assets": "workspace:*",
     "@numina/auth": "workspace:*",
     "@numina/math": "workspace:*",
     "@types/nprogress": "^0.2.3",
     "@vant/icons": "^3.0.1",
     "@vant/touch-emulator": "^1.5.0",
     "axios": "^1.13.6",
+    "cropperjs": "^1.6.2",
     "dompurify": "^3.4.1",
     "echarts": "^6.0.0",
     "html2canvas": "^1.4.1",
@@ -67,6 +71,8 @@
     "vite": "^8.2.1",
     "vite-plugin-svg-icons-ng": "^1.0.4",
     "vitest": "^4.1.3",
-    "vue-tsc": "^3.2.5"
+    "vue-tsc": "^3.2.5",
+    "sharp": "^0.34.0",
+    "tsx": "^4.20.0"
   }
 }

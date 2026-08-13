@@ -6,7 +6,6 @@ from alembic import context
 
 from apps.backend.app.config import settings
 from apps.backend.app.database import Base
-from apps.backend.app.db import get_engine
 from apps.backend.app.models.ai_agent import AIAgent
 from apps.backend.app.models.ai_provider_config import (
     AIProviderConfig,
@@ -48,6 +47,7 @@ from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.tag import Tag
 from apps.backend.app.models.valuation import AssetValuation
 from apps.backend.app.models.wish import Wish
+from packages.db.engine import get_engine
 
 # Models migrated to packages/db/models (Unit 3+)
 from packages.db.models import (

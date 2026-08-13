@@ -113,7 +113,7 @@ import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useManifestoSign } from '@/composables/useManifestoSign'
 import ChildSignaturePad from '@/components/manifesto/ChildSignaturePad.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
+import { noTasksSvg as noTasksSvgRaw } from '@numina/assets/empty-states'
 
 const noTasksSvg = noTasksSvgRaw
 

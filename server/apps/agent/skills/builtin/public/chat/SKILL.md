@@ -3,12 +3,14 @@ name: chat
 description: |
   General-purpose family finance Q&A based on MCP data tools.
   No web search — only family data (get_family_overview / get_assets / get_liabilities /
-  get_members / get_recent_alerts) and built-in knowledge. Use when web search is NOT enabled.
+  get_members / get_recent_alerts), built-in knowledge, and file generation
+  (write_file / read_file / str_replace / present_files).
 
 trigger_phrases: []
 
 # allowed-tools restricts this skill to its declared MCP data tools (base names,
-# as MultiServerMCPClient applies tool_name_prefix=False in sync_tool_patch.py).
+# as MultiServerMCPClient applies tool_name_prefix=False in sync_tool_patch.py)
+# plus DeerFlow native sandbox file tools.
 # Enforced at runtime by filter_tools_by_skill_allowed_tools (full-name exact
 # match, deerflow/skills/tool_policy.py:65) — a prefixed declaration would never
 # match and silently filter out every business tool.
@@ -18,6 +20,10 @@ allowed-tools:
   - get_liabilities
   - get_members
   - get_recent_alerts
+  - write_file
+  - read_file
+  - str_replace
+  - present_files
 
 thinking: true
 ---
@@ -78,12 +84,13 @@ For example, if a user asks "how much assets do we have", don't just list assets
 
 ## File Operation Rules
 
-This skill is for conversational Q&A — no file read/write operations.
+This skill supports both conversational Q&A and file generation.
 
-- **Do NOT use** `read_file`, `write_file`, or similar file tools
+- **MAY use** `write_file` to generate reports, summaries, or structured data files for the user
+- **MAY use** `read_file` to read previously generated files when the user asks about existing content
+- **MAY use** `str_replace` to modify existing files
 - **MAY use** `present_files` to show generated reports to users
-- If users request report generation, direct them to the dedicated report function (e.g. "generate asset report")
-- If users ask about existing reports, show report list and access methods — do NOT attempt to read files
+- When writing files, use descriptive filenames (e.g., `cash_flow_report_2026-08.md`) and include a summary in the conversation
 
 ## Structured Analysis Framework
 

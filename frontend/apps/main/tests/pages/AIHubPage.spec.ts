@@ -89,8 +89,8 @@ vi.mock('../../src/api/sessions', () => ({
 vi.mock('../../src/stores/agent', () => ({
   useAgentStore: vi.fn(() => ({
     tasks: [],
-    // U8/U9: AgentGrid prop renamed; AIHubPage now reads systemAgents +
-    // customAgents. The recipient chip (U11) defaults to numina, so the
+    // AIHubPage reads systemAgents + customAgents.
+    // The recipient chip (U11) defaults to numina, so the
     // mock must include an enabled numina row for startChat to fire.
     systemAgents: [
       {

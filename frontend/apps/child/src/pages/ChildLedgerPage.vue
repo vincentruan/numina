@@ -102,7 +102,7 @@ import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibli
 import BalanceHero from '@/components/BalanceHero.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ChildInlineError from '@/components/ChildInlineError.vue'
-import noRecordsSvgRaw from '@/assets/empty-states/no-records.svg?raw'
+import { noRecordsSvg as noRecordsSvgRaw } from '@numina/assets/empty-states'
 
 const noRecordsSvg = noRecordsSvgRaw
 import { useFamilyStore } from '@/stores/family'

@@ -44,7 +44,7 @@ vi.mock('nprogress/nprogress.css', () => ({ default: {} }))
 // test run these pending fetches accumulate in the worker and cause
 // "JS heap out of memory" crashes (ERR_WORKER_OUT_OF_MEMORY). The stub
 // renders a lightweight <svg> placeholder so tests asserting icon presence
-// (e.g. AgentGrid AE5 inverse) still pass without triggering fetches.
+// (e.g. dashboard icon assertions) still pass without triggering fetches.
 vi.mock('@iconify/vue', () => {
   const Icon = {
     name: 'IconifyIconStub',
@@ -229,7 +229,6 @@ config.global.stubs = {
   UserBubble: { template: '<div class="user-bubble"></div>', props: ['content', 'displayTime', 'sendStatus'] },
   InputBox: { template: '<div class="input-box"><slot /></div>', props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName', 'agentId', 'agents', 'agentIcon', 'agentLabel', 'disabled', 'modelValue', 'webSearch', 'attachments'], emits: ['submit', 'stop', 'update:modelValue', 'update:webSearch', 'selectAgent', 'action', 'removeAttachment', 'contextChange'] },
   ModeSelector: { template: '<div class="mode-selector"></div>', props: ['currentMode', 'supportsThinking', 'ultraDisabled'] },
-  ModelSelectorPopup: { template: '<div class="model-selector-popup"><slot /></div>', props: ['show', 'models', 'currentModel'] },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

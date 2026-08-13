@@ -32,7 +32,7 @@ pnpm -r lint && pnpm -r typecheck && pnpm -r test:run
 | Vue | `<script setup lang="ts">` only，禁止 Options API |
 | Type | 禁止 `any`/`@ts-ignore`/`@ts-expect-error` |
 | UI | Vant 4 自动导入，禁止新 UI 库 |
-| Icon | Iconify 优先，本地 SVG 补充，禁止新图标库 |
+| Icon | Iconify 优先，本地 SVG 补充，禁止新图标库；共享位图/插图放 `@numina/assets` |
 | HTTP | Axios 统一封装 (`src/api/index.ts`)，禁止裸 `fetch`/`axios` |
 | State | Pinia，禁止全局变量/localStorage 代替状态管理 |
 | Style | CSS 变量 + scoped，禁止固定宽度溢出 |

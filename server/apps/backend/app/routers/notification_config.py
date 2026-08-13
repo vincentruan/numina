@@ -4,13 +4,13 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
-from apps.backend.app.models.notification_config import NotificationConfig
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.notification_config import (
     NotificationConfigResponse,
     NotificationConfigUpdate,
 )
 from apps.backend.app.utils.snowflake import next_id
+from packages.db.models.notification_config import NotificationConfig
 
 router = APIRouter(prefix="/notification-config", tags=["notification-config"])
 
