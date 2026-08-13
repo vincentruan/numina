@@ -290,66 +290,6 @@ cp ./backups/numina-20260314.db ./.numina/data/db/numina.db
 docker-compose restart backend
 ```
 
-## 🗺️ Roadmap
-
-### ✅ MVP (Current)
-
-- [x] User authentication & family management
-- [x] Asset & liability CRUD
-- [x] Data visualization dashboard
-- [x] Daily cost calculation & smart analytics
-- [x] Token auto-refresh
-- [x] Liability payment tracking
-- [x] Automated tests
-
-### ✅ Child Star Coin System (Done)
-
-- [x] Chore management (template + assignment + repeat cycles)
-- [x] Star coin rewards with combo bonus
-- [x] Copper/Silver/Gold tiered currency (configurable ratio)
-- [x] Star ledger & sibling gifting
-- [x] Wish system (submit → review → threshold → redemption request → atomic fulfillment)
-- [x] Treasure collection (redeemed wishes become child-owned assets)
-- [x] Parent dashboard (balance overview + approval shortcuts)
-- [x] Child-specific UI (dedicated bottom nav, savings jar progress animation)
-
-### ✅ Phase 2: Smart Analysis (Done)
-
-- [x] Spending leak detection (high idle cost, redundant holdings, high maintenance burden — 3 rule types + LLM advice)
-- [x] Buy vs. rent comparison calculator (break-even point, recommendation)
-- [x] Spending equivalence (daily cost, time cost, opportunity cost — 3 dimensions)
-
-### ✅ Phase 2.5: AI Assistant & Family Finance Coach (Done)
-
-- [x] Conversational AI assistant (unified `stream_run` dispatch, DeerFlow/LangChain multi-provider, family-scoped skills & sandbox)
-- [x] Finance Coach Card (personalized advice from asset/liability context)
-- [x] Wish Advice Card (savings plan & feasibility analysis)
-- [x] Asset report generation (`asset-report` skill, three-step pipeline, image/PDF export)
-- [x] PDF asset import (`import-parse` skill, text + scanned PDF with vision multimodal)
-- [x] Education reward linkage (chores → education reward, dedicated spend stats, parent approval gate)
-- [x] Interval return rate (1M/3M/6M/1Y presets, valuation history comparison)
-- [x] Debt warning linkage (family-level thresholds + over-limit alerts)
-
-### 🔮 Phase 3: Asset Time Machine (Future)
-
-- [ ] What-if analysis for different spending choices
-- [ ] Future financial projection based on historical data
-- [ ] Inflation-adjusted purchasing power tracking
-
-### 🔔 Phase 4: Smart Reminders (Future)
-
-- [ ] Large purchase cooling-off reminders
-- [ ] Asset allocation imbalance alerts
-- [ ] Insurance/warranty expiration reminders
-- [ ] Wealth product maturity reminders
-
-### 📤 Phase 5: Data Import/Export (Future)
-
-- [x] PDF asset import (import-parse — text + scanned vision)
-- [x] Asset report PDF/image export (asset-report)
-- [ ] CSV/Excel batch import
-- [ ] Monthly/yearly financial report auto-generation
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
