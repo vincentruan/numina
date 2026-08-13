@@ -6,6 +6,7 @@
   "exports": {
     "./icons": "./src/icons/index.ts",
     "./icons/3d-things/*": "./src/icons/3d-things/*",
+    "./icons/cartoon-consumer/*": "./src/icons/cartoon-consumer/*",
     "./images": "./src/images/index.ts",
     "./empty-states": "./src/empty-states/index.ts"
   },
