@@ -19,7 +19,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   backend-test:
     name: Backend Tests (pytest)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     defaults:
       run:
         working-directory: server
@@ -59,7 +59,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   frontend-main:
     name: Frontend Main (typecheck + test)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     defaults:
       run:
         working-directory: frontend/apps/main
@@ -103,7 +103,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   frontend-child:
     name: Frontend Child (typecheck + test)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     defaults:
       run:
         working-directory: frontend/apps/child
@@ -149,7 +149,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.run-e2e == true) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[e2e]'))
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     needs: [backend-test, frontend-main, frontend-child]
     timeout-minutes: 15
     env:
@@ -287,7 +287,7 @@ jobs:
     name: Build images (${{ matrix.service }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [backend-test, frontend-main, frontend-child]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     permissions:
       contents: read
       packages: write
