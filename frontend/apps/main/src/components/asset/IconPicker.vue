@@ -80,33 +80,36 @@
           />
         </div>
 
-        <!-- Icon grid -->
-        <div ref="gridRef" class="icon-grid">
-          <div v-if="paginatedIcons.length === 0 && searchQuery" class="empty-state">
-            {{ t('iconPicker.noResults') }}
-          </div>
-          <div
-            v-for="icon in paginatedIcons"
-            :key="icon.fileName"
-            class="icon-cell"
-            :class="{ selected: isSelected(icon) }"
-            @click="selectIcon(icon)"
+        <!-- Icon grid with infinite scroll -->
+        <div class="icon-grid-scroll">
+          <van-list
+            :finished="!hasMore"
+            :finished-text="searchQuery ? '' : undefined"
+            :immediate-check="true"
+            @load="loadMore"
           >
-            <div class="icon-thumb">
-              <img
-                :src="getThumbUrl(icon)"
-                loading="lazy"
-                @error="onThumbError"
-              />
-              <van-icon v-if="isSelected(icon)" name="success" class="check-overlay" />
+            <div class="icon-grid">
+              <div v-if="paginatedIcons.length === 0 && searchQuery" class="empty-state">
+                {{ t('iconPicker.noResults') }}
+              </div>
+              <div
+                v-for="icon in paginatedIcons"
+                :key="icon.fileName"
+                class="icon-cell"
+                :class="{ selected: isSelected(icon) }"
+                @click="selectIcon(icon)"
+              >
+                <div class="icon-thumb">
+                  <img
+                    :src="getThumbUrl(icon)"
+                    loading="lazy"
+                    @error="onThumbError"
+                  />
+                  <van-icon v-if="isSelected(icon)" name="success" class="check-overlay" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Load more trigger -->
-        <div v-if="hasMore" class="load-more" @click="loadMore">
-          <van-loading v-if="loadingMore" size="20" />
-          <span v-else>{{ t('iconPicker.loading') }}</span>
+          </van-list>
         </div>
       </div>
     </div>
@@ -114,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useIconCatalog } from '@/composables/useIconCatalog'
 import type { IconEntry } from '@numina/assets/icons/manifest'
@@ -136,8 +139,6 @@ const emit = defineEmits<{
 
 const activeTab = ref<'gallery' | '3d'>('gallery')
 const showSearchInput = ref(false)
-const loadingMore = ref(false)
-const gridRef = ref<HTMLDivElement>()
 
 const {
   categories,
@@ -200,33 +201,6 @@ function onClosed() {
   activeTab.value = 'gallery'
   showSearchInput.value = false
   reset()
-}
-
-// Scroll-triggered load more.
-watch(
-  () => props.show,
-  async (visible) => {
-    if (visible) {
-      await nextTick()
-      setupScrollLoad()
-    }
-  },
-)
-
-function setupScrollLoad() {
-  const grid = gridRef.value
-  if (!grid) return
-  grid.addEventListener('scroll', () => {
-    if (!hasMore.value || loadingMore.value) return
-    const nearBottom = grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 100
-    if (nearBottom) {
-      loadingMore.value = true
-      loadMore()
-      nextTick(() => {
-        loadingMore.value = false
-      })
-    }
-  })
 }
 
 // Expose totalIcons for debugging / tests.
@@ -379,15 +353,20 @@ void totalIcons
   margin: 0 -12px 8px;
 }
 
+/* Icon grid scroll container (for van-list infinite scroll) */
+.icon-grid-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Icon grid */
 .icon-grid {
-  flex: 1;
-  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 4px 0;
-  -webkit-overflow-scrolling: touch;
 }
 
 .empty-state {
@@ -447,12 +426,5 @@ void totalIcons
   align-items: center;
   justify-content: center;
   font-size: 12px;
-}
-
-.load-more {
-  text-align: center;
-  padding: 12px 0;
-  font-size: 13px;
-  color: var(--van-text-color-3);
 }
 </style>
