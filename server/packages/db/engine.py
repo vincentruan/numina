@@ -54,9 +54,12 @@ class _PostgreSQLBackend(_DatabaseBackend):
         return {}
 
     def get_pool_config(self) -> dict:
+        # Supabase serverless pooler limits: 15 connections in session mode.
+        # With 3 services (backend, agent, scheduler-worker), each gets ~5 connections max.
+        # Using conservative pool sizes to avoid EMAXCONNSESSION errors.
         return {
-            "pool_size": 20,
-            "max_overflow": 20,
+            "pool_size": 3,
+            "max_overflow": 2,
             "pool_timeout": 10,
             "pool_recycle": 300,
             "pool_pre_ping": True,
