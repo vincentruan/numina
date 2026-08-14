@@ -68,7 +68,7 @@ parallel group. Each agent:
 4. **Does NOT call `bsk session stop` on a shared session** — only the G0 owner
    (or a final cleanup step) stops sessions. An agent that stops a shared
    session breaks the other agents reusing it.
-5. Writes its failures to the shared report (`tests/audit-reports/`) with a
+5. Writes its failures to the shared report (`tests/reports/`) with a
    group prefix (e.g. `G1-C2.3`, `G3-C1.10`).
 
 ## What NOT to parallelize

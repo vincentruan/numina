@@ -24,7 +24,7 @@
                          │ reads
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Test Cases (tests/e2e/page-agent/*.yaml)               │
+│  Test Cases (tests/tools/page-agent/*.yaml)               │
 │  - smoke.yaml (core flows)                              │
 │  - custom/*.yaml (feature-specific)                     │
 └─────────────────────────────────────────────────────────┘

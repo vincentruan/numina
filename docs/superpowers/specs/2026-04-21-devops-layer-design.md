@@ -52,7 +52,7 @@ main (稳定版本)
 |----------|------|----------|
 | 后端单元测试 | `backend/tests/` | pytest |
 | E2E 验收测试 | `tests/e2e/` | Shell 脚本 |
-| 截图测试 | `tests/screenshot/` | Puppeteer |
+| 截图测试 | `tests/tools/screenshot/` | Puppeteer |
 
 ### 双层记录机制
 

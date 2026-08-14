@@ -10,12 +10,12 @@ const checks: Array<{ name: string; check: () => boolean; message: string }> = [
   {
     name: 'YAML schema validation',
     check: () => {
-      const smokeFile = resolve(projectRoot, 'tests/e2e/page-agent/smoke.yaml');
+      const smokeFile = resolve(projectRoot, 'tests/tools/page-agent/smoke.yaml');
       if (!existsSync(smokeFile)) return false;
       const result = validateTaskFileWithErrors(smokeFile);
       return result.success;
     },
-    message: 'tests/e2e/page-agent/smoke.yaml passes Zod schema validation',
+    message: 'tests/tools/page-agent/smoke.yaml passes Zod schema validation',
   },
   {
     name: 'Runner script exists',
@@ -40,7 +40,7 @@ const checks: Array<{ name: string; check: () => boolean; message: string }> = [
   {
     name: 'No secrets in smoke.yaml',
     check: () => {
-      const smokeFile = resolve(projectRoot, 'tests/e2e/page-agent/smoke.yaml');
+      const smokeFile = resolve(projectRoot, 'tests/tools/page-agent/smoke.yaml');
       if (!existsSync(smokeFile)) return true;
       const content = readFileSync(smokeFile, 'utf-8');
       const secretPatterns = [/Bearer\s+[A-Za-z0-9\-._~+/]+=*/i, /sk-[a-zA-Z0-9]+/, /password:\s*\S+/i];

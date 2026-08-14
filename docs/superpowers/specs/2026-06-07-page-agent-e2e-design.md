@@ -44,7 +44,7 @@ Neither approach provides **semantic DOM-based interaction** that understands pa
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Runner: scripts/page-agent-e2e/page-agent-runner.ts         │
-│  1. Reads YAML tasks from tests/e2e/page-agent/*.yaml       │
+│  1. Reads YAML tasks from tests/tools/page-agent/*.yaml       │
 │  2. Validates schema (Zod)                                   │
 │  3. Launches Playwright Chromium (headless)                  │
 │  4. Injects PageAgent into page context                      │
@@ -106,7 +106,7 @@ A typical combined flow:
 │   ├── product-verification.md           # Verification requirements + commands
 │   └── hooks-and-memory.md               # Safety hooks, /careful rules, log format
 └── examples/
-    └── smoke.yaml                        # Example smoke case (mirrors tests/e2e/page-agent/smoke.yaml)
+    └── smoke.yaml                        # Example smoke case (mirrors tests/tools/page-agent/smoke.yaml)
 
 scripts/page-agent-e2e/
 ├── README.md                             # Setup + usage instructions
@@ -122,7 +122,7 @@ scripts/page-agent-e2e/
 ├── tsconfig.json                         # TypeScript config (tsx runner)
 └── package.json                          # Dependencies (playwright, page-agent, yaml, zod, tsx)
 
-tests/e2e/page-agent/
+tests/tools/page-agent/
 ├── smoke.yaml                            # Primary smoke test cases
 └── tasks.example.yaml                    # Template for new cases
 
@@ -273,7 +273,7 @@ const config = {
   "gitCommit": "2d715d33",
   "targetApp": "main",
   "targetBaseUrl": "http://localhost:5173",
-  "taskFile": "tests/e2e/page-agent/smoke.yaml",
+  "taskFile": "tests/tools/page-agent/smoke.yaml",
   "caseCount": 3,
   "passCount": 2,
   "failCount": 1,
@@ -390,7 +390,7 @@ config({ path: resolve(__dirname, '.env') });
 ## 9. Smoke Test Cases
 
 ```yaml
-# tests/e2e/page-agent/smoke.yaml
+# tests/tools/page-agent/smoke.yaml
 cases:
   - id: login-smoke
     app: main
@@ -417,7 +417,7 @@ cases:
       确认资产列表页面已加载。检查页面是否显示资产相关内容。
       如果有搜索框，尝试输入"测试"进行搜索。
     maxSteps: 8
-    storageState: tests/e2e/page-agent/.auth/main-user.json
+    storageState: tests/tools/page-agent/.auth/main-user.json
     assertions:
       - type: url_contains
         value: /assets
@@ -447,9 +447,9 @@ Added to `scripts/page-agent-e2e/package.json`:
 ```json
 {
   "scripts": {
-    "e2e": "tsx page-agent-runner.ts tests/e2e/page-agent/**/*.yaml",
-    "e2e:smoke": "tsx page-agent-runner.ts tests/e2e/page-agent/smoke.yaml",
-    "e2e:validate": "tsx task-schema.ts --validate tests/e2e/page-agent/**/*.yaml",
+    "e2e": "tsx page-agent-runner.ts tests/tools/page-agent/**/*.yaml",
+    "e2e:smoke": "tsx page-agent-runner.ts tests/tools/page-agent/smoke.yaml",
+    "e2e:validate": "tsx task-schema.ts --validate tests/tools/page-agent/**/*.yaml",
     "e2e:report": "tsx report.ts --last",
     "e2e:verify": "tsx verify-smoke.ts"
   }

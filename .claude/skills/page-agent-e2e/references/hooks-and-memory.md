@@ -14,7 +14,7 @@ All test runs are recorded in `logs/page-agent-e2e/run.log` as JSONL (one JSON o
   "gitCommit": "string | null",
   "targetApp": "main | child",
   "targetBaseUrl": "http://localhost:5173",
-  "taskFile": "tests/e2e/page-agent/smoke.yaml",
+  "taskFile": "tests/tools/page-agent/smoke.yaml",
   "caseCount": 3,
   "passCount": 2,
   "failCount": 1,
@@ -74,7 +74,7 @@ When a dangerous operation is detected (modifying business code, changing auth, 
 
 ### What Triggers `/careful`
 
-- Any attempt to modify files outside `scripts/page-agent-e2e/` or `tests/e2e/page-agent/`
+- Any attempt to modify files outside `scripts/page-agent-e2e/` or `tests/tools/page-agent/`
 - Deleting test data or fixtures
 - Changing environment variables that affect production
 - Running PageAgent with `experimentalScriptExecutionTool: true`

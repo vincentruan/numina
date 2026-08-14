@@ -32,7 +32,7 @@ Semantic DOM-based E2E testing using Alibaba PageAgent. Reads text DOM instead o
 ## Architecture
 
 Runner: `scripts/page-agent-e2e/page-agent-runner.ts`
-Tests: `tests/e2e/page-agent/*.yaml`
+Tests: `tests/tools/page-agent/*.yaml`
 Reports: `reports/page-agent-e2e/`
 Log: `logs/page-agent-e2e/run.log`
 
@@ -43,7 +43,7 @@ Never trust PageAgent's natural-language "success" — always verify with assert
 ## Workflow
 
 1. Identify target app and flow to test
-2. Write or update YAML case in `tests/e2e/page-agent/`
+2. Write or update YAML case in `tests/tools/page-agent/`
 3. Validate: `cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate <file>`
 4. Run: `cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts <file>`
 5. Check report in `reports/page-agent-e2e/`

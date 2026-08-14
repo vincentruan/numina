@@ -9,7 +9,7 @@ on:
     paths:
       - 'frontend/**'
       - 'server/**'
-      - 'tests/e2e/page-agent/**'
+      - 'tests/tools/page-agent/**'
 
 jobs:
   page-agent-e2e:
@@ -42,10 +42,10 @@ jobs:
           npx wait-on http://localhost:5173 http://localhost:8000/api/v1/health
 
       - name: Validate YAML schemas
-        run: cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate '../../tests/e2e/page-agent/**/*.yaml'
+        run: cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate '../../tests/tools/page-agent/**/*.yaml'
 
       - name: Run smoke tests
-        run: cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+        run: cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 
       - name: Upload reports
         if: always()

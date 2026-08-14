@@ -12,8 +12,8 @@ focus: 完整回归测试能力 — Docker + Chrome仿真，覆盖所有前端�
 
 **Current test state:**
 - Backend: 36 pytest unit tests (in-memory SQLite), all passing
-- E2E: Shell scripts (`tests/e2e/acceptance.sh`, `extended.sh`, `wishes-liabilities.sh`) — curl-only, no browser assertions
-- Screenshots: `tests/screenshot/capture.js` (Puppeteer) — visits pages, saves PNGs, zero assertions
+- E2E: Shell scripts (`tests/e2e/scripts/acceptance.sh`, `extended.sh`, `wishes-liabilities.sh`) — curl-only, no browser assertions
+- Screenshots: `tests/tools/screenshot/capture.js` (Puppeteer) — visits pages, saves PNGs, zero assertions
 - No CI pipeline (no `.github/` directory)
 - Seed script: `tests/seed-complete-data.sh` — 19 physical + 11 financial assets, 3 liabilities, 5 wishes
 

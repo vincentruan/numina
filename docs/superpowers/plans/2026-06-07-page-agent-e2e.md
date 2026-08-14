@@ -29,7 +29,7 @@ scripts/page-agent-e2e/
 ├── start-services.ts         # Optional service launcher (checks if already running)
 └── verify-smoke.ts           # Post-run verification script
 
-tests/e2e/page-agent/
+tests/tools/page-agent/
 ├── smoke.yaml                # Primary smoke test cases
 └── tasks.example.yaml        # Template for new cases
 
@@ -79,9 +79,9 @@ reports/page-agent-e2e/       # Generated reports (gitignored)
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "tsx page-agent-runner.ts 'tests/e2e/page-agent/**/*.yaml'",
-    "e2e:smoke": "tsx page-agent-runner.ts tests/e2e/page-agent/smoke.yaml",
-    "e2e:validate": "tsx task-schema.ts --validate 'tests/e2e/page-agent/**/*.yaml'",
+    "e2e": "tsx page-agent-runner.ts 'tests/tools/page-agent/**/*.yaml'",
+    "e2e:smoke": "tsx page-agent-runner.ts tests/tools/page-agent/smoke.yaml",
+    "e2e:validate": "tsx task-schema.ts --validate 'tests/tools/page-agent/**/*.yaml'",
     "e2e:report": "tsx report.ts --last",
     "e2e:verify": "tsx verify-smoke.ts"
   },
@@ -393,10 +393,10 @@ if (process.argv.includes('--validate')) {
 - [ ] **Step 2: Create smoke.yaml test file**
 
 ```bash
-mkdir -p tests/e2e/page-agent
+mkdir -p tests/tools/page-agent
 ```
 
-Create `tests/e2e/page-agent/smoke.yaml`:
+Create `tests/tools/page-agent/smoke.yaml`:
 
 ```yaml
 cases:
@@ -425,7 +425,7 @@ cases:
       确认资产列表页面已加载。检查页面是否显示资产相关内容。
       如果有搜索框，尝试输入"测试"进行搜索。
     maxSteps: 8
-    storageState: tests/e2e/page-agent/.auth/main-user.json
+    storageState: tests/tools/page-agent/.auth/main-user.json
     assertions:
       - type: url_contains
         value: /assets
@@ -470,15 +470,15 @@ cases:
 - [ ] **Step 4: Run schema validation on smoke.yaml**
 
 ```bash
-cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate ../../tests/e2e/page-agent/smoke.yaml
+cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate ../../tests/tools/page-agent/smoke.yaml
 ```
 
-Expected: `✓ ../../tests/e2e/page-agent/smoke.yaml (3 cases)`
+Expected: `✓ ../../tests/tools/page-agent/smoke.yaml (3 cases)`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add scripts/page-agent-e2e/task-schema.ts tests/e2e/page-agent/smoke.yaml tests/e2e/page-agent/tasks.example.yaml
+git add scripts/page-agent-e2e/task-schema.ts tests/tools/page-agent/smoke.yaml tests/tools/page-agent/tasks.example.yaml
 git commit -m "feat(e2e): add Zod schema validation and smoke test YAML"
 ```
 
@@ -1235,12 +1235,12 @@ const checks: Array<{ name: string; check: () => boolean; message: string }> = [
   {
     name: 'YAML schema validation',
     check: () => {
-      const smokeFile = resolve(projectRoot, 'tests/e2e/page-agent/smoke.yaml');
+      const smokeFile = resolve(projectRoot, 'tests/tools/page-agent/smoke.yaml');
       if (!existsSync(smokeFile)) return false;
       const result = validateTaskFileWithErrors(smokeFile);
       return result.success;
     },
-    message: 'tests/e2e/page-agent/smoke.yaml passes Zod schema validation',
+    message: 'tests/tools/page-agent/smoke.yaml passes Zod schema validation',
   },
   {
     name: 'Runner script exists',
@@ -1273,7 +1273,7 @@ const checks: Array<{ name: string; check: () => boolean; message: string }> = [
   {
     name: 'No secrets in smoke.yaml',
     check: () => {
-      const smokeFile = resolve(projectRoot, 'tests/e2e/page-agent/smoke.yaml');
+      const smokeFile = resolve(projectRoot, 'tests/tools/page-agent/smoke.yaml');
       if (!existsSync(smokeFile)) return true;
       const content = readFileSync(smokeFile, 'utf-8');
       const secretPatterns = [/Bearer\s+[A-Za-z0-9\-._~+/]+=*/i, /sk-[a-zA-Z0-9]+/, /password:\s*\S+/i];
@@ -1405,7 +1405,7 @@ Semantic DOM-based E2E testing using Alibaba PageAgent. Reads text DOM instead o
 ## Architecture
 
 Runner: `scripts/page-agent-e2e/page-agent-runner.ts`
-Tests: `tests/e2e/page-agent/*.yaml`
+Tests: `tests/tools/page-agent/*.yaml`
 Reports: `reports/page-agent-e2e/`
 Log: `logs/page-agent-e2e/run.log`
 
@@ -1416,7 +1416,7 @@ Never trust PageAgent's natural-language "success" — always verify with assert
 ## Workflow
 
 1. Identify target app and flow to test
-2. Write or update YAML case in `tests/e2e/page-agent/`
+2. Write or update YAML case in `tests/tools/page-agent/`
 3. Validate: `cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate <file>`
 4. Run: `cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts <file>`
 5. Check report in `reports/page-agent-e2e/`
@@ -1466,7 +1466,7 @@ Read these when context is needed:
 mkdir -p .claude/skills/page-agent-e2e/examples
 ```
 
-Copy `tests/e2e/page-agent/smoke.yaml` content to `.claude/skills/page-agent-e2e/examples/smoke.yaml` (same content as Task 2 Step 2).
+Copy `tests/tools/page-agent/smoke.yaml` content to `.claude/skills/page-agent-e2e/examples/smoke.yaml` (same content as Task 2 Step 2).
 
 - [ ] **Step 5: Commit**
 
@@ -1575,10 +1575,10 @@ git commit -m "feat(skill): add security, verification, and hooks references"
 - [ ] **Step 1: Run YAML validation**
 
 ```bash
-cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate ../../tests/e2e/page-agent/smoke.yaml
+cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate ../../tests/tools/page-agent/smoke.yaml
 ```
 
-Expected: `✓ ../../tests/e2e/page-agent/smoke.yaml (3 cases)`
+Expected: `✓ ../../tests/tools/page-agent/smoke.yaml (3 cases)`
 
 - [ ] **Step 2: Run verification script**
 
@@ -1607,7 +1607,7 @@ Expected: `No secrets found` (or only .env.example files which contain placehold
 - [ ] **Step 5: Run the runner with missing services (verify graceful failure)**
 
 ```bash
-cd scripts/page-agent-e2e && PAGE_AGENT_LLM_API_KEY=sk-test npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml 2>&1 | head -20
+cd scripts/page-agent-e2e && PAGE_AGENT_LLM_API_KEY=sk-test npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml 2>&1 | head -20
 ```
 
 Expected: Runner starts, prints header, then fails with connection error to localhost:5173 (not a crash). Exit code 1. A JSONL entry should appear in `logs/page-agent-e2e/run.log`.
@@ -1657,7 +1657,7 @@ on:
     paths:
       - 'frontend/**'
       - 'server/**'
-      - 'tests/e2e/page-agent/**'
+      - 'tests/tools/page-agent/**'
 
 jobs:
   page-agent-e2e:
@@ -1692,10 +1692,10 @@ jobs:
           npx wait-on http://localhost:5173 http://localhost:8000/api/v1/health
 
       - name: Validate YAML schemas
-        run: cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate '../../tests/e2e/page-agent/**/*.yaml'
+        run: cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate '../../tests/tools/page-agent/**/*.yaml'
 
       - name: Run smoke tests
-        run: cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+        run: cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 
       - name: Upload reports
         if: always()

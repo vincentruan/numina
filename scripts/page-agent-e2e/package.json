@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml",
-    "e2e:smoke": "tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml",
-    "e2e:validate": "tsx task-schema.ts --validate '../../tests/e2e/page-agent/**/*.yaml'",
+    "e2e": "tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml",
+    "e2e:smoke": "tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml",
+    "e2e:validate": "tsx task-schema.ts --validate '../../tests/tools/page-agent/**/*.yaml'",
     "e2e:report": "tsx report.ts --last",
     "e2e:verify": "tsx verify-smoke.ts"
   },
