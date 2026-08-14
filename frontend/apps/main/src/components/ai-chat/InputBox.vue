@@ -765,9 +765,9 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilityOrUnload)
   window.addEventListener('beforeunload', onVisibilityOrUnload)
   // Show "draft restored" toast if we loaded a non-empty draft
+  // Don't auto-focus — it can cause unwanted scroll/navigation on mobile
   if (internalValue.value.trim()) {
     showToast({ message: t('aiChat.draftRestored'), duration: 2000 })
-    nextTick(() => inputRef.value?.focus())
   }
 })
 
