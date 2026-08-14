@@ -71,17 +71,11 @@ jobs:
         with:
           lfs: true
 
+      # Reuse nvm Node from runner PATH — skip setup-node to save ~10s/job
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Cache pnpm store
         uses: actions/cache@v4
@@ -119,13 +113,6 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Cache pnpm store
         uses: actions/cache@v4
