@@ -204,7 +204,7 @@ export BASE=http://localhost:5173/ CHILD_BASE=http://localhost:5174/child/ API_B
 - **UI language**: 简体中文
 - **Output paths** (gitignored — local only):
   - Screenshots: `dogfood-output/<name>.png`
-  - Report: `tests/audit-reports/ui-audit-YYYY-MM-DD.md` (one file per day; gitignored — local only. Historical reports already tracked under this path remain tracked; new daily reports are not committed)
+  - Report: `tests/reports/ui-audit-YYYY-MM-DD.md` (one file per day; gitignored — local only. Historical reports already tracked under this path remain tracked; new daily reports are not committed)
 
 ### Prerequisites (NOT handled by this skill)
 
@@ -789,7 +789,7 @@ case's outcome, then write the report.
 
 ```bash
 TODAY=$(date +%Y-%m-%d)
-REPORT="tests/audit-reports/ui-audit-${TODAY}.md"
+REPORT="tests/reports/ui-audit-${TODAY}.md"
 # Screenshots already saved during Phase 3/4/5 at:
 #   dogfood-output/<case>.png
 ```
@@ -871,7 +871,7 @@ the skill log.
 ### After writing
 
 Tell the user the report path and the pass/fail/skip counts:
-> 报告已生成: `tests/audit-reports/ui-audit-{date}.md`
+> 报告已生成: `tests/reports/ui-audit-{date}.md`
 > 通过 X / 失败 Y / 跳过 Z (共 N)
 >
 > 如需跟进修复, 说 "修复" 或 "按分类提交" 进入 Phase 7 (Checklist Todo + Categorized Fix Commits).
@@ -885,7 +885,7 @@ Tell the user the report path and the pass/fail/skip counts:
 
 ### Step 1 — 解析报告, 提取失败项
 
-读取 `tests/audit-reports/ui-audit-{date}.md` 的 "失败详情" 段, 提取每个
+读取 `tests/reports/ui-audit-{date}.md` 的 "失败详情" 段, 提取每个
 失败用例的:
 - Case ID (C2.3 / R4 / F.3.6 / ...)
 - 分类代码 (RENDER / NAV / AUTH / DATA / I18N / AI / INTERACT / PERF / REGRESS)
@@ -942,7 +942,7 @@ fix({scope}): {分类} — {N} 项仿真测试失败修复
 - {Case ID}: {修复内容} ({file}:{line})
 - {Case ID}: {修复内容} ({file}:{line})
 
-Ref: tests/audit-reports/ui-audit-{date}.md
+Ref: tests/reports/ui-audit-{date}.md
 ```
 
 **scope 选择:**

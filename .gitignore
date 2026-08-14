@@ -190,20 +190,25 @@ server/apps/backend/data/
 dogfood-output/
 tests/smoke-results.json
 
-# UI simulation test audit reports (local only; historical reports already
-# tracked remain tracked — new daily reports are not committed)
-tests/audit-reports/
-
 # Playwright E2E Tests
 tests/playwright-report/
 tests/test-results/
 
 # Screenshot test runtime screenshots
-tests/screenshot/screenshots/
+tests/tools/screenshot/screenshots/
+tests/tools/screenshot/four-mode-comparison/*.png
+tests/tools/screenshot/node_modules/
 tmp-test-screenshots/
 
 # E2E test screenshots (local only)
 e2e-screenshots/
+e2e-*.png
+tests/screenshots/
+tests/login-screenshot.png
+
+# Runtime artifacts
+__pycache__/
+.omc/
 .claude/worktrees/
 .gstack/
 .worktrees/

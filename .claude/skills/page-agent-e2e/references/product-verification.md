@@ -26,10 +26,10 @@ Never claim verification based on:
 
 ```bash
 # Verify YAML is valid
-cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate ../../tests/e2e/page-agent/smoke.yaml
+cd scripts/page-agent-e2e && npx tsx task-schema.ts --validate ../../tests/tools/page-agent/smoke.yaml
 
 # Run full smoke suite
-cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+cd scripts/page-agent-e2e && npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 
 # Check last report
 cd scripts/page-agent-e2e && npx tsx report.ts --last

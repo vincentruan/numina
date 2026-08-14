@@ -293,6 +293,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          platforms: linux/amd64
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest

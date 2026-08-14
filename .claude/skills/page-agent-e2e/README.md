@@ -31,7 +31,7 @@ cd server && uv run uvicorn apps.backend.app.main:app --port 8000 &
 
 # 5. Run smoke tests
 cd scripts/page-agent-e2e
-npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 ```
 
 ## Configuration
@@ -99,7 +99,7 @@ PageAgent uses any OpenAI-compatible chat API. Tested configurations:
     └── hooks-and-memory.md
 
 scripts/page-agent-e2e/       ← Runner implementation
-tests/e2e/page-agent/         ← Test YAML files
+tests/tools/page-agent/         ← Test YAML files
 reports/page-agent-e2e/       ← Generated reports (git-ignored)
 logs/page-agent-e2e/          ← Execution logs (git-ignored)
 ```
@@ -146,13 +146,13 @@ Full schema: `references/task-yaml-schema.md`
 cd scripts/page-agent-e2e
 
 # Run a specific test file
-npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 
 # Validate YAML without running
-npx tsx task-schema.ts --validate ../../tests/e2e/page-agent/smoke.yaml
+npx tsx task-schema.ts --validate ../../tests/tools/page-agent/smoke.yaml
 
 # Debug mode (headed browser, pauses on failure)
-PAGE_AGENT_DEBUG=1 npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+PAGE_AGENT_DEBUG=1 npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 ```
 
 ## CI Integration
@@ -169,7 +169,7 @@ PAGE_AGENT_DEBUG=1 npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke
   run: |
     cd scripts/page-agent-e2e
     npx playwright install chromium
-    npx tsx page-agent-runner.ts ../../tests/e2e/page-agent/smoke.yaml
+    npx tsx page-agent-runner.ts ../../tests/tools/page-agent/smoke.yaml
 
 - name: Upload reports
   if: always()

@@ -4,21 +4,55 @@
 
 ```
 tests/
-├── data/                    # 测试数据生成脚本
-│   └── seed-data.sh         # 完整测试数据生成（demouser）
+├── e2e/                          # Playwright E2E 测试
+│   ├── *.spec.ts                 # 测试用例（按功能命名）
+│   ├── smoke_test.py             # Python 冒烟测试
+│   └── scripts/                  # Shell 测试运行器
+│       ├── acceptance.sh         #   API 验收测试
+│       ├── extended.sh           #   扩展 API 测试
+│       ├── run-regression.sh     #   (位于 tests/ 根) 一键回归
+│       ├── multi-provider-sim-test.sh
+│       ├── test-child-simulation.sh
+│       └── wishes-liabilities.sh
 │
-├── e2e/                     # E2E 端到端测试
-│   ├── acceptance.sh        # API 验收测试
-│   ├── extended.sh          # 扩展 API 测试
-│   └── wishes-liabilities.sh # 心愿负债专项测试
+├── visual/                       # 视觉回归测试
+│   ├── visual.config.ts
+│   ├── visual-check.config.ts
+│   └── visual-check.spec.ts
 │
-├── screenshot/              # 截图测试
-│   ├── capture.js           # 截图脚本（17个页面）
-│   └── screenshots/         # 截图输出目录
+├── lib/                          # TypeScript 共享工具
+│   ├── auth.ts                   #   登录/token 辅助
+│   ├── fixtures.ts               #   测试 fixtures
+│   └── routes.ts                 #   路由常量
 │
-└── docs/                    # 测试文档
-    ├── TEST_DATA_SUMMARY.md
-    └── WISHES_LIABILITIES_TEST_SUMMARY.md
+├── data/                         # Python 测试数据 & 种子
+│   ├── factories/                #   工厂函数 (assets, users, wishes…)
+│   ├── scenarios/                #   预置场景 (demo, full, empty…)
+│   ├── seed_data.py              #   数据生成
+│   └── seed-data.sh              #   Shell 入口
+│
+├── fixtures/                     # 静态测试夹具
+│   └── openapi.snapshot.json     #   OpenAPI schema 快照
+│
+├── tools/                        # 独立测试工具
+│   ├── screenshot/               #   Puppeteer 截图工具 (独立 npm)
+│   └── page-agent/               #   Page Agent 配置
+│
+├── scripts/                      # 辅助脚本
+│   └── update-openapi-snapshot.js
+│
+├── reports/                      # 测试审计报告（历史存档）
+│   └── ui-audit-*.md
+│
+├── docs/                         # 测试文档
+│   ├── TEST_SPEC.md
+│   ├── TEST_DATA_SUMMARY.md
+│   └── WISHES_LIABILITIES_TEST_SUMMARY.md
+│
+├── playwright.config.ts          # Playwright 主配置
+├── tsconfig.json                 # TypeScript 配置
+├── package.json                  # Playwright 依赖
+└── run-regression.sh             # 一键回归测试入口
 ```
 
 ## 统一测试账号
@@ -29,89 +63,51 @@ tests/
 - **密码**: `DemoPass123`
 - **家庭**: `Demo Family`
 
-## 使用方法
+儿童角色：`testchild`
 
-### 1. 生成测试数据
+## 快速使用
+
+### 一键回归
 
 ```bash
-# 确保服务运行中
-cd tests/data
-./seed-data.sh
+./tests/run-regression.sh           # 完整回归（Docker + 数据 + Playwright）
+./tests/run-regression.sh --keep-up # 保留 Docker 环境用于调试
 ```
 
-生成内容：
-- 实物资产：房产、车辆、数码、家电、家具、珠宝、服饰、美妆、运动、玩具、宠物、乐器、箱包
-- 金融资产：存款、基金、股票、债券、保险、理财产品、数字货币
-- 负债：信用卡、贷款、其他负债
-- 心愿：多个优先级的心愿
-
-### 2. E2E API 测试
+### Playwright E2E
 
 ```bash
-cd tests/e2e
-
-# 基础验收测试
-./acceptance.sh
-
-# 扩展测试（CRUD、分类、标签、成员等）
-./extended.sh
-
-# 心愿负债专项测试
-./wishes-liabilities.sh
+cd tests
+npx playwright test                 # 运行所有 spec
+npx playwright test e2e/smoke.spec.ts  # 运行单个 spec
 ```
 
-### 3. 截图测试
+### 视觉回归
 
 ```bash
-cd tests/screenshot
+cd tests
+npx playwright test --config visual/visual.config.ts
+npx playwright test --config visual/visual-check.config.ts
+```
 
-# 安装依赖
-npm install puppeteer
+### API Shell 测试
 
-# 运行截图
+```bash
+bash tests/e2e/scripts/acceptance.sh   # API 验收
+bash tests/e2e/scripts/extended.sh     # 扩展 CRUD
+```
+
+### 截图工具
+
+```bash
+cd tests/tools/screenshot
+npm install
 node capture.js
 ```
 
-截图输出到 `tests/screenshot/screenshots/` 目录。
-
-## 测试覆盖
-
-### API 端点
-
-| 模块 | 覆盖端点 |
-|------|---------|
-| 认证 | 登录、注册、刷新 token |
-| 资产 | CRUD、估值、统计 |
-| 负债 | CRUD、详情 |
-| 心愿 | CRUD、优先级 |
-| 分类 | CRUD、图标 |
-| 标签 | CRUD、关联 |
-| 家庭 | 成员管理、邀请码 |
-| 仪表盘 | 总览、趋势、分布 |
-| 快照 | 生成、历史 |
-
-### 页面截图
-
-1. 登录页面
-2. 注册页面
-3. 加入家庭页面
-4. 仪表盘总览
-5. 仪表盘图表
-6. 资产列表
-7. 资产筛选
-8. 资产详情
-9. 资产创建表单
-10. 负债列表
-11. 负债详情
-12. 心愿列表
-13. 统计页面
-14. 家庭页面
-15. 设置页面
-16. 分类管理
-17. 标签管理
-
 ## 维护说明
 
-- 测试数据脚本使用动态 token，无需手动更新
-- 截图脚本使用 Puppeteer，需要 Chromium 环境
-- E2E 测试依赖 `jq` 命令处理 JSON
+- E2E spec 放 `e2e/`，shell 运行器放 `e2e/scripts/`
+- 截图产出（`.png`）已被 `.gitignore` 排除
+- `reports/` 存放历史审计报告，新报告按需提交
+- Python 测试数据使用 `data/factories/` 和 `data/scenarios/`

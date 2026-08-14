@@ -151,3 +151,28 @@ docker-compose down           # Stop all
 # Access at http://localhost:8080
 ```
 
+## Tests Directory (`tests/`)
+
+前端 E2E / 视觉回归 / 测试工具的根目录。Python 后端测试在 `server/tests/backend/`（见上方 Module Documentation）。
+
+```
+tests/
+├── e2e/              # Playwright specs (*.spec.ts) + Python smoke (smoke_test.py)
+│   └── scripts/      # Shell 运行器 (acceptance.sh, extended.sh …)
+├── visual/           # 视觉回归 (visual.config.ts, visual-check.*)
+├── lib/              # TS 共享工具 (auth, fixtures, routes)
+├── data/             # Python 测试数据 (factories/, scenarios/, seed_data.py)
+├── fixtures/         # 静态夹具 (openapi.snapshot.json)
+├── tools/            # 独立工具 (screenshot/ 截图, page-agent/ 配置)
+├── scripts/          # 辅助脚本 (update-openapi-snapshot.js)
+├── reports/          # 历史审计报告 (ui-audit-*.md)
+├── docs/             # 测试文档 (TEST_SPEC.md …)
+├── playwright.config.ts / tsconfig.json / package.json
+└── run-regression.sh # 一键回归入口
+```
+
+**规则：**
+- 新增 spec 放 `e2e/`，shell 脚本放 `e2e/scripts/`
+- 截图产出（`.png`）已被 `.gitignore` 排除，不提交
+- `reports/` 仅存放历史审计报告
+

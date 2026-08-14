@@ -77,7 +77,7 @@ cases:
     task: |
       确认资产列表页面已加载，检查是否有资产数据显示。
     maxSteps: 5
-    storageState: tests/e2e/page-agent/.auth/main-user.json
+    storageState: tests/tools/page-agent/.auth/main-user.json
     assertions:
       - type: url_contains
         value: /assets
@@ -111,7 +111,7 @@ Run schema validation before executing tests:
 
 ```bash
 cd scripts/page-agent-e2e
-npx tsx task-schema.ts --validate ../../tests/e2e/page-agent/smoke.yaml
+npx tsx task-schema.ts --validate ../../tests/tools/page-agent/smoke.yaml
 ```
 
-Output: `✓ tests/e2e/page-agent/smoke.yaml (3 cases)` or error details.
+Output: `✓ tests/tools/page-agent/smoke.yaml (3 cases)` or error details.

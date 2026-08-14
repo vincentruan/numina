@@ -7,7 +7,7 @@ topic: tdd-optimization-multi-perspective
 
 ## Problem Frame
 
-Numina 项目已从基础资产管理扩展为包含儿童财商教育、AI 智能建议、多存储后端、防爬虫安全等功能的完整家庭资产平台。但仿真测试 skill（`numina-sim-test`）和 E2E 测试脚本（`tests/data/seed-data.sh`、`tests/e2e/acceptance.sh`）未随功能迭代更新，导致：
+Numina 项目已从基础资产管理扩展为包含儿童财商教育、AI 智能建议、多存储后端、防爬虫安全等功能的完整家庭资产平台。但仿真测试 skill（`numina-sim-test`）和 E2E 测试脚本（`tests/data/seed-data.sh`、`tests/e2e/scripts/acceptance.sh`）未随功能迭代更新，导致：
 
 1. **测试盲区**：9 个 AI 路由、家庭管理、金币系统、标签系统完全无单元测试
 2. **仿真数据缺口**：seed 脚本未覆盖儿童系统（children、child_wishes、chores、coins、milestones、treasures）
@@ -43,7 +43,7 @@ Numina 项目已从基础资产管理扩展为包含儿童财商教育、AI 智�
 - R10. 补充 milestones 数据：至少 3 条里程碑（储蓄目标达成、第一笔投资、完成 10 个任务）
 - R11. 补充 treasures 数据：至少 3 件宝藏（与资产关联）
 
-**E2E 验收脚本更新（tests/e2e/acceptance.sh）**
+**E2E 验收脚本更新（tests/e2e/scripts/acceptance.sh）**
 
 - R12. 补充儿童 PIN 登录流程验证
 - R13. 补充 child_wish 完整审批流：创建 → 父母设置金额 → 批准 → 实现
@@ -75,7 +75,7 @@ Numina 项目已从基础资产管理扩展为包含儿童财商教育、AI 智�
 
 - `uv run pytest tests/ -v` 全部通过，覆盖率从当前约 60% 提升至 80%+（按路由数量计）
 - `./tests/data/seed-data.sh` 执行后，儿童系统数据完整（children、wishes、chores、coins、milestones、treasures 均有数据）
-- `./tests/e2e/acceptance.sh` 覆盖儿童工作流，pass rate 100%
+- `./tests/e2e/scripts/acceptance.sh` 覆盖儿童工作流，pass rate 100%
 - `numina-sim-test` skill 截图覆盖儿童视角页面，UI 审计无 P0 问题
 - 三视角审查中，R22–R28 专项验证点全部通过
 
