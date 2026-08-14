@@ -43,6 +43,11 @@ jobs:
 
       - name: Run pytest
         run: |
+          # Kill any local dev servers occupying ports 8000-8002
+          for port in 8000 8001 8002; do
+            pid=$(lsof -ti :$port 2>/dev/null || true)
+            if [ -n "$pid" ]; then kill $pid 2>/dev/null || true; fi
+          done
           uv run pytest tests/backend --tb=short -q -m "not integration" \
             --deselect tests/backend/test_activities.py::test_activities_family_isolation \
             --deselect tests/backend/test_assets.py::test_cross_family_isolation \
