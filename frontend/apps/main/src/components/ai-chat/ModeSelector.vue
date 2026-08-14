@@ -363,7 +363,7 @@ onUnmounted(() => {
 
 /* ── Dropdown ── */
 .mode-dropdown {
-  z-index: 999;
+  z-index: 1002;
 }
 
 .mode-dropdown-card {

@@ -99,7 +99,6 @@ const focused = ref(false)
 const expanded = ref(false)
 const panelOpen = ref(false)
 const panelTriggerRef = ref<HTMLElement | null>(null)
-const panelRef = ref<HTMLElement | null>(null)
 const webSearchEnabled = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -648,31 +647,31 @@ function onVoiceError(_message: string) {
   showToast(t('aiChat.voiceErrorPermission'))
 }
 
-// Plus panel position: left-aligned with the + button, shown above it
-// Uses ref updated on open + scroll/resize for reactive positioning
+// Plus panel position: left-aligned with the button group, shown above it
+// Uses bottom-based positioning (consistent with ModeSelector) for reliable placement
 const panelPosition = ref<Record<string, string>>({})
 
 function updatePanelPosition() {
   if (!panelTriggerRef.value || !panelOpen.value) return
   const rect = panelTriggerRef.value.getBoundingClientRect()
-  nextTick(() => {
-    const panelEl = panelRef.value
-    const panelHeight = panelEl ? panelEl.offsetHeight : 162
-    const gap = 8
-    const panelTop = rect.top - panelHeight - gap
-    const panelLeft = rect.left
-    const panelWidth = panelEl ? panelEl.offsetWidth : 160
-    let left = panelLeft
-    if (left + panelWidth > window.innerWidth - 16) {
-      left = Math.max(16, window.innerWidth - panelWidth - 16)
-    }
-    panelPosition.value = {
-      position: 'fixed',
-      top: `${Math.max(0, panelTop)}px`,
-      left: `${left}px`,
-      maxWidth: `calc(100vw - 32px)`,
-    }
-  })
+  // Use visualViewport for mobile Safari compatibility (excludes browser chrome)
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const gap = 8
+
+  // Left-align with the + button (leftmost item visible in the controls row)
+  const panelLeft = rect.left
+  const popupWidth = 160
+  let left = panelLeft
+  if (left + popupWidth > window.innerWidth - 16) {
+    left = Math.max(16, window.innerWidth - popupWidth - 16)
+  }
+
+  panelPosition.value = {
+    position: 'fixed' as const,
+    bottom: `${viewportHeight - rect.top + gap}px`,
+    left: `${left}px`,
+    maxWidth: `calc(100vw - 32px)`,
+  }
 }
 
 function togglePanel() {
@@ -825,7 +824,7 @@ onUnmounted(() => {
             <!-- Plus panel (teleported, positioned relative to + button) -->
             <Teleport to="body">
               <Transition name="panel">
-                <div v-if="panelOpen" ref="panelRef" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')" :style="panelPosition">
+                <div v-if="panelOpen" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')" :style="panelPosition">
                   <button
                     v-for="item in panelItems"
                     :key="item.action"
@@ -1442,7 +1441,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 4px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  z-index: 999;
+  z-index: 1002;
   min-width: 160px;
 }
 
