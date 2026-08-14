@@ -473,6 +473,7 @@ export default {
     // Shown when /ai/models returns empty — all providers are inactive or
     // circuit-open. Different from aiNotEnabled (feature toggle off).
     noAvailableModel: '当前无可用 AI 模型，请检查供应商状态或重置熔断',
+    draftRestored: '已恢复上次未发送的内容',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     // DeerFlow InputBox keys

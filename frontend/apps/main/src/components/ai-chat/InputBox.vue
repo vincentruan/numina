@@ -94,7 +94,16 @@ const {
 } = useTenantAiResources()
 
 // ── Input state ──
-const internalValue = ref(props.modelValue ?? '')
+// Restore unsent draft from localStorage if no parent-provided value.
+function readDraft(): string {
+  if (props.modelValue) return props.modelValue
+  try {
+    const saved = localStorage.getItem(getDraftKey())
+    return saved ?? ''
+  } catch { return '' }
+}
+
+const internalValue = ref(readDraft())
 const focused = ref(false)
 const expanded = ref(false)
 const panelOpen = ref(false)
@@ -211,6 +220,43 @@ function getLastSelectedMode(): InputMode {
   return 'thinking'
 }
 
+// ── Input draft auto-save ──
+// Persists unsent input to localStorage so text survives page refresh,
+// re-authentication redirects, or accidental tab navigation.
+// Keyed per-thread (chat mode) or per welcome-mode entry.
+const DRAFT_KEY_PREFIX = 'ai-chat:draft:'
+
+function getDraftKey(): string {
+  if (props.isWelcomeMode) return `${DRAFT_KEY_PREFIX}welcome`
+  return `${DRAFT_KEY_PREFIX}${props.threadId ?? 'new'}`
+}
+
+function saveInputDraft() {
+  const text = internalValue.value.trim()
+  try {
+    if (text) {
+      localStorage.setItem(getDraftKey(), internalValue.value)
+    } else {
+      localStorage.removeItem(getDraftKey())
+    }
+  } catch { /* quota / private mode — ignore */ }
+}
+
+function clearInputDraft() {
+  try { localStorage.removeItem(getDraftKey()) } catch { /* ignore */ }
+}
+
+let draftSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleDraftSave() {
+  if (draftSaveTimer) clearTimeout(draftSaveTimer)
+  draftSaveTimer = setTimeout(saveInputDraft, 500)
+}
+
+function onVisibilityOrUnload() {
+  if (internalValue.value.trim()) saveInputDraft()
+}
+
 const selectedModel = computed(() =>
   models.value.find(m => m.name === context.value.model_name) ?? models.value[0],
 )
@@ -289,6 +335,7 @@ onMounted(() => {
 watch(internalValue, (val) => {
   emit('update:modelValue', val)
   syncSlashState(val)
+  scheduleDraftSave()
 })
 watch(() => props.modelValue, (val) => {
   if (val !== undefined && val !== internalValue.value) {
@@ -453,6 +500,8 @@ function onSubmit() {
     ...finalPayload.value,
     thread_id: props.threadId,
   })
+  clearInputDraft()
+  if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null }
   internalValue.value = ''
   expanded.value = false
   closeSlashPalette()
@@ -712,6 +761,14 @@ onMounted(() => {
   window.matchMedia?.('(pointer: fine)').addEventListener('change', syncDesktop)
   // Listen for text selection quote events from SelectionToolbar
   window.addEventListener('ai-chat:quote', onQuoteEvent)
+  // Draft auto-save: persist on tab switch / page hide / before navigation
+  document.addEventListener('visibilitychange', onVisibilityOrUnload)
+  window.addEventListener('beforeunload', onVisibilityOrUnload)
+  // Show "draft restored" toast if we loaded a non-empty draft
+  if (internalValue.value.trim()) {
+    showToast({ message: t('aiChat.draftRestored'), duration: 2000 })
+    nextTick(() => inputRef.value?.focus())
+  }
 })
 
 function onQuoteEvent(e: Event) {
@@ -729,6 +786,9 @@ onUnmounted(() => {
   window.visualViewport?.removeEventListener('resize', onScrollOrResize)
   window.matchMedia?.('(pointer: fine)').removeEventListener('change', syncDesktop)
   window.removeEventListener('ai-chat:quote', onQuoteEvent)
+  document.removeEventListener('visibilitychange', onVisibilityOrUnload)
+  window.removeEventListener('beforeunload', onVisibilityOrUnload)
+  if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null }
   abortInputPolish()
 })
 </script>
