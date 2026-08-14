@@ -47,12 +47,19 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "server/uv.lock"
 
+      - name: Cache uv virtual environment
+        uses: actions/cache@v4
+        with:
+          path: server/.venv
+          key: uv-venv-${{ runner.os }}-${{ hashFiles('server/uv.lock') }}
+          restore-keys: uv-venv-${{ runner.os }}-
+
       - name: Install dependencies
         run: uv sync --frozen --extra backend --all-groups
 
       - name: Run pytest
         run: |
-          uv run pytest tests/backend --tb=short -q -m "not integration" \
+          uv run pytest tests/backend -n auto --tb=short -q -m "not integration" \
             --deselect tests/backend/test_activities.py::test_activities_family_isolation \
             --deselect tests/backend/test_assets.py::test_cross_family_isolation \
             --deselect tests/backend/test_assets.py::test_batch_archive_cross_family_isolation \
