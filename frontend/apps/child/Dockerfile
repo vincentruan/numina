@@ -6,25 +6,26 @@ COPY frontend/packages/auth ./frontend/packages/auth
 COPY frontend/packages/math ./frontend/packages/math
 COPY frontend/packages/assets ./frontend/packages/assets
 # Install packages devDependencies so vue-tsc can type-check them
+# Cache mount persists npm cache across builds for faster installs
 WORKDIR /app/frontend/packages/auth
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/math
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/assets
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend-child app
 COPY frontend/apps/child/package*.json /app/frontend/apps/child/
 WORKDIR /app/frontend/apps/child
-# Cache bust: unique value per build prevents stale npm install layers
-ARG CACHE_BUST=default
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
-    npm install
+    npm install --cache /root/.npm
 COPY frontend/apps/child/ .
 ARG VITE_MAIN_APP_URL=""
 ENV VITE_MAIN_APP_URL=$VITE_MAIN_APP_URL
-RUN npx vite build
+# Cache mount for vite cache speeds up incremental builds
+RUN --mount=type=cache,target=/app/frontend/apps/child/node_modules/.vite \
+    npx vite build
 
 FROM nginx:1.27-alpine
 

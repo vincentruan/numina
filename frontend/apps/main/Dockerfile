@@ -7,21 +7,20 @@ COPY frontend/packages/auth ./frontend/packages/auth
 COPY frontend/packages/math ./frontend/packages/math
 COPY frontend/packages/assets ./frontend/packages/assets
 # Install packages devDependencies so vue-tsc can type-check them
+# Cache mount persists npm cache across builds for faster installs
 WORKDIR /app/frontend/packages/auth
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/math
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 WORKDIR /app/frontend/packages/assets
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install
 # Copy and install frontend app
 COPY frontend/apps/main/package*.json /app/frontend/apps/main/
 WORKDIR /app/frontend/apps/main
-# Cache bust: unique value per build prevents stale npm install layers
-ARG CACHE_BUST=default
 RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
     sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
     sed -i 's|"@numina/assets": "workspace:\*"|"@numina/assets": "file:../../packages/assets"|g' package.json && \
-    npm install
+    npm install --cache /root/.npm
 # Generate 256×256 WebP thumbnails BEFORE copying full app source.
 # This layer only re-runs when packages/assets icons or the script change —
 # not when app code changes. BuildKit cache mount further speeds up the case
@@ -41,7 +40,9 @@ RUN --mount=type=cache,target=/tmp/icon-thumbs \
     cp -r /tmp/icon-thumbs public/icons/3d-thumbs
 # Copy full app source (3d-thumbs excluded via .dockerignore to preserve cache)
 COPY frontend/apps/main/ .
-RUN npx vite build
+# Cache mount for vite cache speeds up incremental builds
+RUN --mount=type=cache,target=/app/frontend/apps/main/node_modules/.vite \
+    npx vite build
 
 FROM nginx:1.27-alpine
 

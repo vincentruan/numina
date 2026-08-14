@@ -1,17 +1,23 @@
+# syntax=docker/dockerfile:1
 FROM python:3.13-slim
 
 LABEL org.opencontainers.image.source="https://github.com/vincentruan/numina"
 
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
-RUN pip install uv --no-cache-dir
+# Install uv with pip cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install uv
 
 WORKDIR /app
 
 # Install dependencies from server/ root (cached layer)
-# DeerFlow harness will be fetched from GitHub automatically via uv
+# Cache mount for uv cache + venv dramatically speeds up rebuilds.
+# DeerFlow harness will be fetched from GitHub automatically via uv.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --extra worker
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/app/.venv \
+    uv sync --frozen --no-dev --extra worker
 
 # Copy application code
 COPY apps/scheduler_worker/ ./apps/scheduler_worker/
