@@ -13,13 +13,13 @@ export default defineConfig({
       resolvers: [VantResolver()]
     }),
     createSvgIconsPlugin({
-      iconDirs: [path.resolve(__dirname, 'src/icons/svg')],
+      iconDirs: [path.resolve(import.meta.dirname, 'src/icons/svg')],
       symbolId: 'icon-[name]',
     })
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src')
+      '@': path.resolve(import.meta.dirname, 'src')
     },
     dedupe: ['vue', 'pinia', '@vue/runtime-dom', '@vue/runtime-core', 'vue-i18n', '@intlify/core-base', '@intlify/shared']
   },
@@ -27,7 +27,11 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     fs: {
-      allow: ['../..']
+      allow: [
+        path.resolve(import.meta.dirname, '../..'),
+        // pnpm symlink resolves to real path in root node_modules/.pnpm
+        path.resolve(import.meta.dirname, '../../../node_modules/.pnpm'),
+      ]
     },
     proxy: {
       '/api': {
