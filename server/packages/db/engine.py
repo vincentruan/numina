@@ -1,5 +1,6 @@
 """Database engine factory for multiple backends (SQLite, PostgreSQL)."""
 
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -54,12 +55,12 @@ class _PostgreSQLBackend(_DatabaseBackend):
         return {}
 
     def get_pool_config(self) -> dict:
-        # Supabase serverless pooler limits: 15 connections in session mode.
-        # With 3 services (backend, agent, scheduler-worker), each gets ~5 connections max.
-        # Using conservative pool sizes to avoid EMAXCONNSESSION errors.
+        # Pool size configurable per service via DB_POOL_SIZE / DB_MAX_OVERFLOW.
+        # Budget: backend (10) + agent-checkpointer (3) + scheduler-worker (3) = 16.
+        # Supabase pooler transaction mode allows ~20 concurrent connections.
         return {
-            "pool_size": 3,
-            "max_overflow": 2,
+            "pool_size": int(os.environ.get("DB_POOL_SIZE", "3")),
+            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "2")),
             "pool_timeout": 10,
             "pool_recycle": 300,
             "pool_pre_ping": True,
