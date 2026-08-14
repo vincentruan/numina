@@ -1493,7 +1493,7 @@ onUnmounted(() => {
 /* ── Plus panel ── */
 .plus-panel {
   position: fixed;
-  background: var(--ai-panel-bg);
+  background: #ffffff;
   border: 1px solid var(--ai-panel-border);
   border-radius: 14px;
   padding: 8px;
@@ -1503,6 +1503,11 @@ onUnmounted(() => {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   z-index: 1002;
   min-width: 160px;
+  opacity: 1;
+}
+
+:global([data-theme='dark'] .plus-panel) {
+  background: #12122a;
 }
 
 .panel-item {
