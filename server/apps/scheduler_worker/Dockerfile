@@ -12,11 +12,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 WORKDIR /app
 
 # Install dependencies from server/ root (cached layer)
-# Cache mount for uv cache + venv dramatically speeds up rebuilds.
+# Note: venv is NOT cache-mounted - must rebuild per platform for correct
+# architecture-specific wheels (fixes missing modules when cross-compiling).
 # DeerFlow harness will be fetched from GitHub automatically via uv.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,target=/app/.venv \
     uv sync --frozen --no-dev --extra worker
 
 # Copy application code
