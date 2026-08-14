@@ -59,7 +59,7 @@ jobs:
 
       - name: Run pytest
         run: |
-          uv run pytest tests/backend -n auto --tb=short -q -m "not integration" \
+          uv run pytest tests/backend --tb=short -q -m "not integration" \
             --deselect tests/backend/test_activities.py::test_activities_family_isolation \
             --deselect tests/backend/test_assets.py::test_cross_family_isolation \
             --deselect tests/backend/test_assets.py::test_batch_archive_cross_family_isolation \
