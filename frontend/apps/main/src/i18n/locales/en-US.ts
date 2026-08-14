@@ -538,6 +538,7 @@ export default {
     modelsLoading: '模型加载中，请稍候再发送',
     aiNotEnabled: 'AI assistant not enabled. Please configure it in Settings',
     noAvailableModel: 'No available AI models. Please check provider status or reset circuit breaker',
+    draftRestored: 'Restored your unsent message',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
     selectModel: '选择模型',
