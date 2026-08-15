@@ -32,6 +32,7 @@ from apps.backend.app.services.ai_result_parser import (
     _validate_json,
 )
 from apps.backend.app.services.ai_task_service import AITaskService
+from apps.backend.app.services.bridge_consumer import consume_task_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import SKILL_TTL
 from packages.core.path_manager import PathManager
@@ -229,11 +230,10 @@ async def trigger_generate_events(
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
-    """触发体检报告生成（SSE 流式推送三步进度，U4）。
-
+    """触发体检报告生成（U5: Redis Stream 订阅替代 HTTP 代理）。
+    
     1h 缓存——入口先查最新 completed AIReport，1h 内且无 force
     直接返回缓存 JSON（200，非流）；force=true 或超 1h 走 stream_run 重新生成。
-    缓存检查在并发检查之前；强制刷新仍受单家庭单任务并发约束。
     后台生成：SSE 连接断开后 agent pipeline 仍继续运行，用户可切离页面。
     """
     blocked_resp = check_circuit_blocked(current_user.family_id, "report", db)
@@ -338,81 +338,71 @@ async def trigger_generate_events(
     family_id = current_user.family_id
     user_id = str(current_user.id)
 
-    # U4 step 5: trigger an asset-report stream_run on the agent via the
-    # internal X-Agent-Token gateway endpoint. The agent worker runs the 3-step
-    # pipeline and emits report.step2_json; this endpoint streams it back as SSE
-    # (replaces the legacy NDJSON proxy_report_events orchestration).
-    #
-    # Task lifecycle: wrap the SSE stream so that when the agent pipeline
-    # finishes (end frame), the AITask row is transitioned from "running" to
-    # "completed" (or "failed" on error).  Without this the task stays
-    # "running" for 30 min until the timeout auto-kicks in, causing the
-    # frontend to show a stuck "step 1" UI on page revisit.
-    stream_gen = _stream_asset_report_sse(
-        family_id=family_id,
-        user_id=user_id,
-        thread_id=session_id,
+    # U5: Trigger agent via HTTP, then subscribe to Redis stream via bridge_consumer
+    # The agent writes events to Redis stream; backend consumes via bridge_consumer
+    # This enables cross-process reconnection and removes direct HTTP proxy dependency
+    agent_client = AgentClient(family_id, user_id, timeout=300.0)
+    agent_url = f"/internal/gateway/runs/asset-report/{session_id}"
+
+    # Trigger the agent task (fire-and-forget HTTP call)
+    try:
+        async with agent_client.stream(
+            "POST",
+            agent_url,
+            json={
+                "family_id": str(family_id),
+                "user_id": str(user_id),
+                "language": current_user.language,
+                "on_disconnect": "continue",
+            },
+        ) as resp:
+            if resp.status_code != 200:
+                body = await resp.aread()
+                logger.warning(
+                    "[asset-report] agent trigger failed: status=%s body=%s task=%s",
+                    resp.status_code,
+                    body[:200],
+                    task_id,
+                )
+                err = json.dumps(
+                    {"message": "报告生成服务异常", "name": "AgentError"}
+                ).encode()
+                return StreamingResponse(
+                    iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+                    media_type="text/event-stream",
+                )
+    except Exception as exc:
+        logger.warning(
+            "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
+        )
+        err = json.dumps(
+            {"message": "报告生成服务中断", "name": type(exc).__name__}
+        ).encode()
+        return StreamingResponse(
+            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+            media_type="text/event-stream",
+        )
+
+    # U5: Subscribe to Redis stream via bridge_consumer (replaces HTTP proxy)
+    # bridge_consumer handles:
+    # - Last-Event-ID reconnection
+    # - StreamGap detection and recovery
+    # - Heartbeat sentinels
+    # - Task status updates (complete/fail on end/error)
+    last_event_id = None  # TODO: extract from request headers
+    stream_gen = consume_task_stream(
         task_id=task_id,
-        language=current_user.language,
+        family_id=family_id,
+        last_event_id=last_event_id,
     )
 
-    async def _task_tracking_stream() -> AsyncGenerator[bytes, None]:
-        task_complete = False
-        try:
-            async for frame in stream_gen:
-                # Detect the terminal end frame to capture completion status.
-                # The agent publishes exactly one end frame in its finally block
-                # (worker.py step 11), so this is reliable.
-                line = frame.decode("utf-8", errors="replace").strip()
-                if line.startswith("data:"):
-                    data_str = line[5:].strip()
-                    if data_str and data_str not in ("[DONE]", "null"):
-                        try:
-                            parsed = json.loads(data_str)
-                            if isinstance(parsed, dict) and parsed.get("status") == "complete":
-                                task_complete = True
-                        except (json.JSONDecodeError, ValueError):
-                            pass
-                yield frame
-        finally:
-            try:
-                from apps.backend.app.database import SessionLocal
-
-                local_db = SessionLocal()
-                try:
-                    if task_complete:
-                        AITaskService.complete_task(task_id, local_db)
-                    else:
-                        # Stream ended without a completion end frame. This has
-                        # two causes:
-                        #   (a) Client disconnected while on_disconnect=continue —
-                        #       the agent pipeline is still running in the background
-                        #       and may succeed later.
-                        #   (b) The pipeline genuinely failed before producing the
-                        #       end frame.
-                        # We must NOT call fail_task synchronously here: in case (a)
-                        # the task is still actively running, and marking it "failed"
-                        # would cause the frontend to skip polling on revisit, losing
-                        # the completed report. Instead, start a background watcher
-                        # that polls for the report's DB presence and updates the
-                        # task status when the pipeline's fate is known.
-                        asyncio.ensure_future(
-                            _watch_report_task_completion(
-                                task_id=task_id,
-                                family_id=family_id,
-                            )
-                        )
-                finally:
-                    local_db.close()
-            except Exception as cleanup_exc:
-                logger.warning(
-                    "[trigger_generate_events] task cleanup failed task=%s err=%s",
-                    task_id,
-                    cleanup_exc,
-                )
+    async def _sse_stream() -> AsyncGenerator[bytes, None]:
+        """Wrap bridge_consumer output as SSE bytes."""
+        async for sse_text in stream_gen:
+            yield sse_text.encode("utf-8")
 
     return StreamingResponse(
-        _task_tracking_stream(),
+        _sse_stream(),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )
