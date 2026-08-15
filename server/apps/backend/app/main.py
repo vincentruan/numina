@@ -328,6 +328,18 @@ async def lifespan(app: FastAPI):
     validate_registry()
     logger.info("MCP tool registry validated")
 
+    # U7: Register backend SIGTERM handler for graceful shutdown.
+    # Marks the backend-local ShutdownState so ShutdownGuardMiddleware can
+    # reject new task creation (503 + Retry-After) during the drain window.
+    import signal
+
+    def _backend_sigterm_handler(signum, frame):
+        from apps.backend.app.middleware.shutdown_state import mark_shutting_down
+
+        mark_shutting_down()
+
+    signal.signal(signal.SIGTERM, _backend_sigterm_handler)
+
     yield
 
 

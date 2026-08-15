@@ -37,7 +37,8 @@ class ShutdownGuardMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Check shutdown state and reject task creation if shutting down."""
-        from apps.agent.services.runtime.shutdown_state import is_shutting_down
+        # Use backend-local ShutdownState (not the agent's - separate processes)
+        from apps.backend.app.middleware.shutdown_state import is_shutting_down
 
         # Only check POST requests to task-creation endpoints
         if request.method == "POST" and request.url.path in self.TASK_CREATION_PATHS:
