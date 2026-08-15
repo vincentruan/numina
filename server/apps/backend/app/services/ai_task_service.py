@@ -357,12 +357,15 @@ class AITaskService:
     def get_stale_running_tasks(
         db: Session,
         now: datetime | None = None,
+        family_id: int | str | None = None,
     ) -> list[AITask]:
-        """Return tasks with expired leases (for orphan detection).
+        """Return tasks with expired leases (for orphan detection) with optional tenant scope.
 
         Args:
             db: SQLAlchemy session.
             now: Current timestamp. Defaults to datetime.now(timezone.utc).
+            family_id: Optional family ID for tenant-scoped orphan recovery.
+                      If None, returns stale tasks across all families.
 
         Returns tasks WHERE status IN ('running','post_processing') AND
         lease_expires_at < now. Used by orphan recovery to detect dead workers.
@@ -370,11 +373,12 @@ class AITaskService:
         if now is None:
             now = datetime.now(timezone.utc)
 
-        return (
-            db.query(AITask)
-            .filter(
-                AITask.status.in_(["running", "post_processing"]),
-                AITask.lease_expires_at < now,
-            )
-            .all()
+        query = db.query(AITask).filter(
+            AITask.status.in_(["running", "post_processing"]),
+            AITask.lease_expires_at < now,
         )
+
+        if family_id is not None:
+            query = query.filter(AITask.family_id == int(family_id))
+
+        return query.all()
