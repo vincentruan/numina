@@ -181,6 +181,22 @@ async def lifespan(app: FastAPI):
 
     await init_runtime(app)
 
+    # U7: Register SIGTERM handler for graceful shutdown
+    import signal
+
+    def sigterm_handler(signum, frame):
+        """Handle SIGTERM by marking shutdown state.
+
+        The actual shutdown logic runs in lifespan's shutdown phase.
+        This handler just sets the flag so routers can reject new tasks.
+        """
+        import logging
+        logging.getLogger(__name__).info("[SIGTERM] Received SIGTERM, marking shutdown state")
+        from apps.agent.services.runtime.shutdown_state import mark_shutting_down
+        mark_shutting_down()
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
     yield
 
     # [Copied from DeerFlow Reference] — drain in-flight runs BEFORE checkpointer close
