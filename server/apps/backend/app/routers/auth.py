@@ -594,6 +594,7 @@ def login_step1(
             user_id=user.id,
             display_name=user.display_name,
             avatar_color=user.avatar_color,
+            avatar_url=user.avatar_url,
         )
 
     # Issue temp token for step 2
@@ -605,6 +606,7 @@ def login_step1(
         user_id=user.id,
         display_name=user.display_name,
         avatar_color=user.avatar_color,
+        avatar_url=user.avatar_url,
     )
 
 

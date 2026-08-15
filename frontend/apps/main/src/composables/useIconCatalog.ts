@@ -18,6 +18,15 @@ const ALL_CATEGORY_ID = '__all__'
 // Full originals available via getOriginalUrl() for lightbox/enlarge.
 const USE_THUMBS = true
 
+// Avatar-only categories (not shown in asset picker)
+const AVATAR_CATEGORY_IDS = [
+  'characters',
+  'historical-figures',
+  'religion-mythology',
+  'flags',
+  'numbers-symbols',
+]
+
 function stripExt(fileName: string): string {
   const dot = fileName.lastIndexOf('.')
   return dot > 0 ? fileName.slice(0, dot) : fileName
@@ -35,10 +44,19 @@ function buildOriginalUrl(category: IconCategory, icon: IconEntry): string {
   return `/icons/3d/${category.folder}/${icon.fileName}`
 }
 
-export function useIconCatalog() {
+export function useIconCatalog(options?: { avatarOnly?: boolean }) {
   const { locale } = useI18n()
 
   const isZh = computed(() => locale.value === 'zh-CN')
+
+  // Filter categories based on mode
+  const filteredCategories = computed(() => {
+    if (options?.avatarOnly) {
+      return iconManifest.categories.filter(cat => AVATAR_CATEGORY_IDS.includes(cat.id))
+    }
+    // Asset mode: exclude avatar-only categories
+    return iconManifest.categories.filter(cat => !AVATAR_CATEGORY_IDS.includes(cat.id))
+  })
 
   // "全部" pseudo-category prepended to the manifest categories.
   const categories = computed<IconCategory[]>(() => [
@@ -50,10 +68,10 @@ export function useIconCatalog() {
       sortOrder: -1,
       assetCategoryHints: [],
     },
-    ...iconManifest.categories,
+    ...filteredCategories.value,
   ])
 
-  const activeCategory = ref<string>(iconManifest.categories[0]?.id ?? '')
+  const activeCategory = ref<string>(filteredCategories.value[0]?.id ?? '')
 
   const searchQuery = ref('')
   const isSearchMode = ref(false)
@@ -67,7 +85,7 @@ export function useIconCatalog() {
   // Flatten all icons in manifest order (for "全部" and search).
   const allIconsFlat = computed<{ category: IconCategory; icon: IconEntry }[]>(() => {
     const flat: { category: IconCategory; icon: IconEntry }[] = []
-    for (const cat of iconManifest.categories) {
+    for (const cat of filteredCategories.value) {
       const entries = iconManifest.icons[cat.id] ?? []
       for (const icon of entries) {
         flat.push({ category: cat, icon })
@@ -93,7 +111,7 @@ export function useIconCatalog() {
       return allIconsFlat.value
     }
 
-    const cat = iconManifest.categories.find((c) => c.id === activeCategory.value)
+    const cat = filteredCategories.value.find((c) => c.id === activeCategory.value)
     if (!cat) return []
     const entries = iconManifest.icons[cat.id] ?? []
     return entries.map((icon) => ({ category: cat, icon }))
@@ -154,7 +172,7 @@ export function useIconCatalog() {
 
   // Reset state when popup closes (call from parent on close).
   function reset() {
-    activeCategory.value = iconManifest.categories[0]?.id ?? ''
+    activeCategory.value = filteredCategories.value[0]?.id ?? ''
     searchQuery.value = ''
     isSearchMode.value = false
     resetPagination()

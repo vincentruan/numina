@@ -475,6 +475,24 @@ async def _run_asset_report_pipeline(
             user_message[:80],
         )
 
+        # Set report session title IMMEDIATELY so the sidebar/history shows
+        # a proper label (e.g. "家庭资产分析报告 20260815 1430") from the moment
+        # generation starts — even if the user navigates away, the pipeline
+        # errors, or the SSE connection drops. Previously the title was only
+        # set on completion_status=="complete" AFTER run_skill, leaving the
+        # session with title=NULL ("新对话") when the run was interrupted or
+        # the user returned later. _set_session_title is best-effort (internal
+        # try/except) and idempotent — calling it again on completion overwrites
+        # with a fresh timestamp for accurate generation time.
+        _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+            user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
+        )
+        _track_task(
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, _title)
+            )
+        )
+
         await p.run_skill(user_message)
 
         # Step 3: worker-synthesized report.step2_json emission + persistence.
@@ -740,6 +758,17 @@ async def _run_import_parse_agent(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
+        # Set import-parse session title IMMEDIATELY so sidebar/history shows
+        # a proper label even if the user navigates away or the run errors.
+        # _set_session_title is best-effort and idempotent.
+        _ip_title = _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
+            user_language, _SESSION_TITLES_BY_LANG.get("import-parse", {}).get("default", "文件导入解析")
+        )
+        _track_task(
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, _ip_title)
+            )
+        )
         await p.run_skill(user_message)
 
         # Worker-synthesized import-parse.result emission (mirrors asset-report

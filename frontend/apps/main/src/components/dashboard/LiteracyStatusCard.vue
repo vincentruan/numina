@@ -34,12 +34,12 @@
             :key="child.id"
             class="literacy-status-row"
           >
-            <div
-              class="literacy-status-avatar"
-              :style="{ background: child.avatar_color || '#FF6B6B' }"
-            >
-              {{ (child.display_name ?? '?').charAt(0) }}
-            </div>
+            <UserAvatar
+              :avatar-url="child.avatar_url ?? null"
+              :avatar-color="child.avatar_color || '#FF6B6B'"
+              :display-name="child.display_name || '?'"
+              :size="32"
+            />
             <span class="literacy-status-name">{{ child.display_name }}</span>
             <span
               class="literacy-status-badge"
@@ -65,6 +65,7 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
 import IIcon from '@/components/IIcon.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()

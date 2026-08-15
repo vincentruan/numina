@@ -110,9 +110,35 @@ const realtimeTokenUsage = computed(() => {
 /** Ensure the active thread's metadata (especially title) is in store.sessions.
  *  On page refresh or route navigation, store.sessions is empty and loadHistory
  *  only fetches messages via client.threads.getState - the thread title would
- *  show "新对话" without this fetch. */
+ *  show "新对话" without this fetch.
+ *
+ *  Race-condition guard: if the session already exists with a non-empty title
+ *  (set by handleStartChat's temp title or the SSE values handler's LLM title),
+ *  do NOT overwrite it with the getThread API response. The API may return an
+ *  empty title when sync_title_from_checkpoint hasn't persisted yet — overwriting
+ *  would regress the header from the temp title back to "新对话". When the API
+ *  returns a non-empty title, merge it into the existing session so a prior
+ *  temp title is replaced with the persisted one. */
 async function ensureThreadInSessions(threadId: string) {
-  if (store.sessions.find(s => s.thread_id === threadId)) return
+  const existing = store.sessions.find(s => s.thread_id === threadId)
+  if (existing) {
+    // Session already present — only patch the title when the API has a
+    // non-empty one and the local session has none (prevents regressions).
+    if (!existing.title) {
+      try {
+        const thread = await getThread(threadId)
+        if (thread.title) {
+          const idx = store.sessions.findIndex(s => s.thread_id === threadId)
+          if (idx !== -1) {
+            store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
+          }
+        }
+      } catch {
+        // Non-critical: title stays as-is until next refresh
+      }
+    }
+    return
+  }
   try {
     const thread = await getThread(threadId)
     // Re-check: a concurrent values event may have added it already

@@ -56,9 +56,13 @@
                   v-for="assignee in template.assignees"
                   :key="assignee.id"
                   class="assignee-avatar"
-                  :style="{ background: getChildColor(assignee.id) }"
                 >
-                  {{ (assignee.display_name ?? '?').charAt(0) }}
+                  <UserAvatar
+                    :avatar-url="null"
+                    :avatar-color="getChildColor(assignee.id)"
+                    :display-name="assignee.display_name || '?'"
+                    :size="32"
+                  />
                 </div>
               </div>
             </div>
@@ -113,6 +117,7 @@ import {
 } from '@/api/chores'
 import { usePageLoading } from '@/composables/usePageLoading'
 import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()

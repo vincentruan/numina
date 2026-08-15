@@ -3640,6 +3640,7 @@ export default {
   iconPicker: {
     tabGallery: 'Gallery',
     tab3dIcons: '3D Icons',
+    tabEmoji: 'Emoji',
     fromGallery: 'Choose from Gallery',
     fromCamera: 'Take Photo',
     searchPlaceholder: 'Search icons',
@@ -3648,5 +3649,18 @@ export default {
     loading: 'Loading...',
     recentAlbum: 'Recent',
     changeIcon: 'Change Icon',
+    emojiHint: 'Tap the input below to select an emoji',
+    emojiPlaceholder: 'Tap to enter emoji',
+  },
+  profileEdit: {
+    title: 'Edit Profile',
+    tapToChange: 'Tap avatar to change',
+    displayName: 'Display Name',
+    displayNamePlaceholder: 'Enter display name',
+    displayNameRequired: 'Display name is required',
+    invalidFileType: 'Only JPEG, PNG, WebP formats supported',
+    fileTooLarge: 'Image size cannot exceed 5MB',
+    uploading: 'Uploading...',
+    uploadFailed: 'Upload failed',
   },
 }

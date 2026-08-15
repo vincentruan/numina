@@ -7,6 +7,7 @@ export interface User {
   username: string | null
   display_name: string
   avatar_color: string
+  avatar_url?: string | null
   role: 'owner' | 'member' | 'child'
   is_active: boolean
   theme: string
@@ -28,6 +29,7 @@ export interface ChildUser {
   username: string | null
   display_name: string
   avatar_color: string
+  avatar_url?: string | null
   is_active: boolean
 }
 
@@ -71,6 +73,7 @@ export interface LoginStep1Response {
   user_id?: number
   display_name?: string
   avatar_color?: string
+  avatar_url?: string | null
 }
 
 export interface LoginStep2Request {

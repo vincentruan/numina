@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { parseApiDate } from '@/utils/format'
 import EmptyState from '@/components/common/EmptyState.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import { clearAuth } from '@numina/auth'
 import { useRouter } from 'vue-router'
 
@@ -195,23 +196,12 @@ onMounted(load)
       <template v-for="group in familyGroups" :key="group.display_name">
         <!-- Section header with avatar -->
         <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px 4px; background: var(--van-background)">
-          <div
-            style="
-              width: 28px;
-              height: 28px;
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 13px;
-              font-weight: 600;
-              color: #fff;
-              flex-shrink: 0;
-            "
-            :style="{ backgroundColor: group.avatar_color }"
-          >
-            {{ group.display_name.charAt(0) }}
-          </div>
+          <UserAvatar
+            :avatar-url="null"
+            :avatar-color="group.avatar_color"
+            :display-name="group.display_name"
+            :size="28"
+          />
           <span style="font-size: 14px; font-weight: 600; color: var(--van-text-color)">{{ group.display_name }}</span>
         </div>
 

@@ -230,6 +230,7 @@ const authStore = useAuthStore()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
+const retryTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 // Report content root for image export
 const reportContentRef = ref<HTMLElement | null>(null)
@@ -585,8 +586,22 @@ onMounted(async () => {
       await stream.startPolling()
       await loadExistingReport()
       aiStore.clearBackgroundTask('report')
-    } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
+    } else if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
       aiStore.clearBackgroundTask('report')
+      // Task was marked failed (e.g. SSE disconnect before backend fix) but the
+      // agent pipeline continued in the background (on_disconnect=continue). If
+      // the report now exists in DB, the loadExistingReport call above already
+      // loaded it. If it doesn't exist yet (pipeline still running), re-check
+      // after a short delay so the user sees progress instead of a blank state.
+      if (!currentReport.value && task.status === 'failed') {
+        retryTimer.value = setTimeout(async () => {
+          try {
+            await loadExistingReport()
+          } catch {
+            // best-effort; page already shows empty state
+          }
+        }, 3000)
+      }
     }
   } catch {
     // ignore status fetch errors; page already loaded existing report
@@ -597,6 +612,10 @@ onUnmounted(() => {
   // Close the frontend SSE reader but keep the agent pipeline running in the
   // background. The user can leave the page and the task will still complete.
   stream.abort(true)
+  // Clear the retry timer to prevent state updates on unmounted component
+  if (retryTimer.value) {
+    clearTimeout(retryTimer.value)
+  }
 })
 </script>
 

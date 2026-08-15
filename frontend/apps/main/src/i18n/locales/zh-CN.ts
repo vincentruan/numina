@@ -3674,6 +3674,7 @@ export default {
   iconPicker: {
     tabGallery: '相册',
     tab3dIcons: '3D 图标',
+    tabEmoji: '表情',
     fromGallery: '从相册选择',
     fromCamera: '拍照',
     searchPlaceholder: '搜索图标',
@@ -3682,5 +3683,18 @@ export default {
     loading: '加载中...',
     recentAlbum: '最近项目',
     changeIcon: '更换图标',
+    emojiHint: '点击下方输入框选择表情',
+    emojiPlaceholder: '点击输入表情',
+  },
+  profileEdit: {
+    title: '编辑资料',
+    tapToChange: '点击头像更换',
+    displayName: '昵称',
+    displayNamePlaceholder: '请输入昵称',
+    displayNameRequired: '昵称不能为空',
+    invalidFileType: '仅支持 JPEG、PNG、WebP 格式',
+    fileTooLarge: '图片大小不能超过 5MB',
+    uploading: '上传中...',
+    uploadFailed: '上传失败',
   },
 }

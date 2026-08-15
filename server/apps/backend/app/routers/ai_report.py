@@ -5,6 +5,7 @@
 - POST /api/v1/ai/report/generate/events — 触发生成（SSE 流式推送三步进度，U4）
 """
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -147,6 +148,77 @@ async def _stream_asset_report_sse(
             {"message": "报告生成服务中断", "name": type(exc).__name__}
         ).encode()
         yield f"event: error\ndata: {err.decode()}\n\n".encode()
+
+
+async def _watch_report_task_completion(
+    *, task_id: str, family_id: int
+) -> None:
+    """Background watcher for report task completion after client disconnect.
+
+    When the SSE client disconnects while the agent pipeline is still running
+    (``on_disconnect=continue``), the ``_task_tracking_stream`` finally block
+    can no longer see the pipeline's end frame. This watcher polls the
+    ``ai_reports`` table for up to 5 minutes, looking for a row matching this
+    family. When the pipeline persists its report, the watcher completes the
+    AITask so the frontend can discover it on revisit.
+
+    If the report never appears (pipeline failed without persisting), the task
+    is marked failed after the timeout.
+    """
+    POLL_INTERVAL = 15  # seconds between checks
+    MAX_WAIT = 300  # 5 minutes max
+
+    try:
+        for _ in range(MAX_WAIT // POLL_INTERVAL):
+            await asyncio.sleep(POLL_INTERVAL)
+
+            from apps.backend.app.database import SessionLocal
+            from apps.backend.app.models.ai_report import AIReport
+
+            db = SessionLocal()
+            try:
+                # Check if the report was persisted by the pipeline
+                report_exists = (
+                    db.query(AIReport)
+                    .filter(AIReport.family_id == int(family_id))
+                    .first()
+                    is not None
+                )
+                if report_exists:
+                    AITaskService.complete_task(task_id, db)
+                    logger.info(
+                        "[report-watcher] task %s completed (report found)", task_id
+                    )
+                    return
+
+                # Check if the task is still running
+                task = AITaskService.get_task_by_id(task_id, db)
+                if task and task.status == "completed":
+                    return  # Already completed by another path
+                if task and task.status not in ("running", "post_processing", "queued"):
+                    return  # Terminal state reached by another path
+            finally:
+                db.close()
+
+        # Timeout — pipeline didn't produce a report within the window
+        from apps.backend.app.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            AITaskService.fail_task(
+                task_id, "report generation timed out after client disconnect", db
+            )
+            logger.warning(
+                "[report-watcher] task %s timed out (no report after %ds)",
+                task_id,
+                MAX_WAIT,
+            )
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(
+            "[report-watcher] watcher failed task=%s err=%s", task_id, exc
+        )
 
 
 @router.post("/generate/events")
@@ -311,8 +383,24 @@ async def trigger_generate_events(
                     if task_complete:
                         AITaskService.complete_task(task_id, local_db)
                     else:
-                        AITaskService.fail_task(
-                            task_id, "stream ended without completion", local_db
+                        # Stream ended without a completion end frame. This has
+                        # two causes:
+                        #   (a) Client disconnected while on_disconnect=continue —
+                        #       the agent pipeline is still running in the background
+                        #       and may succeed later.
+                        #   (b) The pipeline genuinely failed before producing the
+                        #       end frame.
+                        # We must NOT call fail_task synchronously here: in case (a)
+                        # the task is still actively running, and marking it "failed"
+                        # would cause the frontend to skip polling on revisit, losing
+                        # the completed report. Instead, start a background watcher
+                        # that polls for the report's DB presence and updates the
+                        # task status when the pipeline's fate is known.
+                        asyncio.ensure_future(
+                            _watch_report_task_completion(
+                                task_id=task_id,
+                                family_id=family_id,
+                            )
                         )
                 finally:
                     local_db.close()

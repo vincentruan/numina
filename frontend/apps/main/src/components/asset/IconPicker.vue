@@ -32,6 +32,12 @@
           :class="{ active: activeTab === '3d' }"
           @click="activeTab = '3d'"
         >{{ t('iconPicker.tab3dIcons') }}</div>
+        <div
+          v-if="mode === 'avatar'"
+          class="tab"
+          :class="{ active: activeTab === 'emoji' }"
+          @click="activeTab = 'emoji'"
+        >{{ t('iconPicker.tabEmoji') }}</div>
       </div>
 
       <!-- Gallery tab -->
@@ -46,6 +52,18 @@
           block
           @click="emit('request-camera')"
         >{{ t('iconPicker.fromCamera') }}</van-button>
+      </div>
+
+      <!-- Emoji tab (avatar mode only) -->
+      <div v-if="activeTab === 'emoji'" class="emoji-content">
+        <div class="emoji-hint">{{ t('iconPicker.emojiHint') }}</div>
+        <input
+          ref="emojiInput"
+          type="text"
+          class="emoji-input"
+          @input="onEmojiInput"
+          :placeholder="t('iconPicker.emojiPlaceholder')"
+        />
       </div>
 
       <!-- 3D icons tab -->
@@ -92,7 +110,7 @@
             :immediate-check="true"
             @load="loadMore"
           >
-            <div class="icon-grid">
+            <div class="icon-grid" :class="{ 'avatar-mode': mode === 'avatar' }">
               <div v-if="paginatedIcons.length === 0 && searchQuery" class="empty-state">
                 {{ t('iconPicker.noResults') }}
               </div>
@@ -152,17 +170,19 @@ const { t } = useI18n()
 const props = defineProps<{
   show: boolean
   currentImageUrl?: string
+  mode?: 'asset' | 'avatar'
 }>()
 
 const emit = defineEmits<{
   'update:show': [value: boolean]
   'select-image': [url: string]
+  'select-emoji': [emoji: string]
   'request-gallery': []
   'request-camera': []
   delete: []
 }>()
 
-const activeTab = ref<'gallery' | '3d'>('gallery')
+const activeTab = ref<'gallery' | '3d' | 'emoji'>('gallery')
 const showSearchInput = ref(false)
 const enlargedUrl = ref<string>('')
 const enlargeLoading = ref(false)
@@ -184,7 +204,7 @@ const {
   getOriginalUrl,
   getCategoryName,
   reset,
-} = useIconCatalog()
+} = useIconCatalog({ avatarOnly: props.mode === 'avatar' })
 
 // Track the currently-selected icon (for highlight) based on currentImageUrl.
 const selectedIconUrl = ref<string>('')
@@ -261,6 +281,28 @@ function onClosed() {
   enlargeLoading.value = false
   gridLoading.value = false
   reset()
+}
+
+// Emoji input handler
+const emojiInput = ref<HTMLInputElement | null>(null)
+
+function onEmojiInput(event: Event) {
+  const input = event.target as HTMLInputElement
+  const value = input.value
+  if (value) {
+    // Extract the last emoji (in case of multiple)
+    const lastChar = [...value].pop() || ''
+    if (lastChar) {
+      // Reject ASCII characters, whitespace, and common punctuation
+      // Emoji are typically outside the ASCII range (0x00-0x7F)
+      if (/^[\s\x20-\x7E]$/.test(lastChar)) {
+        input.value = ''
+        return
+      }
+      emit('select-emoji', lastChar)
+      input.value = ''
+    }
+  }
 }
 
 // Expose totalIcons for debugging / tests.
@@ -584,5 +626,45 @@ void totalIcons
 }
 .enlarge-img.visible {
   opacity: 1;
+}
+
+/* Emoji tab */
+.emoji-content {
+  padding: 24px 16px;
+  text-align: center;
+}
+.emoji-hint {
+  font-size: 14px;
+  color: var(--van-text-color-2);
+  margin-bottom: 16px;
+}
+.emoji-input {
+  width: 100%;
+  max-width: 200px;
+  padding: 12px 16px;
+  font-size: 32px;
+  text-align: center;
+  border: 2px dashed var(--van-border-color);
+  border-radius: 12px;
+  background: var(--van-background-2);
+  color: var(--van-text-color);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.emoji-input:focus {
+  border-color: var(--van-primary-color);
+}
+.emoji-input::placeholder {
+  font-size: 14px;
+  color: var(--van-text-color-3);
+}
+
+/* Avatar mode: 6-column grid with smaller cells */
+.icon-grid.avatar-mode {
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.icon-grid.avatar-mode .icon-cell {
+  min-height: 56px;
 }
 </style>

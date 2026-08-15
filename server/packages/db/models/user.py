@@ -28,6 +28,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar_color: Mapped[str] = mapped_column(String(20), default="#4F46E5")
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     role: Mapped[str] = mapped_column(
         String(10), default="member"
     )  # 'owner', 'member', or 'child'

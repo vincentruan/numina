@@ -64,8 +64,19 @@ class AITaskService:
         skill_id: str,
         session_id: int | None,
         db: Session,
+        run_id: str | None = None,
+        worker_id: str | None = None,
     ) -> AITask:
-        """创建新任务记录。若并发请求导致唯一约束冲突，抛出 AI_TASK_IN_PROGRESS。"""
+        """创建新任务记录。若并发请求导致唯一约束冲突，抛出 AI_TASK_IN_PROGRESS。
+
+        Args:
+            family_id: Family (tenant) ID.
+            skill_id: Feature type (report, import, chat, coach, literacy, agent-*).
+            session_id: Linked AIChatSession ID.
+            db: SQLAlchemy session.
+            run_id: Optional agent RunRecord ID for bridge reconnection.
+            worker_id: Optional hostname:uuid of processing worker.
+        """
         from sqlalchemy.exc import IntegrityError
 
         task = AITask(
@@ -74,6 +85,8 @@ class AITaskService:
             status="running",
             session_id=session_id,
             started_at=datetime.utcnow(),
+            run_id=run_id,
+            worker_id=worker_id,
         )
         db.add(task)
         try:
@@ -220,3 +233,112 @@ class AITaskService:
             db.commit()
             return True
         return False
+
+    # ---------------------------------------------------------------------------
+    # StreamBridge task tracking methods (U4)
+    # ---------------------------------------------------------------------------
+
+    @staticmethod
+    def get_task_by_run_id(run_id: str, db: Session) -> AITask | None:
+        """Lookup AITask by agent RunRecord ID for bridge reconnection.
+
+        Returns the task with matching run_id, or None if not found.
+        Used by backend bridge_consumer to map agent run_id → AITask primary key.
+        """
+        return (
+            db.query(AITask)
+            .filter(AITask.run_id == run_id)
+            .first()
+        )
+
+    @staticmethod
+    def get_running_tasks_by_family(
+        family_id: int | str, db: Session
+    ) -> list[AITask]:
+        """Return all running tasks for a family (used by frontend task resume).
+
+        Returns tasks with status='running', ordered by started_at descending
+        (most recent first). Excludes timed-out tasks.
+        """
+        cutoff = datetime.utcnow() - timedelta(minutes=TASK_TIMEOUT_MINUTES)
+        return (
+            db.query(AITask)
+            .filter(
+                AITask.family_id == int(family_id),
+                AITask.status == "running",
+                AITask.started_at >= cutoff,
+            )
+            .order_by(AITask.started_at.desc())
+            .all()
+        )
+
+    @staticmethod
+    def update_lease(
+        task_id: int | str,
+        db: Session,
+        expires_at: datetime | None = None,
+    ) -> None:
+        """Refresh worker lease heartbeat for dead-worker detection.
+
+        Args:
+            task_id: AITask primary key.
+            db: SQLAlchemy session.
+            expires_at: Lease expiration timestamp. Defaults to now + 120s.
+        """
+        if expires_at is None:
+            expires_at = datetime.utcnow() + timedelta(seconds=120)
+
+        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
+        if task:
+            task.lease_expires_at = expires_at
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+    @staticmethod
+    def mark_interrupted(
+        task_id: int | str,
+        error_message: str,
+        db: Session,
+    ) -> None:
+        """Mark a task as interrupted (graceful shutdown or orphan recovery).
+
+        Transitions status to 'interrupted' with error message. Only applies
+        to tasks in running/post_processing/queued states.
+        """
+        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
+        if task and task.status in ("running", "post_processing", "queued"):
+            task.status = "interrupted"
+            task.completed_at = datetime.utcnow()
+            task.error_message = error_message[:500] if error_message else None
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+    @staticmethod
+    def get_stale_running_tasks(
+        db: Session,
+        now: datetime | None = None,
+    ) -> list[AITask]:
+        """Return tasks with expired leases (for orphan detection).
+
+        Args:
+            db: SQLAlchemy session.
+            now: Current timestamp. Defaults to datetime.utcnow().
+
+        Returns tasks WHERE status IN ('running','post_processing') AND
+        lease_expires_at < now. Used by orphan recovery to detect dead workers.
+        """
+        if now is None:
+            now = datetime.utcnow()
+
+        return (
+            db.query(AITask)
+            .filter(
+                AITask.status.in_(["running", "post_processing"]),
+                AITask.lease_expires_at < now,
+            )
+            .all()
+        )
