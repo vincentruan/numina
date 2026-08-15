@@ -105,19 +105,105 @@ async def reconcile_orphaned_runs(
 ) -> list[dict[str, Any]]:
     """Mark persisted pending/running runs as error after process restart.
 
+    U8: DeerFlow-parity conditional claim pattern:
+    - Query AITask WHERE status IN ('running','post_processing') AND lease_expires_at < now
+    - For each stale task: conditional UPDATE with lease guard (prevents split-brain race)
+    - Newer-run protection: skip orphan mark if newer completed task exists
+    - Publish __end__ marker to Redis Stream for late SSE subscribers
+
     When ``RunManager`` has no persistent store (``store=None``), this is a
     no-op.  Wired here so the integration point is live when a ``RunStore``
     is added in Phase 2.
 
     # [Copied from DeerFlow Reference] — from manager.py
+    # [U8 Enhancement] — AITask integration + conditional claim + stream end marker
 
     Note: ``reconcile_orphaned_inflight_runs`` is not available in all DeerFlow
     versions. Fall back gracefully when the method is missing.
     """
     if hasattr(run_manager, "reconcile_orphaned_inflight_runs"):
         return cast("list[dict[str, Any]]", await run_manager.reconcile_orphaned_inflight_runs(error=error))
-    logger.debug("reconcile_orphaned_inflight_runs not available in this DeerFlow version (no-op)")
-    return []
+
+    # U8: AITask-based orphan recovery
+    logger.info("[reconcile_orphaned_runs] Starting AITask-based orphan recovery")
+    recovered = []
+
+    try:
+        from datetime import datetime
+
+        from apps.backend.app.services.ai_task_service import AITaskService
+        from packages.db.session import SessionLocal
+
+        db = SessionLocal()
+        try:
+            # Get all stale running tasks (lease expired)
+            now = datetime.utcnow()
+            stale_tasks = AITaskService.get_stale_running_tasks(db, now)
+
+            for task in stale_tasks:
+                # Newer-run protection: check if a newer completed task exists
+                newer_completed = (
+                    db.query(AITaskService._model_class)
+                    .filter(
+                        AITaskService._model_class.family_id == task.family_id,
+                        AITaskService._model_class.skill_id == task.skill_id,
+                        AITaskService._model_class.status == "completed",
+                        AITaskService._model_class.started_at > task.started_at,
+                    )
+                    .first()
+                )
+
+                if newer_completed:
+                    logger.info(
+                        f"[reconcile_orphaned_runs] Skipping orphan mark for task {task.id} "
+                        f"(newer completed task {newer_completed.id} exists)"
+                    )
+                    continue
+
+                # Conditional claim: mark as interrupted with lease guard
+                # This prevents the split-brain race where a concurrent heartbeat renewal
+                # could win over the orphan claim
+                AITaskService.mark_interrupted(
+                    task.id,
+                    "服务重启，任务中断，请重试",
+                    db,
+                )
+
+                logger.warning(
+                    f"[reconcile_orphaned_runs] Marked task {task.id} as interrupted "
+                    f"(lease expired at {task.lease_expires_at}, now={now})"
+                )
+
+                recovered.append({
+                    "task_id": str(task.id),
+                    "run_id": task.run_id,
+                    "family_id": str(task.family_id),
+                    "skill_id": task.skill_id,
+                    "stop_reason": "orphan_recovered",
+                })
+
+                # U8: Publish __end__ marker to Redis Stream for late SSE subscribers
+                if task.run_id:
+                    try:
+                        from apps.agent.services.runtime.stream_bridge import make_stream_bridge
+                        from apps.agent.services.runtime.stream_bridge.config import StreamBridgeConfig
+
+                        # Create bridge and publish end marker
+                        config = StreamBridgeConfig(type="redis")
+                        bridge = make_stream_bridge(config)
+                        await bridge.publish_end(task.run_id)
+                        await bridge.close()
+                        logger.info(f"[reconcile_orphaned_runs] Published end marker for run {task.run_id}")
+                    except Exception as e:
+                        logger.error(f"[reconcile_orphaned_runs] Failed to publish end marker: {e}")
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"[reconcile_orphaned_runs] Failed to reconcile orphaned runs: {e}")
+
+    return recovered
 
 
 async def schedule_run_cleanup(
