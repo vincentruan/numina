@@ -4,7 +4,7 @@
  * Provides methods to query AI tasks from the backend's /api/v1/ai/tasks endpoint.
  * Used by useTaskResume composable to check for running tasks on page load.
  */
-import axios from 'axios'
+import api from '@/api'
 
 export interface AITask {
   id: string
@@ -33,7 +33,7 @@ export async function getAITasks(
   if (skillId) params.skill_id = skillId
   if (status) params.status = status
 
-  const response = await axios.get('/api/v1/ai/tasks', { params })
+  const response = await api.get('/ai/tasks', { params })
   return response.data
 }
 
@@ -43,7 +43,7 @@ export async function getAITasks(
  * @returns Array of running AITask objects
  */
 export async function getRunningTasks(): Promise<AITask[]> {
-  const response = await axios.get('/api/v1/ai/tasks/running')
+  const response = await api.get('/ai/tasks/running')
   return response.data
 }
 
@@ -54,6 +54,6 @@ export async function getRunningTasks(): Promise<AITask[]> {
  * @returns AITask object
  */
 export async function getTaskById(taskId: string): Promise<AITask> {
-  const response = await axios.get(`/api/v1/ai/tasks/${taskId}`)
+  const response = await api.get(`/ai/tasks/${taskId}`)
   return response.data
 }
