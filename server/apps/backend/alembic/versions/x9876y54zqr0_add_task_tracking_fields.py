@@ -23,56 +23,72 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Add run_id, worker_id, lease_expires_at, progress columns and composite index."""
     # Use batch_alter_table for SQLite compatibility
-    with op.batch_alter_table("ai_tasks", schema=None) as batch_op:
-        # Check if columns already exist (idempotent migration for fresh DBs)
-        # Note: batch_alter_table doesn't support IF NOT EXISTS directly,
-        # so we rely on the migration being run on a clean DB or after checking
-        batch_op.add_column(
-            sa.Column(
-                "run_id",
-                sa.String(64),
-                nullable=True,
-                comment="Agent RunRecord ID for bridge reconnection",
-            )
-        )
-        batch_op.add_column(
-            sa.Column(
-                "worker_id",
-                sa.String(128),
-                nullable=True,
-                comment="hostname:uuid of processing worker",
-            )
-        )
-        batch_op.add_column(
-            sa.Column(
-                "lease_expires_at",
-                sa.DateTime(timezone=True),
-                nullable=True,
-                comment="Heartbeat deadline for dead-worker detection",
-            )
-        )
-        batch_op.add_column(
-            sa.Column(
-                "progress",
-                sa.JSON(),
-                nullable=True,
-                comment="Optional JSON blob (step, percentage, message)",
-            )
-        )
+    # Check if columns already exist for idempotent migration (fresh DB support)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_columns = {col["name"] for col in inspector.get_columns("ai_tasks")}
 
-        # Add index on run_id for bridge reconnection lookup
-        batch_op.create_index(
-            "ix_ai_tasks_run_id",
-            ["run_id"],
-            unique=False,
-        )
+    with op.batch_alter_table("ai_tasks", schema=None) as batch_op:
+        # Add run_id column if not exists
+        if "run_id" not in existing_columns:
+            batch_op.add_column(
+                sa.Column(
+                    "run_id",
+                    sa.String(64),
+                    nullable=True,
+                    comment="Agent RunRecord ID for bridge reconnection",
+                )
+            )
+
+        # Add worker_id column if not exists
+        if "worker_id" not in existing_columns:
+            batch_op.add_column(
+                sa.Column(
+                    "worker_id",
+                    sa.String(128),
+                    nullable=True,
+                    comment="hostname:uuid of processing worker",
+                )
+            )
+
+        # Add lease_expires_at column if not exists
+        if "lease_expires_at" not in existing_columns:
+            batch_op.add_column(
+                sa.Column(
+                    "lease_expires_at",
+                    sa.DateTime(timezone=True),
+                    nullable=True,
+                    comment="Heartbeat deadline for dead-worker detection",
+                )
+            )
+
+        # Add progress column if not exists
+        if "progress" not in existing_columns:
+            batch_op.add_column(
+                sa.Column(
+                    "progress",
+                    sa.JSON(),
+                    nullable=True,
+                    comment="Optional JSON blob (step, percentage, message)",
+                )
+            )
+
+        # Add index on run_id for bridge reconnection lookup (if not exists)
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("ai_tasks")}
+        if "ix_ai_tasks_run_id" not in existing_indexes:
+            batch_op.create_index(
+                "ix_ai_tasks_run_id",
+                ["run_id"],
+                unique=False,
+            )
 
         # Add composite index for efficient task queries by family + skill + status
-        batch_op.create_index(
-            "ix_ai_tasks_family_skill_status",
-            ["family_id", "skill_id", "status"],
-            unique=False,
-        )
+        if "ix_ai_tasks_family_skill_status" not in existing_indexes:
+            batch_op.create_index(
+                "ix_ai_tasks_family_skill_status",
+                ["family_id", "skill_id", "status"],
+                unique=False,
+            )
 
 
 def downgrade() -> None:
