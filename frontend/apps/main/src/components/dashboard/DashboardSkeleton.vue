@@ -24,8 +24,8 @@
       </div>
     </div>
 
-    <!-- Finance Coach Card (collapsed header) -->
-    <div class="skeleton-card">
+    <!-- Finance Coach Card (collapsed header — van-cell-group inset) -->
+    <div class="skeleton-card skeleton-collapse-card">
       <div class="skeleton-card-header">
         <div class="skeleton-icon-circle">
           <van-skeleton :row="1" row-width="18px" animate />
@@ -36,8 +36,8 @@
       </div>
     </div>
 
-    <!-- Literacy Status Card (header + child rows) -->
-    <div class="skeleton-card skeleton-literacy">
+    <!-- Literacy Status Card (header + child rows — van-cell-group inset) -->
+    <div class="skeleton-card skeleton-collapse-card skeleton-literacy">
       <div class="skeleton-literacy-header">
         <van-skeleton :row="1" row-width="72px" animate />
         <van-skeleton :row="1" row-width="48px" animate />
@@ -53,8 +53,8 @@
       </div>
     </div>
 
-    <!-- Smart Reminders Card (collapsed header) -->
-    <div class="skeleton-card">
+    <!-- Smart Reminders Card (collapsed header — van-cell-group inset) -->
+    <div class="skeleton-card skeleton-collapse-card">
       <div class="skeleton-card-header">
         <div class="skeleton-icon-circle">
           <van-skeleton :row="1" row-width="18px" animate />
@@ -76,8 +76,8 @@
       </div>
     </div>
 
-    <!-- Family Manifesto Card (collapsed header) -->
-    <div class="skeleton-card">
+    <!-- Family Manifesto Card (collapsed header — van-cell-group inset) -->
+    <div class="skeleton-card skeleton-collapse-card">
       <div class="skeleton-card-header">
         <div class="skeleton-icon-circle">
           <van-skeleton :row="1" row-width="18px" animate />
@@ -118,13 +118,13 @@ const authStore = useAuthStore()
 
 <style scoped>
 .dashboard-skeleton {
-  background: var(--bg-secondary);
+  background: var(--card-bg);
   min-height: 100vh;
 }
 
 /* ── Hero / Overview (mirrors OverviewStatCard layout) ── */
 .hero-section {
-  background: var(--card-bg);
+  background: var(--bg-secondary);
 }
 .skeleton-overview {
   background: var(--card-bg);
@@ -229,6 +229,17 @@ const authStore = useAuthStore()
   padding: 0;
 }
 
+/* ── Collapse-style card (mirrors van-cell-group inset) ── */
+.skeleton-collapse-card {
+  margin: 8px 16px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  box-shadow: none;
+}
+[data-theme='dark'] .skeleton-collapse-card {
+  box-shadow: none;
+}
+
 /* ── Collapsed card header (icon + title + spacer + summary) ── */
 .skeleton-card-header {
   display: flex;
@@ -293,6 +304,7 @@ const authStore = useAuthStore()
 
 /* ── Pending Approvals ── */
 .skeleton-approvals {
+  margin: 0 16px 12px;
   padding: 12px 16px;
 }
 .skeleton-approvals-header {

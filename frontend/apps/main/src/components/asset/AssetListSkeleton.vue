@@ -70,7 +70,7 @@ import AssetCardSkeleton from '@/components/common/AssetCardSkeleton.vue'
 
 <style scoped>
 .asset-list-skeleton {
-  background: var(--bg-secondary);
+  background: var(--card-bg);
 }
 
 /* ── Status bar (mirrors StatusSummaryGrid exactly) ── */
