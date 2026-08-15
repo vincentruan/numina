@@ -1,6 +1,6 @@
 <template>
   <div class="chore-card-skeleton">
-    <van-skeleton-avatar avatar-size="28px" avatar-shape="round" animate />
+    <van-skeleton-avatar avatar-size="24px" avatar-shape="round" animate />
     <div class="chore-info-skeleton">
       <van-skeleton :row="2" row-width="60% 30%" animate />
     </div>
@@ -18,10 +18,10 @@
   align-items: center;
   gap: 12px;
   background: var(--color-surface-soft);
-  border-radius: var(--radius-lg);
-  padding: 16px;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
   border: 1px solid var(--color-hairline);
-  min-height: 64px;
+  min-height: 56px;
 }
 
 .chore-card-skeleton :deep(.van-skeleton-avatar) {

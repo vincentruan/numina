@@ -1,7 +1,7 @@
 <template>
   <div class="wish-card-skeleton">
     <div class="wish-header-skeleton">
-      <van-skeleton-avatar avatar-size="48px" avatar-shape="square" animate />
+      <van-skeleton-avatar avatar-size="56px" avatar-shape="square" animate />
       <div class="wish-meta-skeleton">
         <van-skeleton :row="2" row-width="50% 30%" animate />
       </div>
@@ -16,9 +16,9 @@
 
 <style scoped>
 .wish-card-skeleton {
-  background: var(--color-surface-soft);
+  background: color-mix(in srgb, var(--color-brand-ochre) 6%, var(--color-surface-soft));
   border-radius: var(--radius-lg);
-  padding: var(--space-md);
+  padding: var(--space-lg);
   border: 1px solid var(--color-hairline);
   border-left: 4px solid var(--color-brand-ochre);
   margin-bottom: 12px;
@@ -57,8 +57,8 @@
 }
 
 .progress-skeleton :deep(.van-skeleton__row) {
-  height: 12px;
-  border-radius: 6px;
+  height: 14px;
+  border-radius: 7px;
   background: var(--color-surface-strong);
 }
 </style>

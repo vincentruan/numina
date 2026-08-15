@@ -1,28 +1,32 @@
 <template>
   <div class="wishes-skeleton">
-    <!-- Hero banner skeleton — peach feature card -->
-    <div class="hero-banner-skeleton">
-      <div class="hero-stat-skeleton">
-        <van-skeleton :row="2" row-width="100% 60%" animate />
-      </div>
-      <div class="hero-divider-skeleton" />
-      <div class="hero-stat-skeleton">
-        <van-skeleton :row="2" row-width="80% 100%" animate />
-      </div>
-      <div class="hero-divider-skeleton" />
-      <div class="hero-stat-skeleton">
-        <van-skeleton :row="2" row-width="80% 100%" animate />
-      </div>
+    <!-- Balance hero skeleton — peach feature card (matches BalanceHero variant="wishes") -->
+    <div class="balance-hero-skeleton">
+      <van-skeleton :row="1" row-width="35%" animate class="hero-balance-skeleton" />
+      <van-skeleton :row="1" row-width="55%" animate class="hero-coins-skeleton" />
     </div>
 
-    <!-- Section title skeleton -->
-    <div class="section-title-skeleton">
-      <van-skeleton :row="1" row-width="30%" animate />
+    <!-- Stats strip skeleton — below the hero -->
+    <div class="stats-strip-skeleton">
+      <div class="stats-item-skeleton">
+        <van-skeleton :row="1" row-width="28px" animate />
+        <van-skeleton :row="1" row-width="40px" animate />
+      </div>
+      <div class="stats-divider-skeleton" />
+      <div class="stats-item-skeleton">
+        <van-skeleton :row="1" row-width="28px" animate />
+        <van-skeleton :row="1" row-width="50px" animate />
+      </div>
     </div>
 
     <!-- Constellation placeholder -->
     <div class="constellation-skeleton">
       <van-skeleton-avatar avatar-size="64px" avatar-shape="round" animate v-for="i in 3" :key="i" />
+    </div>
+
+    <!-- Section title skeleton -->
+    <div class="section-title-skeleton">
+      <van-skeleton :row="1" row-width="30%" animate />
     </div>
 
     <!-- Wish cards skeleton -->
@@ -47,48 +51,87 @@ import WishCardSkeleton from './WishCardSkeleton.vue'
   padding: var(--space-md) var(--space-md) 140px;
 }
 
-/* Hero banner — peach feature card */
-.hero-banner-skeleton {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
+/* Balance hero — peach feature card (matches BalanceHero variant="wishes") */
+.balance-hero-skeleton {
   background: var(--color-brand-peach);
   border-radius: var(--radius-xl);
-  padding: 32px 16px;
+  padding: 24px 20px;
   margin-bottom: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-[data-theme="dark"] .hero-banner-skeleton {
+[data-theme="dark"] .balance-hero-skeleton {
   background:
     linear-gradient(135deg, rgba(var(--color-brand-peach-rgb), 0.14), rgba(var(--color-brand-peach-rgb), 0.06)),
     var(--color-surface-card);
 }
 
-.hero-stat-skeleton :deep(.van-skeleton) {
+.balance-hero-skeleton :deep(.van-skeleton) {
   padding: 0;
 }
 
-.hero-stat-skeleton :deep(.van-skeleton__row) {
-  height: 24px;
-  margin-top: 2px;
+.hero-balance-skeleton :deep(.van-skeleton__row) {
+  height: 32px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.1);
 }
-
-[data-theme="dark"] .hero-stat-skeleton :deep(.van-skeleton__row) {
+[data-theme="dark"] .hero-balance-skeleton :deep(.van-skeleton__row) {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.hero-stat-skeleton :deep(.van-skeleton__row:first-child) {
-  height: 32px;
-  margin-top: 0;
+.hero-coins-skeleton :deep(.van-skeleton__row) {
+  height: 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.1);
+}
+[data-theme="dark"] .hero-coins-skeleton :deep(.van-skeleton__row) {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.hero-divider-skeleton {
+/* Stats strip — matches .stats-strip */
+.stats-strip-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: var(--space-lg);
+}
+
+.stats-item-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stats-item-skeleton :deep(.van-skeleton) {
+  padding: 0;
+}
+
+.stats-item-skeleton :deep(.van-skeleton__row) {
+  border-radius: 4px;
+  background: var(--skeleton-bg);
+}
+
+.stats-item-skeleton :deep(.van-skeleton__row:first-child) {
+  height: 22px;
+}
+
+.stats-item-skeleton :deep(.van-skeleton__row:last-child) {
+  height: 14px;
+}
+
+.stats-divider-skeleton {
   width: 1px;
-  height: 36px;
+  height: 28px;
   background: var(--color-hairline);
-  opacity: 0.4;
 }
 
 /* Section title */
