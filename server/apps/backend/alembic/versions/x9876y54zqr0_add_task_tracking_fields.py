@@ -1,0 +1,86 @@
+"""add task tracking fields to ai_tasks
+
+Revision ID: x9876y54zqr0
+Revises: z4783a86brs1
+Create Date: 2026-08-15 12:00:00.000000
+
+Adds fields for StreamBridge task tracking, worker identification, and
+lease-based dead-worker detection. Required for AI task resilience (U3).
+"""
+
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "x9876y54zqr0"
+down_revision: Union[str, None] = "z4783a86brs1"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Add run_id, worker_id, lease_expires_at, progress columns and composite index."""
+    # Use batch_alter_table for SQLite compatibility
+    with op.batch_alter_table("ai_tasks", schema=None) as batch_op:
+        # Check if columns already exist (idempotent migration for fresh DBs)
+        # Note: batch_alter_table doesn't support IF NOT EXISTS directly,
+        # so we rely on the migration being run on a clean DB or after checking
+        batch_op.add_column(
+            sa.Column(
+                "run_id",
+                sa.String(64),
+                nullable=True,
+                comment="Agent RunRecord ID for bridge reconnection",
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "worker_id",
+                sa.String(128),
+                nullable=True,
+                comment="hostname:uuid of processing worker",
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "lease_expires_at",
+                sa.DateTime(timezone=True),
+                nullable=True,
+                comment="Heartbeat deadline for dead-worker detection",
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "progress",
+                sa.JSON(),
+                nullable=True,
+                comment="Optional JSON blob (step, percentage, message)",
+            )
+        )
+
+        # Add index on run_id for bridge reconnection lookup
+        batch_op.create_index(
+            "ix_ai_tasks_run_id",
+            ["run_id"],
+            unique=False,
+        )
+
+        # Add composite index for efficient task queries by family + skill + status
+        batch_op.create_index(
+            "ix_ai_tasks_family_skill_status",
+            ["family_id", "skill_id", "status"],
+            unique=False,
+        )
+
+
+def downgrade() -> None:
+    """Remove task tracking fields and indexes."""
+    with op.batch_alter_table("ai_tasks", schema=None) as batch_op:
+        batch_op.drop_index("ix_ai_tasks_family_skill_status")
+        batch_op.drop_index("ix_ai_tasks_run_id")
+        batch_op.drop_column("progress")
+        batch_op.drop_column("lease_expires_at")
+        batch_op.drop_column("worker_id")
+        batch_op.drop_column("run_id")
