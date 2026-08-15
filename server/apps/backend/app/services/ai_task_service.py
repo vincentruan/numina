@@ -294,20 +294,26 @@ class AITaskService:
     @staticmethod
     def update_lease(
         task_id: int | str,
+        family_id: int | str,
         db: Session,
         expires_at: datetime | None = None,
     ) -> None:
-        """Refresh worker lease heartbeat for dead-worker detection.
+        """Refresh worker lease heartbeat for dead-worker detection with tenant isolation.
 
         Args:
             task_id: AITask primary key.
+            family_id: Family ID for tenant isolation.
             db: SQLAlchemy session.
             expires_at: Lease expiration timestamp. Defaults to now + 120s.
         """
         if expires_at is None:
             expires_at = datetime.now(timezone.utc) + timedelta(seconds=120)
 
-        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
+        task = (
+            db.query(AITask)
+            .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
+            .first()
+        )
         if task:
             task.lease_expires_at = expires_at
             try:
@@ -318,15 +324,26 @@ class AITaskService:
     @staticmethod
     def mark_interrupted(
         task_id: int | str,
+        family_id: int | str,
         error_message: str,
         db: Session,
     ) -> None:
-        """Mark a task as interrupted (graceful shutdown or orphan recovery).
+        """Mark a task as interrupted with tenant isolation.
 
         Transitions status to 'interrupted' with error message. Only applies
         to tasks in running/post_processing/queued states.
+
+        Args:
+            task_id: AITask primary key.
+            family_id: Family ID for tenant isolation.
+            error_message: Error message to store.
+            db: SQLAlchemy session.
         """
-        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
+        task = (
+            db.query(AITask)
+            .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
+            .first()
+        )
         if task and task.status in ("running", "post_processing", "queued"):
             task.status = "interrupted"
             task.completed_at = datetime.now(timezone.utc)

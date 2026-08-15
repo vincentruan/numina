@@ -91,6 +91,7 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
                                 if task:
                                     AITaskService.mark_interrupted(
                                         task.id,
+                                        family_id,
                                         f"服务关停，任务未完成（超时 {timeout}s）",
                                         db,
                                     )
@@ -171,6 +172,7 @@ async def reconcile_orphaned_runs(
                 # could win over the orphan claim
                 AITaskService.mark_interrupted(
                     task.id,
+                    task.family_id,
                     "服务重启，任务中断，请重试",
                     db,
                 )
