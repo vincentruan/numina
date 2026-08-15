@@ -327,31 +327,72 @@ class AITaskService:
         family_id: int | str,
         error_message: str,
         db: Session,
-    ) -> None:
-        """Mark a task as interrupted with tenant isolation.
+        lease_guard: bool = False,
+    ) -> bool:
+        """Mark a task as interrupted with tenant isolation and optional lease guard.
 
         Transitions status to 'interrupted' with error message. Only applies
         to tasks in running/post_processing/queued states.
+
+        When lease_guard=True, uses an atomic UPDATE with a WHERE clause that
+        checks lease_expires_at < now. This prevents the split-brain race where
+        a concurrent heartbeat renewal could win over the orphan claim.
 
         Args:
             task_id: AITask primary key.
             family_id: Family ID for tenant isolation.
             error_message: Error message to store.
             db: SQLAlchemy session.
+            lease_guard: If True, only mark interrupted if lease has expired.
+                        Returns False if lease is still valid (task is alive).
+
+        Returns:
+            True if task was marked interrupted, False if lease_guard prevented it.
         """
-        task = (
-            db.query(AITask)
-            .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
-            .first()
-        )
-        if task and task.status in ("running", "post_processing", "queued"):
-            task.status = "interrupted"
-            task.completed_at = datetime.now(timezone.utc)
-            task.error_message = error_message[:500] if error_message else None
+        if lease_guard:
+            # Atomic UPDATE with lease guard to prevent split-brain race
+            from sqlalchemy import update
+
+            now = datetime.now(timezone.utc)
+            stmt = (
+                update(AITask)
+                .where(
+                    AITask.id == int(task_id),
+                    AITask.family_id == int(family_id),
+                    AITask.status.in_(["running", "post_processing", "queued"]),
+                    AITask.lease_expires_at < now,  # Lease guard
+                )
+                .values(
+                    status="interrupted",
+                    completed_at=now,
+                    error_message=error_message[:500] if error_message else None,
+                )
+            )
+            result = db.execute(stmt)
             try:
                 db.commit()
+                return result.rowcount > 0  # True if we actually updated a row
             except Exception:
                 db.rollback()
+                return False
+        else:
+            # Original read-then-write pattern (no lease guard)
+            task = (
+                db.query(AITask)
+                .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
+                .first()
+            )
+            if task and task.status in ("running", "post_processing", "queued"):
+                task.status = "interrupted"
+                task.completed_at = datetime.now(timezone.utc)
+                task.error_message = error_message[:500] if error_message else None
+                try:
+                    db.commit()
+                    return True
+                except Exception:
+                    db.rollback()
+                    return False
+            return False
 
     @staticmethod
     def get_stale_running_tasks(

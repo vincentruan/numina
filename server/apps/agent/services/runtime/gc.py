@@ -170,12 +170,20 @@ async def reconcile_orphaned_runs(
                 # Conditional claim: mark as interrupted with lease guard
                 # This prevents the split-brain race where a concurrent heartbeat renewal
                 # could win over the orphan claim
-                AITaskService.mark_interrupted(
+                claimed = AITaskService.mark_interrupted(
                     task.id,
                     task.family_id,
                     "服务重启，任务中断，请重试",
                     db,
+                    lease_guard=True,  # Atomic conditional claim with lease check
                 )
+
+                if not claimed:
+                    logger.info(
+                        f"[reconcile_orphaned_runs] Task {task.id} lease was renewed "
+                        f"concurrently, skipping orphan mark"
+                    )
+                    continue
 
                 logger.warning(
                     f"[reconcile_orphaned_runs] Marked task {task.id} as interrupted "
