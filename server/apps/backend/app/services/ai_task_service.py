@@ -1,6 +1,6 @@
 """AI 任务状态服务 — 管理长任务的生命周期。"""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ class AITaskService:
         )
         if task is None:
             return None
-        cutoff = datetime.utcnow() - timedelta(minutes=TASK_TIMEOUT_MINUTES)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=TASK_TIMEOUT_MINUTES)
         if task.started_at < cutoff:
             try:
                 task.status = "timeout"
@@ -48,7 +48,7 @@ class AITaskService:
         )
         if task is None:
             return None
-        cutoff = datetime.utcnow() - timedelta(minutes=TASK_TIMEOUT_MINUTES)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=TASK_TIMEOUT_MINUTES)
         if task.started_at < cutoff:
             try:
                 task.status = "timeout"
@@ -84,7 +84,7 @@ class AITaskService:
             skill_id=skill_id,
             status="running",
             session_id=session_id,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             run_id=run_id,
             worker_id=worker_id,
         )
@@ -118,7 +118,7 @@ class AITaskService:
             skill_id=skill_id,
             status="queued",
             session_id=session_id,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             queue_position=None,
         )
         db.add(task)
@@ -167,7 +167,7 @@ class AITaskService:
         if task and task.status == "queued":
             task.status = "running"
             task.queue_position = None
-            task.started_at = datetime.utcnow()
+            task.started_at = datetime.now(timezone.utc)
             db.commit()
 
     @staticmethod
@@ -199,7 +199,7 @@ class AITaskService:
         task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task and task.status in ("running", "post_processing", "queued"):
             task.status = "completed"
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             db.commit()
 
     @staticmethod
@@ -207,7 +207,7 @@ class AITaskService:
         task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task and task.status in ("running", "post_processing", "queued"):
             task.status = "failed"
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             task.error_message = error_message[:500] if error_message else None
             db.commit()
 
@@ -229,7 +229,7 @@ class AITaskService:
         )
         if task:
             task.status = "cancelled"
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             db.commit()
             return True
         return False
@@ -260,7 +260,7 @@ class AITaskService:
         Returns tasks with status='running', ordered by started_at descending
         (most recent first). Excludes timed-out tasks.
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=TASK_TIMEOUT_MINUTES)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=TASK_TIMEOUT_MINUTES)
         return (
             db.query(AITask)
             .filter(
@@ -286,7 +286,7 @@ class AITaskService:
             expires_at: Lease expiration timestamp. Defaults to now + 120s.
         """
         if expires_at is None:
-            expires_at = datetime.utcnow() + timedelta(seconds=120)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=120)
 
         task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task:
@@ -310,7 +310,7 @@ class AITaskService:
         task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task and task.status in ("running", "post_processing", "queued"):
             task.status = "interrupted"
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             task.error_message = error_message[:500] if error_message else None
             try:
                 db.commit()
@@ -326,13 +326,13 @@ class AITaskService:
 
         Args:
             db: SQLAlchemy session.
-            now: Current timestamp. Defaults to datetime.utcnow().
+            now: Current timestamp. Defaults to datetime.now(timezone.utc).
 
         Returns tasks WHERE status IN ('running','post_processing') AND
         lease_expires_at < now. Used by orphan recovery to detect dead workers.
         """
         if now is None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
         return (
             db.query(AITask)

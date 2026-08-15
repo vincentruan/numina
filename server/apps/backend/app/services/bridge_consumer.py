@@ -48,12 +48,13 @@ async def bridge_consumer(
         make_stream_bridge,
     )
     from apps.agent.services.runtime.stream_bridge.config import StreamBridgeConfig
+    import os
 
     # Create Redis bridge (or memory bridge for dev)
     # In production, this reads from the same Redis instance the agent writes to
     config = StreamBridgeConfig(
         type="redis",
-        redis_url="redis://localhost:6379/0",  # TODO: read from env/config
+        redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         queue_maxsize=256,
         stream_ttl_seconds=86400,
     )

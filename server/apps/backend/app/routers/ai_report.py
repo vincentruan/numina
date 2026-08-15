@@ -224,6 +224,7 @@ async def _watch_report_task_completion(
 
 @router.post("/generate/events")
 async def trigger_generate_events(
+    request: Request,
     force: bool = False,
     current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
@@ -231,7 +232,7 @@ async def trigger_generate_events(
     db: Session = Depends(get_db),
 ):
     """触发体检报告生成（U5: Redis Stream 订阅替代 HTTP 代理）。
-    
+
     1h 缓存——入口先查最新 completed AIReport，1h 内且无 force
     直接返回缓存 JSON（200，非流）；force=true 或超 1h 走 stream_run 重新生成。
     后台生成：SSE 连接断开后 agent pipeline 仍继续运行，用户可切离页面。
@@ -389,7 +390,8 @@ async def trigger_generate_events(
     # - StreamGap detection and recovery
     # - Heartbeat sentinels
     # - Task status updates (complete/fail on end/error)
-    last_event_id = None  # TODO: extract from request headers
+    # U6: Extract Last-Event-ID from request headers for reconnection
+    last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,

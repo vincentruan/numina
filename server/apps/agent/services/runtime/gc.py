@@ -129,26 +129,27 @@ async def reconcile_orphaned_runs(
     recovered = []
 
     try:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from apps.backend.app.services.ai_task_service import AITaskService
+        from packages.db.models.ai_task import AITask
         from packages.db.session import SessionLocal
 
         db = SessionLocal()
         try:
             # Get all stale running tasks (lease expired)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             stale_tasks = AITaskService.get_stale_running_tasks(db, now)
 
             for task in stale_tasks:
                 # Newer-run protection: check if a newer completed task exists
                 newer_completed = (
-                    db.query(AITaskService._model_class)
+                    db.query(AITask)
                     .filter(
-                        AITaskService._model_class.family_id == task.family_id,
-                        AITaskService._model_class.skill_id == task.skill_id,
-                        AITaskService._model_class.status == "completed",
-                        AITaskService._model_class.started_at > task.started_at,
+                        AITask.family_id == task.family_id,
+                        AITask.skill_id == task.skill_id,
+                        AITask.status == "completed",
+                        AITask.started_at > task.started_at,
                     )
                     .first()
                 )

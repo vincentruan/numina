@@ -1,21 +1,24 @@
 """FastAPI lifespan bootstrap and teardown for runtime singletons.
 
 Manages the lifecycle of:
-- ``app.state.stream_bridge`` — ``MemoryStreamBridge`` for inter-thread event passing
+- ``app.state.stream_bridge`` — ``NuminaRedisStreamBridge`` for cross-process event passing
 - ``app.state.run_manager`` — ``RunManager`` for run lifecycle tracking
 
-# [Copied from DeerFlow Reference] — MemoryStreamBridge + RunManager singleton pattern
+# [Copied from DeerFlow Reference] — StreamBridge + RunManager singleton pattern
 # [Integrated with Numina Multi-Tenant] — shared instances across all families
+# [U5 Enhancement] — Use Redis Stream Bridge for cross-process communication
 """
 
 from __future__ import annotations
 
 import logging
+import os
 
-from deerflow.runtime import MemoryStreamBridge, RunManager, StreamBridge
+from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
+from .stream_bridge import NuminaRedisStreamBridge
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +31,18 @@ async def init_runtime(app: FastAPI) -> None:
     ``yield`` (so the singletons are available for the entire serving
     lifetime).
 
-    # [Copied from DeerFlow Reference] — MemoryStreamBridge with bounded queue
+    # [Copied from DeerFlow Reference] — StreamBridge with bounded queue
     # [Integrated with Numina Multi-Tenant] — single shared instance
+    # [U5 Enhancement] — Use NuminaRedisStreamBridge for cross-process communication
     """
-    # [Copied from DeerFlow Reference] — MemoryStreamBridge with bounded queue
-    app.state.stream_bridge = MemoryStreamBridge(queue_maxsize=256)
+    # U5: Use NuminaRedisStreamBridge for cross-process event passing
+    # This allows the backend to subscribe to the same Redis streams the agent writes to
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    app.state.stream_bridge = NuminaRedisStreamBridge(
+        redis_url=redis_url,
+        queue_maxsize=256,
+        stream_ttl_seconds=86400,
+    )
 
     # [Copied from DeerFlow Reference] — RunManager, in-memory only for Phase 1
     app.state.run_manager = RunManager(store=None)
@@ -43,7 +53,7 @@ async def init_runtime(app: FastAPI) -> None:
         error="Agent restarted before run reached a durable final state.",
     )
 
-    logger.info("[runtime] StreamBridge + RunManager initialized")
+    logger.info(f"[runtime] StreamBridge (Redis: {redis_url}) + RunManager initialized")
 
 
 async def shutdown_runtime(app: FastAPI) -> None:
