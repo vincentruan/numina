@@ -1,12 +1,12 @@
 """FastAPI lifespan bootstrap and teardown for runtime singletons.
 
 Manages the lifecycle of:
-- ``app.state.stream_bridge`` — ``NuminaRedisStreamBridge`` for cross-process event passing
+- ``app.state.stream_bridge`` — StreamBridge for event passing (memory or redis)
 - ``app.state.run_manager`` — ``RunManager`` for run lifecycle tracking
 
 # [Copied from DeerFlow Reference] — StreamBridge + RunManager singleton pattern
 # [Integrated with Numina Multi-Tenant] — shared instances across all families
-# [U5 Enhancement] — Use Redis Stream Bridge for cross-process communication
+# [Cache Abstraction] — Use memory bridge by default, redis when STREAM_BRIDGE_TYPE=redis
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
-from packages.db.stream_bridge import NuminaRedisStreamBridge
+from packages.db.stream_bridge import make_stream_bridge
+from packages.db.stream_bridge.config import StreamBridgeConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +34,23 @@ async def init_runtime(app: FastAPI) -> None:
 
     # [Copied from DeerFlow Reference] — StreamBridge with bounded queue
     # [Integrated with Numina Multi-Tenant] — single shared instance
-    # [U5 Enhancement] — Use NuminaRedisStreamBridge for cross-process communication
+    # [Cache Abstraction] — Memory bridge by default, Redis when configured
     """
-    # U5: Use NuminaRedisStreamBridge for cross-process event passing
-    # This allows the backend to subscribe to the same Redis streams the agent writes to
+    # Cache abstraction: use memory bridge by default (single-process dev/test),
+    # Redis when STREAM_BRIDGE_TYPE=redis (multi-process deployment).
+    # This allows local development without requiring Redis, while supporting
+    # Redis or other cache providers in production via configuration.
+    bridge_type = os.getenv("STREAM_BRIDGE_TYPE", "memory")
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    app.state.stream_bridge = NuminaRedisStreamBridge(
+
+    config = StreamBridgeConfig(
+        type=bridge_type,
         redis_url=redis_url,
         queue_maxsize=256,
         stream_ttl_seconds=86400,
     )
+    app.state.stream_bridge = make_stream_bridge(config)
+    logger.info(f"Initialized StreamBridge (type={bridge_type})")
 
     # [Copied from DeerFlow Reference] — RunManager, in-memory only for Phase 1
     app.state.run_manager = RunManager(store=None)
