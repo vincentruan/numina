@@ -56,9 +56,9 @@ def upgrade() -> None:
             batch_op.add_column(
                 sa.Column(
                     "lease_expires_at",
-                    sa.DateTime(timezone=True),
+                    sa.DateTime(),
                     nullable=True,
-                    comment="Heartbeat deadline for dead-worker detection",
+                    comment="Heartbeat deadline for dead-worker detection (naive UTC)",
                 )
             )
 

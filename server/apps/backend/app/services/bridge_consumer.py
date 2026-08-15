@@ -41,13 +41,13 @@ async def bridge_consumer(
     Raises:
         RuntimeError: If Redis connection fails or stream not found
     """
-    from apps.agent.services.runtime.stream_bridge import (
+    from packages.db.stream_bridge import (
         END_SENTINEL,
         HEARTBEAT_SENTINEL,
         StreamGap,
         make_stream_bridge,
     )
-    from apps.agent.services.runtime.stream_bridge.config import StreamBridgeConfig
+    from packages.db.stream_bridge.config import StreamBridgeConfig
     from apps.backend.app.services.ai_task_service import AITaskService
     import os
 

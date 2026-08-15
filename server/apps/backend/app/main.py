@@ -331,14 +331,19 @@ async def lifespan(app: FastAPI):
     # U7: Register backend SIGTERM handler for graceful shutdown.
     # Marks the backend-local ShutdownState so ShutdownGuardMiddleware can
     # reject new task creation (503 + Retry-After) during the drain window.
+    # Guard: signal.signal only works in the main thread (tests run lifespan
+    # in a worker thread via TestClient).
     import signal
+    import threading
 
-    def _backend_sigterm_handler(signum, frame):
-        from apps.backend.app.middleware.shutdown_state import mark_shutting_down
+    if threading.current_thread() is threading.main_thread():
 
-        mark_shutting_down()
+        def _backend_sigterm_handler(signum, frame):
+            from apps.backend.app.middleware.shutdown_state import mark_shutting_down
 
-    signal.signal(signal.SIGTERM, _backend_sigterm_handler)
+            mark_shutting_down()
+
+        signal.signal(signal.SIGTERM, _backend_sigterm_handler)
 
     yield
 

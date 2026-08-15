@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, cast
 
 from deerflow.runtime import RunManager, RunStatus
@@ -77,24 +78,36 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
                         f"(status={run.status}, did not complete within {timeout}s drain)"
                     )
                     # Mark as interrupted in AITask (U7 integration)
+                    # NOTE: raw SQLAlchemy against AITask model (packages/db) -
+                    # the agent container does not ship apps/backend, so we
+                    # cannot import backend's AITaskService here.
                     try:
-                        from apps.backend.app.services.ai_task_service import AITaskService
+                        from packages.db.models.ai_task import AITask
                         from packages.db.session import SessionLocal
 
                         db = SessionLocal()
                         try:
                             # Find AITask by run_id with tenant isolation
                             # Extract family_id from run metadata
-                            family_id = run.metadata.get("family_id") if hasattr(run, "metadata") and run.metadata else None
+                            family_id = (
+                                run.metadata.get("family_id")
+                                if hasattr(run, "metadata") and run.metadata
+                                else None
+                            )
                             if family_id:
-                                task = AITaskService.get_task_by_run_id(run.run_id, family_id, db)
-                                if task:
-                                    AITaskService.mark_interrupted(
-                                        task.id,
-                                        family_id,
-                                        f"服务关停，任务未完成（超时 {timeout}s）",
-                                        db,
+                                task = (
+                                    db.query(AITask)
+                                    .filter(
+                                        AITask.run_id == run.run_id,
+                                        AITask.family_id == int(family_id),
                                     )
+                                    .first()
+                                )
+                                if task and task.status in ("running", "post_processing", "queued"):
+                                    task.status = "interrupted"
+                                    task.completed_at = datetime.now(timezone.utc)
+                                    task.error_message = f"服务关停，任务未完成（超时 {timeout}s）"
+                                    db.commit()
                                     logger.info(f"[drain_inflight_runs] Marked task {task.id} as interrupted")
                             else:
                                 logger.warning(f"[drain_inflight_runs] Run {run.run_id} has no family_id in metadata, skipping")
@@ -131,21 +144,31 @@ async def reconcile_orphaned_runs(
         return cast("list[dict[str, Any]]", await run_manager.reconcile_orphaned_inflight_runs(error=error))
 
     # U8: AITask-based orphan recovery
+    # NOTE: Uses raw SQLAlchemy against the AITask model (packages/db) instead of
+    # importing backend's AITaskService - the agent container does not ship
+    # apps/backend (see agent Dockerfile), so cross-app imports would fail.
     logger.info("[reconcile_orphaned_runs] Starting AITask-based orphan recovery")
     recovered = []
 
     try:
         from datetime import datetime, timezone
 
-        from apps.backend.app.services.ai_task_service import AITaskService
         from packages.db.models.ai_task import AITask
         from packages.db.session import SessionLocal
+        from sqlalchemy import update
 
         db = SessionLocal()
         try:
             # Get all stale running tasks (lease expired)
             now = datetime.now(timezone.utc)
-            stale_tasks = AITaskService.get_stale_running_tasks(db, now)
+            stale_tasks = (
+                db.query(AITask)
+                .filter(
+                    AITask.status.in_(["running", "post_processing"]),
+                    AITask.lease_expires_at < now,
+                )
+                .all()
+            )
 
             for task in stale_tasks:
                 # Newer-run protection: check if a newer completed task exists
@@ -167,18 +190,30 @@ async def reconcile_orphaned_runs(
                     )
                     continue
 
-                # Conditional claim: mark as interrupted with lease guard
-                # This prevents the split-brain race where a concurrent heartbeat renewal
-                # could win over the orphan claim
-                claimed = AITaskService.mark_interrupted(
-                    task.id,
-                    task.family_id,
-                    "服务重启，任务中断，请重试",
-                    db,
-                    lease_guard=True,  # Atomic conditional claim with lease check
+                # Conditional claim: atomic UPDATE with lease guard.
+                # This prevents the split-brain race where a concurrent heartbeat
+                # renewal could win over the orphan claim.
+                claim_stmt = (
+                    update(AITask)
+                    .where(
+                        AITask.id == task.id,
+                        AITask.status.in_(["running", "post_processing"]),
+                        AITask.lease_expires_at < now,
+                    )
+                    .values(
+                        status="interrupted",
+                        completed_at=now,
+                        error_message="服务重启，任务中断，请重试",
+                    )
                 )
+                result = db.execute(claim_stmt)
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    continue
 
-                if not claimed:
+                if not result.rowcount:
                     logger.info(
                         f"[reconcile_orphaned_runs] Task {task.id} lease was renewed "
                         f"concurrently, skipping orphan mark"
@@ -201,11 +236,16 @@ async def reconcile_orphaned_runs(
                 # U8: Publish __end__ marker to Redis Stream for late SSE subscribers
                 if task.run_id:
                     try:
-                        from apps.agent.services.runtime.stream_bridge import make_stream_bridge
-                        from apps.agent.services.runtime.stream_bridge.config import StreamBridgeConfig
+                        import os as _os
+
+                        from packages.db.stream_bridge import make_stream_bridge
+                        from packages.db.stream_bridge.config import StreamBridgeConfig
 
                         # Create bridge and publish end marker
-                        config = StreamBridgeConfig(type="redis")
+                        config = StreamBridgeConfig(
+                            type="redis",
+                            redis_url=_os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                        )
                         bridge = make_stream_bridge(config)
                         await bridge.publish_end(task.run_id)
                         await bridge.close()

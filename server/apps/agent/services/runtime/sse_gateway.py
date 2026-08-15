@@ -26,7 +26,7 @@ from deerflow.runtime import (
 from fastapi import HTTPException, Request
 
 from .lifespan import get_run_manager, get_stream_bridge
-from .stream_bridge import StreamGap
+from packages.db.stream_bridge import StreamGap
 from .worker import run_agent
 
 logger = logging.getLogger(__name__)

@@ -12,7 +12,7 @@ import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_serializer
 from sqlalchemy.orm import Session
@@ -365,6 +365,14 @@ async def trigger_generate_events(
                 resp.text[:200],
                 task_id,
             )
+            # Mark task failed so frontend does not poll forever on a dead task
+            from apps.backend.app.database import SessionLocal
+
+            _db = SessionLocal()
+            try:
+                AITaskService.fail_task(task_id, "报告生成服务异常", _db)
+            finally:
+                _db.close()
             err = json.dumps(
                 {"message": "报告生成服务异常", "name": "AgentError"}
             ).encode()
@@ -376,6 +384,14 @@ async def trigger_generate_events(
         logger.warning(
             "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
         )
+        # Mark task failed so frontend does not poll forever on a dead task
+        from apps.backend.app.database import SessionLocal
+
+        _db = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"报告生成服务中断: {type(exc).__name__}", _db)
+        finally:
+            _db.close()
         err = json.dumps(
             {"message": "报告生成服务中断", "name": type(exc).__name__}
         ).encode()

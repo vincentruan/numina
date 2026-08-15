@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from apps.agent.services.runtime.stream_bridge import (
+from packages.db.stream_bridge import (
     MemoryStreamBridge,
     NuminaRedisStreamBridge,
     StreamBridge,

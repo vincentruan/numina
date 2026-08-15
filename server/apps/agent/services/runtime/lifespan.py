@@ -18,7 +18,7 @@ from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
-from .stream_bridge import NuminaRedisStreamBridge
+from packages.db.stream_bridge import NuminaRedisStreamBridge
 
 logger = logging.getLogger(__name__)
 

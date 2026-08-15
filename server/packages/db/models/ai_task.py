@@ -38,7 +38,7 @@ class AITask(Base):
         String(128), nullable=True, comment="hostname:uuid of processing worker"
     )
     lease_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="Heartbeat deadline for dead-worker detection"
+        DateTime, nullable=True, comment="Heartbeat deadline for dead-worker detection (naive UTC, per project convention)"
     )
     progress: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, comment="Optional JSON blob (step, percentage, message)"
