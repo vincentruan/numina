@@ -83,15 +83,20 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
 
                         db = SessionLocal()
                         try:
-                            # Find AITask by run_id
-                            task = AITaskService.get_task_by_run_id(run.run_id, db)
-                            if task:
-                                AITaskService.mark_interrupted(
-                                    task.id,
-                                    f"服务关停，任务未完成（超时 {timeout}s）",
-                                    db,
-                                )
-                                logger.info(f"[drain_inflight_runs] Marked task {task.id} as interrupted")
+                            # Find AITask by run_id with tenant isolation
+                            # Extract family_id from run metadata
+                            family_id = run.metadata.get("family_id") if hasattr(run, "metadata") and run.metadata else None
+                            if family_id:
+                                task = AITaskService.get_task_by_run_id(run.run_id, family_id, db)
+                                if task:
+                                    AITaskService.mark_interrupted(
+                                        task.id,
+                                        f"服务关停，任务未完成（超时 {timeout}s）",
+                                        db,
+                                    )
+                                    logger.info(f"[drain_inflight_runs] Marked task {task.id} as interrupted")
+                            else:
+                                logger.warning(f"[drain_inflight_runs] Run {run.run_id} has no family_id in metadata, skipping")
                         finally:
                             db.close()
                     except Exception as e:

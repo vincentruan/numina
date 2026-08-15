@@ -193,7 +193,7 @@ async def _watch_report_task_completion(
                     return
 
                 # Check if the task is still running
-                task = AITaskService.get_task_by_id(task_id, db)
+                task = AITaskService.get_task_by_id(task_id, family_id, db)
                 if task and task.status == "completed":
                     return  # Already completed by another path
                 if task and task.status not in ("running", "post_processing", "queued"):

@@ -212,8 +212,22 @@ class AITaskService:
             db.commit()
 
     @staticmethod
-    def get_task_by_id(task_id: int | str, db: Session) -> AITask | None:
-        return db.query(AITask).filter(AITask.id == int(task_id)).first()
+    def get_task_by_id(task_id: int | str, family_id: int | str, db: Session) -> AITask | None:
+        """Lookup AITask by ID with tenant isolation.
+
+        Args:
+            task_id: AITask primary key.
+            family_id: Family ID for tenant isolation.
+            db: SQLAlchemy session.
+
+        Returns:
+            AITask if found and belongs to the family, None otherwise.
+        """
+        return (
+            db.query(AITask)
+            .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
+            .first()
+        )
 
     @staticmethod
     def cancel_task(family_id: int | str, skill_id: str, db: Session) -> bool:
@@ -239,15 +253,20 @@ class AITaskService:
     # ---------------------------------------------------------------------------
 
     @staticmethod
-    def get_task_by_run_id(run_id: str, db: Session) -> AITask | None:
-        """Lookup AITask by agent RunRecord ID for bridge reconnection.
+    def get_task_by_run_id(run_id: str, family_id: int | str, db: Session) -> AITask | None:
+        """Lookup AITask by agent RunRecord ID with tenant isolation.
 
-        Returns the task with matching run_id, or None if not found.
+        Returns the task with matching run_id and family_id, or None if not found.
         Used by backend bridge_consumer to map agent run_id → AITask primary key.
+
+        Args:
+            run_id: Agent RunRecord UUID.
+            family_id: Family ID for tenant isolation.
+            db: SQLAlchemy session.
         """
         return (
             db.query(AITask)
-            .filter(AITask.run_id == run_id)
+            .filter(AITask.run_id == run_id, AITask.family_id == int(family_id))
             .first()
         )
 

@@ -55,7 +55,7 @@ async def bridge_consumer(
     # The agent publishes events using run_id, not task_id
     db = SessionLocal()
     try:
-        task = AITaskService.get_task_by_id(task_id, db)
+        task = AITaskService.get_task_by_id(task_id, family_id, db)
         if not task:
             raise RuntimeError(f"Task {task_id} not found")
         if not task.run_id:
