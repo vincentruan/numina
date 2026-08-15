@@ -345,10 +345,11 @@ async def trigger_generate_events(
     agent_client = AgentClient(family_id, user_id, timeout=300.0)
     agent_url = f"/internal/gateway/runs/asset-report/{session_id}"
 
-    # Trigger the agent task (fire-and-forget HTTP call)
+    # P0 Fix: Use non-streaming POST to trigger the agent task
+    # We're not reading the response body (just triggering), so use post() not stream()
+    # This prevents the connection from closing immediately and triggering disconnect_watcher
     try:
-        async with agent_client.stream(
-            "POST",
+        resp = await agent_client.post(
             agent_url,
             json={
                 "family_id": str(family_id),
@@ -356,22 +357,21 @@ async def trigger_generate_events(
                 "language": current_user.language,
                 "on_disconnect": "continue",
             },
-        ) as resp:
-            if resp.status_code != 200:
-                body = await resp.aread()
-                logger.warning(
-                    "[asset-report] agent trigger failed: status=%s body=%s task=%s",
-                    resp.status_code,
-                    body[:200],
-                    task_id,
-                )
-                err = json.dumps(
-                    {"message": "报告生成服务异常", "name": "AgentError"}
-                ).encode()
-                return StreamingResponse(
-                    iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-                    media_type="text/event-stream",
-                )
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "[asset-report] agent trigger failed: status=%s body=%s task=%s",
+                resp.status_code,
+                resp.text[:200],
+                task_id,
+            )
+            err = json.dumps(
+                {"message": "报告生成服务异常", "name": "AgentError"}
+            ).encode()
+            return StreamingResponse(
+                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+                media_type="text/event-stream",
+            )
     except Exception as exc:
         logger.warning(
             "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
