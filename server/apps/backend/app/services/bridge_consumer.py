@@ -31,7 +31,7 @@ async def bridge_consumer(
     for the given task_id. Yields events as dicts with 'event' and 'data' keys.
 
     Args:
-        task_id: AITask primary key (the stream key suffix)
+        task_id: AITask primary key (used to look up the run_id)
         family_id: Family ID for tenant isolation
         last_event_id: Optional SSE Last-Event-ID for reconnection
 
@@ -48,7 +48,21 @@ async def bridge_consumer(
         make_stream_bridge,
     )
     from apps.agent.services.runtime.stream_bridge.config import StreamBridgeConfig
+    from apps.backend.app.services.ai_task_service import AITaskService
     import os
+
+    # P0 Fix: Look up the AITask to get the run_id (DeerFlow RunRecord UUID)
+    # The agent publishes events using run_id, not task_id
+    db = SessionLocal()
+    try:
+        task = AITaskService.get_task_by_id(task_id, db)
+        if not task:
+            raise RuntimeError(f"Task {task_id} not found")
+        if not task.run_id:
+            raise RuntimeError(f"Task {task_id} has no run_id (agent may not have started yet)")
+        run_id = task.run_id
+    finally:
+        db.close()
 
     # Create Redis bridge (or memory bridge for dev)
     # In production, this reads from the same Redis instance the agent writes to
@@ -61,14 +75,14 @@ async def bridge_consumer(
     bridge = make_stream_bridge(config)
 
     try:
-        # Subscribe to the task's stream
+        # Subscribe to the task's stream using run_id (not task_id)
         # The bridge.subscribe() method handles:
         # - Last-Event-ID replay
         # - StreamGap detection (cursor beyond retained buffer)
         # - Heartbeat sentinels (every 15s)
         # - End sentinel (stream closed)
         async for entry in bridge.subscribe(
-            run_id=task_id,
+            run_id=run_id,
             last_event_id=last_event_id,
         ):
             if entry is HEARTBEAT_SENTINEL:
