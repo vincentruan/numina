@@ -1,11 +1,11 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     DateTime,
     ForeignKey,
     Index,
-    JSON,
     String,
     Text,
     func,

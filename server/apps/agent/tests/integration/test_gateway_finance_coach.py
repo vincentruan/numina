@@ -102,8 +102,10 @@ def client():
 
 _TOKEN_FAMILY_ID = "family-1"
 
-from packages.core.settings import settings as _core_settings
-from packages.security.service_auth.agent_jwt import create_agent_token
+from packages.core.settings import (  # noqa: E402 (post-env token setup)
+    settings as _core_settings,
+)
+from packages.security.service_auth.agent_jwt import create_agent_token  # noqa: E402
 
 _core_settings.SECRET_KEY = "test-secret-key-for-jwt-tests"
 _TOKEN = create_agent_token(_TOKEN_FAMILY_ID)

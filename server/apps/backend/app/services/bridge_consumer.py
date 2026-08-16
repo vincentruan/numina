@@ -10,10 +10,10 @@ with Redis Stream subscription for cross-process event delivery.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from packages.db.session import SessionLocal
 
@@ -41,6 +41,9 @@ async def bridge_consumer(
     Raises:
         RuntimeError: If Redis connection fails or stream not found
     """
+    import os
+
+    from apps.backend.app.services.ai_task_service import AITaskService
     from packages.db.stream_bridge import (
         END_SENTINEL,
         HEARTBEAT_SENTINEL,
@@ -48,8 +51,6 @@ async def bridge_consumer(
         make_stream_bridge,
     )
     from packages.db.stream_bridge.config import StreamBridgeConfig
-    from apps.backend.app.services.ai_task_service import AITaskService
-    import os
 
     # P0 Fix: Look up the AITask to get the run_id (DeerFlow RunRecord UUID)
     # The agent publishes events using run_id, not task_id

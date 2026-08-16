@@ -18,6 +18,8 @@ from deerflow.runtime.stream_bridge import (
     StreamEvent,
     StreamGap,
     StreamItem,
+)
+from deerflow.runtime.stream_bridge import (
     make_stream_bridge as deerflow_make_stream_bridge,
 )
 

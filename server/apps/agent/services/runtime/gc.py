@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from deerflow.runtime import RunManager, RunStatus
@@ -105,7 +105,7 @@ async def drain_inflight_runs(run_manager: RunManager, *, timeout: float | None 
                                 )
                                 if task and task.status in ("running", "post_processing", "queued"):
                                     task.status = "interrupted"
-                                    task.completed_at = datetime.now(timezone.utc)
+                                    task.completed_at = datetime.now(UTC)
                                     task.error_message = f"服务关停，任务未完成（超时 {timeout}s）"
                                     db.commit()
                                     logger.info(f"[drain_inflight_runs] Marked task {task.id} as interrupted")
@@ -151,16 +151,17 @@ async def reconcile_orphaned_runs(
     recovered = []
 
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
+
+        from sqlalchemy import update
 
         from packages.db.models.ai_task import AITask
         from packages.db.session import SessionLocal
-        from sqlalchemy import update
 
         db = SessionLocal()
         try:
             # Get all stale running tasks (lease expired)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             stale_tasks = (
                 db.query(AITask)
                 .filter(

@@ -17,9 +17,10 @@ import os
 from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
-from .gc import drain_inflight_runs, reconcile_orphaned_runs
 from packages.db.stream_bridge import make_stream_bridge
 from packages.db.stream_bridge.config import StreamBridgeConfig
+
+from .gc import drain_inflight_runs, reconcile_orphaned_runs
 
 logger = logging.getLogger(__name__)
 

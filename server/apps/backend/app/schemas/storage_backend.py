@@ -2,7 +2,7 @@
 
 import ipaddress
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
@@ -10,7 +10,7 @@ from pydantic import BaseModel, field_validator, model_validator
 from apps.backend.app.schemas.base import SnowflakeBase
 
 
-class StorageBackendType(str, Enum):
+class StorageBackendType(StrEnum):
     GITHUB = "github"
     WEBDAV = "webdav"
 
@@ -82,10 +82,10 @@ class WebDAVStorageConfig(BaseModel):
                 ) or lower.endswith(".internal"):
                     raise ValueError(
                         "base_url must not point to a private or loopback address"
-                    )
+                    ) from exc
         except ValueError as exc:
             if "base_url" in str(exc) or "private" in str(exc) or "loopback" in str(exc):
-                raise
+                raise exc
             raise ValueError(f"Invalid base_url: {exc}") from exc
         return v
 

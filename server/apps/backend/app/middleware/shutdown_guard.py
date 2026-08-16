@@ -6,7 +6,7 @@ Rejects new task creation requests during shutdown with 503 + Retry-After header
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -41,8 +41,7 @@ class ShutdownGuardMiddleware(BaseHTTPMiddleware):
         from apps.backend.app.middleware.shutdown_state import is_shutting_down
 
         # Only check POST requests to task-creation endpoints
-        if request.method == "POST" and request.url.path in self.TASK_CREATION_PATHS:
-            if is_shutting_down():
+        if request.method == "POST" and request.url.path in self.TASK_CREATION_PATHS and is_shutting_down():
                 logger.warning(
                     f"[ShutdownGuard] Rejecting task creation during shutdown: "
                     f"{request.method} {request.url.path}"
