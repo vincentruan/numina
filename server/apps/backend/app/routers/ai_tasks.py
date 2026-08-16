@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
+from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.services.ai_task_service import AITaskService
@@ -32,6 +33,11 @@ VALID_SKILL_IDS = {
     "spending_leak",
     "liability",
     "time_machine",
+    # v2 features (U10)
+    "coach",
+    "literacy",
+    "narrative",
+    "chat",
 }
 
 # Default limit for list endpoints - prevents unbounded queries (P2 fix)
@@ -50,6 +56,11 @@ class AITaskResponse(SnowflakeBase):
     started_at: datetime
     completed_at: datetime | None = None
     error_message: str | None = None
+    # v2 fields (U10)
+    progress: dict | None = None
+    lease_expires_at: datetime | None = None
+    queue_position: int | None = None
+    session_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -59,6 +70,7 @@ class AITaskResponse(SnowflakeBase):
 async def get_tasks(
     skill_id: str | None = Query(None, description="Filter by skill_id"),
     status: str | None = Query(None, description="Filter by status"),
+    session_id: int | None = Query(None, description="Filter by session_id (U10)"),
     limit: int = Query(DEFAULT_TASK_LIMIT, ge=1, le=200, description="Max results"),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
@@ -79,6 +91,9 @@ async def get_tasks(
 
     if status:
         query = query.filter(AITask.status == status)
+
+    if session_id:
+        query = query.filter(AITask.session_id == session_id)
 
     # Order by started_at descending (most recent first), bounded by limit
     query = query.order_by(AITask.started_at.desc()).limit(limit)
@@ -167,3 +182,83 @@ def cancel_task(
     if cancelled:
         return {"ok": True, "status": "cancelled"}
     return {"ok": False, "message": "no_running_task"}
+
+
+# ---------------------------------------------------------------------------
+# v2 endpoints (U10 + U20)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/detail/{task_id}", response_model=AITaskResponse)
+async def get_task_by_id(
+    task_id: int,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> AITaskResponse:
+    """Get a single task by ID with full progress data (U10).
+
+    Used by frontend useTaskPolling composable for task state recovery.
+    Returns 404 if task not found or belongs to different family.
+    """
+    task = AITaskService.get_task_by_id(task_id, current_user.family_id, db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "任务不存在")
+    return AITaskResponse.model_validate(task)
+
+
+@router.post("/detail/{task_id}/cancel")
+async def cancel_task_by_id(
+    task_id: int,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """User-initiated task cancellation by task_id (U20).
+
+    1. Verify task belongs to this family (tenant isolation)
+    2. If task has run_id → notify Agent to cancel (fire-and-forget)
+    3. Mark AITask.status = cancelled
+    4. Idempotent: already-cancelled/completed tasks return current status
+    """
+    task = AITaskService.get_task_by_id(task_id, current_user.family_id, db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "任务不存在")
+
+    # Idempotent: if already terminal, return current status
+    if task.status in ("completed", "failed", "cancelled", "timeout"):
+        return {"ok": True, "status": task.status, "task_id": task.id}
+
+    # Notify Agent if task has run_id (fire-and-forget)
+    if task.run_id:
+        import asyncio
+
+        from apps.backend.app.services.agent_client import AgentClient
+
+        # session_id is the thread_id for Agent
+        thread_id = task.session_id
+        if thread_id is None:
+            # Fallback: use family_id as default thread
+            thread_id = current_user.family_id
+
+        async def _notify_agent():
+            try:
+                agent_client = AgentClient(
+                    current_user.family_id, current_user.id, timeout=5.0
+                )
+                await agent_client.post(
+                    f"/api/threads/{thread_id}/runs/{task.run_id}/cancel",
+                    json={},
+                )
+            except Exception as e:
+                logger.warning(
+                    "[task-cancel] agent notification failed task=%s run=%s err=%s",
+                    task_id, task.run_id, e,
+                )
+
+        asyncio.create_task(_notify_agent())
+
+    # Mark as cancelled
+    task.status = "cancelled"
+    task.completed_at = datetime.now()
+    db.commit()
+
+    return {"ok": True, "status": "cancelled", "task_id": task.id}
