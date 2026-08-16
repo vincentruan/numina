@@ -16,6 +16,11 @@ export interface AITask {
   started_at: string
   completed_at?: string
   error_message?: string
+  // v2 fields (U10)
+  progress?: Record<string, unknown> | null
+  lease_expires_at?: string | null
+  queue_position?: number | null
+  session_id?: string | null
 }
 
 /**
@@ -54,6 +59,40 @@ export async function getRunningTasks(): Promise<AITask[]> {
  * @returns AITask object
  */
 export async function getTaskById(taskId: string): Promise<AITask> {
-  const response = await api.get(`/ai/tasks/${taskId}`)
+  const response = await api.get(`/ai/tasks/detail/${taskId}`)
   return response.data
+}
+
+/**
+ * Cancel a running task by ID (U21).
+ *
+ * Backend immediately marks the task as cancelled and notifies the agent
+ * to stop execution (fire-and-forget). Idempotent: already-terminal tasks
+ * return their current status without error.
+ *
+ * @param taskId - Task ID to cancel
+ * @returns { ok, status, task_id }
+ */
+export async function cancelTaskById(
+  taskId: string,
+): Promise<{ ok: boolean; status: string; task_id: string }> {
+  const response = await api.post(`/ai/tasks/detail/${taskId}/cancel`)
+  return response.data
+}
+
+/**
+ * Get the latest chat task for a session (U19).
+ *
+ * Used by the chat frontend recovery flow to check if a task is still
+ * running after page reload / navigation. Returns the most recent chat
+ * AITask for the given session_id, or null if none exists.
+ */
+export async function getChatTaskForSession(
+  sessionId: string,
+): Promise<AITask | null> {
+  const tasks = await getAITasks('chat')
+  // Filter client-side by session_id (backend supports session_id filter
+  // via GET /ai/tasks?session_id=... but we also filter here for safety)
+  const match = tasks.find((t) => t.session_id === sessionId)
+  return match ?? null
 }
