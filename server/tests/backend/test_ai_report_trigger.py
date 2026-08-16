@@ -31,6 +31,7 @@ def _fake_agent_trigger(status_code: int = 200, body: dict | None = None) -> Any
         def __init__(self) -> None:
             self.status_code = status_code
             self.text = json.dumps(body or {"status": "started"})
+            self.headers = {"Content-Location": "/internal/gateway/runs/asset-report/t/run-123"}
 
     return _FakeResp()
 

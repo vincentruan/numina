@@ -99,6 +99,7 @@ def test_generate_force_bypasses_cache(client, auth_headers, db_session):
             class _R:
                 status_code = 200
                 text = "ok"
+                headers = {"Content-Location": "/internal/gateway/runs/finance-coach/t/run-123"}
             return _R()
 
         agent_instance.post = _fake_post
