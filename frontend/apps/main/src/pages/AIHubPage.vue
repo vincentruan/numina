@@ -119,6 +119,19 @@
       <van-loading size="28" color="var(--color-primary)" />
       <p class="report-generating-text">{{ stream.progressMessage || t('aiHub.reportGenerating') }}</p>
       <p class="report-generating-sub">{{ t('aiHub.reportGeneratingSub') }}</p>
+      <!-- Cancel button when generating (U21: user-initiated task cancel) -->
+      <van-button
+        v-if="reportTaskId"
+        plain
+        type="danger"
+        size="mini"
+        :loading="reportCancelling"
+        :disabled="reportCancelling"
+        class="report-cancel-btn"
+        @click="cancelReport"
+      >
+        {{ t('aiTask.cancelBtn') }}
+      </van-button>
     </div>
 
     <!-- AI disabled state: shown when family has not enabled AI -->
@@ -313,6 +326,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getUser, isGuideDone, markGuideDone } from '@/utils/storage'
 import { parseApiDate } from '@/utils/format'
 import { getAIReport, getAITask } from '@/api/ai'
+import { cancelTaskById } from '@/api/ai-tasks'
 import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useFamilyStore } from '@/stores/family'
@@ -358,6 +372,8 @@ const showAiTip = ref(false)
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
+const reportTaskId = ref<string | null>(null)
+const reportCancelling = ref(false)
 const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
@@ -609,6 +625,7 @@ async function generateReport() {
     try {
       const task = await getAITask('report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
           capability: 'report',
           taskId: task.task_id,
@@ -637,10 +654,28 @@ async function generateReport() {
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
     aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
     reportLoading.value = false
+  }
+}
+
+async function cancelReport() {
+  if (!reportTaskId.value || reportCancelling.value) return
+  reportCancelling.value = true
+  try {
+    await cancelTaskById(reportTaskId.value)
+    stream.abort(false)
+    aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
+    reportLoading.value = false
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    reportCancelling.value = false
   }
 }
 
@@ -665,6 +700,7 @@ async function refreshReport(silent?: boolean) {
     try {
       const task = await getAITask('report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
           capability: 'report',
           taskId: task.task_id,
@@ -804,6 +840,7 @@ onActivated(async () => {
   try {
     const task = await getAITask('report')
     if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+      reportTaskId.value = task.task_id
       aiStore.registerBackgroundTask({
         capability: 'report',
         taskId: task.task_id,
@@ -814,9 +851,11 @@ onActivated(async () => {
       await stream.startPolling()
       await loadReport()
       aiStore.clearBackgroundTask('report')
+      reportTaskId.value = null
       return
     } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
       aiStore.clearBackgroundTask('report')
+      reportTaskId.value = null
     }
   } catch {
     // ignore status fetch errors; fall through to normal page load
@@ -1207,6 +1246,10 @@ defineExpose({
   color: var(--text-secondary);
   margin: 0;
   letter-spacing: -0.12px;
+}
+/* Cancel button inside generating card (U21) */
+.report-cancel-btn {
+  margin-top: 10px;
 }
 
 /* Empty report card */

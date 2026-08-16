@@ -85,14 +85,17 @@ export async function cancelTaskById(
  *
  * Used by the chat frontend recovery flow to check if a task is still
  * running after page reload / navigation. Returns the most recent chat
- * AITask for the given session_id, or null if none exists.
+ * AITask for the given session, or null if none exists.
+ *
+ * Returns ONLY exact session_id matches — returning another thread's task
+ * (even if it's the most recent chat task) would show the wrong banner state
+ * after the user switches threads.
+ *
+ * @param sessionId - Session ID to match against AITask.session_id exactly.
  */
 export async function getChatTaskForSession(
   sessionId: string,
 ): Promise<AITask | null> {
   const tasks = await getAITasks('chat')
-  // Filter client-side by session_id (backend supports session_id filter
-  // via GET /ai/tasks?session_id=... but we also filter here for safety)
-  const match = tasks.find((t) => t.session_id === sessionId)
-  return match ?? null
+  return tasks.find((t) => t.session_id === sessionId) ?? null
 }

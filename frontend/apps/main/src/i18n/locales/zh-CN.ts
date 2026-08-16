@@ -198,6 +198,9 @@ export default {
       thinkingElapsed: '正在思考（{seconds} 秒）',
       thinkingDone: '已思考（用时 {seconds} 秒）',
       ariaLabel: '财务叙事卡片',
+      generatedAt: '生成于 {time}',
+      empty: '暂无本月财务叙事',
+      generate: '生成本月洞察',
       error: {
         auth_expired: '认证已过期',
         connect_failed: '连接失败',
@@ -395,6 +398,10 @@ export default {
     compactSuccess: '已压缩对话历史',
     compactSkipped: '对话历史较少，无需压缩',
     compactFailed: '压缩对话历史失败',
+    // U19: Chat AITask preflight status banners
+    chatTaskRunning: '任务仍在后台运行中，完成后将自动刷新对话',
+    chatTaskFailed: 'AI 任务执行失败',
+    chatTaskInterrupted: 'AI 任务已中断',
     // U5 (D1 /goal) — GoalStatusBar + /goal command toasts
     goalLabel: '目标',
     goalContinuing: '续跑中 {count}/{max}',

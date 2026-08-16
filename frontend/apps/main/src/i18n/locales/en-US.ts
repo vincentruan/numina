@@ -133,6 +133,9 @@ export default {
       thinkingElapsed: 'Thinking ({seconds}s)',
       thinkingDone: 'Thought for {seconds}s',
       ariaLabel: 'Financial narrative card',
+      generatedAt: 'Generated at {time}',
+      empty: 'No monthly narrative yet',
+      generate: 'Generate Monthly Insights',
       error: {
         auth_expired: 'Authentication expired',
         connect_failed: 'Connection failed',
@@ -428,6 +431,10 @@ export default {
     compactSuccess: 'Chat history compacted',
     compactSkipped: 'Not enough history to compact',
     compactFailed: 'Failed to compact chat history',
+    // U19: Chat AITask preflight status banners
+    chatTaskRunning: 'Task still running in background — conversation will refresh on completion',
+    chatTaskFailed: 'AI task execution failed',
+    chatTaskInterrupted: 'AI task was interrupted',
     // U5 (D1 /goal) — GoalStatusBar + /goal command toasts
     goalLabel: 'Goal',
     goalContinuing: 'Continuing {count}/{max}',

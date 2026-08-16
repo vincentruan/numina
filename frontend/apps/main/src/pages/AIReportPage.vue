@@ -20,6 +20,20 @@
       @view-markdown="loadFallbackMarkdown"
     />
 
+    <!-- Cancel button when generating (U21: user-initiated task cancel) -->
+    <div v-if="isGenerating && reportTaskId" class="report-cancel-row">
+      <van-button
+        plain
+        type="danger"
+        size="small"
+        :loading="cancelling"
+        :disabled="cancelling"
+        @click="onCancel"
+      >
+        {{ t('aiTask.cancelBtn') }}
+      </van-button>
+    </div>
+
     <!-- Notice bar when generating new report while previous exists -->
     <div v-if="isGenerating && currentReport && !stream.cached.value" class="previous-report-banner">
       <van-notice-bar
@@ -208,6 +222,7 @@ import { useAIStore } from '@/stores/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import { getAIReport, getAIReportMarkdown, getAITask } from '@/api/ai'
+import { cancelTaskById } from '@/api/ai-tasks'
 import type { AIReport, AIReportIndicator } from '@/types'
 import { useReportStream } from '@/composables/useReportStream'
 import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
@@ -236,6 +251,8 @@ const retryTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const reportContentRef = ref<HTMLElement | null>(null)
 const isExportingImage = ref(false)
 const isExportingPdf = ref(false)
+const reportTaskId = ref<string | null>(null)
+const cancelling = ref(false)
 
 // Markdown preview state
 const markdownVisible = ref(false)
@@ -486,6 +503,7 @@ async function onGenerate(force = false) {
     try {
       const task = await getAITask('report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
           capability: 'report',
           taskId: task.task_id,
@@ -522,8 +540,26 @@ async function onGenerate(force = false) {
       await loadExistingReport()
     }
     aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
   } catch {
     showFailToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
+  }
+}
+
+async function onCancel() {
+  if (!reportTaskId.value || cancelling.value) return
+  cancelling.value = true
+  try {
+    await cancelTaskById(reportTaskId.value)
+    // Stop the frontend SSE reader (keepRunning=false resets status).
+    stream.abort(false)
+    aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    cancelling.value = false
   }
 }
 
@@ -576,6 +612,7 @@ onMounted(async () => {
   try {
     const task = await getAITask('report')
     if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+      reportTaskId.value = task.task_id
       aiStore.registerBackgroundTask({
         capability: 'report',
         taskId: task.task_id,
@@ -586,8 +623,10 @@ onMounted(async () => {
       await stream.startPolling()
       await loadExistingReport()
       aiStore.clearBackgroundTask('report')
+      reportTaskId.value = null
     } else if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
       aiStore.clearBackgroundTask('report')
+      reportTaskId.value = null
       // Task was marked failed (e.g. SSE disconnect before backend fix) but the
       // agent pipeline continued in the background (on_disconnect=continue). If
       // the report now exists in DB, the loadExistingReport call above already
@@ -1049,5 +1088,11 @@ onUnmounted(() => {
 /* Report content container */
 .previous-report-content {
   margin-top: 12px;
+}
+/* Cancel button row when generating (U21) */
+.report-cancel-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px;
 }
 </style>

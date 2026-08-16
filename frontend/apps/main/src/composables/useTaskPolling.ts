@@ -60,6 +60,8 @@ export function useTaskPolling(
 
   let timer: ReturnType<typeof setInterval> | null = null
   let disposed = false
+  // I1 fix: overlap guard — prevent concurrent pollOnce calls when API is slow.
+  let pollInFlight = false
 
   function clearTimer(): void {
     if (timer !== null) {
@@ -85,8 +87,9 @@ export function useTaskPolling(
 
   async function pollOnce(): Promise<void> {
     const id = taskIdRef.value
-    if (!id || disposed) return
+    if (!id || disposed || pollInFlight) return
 
+    pollInFlight = true
     try {
       const result = await getTaskById(id)
       if (disposed) return
@@ -95,6 +98,8 @@ export function useTaskPolling(
       if (disposed) return
       // Network error — don't stop polling, just log
       console.warn('[useTaskPolling] poll error:', err)
+    } finally {
+      pollInFlight = false
     }
   }
 
@@ -122,6 +127,9 @@ export function useTaskPolling(
   watch(
     taskIdRef,
     (newId) => {
+      // I5 fix: always remove the previous listener before adding a new one
+      // to avoid accumulating listeners when taskIdRef flips between non-null values.
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       clearTimer()
       if (newId) {
         status.value = 'polling'
@@ -133,7 +141,6 @@ export function useTaskPolling(
         document.addEventListener('visibilitychange', onVisibilityChange)
       } else {
         status.value = 'idle'
-        document.removeEventListener('visibilitychange', onVisibilityChange)
       }
     },
     { immediate: true },
@@ -153,8 +160,25 @@ export function useTaskPolling(
     try {
       const { cancelTaskById } = await import('@/api/ai-tasks')
       await cancelTaskById(id)
-      status.value = 'failed'
-      errorMessage.value = '任务已取消'
+      // Verify server state with one immediate poll (don't trust optimistic update)
+      try {
+        const result = await getTaskById(id)
+        if (result.status === 'cancelled') {
+          status.value = 'failed'
+          errorMessage.value = '任务已取消'
+        } else if (result.status === 'completed') {
+          // Task completed before cancel took effect — show completed state
+          handleTaskResult(result)
+        } else {
+          // Server hasn't processed cancel yet — set cancelled optimistically
+          status.value = 'failed'
+          errorMessage.value = '任务已取消'
+        }
+      } catch {
+        // Verification failed — set optimistically
+        status.value = 'failed'
+        errorMessage.value = '任务已取消'
+      }
       clearTimer()
     } catch (err) {
       console.warn('[useTaskPolling] cancel error:', err)

@@ -438,11 +438,6 @@ export async function getAITaskSession(
   return res.data
 }
 
-export async function cancelAITask(capability: string): Promise<{ ok: boolean }> {
-  const res = await http.post<{ ok: boolean }>(`/ai/tasks/${capability}/cancel`)
-  return res.data
-}
-
 // Streaming fetch helper — returns a ReadableStream reader.
 // Auth uses httpOnly cookies (withCredentials), no Bearer token needed.
 // Auto-refreshes token on 401 before retrying.

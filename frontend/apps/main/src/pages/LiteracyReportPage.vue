@@ -53,6 +53,19 @@
         <div class="streaming-header">
           <van-loading size="18" color="var(--van-primary-color)" />
           <span class="streaming-label">{{ t('literacyReport.generating') }}</span>
+          <!-- U21: cancel button when AITask is running -->
+          <van-button
+            v-if="literacyTaskId"
+            plain
+            type="danger"
+            size="mini"
+            :loading="literacyCancelling"
+            :disabled="literacyCancelling"
+            class="streaming-cancel-btn"
+            @click="onLiteracyCancel"
+          >
+            {{ t('aiTask.cancelBtn') }}
+          </van-button>
         </div>
         <div v-if="stream.narrative.value" class="streaming-text">
           {{ stream.narrative.value }}
@@ -93,7 +106,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showFailToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ChildSelector from '@/components/literacy/ChildSelector.vue'
@@ -105,6 +118,9 @@ import {
 } from '@/api/literacy'
 import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api/literacy'
 import { useLiteracyStream } from '@/composables/useLiteracyStream'
+import { getAITask } from '@/api/ai'
+import { cancelTaskById } from '@/api/ai-tasks'
+import { useTaskPolling } from '@/composables/useTaskPolling'
 
 defineOptions({ name: 'LiteracyReportPage' })
 
@@ -121,6 +137,23 @@ const currentWeekStart = ref<string | null>(null)
 
 const reportLoading = ref(false)
 const stream = useLiteracyStream()
+
+// U17: AITask polling for out-of-page recovery + U21 cancel support
+const literacyTaskId = ref<string | null>(null)
+const literacyCancelling = ref(false)
+const { cancel: cancelPolling } = useTaskPolling(literacyTaskId, {
+  onComplete: async () => {
+    literacyTaskId.value = null
+    // Task completed in background — reload the persisted report
+    if (selectedChildId.value) {
+      await loadReport()
+    }
+  },
+  onError: (task) => {
+    literacyTaskId.value = null
+    showToast(task.error_message || t('aiTask.error.generic'))
+  },
+})
 
 const currentHistoryIndex = computed(() => {
   if (!currentWeekStart.value) return -1
@@ -255,12 +288,48 @@ watch(currentWeekStart, (val, oldVal) => {
 
 let skipNextWatch = true
 
-onMounted(() => {
-  init().then(() => {
-    if (children.value.length > 0) {
+// U17: resume polling if a literacy task is still running (user navigated
+// away while generation was in progress, then returned to the page).
+async function resumeIfRunning() {
+  try {
+    const task = await getAITask('literacy')
+    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+      literacyTaskId.value = task.task_id
+      return true
+    }
+    if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
+      literacyTaskId.value = null
+    }
+  } catch {
+    // ignore
+  }
+  return false
+}
+
+async function onLiteracyCancel() {
+  if (!literacyTaskId.value || literacyCancelling.value) return
+  literacyCancelling.value = true
+  try {
+    await cancelTaskById(literacyTaskId.value)
+    await cancelPolling()
+    stream.abort()
+    literacyTaskId.value = null
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    literacyCancelling.value = false
+  }
+}
+
+onMounted(async () => {
+  await init()
+  if (children.value.length > 0) {
+    const resumed = await resumeIfRunning()
+    if (!resumed) {
       loadReport()
     }
-  })
+  }
 })
 </script>
 
@@ -320,6 +389,11 @@ onMounted(() => {
   font-size: 14px;
   color: var(--van-primary-color);
   font-weight: 500;
+}
+
+/* U21: cancel button inside streaming header */
+.streaming-cancel-btn {
+  margin-left: auto;
 }
 
 .streaming-text {
