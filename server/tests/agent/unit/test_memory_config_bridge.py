@@ -174,7 +174,7 @@ def test_update_replays_family_config_on_background_thread():
     family_cfg = _make_family_config("/tmp/famA/agent/memory.json")
     observed: dict = {}
 
-    def fake_prepare(self, messages, agent_name, correction_detected, reinforcement_detected, user_id=None):
+    def fake_prepare(self, messages, agent_name, signals=None, user_id=None):
         # Runs inside _do_update_memory_sync, on the bare thread, AFTER the
         # bridge has replayed the family config.
         observed["app_cfg"] = peek_current_app_config()
@@ -231,7 +231,7 @@ def test_update_without_snapshot_falls_back_gracefully():
 
     observed: dict = {}
 
-    def fake_prepare(self, messages, agent_name, correction_detected, reinforcement_detected, user_id=None):
+    def fake_prepare(self, messages, agent_name, signals=None, user_id=None):
         observed["called"] = True
         return None
 
