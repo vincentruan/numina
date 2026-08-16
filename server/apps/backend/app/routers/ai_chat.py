@@ -30,7 +30,7 @@ from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
 from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
-from apps.backend.app.database import get_db
+from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
 from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -39,6 +39,7 @@ from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.schemas.file_record import FileRecordResponse
 from apps.backend.app.services.agent_client import AgentClient
+from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.storage.service import StorageService
 
@@ -263,6 +264,23 @@ async def chat_stream(
     session_id = session.id
     task_id = str(uuid.uuid4())
 
+    # U18: Create AITask for chat tracking (using request's db session)
+    ai_task_id: int | None = None
+    try:
+        ai_task = AITaskService.create_task(
+            family_id=current_user.family_id,
+            skill_id="chat",
+            session_id=session_id,
+            db=db,
+        )
+        ai_task_id = ai_task.id
+    except Exception:
+        logger.warning("[chat-stream] AITask creation failed session=%s", session_id, exc_info=True)
+
+    # Capture user attributes before generator (session closes after handler returns)
+    _family_id = str(current_user.family_id)
+    _user_id = str(current_user.id)
+
     async def proxy_stream():
         # Emit session.start as first event (SSE or NDJSON depending on Accept header)
         start_event = {"session_id": str(session_id), "task_id": task_id}
@@ -283,8 +301,8 @@ async def chat_stream(
         agent_id = body.agent_id or str(NUMINA_AGENT_ID)
         agent_url = f"/internal/gateway/runs/chat/{session_id}"
         request_json = {
-            "family_id": str(current_user.family_id),
-            "user_id": str(current_user.id),
+            "family_id": _family_id,
+            "user_id": _user_id,
             "input": {
                 "messages": [{"role": "user", "content": body.question}],
             },
@@ -296,13 +314,14 @@ async def chat_stream(
                 "source": body.source,
                 "is_plan_mode": body.is_plan_mode,
                 "subagent_enabled": body.subagent_enabled,
+                "task_id": ai_task_id,
             },
         }
 
         answer_chunks: list[str] = []
         try:
             agent_client = AgentClient(
-                current_user.family_id, current_user.id, timeout=130.0
+                _family_id, _user_id, timeout=130.0
             )
             async with agent_client.stream(
                 "POST",
@@ -348,10 +367,18 @@ async def chat_stream(
                             "chat_stream client disconnected session=%s", session_id
                         )
                         break
-
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
-            if use_sse:
+            # U18: Mark AITask as failed
+            if ai_task_id is not None:
+                try:
+                    _fdb = SessionLocal()
+                    try:
+                        AITaskService.fail_task(ai_task_id, f"chat stream error: {type(e).__name__}", _fdb)
+                    finally:
+                        _fdb.close()
+                except Exception:
+                    logger.warning("[chat-stream] AITask fail failed task=%s", ai_task_id, exc_info=True)
                 err_payload = json.dumps(
                     {
                         "error": "抱歉，AI 服务暂时不可用。",
@@ -375,6 +402,17 @@ async def chat_stream(
                     ).encode()
                     + b"\n"
                 )
+
+        # U18: Mark AITask as completed after successful stream (no exception)
+        if ai_task_id is not None:
+            try:
+                _cdb = SessionLocal()
+                try:
+                    AITaskService.complete_task(ai_task_id, _cdb)
+                finally:
+                    _cdb.close()
+            except Exception:
+                logger.warning("[chat-stream] AITask complete failed task=%s", ai_task_id, exc_info=True)
 
     return StreamingResponse(
         proxy_stream(),
