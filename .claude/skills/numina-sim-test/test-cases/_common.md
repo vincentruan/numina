@@ -11,6 +11,7 @@ Shared conventions used by all area case files:
 - [`area8-expanded-features.md`](./area8-expanded-features.md) — Expanded coverage (Manifesto/盲盒/Baby/Settings/Guest F.1–F.8)
 - [`area9-security-notification.md`](./area9-security-notification.md) — Account security + notification (WebAuthn/2FA/devices/notifications)
 - [`area11-ai-security-adversarial.md`](./area11-ai-security-adversarial.md) — AI/agent adversarial security testing (prompt injection, tenant isolation, tool escalation)
+- [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) — AI task resilience (前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消)
 
 **角色能力矩阵 (Role Capabilities Matrix):** [`role-capabilities.md`](./role-capabilities.md)
 — 每个角色 (owner/member/child) 的权限边界和可见页面清单。

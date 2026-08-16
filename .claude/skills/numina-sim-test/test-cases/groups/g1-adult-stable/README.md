@@ -14,6 +14,7 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area6-ai-chat-parity.md`](./area6-ai-chat-parity.md) | 6 — AI chat DeerFlow parity | C6.1–C6.27 (D1–D7) |
 | [`area7-regression.md`](./area7-regression.md) | 7 — Regression sweep (历史缺陷回归) | R1–R9 |
 | [`area8-expanded-features.md`](./area8-expanded-features.md) | 8 — Expanded coverage (Manifesto/盲盒/Baby/Settings) | F.1–F.7 |
+| [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) | 12 — AI task resilience (前端不稳定处理) | C12.1–C12.9 |
 
 ## State domain
 
@@ -44,8 +45,8 @@ area2/3/6/7/8 share the adult session and interleave writes to the same AI confi
 chat threads — a second adult agent would race on those.
 
 > **Recommended run order within G1:** area2 (finance) → area8 (expanded features) →
-> area3 (AI) → area6 (AI chat parity) → area7 (regression sweep). Area 7 runs last
-> because R6 (auth expiry) destroys the session — run it at the very end.
+> area3 (AI) → area6 (AI chat parity) → area12 (task resilience) → area7 (regression sweep).
+> Area 7 runs last because R6 (auth expiry) destroys the session — run it at the very end.
 
 ## Run command sketch
 
