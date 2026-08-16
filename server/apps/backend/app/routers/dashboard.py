@@ -1,12 +1,16 @@
+import json
+import logging
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.dashboard import (
     AllocationResponse,
@@ -24,8 +28,13 @@ from apps.backend.app.schemas.dashboard import (
     UpcomingPaymentsResponse,
 )
 from apps.backend.app.services import dashboard as dashboard_service
+from apps.backend.app.services.agent_client import AgentClient
+from apps.backend.app.services.ai_task_service import AITaskService
+from apps.backend.app.services.bridge_consumer import consume_task_stream
+from apps.backend.app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/overview", response_model=OverviewResponse)
@@ -201,17 +210,15 @@ def get_insights(
 
 @router.get("/narrative")
 async def get_narrative(
+    request: Request,
     force: bool = Query(False),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    """Dashboard narrative — AI-generated monthly financial story (R1-R5).
+    """Dashboard narrative — AI-generated monthly financial story (R1-R5, U15 bridge consumer).
 
     Cache hit → JSON ``NarrativeResponse`` (no streaming).
-    Cache miss / force → SSE stream (``text/event-stream``) proxying the agent's
-    reasoning + narrative events. The stream is persisted to cache after completion.
-
-    ``?force=true`` bypasses cache and regenerates.
+    Cache miss / force → AITask tracking + bridge consumer SSE.
     Threshold gate (asset_count >= 5, history >= 1 month) → empty JSON on miss.
     """
     from apps.backend.app.database import SessionLocal
@@ -219,7 +226,6 @@ async def get_narrative(
         SKILL_ID,
         _build_narrative_context,
         _check_history_threshold,
-        stream_narrative_sse,
     )
     from apps.backend.app.services.finance_coach_cache import (
         is_cache_fresh,
@@ -283,19 +289,136 @@ async def get_narrative(
         insights = None
     context = _build_narrative_context(overview, insights)
 
-    # 4. Stream via agent (SSE) — no DB session held
+    # 4. AITask tracking + bridge consumer SSE (U15)
+    # Check if there's already a running task - resume it
+    existing = AITaskService.get_running_task(family_id, SKILL_ID, db)
+    if existing:
+        task = existing
+        session_id = str(task.session_id) if task.session_id else str(task.id)
+        session = (
+            db.query(AIChatSession)
+            .filter_by(id=session_id, family_id=family_id)
+            .first()
+        )
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        # No running task - create new session and task
+        session = await ChatSessionService.create_session(
+            family_id=family_id,
+            user_id=user.id,
+            db=db,
+        )
+        any_running = AITaskService.get_any_running_task(family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=family_id,
+                skill_id=SKILL_ID,
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "queued",
+                    "task_id": task.id,
+                    "queue_position": task.queue_position,
+                },
+            )
+        task = AITaskService.create_task(
+            family_id=family_id,
+            skill_id=SKILL_ID,
+            session_id=session.id,
+            db=db,
+        )
+        session_id = str(session.id)
+
+    task_id = str(task.id)
+
+    # Trigger agent via non-streaming POST (bridge consumer pattern)
+    agent_client = AgentClient(family_id=str(family_id), user_id=str(user.id), timeout=120.0)
+    agent_url = f"/internal/gateway/runs/dashboard-narrative/{session_id}"
+
+    try:
+        resp = await agent_client.post(
+            agent_url,
+            json={
+                "family_id": str(family_id),
+                "user_id": str(user.id),
+                "language": user.language,
+                "on_disconnect": "continue",
+                "task_id": task_id,
+                "input": {"messages": [{"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
+            },
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "[narrative] agent trigger failed: status=%s body=%s task=%s",
+                resp.status_code,
+                resp.text[:200],
+                task_id,
+            )
+            _db = SessionLocal()
+            try:
+                AITaskService.fail_task(task_id, "叙事生成服务异常", _db)
+            finally:
+                _db.close()
+            err = json.dumps({"message": "叙事生成服务异常", "name": "AgentError"}).encode()
+            return StreamingResponse(
+                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+                media_type="text/event-stream",
+            )
+    except Exception as exc:
+        logger.warning("[narrative] agent trigger failed task=%s err=%s", task_id, exc)
+        _db = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"叙事生成服务中断: {type(exc).__name__}", _db)
+        finally:
+            _db.close()
+        err = json.dumps({"message": "叙事生成服务中断", "name": type(exc).__name__}).encode()
+        return StreamingResponse(
+            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+            media_type="text/event-stream",
+        )
+
+    # Subscribe to Redis stream via bridge_consumer
+    async def _sse_stream_with_persist(
+        stream_gen: AsyncIterator[str],
+    ) -> AsyncGenerator[bytes, None]:
+        """Wrap bridge_consumer output, persisting narrative result to skill cache."""
+        from apps.backend.app.services.finance_coach_cache import upsert_skill_result
+
+        async for sse_text in stream_gen:
+            # Intercept custom events to extract narrative result payload
+            if "event: custom" in sse_text:
+                try:
+                    for line in sse_text.split("\n"):
+                        if line.startswith("data: "):
+                            data = json.loads(line[len("data: "):])
+                            if data.get("type") == "dashboard_narrative.result":
+                                payload = data.get("payload")
+                                if payload:
+                                    _pdb = SessionLocal()
+                                    try:
+                                        upsert_skill_result(_pdb, family_id, SKILL_ID, payload)
+                                        _pdb.commit()
+                                    finally:
+                                        _pdb.close()
+                except Exception:
+                    logger.warning("[narrative] persist result failed", exc_info=True)
+            yield sse_text.encode("utf-8")
+
+    last_event_id = request.headers.get("Last-Event-ID")
+    stream_gen = consume_task_stream(
+        task_id=task_id,
+        family_id=family_id,
+        last_event_id=last_event_id,
+    )
+
     return StreamingResponse(
-        stream_narrative_sse(
-            family_id=str(family_id),
-            user_id=str(user.id),
-            context=context,
-        ),
+        _sse_stream_with_persist(stream_gen),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"X-Accel-Buffering": "no"},
     )
 
 
