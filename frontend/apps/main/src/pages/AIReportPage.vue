@@ -217,7 +217,6 @@ import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { marked } from 'marked'
 import { parseApiDate } from '@/utils/format'
-import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
@@ -226,15 +225,11 @@ import { cancelTaskById } from '@/api/ai-tasks'
 import type { AIReport, AIReportIndicator } from '@/types'
 import { useReportStream } from '@/composables/useReportStream'
 import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
+import { sanitizeMarkdown } from '@/utils/sanitize'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportStepTimeline from '@/components/ai/ReportStepTimeline.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ReportMarkdownPreview from '@/components/ai/ReportMarkdownPreview.vue'
-
-const SUMMARY_PURIFY_CONFIG = {
-  USE_PROFILES: { html: true },
-  ALLOW_DATA_ATTR: false,
-} as const
 
 const { t, locale } = useI18n()
 const { formatIn } = useCurrency()
@@ -364,7 +359,7 @@ const renderedIndicators = computed(() => {
     label: getIndicatorLabel(indicator.key),
     icon: getIndicatorIcon(indicator.key),
     scoreClass: getScoreClass(indicator.score),
-    narrativeHtml: DOMPurify.sanitize(marked.parse(indicator.narrative, { async: false }) as string, SUMMARY_PURIFY_CONFIG),
+    narrativeHtml: sanitizeMarkdown(marked.parse(indicator.narrative, { async: false }) as string),
   }))
 })
 
@@ -382,7 +377,7 @@ const scoreProgress = computed(() => {
 const renderedSummary = computed(() => {
   if (!currentReport.value?.summary) return ''
   const raw = marked.parse(currentReport.value.summary, { async: false }) as string
-  return DOMPurify.sanitize(raw, SUMMARY_PURIFY_CONFIG)
+  return sanitizeMarkdown(raw)
 })
 
 function formatMoney(val: number | null | undefined): string {

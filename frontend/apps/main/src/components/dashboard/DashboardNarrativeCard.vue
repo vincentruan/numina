@@ -12,7 +12,7 @@ import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { sanitizeMarkdown } from '@/utils/sanitize'
 import { streamNarrative } from '@/api/dashboard'
 import { getAITask } from '@/api/ai'
 import { useTaskPolling } from '@/composables/useTaskPolling'
@@ -30,16 +30,12 @@ const cancelling = ref(false)
 let streamHandle: NarrativeStreamHandle | null = null
 let taskCheckTimer: ReturnType<typeof setTimeout> | null = null
 
-// Minimal DOMPurify config (matches AIReportPage)
-const PURIFY_CONFIG = {
-  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'h3', 'h4', 'span'],
-  ALLOWED_ATTR: ['class'],
-}
-
 const renderedNarrative = computed(() => {
   if (!narrative.value) return ''
   const html = marked.parse(narrative.value, { async: false }) as string
-  return DOMPurify.sanitize(html, PURIFY_CONFIG)
+  // S1 fix: shared sanitize config (matches AIReportPage) so both consumers
+  // allow full HTML markdown output while stripping XSS vectors uniformly.
+  return sanitizeMarkdown(html)
 })
 
 const isRunning = computed(() => streaming.value || narrativeTaskId.value !== null)

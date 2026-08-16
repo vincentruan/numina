@@ -8,6 +8,7 @@
  * non-Chat AI features (coach, literacy, narrative) share one implementation.
  */
 import { ref, watch, onUnmounted, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getTaskById, type AITask } from '@/api/ai-tasks'
 
 export type TaskPollingStatus = 'idle' | 'polling' | 'completed' | 'failed'
@@ -52,6 +53,19 @@ export function useTaskPolling(
   options: UseTaskPollingOptions = {},
 ): UseTaskPollingReturn {
   const { interval = 2000, onComplete, onError } = options
+  // S2 fix: use i18n for fallback error strings when available; graceful
+  // fallback to English/Chinese literals when called outside a Vue app with
+  // an i18n plugin (e.g. unit tests without a setup wrapper).
+  let t: ((key: string) => string) | null = null
+  try {
+    const i18n = useI18n()
+    t = i18n.t as (key: string) => string
+  } catch {
+    // No i18n context — fall back to literal strings below.
+    t = null
+  }
+  const fallbackFailed = t ? t('aiTask.error.generic') : '分析失败，请稍后重试'
+  const fallbackCancelled = t ? t('aiTask.cancelled') : '任务已终止'
 
   const status = ref<TaskPollingStatus>('idle')
   const task = ref<AITask | null>(null)
@@ -78,7 +92,7 @@ export function useTaskPolling(
       onComplete?.(t)
     } else if (t.status === 'failed' || t.status === 'cancelled' || t.status === 'timeout') {
       status.value = 'failed'
-      errorMessage.value = t.error_message || '任务失败'
+      errorMessage.value = t.error_message || fallbackFailed
       clearTimer()
       onError?.(t)
     }
@@ -165,14 +179,14 @@ export function useTaskPolling(
         const result = await getTaskById(id)
         if (result.status === 'cancelled') {
           status.value = 'failed'
-          errorMessage.value = '任务已取消'
+          errorMessage.value = fallbackCancelled
         } else if (result.status === 'completed') {
           // Task completed before cancel took effect — show completed state
           handleTaskResult(result)
         } else {
           // Server hasn't processed cancel yet — set cancelled optimistically
           status.value = 'failed'
-          errorMessage.value = '任务已取消'
+          errorMessage.value = fallbackCancelled
         }
       } catch {
         // Verification failed — set optimistically

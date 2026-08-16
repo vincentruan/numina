@@ -219,7 +219,9 @@ describe('useTaskPolling', () => {
 
     expect(mockCancelTaskById).toHaveBeenCalledWith('123')
     expect(status.value).toBe('failed')
-    expect(errorMessage.value).toBe('任务已取消')
+    // Aligns with i18n key `aiTask.cancelled` (任务已终止) — the original
+    // hardcoded '任务已取消' was inconsistent with the canonical i18n value.
+    expect(errorMessage.value).toBe('任务已终止')
 
     // No more polls after cancel
     const callCount = mockGetTaskById.mock.calls.length
