@@ -291,6 +291,18 @@ async def run_agent(
     # numina and import-parse also depend on it once native tools are enabled.
     set_family_sandbox_context(family_id, caller_user_id=user_id)
 
+    # U12: Extract task_id from run metadata and start a background heartbeat
+    # loop to renew AITask.lease_expires_at (dead-worker detection). Skipped when
+    # task_id is absent (backward-compatible with old triggers).
+    task_id = _extract_task_id(record.metadata if record else None)
+    heartbeat_stop: asyncio.Event | None = None
+    heartbeat_task: asyncio.Task | None = None
+    if task_id is not None:
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_loop(task_id, family_id, stop_event=heartbeat_stop)
+        )
+
     # Resolved-3 blocker A reset (P0, ce-code-review 2026-07-19): the family_id
     # + extensions_config_path ContextVars are coroutine-scoped and would leak
     # into a subsequent run if this coroutine is reused (shared worker task /
@@ -383,6 +395,14 @@ async def run_agent(
             stream_modes=stream_modes,
         )
     finally:
+        # U12: Stop the heartbeat loop and await it (best-effort).
+        if heartbeat_stop is not None:
+            heartbeat_stop.set()
+        if heartbeat_task is not None:
+            try:
+                await asyncio.wait_for(heartbeat_task, timeout=2.0)
+            except Exception:
+                heartbeat_task.cancel()
         reset_family_sandbox_context()
 
 
