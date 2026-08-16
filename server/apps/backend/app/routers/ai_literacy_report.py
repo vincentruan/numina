@@ -19,7 +19,10 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
-from apps.backend.app.services.ai_task_service import AITaskService
+from apps.backend.app.services.ai_task_service import (
+    AITaskService,
+    extract_run_id_from_content_location,
+)
 from apps.backend.app.services.bridge_consumer import consume_task_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.literacy_report import _sunday_of
@@ -276,6 +279,19 @@ async def trigger_generate_events(
                 iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
                 media_type="text/event-stream",
             )
+
+        # Extract agent run_id from Content-Location header and persist to AITask
+        run_id = extract_run_id_from_content_location(resp.headers.get("Content-Location"))
+        if run_id:
+            from apps.backend.app.database import SessionLocal
+
+            _db = SessionLocal()
+            try:
+                AITaskService.attach_run_id(task_id, run_id, family_id, _db)
+            except Exception:
+                logger.warning("[literacy-report] attach_run_id failed task=%s", task_id, exc_info=True)
+            finally:
+                _db.close()
     except Exception as exc:
         logger.warning(
             "[literacy-report] agent trigger failed task=%s err=%s", task_id, exc

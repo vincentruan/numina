@@ -29,7 +29,10 @@ from apps.backend.app.schemas.dashboard import (
 )
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
-from apps.backend.app.services.ai_task_service import AITaskService
+from apps.backend.app.services.ai_task_service import (
+    AITaskService,
+    extract_run_id_from_content_location,
+)
 from apps.backend.app.services.bridge_consumer import consume_task_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -368,6 +371,17 @@ async def get_narrative(
                 iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
                 media_type="text/event-stream",
             )
+
+        # Extract agent run_id from Content-Location header and persist to AITask
+        run_id = extract_run_id_from_content_location(resp.headers.get("Content-Location"))
+        if run_id:
+            _db = SessionLocal()
+            try:
+                AITaskService.attach_run_id(task_id, run_id, family_id, _db)
+            except Exception:
+                logger.warning("[narrative] attach_run_id failed task=%s", task_id, exc_info=True)
+            finally:
+                _db.close()
     except Exception as exc:
         logger.warning("[narrative] agent trigger failed task=%s err=%s", task_id, exc)
         _db = SessionLocal()

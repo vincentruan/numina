@@ -9,6 +9,19 @@ from packages.db.models.ai_task import AITask
 TASK_TIMEOUT_MINUTES = 30
 
 
+def extract_run_id_from_content_location(content_location: str | None) -> str | None:
+    """Extract the agent RunRecord UUID from a Content-Location header.
+
+    The agent gateway sets ``Content-Location: /internal/gateway/runs/{app}/
+    {thread_id}/{record.run_id}``. The run_id is the final path segment.
+    Returns None if the header is absent or malformed.
+    """
+    if not content_location:
+        return None
+    segment = content_location.rstrip("/").rsplit("/", 1)[-1]
+    return segment or None
+
+
 class AITaskService:
     @staticmethod
     def get_running_task(
@@ -269,6 +282,25 @@ class AITaskService:
             .filter(AITask.run_id == run_id, AITask.family_id == int(family_id))
             .first()
         )
+
+    @staticmethod
+    def attach_run_id(task_id: int | str, run_id: str, family_id: int | str, db: Session) -> bool:
+        """Write the agent RunRecord ID back onto an AITask (tenant-scoped).
+
+        The agent returns its ``record.run_id`` in the ``Content-Location``
+        response header of the gateway trigger endpoint. bridge_consumer needs
+        this run_id to subscribe to the correct Redis stream, so the backend
+        must persist it before the SSE consumer starts.
+
+        Returns True if a row was updated, False otherwise (task not found or
+        wrong family).
+        """
+        task = AITaskService.get_task_by_id(task_id, family_id, db)
+        if not task:
+            return False
+        task.run_id = run_id
+        db.commit()
+        return True
 
     @staticmethod
     def get_running_tasks_by_family(
