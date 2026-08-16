@@ -52,6 +52,63 @@ _WRITE_FILE_DECL_RE = re.compile(
 _REPORT_FILENAME_RE = re.compile(r"^report_[a-zA-Z0-9_-]+\.md$")
 
 
+# ---------------------------------------------------------------------------
+# U12: Task progress callback helpers
+# ---------------------------------------------------------------------------
+
+
+async def _heartbeat_loop(
+    task_id: int, family_id: str, interval: float = 40.0, stop_event: asyncio.Event | None = None
+) -> None:
+    """Background heartbeat loop for dead-worker detection (U12).
+
+    Calls BackendClient.heartbeat() every `interval` seconds until stop_event
+    is set or the task is cancelled. Network errors are logged but don't stop
+    the loop (heartbeat is best-effort).
+
+    Args:
+        task_id: AITask primary key.
+        family_id: Family ID for tenant isolation.
+        interval: Seconds between heartbeats (default 40s, < lease TTL 120s).
+        stop_event: Optional event to signal loop termination.
+    """
+    if stop_event is None:
+        stop_event = asyncio.Event()
+
+    client = BackendClient(family_id)
+    while not stop_event.is_set():
+        try:
+            await client.heartbeat(task_id)
+            logger.debug("[heartbeat] task=%s family=%s", task_id, family_id)
+        except Exception as e:
+            logger.warning(
+                "[heartbeat] failed task=%s family=%s err=%s",
+                task_id, family_id, e,
+            )
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            break  # stop_event was set
+        except TimeoutError:
+            continue  # interval elapsed, send another heartbeat
+
+
+def _extract_task_id(metadata: dict | None) -> int | None:
+    """Extract task_id from run metadata (U12).
+
+    Backend passes task_id in metadata when triggering agent runs. Returns None
+    if not present (backward compatibility with old triggers).
+    """
+    if not metadata:
+        return None
+    task_id = metadata.get("task_id")
+    if task_id is None:
+        return None
+    try:
+        return int(task_id)
+    except (ValueError, TypeError):
+        return None
+
+
 def _deerflow_default_workspace_md(
     thread_id: str, user_id: str | None, filename: str
 ) -> Path | None:
