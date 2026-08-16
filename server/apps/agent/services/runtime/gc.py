@@ -214,7 +214,7 @@ async def reconcile_orphaned_runs(
                     db.rollback()
                     continue
 
-                if not result.rowcount:
+                if not getattr(result, "rowcount", 0):
                     logger.info(
                         f"[reconcile_orphaned_runs] Task {task.id} lease was renewed "
                         f"concurrently, skipping orphan mark"

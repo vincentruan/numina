@@ -371,7 +371,7 @@ class AITaskService:
             result = db.execute(stmt)
             try:
                 db.commit()
-                return result.rowcount > 0  # True if we actually updated a row
+                return bool(getattr(result, "rowcount", 0) > 0)  # True if we actually updated a row
             except Exception:
                 db.rollback()
                 return False

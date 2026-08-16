@@ -42,19 +42,20 @@ class ShutdownGuardMiddleware(BaseHTTPMiddleware):
 
         # Only check POST requests to task-creation endpoints
         if request.method == "POST" and request.url.path in self.TASK_CREATION_PATHS and is_shutting_down():
-                logger.warning(
-                    f"[ShutdownGuard] Rejecting task creation during shutdown: "
-                    f"{request.method} {request.url.path}"
-                )
-                return JSONResponse(
-                    status_code=503,
-                    content={
-                        "code": "SERVICE_UNAVAILABLE",
-                        "message": "服务正在关停，暂不接受新任务。请稍后重试。",
-                        "data": None,
-                    },
-                    headers={"Retry-After": "30"},  # Suggest retry after 30s
-                )
+            logger.warning(
+                f"[ShutdownGuard] Rejecting task creation during shutdown: "
+                f"{request.method} {request.url.path}"
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "SERVICE_UNAVAILABLE",
+                    "message": "服务正在关停，暂不接受新任务。请稍后重试。",
+                    "data": None,
+                },
+                headers={"Retry-After": "30"},  # Suggest retry after 30s
+            )
 
         # Pass through all other requests
-        return await call_next(request)
+        response: Response = await call_next(request)  # type: ignore[assignment,no-any-return]
+        return response

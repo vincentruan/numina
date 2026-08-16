@@ -214,7 +214,7 @@ async def trigger_finance_coach(
     )
 
     return StreamingResponse(
-        _sse_stream_with_persist(stream_gen, family_id),
+        _sse_stream_with_persist(stream_gen, str(family_id)),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )
