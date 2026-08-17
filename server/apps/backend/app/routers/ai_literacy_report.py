@@ -17,6 +17,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
@@ -31,6 +32,7 @@ from apps.backend.app.services.literacy_report_service import (
     generate_literacy_report,
     get_report_status,
 )
+from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 from packages.core.roles import UserRole
 
 router = APIRouter(prefix="/ai/literacy-report", tags=["ai-literacy-report"])
@@ -139,7 +141,6 @@ async def trigger_generate_events(
     Cache miss / force → AITask tracking + bridge consumer SSE.
     """
     # Phase 5.2: circuit breaker gate
-    from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 
     blocked_resp = check_circuit_blocked(current_user.family_id, "literacy", db)
     if blocked_resp is not None:
@@ -331,7 +332,6 @@ async def trigger_generate_events(
         last_event_id=last_event_id,
         run_id=run_id,
     )
-    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     return StreamingResponse(
         tracked_sse_stream(task_id, stream_gen),

@@ -11,6 +11,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.schemas.dashboard import (
     AllocationResponse,
     DailyCostItem,
@@ -34,6 +35,7 @@ from apps.backend.app.services.bridge_consumer import (
     consume_task_stream,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
+from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = logging.getLogger(__name__)
@@ -237,7 +239,6 @@ async def generate_narrative(
     family_id = user.family_id
 
     # Phase 5.2: circuit breaker gate
-    from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 
     blocked_resp = check_circuit_blocked(family_id, "narrative", db)
     if blocked_resp is not None:
@@ -417,7 +418,6 @@ async def generate_narrative(
         on_result=_persist_narrative_result,
     )
 
-    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(

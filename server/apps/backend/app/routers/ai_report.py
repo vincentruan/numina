@@ -35,6 +35,7 @@ from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import consume_task_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import SKILL_TTL
+from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 from packages.core.path_manager import PathManager
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
@@ -420,7 +421,6 @@ async def trigger_generate_events(
         last_event_id=last_event_id,
         run_id=run_id,
     )
-    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     return StreamingResponse(
         tracked_sse_stream(task_id, stream_gen),

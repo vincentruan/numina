@@ -487,7 +487,7 @@ class AITaskService:
             now = datetime.utcnow()
 
         query = db.query(AITask).filter(
-            AITask.status.in_(["running", "post_processing"]),
+            AITask.status.in_(["running", "post_processing", "queued"]),
             AITask.lease_expires_at < now,
         )
 

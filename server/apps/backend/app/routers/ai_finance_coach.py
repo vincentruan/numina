@@ -34,6 +34,7 @@ from apps.backend.app.services.finance_coach_cache import (
 from apps.backend.app.services.finance_coach_snapshot import (
     build_family_finance_snapshot,
 )
+from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
 router = APIRouter(prefix="/ai/finance-coach", tags=["ai-finance-coach"])
 logger = logging.getLogger(__name__)
@@ -213,7 +214,6 @@ async def trigger_finance_coach(
         last_event_id=last_event_id,
         run_id=run_id,
     )
-    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     return StreamingResponse(
         tracked_sse_stream(task_id, stream_gen),

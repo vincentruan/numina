@@ -351,6 +351,9 @@ async def lifespan(app: FastAPI):
     from apps.backend.app.services.orphan_detector import orphan_detector_loop
 
     orphan_task = asyncio.create_task(orphan_detector_loop())
+    # P3-17 fix: store on app.state for observability (health checks can verify
+    # `not app.state.orphan_detector_task.done()`)
+    app.state.orphan_detector_task = orphan_task
     logger.info("Orphan task detector started")
 
     yield

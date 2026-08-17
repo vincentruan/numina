@@ -1,11 +1,12 @@
 """Periodic orphan task detector (Phase 5.1).
 
-Scans for AITask records stuck in 'running'/'post_processing' with expired
-leases (lease_expires_at < now). These are tasks whose worker died or
-lost connectivity without completing the task.
+Scans for AITask records stuck in 'running'/'post_processing'/'queued' with
+expired leases (lease_expires_at < now). These are tasks whose worker died or
+lost connectivity without completing the task (P2-6: now includes 'queued').
 
 Uses existing infrastructure:
 - AITaskService.get_stale_running_tasks() — query for expired-lease tasks
+  (now covers running, post_processing, AND queued states)
 - AITaskService.mark_interrupted(lease_guard=True) — atomic transition
 
 Registered as a FastAPI lifespan background task in app/main.py.
@@ -22,8 +23,12 @@ logger = logging.getLogger(__name__)
 SCAN_INTERVAL_SECONDS = 120
 
 
-async def _scan_and_recover() -> int:
-    """Run one scan cycle. Returns the number of tasks recovered."""
+def _scan_and_recover_sync() -> int:
+    """Run one scan cycle synchronously. Returns the number of tasks recovered.
+
+    All DB I/O happens here — callers must run this in a thread to avoid
+    blocking the asyncio event loop (P1-1 fix).
+    """
     from apps.backend.app.services.ai_task_service import AITaskService
     from packages.db.session import SessionLocal
 
@@ -36,6 +41,9 @@ async def _scan_and_recover() -> int:
         recovered = 0
         for task in stale_tasks:
             try:
+                # mark_interrupted(lease_guard=True) commits atomically per-task
+                # (P1-2 fix: removed the redundant outer db.commit block —
+                # each task's transition is durable on its own commit)
                 result = AITaskService.mark_interrupted(
                     task_id=task.id,
                     family_id=task.family_id,
@@ -52,22 +60,25 @@ async def _scan_and_recover() -> int:
                         task.skill_id,
                     )
             except Exception:
+                db.rollback()
                 logger.warning(
                     "[orphan_detector] failed to recover task=%s",
                     task.id,
                     exc_info=True,
                 )
 
-        if recovered > 0:
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
-                logger.error("[orphan_detector] commit failed", exc_info=True)
-
         return recovered
     finally:
         db.close()
+
+
+async def _scan_and_recover() -> int:
+    """Async wrapper — delegates to sync DB work via asyncio.to_thread (P1-1 fix).
+
+    Keeps the blocking SQLAlchemy queries off the event loop so pool exhaustion
+    or slow DB cannot stall other asyncio tasks (e.g. SSE heartbeats).
+    """
+    return await asyncio.to_thread(_scan_and_recover_sync)
 
 
 async def orphan_detector_loop() -> None:

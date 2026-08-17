@@ -169,5 +169,23 @@ def validate_report_json(data: dict) -> list[str]:
             errors.append(f"indicator[{idx}].data.items 为空")
             continue
 
+        # P2-7 fix: validate per-item field structure (key, zh, en, value)
+        for item_idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                errors.append(
+                    f"indicator[{idx}].data.items[{item_idx}] 不是有效对象"
+                )
+                continue
+            for field in ("key", "zh", "en"):
+                if field not in item or not item[field]:
+                    errors.append(
+                        f"indicator[{idx}].data.items[{item_idx}] 缺少 '{field}' 字段"
+                    )
+            value = item.get("value")
+            if value is None or not isinstance(value, (int, float)):
+                errors.append(
+                    f"indicator[{idx}].data.items[{item_idx}].value 必须是数字"
+                )
+
     return errors
 

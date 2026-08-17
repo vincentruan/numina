@@ -6,6 +6,10 @@ subscriber-aware optimizations (skip SSE formatting when no client is listening)
 
 Process-local dict — not shared across Uvicorn workers. For single-worker
 deployments (current), this is sufficient. Multi-worker would need Redis.
+
+TODO: Phase 4A follow-up — add a consumer that reads ``registry.has_subscriber()``
+to change behavior (e.g., skip intermediate event formatting when no client
+is actively reading). Currently this module ships as tracking scaffolding only.
 """
 
 from __future__ import annotations

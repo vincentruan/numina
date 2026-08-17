@@ -507,10 +507,20 @@ async def _repair_report_json_via_llm(
         )
         repaired_text = await llm.complete(repair_prompt, max_tokens=4000)
         return parse_report_json(repaired_text)
-    except Exception as exc:
+    except (ValueError, KeyError, TypeError) as exc:
+        # Parse/structural errors — retryable (LLM returned garbage)
         logger.warning(
-            "[_repair_report_json_via_llm] repair failed: %s",
+            "[_repair_report_json_via_llm] parse failed: %s: %s",
             type(exc).__name__,
+            exc,
+        )
+        return None
+    except Exception as exc:
+        # Network/auth/timeout errors — log and fail fast (P2-8 fix: differentiate)
+        logger.warning(
+            "[_repair_report_json_via_llm] repair failed: %s: %s",
+            type(exc).__name__,
+            exc,
         )
         return None
 
@@ -645,24 +655,56 @@ async def _run_asset_report_pipeline(
             # the LLM (lightweight single-call) to re-emit a corrected JSON.
             # Max 3 attempts; after that, fail the run so the frontend surfaces
             # an error instead of a silently-broken report.
+            #
+            # P1-3 fix: total budget timeout (120s) prevents 3×60s worst-case
+            # from stalling the pipeline indefinitely. Emit a bridge event per
+            # retry attempt so the SSE connection stays alive and the frontend
+            # can show repair progress.
+            # P1-4 fix: break early when no provider is available — retrying
+            # with provider=None is guaranteed to fail.
             retry_count = 0
-            while validation_errors and retry_count < 3:
-                retry_count += 1
-                logger.warning(
-                    "[_run_asset_report_pipeline] report JSON invalid, "
-                    "retry=%d/%d errors=%s",
+            try:
+                async with asyncio.timeout(120):
+                    while validation_errors and retry_count < 3:
+                        retry_count += 1
+                        if not p.selected_provider:
+                            logger.warning(
+                                "[_run_asset_report_pipeline] no provider available "
+                                "for repair — stopping retry run=%s",
+                                p.run_id,
+                            )
+                            break
+                        logger.warning(
+                            "[_run_asset_report_pipeline] report JSON invalid, "
+                            "retry=%d/%d errors=%s",
+                            retry_count,
+                            3,
+                            validation_errors[:3],
+                        )
+                        await bridge.publish(
+                            p.run_id,
+                            "custom",
+                            {
+                                "type": "report.repair_retry",
+                                "attempt": retry_count,
+                                "max_attempts": 3,
+                            },
+                        )
+                        repaired = await _repair_report_json_via_llm(
+                            ai_text,
+                            validation_errors,
+                            p.selected_provider,
+                        )
+                        if repaired is not None:
+                            step2_payload = repaired
+                            validation_errors = validate_report_json(repaired)
+            except TimeoutError:
+                logger.error(
+                    "[_run_asset_report_pipeline] report JSON repair timed out "
+                    "after %d attempts run=%s",
                     retry_count,
-                    3,
-                    validation_errors[:3],
+                    p.run_id,
                 )
-                repaired = await _repair_report_json_via_llm(
-                    ai_text,
-                    validation_errors,
-                    p.selected_provider,
-                )
-                if repaired is not None:
-                    step2_payload = repaired
-                    validation_errors = validate_report_json(repaired)
 
             if validation_errors:
                 # Still invalid after retries — fail the run (Phase 4B.5).
