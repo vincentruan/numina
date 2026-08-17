@@ -66,9 +66,8 @@
         @click="showEndPicker = true"
       />
       <van-popup v-model:show="showEndPicker" position="bottom" round>
-        <van-picker
+        <van-date-picker
           v-model="endPickerValue"
-          :columns="endColumns"
           :title="t('rental.endDate')"
           @confirm="onEndConfirm"
           @cancel="showEndPicker = false"
@@ -196,12 +195,10 @@ const startPickerValue = ref([
   String(now.getMonth() + 1).padStart(2, '0'),
   String(now.getDate()).padStart(2, '0'),
 ])
-const endPickerValue = ref<string[]>([])
-
-const NONE_END_VALUE = '__open__'
-const endColumns = computed(() => [
-  { text: t('rental.openEnded'), value: NONE_END_VALUE },
-  ...(form.value.end_date ? [{ text: form.value.end_date, value: form.value.end_date }] : []),
+const endPickerValue = ref([
+  String(now.getFullYear()),
+  String(now.getMonth() + 1).padStart(2, '0'),
+  String(now.getDate()).padStart(2, '0'),
 ])
 const endDisplay = computed(() => form.value.end_date ?? '')
 
@@ -210,8 +207,7 @@ function onStartConfirm({ selectedValues }: { selectedValues: string[] }) {
   showStartPicker.value = false
 }
 function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
-  const v = selectedValues[0] ?? NONE_END_VALUE
-  form.value.end_date = v === NONE_END_VALUE ? null : v
+  form.value.end_date = selectedValues.join('-')
   showEndPicker.value = false
 }
 
@@ -247,7 +243,9 @@ watch(showAssetPicker, (open) => {
 onMounted(async () => {
   try {
     const res = await getAssets()
-    assets.value = res.data
+    // Backend returns PaginatedAssetResponse after envelope unwrap: { items: Asset[], ... }
+    const raw = res.data as unknown as { items?: Asset[] } | Asset[]
+    assets.value = Array.isArray(raw) ? raw : (raw.items ?? [])
   } catch {
     assets.value = []
   }

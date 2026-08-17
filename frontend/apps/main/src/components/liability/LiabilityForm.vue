@@ -292,7 +292,9 @@ watch(showAssetPicker, (open) => {
 onMounted(async () => {
   try {
     const res = await getAssets()
-    assets.value = res.data
+    // Backend returns PaginatedAssetResponse after envelope unwrap: { items: Asset[], ... }
+    const raw = res.data as unknown as { items?: Asset[] } | Asset[]
+    assets.value = Array.isArray(raw) ? raw : (raw.items ?? [])
   } catch {
     // Non-fatal: picker just shows the "无" option if assets fail to load.
     assets.value = []
