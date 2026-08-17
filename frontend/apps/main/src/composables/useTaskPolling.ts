@@ -7,7 +7,7 @@
  * Extracted from useReportStream's inline pollTaskUntilComplete() so all
  * non-Chat AI features (coach, literacy, narrative) share one implementation.
  */
-import { ref, watch, onUnmounted, type Ref } from 'vue'
+import { ref, watch, onUnmounted, onDeactivated, onActivated, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTaskById, type AITask } from '@/api/ai-tasks'
 
@@ -110,7 +110,17 @@ export function useTaskPolling(
       handleTaskResult(result)
     } catch (err) {
       if (disposed) return
-      // Network error — don't stop polling, just log
+      // T18 fix: 404 -> task no longer exists on the backend (data anomaly
+      // or cleanup). Stop polling silently - no toast, no error message,
+      // otherwise users see repeated toasts on every page.
+      const httpStatus = (err as { response?: { status?: number } })?.response?.status
+      if (httpStatus === 404) {
+        status.value = 'failed'
+        errorMessage.value = '' // silent
+        clearTimer()
+        return
+      }
+      // Other errors (500, network) - keep polling, just log
       console.warn('[useTaskPolling] poll error:', err)
     } finally {
       pollInFlight = false
@@ -205,6 +215,24 @@ export function useTaskPolling(
     document.removeEventListener('visibilitychange', onVisibilityChange)
     status.value = 'idle'
   }
+
+  // T19 fix: KeepAlive lifecycle - onUnmounted does not fire for cached
+  // pages (Dashboard, AIHub); only onDeactivated does. Pause polling when
+  // deactivated so users who navigate away stop generating 2s requests.
+  let keepAlivePaused = false
+  onDeactivated(() => {
+    if (disposed || status.value !== 'polling') return
+    keepAlivePaused = true
+    paused.value = true
+    clearTimer()
+  })
+  onActivated(() => {
+    if (disposed || !keepAlivePaused) return
+    keepAlivePaused = false
+    paused.value = false
+    pollOnce()
+    startTimer()
+  })
 
   onUnmounted(() => {
     stop()

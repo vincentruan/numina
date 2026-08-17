@@ -14,7 +14,6 @@ import { showToast, showFailToast } from 'vant'
 import { marked } from 'marked'
 import { sanitizeMarkdown } from '@/utils/sanitize'
 import { streamNarrative } from '@/api/dashboard'
-import { getAITask } from '@/api/ai'
 import { useTaskResume } from '@/composables/useTaskResume'
 import type { NarrativeStreamHandle } from '@/api/dashboard'
 
@@ -81,18 +80,11 @@ async function triggerStream(_force = true) {
   thinking.value = ''
   narrative.value = null
 
-  // Track AITask shortly after triggering (backend creates it on cache miss).
-  // Cleanup handled by onUnmounted.
+  // T20: progressive retry (500ms->1s->2s->4s) to locate the AITask created
+  // by this trigger. Runs in background; cleanup on unmount via checkCancelled.
   taskCheckTimer = setTimeout(async () => {
     taskCheckTimer = null
-    try {
-      const task = await getAITask('narrative')
-      if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-        resumeHandle.taskId.value = task.task_id
-      }
-    } catch {
-      // best-effort
-    }
+    await resumeHandle.waitForTask()
   }, 500)
 
   streamHandle = await streamNarrative({

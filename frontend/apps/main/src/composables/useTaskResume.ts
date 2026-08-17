@@ -56,6 +56,8 @@ export interface UseTaskResumeReturn {
   loading: Ref<boolean>
   /** Attempt to resume — returns true if a running task was found. */
   resume: () => Promise<boolean>
+  /** Progressive retry (500ms->1s->2s->4s) to find a just-triggered task. */
+  waitForTask: () => Promise<AITask | null>
   /** Cancel the current task (delegates to useTaskPolling.cancel). */
   cancel: () => Promise<void>
   /** Clean up SSE connection and polling. */
@@ -163,6 +165,34 @@ export function useTaskResume(
     }
   }
 
+  /**
+   * T20 fix: progressive retry to locate the AITask created by a just-fired
+   * trigger. Backend task creation races with agent startup; a single 500ms
+   * check may miss it. Retries at 500ms -> 1s -> 2s -> 4s (4 attempts).
+   * Returns the running task, or null if none appears.
+   */
+  async function waitForTask(): Promise<AITask | null> {
+    const delays = [500, 1000, 2000, 4000]
+    for (const delay of delays) {
+      await new Promise((r) => setTimeout(r, delay))
+      try {
+        const tasks = await getAITasks(capability)
+        const latestTask = tasks[0]
+        if (
+          latestTask?.id &&
+          ['running', 'queued', 'post_processing'].includes(latestTask.status)
+        ) {
+          taskId.value = latestTask.id
+          task.value = latestTask
+          return latestTask
+        }
+      } catch {
+        // best-effort; keep retrying
+      }
+    }
+    return null
+  }
+
   function cleanup(): void {
     streamHandle?.abort()
     streamHandle = null
@@ -182,6 +212,7 @@ export function useTaskResume(
     task,
     loading,
     resume,
+    waitForTask,
     cancel: polling.cancel,
     cleanup,
     check,
