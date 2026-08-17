@@ -61,14 +61,15 @@
 
         <!-- Preset emoji grid for quick selection -->
         <div class="emoji-preset-grid">
-          <button
-            v-for="emoji in presetEmojis"
-            :key="emoji"
-            class="emoji-preset-btn"
-            :class="{ selected: currentEmoji === emoji }"
-            type="button"
-            @click="emit('select-emoji', emoji)"
-          >{{ emoji }}</button>
+          <template v-for="(emoji, idx) in presetEmojis" :key="`emoji-${idx}`">
+            <button
+              v-if="emoji"
+              class="emoji-preset-btn"
+              :class="{ selected: currentEmoji === emoji }"
+              type="button"
+              @click="emit('select-emoji', emoji)"
+            >{{ emoji }}</button>
+          </template>
         </div>
 
         <!-- Text input for keyboards with emoji support -->
@@ -148,7 +149,7 @@
                   />
                   <!-- Magnify button: preview original (doesn't select) -->
                   <van-icon
-                    name="zoom-in"
+                    name="enlarge"
                     class="magnify-btn"
                     @click.stop="enlargeIcon(icon)"
                   />
@@ -303,34 +304,29 @@ function onClosed() {
 
 // Preset emojis for quick selection (PC keyboards without emoji support)
 const presetEmojis = [
-  '😀', '😊', '😎', '🤩', '🥰', '🤗', '🥳', '😜',
-  '😺', '🐱', '🦊', '🐻', '', '🐨', '🦁', '🐸',
-  '🦄', '🦋', '🌸', '🌺', '', '🌈', '⭐', '',
-  '️', '💧', '🍎', '🍊', '🍋', '', '🍓', '🍑',
-  '❤️', '🧡', '💛', '💚', '💙', '💜', '', '🖤',
-  '💎', '✨', '', '🎀', '🎵', '🎨', '🚀', '',
+  '😀', '', '😎', '🤩', '🥰', '🤗', '🥳', '😜',
+  '', '', '', '🐻', '', '🐨', '🦁', '',
+  '🦄', '', '🌸', '🌺', '🌻', '🌈', '⭐', '🔥',
+  '️', '💧', '🍎', '', '🍋', '', '', '',
+  '❤️', '', '', '💚', '💙', '💜', '', '🖤',
+  '💎', '✨', '', '', '', '🎨', '', '',
 ]
-
-// Emoji input handler
-const emojiInput = ref<HTMLInputElement | null>(null)
 
 function onEmojiInput(event: Event) {
   const input = event.target as HTMLInputElement
   const value = input.value
-  if (value) {
-    // Extract the last emoji (in case of multiple)
-    const lastChar = [...value].pop() || ''
-    if (lastChar) {
-      // Reject ASCII characters, whitespace, and common punctuation
-      // Emoji are typically outside the ASCII range (0x00-0x7F)
-      if (/^[\s\x20-\x7E]$/.test(lastChar)) {
-        input.value = ''
-        return
-      }
-      emit('select-emoji', lastChar)
-      input.value = ''
-    }
+  if (!value) return
+  // Extract last emoji (code point)
+  const chars = [...value]
+  const lastChar = chars[chars.length - 1]
+  // Reject ASCII characters, whitespace, and common punctuation
+  // Emoji are typically outside the ASCII range (0x00-0x7F)
+  if (/^[\s\x20-\x7E]$/.test(lastChar)) {
+    input.value = ''
+    return
   }
+  emit('select-emoji', lastChar)
+  input.value = ''
 }
 
 // Expose totalIcons for debugging / tests.
@@ -619,19 +615,21 @@ void totalIcons
 }
 .magnify-btn {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 22px;
-  height: 22px;
+  top: 3px;
+  right: 3px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
   z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 /* Enlarge preview overlay */
