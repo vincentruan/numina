@@ -25,6 +25,13 @@ vi.mock('vue-router', () => ({
 // Mock vant showFailToast so it doesn't touch the DOM
 vi.mock('vant', () => ({
   showFailToast: vi.fn(),
+  showToast: vi.fn(),
+}))
+
+// Mock useTaskResume's API calls (getAITasks from ai-tasks)
+vi.mock('@/api/ai-tasks', () => ({
+  getAITasks: vi.fn().mockResolvedValue([]),
+  subscribeTaskStream: vi.fn(),
 }))
 
 vi.mock('@/stores/family', () => ({

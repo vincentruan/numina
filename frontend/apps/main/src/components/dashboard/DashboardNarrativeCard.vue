@@ -58,9 +58,9 @@ const resumeHandle = useTaskResume('narrative', {
     streaming.value = false
     await loadCached()
   },
-  onError: (task) => {
+  onError: () => {
     streaming.value = false
-    showFailToast(task.error_message || t('dashboard.narrative.error.generation_failed'))
+    // Don't toast here — the template shows inline error + retry instead
   },
 })
 
@@ -238,6 +238,16 @@ function formatTime(iso: string | null): string {
       </van-button>
     </div>
 
+    <!-- Inline error when task failed (replaces error toast) -->
+    <div v-else-if="resumeHandle.status.value === 'failed'" class="narrative-retry-row">
+      <p class="narrative-retry-hint narrative-error-text">
+        {{ resumeHandle.task.value?.error_message || t('dashboard.narrative.error.generation_failed') }}
+      </p>
+      <van-button plain type="primary" size="small" @click="onRetry">
+        {{ t('dashboard.narrative.retry') }}
+      </van-button>
+    </div>
+
     <!-- Empty state with generate button -->
     <div v-else-if="!loading" class="narrative-empty">
       <p class="narrative-empty-text">{{ t('dashboard.narrative.empty') }}</p>
@@ -336,6 +346,9 @@ function formatTime(iso: string | null): string {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 8px;
+}
+.narrative-error-text {
+  color: #ee0a24;
 }
 .narrative-loading {
   padding: 12px 16px;

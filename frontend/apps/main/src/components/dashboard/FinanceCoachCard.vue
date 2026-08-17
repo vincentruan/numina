@@ -31,10 +31,10 @@ const resumeHandle = useTaskResume('coach', {
   onComplete: async () => {
     await load(false)
   },
-  onError: (task) => {
+  onError: () => {
     loading.value = false
     loaded.value = true
-    showToast(task.error_message || t('aiTask.error.generic'))
+    // Don't toast here — the template shows inline error + retry instead
   },
 })
 
@@ -94,6 +94,10 @@ async function onCancel() {
   } finally {
     cancelling.value = false
   }
+}
+
+async function onRetry() {
+  await load(true)
 }
 
 function onCta(s: FinanceSuggestion) {
@@ -208,7 +212,16 @@ onActivated(async () => {
 
         <!-- Empty / error state inside expanded area -->
         <template v-else-if="loaded">
+          <div v-if="resumeHandle.status.value === 'failed'" class="fc-error-state">
+            <p class="fc-error-text">
+              {{ resumeHandle.task.value?.error_message || t('aiTask.error.generic') }}
+            </p>
+            <van-button size="small" type="primary" plain @click.stop="onRetry">
+              {{ t('aiTask.retry') }}
+            </van-button>
+          </div>
           <van-empty
+            v-else
             :description="t('dashboard.financeCoach.empty')"
             image-size="60"
             class="section-empty"
@@ -346,5 +359,18 @@ onActivated(async () => {
 }
 .section-empty {
   padding: 12px 0;
+}
+.fc-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+}
+.fc-error-text {
+  font-size: 13px;
+  color: #ee0a24;
+  margin: 0;
+  text-align: center;
 }
 </style>

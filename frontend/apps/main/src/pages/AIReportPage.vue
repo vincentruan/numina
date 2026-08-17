@@ -63,6 +63,15 @@
       </van-button>
     </div>
 
+    <!-- Task failed from resume detection (replaces error toast) -->
+    <div v-else-if="resumeHandle.status.value === 'failed' && !currentReport" class="failed-placeholder">
+      <van-icon name="warning-o" size="48" class="failed-icon" />
+      <p class="failed-text">{{ resumeHandle.task.value?.error_message || t('toast.aiGenerateFailed') }}</p>
+      <van-button plain size="small" style="margin-top: 8px" @click="onGenerate()">
+        {{ t('aiTask.retry') }}
+      </van-button>
+    </div>
+
     <!-- No report yet (only show when not failed/generating and no report) -->
     <div v-else-if="!currentReport && !isGenerating" class="empty-state">
       <EmptyState image="search" :description="t('aiReport.noReport')" />

@@ -80,6 +80,14 @@
         </van-button>
       </div>
 
+      <!-- Task failed (from resume detection) -->
+      <div v-else-if="resumeHandle.status.value === 'failed'" class="stream-error">
+        <EmptyState image="error" :description="resumeHandle.task.value?.error_message || t('literacyReport.generateFailed')" />
+        <van-button plain type="primary" size="small" @click="onTaskRetry">
+          {{ t('literacyReport.retry') }}
+        </van-button>
+      </div>
+
       <!-- No report for this week -->
       <div v-else class="empty-state">
         <EmptyState image="search" :description="t('literacyReport.noReport')" />
@@ -143,8 +151,8 @@ const resumeHandle = useTaskResume('literacy', {
       await loadReport()
     }
   },
-  onError: (task) => {
-    showToast(task.error_message || t('aiTask.error.generic'))
+  onError: () => {
+    // Don't toast here — the template shows inline error + retry instead
   },
 })
 const literacyCancelling = ref(false)
@@ -261,6 +269,12 @@ async function regenerate() {
   if (stream.status.value === 'completed') {
     await loadReport()
   }
+}
+
+async function onTaskRetry() {
+  stream.reset()
+  report.value = null
+  await regenerate()
 }
 
 watch(stream.status, (val) => {

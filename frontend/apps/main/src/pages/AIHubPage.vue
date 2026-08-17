@@ -137,6 +137,17 @@
     <!-- AI disabled state: shown when family has not enabled AI -->
     <AiGatedCard v-else-if="!familyStore.aiEnabled" :is-owner="isOwner" />
 
+    <!-- Task failed from resume detection (replaces error toast) -->
+    <div v-else-if="resumeHandle.status.value === 'failed'" class="report-error-card">
+      <van-icon name="warning-o" size="32" class="report-error-icon" />
+      <p class="report-error-text">
+        {{ resumeHandle.task.value?.error_message || t('toast.aiGenerateFailed') }}
+      </p>
+      <van-button plain type="primary" size="small" @click="generateReport">
+        {{ t('aiTask.retry') }}
+      </van-button>
+    </div>
+
     <div v-else class="report-empty-card" role="button" tabindex="0" :aria-label="t('aiHub.generateFirstReport')" @click="generateReport" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
       <div class="report-empty-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1297,6 +1308,26 @@ defineExpose({
   color: var(--text-secondary);
   margin: 0;
   letter-spacing: -0.12px;
+}
+
+.report-error-card {
+  margin: 12px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  border: 1px solid #ee0a24;
+}
+
+.report-error-icon {
+  color: #ee0a24;
+  margin-bottom: 8px;
+}
+
+.report-error-text {
+  font-size: 13px;
+  color: #ee0a24;
+  margin: 0 0 12px;
 }
 
 /* ── Agent grid section ── */
