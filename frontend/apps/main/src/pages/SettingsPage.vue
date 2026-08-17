@@ -488,9 +488,9 @@ function aiStatusBadgeStyle(status: string | null) {
 }
 
 function aiStatusLabel(status: string | null) {
-  if (status === 'unavailable') return '不可用'
-  if (status === 'degraded') return '部分降级'
-  return '正常'
+  if (status === 'unavailable') return t('settings.aiStatusUnavailable')
+  if (status === 'degraded') return t('settings.aiStatusDegraded')
+  return t('settings.aiStatusHealthy')
 }
 
 async function onToggleAI(val: boolean) {
