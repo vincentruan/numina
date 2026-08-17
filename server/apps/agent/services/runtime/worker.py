@@ -25,7 +25,7 @@ from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 from apps.agent.core.backend_client import BackendClient
 from packages.core import get_path_manager
 
-from .asset_report_middleware import parse_report_json
+from .asset_report_middleware import parse_report_json, validate_report_json
 from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
     _prepare_goal_continuation_input,
@@ -466,6 +466,55 @@ def _persist_session_status(
         )
 
 
+async def _repair_report_json_via_llm(
+    ai_text: str,
+    validation_errors: list[str],
+    provider: dict | None,
+) -> dict | None:
+    """Phase 4B (T13b): repair an invalid report JSON via a lightweight LLM call.
+
+    Uses the family's selected provider (``ai_provider``/``ai_model_id``/
+    ``api_key``/``ai_base_url`` keys) to issue a single follow-up completion
+    asking the LLM to re-emit a corrected indicators JSON. Returns the parsed
+    dict (via ``parse_report_json``) on success, or ``None`` if the provider is
+    unavailable or the repair still fails.
+    """
+    if not provider:
+        return None
+    try:
+        from apps.agent.core.llm import get_llm_client
+
+        llm = get_llm_client(
+            provider=provider.get("ai_provider", ""),
+            api_key=provider.get("api_key", ""),
+            model_id=provider.get("ai_model_id", ""),
+            base_url=provider.get("ai_base_url"),
+            timeout=60.0,
+        )
+        error_summary = "; ".join(validation_errors[:5])
+        repair_prompt = (
+            "你之前输出的家庭资产报告 JSON 未通过校验。\n"
+            f"校验错误：{error_summary}\n\n"
+            "请重新输出一个严格符合以下结构的 JSON（不要包含任何 markdown 代码块、"
+            "解释文字或额外内容）：\n"
+            '{"overall_score": <number>, "indicators": ['
+            '{"name": "<string>", "data": {"items": ['
+            '{"key": "<string>", "zh": "<string>", "en": "<string>", "value": <number>}'
+            "]}}]}\n\n"
+            "要求：indicators 非空；每个 indicator 必须有 data.items 非空数组；"
+            "value 必须是数字。只输出 JSON 本身。\n\n"
+            f"原始输出片段（供参考）：\n{ai_text[-4000:]}"
+        )
+        repaired_text = await llm.complete(repair_prompt, max_tokens=4000)
+        return parse_report_json(repaired_text)
+    except Exception as exc:
+        logger.warning(
+            "[_repair_report_json_via_llm] repair failed: %s",
+            type(exc).__name__,
+        )
+        return None
+
+
 async def _run_asset_report_pipeline(
     *,
     bridge: StreamBridge,
@@ -582,7 +631,53 @@ async def _run_asset_report_pipeline(
         if p.completion_status == "complete":
             ai_text = p.ai_text
             step2_payload = parse_report_json(ai_text)
-            if step2_payload is not None:
+
+            # Phase 4B (T12b): validate the parsed report JSON against the
+            # canonical schema. Invalid JSON (missing indicators, empty items)
+            # is repaired before being shipped to the frontend.
+            validation_errors = (
+                validate_report_json(step2_payload)
+                if step2_payload is not None
+                else ["无法解析报告 JSON"]
+            )
+
+            # Phase 4B (T13b): conversation retry — on validation failure, ask
+            # the LLM (lightweight single-call) to re-emit a corrected JSON.
+            # Max 3 attempts; after that, fail the run so the frontend surfaces
+            # an error instead of a silently-broken report.
+            retry_count = 0
+            while validation_errors and retry_count < 3:
+                retry_count += 1
+                logger.warning(
+                    "[_run_asset_report_pipeline] report JSON invalid, "
+                    "retry=%d/%d errors=%s",
+                    retry_count,
+                    3,
+                    validation_errors[:3],
+                )
+                repaired = await _repair_report_json_via_llm(
+                    ai_text,
+                    validation_errors,
+                    p.selected_provider,
+                )
+                if repaired is not None:
+                    step2_payload = repaired
+                    validation_errors = validate_report_json(repaired)
+
+            if validation_errors:
+                # Still invalid after retries — fail the run (Phase 4B.5).
+                logger.error(
+                    "[_run_asset_report_pipeline] report JSON validation failed "
+                    "after %d retries run=%s errors=%s",
+                    retry_count,
+                    p.run_id,
+                    validation_errors[:3],
+                )
+                p.set_error(
+                    "报告结构化输出校验失败",
+                    error_type="ReportValidationError",
+                )
+            elif step2_payload is not None:
                 logger.info(
                     "[_run_asset_report_pipeline] Extracted report JSON: "
                     "overall_score=%s indicators_count=%d ai_text_length=%d",
