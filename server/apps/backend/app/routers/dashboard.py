@@ -30,7 +30,10 @@ from apps.backend.app.schemas.dashboard import (
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.bridge_consumer import consume_task_stream
+from apps.backend.app.services.bridge_consumer import (
+    _spawn_lifecycle_consumer,
+    consume_task_stream,
+)
 from apps.backend.app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -387,31 +390,32 @@ async def generate_narrative(
             media_type="text/event-stream",
         )
 
-    # Subscribe to Redis stream via bridge_consumer
-    async def _sse_stream_with_persist(
+    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    from apps.backend.app.services.finance_coach_cache import upsert_skill_result
+
+    async def _persist_narrative_result(_event_type: str, data: dict) -> None:
+        if isinstance(data, dict) and data.get("type") == "dashboard_narrative.result":
+            payload = data.get("payload")
+            if payload:
+                _db = SessionLocal()
+                try:
+                    upsert_skill_result(_db, family_id, SKILL_ID, payload)
+                    _db.commit()
+                finally:
+                    _db.close()
+
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=run_id,
+        on_result=_persist_narrative_result,
+    )
+
+    # SSE forwarder — pure relay, lifecycle handled above
+    async def _sse_stream(
         stream_gen: AsyncIterator[str],
     ) -> AsyncGenerator[bytes, None]:
-        """Wrap bridge_consumer output, persisting narrative result to skill cache."""
-        from apps.backend.app.services.finance_coach_cache import upsert_skill_result
-
         async for sse_text in stream_gen:
-            # Intercept custom events to extract narrative result payload
-            if "event: custom" in sse_text:
-                try:
-                    for line in sse_text.split("\n"):
-                        if line.startswith("data: "):
-                            data = json.loads(line[len("data: "):])
-                            if data.get("type") == "dashboard_narrative.result":
-                                payload = data.get("payload")
-                                if payload:
-                                    _pdb = SessionLocal()
-                                    try:
-                                        upsert_skill_result(_pdb, family_id, SKILL_ID, payload)
-                                        _pdb.commit()
-                                    finally:
-                                        _pdb.close()
-                except Exception:
-                    logger.warning("[narrative] persist result failed", exc_info=True)
             yield sse_text.encode("utf-8")
 
     last_event_id = request.headers.get("Last-Event-ID")
@@ -423,7 +427,7 @@ async def generate_narrative(
     )
 
     return StreamingResponse(
-        _sse_stream_with_persist(stream_gen),
+        _sse_stream(stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

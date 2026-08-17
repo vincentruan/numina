@@ -22,7 +22,10 @@ from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.bridge_consumer import consume_task_stream
+from apps.backend.app.services.bridge_consumer import (
+    _spawn_lifecycle_consumer,
+    consume_task_stream,
+)
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import (
     is_cache_fresh,
@@ -40,33 +43,11 @@ logger = logging.getLogger(__name__)
 SKILL_ID = "coach"
 
 
-async def _sse_stream_with_persist(
+async def _sse_stream(
     stream_gen: AsyncIterator[str],
-    family_id: str,
 ) -> AsyncGenerator[bytes, None]:
-    """Wrap bridge_consumer output, persisting finance_coach.result to skill cache."""
+    """Wrap bridge_consumer output as SSE bytes (pure relay)."""
     async for sse_text in stream_gen:
-        # Intercept custom events to extract finance_coach.result payload
-        if "event: custom" in sse_text:
-            try:
-                # Parse SSE data line: "event: custom\ndata: {...}\n\n"
-                for line in sse_text.split("\n"):
-                    if line.startswith("data: "):
-                        data = json.loads(line[len("data: "):])
-                        if data.get("type") == "finance_coach.result":
-                            payload = data.get("payload")
-                            if payload:
-                                from apps.backend.app.database import SessionLocal
-
-                                _db = SessionLocal()
-                                try:
-                                    upsert_skill_result(_db, family_id, "finance_coach", payload)
-                                    _db.commit()
-                                finally:
-                                    _db.close()
-                                logger.info("[finance-coach] persisted result to skill cache family=%s", family_id)
-            except Exception as exc:
-                logger.warning("[finance-coach] persist result failed err=%s", type(exc).__name__)
         yield sse_text.encode("utf-8")
 
 
@@ -213,6 +194,27 @@ async def trigger_finance_coach(
         )
 
     # Subscribe to Redis stream via bridge_consumer (replaces HTTP proxy)
+    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    async def _persist_coach_result(_event_type: str, data: dict) -> None:
+        if isinstance(data, dict) and data.get("type") == "finance_coach.result":
+            payload = data.get("payload")
+            if payload:
+                from apps.backend.app.database import SessionLocal
+
+                _db = SessionLocal()
+                try:
+                    upsert_skill_result(_db, family_id, "finance_coach", payload)
+                    _db.commit()
+                finally:
+                    _db.close()
+
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=run_id,
+        on_result=_persist_coach_result,
+    )
+
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
@@ -222,7 +224,7 @@ async def trigger_finance_coach(
     )
 
     return StreamingResponse(
-        _sse_stream_with_persist(stream_gen, str(family_id)),
+        _sse_stream(stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

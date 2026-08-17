@@ -20,12 +20,14 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.bridge_consumer import consume_task_stream
+from apps.backend.app.services.bridge_consumer import (
+    _spawn_lifecycle_consumer,
+    consume_task_stream,
+)
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.literacy_report import _sunday_of
 from apps.backend.app.services.literacy_report_service import (
     _make_thread_id,
-    _persist_report_result,
     _validate_child_in_family,
     generate_literacy_report,
     get_report_status,
@@ -123,41 +125,12 @@ def _validate_child(
     return cid
 
 
-async def _sse_stream_with_persist(
+async def _sse_stream(
     stream_gen: AsyncIterator[str],
-    *,
-    child_id: int,
-    week_start: date,
-    thread_id: str,
 ) -> AsyncGenerator[bytes, None]:
-    """Wrap bridge_consumer output, persisting literacy_weekly_report.result."""
-    collected = b""
+    """Wrap bridge_consumer output as SSE bytes (pure relay)."""
     async for sse_text in stream_gen:
-        collected += sse_text.encode("utf-8")
         yield sse_text.encode("utf-8")
-
-    # After stream ends, persist the report from collected SSE bytes (best-effort)
-    try:
-        from apps.backend.app.database import SessionLocal
-
-        _db = SessionLocal()
-        try:
-            _persist_report_result(
-                _db,
-                child_id=child_id,
-                week_start=week_start,
-                thread_id=thread_id,
-                collected_sse=collected,
-            )
-            _db.commit()
-        finally:
-            _db.close()
-    except Exception:
-        logger.warning(
-            "[literacy-report] persist failed child=%s",
-            child_id,
-            exc_info=True,
-        )
 
 
 @router.post("/generate/events")
@@ -299,7 +272,60 @@ async def trigger_generate_events(
             media_type="text/event-stream",
         )
 
-    # Subscribe to Redis stream via bridge_consumer
+    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    async def _persist_literacy_result(_event_type: str, data: dict) -> None:
+        if isinstance(data, dict) and data.get("type") == "literacy_weekly_report.result":
+            payload = data.get("payload", {})
+            narrative = payload.get("report") or payload.get("narrative")
+            if narrative:
+                from sqlalchemy import select
+
+                from apps.backend.app.database import SessionLocal
+                from apps.backend.app.models.literacy_report import LiteracyWeeklyReport
+
+                thinking = payload.get("thinking", "")
+                report_json = json.dumps(
+                    {
+                        "week_start": week_start.isoformat(),
+                        "source": "agent_sse",
+                        "narrative": narrative,
+                        "thinking": thinking,
+                    },
+                    ensure_ascii=False,
+                )
+
+                _db = SessionLocal()
+                try:
+                    existing = _db.execute(
+                        select(LiteracyWeeklyReport).where(
+                            LiteracyWeeklyReport.child_id == cid,
+                            LiteracyWeeklyReport.week_start == week_start,
+                        )
+                    ).scalar_one_or_none()
+                    if existing is not None:
+                        existing.narrative = narrative
+                        existing.thread_id = thread_id
+                        existing.report_json = report_json
+                    else:
+                        _db.add(LiteracyWeeklyReport(
+                            child_id=cid,
+                            week_start=week_start,
+                            report_json=report_json,
+                            narrative=narrative,
+                            thread_id=thread_id,
+                        ))
+                    _db.commit()
+                finally:
+                    _db.close()
+
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=run_id,
+        on_result=_persist_literacy_result,
+    )
+
+    # SSE forwarder — pure relay, lifecycle handled above
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
@@ -309,12 +335,7 @@ async def trigger_generate_events(
     )
 
     return StreamingResponse(
-        _sse_stream_with_persist(
-            stream_gen,
-            child_id=cid,
-            week_start=week_start,
-            thread_id=thread_id,
-        ),
+        _sse_stream(stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

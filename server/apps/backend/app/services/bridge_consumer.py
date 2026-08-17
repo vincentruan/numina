@@ -10,9 +10,10 @@ with Redis Stream subscription for cross-process event delivery.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any
 
 from packages.db.session import SessionLocal
@@ -127,16 +128,101 @@ async def bridge_consumer(
         await bridge.close()
 
 
+def _map_to_safe_message(exc: Exception) -> str:
+    """Map internal exceptions to user-safe SSE error messages.
+
+    Prevents leaking internal paths, DB connection strings, or stack traces
+    to the SSE client. (F12 fix)
+    """
+    if isinstance(exc, RuntimeError):
+        msg = str(exc)
+        if "not found" in msg.lower():
+            return "任务未找到"
+        return "任务执行异常"
+    return "服务异常"
+
+
+def _spawn_lifecycle_consumer(
+    task_id: str,
+    family_id: int,
+    run_id: str | None,
+    on_result: Callable[[str, Any], Coroutine[Any, Any, None]] | None = None,
+) -> asyncio.Task[None]:
+    """Spawn an independent background consumer for task lifecycle management.
+
+    This task subscribes to the bridge stream independently of any SSE client.
+    It handles:
+    - Calling ``complete_task()`` when the stream ends normally
+    - Calling ``fail_task()`` if an exception occurs
+    - Optional ``on_result(event_type, data)`` callback for result persistence
+
+    The returned ``asyncio.Task`` survives SSE client disconnect, ensuring
+    the task lifecycle is always finalized. (F1 fix)
+
+    Args:
+        task_id: AITask primary key
+        family_id: Family ID for tenant isolation
+        run_id: Pre-resolved agent RunRecord UUID
+        on_result: Optional async callback invoked for each ``custom`` event.
+                   Use this to persist scenario results (e.g. upsert_skill_result).
+
+    Returns:
+        An ``asyncio.Task`` running the background consumer.
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    async def _consume() -> None:
+        db = SessionLocal()
+        try:
+            async for event in bridge_consumer(task_id, family_id, run_id=run_id):
+                event_type = event["event"]
+                event_data = event["data"]
+
+                if event_type == "custom" and on_result is not None:
+                    try:
+                        await on_result(event_type, event_data)
+                    except Exception:
+                        logger.warning(
+                            "[lifecycle] result callback failed task=%s",
+                            task_id,
+                            exc_info=True,
+                        )
+                elif event_type == "end":
+                    AITaskService.complete_task(task_id, db)
+                    return
+                elif event_type == "gap":
+                    logger.warning(
+                        "[lifecycle] stream gap task=%s",
+                        task_id,
+                    )
+                    return
+        except Exception as e:
+            logger.error(
+                "[lifecycle] consumer error task=%s: %s",
+                task_id,
+                e,
+                exc_info=True,
+            )
+            safe_msg = _map_to_safe_message(e)
+            AITaskService.fail_task(task_id, safe_msg, db)
+        finally:
+            db.close()
+
+    return asyncio.create_task(_consume())
+
+
 async def consume_task_stream(
     task_id: str,
     family_id: int,
     last_event_id: str | None = None,
     run_id: str | None = None,
 ) -> AsyncIterator[str]:
-    """High-level wrapper that yields SSE-formatted strings.
+    """SSE event forwarder — yields SSE-formatted strings.
 
-    Consumes from bridge_consumer and formats each event as SSE text.
-    Updates AITask status when end event is received.
+    Pure relay: subscribes to the bridge stream and formats events as SSE text.
+    Lifecycle management (complete_task / fail_task) is handled separately by
+    ``_spawn_lifecycle_consumer`` — callers must spawn that before using this
+    forwarder. This separation ensures task completion survives SSE disconnect.
 
     Args:
         task_id: AITask primary key
@@ -145,25 +231,16 @@ async def consume_task_stream(
         run_id: Pre-resolved agent RunRecord UUID (avoids DB lookup race)
 
     Yields:
-        SSE-formatted strings (e.g., "event: update\ndata: {...}\n\n")
+        SSE-formatted strings (e.g., "event: update\\ndata: {...}\\n\\n")
     """
-    from apps.backend.app.services.ai_task_service import AITaskService
-
     try:
         async for event in bridge_consumer(task_id, family_id, last_event_id, run_id=run_id):
             event_type = event["event"]
             event_data = event["data"]
 
-            # Format as SSE
             if event_type == "heartbeat":
                 yield ": heartbeat\n\n"
             elif event_type == "end":
-                # Mark task as completed
-                db = SessionLocal()
-                try:
-                    AITaskService.complete_task(task_id, db)
-                finally:
-                    db.close()
                 yield f"event: end\ndata: {json.dumps(None)}\n\n"
                 return
             elif event_type == "gap":
@@ -173,11 +250,6 @@ async def consume_task_stream(
                 yield f"event: {event_type}\ndata: {json.dumps(event_data, default=str)}\n\n"
 
     except Exception as e:
-        logger.error(f"Error consuming task stream {task_id}: {e}")
-        # Mark task as failed
-        db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, str(e), db)
-        finally:
-            db.close()
-        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+        logger.error(f"Error consuming task stream {task_id}: {e}", exc_info=True)
+        safe_msg = _map_to_safe_message(e)
+        yield f"event: error\ndata: {json.dumps({'error': safe_msg})}\n\n"
