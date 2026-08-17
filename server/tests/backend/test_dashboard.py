@@ -972,3 +972,137 @@ def test_education_reward_summary_family_isolation(client, db, auth_headers):
     assert data["total"] == 20.0
     assert data["month_total"] == 20.0
     assert data["count"] == 1
+
+
+# ── Rental overview aggregation ──────────────────────────────────────
+
+
+def _create_contract(client, auth_headers, **kwargs):
+    """Helper: create a rental contract via HTTP and return the response data."""
+    payload = {
+        "role": "landlord",
+        "monthly_rent": 5000,
+        "deposit": 10000,
+        "start_date": "2026-01-01",
+    }
+    payload.update(kwargs)
+    resp = client.post("/api/v1/rental-contracts", headers=auth_headers, json=payload)
+    assert resp.status_code == 201
+    return resp.json()["data"]
+
+
+def test_overview_rental_null_when_no_contracts(client, auth_headers):
+    """No active rental contracts -> all rental fields are None."""
+    response = client.get("/api/v1/dashboard/overview", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["rental_net_cash_flow"] is None
+    assert data["rental_monthly_income"] is None
+    assert data["rental_monthly_expense"] is None
+    assert data["rental_total_deposit"] is None
+
+
+def test_overview_rental_landlord_only(client, auth_headers):
+    """Landlord-only contracts: income>0, expense=0, deposit=sum."""
+    _create_contract(client, auth_headers, monthly_rent=5000, deposit=10000)
+    _create_contract(client, auth_headers, monthly_rent=3000, deposit=6000)
+
+    data = client.get("/api/v1/dashboard/overview", headers=auth_headers).json()["data"]
+    assert data["rental_monthly_income"] == 8000.0
+    assert data["rental_monthly_expense"] == 0.0
+    assert data["rental_net_cash_flow"] == 8000.0
+    assert data["rental_total_deposit"] == 16000.0
+
+
+def test_overview_rental_tenant_only(client, auth_headers):
+    """Tenant-only contracts: income=0, expense>0, deposit=sum."""
+    _create_contract(client, auth_headers, role="tenant", monthly_rent=4000, deposit=8000)
+
+    data = client.get("/api/v1/dashboard/overview", headers=auth_headers).json()["data"]
+    assert data["rental_monthly_income"] == 0.0
+    assert data["rental_monthly_expense"] == 4000.0
+    assert data["rental_net_cash_flow"] == -4000.0
+    assert data["rental_total_deposit"] == 8000.0
+
+
+def test_overview_rental_mixed_roles(client, auth_headers):
+    """Mixed landlord+tenant: net = income - expense, deposit is gross sum."""
+    _create_contract(client, auth_headers, role="landlord", monthly_rent=6000, deposit=12000)
+    _create_contract(client, auth_headers, role="tenant", monthly_rent=3500, deposit=7000)
+
+    data = client.get("/api/v1/dashboard/overview", headers=auth_headers).json()["data"]
+    assert data["rental_monthly_income"] == 6000.0
+    assert data["rental_monthly_expense"] == 3500.0
+    assert data["rental_net_cash_flow"] == 2500.0
+    # Deposit is gross sum (landlord 12000 + tenant 7000), not net
+    assert data["rental_total_deposit"] == 19000.0
+
+
+def test_overview_rental_zero_deposit(client, auth_headers):
+    """Contracts with zero deposit: deposit field should be 0, not None."""
+    _create_contract(client, auth_headers, monthly_rent=5000, deposit=0)
+
+    data = client.get("/api/v1/dashboard/overview", headers=auth_headers).json()["data"]
+    assert data["rental_monthly_income"] == 5000.0
+    assert data["rental_total_deposit"] == 0.0
+
+
+def test_overview_rental_inactive_excluded(client, auth_headers, db):
+    """Inactive contracts (is_active=False) are excluded from aggregation."""
+    _create_contract(client, auth_headers, role="landlord", monthly_rent=5000, deposit=10000)
+
+    # Create a second contract, then deactivate it via direct DB update
+    from apps.backend.app.models.rental_contract import RentalContract
+
+    c2_data = _create_contract(client, auth_headers, role="landlord", monthly_rent=8000, deposit=16000)
+    contract = db.query(RentalContract).filter(
+        RentalContract.id == int(c2_data["id"])
+    ).first()
+    contract.is_active = False
+    db.commit()
+
+    data = client.get("/api/v1/dashboard/overview", headers=auth_headers).json()["data"]
+    # Only the first contract (5000) should be counted; the deactivated one (8000) excluded
+    assert data["rental_monthly_income"] == 5000.0
+    assert data["rental_total_deposit"] == 10000.0
+
+
+def test_overview_rental_cross_family_isolation(client, auth_headers, db):
+    """Rental contracts from other families do not appear in dashboard overview."""
+    from datetime import date
+
+    from apps.backend.app.models.family import Family
+    from apps.backend.app.models.user import User
+    from apps.backend.app.models.rental_contract import RentalContract
+    from apps.backend.app.utils.snowflake import next_id
+
+    # Create another family with a user and a rental contract
+    other_family = Family(id=next_id(), name="Other Family", created_by=next_id())
+    db.add(other_family)
+    other_user = User(
+        id=next_id(),
+        username="other_rental_user",
+        display_name="Other",
+        password_hash="test_hash",
+        family_id=other_family.id,
+    )
+    db.add(other_user)
+    db.commit()
+
+    other_contract = RentalContract(
+        id=next_id(),
+        user_id=other_user.id,
+        family_id=other_family.id,
+        role="landlord",
+        monthly_rent=99000,
+        deposit=99000,
+        start_date=date(2026, 1, 1),
+        is_active=True,
+    )
+    db.add(other_contract)
+    db.commit()
+
+    # Our user's overview should NOT include the other family's contract
+    data = client.get("/api/v1/dashboard/overview", headers=auth_headers).json()["data"]
+    assert data["rental_monthly_income"] is None
+    assert data["rental_total_deposit"] is None

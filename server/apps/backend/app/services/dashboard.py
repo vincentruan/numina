@@ -166,6 +166,8 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
                 rental_income += converted_rent
             else:
                 rental_expense += converted_rent
+            # Deposit is gross sum across all contracts regardless of role
+            # (total deposits involved, not net exposure). Intentional.
             rental_deposit += converted_deposit
         rental_income = round(rental_income, 2)
         rental_expense = round(rental_expense, 2)

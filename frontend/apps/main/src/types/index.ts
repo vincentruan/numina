@@ -201,6 +201,9 @@ export interface DashboardOverview {
   month_over_month_change_amount: number | null
   total_daily_cost: number
   rental_net_cash_flow: number | null
+  rental_monthly_income: number | null
+  rental_monthly_expense: number | null
+  rental_total_deposit: number | null
 }
 
 export interface AllocationItem {
