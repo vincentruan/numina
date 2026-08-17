@@ -264,7 +264,7 @@ async function onChatTaskRetry() {
   // Retry: re-trigger chat with the last user message (resends via sendMessage).
   const threadId = store.activeThreadId
   if (!threadId) return
-  const lastUser = [...chat.messages.value].reverse().find(m => m.role === 'human')
+  const lastUser = [...chat.messages.value].reverse().find(m => m.role === 'user')
   if (!lastUser) return
   chatTaskRetrying.value = true
   chatTaskStatus.value = 'idle'
