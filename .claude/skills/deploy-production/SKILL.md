@@ -115,14 +115,53 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
   'sudo docker builder prune -af && sudo docker image prune -af --filter "until=48h"'
 ```
 
-### Step 4: Pull Images & Recreate
+### Step 4: Pull Images & Check Migration
+
+Pull new images first — migration must run with the new image that contains updated alembic files.
 
 ```bash
 set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd $DEPLOY_REMOTE_DIR &&
   echo "=== Pull GHCR images ===" &&
-  sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child &&
+  sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child
+'
+```
+
+Then check migration state using the newly pulled image:
+
+```bash
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd $DEPLOY_REMOTE_DIR &&
+  echo "=== Check migration state ===" &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+    cd /app && uv run alembic current && echo \"---\" && uv run alembic heads
+  "
+'
+```
+
+### Step 5: Database Migration
+
+If current ≠ head → run upgrade:
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd $DEPLOY_REMOTE_DIR &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+    cd /app && uv run alembic upgrade head 2>&1
+  "
+'
+```
+
+If it fails with DuplicateColumn/DuplicateTable → follow [db-migration.md](db-migration.md) §Handle Failures. **Never blindly `stamp head`** — it skips ALL pending migrations.
+
+### Step 6: Recreate Services
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd $DEPLOY_REMOTE_DIR &&
   echo "=== Recreate services ===" &&
   sudo docker compose -f docker-compose.production.yml up -d &&
   echo "=== Wait for backend healthy ===" &&
@@ -136,17 +175,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 '
 ```
 
-### Step 5: Database Migration (if needed)
-
-Check for new migrations since last deploy:
-
-```bash
-git log --oneline <last-deploy-sha>..HEAD -- server/apps/backend/alembic/versions/
-```
-
-If new migrations exist → follow [db-migration.md](db-migration.md).
-
-### Step 6: Health Check
+### Step 7: Health Check
 
 ```bash
 set -a && source .claude/deploy.env && set +a
@@ -180,7 +209,26 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
 
 If conflicts → **stop and report**. Never resolve conflicts on the server.
 
-### Step 2: Build & Deploy
+### Step 2: Database Migration
+
+Same check as Mode A Step 4 — run migration on the server before rebuilding:
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd ~/data/numina &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+    cd /app && uv run alembic current && echo \"---\" && uv run alembic heads
+  " &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+    cd /app && uv run alembic upgrade head 2>&1
+  "
+'
+```
+
+If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures.
+
+### Step 3: Build & Deploy
 
 ```bash
 set -a && source .claude/deploy.env && set +a
@@ -196,7 +244,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 '
 ```
 
-### Step 3: Health Check
+### Step 4: Health Check
 
 Same as Mode A Step 6.
 
@@ -263,25 +311,14 @@ make package-images
 
 Exports all 5 images into a compressed tarball for transfer.
 
-### Step 3: Deploy to Remote
-
-```bash
-make deploy-remote
-```
-
-This single target handles:
-1. **Sync config files** — rsync compose/nginx/system-config to server
-2. **Transfer images** — rsync `dist/images.tar.gz` to server
-3. **Remote load** — `docker load -i images.tar.gz` on server
-4. **Recreate services** — `docker compose up -d` with existing `.env`
-5. **Health check** — wait for backend `(healthy)`
-
 ### One-Command Pipeline
 
 ```bash
 # Full: build → package → deploy (验证在生产服务器自动完成)
 make deploy-local
 ```
+
+> **Note:** `deploy-local` runs Steps 1-3 automatically but does NOT run database migration. If new migrations exist, run Step 4 manually after.
 
 ### Production Server `.env` Setup
 
@@ -298,9 +335,50 @@ FRONTEND_CHILD_IMAGE=numina/frontend-child:latest
 
 **Switching back to Mode A:** restore the `ghcr.io/...` values (or remove the `*_IMAGE` lines to use defaults).
 
-### Step 4: Database Migration (if needed)
+### Step 3: Deploy to Remote
 
-Same as Mode A Step 5 — check for new alembic migrations and follow [db-migration.md](db-migration.md).
+```bash
+make deploy-remote
+```
+
+This single target handles:
+1. **Sync config files** — rsync compose/nginx/system-config to server
+2. **Transfer images** — rsync `dist/images.tar.gz` to server
+3. **Remote load** — `docker load -i images.tar.gz` on server
+4. **Recreate services** — `docker compose up -d` with existing `.env`
+5. **Health check** — wait for backend `(healthy)`
+
+> **Note:** `deploy-remote` loads images and recreates in one shot. Backend may crash-loop if new columns are missing — Step 4 fixes this.
+
+### Step 4: Database Migration + Restart
+
+Always run after `deploy-remote`. The new image is already loaded:
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd $DEPLOY_REMOTE_DIR &&
+  echo "=== Check migration state ===" &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+    cd /app && uv run alembic current && echo \"---\" && uv run alembic heads
+  "
+'
+```
+
+If current ≠ head → run upgrade:
+
+```bash
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  cd $DEPLOY_REMOTE_DIR &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+    cd /app && uv run alembic upgrade head 2>&1
+  " &&
+  echo "=== Restart backend ===" &&
+  sudo docker compose -f docker-compose.production.yml restart backend
+'
+```
+
+If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures.
 
 ### Step 5: Health Check
 
@@ -355,11 +433,12 @@ make deploy-remote  # uses existing dist/images.tar.gz
 
 | Task | Mode A (GHCR) | Mode B (Source) | Mode C (Local Build) |
 |------|---------------|-----------------|----------------------|
-| Full deploy | Steps 1-6 | Steps 1-3 | `make deploy-local` |
-| Config change only | Step 2 + Step 4 | Step 1 + Step 2 | Sync config + `make deploy-remote` |
-| Code change only | Step 4 (skip Step 2) | Steps 1-2 | `make deploy-local` |
+| Full deploy | Steps 1-7 | Steps 1-4 | `make deploy-local` + Step 4 |
+| Config change only | Step 2 + Step 6 | Step 1 + Step 3 | Sync config + `make deploy-remote` |
+| Code change only | Steps 4-6 | Steps 2-3 | `make deploy-local` + Step 4 |
+| DB migration only | Steps 4-5 | Step 2 | Step 4 |
 | Build images | (CI does this) | (server does this) | `make build-local` |
-| Health check | Step 6 | Step 3 | (automatic in `deploy-remote`) |
+| Health check | Step 7 | Step 4 | (automatic in `deploy-remote`) |
 | View logs | `sudo docker compose -f docker-compose.production.yml logs --tail 100 -f <service>` |
 | Restart service | `sudo docker compose -f docker-compose.production.yml restart <service>` |
 
@@ -368,7 +447,7 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Error | Fix |
 |-------|-----|
 | `No space left on device` | `sudo docker builder prune -af && sudo docker image prune -af` |
-| `DuplicateTable`/`DuplicateColumn` | DB bootstrapped → use `stamp head` (see [db-migration.md](db-migration.md)) |
+| `DuplicateTable`/`DuplicateColumn` | Object already exists → stamp that revision, then `upgrade head` for remaining. **Never `stamp head` blindly** — it skips pending migrations with genuinely new DDL. See [db-migration.md](db-migration.md) §Handle Failures |
 | Container unhealthy | `sudo docker compose -f docker-compose.production.yml logs --tail 50 <service>` |
 | GHCR pull fails | Verify `*_IMAGE` in `.env`. Auth: `echo "$TOKEN" \| docker login ghcr.io -u <user> --password-stdin` |
 | CI didn't build images | Only builds on push to `main`. Check `gh run list --workflow=ci.yml` |

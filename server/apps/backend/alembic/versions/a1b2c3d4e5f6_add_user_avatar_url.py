@@ -17,10 +17,14 @@ depends_on = None
 
 def upgrade() -> None:
     """Add avatar_url column to users table."""
-    op.add_column(
-        'users',
-        sa.Column('avatar_url', sa.String(500), nullable=True)
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing = {col["name"] for col in inspector.get_columns("users")}
+    if "avatar_url" not in existing:
+        op.add_column(
+            'users',
+            sa.Column('avatar_url', sa.String(500), nullable=True)
+        )
 
 
 def downgrade() -> None:
