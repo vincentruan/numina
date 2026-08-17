@@ -149,6 +149,7 @@ from apps.backend.app.routers import (
 )
 from apps.backend.app.routers import notification_config as notification_config_router
 from apps.backend.app.routers import reminders as reminders_router
+from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import uploads as uploads_serve_router
@@ -526,6 +527,7 @@ app.add_middleware(RequestIDMiddleware)
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
 app.include_router(liabilities.router, prefix="/api/v1")
+app.include_router(rental_contracts_router.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(tags.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")

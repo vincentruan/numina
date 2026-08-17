@@ -152,6 +152,39 @@ export type LiabilityRequestPayload = Omit<Partial<Liability>, 'original_amount'
   linked_asset_id?: string | null
 }
 
+// Rental contracts - money fields are str on the wire (money-as-str), matching
+// Liability above.
+export interface RentalContract {
+  id: string
+  user_id: string
+  family_id: string
+  role: 'landlord' | 'tenant'
+  monthly_rent: string
+  deposit: string
+  start_date: string
+  end_date?: string | null // null = 不定期租约
+  linked_asset_id?: string | null // landlord-only
+  counterparty?: string | null
+  notes?: string | null
+  currency: string
+  is_active: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export type RentalRequestPayload = Omit<Partial<RentalContract>, 'monthly_rent' | 'deposit' | 'linked_asset_id'> & {
+  monthly_rent?: number
+  deposit?: number
+  linked_asset_id?: string | null
+}
+
+export interface RentalSummary {
+  monthly_income: string
+  monthly_expense: string
+  net_cash_flow: string
+  total_deposit: string
+}
+
 export interface Tag {
   id: string
   family_id: string
@@ -167,6 +200,7 @@ export interface DashboardOverview {
   month_over_month_change: number | null
   month_over_month_change_amount: number | null
   total_daily_cost: number
+  rental_net_cash_flow: number | null
 }
 
 export interface AllocationItem {

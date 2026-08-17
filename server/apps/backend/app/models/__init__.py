@@ -69,6 +69,7 @@ from apps.backend.app.models.reminder import Reminder
 from apps.backend.app.models.reminder_notification import (
     ReminderNotification,
 )
+from apps.backend.app.models.rental_contract import RentalContract
 from apps.backend.app.models.revoked_token import RevokedToken
 from apps.backend.app.models.security_audit_log import SecurityAuditLog
 from apps.backend.app.models.skill_registry import SkillRegistry

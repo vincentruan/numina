@@ -108,6 +108,9 @@ const stubs = [
   'AssetListPanel',
   'LiabilityListPanel',
   'WishListPanel',
+  'RentalListPanel',
+  'RentalListSkeleton',
+  'van-skeleton-avatar',
 ]
 
 function resetState() {

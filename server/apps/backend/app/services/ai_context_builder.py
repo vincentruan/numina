@@ -23,6 +23,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.rental_contract import RentalContract
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
 from packages.domain.exchange_rate.service import ExchangeRateService
@@ -251,4 +252,48 @@ def build_wish_advice(db: Session, user: User) -> str:
     }
     if rate_missing:
         data["rate_missing"] = True
+    return _serialize(data)
+
+
+def build_rental_summary(db: Session, user: User) -> str:
+    """Active rental contracts summary as structured JSON for AI context."""
+    contracts = db.query(RentalContract).filter(
+        RentalContract.family_id == user.family_id,
+        RentalContract.is_active.is_(True),
+    ).all()
+
+    dc = user.default_currency or "CNY"
+
+    if not contracts:
+        return _serialize({"type": "rental_summary", "currency": dc, "count": 0, "contracts": []})
+
+    landlord_count = 0
+    tenant_count = 0
+    monthly_income = 0.0
+    monthly_expense = 0.0
+    total_deposit = 0.0
+
+    for c in contracts:
+        rent, _ = _convert(c.monthly_rent, c.currency, dc, db)
+        dep, _ = _convert(c.deposit or Decimal("0"), c.currency, dc, db)
+        total_deposit += dep
+
+        if c.role == "landlord":
+            landlord_count += 1
+            monthly_income += rent
+        else:
+            tenant_count += 1
+            monthly_expense += rent
+
+    data: dict[str, Any] = {
+        "type": "rental_summary",
+        "currency": dc,
+        "count": len(contracts),
+        "landlord_count": landlord_count,
+        "tenant_count": tenant_count,
+        "monthly_income": round(monthly_income, 2),
+        "monthly_expense": round(monthly_expense, 2),
+        "net_cash_flow": round(monthly_income - monthly_expense, 2),
+        "total_deposit": round(total_deposit, 2),
+    }
     return _serialize(data)
