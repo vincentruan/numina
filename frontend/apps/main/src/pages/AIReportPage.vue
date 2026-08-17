@@ -326,6 +326,9 @@ const stream = useReportStream()
 
 // v3: useTaskResume for SSE reconnection on page re-entry
 const resumeHandle = useTaskResume('report', {
+  onStreamEvent: (event, data) => {
+    stream.ingestEvent(event, data)
+  },
   onComplete: async () => {
     aiStore.clearBackgroundTask('report')
     await loadExistingReport()
@@ -641,6 +644,7 @@ onUnmounted(() => {
   // Close the frontend SSE reader but keep the agent pipeline running in the
   // background. The user can leave the page and the task will still complete.
   stream.abort(true)
+  resumeHandle.cleanup()
   // Clear the retry timer to prevent state updates on unmounted component
   if (retryTimer.value) {
     clearTimeout(retryTimer.value)

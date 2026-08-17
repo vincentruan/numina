@@ -366,6 +366,9 @@ const authStore = useAuthStore()
 const stream = useReportStream()
 // v3: useTaskResume for SSE reconnection on page re-entry
 const resumeHandle = useTaskResume('report', {
+  onStreamEvent: (event, data) => {
+    stream.ingestEvent(event, data)
+  },
   onComplete: async () => {
     aiStore.clearBackgroundTask('report')
     await loadReport()
@@ -869,9 +872,11 @@ onActivated(async () => {
 // user can navigate back and pick up progress via polling.
 onDeactivated(() => {
   stream.abort(true)
+  resumeHandle.cleanup()
 })
 onUnmounted(() => {
   stream.abort(true)
+  resumeHandle.cleanup()
 })
 
 // Expose refs and functions for testing purposes

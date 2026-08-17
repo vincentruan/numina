@@ -65,6 +65,11 @@ export interface UseReportStreamReturn {
   reset: () => void
   pollTaskUntilComplete: () => Promise<void>
   startPolling: () => Promise<void>
+  /**
+   * P1-5 fix: ingest an external SSE event (from useTaskResume reconnect)
+   * and route it through the same internal handlers as connect().
+   */
+  ingestEvent: (eventName: string, data: unknown) => void
 }
 
 export function useReportStream(): UseReportStreamReturn {
@@ -608,6 +613,44 @@ export function useReportStream(): UseReportStreamReturn {
     }
   }
 
+  /**
+   * P1-5 fix: ingest an external SSE event (e.g. from useTaskResume
+   * reconnect via subscribeTaskStream) and route it through the same
+   * internal handlers as connect()'s SSE reader loop.
+   */
+  function ingestEvent(eventName: string, data: unknown): void {
+    if (status.value === 'completed' || status.value === 'error') return
+    status.value = 'streaming'
+
+    const d = (data ?? {}) as Record<string, unknown>
+
+    switch (eventName) {
+      case 'metadata':
+        if (typeof d.run_id === 'string') runId.value = d.run_id
+        if (typeof d.progress_message === 'string') progressMessage.value = d.progress_message
+        break
+      case 'messages': {
+        const msgType = d.type as string | undefined
+        if (msgType === 'ai') {
+          handleAiMessage(d as Parameters<typeof handleAiMessage>[0])
+        } else if (msgType === 'tool') {
+          handleToolMessage(d as Parameters<typeof handleToolMessage>[0])
+        }
+        break
+      }
+      case 'custom':
+        handleCustom(d as Parameters<typeof handleCustom>[0])
+        break
+      case 'end':
+        handleEnd(d as Parameters<typeof handleEnd>[0])
+        break
+      case 'error':
+        status.value = 'error'
+        errorMessage.value = (d.message as string) || t('toast.aiGenerateFailed')
+        break
+    }
+  }
+
   return {
     status,
     progressMessage,
@@ -631,5 +674,6 @@ export function useReportStream(): UseReportStreamReturn {
     reset,
     pollTaskUntilComplete,
     startPolling,
+    ingestEvent,
   }
 }

@@ -83,9 +83,9 @@ export function useTaskResume(
   const task = ref<AITask | null>(null)
   const triggerFailed = ref(false)
   const loading = ref(false)
-  const lastEventId = ref<string | null>(null)
 
   let streamHandle: TaskStreamHandle | null = null
+  let disposed = false
 
   // Polling fallback — watches taskId ref
   const polling = useTaskPolling(taskId, {
@@ -102,15 +102,14 @@ export function useTaskResume(
   })
 
   function startSSE(tid: string): void {
+    // P1-1 fix: abort previous SSE before starting a new one
+    streamHandle?.abort()
     status.value = 'connecting'
     streamHandle = subscribeTaskStream(
       tid,
       {
         onEvent: (event, data) => {
           status.value = 'streaming'
-          // Track last event ID for potential reconnects
-          // (SSE spec: events may carry an id field — for now
-          // we track via the onEvent callback data)
           options.onStreamEvent?.(event, data)
         },
         onGap: () => {
@@ -131,7 +130,6 @@ export function useTaskResume(
           status.value = 'polling'
         },
       },
-      { lastEventId: lastEventId.value || undefined },
     )
   }
 
@@ -183,7 +181,9 @@ export function useTaskResume(
   async function waitForTask(): Promise<AITask | null> {
     const delays = [500, 1000, 2000, 4000]
     for (const delay of delays) {
+      if (disposed) return null
       await new Promise((r) => setTimeout(r, delay))
+      if (disposed) return null
       try {
         const tasks = await getAITasks(capability)
         const latestTask = tasks[0]
@@ -199,7 +199,7 @@ export function useTaskResume(
         // best-effort; keep retrying
       }
     }
-    triggerFailed.value = true
+    if (!disposed) triggerFailed.value = true
     return null
   }
 
@@ -236,6 +236,7 @@ export function useTaskResume(
   }
 
   function cleanup(): void {
+    disposed = true
     streamHandle?.abort()
     streamHandle = null
     polling.stop()

@@ -10,7 +10,15 @@ export interface AITask {
   id: string
   family_id: string
   skill_id: string
-  status: 'running' | 'queued' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'timeout'
+  status:
+    | 'running'
+    | 'queued'
+    | 'post_processing'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'interrupted'
+    | 'timeout'
   run_id?: string
   worker_id?: string
   started_at: string
@@ -141,7 +149,7 @@ async function runTaskStream(
   callbacks: TaskStreamCallbacks,
   options?: { lastEventId?: string },
 ): Promise<void> {
-  const url = `/api/v1/ai/tasks/${taskId}/stream`
+  const url = `/api/v1/ai/tasks/detail/${taskId}/stream`
   const headers: Record<string, string> = { Accept: 'text/event-stream' }
   if (options?.lastEventId) {
     headers['Last-Event-ID'] = options.lastEventId

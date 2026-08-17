@@ -192,8 +192,11 @@ def _spawn_lifecycle_consumer(
                     return
                 elif event_type == "gap":
                     logger.warning(
-                        "[lifecycle] stream gap task=%s",
+                        "[lifecycle] stream gap task=%s — failing task",
                         task_id,
+                    )
+                    AITaskService.fail_task(
+                        task_id, "事件流缓冲区间断，请重新触发", db
                     )
                     return
         except Exception as e:

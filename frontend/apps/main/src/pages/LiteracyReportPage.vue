@@ -103,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
@@ -307,6 +307,10 @@ onMounted(async () => {
       loadReport()
     }
   }
+})
+
+onUnmounted(() => {
+  resumeHandle.cleanup()
 })
 </script>
 
