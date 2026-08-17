@@ -1238,6 +1238,7 @@ def internal_task_progress(
 
     Agent calls this endpoint during execution to report progress updates
     (step, steps_completed, status, etc.). Size limit enforced by schema validator.
+    Only updates tasks in running/post_processing state (idempotent on terminal tasks).
     """
     from packages.db.models.ai_task import AITask
 
@@ -1249,6 +1250,10 @@ def internal_task_progress(
     )
     if not task:
         raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    # Guard: only update progress on active tasks (not terminal states)
+    if task.status not in ("running", "post_processing"):
+        return {"ok": True, "task_id": task_id, "skipped": "task_not_active"}
 
     # Update progress field
     task.progress = body.progress
@@ -1356,7 +1361,7 @@ def internal_task_cancel_confirm(
     # Mark as cancelled (idempotent)
     if task.status in ("running", "post_processing", "queued"):
         task.status = "cancelled"
-        task.completed_at = datetime.now(UTC)
+        task.completed_at = datetime.utcnow()
         db.commit()
 
     return {"ok": True, "task_id": task_id, "status": "cancelled"}

@@ -31,10 +31,7 @@ from apps.backend.app.services.ai_result_parser import (
     _contains_markdown_table,
     _validate_json,
 )
-from apps.backend.app.services.ai_task_service import (
-    AITaskService,
-    extract_run_id_from_content_location,
-)
+from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import consume_task_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import SKILL_TTL
@@ -347,6 +344,7 @@ async def trigger_generate_events(
     # This enables cross-process reconnection and removes direct HTTP proxy dependency
     agent_client = AgentClient(family_id, user_id, timeout=300.0)
     agent_url = f"/internal/gateway/runs/asset-report/{session_id}"
+    run_id: str | None = None
 
     # P0 Fix: Use non-streaming POST to trigger the agent task
     # We're not reading the response body (just triggering), so use post() not stream()
@@ -385,17 +383,9 @@ async def trigger_generate_events(
             )
 
         # Extract agent run_id from Content-Location header and persist to AITask
-        run_id = extract_run_id_from_content_location(resp.headers.get("Content-Location"))
-        if run_id:
-            from apps.backend.app.database import SessionLocal
-
-            _db = SessionLocal()
-            try:
-                AITaskService.attach_run_id(task_id, run_id, family_id, _db)
-            except Exception:
-                logger.warning("[asset-report] attach_run_id failed task=%s", task_id, exc_info=True)
-            finally:
-                _db.close()
+        run_id = AITaskService.extract_and_attach_run_id(
+            task_id, resp.headers.get("Content-Location"), family_id
+        )
     except Exception as exc:
         logger.warning(
             "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
@@ -428,6 +418,7 @@ async def trigger_generate_events(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
+        run_id=run_id,
     )
 
     async def _sse_stream() -> AsyncGenerator[bytes, None]:

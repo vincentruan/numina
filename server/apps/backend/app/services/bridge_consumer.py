@@ -19,11 +19,16 @@ from packages.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+# Cache bridge type at module load to avoid per-call env reads.
+# Override via STREAM_BRIDGE_TYPE env var before process start.
+_BRIDGE_TYPE: str = __import__("os").getenv("STREAM_BRIDGE_TYPE", "memory")
+
 
 async def bridge_consumer(
     task_id: str,
     family_id: int,
     last_event_id: str | None = None,
+    run_id: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Consume events from a task's Redis stream.
 
@@ -34,6 +39,8 @@ async def bridge_consumer(
         task_id: AITask primary key (used to look up the run_id)
         family_id: Family ID for tenant isolation
         last_event_id: Optional SSE Last-Event-ID for reconnection
+        run_id: Pre-resolved agent RunRecord UUID. When provided, skips the
+                DB lookup (avoids race with attach_run_id commit).
 
     Yields:
         Dict with 'event' (str) and 'data' (Any) keys
@@ -52,22 +59,23 @@ async def bridge_consumer(
     )
     from packages.db.stream_bridge.config import StreamBridgeConfig
 
-    # P0 Fix: Look up the AITask to get the run_id (DeerFlow RunRecord UUID)
-    # The agent publishes events using run_id, not task_id
-    db = SessionLocal()
-    try:
-        task = AITaskService.get_task_by_id(task_id, family_id, db)
-        if not task:
-            raise RuntimeError(f"Task {task_id} not found")
-        if not task.run_id:
-            raise RuntimeError(f"Task {task_id} has no run_id (agent may not have started yet)")
-        run_id = task.run_id
-    finally:
-        db.close()
+    # Resolve run_id: prefer caller-provided value (avoids DB lookup race),
+    # fall back to querying the AITask table.
+    if not run_id:
+        db = SessionLocal()
+        try:
+            task = AITaskService.get_task_by_id(task_id, family_id, db)
+            if not task:
+                raise RuntimeError(f"Task {task_id} not found")
+            if not task.run_id:
+                raise RuntimeError(f"Task {task_id} has no run_id (agent may not have started yet)")
+            run_id = task.run_id
+        finally:
+            db.close()
 
     # Create Redis bridge (or memory bridge for dev)
     # In production, this reads from the same Redis instance the agent writes to
-    bridge_type = os.getenv("STREAM_BRIDGE_TYPE", "memory")
+    bridge_type = _BRIDGE_TYPE
     config = StreamBridgeConfig(
         type=bridge_type,
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
@@ -123,6 +131,7 @@ async def consume_task_stream(
     task_id: str,
     family_id: int,
     last_event_id: str | None = None,
+    run_id: str | None = None,
 ) -> AsyncIterator[str]:
     """High-level wrapper that yields SSE-formatted strings.
 
@@ -133,6 +142,7 @@ async def consume_task_stream(
         task_id: AITask primary key
         family_id: Family ID for tenant isolation
         last_event_id: Optional SSE Last-Event-ID for reconnection
+        run_id: Pre-resolved agent RunRecord UUID (avoids DB lookup race)
 
     Yields:
         SSE-formatted strings (e.g., "event: update\ndata: {...}\n\n")
@@ -140,7 +150,7 @@ async def consume_task_stream(
     from apps.backend.app.services.ai_task_service import AITaskService
 
     try:
-        async for event in bridge_consumer(task_id, family_id, last_event_id):
+        async for event in bridge_consumer(task_id, family_id, last_event_id, run_id=run_id):
             event_type = event["event"]
             event_data = event["data"]
 

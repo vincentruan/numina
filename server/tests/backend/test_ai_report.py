@@ -155,7 +155,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    async def _fake_stream(task_id, family_id, last_event_id=None):
+    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None):
         # Simulate the bridge consumer completing the task on end event
         from apps.backend.app.services.ai_task_service import AITaskService
         from apps.backend.app.database import SessionLocal

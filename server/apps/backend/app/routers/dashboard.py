@@ -29,10 +29,7 @@ from apps.backend.app.schemas.dashboard import (
 )
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
-from apps.backend.app.services.ai_task_service import (
-    AITaskService,
-    extract_run_id_from_content_location,
-)
+from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import consume_task_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -211,8 +208,8 @@ def get_insights(
     return dashboard_service.get_insights(db, user)
 
 
-@router.get("/narrative")
-async def get_narrative(
+@router.post("/narrative")
+async def generate_narrative(
     request: Request,
     force: bool = Query(False),
     db: Session = Depends(get_db),
@@ -341,6 +338,7 @@ async def get_narrative(
     # Trigger agent via non-streaming POST (bridge consumer pattern)
     agent_client = AgentClient(family_id=str(family_id), user_id=str(user.id), timeout=120.0)
     agent_url = f"/internal/gateway/runs/dashboard-narrative/{session_id}"
+    run_id: str | None = None
 
     try:
         resp = await agent_client.post(
@@ -373,15 +371,9 @@ async def get_narrative(
             )
 
         # Extract agent run_id from Content-Location header and persist to AITask
-        run_id = extract_run_id_from_content_location(resp.headers.get("Content-Location"))
-        if run_id:
-            _db = SessionLocal()
-            try:
-                AITaskService.attach_run_id(task_id, run_id, family_id, _db)
-            except Exception:
-                logger.warning("[narrative] attach_run_id failed task=%s", task_id, exc_info=True)
-            finally:
-                _db.close()
+        run_id = AITaskService.extract_and_attach_run_id(
+            task_id, resp.headers.get("Content-Location"), family_id
+        )
     except Exception as exc:
         logger.warning("[narrative] agent trigger failed task=%s err=%s", task_id, exc)
         _db = SessionLocal()
@@ -427,6 +419,7 @@ async def get_narrative(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
+        run_id=run_id,
     )
 
     return StreamingResponse(

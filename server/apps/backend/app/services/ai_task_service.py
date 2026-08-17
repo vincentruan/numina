@@ -302,6 +302,46 @@ class AITaskService:
         db.commit()
         return True
 
+    @classmethod
+    def extract_and_attach_run_id(
+        cls,
+        task_id: int | str,
+        content_location: str | None,
+        family_id: int | str,
+    ) -> str | None:
+        """Extract run_id from Content-Location and persist to AITask in a self-contained session.
+
+        Returns the run_id if successfully extracted and persisted, None otherwise.
+        Callers pass the result to bridge_consumer to avoid a second DB lookup race.
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        run_id = extract_run_id_from_content_location(content_location)
+        if not run_id:
+            return None
+        from apps.backend.app.database import SessionLocal
+
+        _db = SessionLocal()
+        try:
+            ok = cls.attach_run_id(task_id, run_id, family_id, _db)
+            if not ok:
+                logger.warning(
+                    "[attach_run_id] task not found or wrong family task=%s family=%s",
+                    task_id,
+                    family_id,
+                )
+                return None
+            return run_id
+        except Exception:
+            logger.warning(
+                "[attach_run_id] failed task=%s", task_id, exc_info=True
+            )
+            return None
+        finally:
+            _db.close()
+
     @staticmethod
     def get_running_tasks_by_family(
         family_id: int | str, db: Session
