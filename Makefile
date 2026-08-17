@@ -471,76 +471,72 @@ stop-dev-all:
 	  fi; \
 	  sleep 1; \
 	fi
-	@bad=0; found=0; \
+	@found=0; bad=0; \
+	my_pgid=$$(ps -o pgid= -p $$$$ 2>/dev/null | tr -d ' '); \
 	for port in 8000 8001 8002 5173 5174; do \
-	  pid=$$(lsof -tiTCP:$$port -P -n 2>/dev/null | head -1); \
-	  if [ -z "$$pid" ]; then continue; fi; \
+	  pid=$$(lsof -tiTCP:$$port -sTCP:LISTEN -P -n 2>/dev/null | head -1); \
+	  [ -z "$$pid" ] && continue; \
 	  cmdline=$$(ps -p $$pid -o args= 2>/dev/null || echo ""); \
 	  case $$port in \
 	    8000|8001|8002) expect="uvicorn"; venv_path="numina/server/.venv" ;; \
 	    5173|5174)      expect="vite";    venv_path="" ;; \
 	    *)              expect="";        venv_path="" ;; \
 	  esac; \
-	  matched=0; method=""; \
-	  case "$$cmdline" in *$$expect*) matched=1; method="cmdline" ;; esac; \
+	  matched=0; \
+	  case "$$cmdline" in *$$expect*) matched=1 ;; esac; \
 	  if [ $$matched -eq 0 ] && [ -n "$$venv_path" ]; then \
-	    case "$$cmdline" in *$$venv_path*) matched=1; method="venv" ;; esac; \
+	    case "$$cmdline" in *$$venv_path*) matched=1 ;; esac; \
 	  fi; \
 	  if [ $$matched -eq 0 ]; then \
-	    cpid=$$pid; depth=0; \
-	    while [ $$depth -lt 20 ]; do \
+	    cpid=$$pid; \
+	    while true; do \
 	      ppid=$$(ps -o ppid= -p $$cpid 2>/dev/null | tr -d ' ' || true); \
 	      [ -z "$$ppid" ] || [ "$$ppid" = "0" ] || [ "$$ppid" = "1" ] && break; \
 	      pc=$$(ps -p $$ppid -o args= 2>/dev/null || true); \
-	      case "$$pc" in *$$expect*) matched=1; method="ancestor"; break ;; esac; \
-	      cpid=$$ppid; depth=$$((depth + 1)); \
+	      case "$$pc" in *$$expect*) matched=1; break ;; esac; \
+	      cpid=$$ppid; \
 	    done; \
 	  fi; \
-	  if [ $$matched -eq 1 ]; then \
-	    top=$$pid; cpid=$$pid; pids="$$pid"; depth=0; \
-	    while [ $$depth -lt 20 ]; do \
-	      ppid=$$(ps -o ppid= -p $$cpid 2>/dev/null | tr -d ' ' || true); \
-	      [ -z "$$ppid" ] || [ "$$ppid" = "0" ] || [ "$$ppid" = "1" ] && break; \
-	      pc=$$(ps -p $$ppid -o args= 2>/dev/null || true); \
-	      case "$$pc" in *$$expect*) top=$$ppid; pids="$$pids $$ppid" ;; \
-	        *) break ;; \
-	      esac; \
-	      cpid=$$ppid; depth=$$((depth + 1)); \
-	    done; \
-	    echo "  端口 $$port: 终止进程树 (top PID $$top, via $$method) ✓"; \
-	    kill $$pids 2>/dev/null || true; \
-	    pkill -P $$top 2>/dev/null || true; \
-	    sleep 1; \
-	    for kp in $$pids; do kill -0 $$kp 2>/dev/null && kill -9 $$kp 2>/dev/null || true; done; \
-	    found=1; \
-	  else \
+	  if [ $$matched -eq 0 ]; then \
 	    echo "⚠ 端口 $$port 无法自动识别 (PID $$pid):"; \
 	    echo "    $$cmdline"; \
 	    echo "    预期: $$expect (numina dev server)"; \
-	    if [ -t 0 ]; then \
-	      printf "    是否仍按端口关闭? [y/N] "; \
-	      read -r ans; \
-	      case "$$ans" in \
-	        [yY]*) \
-	          echo "    正在关闭端口 $$port ..."; \
-	          kill $$pid 2>/dev/null || true; \
-	          sleep 1; \
-	          kill -0 $$pid 2>/dev/null && kill -9 $$pid 2>/dev/null || true; \
-	          found=1; \
-	          ;; \
-	        *) echo "    已跳过"; bad=1 ;; \
-	      esac; \
+	    bad=1; continue; \
+	  fi; \
+	  found=1; \
+	  pgid=$$(ps -o pgid= -p $$pid 2>/dev/null | tr -d ' '); \
+	  if [ -n "$$pgid" ] && [ "$$pgid" != "0" ] && [ "$$pgid" != "1" ] && [ "$$pgid" != "$$my_pgid" ]; then \
+	    echo "  端口 $$port: 终止进程组 $$pgid (PID $$pid) ✓"; \
+	    kill -9 -$$pgid 2>/dev/null || true; \
+	  else \
+	    echo "  端口 $$port: 终止进程树 (PID $$pid) ✓"; \
+	    kill -9 $$pid 2>/dev/null || true; \
+	    pkill -9 -P $$pid 2>/dev/null || true; \
+	  fi; \
+	done; \
+	sleep 0.5; \
+	stale=0; \
+	for port in 8000 8001 8002 5173 5174; do \
+	  pid=$$(lsof -tiTCP:$$port -sTCP:LISTEN -P -n 2>/dev/null | head -1); \
+	  if [ -n "$$pid" ]; then \
+	    pgid=$$(ps -o pgid= -p $$pid 2>/dev/null | tr -d ' '); \
+	    if [ -n "$$pgid" ] && [ "$$pgid" != "0" ] && [ "$$pgid" != "1" ] && [ "$$pgid" != "$$my_pgid" ]; then \
+	      kill -9 -$$pgid 2>/dev/null || true; \
 	    else \
-	      echo "    非交互模式，已跳过"; \
-	      bad=1; \
+	      kill -9 $$pid 2>/dev/null || true; \
+	      pkill -9 -P $$pid 2>/dev/null || true; \
 	    fi; \
+	    echo "  端口 $$port: 清理残留进程 (PID $$pid) ✓"; \
+	    stale=1; \
 	  fi; \
 	done; \
 	if [ $$bad -eq 1 ]; then \
-	  echo "⚠ 部分端口未关闭"; \
+	  echo "⚠ 部分端口未能自动识别"; \
 	  exit 1; \
-	fi; \
-	if [ $$found -eq 1 ]; then \
+	elif [ $$stale -eq 1 ]; then \
+	  echo "⚠ 部分端口残留进程已强制清理"; \
+	  exit 1; \
+	elif [ $$found -eq 1 ]; then \
 	  echo "✓ 全部 dev server 已停止"; \
 	else \
 	  echo "✓ 没有运行中的 dev server"; \
