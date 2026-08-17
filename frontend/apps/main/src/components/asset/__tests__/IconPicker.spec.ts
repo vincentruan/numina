@@ -52,6 +52,7 @@ const i18n = createI18n({
       iconPicker: {
         tabGallery: 'Gallery',
         tab3dIcons: '3D Icons',
+        tabEmoji: 'Emoji',
         fromGallery: 'Choose from Gallery',
         fromCamera: 'Take Photo',
         searchPlaceholder: 'Search icons',
@@ -60,6 +61,9 @@ const i18n = createI18n({
         loading: 'Loading...',
         recentAlbum: 'Recent',
         changeIcon: 'Change Icon',
+        emojiHint: 'Tap the input below to select an emoji',
+        emojiPlaceholder: 'Tap to enter emoji',
+        emojiPresets: 'Common emojis',
       },
     },
   },
@@ -200,5 +204,61 @@ describe('IconPicker', () => {
     expect(emitted).toBeTruthy()
     expect(emitted![0][0]).toContain('/icons/3d-thumbs/vehicles/')
     expect(emitted![0][0]).toContain('Car')
+  })
+
+  // --- Emoji tab ---
+
+  it('shows emoji tab when mode=avatar', () => {
+    const wrapper = mountPicker({ mode: 'avatar' })
+    const tabs = wrapper.findAll('.tab')
+    expect(tabs.length).toBe(3)
+    expect(tabs[2].text()).toBe('Emoji')
+  })
+
+  it('renders preset emoji grid in emoji tab', async () => {
+    const wrapper = mountPicker({ mode: 'avatar' })
+    const tabs = wrapper.findAll('.tab')
+    await tabs[2].trigger('click') // Emoji tab
+
+    const buttons = wrapper.findAll('.emoji-preset-btn')
+    expect(buttons.length).toBeGreaterThan(0)
+  })
+
+  it('emits select-emoji when preset emoji clicked', async () => {
+    const wrapper = mountPicker({ mode: 'avatar' })
+    const tabs = wrapper.findAll('.tab')
+    await tabs[2].trigger('click') // Emoji tab
+
+    const buttons = wrapper.findAll('.emoji-preset-btn')
+    await buttons[0].trigger('click')
+
+    const emitted = wrapper.emitted('select-emoji')
+    expect(emitted).toBeTruthy()
+    expect(emitted![0][0]).toBeTruthy()
+  })
+
+  it('highlights currently selected emoji in preset grid', async () => {
+    const wrapper = mountPicker({ mode: 'avatar', currentEmoji: '😀' })
+    const tabs = wrapper.findAll('.tab')
+    await tabs[2].trigger('click') // Emoji tab
+
+    const selectedBtn = wrapper.find('.emoji-preset-btn.selected')
+    expect(selectedBtn.exists()).toBe(true)
+    expect(selectedBtn.text()).toBe('😀')
+  })
+
+  it('shows emoji preview and delete button when currentEmoji is set', () => {
+    const wrapper = mountPicker({ currentEmoji: '😀' })
+    expect(wrapper.find('.current-preview').exists()).toBe(true)
+    expect(wrapper.find('.preview-emoji').exists()).toBe(true)
+    expect(wrapper.find('.preview-emoji').text()).toBe('😀')
+    expect(wrapper.find('.delete-btn').exists()).toBe(true)
+  })
+
+  it('emits delete when delete button clicked on emoji avatar', async () => {
+    const wrapper = mountPicker({ currentEmoji: '😀' })
+    const deleteBtn = wrapper.find('.delete-btn')
+    await deleteBtn.trigger('click')
+    expect(wrapper.emitted('delete')).toBeTruthy()
   })
 })

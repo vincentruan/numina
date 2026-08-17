@@ -3694,6 +3694,7 @@ export default {
     changeIcon: '更换图标',
     emojiHint: '点击下方输入框选择表情',
     emojiPlaceholder: '点击输入表情',
+    emojiPresets: '常用表情',
   },
   profileEdit: {
     title: '编辑资料',

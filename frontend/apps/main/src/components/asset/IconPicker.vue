@@ -15,8 +15,9 @@
       </div>
 
       <!-- Edit mode: current image preview + delete -->
-      <div v-if="currentImageUrl" class="current-preview">
-        <img :src="currentImageUrl" class="preview-thumb" />
+      <div v-if="currentImageUrl || currentEmoji" class="current-preview">
+        <img v-if="currentImageUrl" :src="currentImageUrl" class="preview-thumb" />
+        <span v-else class="preview-emoji">{{ currentEmoji }}</span>
         <van-icon name="cross" class="delete-btn" @click="emit('delete')" />
       </div>
 
@@ -57,13 +58,29 @@
       <!-- Emoji tab (avatar mode only) -->
       <div v-if="activeTab === 'emoji'" class="emoji-content">
         <div class="emoji-hint">{{ t('iconPicker.emojiHint') }}</div>
-        <input
-          ref="emojiInput"
-          type="text"
-          class="emoji-input"
-          @input="onEmojiInput"
-          :placeholder="t('iconPicker.emojiPlaceholder')"
-        />
+
+        <!-- Preset emoji grid for quick selection -->
+        <div class="emoji-preset-grid">
+          <button
+            v-for="emoji in presetEmojis"
+            :key="emoji"
+            class="emoji-preset-btn"
+            :class="{ selected: currentEmoji === emoji }"
+            type="button"
+            @click="emit('select-emoji', emoji)"
+          >{{ emoji }}</button>
+        </div>
+
+        <!-- Text input for keyboards with emoji support -->
+        <div class="emoji-input-row">
+          <input
+            ref="emojiInput"
+            type="text"
+            class="emoji-input"
+            :placeholder="t('iconPicker.emojiPlaceholder')"
+            @input="onEmojiInput"
+          />
+        </div>
       </div>
 
       <!-- 3D icons tab -->
@@ -170,6 +187,7 @@ const { t } = useI18n()
 const props = defineProps<{
   show: boolean
   currentImageUrl?: string
+  currentEmoji?: string
   mode?: 'asset' | 'avatar'
 }>()
 
@@ -283,6 +301,17 @@ function onClosed() {
   reset()
 }
 
+// Preset emojis for quick selection (PC keyboards without emoji support)
+const presetEmojis = [
+  '😀', '😊', '😎', '🤩', '🥰', '', '🤗', '',
+  '😜', '', '🥳', '', '😺', '', '🐱', '🦊',
+  '🐻', '🐼', '🐨', '🦁', '🐸', '🦄', '', '🦋',
+  '🌸', '🌺', '🌻', '🌈', '️', '⭐', '🔥', '❄️',
+  '💧', '🍎', '', '🍋', '🍉', '🍓', '🍑', '',
+  '❤️', '', '💛', '💚', '💙', '💜', '🤍', '🖤',
+  '💎', '✨', '🎈', '', '🎵', '🎨', '🚀', '🌊',
+]
+
 // Emoji input handler
 const emojiInput = ref<HTMLInputElement | null>(null)
 
@@ -335,6 +364,7 @@ void totalIcons
   position: relative;
   display: flex;
   justify-content: center;
+  align-items: center;
   padding: 8px 0 12px;
 }
 .preview-thumb {
@@ -344,10 +374,20 @@ void totalIcons
   object-fit: cover;
   background: var(--van-background-2);
 }
+.preview-emoji {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  background: var(--van-background-2);
+}
 .delete-btn {
   position: absolute;
-  top: 0;
-  right: calc(50% - 44px);
+  top: 2px;
+  left: calc(50% + 30px);
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -585,19 +625,14 @@ void totalIcons
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  opacity: 0;
-  transition: opacity 0.15s;
   cursor: pointer;
-}
-.icon-cell:hover .magnify-btn,
-.icon-cell:active .magnify-btn {
-  opacity: 1;
+  z-index: 2;
 }
 
 /* Enlarge preview overlay */
@@ -630,13 +665,52 @@ void totalIcons
 
 /* Emoji tab */
 .emoji-content {
-  padding: 24px 16px;
+  padding: 16px;
   text-align: center;
 }
 .emoji-hint {
   font-size: 14px;
   color: var(--van-text-color-2);
+  margin-bottom: 12px;
+}
+
+/* Preset emoji grid */
+.emoji-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
   margin-bottom: 16px;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.emoji-preset-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--van-background-2);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.emoji-preset-btn:active {
+  transform: scale(0.92);
+}
+.emoji-preset-btn.selected {
+  border-color: var(--van-primary-color);
+  background: var(--van-background-3, #f0f0f0);
+}
+
+/* Text input row for keyboards with emoji support */
+.emoji-input-row {
+  display: flex;
+  justify-content: center;
 }
 .emoji-input {
   width: 100%;

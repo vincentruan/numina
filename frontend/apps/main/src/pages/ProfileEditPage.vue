@@ -25,6 +25,7 @@
           :label="t('profileEdit.displayName')"
           :placeholder="t('profileEdit.displayNamePlaceholder')"
           :rules="[{ required: true, message: t('profileEdit.displayNameRequired') }]"
+          label-width="6.5em"
           maxlength="100"
           show-word-limit
         />
@@ -47,6 +48,7 @@
       v-model:show="showPicker"
       mode="avatar"
       :current-image-url="form.avatar_url?.startsWith('/') ? form.avatar_url : undefined"
+      :current-emoji="form.avatar_url && !form.avatar_url.startsWith('/') ? form.avatar_url : undefined"
       @select-image="onSelectImage"
       @select-emoji="onSelectEmoji"
       @request-gallery="onRequestGallery"

@@ -55,11 +55,13 @@ const avatarStyle = computed(() => {
       width: size,
       height: size,
       backgroundColor: props.avatarColor,
+      '--avatar-size': size,
     }
   }
   return {
     width: size,
     height: size,
+    '--avatar-size': size,
   }
 })
 </script>
@@ -76,6 +78,8 @@ const avatarStyle = computed(() => {
   /* Fallback text styling */
   color: #fff;
   font-weight: 600;
+  font-size: calc(var(--avatar-size, 36px) * 0.7);
+  line-height: 1;
 }
 
 .avatar-img {
@@ -91,7 +95,6 @@ const avatarStyle = computed(() => {
 }
 
 .avatar-fallback {
-  font-size: 45%;
   line-height: 1;
 }
 </style>

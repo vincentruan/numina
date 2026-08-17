@@ -3660,6 +3660,7 @@ export default {
     changeIcon: 'Change Icon',
     emojiHint: 'Tap the input below to select an emoji',
     emojiPlaceholder: 'Tap to enter emoji',
+    emojiPresets: 'Common emojis',
   },
   profileEdit: {
     title: 'Edit Profile',
