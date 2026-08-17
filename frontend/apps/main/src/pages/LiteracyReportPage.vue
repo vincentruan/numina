@@ -272,7 +272,6 @@ async function regenerate() {
 }
 
 async function onTaskRetry() {
-  stream.reset()
   report.value = null
   await regenerate()
 }
