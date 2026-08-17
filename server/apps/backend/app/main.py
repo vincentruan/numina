@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import os
 import secrets
@@ -356,10 +357,8 @@ async def lifespan(app: FastAPI):
 
     # Cancel orphan detector on shutdown
     orphan_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await orphan_task
-    except asyncio.CancelledError:
-        pass
 
 
 app = FastAPI(

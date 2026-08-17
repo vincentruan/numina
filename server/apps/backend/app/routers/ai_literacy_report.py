@@ -5,7 +5,6 @@ POST /api/v1/ai/literacy-report/generate/events  — SSE streaming (U14 bridge c
 """
 import json
 import logging
-from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -123,14 +122,6 @@ def _validate_child(
 
     _validate_child_in_family(db, child_id=cid, family_id=family_id)
     return cid
-
-
-async def _sse_stream(
-    stream_gen: AsyncIterator[str],
-) -> AsyncGenerator[bytes, None]:
-    """Wrap bridge_consumer output as SSE bytes (pure relay)."""
-    async for sse_text in stream_gen:
-        yield sse_text.encode("utf-8")
 
 
 @router.post("/generate/events")
@@ -340,9 +331,10 @@ async def trigger_generate_events(
         last_event_id=last_event_id,
         run_id=run_id,
     )
+    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     return StreamingResponse(
-        _sse_stream(stream_gen),
+        tracked_sse_stream(task_id, stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

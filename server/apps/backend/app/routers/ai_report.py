@@ -420,14 +420,10 @@ async def trigger_generate_events(
         last_event_id=last_event_id,
         run_id=run_id,
     )
-
-    async def _sse_stream() -> AsyncGenerator[bytes, None]:
-        """Wrap bridge_consumer output as SSE bytes."""
-        async for sse_text in stream_gen:
-            yield sse_text.encode("utf-8")
+    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     return StreamingResponse(
-        _sse_stream(),
+        tracked_sse_stream(task_id, stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

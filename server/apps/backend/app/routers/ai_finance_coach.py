@@ -6,7 +6,6 @@
 """
 import json
 import logging
-from collections.abc import AsyncGenerator, AsyncIterator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -41,14 +40,6 @@ logger = logging.getLogger(__name__)
 
 # skill_id for AITask tracking (matches VALID_SKILL_IDS in ai_tasks.py)
 SKILL_ID = "coach"
-
-
-async def _sse_stream(
-    stream_gen: AsyncIterator[str],
-) -> AsyncGenerator[bytes, None]:
-    """Wrap bridge_consumer output as SSE bytes (pure relay)."""
-    async for sse_text in stream_gen:
-        yield sse_text.encode("utf-8")
 
 
 @router.post("/generate")
@@ -222,9 +213,10 @@ async def trigger_finance_coach(
         last_event_id=last_event_id,
         run_id=run_id,
     )
+    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     return StreamingResponse(
-        _sse_stream(stream_gen),
+        tracked_sse_stream(task_id, stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

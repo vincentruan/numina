@@ -24,8 +24,8 @@ SCAN_INTERVAL_SECONDS = 120
 
 async def _scan_and_recover() -> int:
     """Run one scan cycle. Returns the number of tasks recovered."""
-    from packages.db.session import SessionLocal
     from apps.backend.app.services.ai_task_service import AITaskService
+    from packages.db.session import SessionLocal
 
     db = SessionLocal()
     try:

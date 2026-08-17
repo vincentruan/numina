@@ -1,6 +1,5 @@
 import json
 import logging
-from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -418,12 +417,7 @@ async def generate_narrative(
         on_result=_persist_narrative_result,
     )
 
-    # SSE forwarder — pure relay, lifecycle handled above
-    async def _sse_stream(
-        stream_gen: AsyncIterator[str],
-    ) -> AsyncGenerator[bytes, None]:
-        async for sse_text in stream_gen:
-            yield sse_text.encode("utf-8")
+    from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
@@ -434,7 +428,7 @@ async def generate_narrative(
     )
 
     return StreamingResponse(
-        _sse_stream(stream_gen),
+        tracked_sse_stream(task_id, stream_gen),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )
