@@ -99,3 +99,129 @@ export async function getChatTaskForSession(
   const tasks = await getAITasks('chat')
   return tasks.find((t) => t.session_id === sessionId) ?? null
 }
+
+// ---------------------------------------------------------------------------
+// v3 SSE reconnection — subscribe-only stream
+// ---------------------------------------------------------------------------
+
+export interface TaskStreamCallbacks {
+  onEvent: (event: string, data: unknown) => void
+  onGap: () => void
+  onEnd: () => void
+  onError: (message: string) => void
+}
+
+export interface TaskStreamHandle {
+  abort: () => void
+}
+
+/**
+ * Subscribe to a task's SSE stream (subscribe-only, no trigger).
+ *
+ * Used for SSE reconnection when user navigates back to a page
+ * while a task is still running. Supports Last-Event-ID for
+ * gap-free replay from the bridge buffer.
+ *
+ * Uses bare fetch because axios lacks native SSE support —
+ * same pattern as streamNarrative / useReportStream.
+ */
+export function subscribeTaskStream(
+  taskId: string,
+  callbacks: TaskStreamCallbacks,
+  options?: { lastEventId?: string },
+): TaskStreamHandle {
+  const controller = new AbortController()
+  void runTaskStream(controller, taskId, callbacks, options)
+  return { abort: () => controller.abort() }
+}
+
+async function runTaskStream(
+  controller: AbortController,
+  taskId: string,
+  callbacks: TaskStreamCallbacks,
+  options?: { lastEventId?: string },
+): Promise<void> {
+  const url = `/api/v1/ai/tasks/${taskId}/stream`
+  const headers: Record<string, string> = { Accept: 'text/event-stream' }
+  if (options?.lastEventId) {
+    headers['Last-Event-ID'] = options.lastEventId
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    })
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('stream.request_failed')
+    }
+    return
+  }
+
+  if (!res.ok) {
+    callbacks.onError(`stream.request_failed:${res.status}`)
+    return
+  }
+
+  if (!res.body) {
+    callbacks.onError('stream.unavailable')
+    return
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let currentEvent = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim()
+          continue
+        }
+        if (!line.startsWith('data:')) continue
+        const dataStr = line.slice(5).trim()
+
+        const event = currentEvent || 'message'
+        currentEvent = ''
+
+        if (event === 'end') {
+          callbacks.onEnd()
+          return
+        }
+        if (event === 'gap') {
+          callbacks.onGap()
+          return
+        }
+
+        // Parse JSON data (best-effort)
+        let parsed: unknown = dataStr
+        try {
+          parsed = JSON.parse(dataStr)
+        } catch {
+          // Non-JSON data — pass raw string
+        }
+
+        callbacks.onEvent(event, parsed)
+      }
+    }
+    // Stream ended without explicit end event
+    callbacks.onEnd()
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('stream.read_failed')
+    }
+  }
+}

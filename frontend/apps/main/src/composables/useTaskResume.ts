@@ -1,107 +1,185 @@
 /**
- * useTaskResume - U6 generic task resume hook for frontend SSE reconnection.
+ * useTaskResume — v3 unified task resume composable.
  *
- * Checks for existing running/completed tasks on page load and returns state
- * so the caller can reconnect SSE or load cached results.
+ * When user returns to a page, detects running tasks and attempts SSE
+ * reconnection (subscribeTaskStream). Falls back to useTaskPolling on
+ * gap/error/completion.
+ *
+ * Replaces the inline `resumeIfRunning()` pattern in individual components.
  *
  * Usage:
- *   const { status, taskId, runId, task } = useTaskResume('report')
+ *   const { resume, cleanup, status, taskId } = useTaskResume('narrative', {
+ *     onStreamEvent: (event, data) => { ... },
+ *     onComplete: (task) => { ... },
+ *     onError: (task) => { ... },
+ *   })
  *
- *   if (status.value === 'running') {
- *     // Reconnect SSE with taskId and runId
- *   } else if (status.value === 'completed') {
- *     // Load cached result from task
- *   } else {
- *     // No existing task, trigger new generation
- *   }
+ *   onActivated(async () => {
+ *     const resumed = await resume()
+ *     if (!resumed) await loadCached()
+ *   })
  */
-import { ref, onMounted, type Ref } from 'vue'
-import { getAITasks, type AITask } from '@/api/ai-tasks'
+import { ref, type Ref } from 'vue'
+import {
+  getAITasks,
+  subscribeTaskStream,
+  type AITask,
+  type TaskStreamHandle,
+} from '@/api/ai-tasks'
+import { useTaskPolling } from '@/composables/useTaskPolling'
 
-export type TaskResumeStatus = 'idle' | 'running' | 'completed' | 'failed' | 'interrupted'
+export type TaskResumeStatus =
+  | 'idle'
+  | 'connecting'
+  | 'streaming'
+  | 'polling'
+  | 'completed'
+  | 'failed'
+
+export interface UseTaskResumeOptions {
+  /** Called for each SSE event during streaming. */
+  onStreamEvent?: (event: string, data: unknown) => void
+  /** Called when the task reaches 'completed' status. */
+  onComplete?: (task: AITask) => void
+  /** Called when the task reaches a terminal error state. */
+  onError?: (task: AITask) => void
+}
 
 export interface UseTaskResumeReturn {
-  status: Ref<TaskResumeStatus>
+  /** Current task ID (set after resume detects a running task). */
   taskId: Ref<string | null>
-  runId: Ref<string | null>
+  /** Resume lifecycle status. */
+  status: Ref<TaskResumeStatus>
+  /** Latest task data from API or polling. */
   task: Ref<AITask | null>
+  /** Whether the composable is loading/checking. */
   loading: Ref<boolean>
-  error: Ref<string | null>
+  /** Attempt to resume — returns true if a running task was found. */
+  resume: () => Promise<boolean>
+  /** Clean up SSE connection and polling. */
+  cleanup: () => void
+  /** Re-check task status (legacy compat). */
   check: () => Promise<void>
 }
 
-/**
- * Generic task resume hook.
- *
- * On mount, queries GET /api/v1/ai/tasks?skill={skillId}&status=running,completed
- * and returns the most recent task state.
- *
- * @param skillId - Skill ID to check (e.g., 'report', 'import', 'coach')
- * @returns Task resume state and check function
- */
-export function useTaskResume(skillId: string): UseTaskResumeReturn {
-  const status = ref<TaskResumeStatus>('idle')
+export function useTaskResume(
+  capability: string,
+  options: UseTaskResumeOptions = {},
+): UseTaskResumeReturn {
   const taskId = ref<string | null>(null)
-  const runId = ref<string | null>(null)
+  const status = ref<TaskResumeStatus>('idle')
   const task = ref<AITask | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  const lastEventId = ref<string | null>(null)
 
-  async function check(): Promise<void> {
+  let streamHandle: TaskStreamHandle | null = null
+
+  // Polling fallback — watches taskId ref
+  const polling = useTaskPolling(taskId, {
+    onComplete: (t) => {
+      status.value = 'completed'
+      task.value = t
+      options.onComplete?.(t)
+    },
+    onError: (t) => {
+      status.value = 'failed'
+      task.value = t
+      options.onError?.(t)
+    },
+  })
+
+  function startSSE(tid: string): void {
+    status.value = 'connecting'
+    streamHandle = subscribeTaskStream(
+      tid,
+      {
+        onEvent: (event, data) => {
+          status.value = 'streaming'
+          // Track last event ID for potential reconnects
+          // (SSE spec: events may carry an id field — for now
+          // we track via the onEvent callback data)
+          options.onStreamEvent?.(event, data)
+        },
+        onGap: () => {
+          // Buffer overflow — fallback to polling
+          status.value = 'polling'
+          // taskId is already set → useTaskPolling takes over
+        },
+        onEnd: () => {
+          // Stream ended — task likely completed.
+          // useTaskPolling will detect the terminal state on next poll.
+          // If polling isn't active yet, trigger a check.
+          if (status.value !== 'completed' && status.value !== 'failed') {
+            polling.pollNow()
+          }
+        },
+        onError: (_msg) => {
+          // SSE failed — fallback to polling
+          status.value = 'polling'
+        },
+      },
+      { lastEventId: lastEventId.value || undefined },
+    )
+  }
+
+  async function resume(): Promise<boolean> {
     loading.value = true
-    error.value = null
-
     try {
-      // Query for running and completed tasks
-      const tasks = await getAITasks(skillId)
-
-      if (tasks.length === 0) {
-        status.value = 'idle'
-        taskId.value = null
-        runId.value = null
-        task.value = null
-        return
-      }
-
-      // Find the most recent task (sorted by started_at desc by backend)
+      const tasks = await getAITasks(capability)
       const latestTask = tasks[0]
 
-      taskId.value = latestTask.id
-      runId.value = latestTask.run_id || null
-      task.value = latestTask
-
-      // Map backend status to frontend status
-      if (latestTask.status === 'running' || latestTask.status === 'queued') {
-        status.value = 'running'
-      } else if (latestTask.status === 'completed') {
-        status.value = 'completed'
-      } else if (latestTask.status === 'failed' || latestTask.status === 'timeout') {
-        status.value = 'failed'
-      } else if (latestTask.status === 'interrupted' || latestTask.status === 'cancelled') {
-        status.value = 'interrupted'
-      } else {
-        status.value = 'idle'
+      if (
+        !latestTask?.id ||
+        !['running', 'queued', 'post_processing'].includes(latestTask.status)
+      ) {
+        // No running task
+        if (latestTask?.status === 'completed') {
+          status.value = 'completed'
+          task.value = latestTask
+          options.onComplete?.(latestTask)
+        } else if (
+          latestTask?.status === 'failed' ||
+          latestTask?.status === 'timeout'
+        ) {
+          status.value = 'failed'
+          task.value = latestTask
+          options.onError?.(latestTask)
+        }
+        return false
       }
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to check task status'
+
+      // Found a running task — try SSE reconnection
+      taskId.value = latestTask.id
+      task.value = latestTask
+      startSSE(latestTask.id)
+      return true
+    } catch {
       status.value = 'idle'
+      return false
     } finally {
       loading.value = false
     }
   }
 
-  // Check on mount
-  onMounted(() => {
-    check()
-  })
+  function cleanup(): void {
+    streamHandle?.abort()
+    streamHandle = null
+    polling.stop()
+    status.value = 'idle'
+  }
+
+  // Legacy compat — same as resume but returns void
+  async function check(): Promise<void> {
+    await resume()
+  }
 
   return {
-    status,
     taskId,
-    runId,
+    status,
     task,
     loading,
-    error,
+    resume,
+    cleanup,
     check,
   }
 }
