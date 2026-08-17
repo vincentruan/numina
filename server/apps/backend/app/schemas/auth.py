@@ -223,8 +223,8 @@ class UpdateProfileRequest(BaseModel):
         # Allow uploaded images
         if v.startswith("/uploads/"):
             return v
-        # Allow 3D icon paths
-        if v.startswith("/icons/3d/"):
+        # Allow 3D icon paths (originals and thumbnails)
+        if v.startswith("/icons/3d/") or v.startswith("/icons/3d-thumbs/"):
             return v
         # Allow single emoji (max 8 bytes, no HTML metacharacters)
         if len(v.encode("utf-8")) <= 8 and not any(c in v for c in "<>&\"'"):
@@ -403,8 +403,8 @@ class UpdateMemberInfoRequest(BaseModel):
         # Allow uploaded images
         if v.startswith("/uploads/"):
             return v
-        # Allow 3D icon paths
-        if v.startswith("/icons/3d/"):
+        # Allow 3D icon paths (originals and thumbnails)
+        if v.startswith("/icons/3d/") or v.startswith("/icons/3d-thumbs/"):
             return v
         # Allow single emoji (max 8 bytes, no HTML metacharacters)
         if len(v.encode("utf-8")) <= 8 and not any(c in v for c in "<>&\"'"):
