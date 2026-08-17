@@ -63,6 +63,7 @@ class UpdateChildRequest(BaseModel):
     username: str | None = None  # 新增：允许修改 username
     display_name: str | None = None
     avatar_color: str | None = None
+    avatar_url: str | None = None
     pin: list[str] | None = None  # if provided, reset PIN
 
     @field_validator("username")
@@ -85,6 +86,26 @@ class UpdateChildRequest(BaseModel):
             raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
         return v
 
+    @field_validator("avatar_url")
+    @classmethod
+    def check_avatar_url(cls, v: str | None) -> str | None:
+        """Validate avatar_url: allow null, /uploads/..., /icons/3d/..., or single emoji."""
+        if v is None:
+            return v
+        # Reject path traversal attempts
+        if ".." in v:
+            raise ValueError("avatar_url 不允许包含路径遍历序列")
+        # Allow uploaded images
+        if v.startswith("/uploads/"):
+            return v
+        # Allow 3D icon paths
+        if v.startswith("/icons/3d/"):
+            return v
+        # Allow single emoji (max 8 bytes, no HTML metacharacters)
+        if len(v.encode("utf-8")) <= 8 and not any(c in v for c in "<>&\"'"):
+            return v
+        raise ValueError("avatar_url 必须是有效的上传路径、图标路径或单个表情符号")
+
     @field_validator("pin")
     @classmethod
     def check_pin(cls, v):
@@ -103,4 +124,5 @@ class ChildResponse(SnowflakeBase):
     username: str
     display_name: str
     avatar_color: str
+    avatar_url: str | None = None
     is_active: bool

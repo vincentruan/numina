@@ -208,10 +208,11 @@ def install() -> None:
         messages: list[Any],
         thread_id: str | None = None,
         agent_name: str | None = None,
-        correction_detected: bool = False,
-        reinforcement_detected: bool = False,
+        signals: frozenset[str] = frozenset(),
         user_id: str | None = None,
         trace_id: str | None = None,
+        *,
+        bypass_watermark: bool = False,
     ) -> bool:
         cfg = pop_config(thread_id, user_id, agent_name)
         if cfg is None:
@@ -222,10 +223,10 @@ def install() -> None:
                 messages,
                 thread_id=thread_id,
                 agent_name=agent_name,
-                correction_detected=correction_detected,
-                reinforcement_detected=reinforcement_detected,
+                signals=signals,
                 user_id=user_id,
                 trace_id=trace_id,
+                bypass_watermark=bypass_watermark,
             ))
         push_current_app_config(cfg)
         try:
@@ -234,10 +235,10 @@ def install() -> None:
                 messages,
                 thread_id=thread_id,
                 agent_name=agent_name,
-                correction_detected=correction_detected,
-                reinforcement_detected=reinforcement_detected,
+                signals=signals,
                 user_id=user_id,
                 trace_id=trace_id,
+                bypass_watermark=bypass_watermark,
             ))
         finally:
             pop_current_app_config()

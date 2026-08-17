@@ -28,6 +28,22 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
+def _make_fake_task():
+    """Create a mock AITask for testing."""
+    from datetime import UTC, datetime
+
+    class _FakeTask:
+        id = 12345
+        family_id = 1
+        skill_id = "coach"
+        status = "running"
+        session_id = "test-session-123"
+        started_at = datetime.now(UTC)
+        completed_at = None
+        queue_position = None
+    return _FakeTask()
+
+
 def test_generate_returns_cached_when_fresh(client, auth_headers, db_session):
     """A cached finance_coach row younger than 8h is returned as JSON (non-stream)."""
     from apps.backend.app.services.finance_coach_cache import upsert_skill_result
@@ -50,20 +66,47 @@ def test_generate_returns_cached_when_fresh(client, auth_headers, db_session):
 
 
 def test_generate_force_bypasses_cache(client, auth_headers, db_session):
-    """force=true skips the cache and regenerates (streams)."""
+    """force=true skips the cache and regenerates (AITask-tracked bridge consumer)."""
     from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     family_id = _enable_ai(db_session, auth_headers, client)
     upsert_skill_result(db_session, family_id, "finance_coach", {"suggestions": []})
     db_session.commit()
 
+    async def _fake_stream(*args, **kwargs):
+        yield "event: custom\ndata: {}\n\n"
+        yield "event: end\ndata: null\n\n"
+
+    class _FakeSession:
+        id = "test-session-123"
+
     with patch("apps.backend.app.routers.ai_finance_coach.check_circuit_blocked", return_value=None), \
-         patch("apps.backend.app.routers.ai_finance_coach._stream_finance_coach_sse") as stream_mock:
-        stream_mock.return_value = iter([b"event: end\ndata: {}\n\n"])
+         patch("apps.backend.app.routers.ai_finance_coach.AITaskService") as task_svc, \
+         patch("apps.backend.app.routers.ai_finance_coach.ChatSessionService") as sess_svc, \
+         patch("apps.backend.app.routers.ai_finance_coach.AgentClient") as agent_cls, \
+         patch("apps.backend.app.routers.ai_finance_coach.consume_task_stream", side_effect=_fake_stream):
+        task_svc.get_running_task.return_value = None
+        task_svc.get_any_running_task.return_value = None
+        task_svc.create_task.return_value = _make_fake_task()
+
+        async def _fake_create_session(*a, **kw):
+            return _FakeSession()
+
+        sess_svc.create_session = _fake_create_session
+        agent_instance = agent_cls.return_value
+
+        async def _fake_post(*a, **kw):
+            class _R:
+                status_code = 200
+                text = "ok"
+                headers = {"Content-Location": "/internal/gateway/runs/finance-coach/t/run-123"}
+            return _R()
+
+        agent_instance.post = _fake_post
         resp = client.post(
             "/api/v1/ai/finance-coach/generate?force=true", headers=auth_headers
         )
-    # force path streams (StreamingResponse 200) — the mock returns a frame.
+    # force path streams (StreamingResponse 200)
     assert resp.status_code == 200
     # consume the streamed body so the generator completes
     _ = resp.content

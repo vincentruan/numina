@@ -53,6 +53,19 @@
         <div class="streaming-header">
           <van-loading size="18" color="var(--van-primary-color)" />
           <span class="streaming-label">{{ t('literacyReport.generating') }}</span>
+          <!-- U21: cancel button when AITask is running -->
+          <van-button
+            v-if="resumeHandle.taskId"
+            plain
+            type="danger"
+            size="mini"
+            :loading="literacyCancelling"
+            :disabled="literacyCancelling"
+            class="streaming-cancel-btn"
+            @click="onLiteracyCancel"
+          >
+            {{ t('aiTask.cancelBtn') }}
+          </van-button>
         </div>
         <div v-if="stream.narrative.value" class="streaming-text">
           {{ stream.narrative.value }}
@@ -63,6 +76,14 @@
       <div v-else-if="stream.status.value === 'error'" class="stream-error">
         <EmptyState image="error" :description="stream.errorMessage.value || t('literacyReport.generateFailed')" />
         <van-button plain type="primary" size="small" @click="regenerate">
+          {{ t('literacyReport.retry') }}
+        </van-button>
+      </div>
+
+      <!-- Task failed (from resume detection) -->
+      <div v-else-if="resumeHandle.status.value === 'failed'" class="stream-error">
+        <EmptyState image="error" :description="resumeHandle.task.value?.error_message || t('literacyReport.generateFailed')" />
+        <van-button plain type="primary" size="small" @click="onTaskRetry">
           {{ t('literacyReport.retry') }}
         </van-button>
       </div>
@@ -90,10 +111,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showFailToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ChildSelector from '@/components/literacy/ChildSelector.vue'
@@ -105,6 +126,7 @@ import {
 } from '@/api/literacy'
 import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api/literacy'
 import { useLiteracyStream } from '@/composables/useLiteracyStream'
+import { useTaskResume } from '@/composables/useTaskResume'
 
 defineOptions({ name: 'LiteracyReportPage' })
 
@@ -121,6 +143,19 @@ const currentWeekStart = ref<string | null>(null)
 
 const reportLoading = ref(false)
 const stream = useLiteracyStream()
+
+// v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
+const resumeHandle = useTaskResume('literacy', {
+  onComplete: async () => {
+    if (selectedChildId.value) {
+      await loadReport()
+    }
+  },
+  onError: () => {
+    // Don't toast here — the template shows inline error + retry instead
+  },
+})
+const literacyCancelling = ref(false)
 
 const currentHistoryIndex = computed(() => {
   if (!currentWeekStart.value) return -1
@@ -236,6 +271,11 @@ async function regenerate() {
   }
 }
 
+async function onTaskRetry() {
+  report.value = null
+  await regenerate()
+}
+
 watch(stream.status, (val) => {
   if (val === 'completed' && selectedChildId.value) {
     loadReport()
@@ -255,12 +295,35 @@ watch(currentWeekStart, (val, oldVal) => {
 
 let skipNextWatch = true
 
-onMounted(() => {
-  init().then(() => {
-    if (children.value.length > 0) {
+// v3: resume replaced by useTaskResume
+
+async function onLiteracyCancel() {
+  if (!resumeHandle.taskId.value || literacyCancelling.value) return
+  literacyCancelling.value = true
+  try {
+    await resumeHandle.cancel()
+    stream.abort()
+    resumeHandle.taskId.value = null
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    literacyCancelling.value = false
+  }
+}
+
+onMounted(async () => {
+  await init()
+  if (children.value.length > 0) {
+    const resumed = await resumeHandle.resume()
+    if (!resumed) {
       loadReport()
     }
-  })
+  }
+})
+
+onUnmounted(() => {
+  resumeHandle.cleanup()
 })
 </script>
 
@@ -320,6 +383,11 @@ onMounted(() => {
   font-size: 14px;
   color: var(--van-primary-color);
   font-weight: 500;
+}
+
+/* U21: cancel button inside streaming header */
+.streaming-cancel-btn {
+  margin-left: auto;
 }
 
 .streaming-text {

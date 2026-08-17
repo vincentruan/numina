@@ -145,17 +145,35 @@ def test_get_report_requires_auth(client):
 # ── POST /ai/report/generate ─────────────────────────────────────────────────────
 
 def test_generate_report_creates_pending_then_completes(client, auth_headers, db):
-    """POST /ai/report/generate/events streams SSE and marks task completed.
+    """POST /ai/report/generate/events triggers the agent and marks task completed.
 
-    The task-tracking wrapper in ``trigger_generate_events`` transitions the
-    AITask from ``running`` to ``completed`` when the agent's SSE stream ends
-    with an ``end`` frame carrying ``status=complete``.
+    The bridge consumer (consume_task_stream) transitions the AITask from
+    ``running`` to ``completed`` when it consumes the end event from the
+    Redis stream.
     """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None):
+        # Simulate the bridge consumer completing the task on end event
+        from apps.backend.app.services.ai_task_service import AITaskService
+        from apps.backend.app.database import SessionLocal
+
+        yield "event: custom\ndata: {\"type\":\"report.step2_json\"}\n\n"
+        # Mark the task completed (mimics consume_task_stream's end handling)
+        _db = SessionLocal()
+        try:
+            AITaskService.complete_task(task_id, _db)
+        finally:
+            _db.close()
+        yield "event: end\ndata: null\n\n"
+
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
+        patch("apps.backend.app.routers.ai_report.consume_task_stream", _fake_stream),
+    ):
+        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -186,7 +204,12 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate/events requires owner role (embedded in JWT)."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+    ):
+        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
+        mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -221,7 +244,12 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     db.add(task)
     db.commit()
 
-    with patch("apps.backend.app.routers.ai_report.AgentClient", new=_make_sse_streaming_mock()):
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+    ):
+        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
+        mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     # Should resume (200 + SSE stream) instead of 409
@@ -230,53 +258,37 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
-    """If agent streaming raises, the route emits an SSE error frame (200) and
-    transitions the AITask to ``failed``.
-
-    The passthrough's ``except`` catches the exception and yields a single
-    ``event: error`` SSE frame so the frontend gets a graceful close.
-    The task-tracking wrapper's ``finally`` block then marks the AITask as
-    failed since no ``end`` frame with ``status=complete`` was received.
+    """If agent trigger fails (non-200), the route emits an SSE error frame (200)
+    and transitions the AITask to ``failed``.
     """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    async def _aiter_raises():
-        raise Exception("Agent error")
-        yield  # make it an async generator
-
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.aiter_lines = _aiter_raises
-    mock_resp.aread = AsyncMock(return_value=b"")
-
-    mock_stream_cm = MagicMock()
-    mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
-
-    mock_client = MagicMock()
-    mock_client.stream = MagicMock(return_value=mock_stream_cm)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-
-    mock_cls = MagicMock(return_value=mock_client)
-
-    with patch("apps.backend.app.routers.ai_report.AgentClient", new=mock_cls):
+    with patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls:
+        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=500, text="agent error"))
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Response is still 200 SSE (passthrough catches the error and emits an error frame)
+    # Response is still 200 SSE (route emits an error frame)
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    # CRITICAL: Consume response to let generator's except/finally block execute
+    # CRITICAL: Consume response to let generator complete
     _ = resp.content
 
-    # Task is marked failed — no completion end frame was received
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
     assert task is not None
     assert task.status == "failed"
+
+
+def _make_empty_async_gen():
+    """An empty async generator (used to stub consume_task_stream)."""
+    async def _gen():
+        return
+        yield  # unreachable, makes it an async generator
+
+    return _gen()
 
 
 # ── Cross-family isolation ──────────────────────────────────────────────────────

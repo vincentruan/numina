@@ -16,7 +16,7 @@ from apps.backend.app.services import ai_context_builder as builder
 
 router = APIRouter(prefix="/ai/context", tags=["ai-context"])
 
-_VALID_SOURCES = {"liability_detail", "wish_detail", "liability_strategy", "wish_advice"}
+_VALID_SOURCES = {"liability_detail", "wish_detail", "liability_strategy", "wish_advice", "rental_summary"}
 
 
 @router.get("")
@@ -39,6 +39,8 @@ def get_ai_context(
             raise AppError(ErrorCode.NOT_FOUND)
     elif source == "liability_strategy":
         summary = builder.build_liability_strategy(db, user)
+    elif source == "rental_summary":
+        summary = builder.build_rental_summary(db, user)
     else:  # wish_advice
         summary = builder.build_wish_advice(db, user)
 

@@ -96,6 +96,11 @@ const router = createRouter({
           name: 'ChildSettings',
           component: () => import('@/pages/ChildSettingsPage.vue'),
         },
+        {
+          path: 'settings/profile',
+          name: 'ChildProfileEdit',
+          component: () => import('@/pages/ChildProfileEditPage.vue'),
+        },
       ],
     },
     // Catch-all redirect — must stay within child app

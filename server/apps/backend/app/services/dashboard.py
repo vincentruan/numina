@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from apps.backend.app.models.activity import Activity
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.rental_contract import RentalContract
 from apps.backend.app.models.snapshot import AssetSnapshot
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.dashboard import (
@@ -139,6 +140,23 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         mom_change_amount = round(current_net - snapshot_net, 2)
         mom_change = round((current_net - snapshot_net) / abs(snapshot_net) * 100, 2)
 
+    # Rental contracts (U13): net monthly rental cash flow; None when no active contracts
+    # so the frontend hides the metric entirely (deposit is not cash flow).
+    rental_contracts = (
+        db.query(RentalContract)
+        .filter(RentalContract.family_id == family_id, RentalContract.is_active.is_(True))
+        .all()
+    )
+    rental_net = None
+    if rental_contracts:
+        rental_net = 0.0
+        for c in rental_contracts:
+            sign = 1.0 if c.role == "landlord" else -1.0
+            rental_net += sign * ExchangeRateService.convert(
+                float(c.monthly_rent), c.currency or "CNY", default_currency, db
+            )
+        rental_net = round(rental_net, 2)
+
     return OverviewResponse(
         currency=default_currency,
         total_assets=round(total_assets_val, 2),
@@ -148,6 +166,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         month_over_month_change=mom_change,
         month_over_month_change_amount=mom_change_amount,
         total_daily_cost=total_daily_cost,
+        rental_net_cash_flow=rental_net,
     )
 
 

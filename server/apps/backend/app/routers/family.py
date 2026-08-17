@@ -232,6 +232,9 @@ def update_member_info(
         member.display_name = body.display_name
     if body.avatar_color is not None:
         member.avatar_color = body.avatar_color
+    # Use model_fields_set to distinguish "not provided" from "explicitly cleared"
+    if "avatar_url" in body.model_fields_set:
+        member.avatar_url = body.avatar_url
     if body.birthday is not None:
         member.birthday = body.birthday
     if body.birthday_is_lunar is not None:

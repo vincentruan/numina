@@ -23,6 +23,12 @@ from apps.backend.app.models.ai_provider_config import (
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.skill_registry import SkillRegistry
+from apps.backend.app.schemas.ai_task import (
+    TaskCompleteRequest,
+    TaskFailRequest,
+    TaskHeartbeatRequest,
+    TaskProgressRequest,
+)
 
 if TYPE_CHECKING:
     from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -1214,3 +1220,148 @@ async def internal_generate_literacy_report(
         "week_start": report.week_start.isoformat() if report.week_start else week_start.isoformat(),
         "generated_at": report.generated_at.isoformat() if report.generated_at else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# AI Task Callbacks — agent reports progress/completion/failure (U9)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/tasks/{task_id}/progress")
+def internal_task_progress(
+    task_id: str,
+    body: TaskProgressRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Update AITask.progress JSON field.
+
+    Agent calls this endpoint during execution to report progress updates
+    (step, steps_completed, status, etc.). Size limit enforced by schema validator.
+    Only updates tasks in running/post_processing state (idempotent on terminal tasks).
+    """
+    from packages.db.models.ai_task import AITask
+
+    # Verify task belongs to this family (tenant isolation)
+    task = (
+        db.query(AITask)
+        .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
+        .first()
+    )
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    # Guard: only update progress on active tasks (not terminal states)
+    if task.status not in ("running", "post_processing"):
+        return {"ok": True, "task_id": task_id, "skipped": "task_not_active"}
+
+    # Update progress field
+    task.progress = body.progress
+    db.commit()
+
+    return {"ok": True, "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/complete")
+def internal_task_complete(
+    task_id: str,
+    body: TaskCompleteRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Mark task as completed.
+
+    Optionally stores result_summary in progress field. Idempotent: calling
+    on an already-completed task returns success without error.
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    # Verify task belongs to this family (tenant isolation)
+    task = AITaskService.get_task_by_id(int(task_id), int(family_id), db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    # Store result_summary in progress if provided
+    if body.result_summary:
+        task.progress = {"result_summary": body.result_summary}
+
+    # Mark as completed (idempotent)
+    AITaskService.complete_task(int(task_id), db)
+
+    return {"ok": True, "task_id": task_id, "status": "completed"}
+
+
+@router.post("/tasks/{task_id}/fail")
+def internal_task_fail(
+    task_id: str,
+    body: TaskFailRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Mark task as failed with error message.
+
+    Error message truncated to 500 characters by schema validator.
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    # Verify task belongs to this family (tenant isolation)
+    task = AITaskService.get_task_by_id(int(task_id), int(family_id), db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    # Mark as failed
+    AITaskService.fail_task(int(task_id), body.error_message, db)
+
+    return {"ok": True, "task_id": task_id, "status": "failed"}
+
+
+@router.post("/tasks/{task_id}/heartbeat")
+def internal_task_heartbeat(
+    task_id: str,
+    body: TaskHeartbeatRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Renew worker lease heartbeat for dead-worker detection.
+
+    Updates lease_expires_at to now + 120s (or custom expires_at if provided).
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    # Verify task belongs to this family (tenant isolation)
+    task = AITaskService.get_task_by_id(int(task_id), int(family_id), db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    # Update lease
+    AITaskService.update_lease(int(task_id), int(family_id), db, body.expires_at)
+
+    return {"ok": True, "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/cancel")
+def internal_task_cancel_confirm(
+    task_id: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Agent confirms cancellation completed.
+
+    Called by agent after receiving cancel signal from Backend. Backend marks
+    AITask.status = cancelled. Idempotent: calling on already-cancelled task
+    returns success without error.
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    # Verify task belongs to this family (tenant isolation)
+    task = AITaskService.get_task_by_id(int(task_id), int(family_id), db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    # Mark as cancelled (idempotent)
+    if task.status in ("running", "post_processing", "queued"):
+        task.status = "cancelled"
+        task.completed_at = datetime.utcnow()
+        db.commit()
+
+    return {"ok": True, "task_id": task_id, "status": "cancelled"}

@@ -89,6 +89,9 @@ def update_child(
         child.display_name = req.display_name
     if req.avatar_color is not None:
         child.avatar_color = req.avatar_color
+    # Use model_fields_set to distinguish "not provided" from "explicitly cleared"
+    if "avatar_url" in req.model_fields_set:
+        child.avatar_url = req.avatar_url
     if req.pin is not None:
         child.pin_hash = _hash_pin(req.pin)
         child.pin_fail_count = 0

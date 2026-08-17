@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import os
 import secrets
@@ -147,6 +149,7 @@ from apps.backend.app.routers import (
 )
 from apps.backend.app.routers import notification_config as notification_config_router
 from apps.backend.app.routers import reminders as reminders_router
+from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import uploads as uploads_serve_router
@@ -328,7 +331,38 @@ async def lifespan(app: FastAPI):
     validate_registry()
     logger.info("MCP tool registry validated")
 
+    # U7: Register backend SIGTERM handler for graceful shutdown.
+    # Marks the backend-local ShutdownState so ShutdownGuardMiddleware can
+    # reject new task creation (503 + Retry-After) during the drain window.
+    # Guard: signal.signal only works in the main thread (tests run lifespan
+    # in a worker thread via TestClient).
+    import signal
+    import threading
+
+    if threading.current_thread() is threading.main_thread():
+
+        def _backend_sigterm_handler(signum, frame):
+            from apps.backend.app.middleware.shutdown_state import mark_shutting_down
+
+            mark_shutting_down()
+
+        signal.signal(signal.SIGTERM, _backend_sigterm_handler)
+
+    # Phase 5.1: Start orphan task detector background loop
+    from apps.backend.app.services.orphan_detector import orphan_detector_loop
+
+    orphan_task = asyncio.create_task(orphan_detector_loop())
+    # P3-17 fix: store on app.state for observability (health checks can verify
+    # `not app.state.orphan_detector_task.done()`)
+    app.state.orphan_detector_task = orphan_task
+    logger.info("Orphan task detector started")
+
     yield
+
+    # Cancel orphan detector on shutdown
+    orphan_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await orphan_task
 
 
 app = FastAPI(
@@ -493,6 +527,7 @@ app.add_middleware(RequestIDMiddleware)
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
 app.include_router(liabilities.router, prefix="/api/v1")
+app.include_router(rental_contracts_router.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(tags.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")

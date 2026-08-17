@@ -119,10 +119,34 @@
       <van-loading size="28" color="var(--color-primary)" />
       <p class="report-generating-text">{{ stream.progressMessage || t('aiHub.reportGenerating') }}</p>
       <p class="report-generating-sub">{{ t('aiHub.reportGeneratingSub') }}</p>
+      <!-- Cancel button when generating (U21: user-initiated task cancel) -->
+      <van-button
+        v-if="reportTaskId"
+        plain
+        type="danger"
+        size="mini"
+        :loading="reportCancelling"
+        :disabled="reportCancelling"
+        class="report-cancel-btn"
+        @click="cancelReport"
+      >
+        {{ t('aiTask.cancelBtn') }}
+      </van-button>
     </div>
 
     <!-- AI disabled state: shown when family has not enabled AI -->
     <AiGatedCard v-else-if="!familyStore.aiEnabled" :is-owner="isOwner" />
+
+    <!-- Task failed from resume detection (replaces error toast) -->
+    <div v-else-if="resumeHandle.status.value === 'failed'" class="report-error-card">
+      <van-icon name="warning-o" size="32" class="report-error-icon" />
+      <p class="report-error-text">
+        {{ resumeHandle.task.value?.error_message || t('toast.aiGenerateFailed') }}
+      </p>
+      <van-button plain type="primary" size="small" @click="generateReport">
+        {{ t('aiTask.retry') }}
+      </van-button>
+    </div>
 
     <div v-else class="report-empty-card" role="button" tabindex="0" :aria-label="t('aiHub.generateFirstReport')" @click="generateReport" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
       <div class="report-empty-icon" aria-hidden="true">
@@ -313,6 +337,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getUser, isGuideDone, markGuideDone } from '@/utils/storage'
 import { parseApiDate } from '@/utils/format'
 import { getAIReport, getAITask } from '@/api/ai'
+import { cancelTaskById } from '@/api/ai-tasks'
 import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useFamilyStore } from '@/stores/family'
@@ -321,6 +346,7 @@ import { useAuthStore } from '@/stores/auth'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useReportStream } from '@/composables/useReportStream'
+import { useTaskResume } from '@/composables/useTaskResume'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
@@ -349,6 +375,19 @@ const familyStore = useFamilyStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
 const stream = useReportStream()
+// v3: useTaskResume for SSE reconnection on page re-entry
+const resumeHandle = useTaskResume('report', {
+  onStreamEvent: (event, data) => {
+    stream.ingestEvent(event, data)
+  },
+  onComplete: async () => {
+    aiStore.clearBackgroundTask('report')
+    await loadReport()
+  },
+  onError: () => {
+    aiStore.clearBackgroundTask('report')
+  },
+})
 const { increment, decrement } = usePageLoading()
 const isOwner = authStore.user?.role === 'owner'
 
@@ -358,6 +397,8 @@ const showAiTip = ref(false)
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
+const reportTaskId = ref<string | null>(null)
+const reportCancelling = ref(false)
 const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
@@ -609,6 +650,7 @@ async function generateReport() {
     try {
       const task = await getAITask('report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
           capability: 'report',
           taskId: task.task_id,
@@ -637,10 +679,28 @@ async function generateReport() {
     // (stream.report is only populated on cache hit, not fresh generation)
     await loadReport()
     aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
   } catch {
     showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
     reportLoading.value = false
+  }
+}
+
+async function cancelReport() {
+  if (!reportTaskId.value || reportCancelling.value) return
+  reportCancelling.value = true
+  try {
+    await cancelTaskById(reportTaskId.value)
+    stream.abort(false)
+    aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
+    reportLoading.value = false
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    reportCancelling.value = false
   }
 }
 
@@ -665,6 +725,7 @@ async function refreshReport(silent?: boolean) {
     try {
       const task = await getAITask('report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
           capability: 'report',
           taskId: task.task_id,
@@ -799,27 +860,19 @@ onMounted(() => {
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
-  // If a report task is still running (user navigated away while generation
-  // was in progress), resume polling so the page picks up latest progress.
-  try {
-    const task = await getAITask('report')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      aiStore.registerBackgroundTask({
-        capability: 'report',
-        taskId: task.task_id,
-        sessionId: task.session_id || '',
-        startedAt: task.started_at || new Date().toISOString(),
-        status: task.status,
-      })
-      await stream.startPolling()
-      await loadReport()
-      aiStore.clearBackgroundTask('report')
-      return
-    } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
-      aiStore.clearBackgroundTask('report')
-    }
-  } catch {
-    // ignore status fetch errors; fall through to normal page load
+  // v3: useTaskResume handles running task detection + SSE reconnection
+  const resumed = await resumeHandle.resume()
+  if (resumed && resumeHandle.task.value) {
+    aiStore.registerBackgroundTask({
+      capability: 'report',
+      taskId: resumeHandle.taskId.value!,
+      sessionId: resumeHandle.task.value.session_id || '',
+      startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
+      status: resumeHandle.task.value.status,
+    })
+  } else {
+    aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
   }
   loadPageData()
 })
@@ -830,9 +883,11 @@ onActivated(async () => {
 // user can navigate back and pick up progress via polling.
 onDeactivated(() => {
   stream.abort(true)
+  resumeHandle.cleanup()
 })
 onUnmounted(() => {
   stream.abort(true)
+  resumeHandle.cleanup()
 })
 
 // Expose refs and functions for testing purposes
@@ -1208,6 +1263,10 @@ defineExpose({
   margin: 0;
   letter-spacing: -0.12px;
 }
+/* Cancel button inside generating card (U21) */
+.report-cancel-btn {
+  margin-top: 10px;
+}
 
 /* Empty report card */
 .report-empty-card {
@@ -1249,6 +1308,26 @@ defineExpose({
   color: var(--text-secondary);
   margin: 0;
   letter-spacing: -0.12px;
+}
+
+.report-error-card {
+  margin: 12px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  border: 1px solid var(--van-danger-color, #ee0a24);
+}
+
+.report-error-icon {
+  color: var(--van-danger-color, #ee0a24);
+  margin-bottom: 8px;
+}
+
+.report-error-text {
+  font-size: 13px;
+  color: var(--van-danger-color, #ee0a24);
+  margin: 0 0 12px;
 }
 
 /* ── Agent grid section ── */

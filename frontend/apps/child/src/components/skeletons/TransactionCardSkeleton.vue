@@ -18,7 +18,7 @@
   align-items: center;
   background: var(--color-surface-soft);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 12px 14px;
   gap: 12px;
   border: 1px solid var(--color-hairline);
   min-height: 56px;

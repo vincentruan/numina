@@ -5,20 +5,25 @@
     <!-- Invite tooltip (shown once for owners on first visit) -->
     <div v-if="showInviteTip" class="feature-tip">{{ t('featureHints.settingsInvite') }}</div>
 
+    <!-- Profile Card (centered layout) -->
+    <div class="profile-card" @click="router.push('/settings/profile')">
+      <UserAvatar
+        :avatar-url="authStore.user?.avatar_url ?? null"
+        :avatar-color="authStore.user?.avatar_color ?? 'var(--van-primary-color)'"
+        :display-name="authStore.user?.display_name || ''"
+        :size="64"
+      />
+      <div class="profile-info">
+        <div class="profile-name">{{ authStore.user?.display_name }}</div>
+        <div class="profile-family">
+          <van-icon name="home-o" size="14" />
+          <span>{{ familyStore.family?.custom_title || familyStore.family?.name }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 账户信息 -->
     <van-cell-group inset :title="t('settings.accountInfo')">
-      <van-cell
-        :title="t('family.familyName')"
-        :value="familyStore.family?.custom_title || familyStore.family?.name"
-        icon="home-o"
-        :is-link="authStore.user?.role === 'owner'"
-        @click="onEditFamilyTitle"
-      />
-      <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name">
-        <template #icon>
-          <UserIcon :size="16" class="cell-icon" />
-        </template>
-      </van-cell>
       <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" is-link to="/settings/username">
         <template #icon>
           <UsernameIcon :size="16" class="cell-icon" />
@@ -361,6 +366,7 @@ import { getFamilySettings, updateFamilySettings } from '@/api/family'
 import { isGuideDone, markGuideDone } from '@/utils/storage'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 import UserIcon from '@/components/common/UserIcon.vue'
@@ -482,9 +488,9 @@ function aiStatusBadgeStyle(status: string | null) {
 }
 
 function aiStatusLabel(status: string | null) {
-  if (status === 'unavailable') return '不可用'
-  if (status === 'degraded') return '部分降级'
-  return '正常'
+  if (status === 'unavailable') return t('settings.aiStatusUnavailable')
+  if (status === 'degraded') return t('settings.aiStatusDegraded')
+  return t('settings.aiStatusHealthy')
 }
 
 async function onToggleAI(val: boolean) {
@@ -822,5 +828,37 @@ async function onLogout() {
   font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
+}
+/* Profile Card */
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+  margin: 12px 16px;
+  background: var(--card-bg, var(--van-background-2));
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.profile-card:active {
+  transform: scale(0.98);
+}
+.profile-info {
+  margin-top: 12px;
+  text-align: center;
+}
+.profile-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary, var(--van-text-color));
+  margin-bottom: 4px;
+}
+.profile-family {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary, var(--van-text-color-2));
 }
 </style>

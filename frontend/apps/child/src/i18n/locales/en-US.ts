@@ -449,4 +449,18 @@ export default {
     noTreasures: 'Treasures will appear here after wishes come true 🎁',
     noRecords: 'Start doing tasks and Star Coins will roll in 💫',
   },
+  profileEdit: {
+    title: 'Edit Profile',
+    tapToChange: 'Tap avatar to change',
+    displayName: 'Display Name',
+    displayNamePlaceholder: 'Enter display name',
+    displayNameRequired: 'Display name is required',
+  },
+  avatarPicker: {
+    title: 'Choose Avatar',
+    tab3d: '3D Icons',
+    tabEmoji: 'Emoji',
+    emojiHint: 'Tap the input below to select an emoji',
+    emojiPlaceholder: 'Tap to enter emoji',
+  },
 }

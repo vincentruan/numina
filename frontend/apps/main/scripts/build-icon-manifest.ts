@@ -39,6 +39,12 @@ const CATEGORY_DEFS: CategoryDef[] = [
   { folder: 'plants',              nameZh: '植物花卉',   nameEn: 'Plants & Flowers',      sortOrder: 13, assetCategoryHints: ['plant'] },
   { folder: 'science-tech',        nameZh: '科学技术',   nameEn: 'Science & Technology',  sortOrder: 14, assetCategoryHints: ['digital', 'tech'] },
   { folder: 'healthcare',          nameZh: '医疗健康',   nameEn: 'Healthcare',            sortOrder: 15, assetCategoryHints: ['medical'] },
+  // Avatar-only categories (not shown in asset picker)
+  { folder: 'characters',          nameZh: '人物角色',   nameEn: 'Characters',            sortOrder: 16, assetCategoryHints: [] },
+  { folder: 'historical-figures',  nameZh: '历史名人',   nameEn: 'Historical Figures',    sortOrder: 17, assetCategoryHints: [] },
+  { folder: 'religion-mythology',  nameZh: '宗教神话',   nameEn: 'Religion & Mythology',  sortOrder: 18, assetCategoryHints: [] },
+  { folder: 'flags',               nameZh: '旗帜标志',   nameEn: 'Flags',                 sortOrder: 19, assetCategoryHints: [] },
+  { folder: 'numbers-symbols',     nameZh: '数字符号',   nameEn: 'Numbers & Symbols',     sortOrder: 20, assetCategoryHints: [] },
 ]
 
 // ── parsing ──────────────────────────────────────────────────────────────────

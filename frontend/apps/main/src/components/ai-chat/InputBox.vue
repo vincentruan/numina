@@ -1503,6 +1503,11 @@ onUnmounted(() => {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   z-index: 1002;
   min-width: 160px;
+  opacity: 1;
+}
+
+:global([data-theme='dark'] .plus-panel) {
+  background: var(--ai-panel-bg);
 }
 
 .panel-item {

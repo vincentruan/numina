@@ -264,7 +264,7 @@ async function runNarrativeStream(
   try {
     // SSE: axios lacks native EventSource/SSE support — bare fetch required.
     res = await fetch(url, {
-      method: 'GET',
+      method: 'POST',
       headers,
       credentials: 'include',
       signal: controller.signal,
@@ -278,7 +278,7 @@ async function runNarrativeStream(
       }
       // SSE: axios lacks native EventSource/SSE support — bare fetch required.
       res = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers,
         credentials: 'include',
         signal: controller.signal,

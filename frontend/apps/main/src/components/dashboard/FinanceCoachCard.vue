@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFinanceCoach } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
 import { useI18n } from 'vue-i18n'
+import { showToast, showFailToast } from 'vant'
+import { useTaskResume } from '@/composables/useTaskResume'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
@@ -20,8 +22,21 @@ const loaded = ref(false)
 const visible = ref(false)
 const refreshing = ref(false)
 const expanded = ref<string[]>([])
+const cancelling = ref(false)
 
 const count = computed(() => suggestions.value.length)
+
+// v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
+const resumeHandle = useTaskResume('coach', {
+  onComplete: async () => {
+    await load(false)
+  },
+  onError: () => {
+    loading.value = false
+    loaded.value = true
+    // Don't toast here — the template shows inline error + retry instead
+  },
+})
 
 async function load(force = false) {
   if (!familyStore.aiEnabled) {
@@ -32,6 +47,7 @@ async function load(force = false) {
   }
   try {
     refreshing.value = force
+    loading.value = true
     const resp = await getFinanceCoach(force)
     // Advice baseline gate (spec §7.1): schema-validate before display.
     const valid = (resp.report.suggestions || []).filter(
@@ -51,13 +67,37 @@ async function load(force = false) {
     }
     suggestions.value = valid.slice(0, 3)
     visible.value = true
+    resumeHandle.taskId.value = null
   } catch {
     visible.value = false // silent hide on failure (spec §7.2)
+    resumeHandle.taskId.value = null
   } finally {
     loading.value = false
     loaded.value = true
     refreshing.value = false
   }
+}
+
+// v3: resume replaced by useTaskResume
+
+async function onCancel() {
+  if (!resumeHandle.taskId.value || cancelling.value) return
+  cancelling.value = true
+  try {
+    await resumeHandle.cancel()
+    resumeHandle.taskId.value = null
+    loading.value = false
+    loaded.value = true
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    cancelling.value = false
+  }
+}
+
+async function onRetry() {
+  await load(true)
 }
 
 function onCta(s: FinanceSuggestion) {
@@ -75,11 +115,21 @@ async function onToggle(names: string[]) {
 
 onMounted(async () => {
   if (familyStore.aiEnabled) {
-    load(false)
+    const resumed = await resumeHandle.resume()
+    if (!resumed) {
+      load(false)
+    }
   } else {
     loading.value = false
     loaded.value = true
   }
+})
+
+// Dashboard is KeepAlive-cached; onActivated re-runs resume logic.
+let hasActivated = false
+onActivated(async () => {
+  if (!hasActivated) { hasActivated = true; return }
+  await resumeHandle.resume()
 })
 </script>
 
@@ -97,7 +147,20 @@ onMounted(async () => {
               <span class="coach-title__text">{{ t('dashboard.financeCoach.title') }}</span>
             </span>
             <span v-if="loading" class="coach-summary coach-summary--loading">
-              <van-loading size="12px" type="spinner" />
+              <!-- U21: cancel button visible when AITask is running -->
+              <van-button
+                v-if="resumeHandle.taskId"
+                plain
+                type="danger"
+                size="mini"
+                :loading="cancelling"
+                :disabled="cancelling"
+                class="coach-cancel-btn"
+                @click.stop="onCancel"
+              >
+                {{ t('aiTask.cancelBtn') }}
+              </van-button>
+              <van-loading v-else size="12px" type="spinner" />
             </span>
             <span v-else-if="count > 0" class="coach-summary">
               {{ t('dashboard.financeCoach.count', { count }) }}
@@ -149,7 +212,16 @@ onMounted(async () => {
 
         <!-- Empty / error state inside expanded area -->
         <template v-else-if="loaded">
+          <div v-if="resumeHandle.status.value === 'failed'" class="fc-error-state">
+            <p class="fc-error-text">
+              {{ resumeHandle.task.value?.error_message || t('aiTask.error.generic') }}
+            </p>
+            <van-button size="small" type="primary" plain @click.stop="onRetry">
+              {{ t('aiTask.retry') }}
+            </van-button>
+          </div>
           <van-empty
+            v-else
             :description="t('dashboard.financeCoach.empty')"
             image-size="60"
             class="section-empty"
@@ -213,6 +285,10 @@ onMounted(async () => {
 .coach-summary--loading {
   display: inline-flex;
   align-items: center;
+}
+/* U21: cancel button inside coach header */
+.coach-cancel-btn {
+  margin-left: 4px;
 }
 .coach-summary--empty {
   color: var(--van-text-color-3);
@@ -283,5 +359,18 @@ onMounted(async () => {
 }
 .section-empty {
   padding: 12px 0;
+}
+.fc-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+}
+.fc-error-text {
+  font-size: 13px;
+  color: var(--van-danger-color, #ee0a24);
+  margin: 0;
+  text-align: center;
 }
 </style>

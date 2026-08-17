@@ -155,6 +155,7 @@ class UserResponse(SnowflakeBase):
     username: str | None  # NULL for child accounts
     display_name: str
     avatar_color: str
+    avatar_url: str | None = None
     role: str
     is_active: bool
     theme: str = "light"
@@ -201,6 +202,7 @@ class UserResponse(SnowflakeBase):
 class UpdateProfileRequest(BaseModel):
     display_name: str | None = None
     avatar_color: str | None = None
+    avatar_url: str | None = None
 
     @field_validator("avatar_color")
     @classmethod
@@ -208,6 +210,26 @@ class UpdateProfileRequest(BaseModel):
         if v is not None and not _HEX_COLOR_RE.match(v):
             raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
         return v
+
+    @field_validator("avatar_url")
+    @classmethod
+    def check_avatar_url(cls, v: str | None) -> str | None:
+        """Validate avatar_url: allow null, /uploads/..., /icons/3d/..., or single emoji."""
+        if v is None:
+            return v
+        # Reject path traversal attempts
+        if ".." in v:
+            raise ValueError("avatar_url 不允许包含路径遍历序列")
+        # Allow uploaded images
+        if v.startswith("/uploads/"):
+            return v
+        # Allow 3D icon paths
+        if v.startswith("/icons/3d/"):
+            return v
+        # Allow single emoji (max 8 bytes, no HTML metacharacters)
+        if len(v.encode("utf-8")) <= 8 and not any(c in v for c in "<>&\"'"):
+            return v
+        raise ValueError("avatar_url 必须是有效的上传路径、图标路径或单个表情符号")
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -295,6 +317,7 @@ class LoginStep1Response(BaseModel):
     user_id: int | None = None
     display_name: str | None = None
     avatar_color: str | None = None
+    avatar_url: str | None = None
 
 
 class LoginStep2Request(BaseModel):
@@ -357,6 +380,7 @@ class SetChildPasswordRequest(BaseModel):
 class UpdateMemberInfoRequest(BaseModel):
     display_name: str | None = Field(None, max_length=20)
     avatar_color: str | None = None
+    avatar_url: str | None = None
     birthday: date_type | None = None
     birthday_is_lunar: bool | None = None
 
@@ -366,3 +390,23 @@ class UpdateMemberInfoRequest(BaseModel):
         if v is not None and not _HEX_COLOR_RE.match(v):
             raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
         return v
+
+    @field_validator("avatar_url")
+    @classmethod
+    def check_avatar_url(cls, v: str | None) -> str | None:
+        """Validate avatar_url: allow null, /uploads/..., /icons/3d/..., or single emoji."""
+        if v is None:
+            return v
+        # Reject path traversal attempts
+        if ".." in v:
+            raise ValueError("avatar_url 不允许包含路径遍历序列")
+        # Allow uploaded images
+        if v.startswith("/uploads/"):
+            return v
+        # Allow 3D icon paths
+        if v.startswith("/icons/3d/"):
+            return v
+        # Allow single emoji (max 8 bytes, no HTML metacharacters)
+        if len(v.encode("utf-8")) <= 8 and not any(c in v for c in "<>&\"'"):
+            return v
+        raise ValueError("avatar_url 必须是有效的上传路径、图标路径或单个表情符号")

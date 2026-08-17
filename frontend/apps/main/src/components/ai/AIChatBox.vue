@@ -27,6 +27,8 @@ import { useActiveGoal } from '@/composables/ai-chat/useActiveGoal'
 import { parseGoalCommand } from '@/composables/ai-chat/useThreadChat'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 import { useAiContext } from '@/composables/useAiContext'
+import { getChatTaskForSession, type AITask } from '@/api/ai-tasks'
+import { cancelTaskById } from '@/api/ai-tasks'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 import { usePageLoading } from '@/composables/usePageLoading'
 
@@ -110,9 +112,35 @@ const realtimeTokenUsage = computed(() => {
 /** Ensure the active thread's metadata (especially title) is in store.sessions.
  *  On page refresh or route navigation, store.sessions is empty and loadHistory
  *  only fetches messages via client.threads.getState - the thread title would
- *  show "新对话" without this fetch. */
+ *  show "新对话" without this fetch.
+ *
+ *  Race-condition guard: if the session already exists with a non-empty title
+ *  (set by handleStartChat's temp title or the SSE values handler's LLM title),
+ *  do NOT overwrite it with the getThread API response. The API may return an
+ *  empty title when sync_title_from_checkpoint hasn't persisted yet — overwriting
+ *  would regress the header from the temp title back to "新对话". When the API
+ *  returns a non-empty title, merge it into the existing session so a prior
+ *  temp title is replaced with the persisted one. */
 async function ensureThreadInSessions(threadId: string) {
-  if (store.sessions.find(s => s.thread_id === threadId)) return
+  const existing = store.sessions.find(s => s.thread_id === threadId)
+  if (existing) {
+    // Session already present — only patch the title when the API has a
+    // non-empty one and the local session has none (prevents regressions).
+    if (!existing.title) {
+      try {
+        const thread = await getThread(threadId)
+        if (thread.title) {
+          const idx = store.sessions.findIndex(s => s.thread_id === threadId)
+          if (idx !== -1) {
+            store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
+          }
+        }
+      } catch {
+        // Non-critical: title stays as-is until next refresh
+      }
+    }
+    return
+  }
   try {
     const thread = await getThread(threadId)
     // Re-check: a concurrent values event may have added it already
@@ -159,6 +187,110 @@ const draftText = ref<string | undefined>(undefined)
 // Pass it to the chat InputBox as an explicit initial value so it inherits the
 // user's choice instead of re-running the auto-default logic.
 const chatWebSearch = ref<boolean | undefined>(undefined)
+
+// U19: Chat AITask preflight state (tracks background task across refresh/return).
+// `chatTaskStatus` reflects the last known AITask status for the active thread.
+// When 'running', a 2s polling timer resumes the connection via loadHistory on
+// completion. When 'failed'/'interrupted', a retry banner is shown.
+type ChatTaskStatus = 'idle' | 'running' | 'completed' | 'failed' | 'interrupted'
+const chatTaskStatus = ref<ChatTaskStatus>('idle')
+const chatTaskError = ref<string | null>(null)
+const chatTaskRetrying = ref(false)
+let chatTaskTimer: ReturnType<typeof setInterval> | null = null
+// I2 fix: overlap guard for chat task polling.
+let chatTaskInFlight = false
+
+async function checkChatTask() {
+  const threadId = store.activeThreadId
+  if (!threadId || chatTaskInFlight) {
+    if (!threadId) chatTaskStatus.value = 'idle'
+    return
+  }
+  chatTaskInFlight = true
+  try {
+    const task = await getChatTaskForSession(threadId)
+    if (!task) {
+      chatTaskStatus.value = 'idle'
+      stopChatTaskPolling()
+      return
+    }
+    if (task.status === 'running' || task.status === 'queued' || task.status === 'post_processing') {
+      chatTaskStatus.value = 'running'
+      chatTaskError.value = null
+      startChatTaskPolling()
+    } else if (task.status === 'completed') {
+      chatTaskStatus.value = 'completed'
+      chatTaskError.value = null
+      stopChatTaskPolling()
+      // Task completed in background — reload canonical history from checkpointer.
+      await chat.loadHistory(threadId)
+    } else if (task.status === 'failed' || task.status === 'timeout') {
+      chatTaskStatus.value = 'failed'
+      chatTaskError.value = task.error_message || t('aiChat.chatTaskFailed')
+      stopChatTaskPolling()
+    } else if (task.status === 'interrupted' || task.status === 'cancelled') {
+      chatTaskStatus.value = 'interrupted'
+      chatTaskError.value = task.error_message || t('aiChat.chatTaskInterrupted')
+      stopChatTaskPolling()
+    } else {
+      chatTaskStatus.value = 'idle'
+    }
+  } catch {
+    // Non-fatal: chat continues with checkpointer-only recovery.
+    chatTaskStatus.value = 'idle'
+    stopChatTaskPolling()
+  } finally {
+    chatTaskInFlight = false
+  }
+}
+
+function startChatTaskPolling() {
+  if (chatTaskTimer) return
+  chatTaskTimer = setInterval(() => {
+    checkChatTask()
+  }, 2000)
+}
+
+function stopChatTaskPolling() {
+  if (chatTaskTimer) {
+    clearInterval(chatTaskTimer)
+    chatTaskTimer = null
+  }
+}
+
+async function onChatTaskRetry() {
+  // I6 fix: debounce rapid retry clicks.
+  if (chatTaskRetrying.value) return
+  // Retry: re-trigger chat with the last user message (resends via sendMessage).
+  const threadId = store.activeThreadId
+  if (!threadId) return
+  const lastUser = [...chat.messages.value].reverse().find(m => m.role === 'user')
+  if (!lastUser) return
+  chatTaskRetrying.value = true
+  chatTaskStatus.value = 'idle'
+  chatTaskError.value = null
+  try {
+    await chat.sendMessage(lastUser.content, undefined, threadId)
+  } finally {
+    chatTaskRetrying.value = false
+  }
+}
+
+async function onChatTaskCancel() {
+  const threadId = store.activeThreadId
+  if (!threadId) return
+  try {
+    const task = await getChatTaskForSession(threadId)
+    if (task?.id) {
+      await cancelTaskById(task.id)
+      chatTaskStatus.value = 'interrupted'
+      chatTaskError.value = t('aiTask.cancelled')
+      stopChatTaskPolling()
+    }
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  }
+}
 
 // Initialize from URL on mount and auto-send pending message if present
 onMounted(async () => {
@@ -217,8 +349,15 @@ onMounted(async () => {
       && store.activeThreadId === prevActiveId
       && !store.pendingMessage
     ) {
+      // U19: AITask preflight — check if a background task is still running
+      // before loading history. Terminal states (completed/failed/interrupted)
+      // determine whether to reconnect SSE or just show the last state.
+      await checkChatTask()
       // Existing thread: load history and hide skeleton immediately
-      chat.loadHistory(store.activeThreadId)
+      // (skipped if chatTaskStatus is running → polling handles it via completion callback)
+      if (chatTaskStatus.value !== 'running') {
+        chat.loadHistory(store.activeThreadId)
+      }
       // Watcher won't fire (same ID) - fetch thread metadata here too.
       ensureThreadInSessions(store.activeThreadId)
       initialLoading.value = false
@@ -281,6 +420,8 @@ onUnmounted(() => {
   // timers don't keep mutating refs / firing network requests for up to 120s
   // after navigation away from the chat page.
   chat.cancelStream()
+  // U19: stop AITask polling timer on unmount.
+  stopChatTaskPolling()
 })
 
 // When handleStartChat creates a new thread and calls setActiveThread, the
@@ -346,6 +487,13 @@ function handleTitleUpdated(threadId: string, newTitle: string) {
 }
 
 async function handleStartChat(payload: SubmitPayload, source?: string) {
+  // C1 fix: block sending while AITask preflight reports a background task running.
+  // Without this guard the user can fire a new SSE run concurrently with the
+  // in-flight task, risking competing runs on the same session.
+  if (chatTaskStatus.value === 'running') {
+    showToast({ message: t('aiChat.chatTaskRunning'), icon: 'warning-o' })
+    return
+  }
   try {
     const thread = await createThread(source)
     // Mark this thread so the activeThreadId watcher skips loadHistory for it
@@ -643,6 +791,21 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
         :suggestions="chat.suggestions.value"
         @select="handleSuggestionClick"
       />
+      <!-- U19: Chat AITask status banner (running/failed/interrupted) -->
+      <div v-if="chatTaskStatus === 'running'" class="chat-task-banner chat-task-banner--running">
+        <van-loading size="14" type="spinner" color="var(--van-primary-color)" />
+        <span class="chat-task-banner__text">{{ t('aiChat.chatTaskRunning') }}</span>
+        <van-button plain type="danger" size="mini" @click="onChatTaskCancel">
+          {{ t('aiTask.cancelBtn') }}
+        </van-button>
+      </div>
+      <div v-else-if="chatTaskStatus === 'failed' || chatTaskStatus === 'interrupted'" class="chat-task-banner chat-task-banner--error">
+        <van-icon name="warning-o" size="16" />
+        <span class="chat-task-banner__text">{{ chatTaskError || t('aiChat.chatTaskFailed') }}</span>
+        <van-button plain type="primary" size="mini" @click="onChatTaskRetry">
+          {{ t('aiTask.retry') }}
+        </van-button>
+      </div>
       <!-- Connection error bar (after SSE retry exhaustion) -->
       <ErrorMessage
         v-if="errorBarMessage"
@@ -734,5 +897,27 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
 .context-tag .van-icon {
   cursor: pointer;
   font-size: 14px;
+}
+/* U19: Chat AITask status banner (running/failed/interrupted) */
+.chat-task-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.chat-task-banner--running {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--van-primary-color);
+}
+.chat-task-banner--error {
+  background: rgba(238, 17, 17, 0.08);
+  color: var(--van-danger-color, #ee0a24);
+}
+.chat-task-banner__text {
+  flex: 1;
+  line-height: 1.4;
 }
 </style>

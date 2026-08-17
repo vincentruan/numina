@@ -607,6 +607,9 @@ def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
         user.display_name = req.display_name
     if req.avatar_color is not None:
         user.avatar_color = req.avatar_color
+    # Use model_fields_set to distinguish "not provided" from "explicitly cleared"
+    if "avatar_url" in req.model_fields_set:
+        user.avatar_url = req.avatar_url
     db.commit()
     db.refresh(user)
     return user

@@ -23,9 +23,12 @@
           <van-tab v-for="child in childMembers" :key="child.id">
             <template #title>
               <div class="child-tab-title">
-                <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B' }">
-                  {{ (child.display_name ?? '?').charAt(0) }}
-                </div>
+                <UserAvatar
+                  :avatar-url="child.avatar_url ?? null"
+                  :avatar-color="child.avatar_color || '#FF6B6B'"
+                  :display-name="child.display_name || '?'"
+                  :size="24"
+                />
                 <span class="child-tab-name">{{ child.display_name }}</span>
               </div>
             </template>
@@ -394,9 +397,12 @@
             @click="selectChildAndGrant(child)"
           >
             <template #icon>
-              <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B', marginRight: '8px' }">
-                {{ (child.display_name ?? '?').charAt(0) }}
-              </div>
+              <UserAvatar
+                :avatar-url="child.avatar_url ?? null"
+                :avatar-color="child.avatar_color || '#FF6B6B'"
+                :display-name="child.display_name || '?'"
+                :size="32"
+              />
             </template>
           </van-cell>
         </van-popup>
@@ -438,9 +444,12 @@
             @click="selectChildForAssign(child)"
           >
             <template #icon>
-              <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B', marginRight: '8px' }">
-                {{ (child.display_name ?? '?').charAt(0) }}
-              </div>
+              <UserAvatar
+                :avatar-url="child.avatar_url ?? null"
+                :avatar-color="child.avatar_color || '#FF6B6B'"
+                :display-name="child.display_name || '?'"
+                :size="32"
+              />
             </template>
           </van-cell>
         </van-popup>
@@ -567,6 +576,7 @@ import { useFamilyStore } from '@/stores/family'
 import { useChoreStore } from '@/stores/chore'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import PageHeader from '@/components/common/PageHeader.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'

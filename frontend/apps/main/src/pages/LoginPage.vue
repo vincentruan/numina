@@ -52,9 +52,12 @@
               @click="onSelectUser(user)"
             >
               <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
-                <div class="account-avatar" :style="{ background: user.avatarColor }">
-                  {{ user.displayName.charAt(0) }}
-                </div>
+                <UserAvatar
+                  :avatar-url="null"
+                  :avatar-color="user.avatarColor"
+                  :display-name="user.displayName"
+                  :size="56"
+                />
                 <p class="account-name">{{ user.displayName }}</p>
                 <p v-if="user.username || user.familyName" class="account-subtitle">
                   <span v-if="user.username">@{{ user.username }}</span><span v-if="user.username && user.familyName"> / </span><span v-if="user.familyName">{{ user.familyName }}</span>
@@ -158,10 +161,12 @@
 
         <!-- User identity card — shown when step1 returned display_name/avatar_color -->
         <div v-else-if="step2User" class="pin-user-card">
-          <div
-            class="pin-avatar"
-            :style="{ background: step2User.avatarColor }"
-          >{{ step2User.displayName.charAt(0).toUpperCase() }}</div>
+          <UserAvatar
+            :avatar-url="null"
+            :avatar-color="step2User.avatarColor"
+            :display-name="step2User.displayName"
+            :size="56"
+          />
           <div class="pin-user-info">
             <p class="pin-display-name">{{ step2User.displayName }}</p>
             <p class="pin-username-sub">{{ form.username }}</p>
@@ -264,6 +269,7 @@ import type { DeviceCheckUser } from '@/api/device'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import { getChildBaseUrl } from '@/utils/childApp'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 const { t } = useI18n()
 

@@ -16,6 +16,17 @@ The chat-specific adapter that owns prompt resolution (family override → defau
 ### sandbox_family_id
 A coroutine-scoped ContextVar carrying the tenant family id that scopes every agent sandbox file operation (`write_file`, `read_file`, `str_replace`) under `AGENT_DATA_DIR/{family_id}/sandboxes/...`. It is set at the `worker.run_agent` dispatch boundary before any branch runs and reset in a `finally`, and must be propagated into executor threads via `copy_context().run` because `loop.run_in_executor` does not copy contextvars — without propagation the provider resolves empty path mappings and file tools fail open (return success without writing).
 
+## Event streaming
+
+### StreamBridge
+Abstract interface that decouples agent workers (event producers) from SSE endpoints (event consumers), modeled on DeerFlow's `deerflow/runtime/stream_bridge/base.py`. Each AI task gets a bridge: the worker calls `publish(run_id, event, data)` to enqueue events, and the SSE endpoint calls `subscribe(run_id, last_event_id=...)` to consume them. Two implementations — `MemoryStreamBridge` (in-process asyncio queue, dev default) and `RedisStreamBridge` (Redis Streams per task, production default). The bridge enables frontend disconnect/reconnect: events are buffered so a reconnecting client can replay from `Last-Event-ID`. Replaces the prior direct-proxy pattern where SSE bytes flowed straight from agent to frontend with no buffer.
+
+### Graceful shutdown
+SIGTERM handling protocol for the agent worker and backend gateway. Three phases: (1) reject new task creation (503 + Retry-After), (2) drain in-flight tasks up to a configurable timeout (default 60s) — agent pipelines continue, SSE stays open, (3) force-cancel remaining tasks and mark them `interrupted`. Modeled on DeerFlow's `RunManager.shutdown(timeout=...)` which cancels and bounded-awaits every in-flight run before the checkpointer pool closes.
+
+### Orphan recovery
+Startup reconciliation that detects tasks left in `running` status whose owning worker is no longer active (crash, deployment roll). Stale runs are marked `interrupted` with a recovery message so the frontend can surface a retry option. Modeled on DeerFlow's `RunManager.reconcile_orphaned_inflight_runs()`. Relies on `worker_id` + `lease_expires_at` heartbeat fields on the AITask record.
+
 ## API serialization
 
 ### 素养徽章 (Literacy Badge)

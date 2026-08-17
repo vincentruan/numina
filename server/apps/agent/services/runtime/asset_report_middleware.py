@@ -133,3 +133,59 @@ def parse_report_json(ai_text: str) -> dict | None:
     if first_valid is not None:
         return normalize_report_json(first_valid)
     return None
+
+
+def validate_report_json(data: dict) -> list[str]:
+    """Validate a normalized report JSON dict against the canonical schema.
+
+    Returns a list of human-readable error strings (empty list = valid).
+    The canonical schema (after ``normalize_report_json``) requires:
+
+    - ``indicators`` is a non-empty list
+    - each indicator has a non-empty ``data.items`` list
+
+    ``overall_score`` is optional (informational) and not strictly required.
+    """
+    if not isinstance(data, dict):
+        return ["报告结果不是有效的 JSON 对象"]
+
+    errors: list[str] = []
+
+    indicators = data.get("indicators")
+    if not isinstance(indicators, list) or len(indicators) == 0:
+        errors.append("缺少 indicators 数组或为空")
+        return errors
+
+    for idx, indicator in enumerate(indicators):
+        if not isinstance(indicator, dict):
+            errors.append(f"indicator[{idx}] 不是有效对象")
+            continue
+        data_obj = indicator.get("data")
+        if not isinstance(data_obj, dict):
+            errors.append(f"indicator[{idx}] 缺少 data 对象")
+            continue
+        items = data_obj.get("items")
+        if not isinstance(items, list) or len(items) == 0:
+            errors.append(f"indicator[{idx}].data.items 为空")
+            continue
+
+        # P2-7 fix: validate per-item field structure (key, zh, en, value)
+        for item_idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                errors.append(
+                    f"indicator[{idx}].data.items[{item_idx}] 不是有效对象"
+                )
+                continue
+            for field in ("key", "zh", "en"):
+                if field not in item or not item[field]:
+                    errors.append(
+                        f"indicator[{idx}].data.items[{item_idx}] 缺少 '{field}' 字段"
+                    )
+            value = item.get("value")
+            if value is None or not isinstance(value, (int, float)):
+                errors.append(
+                    f"indicator[{idx}].data.items[{item_idx}].value 必须是数字"
+                )
+
+    return errors
+

@@ -2,21 +2,24 @@
 name: deploy-production
 description: >
   Use when deploying Numina to the production Linux Docker server.
-  Two modes: (A) GHCR images — pull pre-built images, no git needed;
-  (B) Source build — git pull + docker compose build.
+  Three modes: (A) GHCR images — pull pre-built images, no git needed;
+  (B) Source build — git pull + docker compose build on server;
+  (C) Local build — build images locally, transfer, deploy remote.
   Triggers: "部署到生产", "deploy to production", "上线", "发布",
   "deploy prod", "服务器更新", "拉取最新镜像", "health check",
-  "disk cleanup", "database migration", "rollback".
+  "disk cleanup", "database migration", "rollback",
+  "本地编译", "build local", "本地镜像", "CI 额度".
 ---
 
 # Production Deployment
 
-Deploy Numina to the production Docker server. Two modes:
+Deploy Numina to the production Docker server. Three modes:
 
-| Mode | When | Git needed on server? |
-|------|------|----------------------|
-| **A: GHCR (default)** | CI built images on push to main | No |
-| **B: Source build** | Custom changes not yet on main | Yes |
+| Mode | When | Git needed on server? | Build location |
+|------|------|----------------------|----------------|
+| **A: GHCR (default)** | CI built images on push to main | No | GitHub Actions |
+| **B: Source build** | Custom changes not yet on main | Yes | Server |
+| **C: Local build** | CI quota exhausted / server can't compile | No | Local machine |
 
 ## Prerequisites
 
@@ -27,8 +30,11 @@ SSH config in `.claude/deploy.env` (gitignored). If missing, ask the user and cr
 DEPLOY_SSH_HOST=<server-ip>
 DEPLOY_SSH_PORT=<ssh-port>
 DEPLOY_SSH_USER=<ssh-user>
-DEPLOY_REMOTE_DIR=~/data/numina
+DEPLOY_REMOTE_DIR=<absolute-path>   # 必须用绝对路径，不能用 ~
 ```
+
+> **⚠️ `DEPLOY_REMOTE_DIR` 必须是绝对路径**（如 `/home/geek/data/numina`），不能用 `~`。
+> Makefile 中 rsync 在本地 shell 展开变量，`~` 会被解析为本地 home 目录。
 
 **Variable sourcing** — shell state does NOT persist between bash calls. Source in every command block:
 
@@ -196,6 +202,112 @@ Same as Mode A Step 6.
 
 ---
 
+## Mode C: Local Build & Deploy
+
+Use when CI quota is exhausted or the production server lacks resources to compile.
+Build images on the local machine, transfer, and deploy. Verification happens on the
+production server (health check after recreate) — local only builds, does NOT verify
+(production has domain-specific config: SSL certs, Supabase PG, short URL, etc.).
+
+### Prerequisites
+
+- Docker with BuildKit enabled on the local machine
+- `.claude/deploy.env` configured (same as Mode A)
+- Production server architecture must match `DOCKER_PLATFORM` (default: `linux/amd64`)
+  - Mac Apple Silicon → cross-compile: `DOCKER_PLATFORM=linux/amd64` (default)
+  - Mac ARM server: `DOCKER_PLATFORM=linux/arm64`
+
+### Configurable Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOCAL_IMAGE_PREFIX` | `numina` | Image repository prefix |
+| `LOCAL_IMAGE_TAG` | `latest` | Image tag |
+| `DOCKER_PLATFORM` | `linux/amd64` | Target platform (empty = host arch) |
+
+### Step 1: Build Images Locally
+
+```bash
+# Default: cross-compile for linux/amd64 (most production servers)
+make build-local
+
+# Same architecture as host (e.g. ARM server)
+make build-local DOCKER_PLATFORM=linux/arm64
+
+# Host architecture (no cross-compile)
+make build-local DOCKER_PLATFORM=
+
+# Custom tag
+make build-local LOCAL_IMAGE_TAG=v2026.08.15
+```
+
+This uses `docker compose -f docker-compose.production.yml build` for all 5 services,
+then re-tags them as `numina/<service>:latest`.
+
+**Images produced:**
+
+```
+numina/backend:latest
+numina/agent:latest
+numina/scheduler-worker:latest
+numina/frontend-main:latest
+numina/frontend_child:latest
+```
+
+### Step 2: Package Images
+
+```bash
+make package-images
+# Output: dist/images.tar.gz
+```
+
+Exports all 5 images into a compressed tarball for transfer.
+
+### Step 3: Deploy to Remote
+
+```bash
+make deploy-remote
+```
+
+This single target handles:
+1. **Sync config files** — rsync compose/nginx/system-config to server
+2. **Transfer images** — rsync `dist/images.tar.gz` to server
+3. **Remote load** — `docker load -i images.tar.gz` on server
+4. **Recreate services** — `docker compose up -d` with existing `.env`
+5. **Health check** — wait for backend `(healthy)`
+
+### One-Command Pipeline
+
+```bash
+# Full: build → package → deploy (验证在生产服务器自动完成)
+make deploy-local
+```
+
+### Production Server `.env` Setup
+
+When switching from Mode A (GHCR) to Mode C for the first time, update the server's `.env`:
+
+```bash
+# Replace GHCR image references with local tags:
+BACKEND_IMAGE=numina/backend:latest
+AGENT_IMAGE=numina/agent:latest
+SCHEDULER_WORKER_IMAGE=numina/scheduler-worker:latest
+FRONTEND_MAIN_IMAGE=numina/frontend-main:latest
+FRONTEND_CHILD_IMAGE=numina/frontend-child:latest
+```
+
+**Switching back to Mode A:** restore the `ghcr.io/...` values (or remove the `*_IMAGE` lines to use defaults).
+
+### Step 4: Database Migration (if needed)
+
+Same as Mode A Step 5 — check for new alembic migrations and follow [db-migration.md](db-migration.md).
+
+### Step 5: Health Check
+
+Same as Mode A Step 6.
+
+---
+
 ## Rollback
 
 ### Mode A Rollback (GHCR — pin to specific SHA)
@@ -221,16 +333,33 @@ ssh ... 'cd ~/data/numina && git checkout <commit-sha> && sudo docker compose -f
 
 Then restore: `git checkout main`.
 
+### Mode C Rollback (local build)
+
+Re-build from the previous commit and re-deploy:
+
+```bash
+git checkout <previous-commit>
+make deploy-local
+git checkout -  # return to previous branch
+```
+
+If the previous image tarball is still available in `dist/images.tar.gz`, skip the build:
+
+```bash
+make deploy-remote  # uses existing dist/images.tar.gz
+```
+
 ---
 
 ## Quick Reference
 
-| Task | Mode A (GHCR) | Mode B (Source) |
-|------|---------------|-----------------|
-| Full deploy | Steps 1-6 | Steps 1-3 |
-| Config change only | Step 2 + Step 4 | Step 1 + Step 2 |
-| Code change only | Step 4 (skip Step 2) | Steps 1-2 |
-| Health check | Step 6 | Step 3 |
+| Task | Mode A (GHCR) | Mode B (Source) | Mode C (Local Build) |
+|------|---------------|-----------------|----------------------|
+| Full deploy | Steps 1-6 | Steps 1-3 | `make deploy-local` |
+| Config change only | Step 2 + Step 4 | Step 1 + Step 2 | Sync config + `make deploy-remote` |
+| Code change only | Step 4 (skip Step 2) | Steps 1-2 | `make deploy-local` |
+| Build images | (CI does this) | (server does this) | `make build-local` |
+| Health check | Step 6 | Step 3 | (automatic in `deploy-remote`) |
 | View logs | `sudo docker compose -f docker-compose.production.yml logs --tail 100 -f <service>` |
 | Restart service | `sudo docker compose -f docker-compose.production.yml restart <service>` |
 
@@ -244,5 +373,9 @@ Then restore: `git checkout main`.
 | GHCR pull fails | Verify `*_IMAGE` in `.env`. Auth: `echo "$TOKEN" \| docker login ghcr.io -u <user> --password-stdin` |
 | CI didn't build images | Only builds on push to `main`. Check `gh run list --workflow=ci.yml` |
 | Cloudflare 526 (Invalid SSL) | SSL mode "Full (Strict)" + self-signed cert → change to "Full" in Cloudflare, or use Origin CA cert |
+| `docker tag` fails (image not found) | Run `docker images` to find the actual compose-generated name (e.g. `numina_backend`). Update fallback in `build-local` if project dir name differs |
+| Cross-compile slow on Mac | First build downloads base images + installs deps. Subsequent builds use BuildKit cache. `DOCKER_BUILDKIT=1` is auto-set |
+| `docker load` fails on server | Check disk space: `df -h`. Prune old images: `sudo docker image prune -af --filter "until=48h"` |
+| Services building instead of pulling (Mode C) | Server `.env` missing `*_IMAGE` vars — set them to `numina/<service>:latest` |
 | Services building instead of pulling | `.env` missing `*_IMAGE` vars — add `BACKEND_IMAGE=ghcr.io/vincentruan/numina/backend:latest` etc. |
 | Double CSP headers (browser console) | Outer nginx must NOT add CSP — inner nginx (frontend container) handles it with nonce injection |

@@ -3,6 +3,20 @@
     <PageHeader :title="t('home.settings')" />
 
     <div class="settings-body">
+      <!-- Profile Card (centered layout) -->
+      <div class="profile-card" @click="router.push('/settings/profile')">
+        <UserAvatar
+          :avatar-url="childAuthStore.childUser?.avatar_url ?? null"
+          :avatar-color="childAuthStore.childUser?.avatar_color ?? 'var(--color-primary)'"
+          :display-name="childAuthStore.childUser?.display_name || ''"
+          :size="64"
+        />
+        <div class="profile-info">
+          <div class="profile-name">{{ childAuthStore.childUser?.display_name }}</div>
+          <div class="profile-username">@{{ childAuthStore.childUser?.username }}</div>
+        </div>
+      </div>
+
       <!-- Theme -->
       <div class="field-group">
         <p class="settings-label">{{ t('home.settingsTheme') }}</p>
@@ -50,14 +64,17 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChildSettings' })
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showConfirmDialog, showToast } from 'vant'
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
 import { useChildAuthStore } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const { themeMode, setMode } = useDarkMode()
 const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
@@ -179,4 +196,33 @@ async function handleLogout() {
   min-height: 44px;
 }
 .logout-btn:active { transform: scale(0.96); }
+
+/* Profile Card */
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.profile-card:active {
+  transform: scale(0.98);
+}
+.profile-info {
+  margin-top: 12px;
+  text-align: center;
+}
+.profile-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-bottom: 4px;
+}
+.profile-username {
+  font-size: 13px;
+  color: var(--color-muted);
+}
 </style>

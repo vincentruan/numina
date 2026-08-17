@@ -30,6 +30,12 @@ const CATEGORIES = [
   'plants',
   'science-tech',
   'healthcare',
+  // Avatar-only categories (used by avatar pickers, not asset picker)
+  'characters',
+  'historical-figures',
+  'religion-mythology',
+  'flags',
+  'numbers-symbols',
 ] as const
 
 async function deploy(): Promise<void> {

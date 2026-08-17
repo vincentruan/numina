@@ -1,9 +1,12 @@
 <template>
   <van-cell class="member-card" :title="member.display_name" :label="member.username ? '@' + member.username : (member.role === 'child' ? t('memberCard.childAccount') : '')">
     <template #icon>
-      <div class="avatar" :style="{ background: member.avatar_color || 'var(--color-primary)' }">
-        {{ member.display_name.charAt(0) }}
-      </div>
+      <UserAvatar
+        :avatar-url="member.avatar_url ?? null"
+        :avatar-color="member.avatar_color || '#4F46E5'"
+        :display-name="member.display_name"
+        :size="36"
+      />
     </template>
     <template #value>
       <van-tag :type="member.role === 'owner' ? 'primary' : 'default'" size="medium">
@@ -16,6 +19,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { User } from '@/types'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 const { t } = useI18n()
 

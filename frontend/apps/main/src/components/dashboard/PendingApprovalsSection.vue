@@ -16,13 +16,12 @@
       >
         <!-- Avatar + Info -->
         <div class="card-top">
-          <div
-            class="child-avatar"
-            :style="{ backgroundColor: item.child_avatar_color || '#ccc' }"
-            aria-hidden="true"
-          >
-            {{ item.child_display_name?.charAt(0) || '?' }}
-          </div>
+          <UserAvatar
+            :avatar-url="null"
+            :avatar-color="item.child_avatar_color || '#ccc'"
+            :display-name="item.child_display_name || '?'"
+            :size="40"
+          />
 
           <div class="card-info">
             <div class="card-title">
@@ -79,6 +78,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChoreStore } from '@/stores/chore'
 import { parseApiDate } from '@/utils/format'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 const props = defineProps<{
   childId?: string | null

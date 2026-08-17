@@ -22,6 +22,9 @@
         <!-- D2/A1a: finance_coach proactive suggestions card (Plan B T5) -->
         <FinanceCoachCard />
 
+        <!-- U15+U17: Dashboard narrative — AI-generated monthly financial story -->
+        <DashboardNarrativeCard />
+
         <!-- Literacy weekly report status (per-child) -->
         <LiteracyStatusCard ref="literacyStatusRef" />
 
@@ -89,6 +92,7 @@ import OverviewStatCard from '@/components/dashboard/OverviewStatCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 import FinanceCoachCard from '@/components/dashboard/FinanceCoachCard.vue'
+import DashboardNarrativeCard from '@/components/dashboard/DashboardNarrativeCard.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import StepGuideOverlay from '@/components/common/StepGuideOverlay.vue'
 import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'

@@ -450,4 +450,18 @@ export default {
     noTreasures: '完成心愿后，宝贝会出现在这里 🎁',
     noRecords: '开始做任务，星星币就会到账 💫',
   },
+  profileEdit: {
+    title: '编辑资料',
+    tapToChange: '点击头像更换',
+    displayName: '昵称',
+    displayNamePlaceholder: '请输入昵称',
+    displayNameRequired: '昵称不能为空',
+  },
+  avatarPicker: {
+    title: '选择头像',
+    tab3d: '3D 图标',
+    tabEmoji: '表情',
+    emojiHint: '点击下方输入框选择表情',
+    emojiPlaceholder: '点击输入表情',
+  },
 }

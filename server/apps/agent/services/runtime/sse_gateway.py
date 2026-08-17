@@ -25,6 +25,8 @@ from deerflow.runtime import (
 )
 from fastapi import HTTPException, Request
 
+from packages.db.stream_bridge import StreamGap
+
 from .lifespan import get_run_manager, get_stream_bridge
 from .worker import run_agent
 
@@ -78,6 +80,7 @@ def normalize_stream_modes(raw: list[str] | str | None) -> list[str]:
 
 
 # [Copied from DeerFlow Reference] — sse_consumer with heartbeat + disconnect handling
+# [U2 Enhancement] — StreamGap handling + terminal probe + orphan recovery
 async def sse_consumer(
     bridge: StreamBridge,
     record: RunRecord,
@@ -90,9 +93,22 @@ async def sse_consumer(
     - ``cancel``: abort the background task on client disconnect.
     - ``continue``: let the task run; events are discarded.
 
+    U2 enhancements (DeerFlow parity):
+    - StreamGap handling: when cursor is beyond retained buffer, yield gap event
+    - Terminal probe: if record is terminal and stream is empty, yield end immediately
+    - Orphan recovery: after heartbeat, check if run was terminalized by orphan recovery
+
     # [Copied from DeerFlow Reference] — app/gateway/services.py sse_consumer
     """
     last_event_id = request.headers.get("Last-Event-ID")
+
+    # U2: Terminal record probe — if record is already terminal and stream is empty,
+    # yield end frame immediately instead of hanging on heartbeat
+    if await _terminal_record_stream_missing(bridge, record):
+        yield format_sse("end", None)
+        return
+
+    gap_emitted = False
     try:
         async for entry in bridge.subscribe(record.run_id, last_event_id=last_event_id):
             if await request.is_disconnected():
@@ -100,7 +116,31 @@ async def sse_consumer(
 
             if entry is HEARTBEAT_SENTINEL:
                 yield ": heartbeat\n\n"
+
+                # U2: DeerFlow parity — orphan recovery observed after heartbeat
+                # Check if the run was terminalized by orphan recovery while we were
+                # waiting on heartbeat. If so, yield end frame and return.
+                if await _orphan_recovery_observed_after_heartbeat(record):
+                    yield format_sse("end", None)
+                    return
+
                 continue
+
+            # U2: StreamGap handling — cursor is beyond retained buffer
+            if isinstance(entry, StreamGap):
+                gap_emitted = True
+                yield format_sse(
+                    "gap",
+                    {
+                        "code": "stream_replay_gap",
+                        "run_id": record.run_id,
+                        "requested_event_id": entry.requested_event_id,
+                        "earliest_available_event_id": entry.earliest_available_event_id,
+                        "latest_available_event_id": entry.latest_available_event_id,
+                        "recovery": "reload_durable_state",
+                    },
+                )
+                return
 
             if entry is END_SENTINEL:
                 yield format_sse("end", None, event_id=entry.id or None)
@@ -111,11 +151,71 @@ async def sse_consumer(
     finally:
         # [Copied from DeerFlow Reference] — on_disconnect=cancel aborts background task
         # [Integrated with Numina Multi-Tenant] — uses record.metadata["family_id"]
+        # U2: Skip cancel if gap was emitted (client will reconnect) or if
+        # on_disconnect=continue (background task should keep running)
         if (
             record.status in (RunStatus.pending, RunStatus.running)
             and record.on_disconnect == DisconnectMode.cancel
+            and not gap_emitted
         ):
             await run_mgr.cancel(record.run_id)
+
+
+async def _terminal_record_stream_missing(
+    bridge: StreamBridge, record: RunRecord
+) -> bool:
+    """U2: Probe whether a terminal record has an empty stream.
+
+    If the record status is terminal (completed/failed/cancelled/interrupted) AND
+    the bridge has no events for this run, return True. This prevents hanging on
+    stale records where the stream was already cleaned up.
+
+    Returns True if the record is terminal and stream is empty/missing.
+    """
+    if record.status not in (
+        RunStatus.success,
+        RunStatus.error,
+        RunStatus.timeout,
+        RunStatus.interrupted,
+    ):
+        return False
+
+    # Check if stream exists and has events
+    # For DeerFlow's RedisStreamBridge, we can check stream_exists()
+    # For MemoryStreamBridge, we assume stream is gone if record is terminal
+    if hasattr(bridge, "stream_exists"):
+        exists = await bridge.stream_exists(record.run_id)
+        return not exists
+
+    # MemoryStreamBridge doesn't persist, so if record is terminal, stream is gone
+    return True
+
+
+async def _orphan_recovery_observed_after_heartbeat(record: RunRecord) -> bool:
+    """U2: Check if run was terminalized by orphan recovery after heartbeat.
+
+    After yielding a heartbeat sentinel, check if the run record has been
+    terminalized by orphan recovery (status=interrupted AND stop_reason='orphan_recovered').
+    If so, the SSE consumer should yield end frame and return to prevent hanging
+    on heartbeat forever when the producer died and a peer reconciler has already
+    marked the run terminal.
+
+    Returns True if orphan recovery was observed.
+    """
+    # Check if record status is interrupted with orphan_recovered stop_reason
+    # This requires checking the run record's metadata or a separate field
+    # For now, we check if the record status is interrupted
+    if record.status == RunStatus.interrupted:
+        # Check if stop_reason is 'orphan_recovered' (if available in metadata)
+        metadata = getattr(record, "metadata", {}) or {}
+        stop_reason = metadata.get("stop_reason")
+        if stop_reason == "orphan_recovered":
+            logger.info(
+                "Orphan recovery observed after heartbeat for run %s",
+                record.run_id,
+            )
+            return True
+    return False
 
 
 # [Integrated with Numina Multi-Tenant] — family_id in metadata

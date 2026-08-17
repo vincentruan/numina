@@ -74,17 +74,32 @@ class RunCreateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def disconnect_watcher(request: Request, run_id: str, run_mgr: RunManager):
+async def disconnect_watcher(
+    request: Request, record: Any, run_mgr: RunManager
+):
     """Background task to actively poll for client disconnect.
 
     This ensures that cooperative cancellation is triggered immediately,
     even if the SSE generator is currently suspended waiting for the next event.
+
+    U2: Respects on_disconnect mode — only cancels if record.on_disconnect == 'cancel'.
+    When on_disconnect='continue', the watcher detects disconnect but does NOT cancel,
+    allowing the background task to continue running (for asset-report, finance-coach, etc.).
     """
     try:
         while True:
             if await request.is_disconnected():
-                logger.info("[runs_stream] active disconnect detected for run_id=%s", run_id)
-                await run_mgr.cancel(run_id)
+                # U2: Check on_disconnect mode before cancelling
+                on_disconnect = getattr(record, "on_disconnect", None)
+                if on_disconnect == "continue":
+                    logger.info(
+                        "[runs_stream] disconnect detected but on_disconnect=continue for run_id=%s, skipping cancel",
+                        record.run_id,
+                    )
+                    break
+
+                logger.info("[runs_stream] active disconnect detected for run_id=%s", record.run_id)
+                await run_mgr.cancel(record.run_id)
                 break
             await asyncio.sleep(0.5)
     except asyncio.CancelledError:
@@ -124,7 +139,7 @@ async def stream_run(
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
-    watcher_task = asyncio.create_task(disconnect_watcher(request, record.run_id, run_mgr))
+    watcher_task = asyncio.create_task(disconnect_watcher(request, record, run_mgr))
 
     async def sse_generator():
         try:

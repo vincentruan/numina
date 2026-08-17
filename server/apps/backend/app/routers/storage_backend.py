@@ -13,7 +13,9 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors.codes import ErrorCode
 from apps.backend.app.errors.exceptions import AppError
-from apps.backend.app.models.storage_backend import StorageBackend as StorageBackendModel
+from apps.backend.app.models.storage_backend import (
+    StorageBackend as StorageBackendModel,
+)
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.storage_backend import (
     StorageBackendCreateRequest,

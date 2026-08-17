@@ -25,7 +25,7 @@ from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 from apps.agent.core.backend_client import BackendClient
 from packages.core import get_path_manager
 
-from .asset_report_middleware import parse_report_json
+from .asset_report_middleware import parse_report_json, validate_report_json
 from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
     _prepare_goal_continuation_input,
@@ -50,6 +50,63 @@ _WRITE_FILE_DECL_RE = re.compile(
 # Canonical report filename pattern (mirrors PathManager._REPORT_FILENAME_PATTERN)
 # — used to validate filenames recovered from write_file tool_call args.path.
 _REPORT_FILENAME_RE = re.compile(r"^report_[a-zA-Z0-9_-]+\.md$")
+
+
+# ---------------------------------------------------------------------------
+# U12: Task progress callback helpers
+# ---------------------------------------------------------------------------
+
+
+async def _heartbeat_loop(
+    task_id: int, family_id: str, interval: float = 40.0, stop_event: asyncio.Event | None = None
+) -> None:
+    """Background heartbeat loop for dead-worker detection (U12).
+
+    Calls BackendClient.heartbeat() every `interval` seconds until stop_event
+    is set or the task is cancelled. Network errors are logged but don't stop
+    the loop (heartbeat is best-effort).
+
+    Args:
+        task_id: AITask primary key.
+        family_id: Family ID for tenant isolation.
+        interval: Seconds between heartbeats (default 40s, < lease TTL 120s).
+        stop_event: Optional event to signal loop termination.
+    """
+    if stop_event is None:
+        stop_event = asyncio.Event()
+
+    client = BackendClient(family_id)
+    while not stop_event.is_set():
+        try:
+            await client.heartbeat(task_id)
+            logger.debug("[heartbeat] task=%s family=%s", task_id, family_id)
+        except Exception as e:
+            logger.warning(
+                "[heartbeat] failed task=%s family=%s err=%s",
+                task_id, family_id, e,
+            )
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            break  # stop_event was set
+        except TimeoutError:
+            continue  # interval elapsed, send another heartbeat
+
+
+def _extract_task_id(metadata: dict | None) -> int | None:
+    """Extract task_id from run metadata (U12).
+
+    Backend passes task_id in metadata when triggering agent runs. Returns None
+    if not present (backward compatibility with old triggers).
+    """
+    if not metadata:
+        return None
+    task_id = metadata.get("task_id")
+    if task_id is None:
+        return None
+    try:
+        return int(task_id)
+    except (ValueError, TypeError):
+        return None
 
 
 def _deerflow_default_workspace_md(
@@ -234,6 +291,18 @@ async def run_agent(
     # numina and import-parse also depend on it once native tools are enabled.
     set_family_sandbox_context(family_id, caller_user_id=user_id)
 
+    # U12: Extract task_id from run metadata and start a background heartbeat
+    # loop to renew AITask.lease_expires_at (dead-worker detection). Skipped when
+    # task_id is absent (backward-compatible with old triggers).
+    task_id = _extract_task_id(record.metadata if record else None)
+    heartbeat_stop: asyncio.Event | None = None
+    heartbeat_task: asyncio.Task | None = None
+    if task_id is not None:
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_loop(task_id, family_id, stop_event=heartbeat_stop)
+        )
+
     # Resolved-3 blocker A reset (P0, ce-code-review 2026-07-19): the family_id
     # + extensions_config_path ContextVars are coroutine-scoped and would leak
     # into a subsequent run if this coroutine is reused (shared worker task /
@@ -326,6 +395,14 @@ async def run_agent(
             stream_modes=stream_modes,
         )
     finally:
+        # U12: Stop the heartbeat loop and await it (best-effort).
+        if heartbeat_stop is not None:
+            heartbeat_stop.set()
+        if heartbeat_task is not None:
+            try:
+                await asyncio.wait_for(heartbeat_task, timeout=2.0)
+            except Exception:
+                heartbeat_task.cancel()
         reset_family_sandbox_context()
 
 
@@ -387,6 +464,65 @@ def _persist_session_status(
             "[_persist_session_status] Failed for thread %s status=%s: %s",
             thread_id, status, e,
         )
+
+
+async def _repair_report_json_via_llm(
+    ai_text: str,
+    validation_errors: list[str],
+    provider: dict | None,
+) -> dict | None:
+    """Phase 4B (T13b): repair an invalid report JSON via a lightweight LLM call.
+
+    Uses the family's selected provider (``ai_provider``/``ai_model_id``/
+    ``api_key``/``ai_base_url`` keys) to issue a single follow-up completion
+    asking the LLM to re-emit a corrected indicators JSON. Returns the parsed
+    dict (via ``parse_report_json``) on success, or ``None`` if the provider is
+    unavailable or the repair still fails.
+    """
+    if not provider:
+        return None
+    try:
+        from apps.agent.core.llm import get_llm_client
+
+        llm = get_llm_client(
+            provider=provider.get("ai_provider", ""),
+            api_key=provider.get("api_key", ""),
+            model_id=provider.get("ai_model_id", ""),
+            base_url=provider.get("ai_base_url"),
+            timeout=60.0,
+        )
+        error_summary = "; ".join(validation_errors[:5])
+        repair_prompt = (
+            "你之前输出的家庭资产报告 JSON 未通过校验。\n"
+            f"校验错误：{error_summary}\n\n"
+            "请重新输出一个严格符合以下结构的 JSON（不要包含任何 markdown 代码块、"
+            "解释文字或额外内容）：\n"
+            '{"overall_score": <number>, "indicators": ['
+            '{"name": "<string>", "data": {"items": ['
+            '{"key": "<string>", "zh": "<string>", "en": "<string>", "value": <number>}'
+            "]}}]}\n\n"
+            "要求：indicators 非空；每个 indicator 必须有 data.items 非空数组；"
+            "value 必须是数字。只输出 JSON 本身。\n\n"
+            f"原始输出片段（供参考）：\n{ai_text[-4000:]}"
+        )
+        repaired_text = await llm.complete(repair_prompt, max_tokens=4000)
+        return parse_report_json(repaired_text)
+    except (ValueError, KeyError, TypeError) as exc:
+        # Parse/structural errors — retryable (LLM returned garbage)
+        logger.warning(
+            "[_repair_report_json_via_llm] parse failed: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return None
+    except Exception as exc:
+        # Network/auth/timeout errors — log and fail fast (P2-8 fix: differentiate)
+        logger.warning(
+            "[_repair_report_json_via_llm] repair failed: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return None
 
 
 async def _run_asset_report_pipeline(
@@ -475,6 +611,24 @@ async def _run_asset_report_pipeline(
             user_message[:80],
         )
 
+        # Set report session title IMMEDIATELY so the sidebar/history shows
+        # a proper label (e.g. "家庭资产分析报告 20260815 1430") from the moment
+        # generation starts — even if the user navigates away, the pipeline
+        # errors, or the SSE connection drops. Previously the title was only
+        # set on completion_status=="complete" AFTER run_skill, leaving the
+        # session with title=NULL ("新对话") when the run was interrupted or
+        # the user returned later. _set_session_title is best-effort (internal
+        # try/except) and idempotent — calling it again on completion overwrites
+        # with a fresh timestamp for accurate generation time.
+        _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+            user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
+        )
+        _track_task(
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, _title)
+            )
+        )
+
         await p.run_skill(user_message)
 
         # Step 3: worker-synthesized report.step2_json emission + persistence.
@@ -487,7 +641,85 @@ async def _run_asset_report_pipeline(
         if p.completion_status == "complete":
             ai_text = p.ai_text
             step2_payload = parse_report_json(ai_text)
-            if step2_payload is not None:
+
+            # Phase 4B (T12b): validate the parsed report JSON against the
+            # canonical schema. Invalid JSON (missing indicators, empty items)
+            # is repaired before being shipped to the frontend.
+            validation_errors = (
+                validate_report_json(step2_payload)
+                if step2_payload is not None
+                else ["无法解析报告 JSON"]
+            )
+
+            # Phase 4B (T13b): conversation retry — on validation failure, ask
+            # the LLM (lightweight single-call) to re-emit a corrected JSON.
+            # Max 3 attempts; after that, fail the run so the frontend surfaces
+            # an error instead of a silently-broken report.
+            #
+            # P1-3 fix: total budget timeout (120s) prevents 3×60s worst-case
+            # from stalling the pipeline indefinitely. Emit a bridge event per
+            # retry attempt so the SSE connection stays alive and the frontend
+            # can show repair progress.
+            # P1-4 fix: break early when no provider is available — retrying
+            # with provider=None is guaranteed to fail.
+            retry_count = 0
+            try:
+                async with asyncio.timeout(120):
+                    while validation_errors and retry_count < 3:
+                        retry_count += 1
+                        if not p.selected_provider:
+                            logger.warning(
+                                "[_run_asset_report_pipeline] no provider available "
+                                "for repair — stopping retry run=%s",
+                                p.run_id,
+                            )
+                            break
+                        logger.warning(
+                            "[_run_asset_report_pipeline] report JSON invalid, "
+                            "retry=%d/%d errors=%s",
+                            retry_count,
+                            3,
+                            validation_errors[:3],
+                        )
+                        await bridge.publish(
+                            p.run_id,
+                            "custom",
+                            {
+                                "type": "report.repair_retry",
+                                "attempt": retry_count,
+                                "max_attempts": 3,
+                            },
+                        )
+                        repaired = await _repair_report_json_via_llm(
+                            ai_text,
+                            validation_errors,
+                            p.selected_provider,
+                        )
+                        if repaired is not None:
+                            step2_payload = repaired
+                            validation_errors = validate_report_json(repaired)
+            except TimeoutError:
+                logger.error(
+                    "[_run_asset_report_pipeline] report JSON repair timed out "
+                    "after %d attempts run=%s",
+                    retry_count,
+                    p.run_id,
+                )
+
+            if validation_errors:
+                # Still invalid after retries — fail the run (Phase 4B.5).
+                logger.error(
+                    "[_run_asset_report_pipeline] report JSON validation failed "
+                    "after %d retries run=%s errors=%s",
+                    retry_count,
+                    p.run_id,
+                    validation_errors[:3],
+                )
+                p.set_error(
+                    "报告结构化输出校验失败",
+                    error_type="ReportValidationError",
+                )
+            elif step2_payload is not None:
                 logger.info(
                     "[_run_asset_report_pipeline] Extracted report JSON: "
                     "overall_score=%s indicators_count=%d ai_text_length=%d",
@@ -740,6 +972,17 @@ async def _run_import_parse_agent(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
+        # Set import-parse session title IMMEDIATELY so sidebar/history shows
+        # a proper label even if the user navigates away or the run errors.
+        # _set_session_title is best-effort and idempotent.
+        _ip_title = _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
+            user_language, _SESSION_TITLES_BY_LANG.get("import-parse", {}).get("default", "文件导入解析")
+        )
+        _track_task(
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, _ip_title)
+            )
+        )
         await p.run_skill(user_message)
 
         # Worker-synthesized import-parse.result emission (mirrors asset-report

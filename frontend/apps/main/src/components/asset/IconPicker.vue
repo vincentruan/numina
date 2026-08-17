@@ -15,8 +15,9 @@
       </div>
 
       <!-- Edit mode: current image preview + delete -->
-      <div v-if="currentImageUrl" class="current-preview">
-        <img :src="currentImageUrl" class="preview-thumb" />
+      <div v-if="currentImageUrl || currentEmoji" class="current-preview">
+        <img v-if="currentImageUrl" :src="currentImageUrl" class="preview-thumb" />
+        <span v-else class="preview-emoji">{{ currentEmoji }}</span>
         <van-icon name="cross" class="delete-btn" @click="emit('delete')" />
       </div>
 
@@ -32,6 +33,12 @@
           :class="{ active: activeTab === '3d' }"
           @click="activeTab = '3d'"
         >{{ t('iconPicker.tab3dIcons') }}</div>
+        <div
+          v-if="mode === 'avatar'"
+          class="tab"
+          :class="{ active: activeTab === 'emoji' }"
+          @click="activeTab = 'emoji'"
+        >{{ t('iconPicker.tabEmoji') }}</div>
       </div>
 
       <!-- Gallery tab -->
@@ -46,6 +53,35 @@
           block
           @click="emit('request-camera')"
         >{{ t('iconPicker.fromCamera') }}</van-button>
+      </div>
+
+      <!-- Emoji tab (avatar mode only) -->
+      <div v-if="activeTab === 'emoji'" class="emoji-content">
+        <div class="emoji-hint">{{ t('iconPicker.emojiHint') }}</div>
+
+        <!-- Preset emoji grid for quick selection -->
+        <div class="emoji-preset-grid">
+          <template v-for="(emoji, idx) in presetEmojis" :key="`emoji-${idx}`">
+            <button
+              v-if="emoji"
+              class="emoji-preset-btn"
+              :class="{ selected: currentEmoji === emoji }"
+              type="button"
+              @click="emit('select-emoji', emoji)"
+            >{{ emoji }}</button>
+          </template>
+        </div>
+
+        <!-- Text input for keyboards with emoji support -->
+        <div class="emoji-input-row">
+          <input
+            ref="emojiInput"
+            type="text"
+            class="emoji-input"
+            :placeholder="t('iconPicker.emojiPlaceholder')"
+            @input="onEmojiInput"
+          />
+        </div>
       </div>
 
       <!-- 3D icons tab -->
@@ -92,7 +128,7 @@
             :immediate-check="true"
             @load="loadMore"
           >
-            <div class="icon-grid">
+            <div class="icon-grid" :class="{ 'avatar-mode': mode === 'avatar' }">
               <div v-if="paginatedIcons.length === 0 && searchQuery" class="empty-state">
                 {{ t('iconPicker.noResults') }}
               </div>
@@ -113,7 +149,7 @@
                   />
                   <!-- Magnify button: preview original (doesn't select) -->
                   <van-icon
-                    name="zoom-in"
+                    name="enlarge"
                     class="magnify-btn"
                     @click.stop="enlargeIcon(icon)"
                   />
@@ -152,17 +188,20 @@ const { t } = useI18n()
 const props = defineProps<{
   show: boolean
   currentImageUrl?: string
+  currentEmoji?: string
+  mode?: 'asset' | 'avatar'
 }>()
 
 const emit = defineEmits<{
   'update:show': [value: boolean]
   'select-image': [url: string]
+  'select-emoji': [emoji: string]
   'request-gallery': []
   'request-camera': []
   delete: []
 }>()
 
-const activeTab = ref<'gallery' | '3d'>('gallery')
+const activeTab = ref<'gallery' | '3d' | 'emoji'>('gallery')
 const showSearchInput = ref(false)
 const enlargedUrl = ref<string>('')
 const enlargeLoading = ref(false)
@@ -184,7 +223,7 @@ const {
   getOriginalUrl,
   getCategoryName,
   reset,
-} = useIconCatalog()
+} = useIconCatalog({ avatarOnly: props.mode === 'avatar' })
 
 // Track the currently-selected icon (for highlight) based on currentImageUrl.
 const selectedIconUrl = ref<string>('')
@@ -263,6 +302,33 @@ function onClosed() {
   reset()
 }
 
+// Preset emojis for quick selection (PC keyboards without emoji support)
+const presetEmojis = [
+  '😀', '', '😎', '🤩', '🥰', '🤗', '🥳', '😜',
+  '', '', '', '🐻', '', '🐨', '🦁', '',
+  '🦄', '', '🌸', '🌺', '🌻', '🌈', '⭐', '🔥',
+  '️', '💧', '🍎', '', '🍋', '', '', '',
+  '❤️', '', '', '💚', '💙', '💜', '', '🖤',
+  '💎', '✨', '', '', '', '🎨', '', '',
+]
+
+function onEmojiInput(event: Event) {
+  const input = event.target as HTMLInputElement
+  const value = input.value
+  if (!value) return
+  // Extract last emoji (code point)
+  const chars = [...value]
+  const lastChar = chars[chars.length - 1]
+  // Reject ASCII characters, whitespace, and common punctuation
+  // Emoji are typically outside the ASCII range (0x00-0x7F)
+  if (/^[\s\x20-\x7E]$/.test(lastChar)) {
+    input.value = ''
+    return
+  }
+  emit('select-emoji', lastChar)
+  input.value = ''
+}
+
 // Expose totalIcons for debugging / tests.
 void totalIcons
 </script>
@@ -293,6 +359,7 @@ void totalIcons
   position: relative;
   display: flex;
   justify-content: center;
+  align-items: center;
   padding: 8px 0 12px;
 }
 .preview-thumb {
@@ -302,10 +369,20 @@ void totalIcons
   object-fit: cover;
   background: var(--van-background-2);
 }
+.preview-emoji {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  background: var(--van-background-2);
+}
 .delete-btn {
   position: absolute;
-  top: 0;
-  right: calc(50% - 44px);
+  top: 2px;
+  left: calc(50% + 30px);
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -538,24 +615,21 @@ void totalIcons
 }
 .magnify-btn {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 22px;
-  height: 22px;
+  top: 3px;
+  right: 3px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  opacity: 0;
-  transition: opacity 0.15s;
+  font-size: 16px;
   cursor: pointer;
-}
-.icon-cell:hover .magnify-btn,
-.icon-cell:active .magnify-btn {
-  opacity: 1;
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 /* Enlarge preview overlay */
@@ -584,5 +658,84 @@ void totalIcons
 }
 .enlarge-img.visible {
   opacity: 1;
+}
+
+/* Emoji tab */
+.emoji-content {
+  padding: 16px;
+  text-align: center;
+}
+.emoji-hint {
+  font-size: 14px;
+  color: var(--van-text-color-2);
+  margin-bottom: 12px;
+}
+
+/* Preset emoji grid */
+.emoji-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  margin-bottom: 16px;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.emoji-preset-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--van-background-2);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.emoji-preset-btn:active {
+  transform: scale(0.92);
+}
+.emoji-preset-btn.selected {
+  border-color: var(--van-primary-color);
+  background: var(--van-background-3, #f0f0f0);
+}
+
+/* Text input row for keyboards with emoji support */
+.emoji-input-row {
+  display: flex;
+  justify-content: center;
+}
+.emoji-input {
+  width: 100%;
+  max-width: 200px;
+  padding: 12px 16px;
+  font-size: 32px;
+  text-align: center;
+  border: 2px dashed var(--van-border-color);
+  border-radius: 12px;
+  background: var(--van-background-2);
+  color: var(--van-text-color);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.emoji-input:focus {
+  border-color: var(--van-primary-color);
+}
+.emoji-input::placeholder {
+  font-size: 14px;
+  color: var(--van-text-color-3);
+}
+
+/* Avatar mode: 6-column grid with smaller cells */
+.icon-grid.avatar-mode {
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.icon-grid.avatar-mode .icon-cell {
+  min-height: 56px;
 }
 </style>

@@ -1,26 +1,31 @@
-"""finance_coach trigger endpoint (Plan A T8).
+"""finance_coach trigger endpoint (Plan A T8 + U13 AITask tracking).
 
 - POST /api/v1/ai/finance-coach/generate?force=false
-    8h skill-cache check -> cached JSON 200 (non-stream) OR stream_run via
-    the agent gateway /internal/gateway/runs/finance-coach/{thread_id} (Task 5).
-    Mirrors ai_report.trigger_generate_events but skill_id='finance_coach'.
+    8h skill-cache check -> cached JSON 200 (non-stream) OR AITask-tracked
+    bridge consumer SSE via agent gateway. Mirrors ai_report.py pattern (U13).
 """
 import json
 import logging
-import uuid
-from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
+from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
+from apps.backend.app.services.ai_task_service import AITaskService
+from apps.backend.app.services.bridge_consumer import (
+    _spawn_lifecycle_consumer,
+    consume_task_stream,
+)
+from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import (
     is_cache_fresh,
     latest_by_skill,
@@ -29,109 +34,29 @@ from apps.backend.app.services.finance_coach_cache import (
 from apps.backend.app.services.finance_coach_snapshot import (
     build_family_finance_snapshot,
 )
+from apps.backend.app.services.subscriber_registry import tracked_sse_stream
 
 router = APIRouter(prefix="/ai/finance-coach", tags=["ai-finance-coach"])
 logger = logging.getLogger(__name__)
 
-
-async def _stream_finance_coach_sse(
-    *,
-    family_id: str,
-    user_id: str,
-    thread_id: str,
-    snapshot: dict,
-) -> AsyncGenerator[bytes, None]:
-    """Proxy the agent's finance-coach SSE stream (mirrors _stream_asset_report_sse).
-
-    Calls the agent's /internal/gateway/runs/finance-coach/{thread_id} endpoint
-    via AgentClient (X-Agent-Token service-to-service auth) and forwards raw SSE
-    bytes. The worker (_run_finance_coach_agent) emits a finance_coach.result
-    custom event; this helper is a pure passthrough. On stream end the caller
-    persists the result to ai_reports (skill_id='finance_coach').
-    """
-    agent_client = AgentClient(family_id, user_id, timeout=300.0)
-    agent_url = f"/internal/gateway/runs/finance-coach/{thread_id}"
-    try:
-        async with agent_client.stream(
-            "POST",
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": str(user_id),
-                # Inject the snapshot as the run's user message so the worker
-                # (_extract_finance_coach_snapshot) picks it up.
-                "input": {"messages": [{"role": "user", "content": json.dumps(snapshot, ensure_ascii=False)}]},
-            },
-        ) as resp:
-            if resp.status_code != 200:
-                body = await resp.aread()
-                logger.warning(
-                    "[finance-coach] agent stream non-200: status=%s body=%s",
-                    resp.status_code, body[:200],
-                )
-                err = json.dumps({"message": "财务建议服务异常", "name": "AgentError"}).encode()
-                yield f"event: error\ndata: {err.decode()}\n\n".encode()
-                return
-            collected = b""
-            async for line in resp.aiter_lines():
-                yield (line + "\n").encode()
-                collected += (line + "\n").encode()
-            # Persist the finance_coach.result payload to the skill cache.
-            # The worker emits exactly one `event: custom` frame with
-            # data.type == "finance_coach.result". Parse it out of the collected bytes.
-            _persist_finance_coach_result(family_id, collected)
-    except Exception as exc:
-        logger.warning("[finance-coach] agent stream failed err=%s", type(exc).__name__)
-        err = json.dumps({"message": "财务建议服务中断", "name": type(exc).__name__}).encode()
-        yield f"event: error\ndata: {err.decode()}\n\n".encode()
-
-
-def _persist_finance_coach_result(family_id: str, collected_sse: bytes) -> None:
-    """Extract the finance_coach.result payload from the SSE bytes and cache it.
-
-    Called after a successful stream. Opens a short-lived session (separate from
-    the request's read-only db) to write the result row. Silently no-ops if the
-    result frame is missing (advice baseline: wrong/absent output is dropped, not
-    displayed — spec §7.1).
-    """
-    try:
-        text = collected_sse.decode("utf-8", errors="replace")
-        # SSE frames look like: event: custom\ndata: {"type":"finance_coach.result","payload":{...}}\n\n
-        payload = None
-        for block in text.split("\n\n"):
-            if "finance_coach.result" not in block:
-                continue
-            for line in block.split("\n"):
-                if line.startswith("data: "):
-                    try:
-                        data = json.loads(line[len("data: "):])
-                        if data.get("type") == "finance_coach.result":
-                            payload = data.get("payload")
-                    except json.JSONDecodeError:
-                        continue
-        if payload is None:
-            logger.info("[finance-coach] no finance_coach.result frame in stream — not caching")
-            return
-        from apps.backend.app.database import SessionLocal
-        with SessionLocal() as db:
-            upsert_skill_result(db, family_id, "finance_coach", payload)
-            db.commit()
-    except Exception as exc:
-        logger.warning("[finance-coach] persist result failed err=%s", type(exc).__name__)
+# skill_id for AITask tracking (matches VALID_SKILL_IDS in ai_tasks.py)
+SKILL_ID = "coach"
 
 
 @router.post("/generate")
 async def trigger_finance_coach(
+    request: Request,
     force: bool = False,
     current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
-    """Trigger finance_coach generation (8h skill-cache + SSE stream).
+    """Trigger finance_coach generation (8h skill-cache + AITask-tracked SSE).
 
-    Mirrors trigger_generate_events: circuit breaker -> 8h cache check (force
-    skips) -> stream_run via agent gateway. Cache hit returns JSON 200 (non-stream).
+    U13: Mirrors trigger_generate_events (ai_report.py) — circuit breaker ->
+    8h cache check (force skips) -> AITask tracking + bridge consumer SSE.
+    Cache hit returns JSON 200 (non-stream).
     """
     blocked_resp = check_circuit_blocked(current_user.family_id, "finance_coach", db)
     if blocked_resp is not None:
@@ -150,21 +75,148 @@ async def trigger_finance_coach(
                 },
             )
 
-    # Build the PII-minimized snapshot (spec §7.1) and stream.
+    # Check if there's already a running task - resume it instead of 409
+    existing = AITaskService.get_running_task(current_user.family_id, SKILL_ID, db)
+    if existing:
+        # Already running — resume via bridge consumer
+        task = existing
+        session_id = str(task.session_id) if task.session_id else str(task.id)
+        session = (
+            db.query(AIChatSession)
+            .filter_by(id=session_id, family_id=current_user.family_id)
+            .first()
+        )
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        # No running task - create new session and task
+        session = await ChatSessionService.create_session(
+            family_id=current_user.family_id,
+            user_id=current_user.id,
+            db=db,
+        )
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                skill_id=SKILL_ID,
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "queued",
+                    "task_id": task.id,
+                    "queue_position": task.queue_position,
+                },
+            )
+        task = AITaskService.create_task(
+            family_id=current_user.family_id,
+            skill_id=SKILL_ID,
+            session_id=session.id,
+            db=db,
+        )
+        session_id = str(session.id)
+
+    task_id = str(task.id)
+    family_id = current_user.family_id
+    user_id = str(current_user.id)
+
+    # Build the PII-minimized snapshot (spec §7.1) — injected as input payload
     snapshot = build_family_finance_snapshot(db, current_user)
-    thread_id = f"finance-coach-{current_user.family_id}-{uuid.uuid4().hex[:8]}"
+
+    # Trigger agent via non-streaming POST (bridge consumer pattern)
+    agent_client = AgentClient(family_id, user_id, timeout=300.0)
+    agent_url = f"/internal/gateway/runs/finance-coach/{session_id}"
+    run_id: str | None = None
+
+    try:
+        resp = await agent_client.post(
+            agent_url,
+            json={
+                "family_id": str(family_id),
+                "user_id": user_id,
+                "language": current_user.language,
+                "on_disconnect": "continue",
+                "task_id": task_id,
+                "input": {"messages": [{"role": "user", "content": json.dumps(snapshot, ensure_ascii=False)}]},
+            },
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "[finance-coach] agent trigger failed: status=%s body=%s task=%s",
+                resp.status_code,
+                resp.text[:200],
+                task_id,
+            )
+            from apps.backend.app.database import SessionLocal
+
+            _db = SessionLocal()
+            try:
+                AITaskService.fail_task(task_id, "财务建议服务异常", _db)
+            finally:
+                _db.close()
+            err = json.dumps({"message": "财务建议服务异常", "name": "AgentError"}).encode()
+            return StreamingResponse(
+                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+                media_type="text/event-stream",
+            )
+
+        # Extract agent run_id from Content-Location header and persist to AITask
+        # so bridge_consumer can subscribe to the correct Redis stream.
+        run_id = AITaskService.extract_and_attach_run_id(
+            task_id, resp.headers.get("Content-Location"), family_id
+        )
+    except Exception as exc:
+        logger.warning(
+            "[finance-coach] agent trigger failed task=%s err=%s", task_id, exc
+        )
+        from apps.backend.app.database import SessionLocal
+
+        _db = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"财务建议服务中断: {type(exc).__name__}", _db)
+        finally:
+            _db.close()
+        err = json.dumps({"message": "财务建议服务中断", "name": type(exc).__name__}).encode()
+        return StreamingResponse(
+            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+            media_type="text/event-stream",
+        )
+
+    # Subscribe to Redis stream via bridge_consumer (replaces HTTP proxy)
+    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    async def _persist_coach_result(_event_type: str, data: dict) -> None:
+        if isinstance(data, dict) and data.get("type") == "finance_coach.result":
+            payload = data.get("payload")
+            if payload:
+                from apps.backend.app.database import SessionLocal
+
+                _db = SessionLocal()
+                try:
+                    upsert_skill_result(_db, family_id, "finance_coach", payload)
+                    _db.commit()
+                finally:
+                    _db.close()
+
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=run_id,
+        on_result=_persist_coach_result,
+    )
+
+    last_event_id = request.headers.get("Last-Event-ID")
+    stream_gen = consume_task_stream(
+        task_id=task_id,
+        family_id=family_id,
+        last_event_id=last_event_id,
+        run_id=run_id,
+    )
 
     return StreamingResponse(
-        _stream_finance_coach_sse(
-            family_id=str(current_user.family_id),
-            user_id=str(current_user.id),
-            thread_id=thread_id,
-            snapshot=snapshot,
-        ),
+        tracked_sse_stream(task_id, stream_gen),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"X-Accel-Buffering": "no"},
     )

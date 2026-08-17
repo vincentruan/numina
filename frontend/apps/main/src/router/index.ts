@@ -307,6 +307,17 @@ const router = createRouter({
           component: () => import('@/pages/ChangeUsernamePage.vue'),
         },
         {
+          path: 'settings/profile',
+          name: 'ProfileEdit',
+          component: () => import('@/pages/ProfileEditPage.vue'),
+        },
+        {
+          path: 'settings/family/children/:childId/profile',
+          name: 'ChildProfileEdit',
+          component: () => import('@/pages/ProfileEditPage.vue'),
+          props: true,
+        },
+        {
           path: 'settings/second-factor',
           name: 'ChangeSecondFactor',
           component: () => import('@/pages/ChangeSecondFactorPage.vue'),

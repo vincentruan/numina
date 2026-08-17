@@ -1,0 +1,251 @@
+/**
+ * useTaskPolling — U16 generic task polling composable.
+ *
+ * Polls GET /api/v1/ai/tasks/detail/{taskId} at a configurable interval,
+ * tracking status transitions and pausing when the document is hidden.
+ *
+ * Extracted from useReportStream's inline pollTaskUntilComplete() so all
+ * non-Chat AI features (coach, literacy, narrative) share one implementation.
+ */
+import { ref, watch, onUnmounted, onDeactivated, onActivated, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { getTaskById, type AITask } from '@/api/ai-tasks'
+
+export type TaskPollingStatus = 'idle' | 'polling' | 'completed' | 'failed'
+
+export interface UseTaskPollingOptions {
+  /** Polling interval in ms (default 2000). */
+  interval?: number
+  /** Called when task status becomes 'completed'. */
+  onComplete?: (task: AITask) => void
+  /** Called when task status becomes 'failed'/'cancelled'/'timeout'. */
+  onError?: (task: AITask) => void
+}
+
+export interface UseTaskPollingReturn {
+  /** Current polling lifecycle status. */
+  status: Ref<TaskPollingStatus>
+  /** Latest task data from the API. */
+  task: Ref<AITask | null>
+  /** Whether the polling timer is currently paused (document hidden). */
+  paused: Ref<boolean>
+  /** Last error message (if any). */
+  errorMessage: Ref<string>
+  /** Start polling a specific taskId. Pass null to stop. */
+  setTaskId: (id: string | null) => void
+  /** Force an immediate poll cycle. */
+  pollNow: () => Promise<void>
+  /** Cancel the current task (U21) and stop polling. */
+  cancel: () => Promise<void>
+  /** Stop polling and reset state. */
+  stop: () => void
+}
+
+/**
+ * Generic task polling composable.
+ *
+ * Watches `taskIdRef` — when it becomes non-null, starts polling every
+ * `interval` ms. Pauses on `document.hidden`, resumes on visibility change.
+ * Stops automatically on component unmount.
+ */
+export function useTaskPolling(
+  taskIdRef: Ref<string | null>,
+  options: UseTaskPollingOptions = {},
+): UseTaskPollingReturn {
+  const { interval = 2000, onComplete, onError } = options
+  // S2 fix: use i18n for fallback error strings when available; graceful
+  // fallback to English/Chinese literals when called outside a Vue app with
+  // an i18n plugin (e.g. unit tests without a setup wrapper).
+  let t: ((key: string) => string) | null = null
+  try {
+    const i18n = useI18n()
+    t = i18n.t as (key: string) => string
+  } catch {
+    // No i18n context — fall back to literal strings below.
+    t = null
+  }
+  const fallbackFailed = t ? t('aiTask.error.generic') : '分析失败，请稍后重试'
+  const fallbackCancelled = t ? t('aiTask.cancelled') : '任务已终止'
+
+  const status = ref<TaskPollingStatus>('idle')
+  const task = ref<AITask | null>(null)
+  const paused = ref(false)
+  const errorMessage = ref('')
+
+  let timer: ReturnType<typeof setInterval> | null = null
+  let disposed = false
+  // I1 fix: overlap guard — prevent concurrent pollOnce calls when API is slow.
+  let pollInFlight = false
+
+  function clearTimer(): void {
+    if (timer !== null) {
+      clearInterval(timer)
+      timer = null
+    }
+  }
+
+  function handleTaskResult(t: AITask): void {
+    task.value = t
+    if (t.status === 'completed') {
+      status.value = 'completed'
+      clearTimer()
+      onComplete?.(t)
+    } else if (t.status === 'failed' || t.status === 'cancelled' || t.status === 'timeout') {
+      status.value = 'failed'
+      errorMessage.value = t.error_message || fallbackFailed
+      clearTimer()
+      onError?.(t)
+    }
+    // 'running' / 'queued' → keep polling, progress is in task.value
+  }
+
+  async function pollOnce(): Promise<void> {
+    const id = taskIdRef.value
+    if (!id || disposed || pollInFlight) return
+
+    pollInFlight = true
+    try {
+      const result = await getTaskById(id)
+      if (disposed) return
+      handleTaskResult(result)
+    } catch (err) {
+      if (disposed) return
+      // T18 fix: 404 -> task no longer exists on the backend (data anomaly
+      // or cleanup). Stop polling silently - no toast, no error message,
+      // otherwise users see repeated toasts on every page.
+      const httpStatus = (err as { response?: { status?: number } })?.response?.status
+      if (httpStatus === 404) {
+        status.value = 'failed'
+        errorMessage.value = '' // silent
+        clearTimer()
+        return
+      }
+      // Other errors (500, network) - keep polling, just log
+      console.warn('[useTaskPolling] poll error:', err)
+    } finally {
+      pollInFlight = false
+    }
+  }
+
+  function startTimer(): void {
+    clearTimer()
+    timer = setInterval(() => {
+      if (!document.hidden) {
+        pollOnce()
+      }
+    }, interval)
+  }
+
+  // Visibility change handler — pause/resume
+  function onVisibilityChange(): void {
+    if (disposed || status.value === 'completed' || status.value === 'failed') return
+    paused.value = document.hidden
+    if (!document.hidden && timer !== null) {
+      // Resume: poll immediately then restart timer
+      pollOnce()
+      startTimer()
+    }
+  }
+
+  // Watch taskIdRef — start/stop polling
+  watch(
+    taskIdRef,
+    (newId) => {
+      // I5 fix: always remove the previous listener before adding a new one
+      // to avoid accumulating listeners when taskIdRef flips between non-null values.
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      clearTimer()
+      if (newId) {
+        status.value = 'polling'
+        errorMessage.value = ''
+        task.value = null
+        // Poll immediately, then start interval
+        pollOnce()
+        startTimer()
+        document.addEventListener('visibilitychange', onVisibilityChange)
+      } else {
+        status.value = 'idle'
+      }
+    },
+    { immediate: true },
+  )
+
+  function setTaskId(id: string | null): void {
+    taskIdRef.value = id
+  }
+
+  async function pollNow(): Promise<void> {
+    await pollOnce()
+  }
+
+  async function cancel(): Promise<void> {
+    const id = taskIdRef.value
+    if (!id) return
+    try {
+      const { cancelTaskById } = await import('@/api/ai-tasks')
+      await cancelTaskById(id)
+      // Verify server state with one immediate poll (don't trust optimistic update)
+      try {
+        const result = await getTaskById(id)
+        if (result.status === 'cancelled') {
+          status.value = 'failed'
+          errorMessage.value = fallbackCancelled
+        } else if (result.status === 'completed') {
+          // Task completed before cancel took effect — show completed state
+          handleTaskResult(result)
+        } else {
+          // Server hasn't processed cancel yet — set cancelled optimistically
+          status.value = 'failed'
+          errorMessage.value = fallbackCancelled
+        }
+      } catch {
+        // Verification failed — set optimistically
+        status.value = 'failed'
+        errorMessage.value = '任务已取消'
+      }
+      clearTimer()
+    } catch (err) {
+      console.warn('[useTaskPolling] cancel error:', err)
+    }
+  }
+
+  function stop(): void {
+    disposed = true
+    clearTimer()
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    status.value = 'idle'
+  }
+
+  // T19 fix: KeepAlive lifecycle - onUnmounted does not fire for cached
+  // pages (Dashboard, AIHub); only onDeactivated does. Pause polling when
+  // deactivated so users who navigate away stop generating 2s requests.
+  let keepAlivePaused = false
+  onDeactivated(() => {
+    if (disposed || status.value !== 'polling') return
+    keepAlivePaused = true
+    paused.value = true
+    clearTimer()
+  })
+  onActivated(() => {
+    if (disposed || !keepAlivePaused) return
+    keepAlivePaused = false
+    paused.value = false
+    pollOnce()
+    startTimer()
+  })
+
+  onUnmounted(() => {
+    stop()
+  })
+
+  return {
+    status,
+    task,
+    paused,
+    errorMessage,
+    setTaskId,
+    pollNow,
+    cancel,
+    stop,
+  }
+}

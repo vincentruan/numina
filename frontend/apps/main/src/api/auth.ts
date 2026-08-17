@@ -41,3 +41,13 @@ interface UpdateSettingsRequest {
 export function updateSettings(data: UpdateSettingsRequest) {
   return http.put<User>('/auth/me/settings', data)
 }
+
+interface UpdateProfileRequest {
+  display_name?: string
+  avatar_color?: string
+  avatar_url?: string | null
+}
+
+export function updateProfile(data: UpdateProfileRequest) {
+  return http.put<User>('/auth/me', data)
+}

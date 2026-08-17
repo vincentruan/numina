@@ -26,10 +26,12 @@
           <div class="member-cards">
             <div v-for="member in adultMembers" :key="member.id" class="child-mgmt-card" :class="{ 'member-disabled': member.is_active === false }">
               <div class="child-mgmt-header">
-                <span
-                  class="child-avatar"
-                  :style="{ background: member.is_active === false ? 'var(--text-tertiary)' : (member.avatar_color || 'var(--color-primary)') }"
-                >{{ member.display_name[0] }}</span>
+                <UserAvatar
+                  :avatar-url="member.avatar_url ?? null"
+                  :avatar-color="member.is_active === false ? 'var(--text-tertiary)' : (member.avatar_color || 'var(--color-primary)')"
+                  :display-name="member.display_name"
+                  :size="36"
+                />
                 <span class="child-name">{{ member.display_name }}</span>
                 <span v-if="member.username" class="child-username">@{{ member.username }}</span>
                 <van-tag v-if="member.is_active === false" type="danger" size="medium" style="margin-left: auto">
@@ -104,10 +106,12 @@
           <div class="child-cards">
             <div v-for="child in childMembers" :key="child.id" class="child-mgmt-card">
               <div class="child-mgmt-header">
-                <span
-                  class="child-avatar"
-                  :style="{ background: child.avatar_color || '#f5a623' }"
-                >{{ child.display_name[0] }}</span>
+                <UserAvatar
+                  :avatar-url="child.avatar_url ?? null"
+                  :avatar-color="child.avatar_color || '#f5a623'"
+                  :display-name="child.display_name"
+                  :size="36"
+                />
                 <span class="child-name">{{ child.display_name }}</span>
                 <span v-if="child.username" class="child-username">@{{ child.username }}</span>
               </div>
@@ -332,6 +336,7 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemberPassword, updateMemberStatus, createShareLink, type ChoreStats } from '@/api/family'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'

@@ -417,7 +417,7 @@ export const suggestAssetFields = (data: AssetSuggestRequest) =>
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
 export interface AITaskStatus {
-  status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
+  status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled' | 'interrupted'
   task_id?: string
   session_id?: string
   started_at?: string
@@ -435,11 +435,6 @@ export async function getAITaskSession(
   const res = await http.get<{ session_id: string | null; task_id: string | null }>(
     `/ai/tasks/${capability}/session`,
   )
-  return res.data
-}
-
-export async function cancelAITask(capability: string): Promise<{ ok: boolean }> {
-  const res = await http.post<{ ok: boolean }>(`/ai/tasks/${capability}/cancel`)
   return res.data
 }
 

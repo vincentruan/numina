@@ -20,6 +20,20 @@
       @view-markdown="loadFallbackMarkdown"
     />
 
+    <!-- Cancel button when generating (U21: user-initiated task cancel) -->
+    <div v-if="isGenerating && reportTaskId" class="report-cancel-row">
+      <van-button
+        plain
+        type="danger"
+        size="small"
+        :loading="cancelling"
+        :disabled="cancelling"
+        @click="onCancel"
+      >
+        {{ t('aiTask.cancelBtn') }}
+      </van-button>
+    </div>
+
     <!-- Notice bar when generating new report while previous exists -->
     <div v-if="isGenerating && currentReport && !stream.cached.value" class="previous-report-banner">
       <van-notice-bar
@@ -45,6 +59,15 @@
         <p class="failed-text">{{ stream.errorMessage.value || t('toast.aiGenerateFailed') }}</p>
       </template>
       <van-button plain size="small" :loading="false" style="margin-top: 8px" @click="onGenerate()">
+        {{ t('aiTask.retry') }}
+      </van-button>
+    </div>
+
+    <!-- Task failed from resume detection (replaces error toast) -->
+    <div v-else-if="resumeHandle.status.value === 'failed' && !currentReport && !isGenerating" class="failed-placeholder">
+      <van-icon name="warning-o" size="48" class="failed-icon" />
+      <p class="failed-text">{{ resumeHandle.task.value?.error_message || t('toast.aiGenerateFailed') }}</p>
+      <van-button plain size="small" style="margin-top: 8px" @click="onGenerate()">
         {{ t('aiTask.retry') }}
       </van-button>
     </div>
@@ -203,23 +226,20 @@ import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { marked } from 'marked'
 import { parseApiDate } from '@/utils/format'
-import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import { getAIReport, getAIReportMarkdown, getAITask } from '@/api/ai'
+import { cancelTaskById } from '@/api/ai-tasks'
 import type { AIReport, AIReportIndicator } from '@/types'
 import { useReportStream } from '@/composables/useReportStream'
+import { useTaskResume } from '@/composables/useTaskResume'
 import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
+import { sanitizeMarkdown } from '@/utils/sanitize'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportStepTimeline from '@/components/ai/ReportStepTimeline.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ReportMarkdownPreview from '@/components/ai/ReportMarkdownPreview.vue'
-
-const SUMMARY_PURIFY_CONFIG = {
-  USE_PROFILES: { html: true },
-  ALLOW_DATA_ATTR: false,
-} as const
 
 const { t, locale } = useI18n()
 const { formatIn } = useCurrency()
@@ -230,11 +250,14 @@ const authStore = useAuthStore()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
+const retryTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 // Report content root for image export
 const reportContentRef = ref<HTMLElement | null>(null)
 const isExportingImage = ref(false)
 const isExportingPdf = ref(false)
+const reportTaskId = ref<string | null>(null)
+const cancelling = ref(false)
 
 // Markdown preview state
 const markdownVisible = ref(false)
@@ -310,6 +333,20 @@ async function loadMarkdownPreview() {
 
 const stream = useReportStream()
 
+// v3: useTaskResume for SSE reconnection on page re-entry
+const resumeHandle = useTaskResume('report', {
+  onStreamEvent: (event, data) => {
+    stream.ingestEvent(event, data)
+  },
+  onComplete: async () => {
+    aiStore.clearBackgroundTask('report')
+    await loadExistingReport()
+  },
+  onError: () => {
+    aiStore.clearBackgroundTask('report')
+  },
+})
+
 // Whether a generation is in flight (streaming or connecting).
 const isGenerating = computed(() =>
   stream.status.value === 'connecting' || stream.status.value === 'streaming',
@@ -346,7 +383,7 @@ const renderedIndicators = computed(() => {
     label: getIndicatorLabel(indicator.key),
     icon: getIndicatorIcon(indicator.key),
     scoreClass: getScoreClass(indicator.score),
-    narrativeHtml: DOMPurify.sanitize(marked.parse(indicator.narrative, { async: false }) as string, SUMMARY_PURIFY_CONFIG),
+    narrativeHtml: sanitizeMarkdown(marked.parse(indicator.narrative, { async: false }) as string),
   }))
 })
 
@@ -364,7 +401,7 @@ const scoreProgress = computed(() => {
 const renderedSummary = computed(() => {
   if (!currentReport.value?.summary) return ''
   const raw = marked.parse(currentReport.value.summary, { async: false }) as string
-  return DOMPurify.sanitize(raw, SUMMARY_PURIFY_CONFIG)
+  return sanitizeMarkdown(raw)
 })
 
 function formatMoney(val: number | null | undefined): string {
@@ -485,6 +522,7 @@ async function onGenerate(force = false) {
     try {
       const task = await getAITask('report')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+        reportTaskId.value = task.task_id
         aiStore.registerBackgroundTask({
           capability: 'report',
           taskId: task.task_id,
@@ -521,8 +559,26 @@ async function onGenerate(force = false) {
       await loadExistingReport()
     }
     aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
   } catch {
     showFailToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
+  }
+}
+
+async function onCancel() {
+  if (!reportTaskId.value || cancelling.value) return
+  cancelling.value = true
+  try {
+    await cancelTaskById(reportTaskId.value)
+    // Stop the frontend SSE reader (keepRunning=false resets status).
+    stream.abort(false)
+    aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
+    showToast(t('aiTask.cancelled'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    cancelling.value = false
   }
 }
 
@@ -569,27 +625,27 @@ async function onExportPdf() {
 onMounted(async () => {
   await loadExistingReport()
 
-  // If a report task is still running (possibly from a previous session or
-  // after the user navigated away), resume polling and load the result when
-  // it completes.
-  try {
-    const task = await getAITask('report')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      aiStore.registerBackgroundTask({
-        capability: 'report',
-        taskId: task.task_id,
-        sessionId: task.session_id || '',
-        startedAt: task.started_at || new Date().toISOString(),
-        status: task.status,
-      })
-      await stream.startPolling()
-      await loadExistingReport()
-      aiStore.clearBackgroundTask('report')
-    } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
-      aiStore.clearBackgroundTask('report')
-    }
-  } catch {
-    // ignore status fetch errors; page already loaded existing report
+  // v3: useTaskResume handles running task detection + SSE reconnection
+  const resumed = await resumeHandle.resume()
+  if (resumed && resumeHandle.task.value) {
+    aiStore.registerBackgroundTask({
+      capability: 'report',
+      taskId: resumeHandle.taskId.value!,
+      sessionId: resumeHandle.task.value.session_id || '',
+      startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
+      status: resumeHandle.task.value.status,
+    })
+  }
+
+  // Retry check for previously failed tasks (agent pipeline may still be running)
+  if (!currentReport.value && resumeHandle.task.value?.status === 'failed') {
+    retryTimer.value = setTimeout(async () => {
+      try {
+        await loadExistingReport()
+      } catch {
+        // best-effort; page already shows empty state
+      }
+    }, 3000)
   }
 })
 
@@ -597,6 +653,11 @@ onUnmounted(() => {
   // Close the frontend SSE reader but keep the agent pipeline running in the
   // background. The user can leave the page and the task will still complete.
   stream.abort(true)
+  resumeHandle.cleanup()
+  // Clear the retry timer to prevent state updates on unmounted component
+  if (retryTimer.value) {
+    clearTimeout(retryTimer.value)
+  }
 })
 </script>
 
@@ -1030,5 +1091,11 @@ onUnmounted(() => {
 /* Report content container */
 .previous-report-content {
   margin-top: 12px;
+}
+/* Cancel button row when generating (U21) */
+.report-cancel-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px;
 }
 </style>

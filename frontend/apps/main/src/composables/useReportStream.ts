@@ -56,11 +56,20 @@ export interface UseReportStreamReturn {
   toolCalls: Ref<ToolCallInfo[]>
   toolResults: Ref<ToolResultInfo[]>
   step2Json: Ref<Record<string, unknown> | null>
+  // U6: SSE reconnection state
+  lastEventId: Ref<string | null>
+  runId: Ref<string | null>
   abort: (keepRunning?: boolean) => void
   connect: (force?: boolean) => Promise<boolean>
+  reconnect: () => Promise<boolean>
   reset: () => void
   pollTaskUntilComplete: () => Promise<void>
   startPolling: () => Promise<void>
+  /**
+   * P1-5 fix: ingest an external SSE event (from useTaskResume reconnect)
+   * and route it through the same internal handlers as connect().
+   */
+  ingestEvent: (eventName: string, data: unknown) => void
 }
 
 export function useReportStream(): UseReportStreamReturn {
@@ -80,6 +89,10 @@ export function useReportStream(): UseReportStreamReturn {
   const toolCalls = ref<ToolCallInfo[]>([])
   const toolResults = ref<ToolResultInfo[]>([])
   const step2Json = ref<Record<string, unknown> | null>(null)
+
+  // U6: SSE reconnection state
+  const lastEventId = ref<string | null>(null)
+  const runId = ref<string | null>(null)
 
   let abortController: AbortController | null = null
   let cookieRefreshTimer: ReturnType<typeof setInterval> | null = null
@@ -116,6 +129,9 @@ export function useReportStream(): UseReportStreamReturn {
     toolCalls.value = []
     toolResults.value = []
     step2Json.value = null
+    // U6: Reset reconnection state
+    lastEventId.value = null
+    runId.value = null
   }
 
   function abort(keepRunning = false): void {
@@ -133,6 +149,10 @@ export function useReportStream(): UseReportStreamReturn {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+    }
+    // U6: Send Last-Event-ID header for reconnection
+    if (lastEventId.value) {
+      headers['Last-Event-ID'] = lastEventId.value
     }
     let res = await fetch(url, {
       method: 'POST',
@@ -383,6 +403,11 @@ export function useReportStream(): UseReportStreamReturn {
             currentEvent = line.slice(6).trim()
             continue
           }
+          // U6: Capture event ID for reconnection
+          if (line.startsWith('id:')) {
+            lastEventId.value = line.slice(3).trim()
+            continue
+          }
           if (!line.startsWith('data:')) continue
           const dataStr = line.slice(5).trim()
           if (!dataStr || dataStr === '[DONE]' || dataStr === 'null') {
@@ -400,6 +425,10 @@ export function useReportStream(): UseReportStreamReturn {
 
             if (event === 'metadata') {
               progressMessage.value = t('aiHub.reportGenerating')
+              // U6: Capture runId from metadata for reconnection
+              if (data && typeof data === 'object' && 'run_id' in data) {
+                runId.value = data.run_id as string
+              }
             } else if (event === 'messages' && data) {
               const msg = data as { type?: string }
               if (msg.type === 'ai') handleAiMessage(data as Parameters<typeof handleAiMessage>[0])
@@ -413,6 +442,14 @@ export function useReportStream(): UseReportStreamReturn {
               const errData = data as { message?: string }
               status.value = 'error'
               errorMessage.value = errData.message || t('toast.aiGenerateFailed')
+            } else if (event === 'gap') {
+              // U6: Handle gap event - cursor beyond retained buffer
+              // Reload durable state from DB and resume from current tail
+              console.warn('[useReportStream] Stream gap detected, reloading state from DB')
+              // The page should call useTaskResume to reload state
+              // For now, just mark as error with a specific message
+              status.value = 'error'
+              errorMessage.value = '事件流中断，请刷新页面重新连接'
             } else if (event === 'end') {
               handleEnd(data as { status?: string })
             }
@@ -440,6 +477,180 @@ export function useReportStream(): UseReportStreamReturn {
     return true
   }
 
+  // U6: Reconnect to existing stream using Last-Event-ID
+  async function reconnect(): Promise<boolean> {
+    if (!lastEventId.value) {
+      // No previous event ID, fall back to full connect
+      return connect(false)
+    }
+    // Reset status but keep lastEventId and runId for reconnection
+    status.value = 'connecting'
+    progressMessage.value = t('wsErrors.connecting')
+    errorMessage.value = ''
+
+    abortController = new AbortController()
+    const signal = abortController.signal
+
+    try {
+      const res = await doFetch(false, signal)
+      if (!res.ok) {
+        status.value = 'error'
+        const detail = res.headers.get('Content-Type')?.includes('application/json')
+          ? (await res.json()).detail
+          : res.statusText
+        errorMessage.value = detail || t('wsErrors.connectionFailed')
+        return false
+      }
+
+      // Continue streaming from the reconnect point
+      status.value = 'streaming'
+      startCookieRefresh()
+
+      if (!res.body) {
+        status.value = 'error'
+        errorMessage.value = t('wsErrors.connectionFailed')
+        return false
+      }
+
+      // U6: Full streaming logic for reconnection (same as connect())
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let currentEvent = ''
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim()
+              continue
+            }
+            // U6: Capture event ID for reconnection
+            if (line.startsWith('id:')) {
+              lastEventId.value = line.slice(3).trim()
+              continue
+            }
+            if (!line.startsWith('data:')) continue
+            const dataStr = line.slice(5).trim()
+            if (!dataStr || dataStr === '[DONE]' || dataStr === 'null') {
+              // 'end' frame carries data: null (sentinel) — handle it.
+              if (currentEvent === 'end') handleEnd(null)
+              currentEvent = ''
+              continue
+            }
+
+            try {
+              const parsed = JSON.parse(dataStr)
+              const event = currentEvent || parsed.event || 'message'
+              const data = parsed.data ?? parsed
+              currentEvent = ''
+
+              if (event === 'metadata') {
+                progressMessage.value = t('aiHub.reportGenerating')
+                // U6: Capture runId from metadata for reconnection
+                if (data && typeof data === 'object' && 'run_id' in data) {
+                  runId.value = data.run_id as string
+                }
+              } else if (event === 'messages' && data) {
+                const msg = data as { type?: string }
+                if (msg.type === 'ai') handleAiMessage(data as Parameters<typeof handleAiMessage>[0])
+                else if (msg.type === 'tool') handleToolMessage(data as Parameters<typeof handleToolMessage>[0])
+              } else if (event === 'values' && data) {
+                // values frames carry the full message list; we rely on messages
+                // frames for incremental updates, so values is a no-op here.
+              } else if (event === 'custom' && data) {
+                handleCustom(data as Parameters<typeof handleCustom>[0])
+              } else if (event === 'error' && data) {
+                const errData = data as { message?: string }
+                status.value = 'error'
+                errorMessage.value = errData.message || t('toast.aiGenerateFailed')
+              } else if (event === 'gap') {
+                // U6: Handle gap event - cursor beyond retained buffer
+                // Reload durable state from DB and resume from current tail
+                console.warn('[useReportStream] Stream gap detected, reloading state from DB')
+                // The page should call useTaskResume to reload state
+                // For now, just mark as error with a specific message
+                status.value = 'error'
+                errorMessage.value = '事件流中断，请刷新页面重新连接'
+              } else if (event === 'end') {
+                handleEnd(data as { status?: string })
+              }
+            } catch {
+              // Non-JSON data line; skip (best-effort, mirrors useThreadChat)
+            }
+            currentEvent = ''
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+          status.value = 'idle'
+        } else {
+          status.value = 'error'
+          errorMessage.value = (err instanceof Error && err.message)
+            ? t('wsErrors.connectionInterrupted')
+            : t('toast.aiGenerateFailed')
+        }
+      } finally {
+        stopCookieRefresh()
+        // If the stream ended without an explicit end frame, mark step3 from
+        // process → finish when status is already completed via a custom event.
+        if (status.value === 'streaming') status.value = 'completed'
+      }
+      return true
+    } catch (err) {
+      status.value = 'error'
+      errorMessage.value = (err instanceof Error && err.message)
+        ? t('wsErrors.connectionInterrupted')
+        : t('toast.aiGenerateFailed')
+      return false
+    }
+  }
+
+  /**
+   * P1-5 fix: ingest an external SSE event (e.g. from useTaskResume
+   * reconnect via subscribeTaskStream) and route it through the same
+   * internal handlers as connect()'s SSE reader loop.
+   */
+  function ingestEvent(eventName: string, data: unknown): void {
+    if (status.value === 'completed' || status.value === 'error') return
+    status.value = 'streaming'
+
+    const d = (data ?? {}) as Record<string, unknown>
+
+    switch (eventName) {
+      case 'metadata':
+        if (typeof d.run_id === 'string') runId.value = d.run_id
+        if (typeof d.progress_message === 'string') progressMessage.value = d.progress_message
+        break
+      case 'messages': {
+        const msgType = d.type as string | undefined
+        if (msgType === 'ai') {
+          handleAiMessage(d as Parameters<typeof handleAiMessage>[0])
+        } else if (msgType === 'tool') {
+          handleToolMessage(d as Parameters<typeof handleToolMessage>[0])
+        }
+        break
+      }
+      case 'custom':
+        handleCustom(d as Parameters<typeof handleCustom>[0])
+        break
+      case 'end':
+        handleEnd(d as Parameters<typeof handleEnd>[0])
+        break
+      case 'error':
+        status.value = 'error'
+        errorMessage.value = (d.message as string) || t('toast.aiGenerateFailed')
+        break
+    }
+  }
+
   return {
     status,
     progressMessage,
@@ -454,10 +665,15 @@ export function useReportStream(): UseReportStreamReturn {
     toolCalls,
     toolResults,
     step2Json,
+    // U6: SSE reconnection state
+    lastEventId,
+    runId,
     abort,
     connect,
+    reconnect,
     reset,
     pollTaskUntilComplete,
     startPolling,
+    ingestEvent,
   }
 }

@@ -22,7 +22,7 @@ flows → screenshot capture → test report (success summary + failure details)
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **eleven** feature areas (detailed cases split by area under
+Covers **twelve** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -37,6 +37,7 @@ Covers **eleven** feature areas (detailed cases split by area under
 9. **Account security + notification** — WebAuthn / 2FA / 设备管理 / 通知规则 (C9.1–C9.7) ([`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md))
 10. **Guest 端到端注册 + 加入家庭** — 注册 / 邀请码 / 已登录守卫 (C10.1–C10.4) ([`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md))
 11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
+12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -66,7 +67,7 @@ schedule + verified bsk concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11, 12 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
@@ -110,7 +111,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
-| **ai** | "ai test", "AI测试" | Area 3 + Area 6 (G1 subset, AI 必须启用) | ~25-35 min |
+| **ai** | "ai test", "AI测试" | Area 3 + Area 6 + Area 12 (G1 subset, AI 必须启用) | ~30-40 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
@@ -119,7 +120,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 1. 用户未指定模式 → 默认 `full`
 2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 10 个用例)
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
-4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11, 仅验证核心 adult 功能 + 币种回归 + 通知触发
+4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12, 仅验证核心 adult 功能 + 币种回归 + 通知触发
 
 ---
 
@@ -683,7 +684,7 @@ bsk snapshot --session "$SID"
 # Look for: "AI 已启用" or provider config present
 ```
 
-- If AI is **not enabled** → skip Area 3 + Area 6 cases, mark as `SKIP-AI` in
+- If AI is **not enabled** → skip Area 3 + Area 6 + Area 12 cases, mark as `SKIP-AI` in
   the report, and continue with other areas.
 - If AI provider has no model configured → same skip, note "provider 无模型" in report.
 
@@ -1038,6 +1039,8 @@ bsk session stop "$SID"
 | **8 — Expanded coverage (Manifesto/盲盒/Baby/Settings/Gift)** | **G1** | **F.1–F.10** | [`test-cases/groups/g1-adult-stable/area8-expanded-features.md`](./test-cases/groups/g1-adult-stable/area8-expanded-features.md) |
 | **9 — Security + notification (WebAuthn/2FA/通知)** | **G1** | **C9.1–C9.7** | [`test-cases/groups/g1-adult-stable/area9-security-notification.md`](./test-cases/groups/g1-adult-stable/area9-security-notification.md) |
 | **10 — Guest 端到端 (注册/邀请码/加入家庭)** | **G1** | **C10.1–C10.4** | [`test-cases/groups/g1-adult-stable/area10-guest-join-flow.md`](./test-cases/groups/g1-adult-stable/area10-guest-join-flow.md) |
+| **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |
+| **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 
 ### Supporting References
 

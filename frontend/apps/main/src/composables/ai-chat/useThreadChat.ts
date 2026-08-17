@@ -1256,6 +1256,20 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
                   title: data.title,
                   titleGenerating: false,
                 }
+              } else {
+                // Defensive fallback: session not in store (shouldn't happen in
+                // normal flow — handleStartChat adds it, and ensureThreadInSessions
+                // fetches it). Add a minimal entry with the title so the header
+                // shows the LLM-generated title instead of "新对话".
+                sessionStore.sessions.unshift({
+                  thread_id: currentThreadId,
+                  title: data.title,
+                  titleGenerating: false,
+                  status: 'idle' as const,
+                  is_pinned: false,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
               }
             }
             // U7 (D5 TodoList): todos channel — replace wholesale (merge_todos

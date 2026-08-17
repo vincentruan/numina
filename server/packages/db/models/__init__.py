@@ -15,6 +15,7 @@ from packages.db.models.literacy_scenario import (
 )
 from packages.db.models.reminder import Reminder
 from packages.db.models.reminder_notification import ReminderNotification
+from packages.db.models.rental_contract import RentalContract
 from packages.db.models.revoked_token import RevokedToken
 from packages.db.models.security_audit_log import SecurityAuditLog
 from packages.db.models.storage_backend import StorageBackend
@@ -39,6 +40,7 @@ __all__ = [
     "LiteracyWeeklyReport",
     "Reminder",
     "ReminderNotification",
+    "RentalContract",
     "RevokedToken",
     "SecurityAuditLog",
     "StorageBackend",

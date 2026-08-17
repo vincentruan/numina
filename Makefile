@@ -43,6 +43,12 @@ INVITATION_CODE_COUNT ?= 20
 # 指定邀请码 (逗号分隔, 优先级高于 INVITATION_CODE_COUNT)
 INVITATION_CODES ?=
 
+# ── 本地镜像编译配置 ──────────────────────────────────────
+LOCAL_IMAGE_PREFIX ?= numina
+LOCAL_IMAGE_TAG ?= latest
+DOCKER_PLATFORM ?= linux/amd64
+DIST_DIR ?= dist
+
 .PHONY: help check install \
         setup setup-keys setup-env setup-env-db setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
         dev-backend dev-agent dev-worker dev-frontend dev-child dev-all stop-dev-all \
@@ -51,6 +57,7 @@ INVITATION_CODES ?=
         test test-backend test-agent test-worker test-server test-frontend test-e2e \
         migrate migrate-revision migrate-down migrate-current \
         up down build-docker pull logs logs-backend logs-agent logs-worker logs-frontend ps restart shell up-prod down-prod \
+        build-local package-images deploy-remote deploy-local \
         deploy deploy-images deploy-dev \
         clean
 
@@ -126,6 +133,12 @@ help:
 	@echo "  make shell         - 进入 backend 容器 shell"
 	@echo "  make up-prod       - 使用 docker-compose.production.yml 启动"
 	@echo "  make down-prod     - 停止 production 容器"
+	@echo ""
+	@echo "本地编译镜像 (CI 额度不足时替代方案):"
+	@echo "  make build-local   - 本地编译全部 Docker 镜像 (可指定 DOCKER_PLATFORM=linux/amd64)"
+	@echo "  make package-images - 打包镜像为 dist/images.tar.gz (用于传输到服务器)"
+	@echo "  make deploy-remote - 将镜像包和配置推送到远程服务器并部署"
+	@echo "  make deploy-local  - 完整流程: build + package + deploy-remote (验证在远程完成)"
 	@echo ""
 	@echo "部署:"
 	@echo "  make deploy        - 生产部署 (本地构建 + 健康检查 + 邀请码初始化)"
@@ -656,6 +669,144 @@ up-prod:
 
 down-prod:
 	@$(COMPOSE) -f docker-compose.production.yml down
+
+# ══════════════════════════════════════════════════════════
+# 本地编译镜像 (CI 额度不足时替代方案)
+# 流程: build-local → package-images → deploy-remote
+# 或一键: deploy-local (= build + package + deploy-remote)
+# 注意: 本地仅构建镜像，验证在生产服务器上完成 (health check)
+# ══════════════════════════════════════════════════════════
+
+# 本地编译全部 Docker 镜像并打上统一 tag
+# Mac ARM 交叉编译到 Linux AMD64: make build-local DOCKER_PLATFORM=linux/amd64
+# 本地 ARM 服务器: make build-local DOCKER_PLATFORM=linux/arm64
+# 宿主机架构: make build-local DOCKER_PLATFORM=
+build-local:
+	@echo "═══════════════════════════════════════════════"
+	@echo "  本地编译 Docker 镜像"
+	@if [ -n "$(DOCKER_PLATFORM)" ]; then echo "  平台: $(DOCKER_PLATFORM)"; else echo "  平台: 宿主机 ($(shell uname -m))"; fi
+	@echo "  标签: $(LOCAL_IMAGE_TAG)"
+	@echo "═══════════════════════════════════════════════"
+	@if [ -n "$(DOCKER_PLATFORM)" ]; then \
+		DOCKER_BUILDKIT=1 DOCKER_DEFAULT_PLATFORM=$(DOCKER_PLATFORM) $(COMPOSE) -f docker-compose.production.yml build; \
+	else \
+		DOCKER_BUILDKIT=1 $(COMPOSE) -f docker-compose.production.yml build; \
+	fi
+	@echo ""
+	@echo "重新标记为 $(LOCAL_IMAGE_PREFIX)/<service>:$(LOCAL_IMAGE_TAG) ..."
+	@proj=$$(docker compose -f docker-compose.production.yml config --format json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null); \
+	if [ -z "$$proj" ]; then proj=$$(basename "$$(pwd)"); fi; \
+	echo "  compose project: $$proj"; \
+	for svc in backend:backend agent:agent scheduler_worker:scheduler-worker \
+	            frontend-main:frontend-main frontend-child:frontend-child; do \
+		compose_svc=$${svc%%:*}; \
+		tag_svc=$${svc##*:}; \
+		src="$${proj}_$${compose_svc}"; \
+		dst="$(LOCAL_IMAGE_PREFIX)/$$tag_svc:$(LOCAL_IMAGE_TAG)"; \
+		echo "  $$src → $$dst"; \
+		docker tag "$$src" "$$dst" || { echo "✗ 标记失败: $$src (运行 docker images 确认镜像名)"; exit 1; }; \
+	done
+	@echo ""
+	@echo "✓ 全部镜像编译完成"
+	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" \
+		| grep "^$(LOCAL_IMAGE_PREFIX)/" || true
+
+# 打包镜像为 tar.gz (用于 rsync/scp 传输到服务器)
+package-images:
+	@mkdir -p $(DIST_DIR)
+	@echo "打包镜像 → $(DIST_DIR)/images.tar.gz ..."
+	@docker save \
+		"$(LOCAL_IMAGE_PREFIX)/backend:$(LOCAL_IMAGE_TAG)" \
+		"$(LOCAL_IMAGE_PREFIX)/agent:$(LOCAL_IMAGE_TAG)" \
+		"$(LOCAL_IMAGE_PREFIX)/scheduler-worker:$(LOCAL_IMAGE_TAG)" \
+		"$(LOCAL_IMAGE_PREFIX)/frontend-main:$(LOCAL_IMAGE_TAG)" \
+		"$(LOCAL_IMAGE_PREFIX)/frontend-child:$(LOCAL_IMAGE_TAG)" \
+		| gzip > $(DIST_DIR)/images.tar.gz
+	@ls -lh $(DIST_DIR)/images.tar.gz
+	@echo "✓ 镜像包已就绪: $(DIST_DIR)/images.tar.gz"
+
+# 传输镜像包 + 配置到远程服务器，加载并部署
+# 注意: DEPLOY_REMOTE_DIR 必须使用绝对路径 (不能用 ~)
+deploy-remote:
+	@test -f .claude/deploy.env || { echo "✗ .claude/deploy.env 不存在 (见 SKILL.md prerequisites)"; exit 1; }
+	@set -a && source .claude/deploy.env && set +a && \
+	echo "═══════════════════════════════════════════════" && \
+	echo "  部署到远程服务器" && \
+	echo "  目标: $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}" && \
+	echo "═══════════════════════════════════════════════" && \
+	echo "" && \
+	echo "══ 同步配置文件 ══" && \
+	rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
+		docker-compose.production.yml \
+		nginx.production.conf \
+		system-config.yaml \
+		$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/ && \
+	echo "" && \
+	if [ -f "$(DIST_DIR)/images.tar.gz" ]; then \
+		echo "══ 传输镜像包 ($(shell ls -lh $(DIST_DIR)/images.tar.gz 2>/dev/null | awk '{print $$5}')) ══" && \
+		rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
+			$(DIST_DIR)/images.tar.gz \
+			$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/images.tar.gz && \
+		echo "✓ 镜像包已传输"; \
+	else \
+		echo "ℹ 无镜像包 ($(DIST_DIR)/images.tar.gz 不存在)，跳过传输 (将使用服务器已有镜像)"; \
+	fi && \
+	echo "" && \
+	echo "══ 远程加载并部署 ══" && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} 'cd '"$${DEPLOY_REMOTE_DIR}"' && \
+		command -v docker >/dev/null 2>&1 || { echo "✗ docker 未安装"; exit 1; }; \
+		if [ -f images.tar.gz ]; then \
+			echo "加载镜像..." && \
+			sudo docker load -i images.tar.gz && \
+			echo "✓ 镜像已加载" && \
+			rm -f images.tar.gz; \
+		else \
+			echo "ℹ 无镜像包，跳过加载"; \
+		fi && \
+		echo "重建服务..." && \
+		sudo docker compose -f docker-compose.production.yml up -d && \
+		echo "等待 backend 就绪..." && \
+		for i in $$(seq 1 30); do \
+			if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy"; then \
+				echo "✓ Backend healthy"; break; \
+			fi; \
+			if [ "$$i" = "30" ]; then \
+				echo "✗ Backend 启动超时"; \
+				sudo docker compose -f docker-compose.production.yml logs --tail 30 backend; \
+				exit 1; \
+			fi; \
+			sleep 2; \
+		done && \
+		echo "重新加载 nginx (刷新上游 DNS)..." && \
+		sudo docker exec numina-nginx nginx -s reload 2>/dev/null && \
+		echo "" && \
+		sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}" \
+	'
+	@echo ""
+	@echo "✓ 远程部署完成"
+
+# 一键: 本地编译 + 打包 + 部署 (验证在生产服务器完成)
+deploy-local: build-local
+	@$(MAKE) package-images
+	@$(MAKE) deploy-remote
+	@echo ""
+	@echo "═══════════════════════════════════════════════"
+	@echo "  ✓ 本地编译部署完成"
+	@echo "═══════════════════════════════════════════════"
+	@echo ""
+	@echo "镜像标签:"
+	@echo "  $(LOCAL_IMAGE_PREFIX)/backend:$(LOCAL_IMAGE_TAG)"
+	@echo "  $(LOCAL_IMAGE_PREFIX)/agent:$(LOCAL_IMAGE_TAG)"
+	@echo "  $(LOCAL_IMAGE_PREFIX)/scheduler-worker:$(LOCAL_IMAGE_TAG)"
+	@echo "  $(LOCAL_IMAGE_PREFIX)/frontend-main:$(LOCAL_IMAGE_TAG)"
+	@echo "  $(LOCAL_IMAGE_PREFIX)/frontend-child:$(LOCAL_IMAGE_TAG)"
+	@echo ""
+	@echo "生产服务器 .env 中需设置:"
+	@echo "  BACKEND_IMAGE=$(LOCAL_IMAGE_PREFIX)/backend:$(LOCAL_IMAGE_TAG)"
+	@echo "  AGENT_IMAGE=$(LOCAL_IMAGE_PREFIX)/agent:$(LOCAL_IMAGE_TAG)"
+	@echo "  SCHEDULER_WORKER_IMAGE=$(LOCAL_IMAGE_PREFIX)/scheduler-worker:$(LOCAL_IMAGE_TAG)"
+	@echo "  FRONTEND_MAIN_IMAGE=$(LOCAL_IMAGE_PREFIX)/frontend-main:$(LOCAL_IMAGE_TAG)"
+	@echo "  FRONTEND_CHILD_IMAGE=$(LOCAL_IMAGE_PREFIX)/frontend-child:$(LOCAL_IMAGE_TAG)"
 
 # PostgreSQL compose (docker-compose.yml + docker-compose.postgres.yml)
 # Requires --profile postgres to activate the postgres service defined in docker-compose.yml

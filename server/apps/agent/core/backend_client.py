@@ -301,6 +301,85 @@ class BackendClient:
         """Get user info by user_id for title generation."""
         return await get_user(self.family_id, user_id)
 
+    # ---------------------------------------------------------------------------
+    # AI Task Callbacks (U11) — agent reports progress/completion/failure
+    # ---------------------------------------------------------------------------
+
+    async def report_progress(
+        self, task_id: int, progress: dict
+    ) -> None:
+        """Report task progress to backend (U11).
+
+        Agent calls this during execution to update AITask.progress JSON field.
+        Raises on network error — caller should try/except + logger.warning.
+        """
+        client = await get_shared_client()
+        resp = await client.post(
+            f"/api/v1/internal/tasks/{task_id}/progress",
+            json={"progress": progress},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+
+    async def complete_task(
+        self, task_id: int, result_summary: str | None = None
+    ) -> None:
+        """Mark task as completed (U11).
+
+        Optionally stores result_summary in progress field.
+        Raises on network error — caller should try/except + logger.warning.
+        """
+        client = await get_shared_client()
+        resp = await client.post(
+            f"/api/v1/internal/tasks/{task_id}/complete",
+            json={"result_summary": result_summary},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+
+    async def fail_task(self, task_id: int, error_message: str) -> None:
+        """Mark task as failed (U11).
+
+        Error message truncated to 500 chars by backend schema.
+        Raises on network error — caller should try/except + logger.warning.
+        """
+        client = await get_shared_client()
+        resp = await client.post(
+            f"/api/v1/internal/tasks/{task_id}/fail",
+            json={"error_message": error_message},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+
+    async def heartbeat(self, task_id: int) -> None:
+        """Renew worker lease heartbeat (U11).
+
+        Updates lease_expires_at to now + 120s for dead-worker detection.
+        Raises on network error — caller should try/except + logger.warning.
+        """
+        client = await get_shared_client()
+        resp = await client.post(
+            f"/api/v1/internal/tasks/{task_id}/heartbeat",
+            json={},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+
+    async def cancel_task(self, task_id: int) -> None:
+        """Confirm cancellation completed (U11).
+
+        Called by agent after receiving cancel signal. Backend marks
+        AITask.status = cancelled. Idempotent.
+        Raises on network error — caller should try/except + logger.warning.
+        """
+        client = await get_shared_client()
+        resp = await client.post(
+            f"/api/v1/internal/tasks/{task_id}/cancel",
+            json={},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+
 
 def classify_error_type(error_code: int, error_message: str | None = None) -> str:
     """根据 HTTP 错误码和错误消息分类错误类型。
