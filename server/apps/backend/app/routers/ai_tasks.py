@@ -5,14 +5,20 @@
 - GET /ai/tasks/{skill_id}           - 查询当前 skill_id 的任务状态（向后兼容）
 - GET /ai/tasks/{skill_id}/session   - 获取关联的 session_id（向后兼容）
 - POST /ai/tasks/{skill_id}/cancel   - 终止当前运行的任务（向后兼容）
+- GET /ai/tasks/detail/{task_id}     - 按 ID 查询任务（U10）
+- GET /ai/tasks/detail/{task_id}/stream - SSE 重连端点（v3 subscribe-only）
+- POST /ai/tasks/detail/{task_id}/cancel - 按 ID 终止任务（U20）
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import AsyncIterator
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
@@ -262,3 +268,151 @@ async def cancel_task_by_id(
     db.commit()
 
     return {"ok": True, "status": "cancelled", "task_id": task.id}
+
+
+# ---------------------------------------------------------------------------
+# v3 SSE reconnect endpoint (subscribe-only)
+# ---------------------------------------------------------------------------
+
+# F7: Per-family concurrent SSE connection cap (prevents DoS)
+_MAX_SSE_CONNECTIONS_PER_FAMILY = 3
+_active_sse_connections: dict[int, int] = {}
+
+
+def _load_scenario_result(task, db: Session) -> dict:
+    """Load cached scenario result for a terminal task.
+
+    Maps ``task.skill_id`` (scenario identifier) to the corresponding result
+    storage and returns a dict suitable for SSE ``event: result`` data.
+    """
+    scenario = task.skill_id
+
+    if scenario in ("narrative", "coach"):
+        from apps.backend.app.services.finance_coach_cache import latest_by_skill
+
+        skill_key = "narrative" if scenario == "narrative" else "finance_coach"
+        cached = latest_by_skill(db, task.family_id, skill_key)
+        if not cached:
+            return {"error": "结果未找到"}
+        if scenario == "narrative":
+            report_data = cached.report_json
+            narrative_text = (
+                report_data.get("narrative", "")
+                if isinstance(report_data, dict)
+                else str(report_data)
+            )
+            return {"narrative": narrative_text}
+        else:
+            return cached.report_json if isinstance(cached.report_json, dict) else {"data": cached.report_json}
+
+    elif scenario == "literacy":
+        from packages.db.models.literacy_report import LiteracyWeeklyReport
+
+        report = (
+            db.query(LiteracyWeeklyReport)
+            .filter(LiteracyWeeklyReport.family_id == task.family_id)
+            .order_by(LiteracyWeeklyReport.generated_at.desc())
+            .first()
+        )
+        if not report:
+            return {"error": "报告未找到"}
+        return {
+            "report": {
+                "id": str(report.id),
+                "child_id": str(report.child_id),
+                "week_start": report.week_start.isoformat() if report.week_start else None,
+                "narrative": report.narrative,
+                "report_json": report.report_json,
+                "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+            }
+        }
+
+    elif scenario == "report":
+        from apps.backend.app.services.finance_coach_cache import latest_by_skill
+
+        cached = latest_by_skill(db, task.family_id, "report")
+        if not cached:
+            return {"error": "报告未找到"}
+        return {"report": cached.report_json}
+
+    else:
+        return {"error": f"未知场景: {scenario}"}
+
+
+async def _emit_scenario_result(task, db: Session) -> AsyncIterator[str]:
+    """Emit cached scenario result for terminal tasks, then close."""
+    if task.status == "completed":
+        result = _load_scenario_result(task, db)
+        yield f"event: result\ndata: {json.dumps(result, default=str)}\n\n"
+    elif task.status in ("failed", "cancelled", "timeout"):
+        yield f"event: error\ndata: {json.dumps({'error': task.error_message or '任务异常终止'})}\n\n"
+    yield "event: end\ndata: null\n\n"
+
+
+@router.get("/detail/{task_id}/stream")
+async def stream_task_events(
+    task_id: int,
+    request: Request,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """Subscribe-only SSE endpoint for task stream reconnection (v3).
+
+    Does NOT trigger a new task. Subscribes to the existing task's
+    bridge buffer and replays events from Last-Event-ID (if provided).
+
+    Behavior matrix:
+    - running/queued/post_processing + buffer exists → 200 SSE stream
+    - running/queued/post_processing + buffer gap → 200 SSE with gap event
+    - completed → 200 SSE with cached result + end
+    - failed/cancelled/timeout → 200 SSE with error + end
+    - not found / wrong family → 404
+    """
+    from apps.backend.app.services.bridge_consumer import consume_task_stream
+
+    task = AITaskService.get_task_by_id(task_id, current_user.family_id, db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "任务不存在")
+
+    # Connection cap (F7)
+    family_id = current_user.family_id
+    current_count = _active_sse_connections.get(family_id, 0)
+    if current_count >= _MAX_SSE_CONNECTIONS_PER_FAMILY:
+        raise AppError(ErrorCode.RATE_LIMITED, "SSE 连接数已达上限")
+
+    # Terminal states: emit cached result and close
+    if task.status in ("completed", "failed", "cancelled", "timeout"):
+        return StreamingResponse(
+            _emit_scenario_result(task, db),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # Active task: subscribe to bridge buffer
+    if not task.run_id:
+        raise AppError(ErrorCode.NOT_FOUND, "任务尚未分配 run_id")
+
+    last_event_id = request.headers.get("Last-Event-ID")
+
+    async def _tracked_stream() -> AsyncIterator[str]:
+        _active_sse_connections[family_id] = _active_sse_connections.get(family_id, 0) + 1
+        try:
+            async for chunk in consume_task_stream(
+                task_id=task.id,
+                family_id=family_id,
+                last_event_id=last_event_id,
+                run_id=task.run_id,
+            ):
+                yield chunk
+        finally:
+            _active_sse_connections[family_id] = max(0, _active_sse_connections.get(family_id, 1) - 1)
+
+    return StreamingResponse(
+        _tracked_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
