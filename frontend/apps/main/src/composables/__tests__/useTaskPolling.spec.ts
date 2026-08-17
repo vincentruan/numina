@@ -204,6 +204,44 @@ describe('useTaskPolling', () => {
     expect(status.value).toBe('failed')
   })
 
+  it('T18: 404 -> stops polling silently with empty errorMessage', async () => {
+    const taskId = ref<string | null>('123')
+    const onError = vi.fn()
+    // Axios-style error with response.status 404
+    mockGetTaskById.mockRejectedValueOnce({ response: { status: 404 } })
+
+    const { status, errorMessage } = useTaskPolling(taskId, { onError })
+
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(status.value).toBe('failed')
+    // Silent: no error message (no toast), no onError callback
+    expect(errorMessage.value).toBe('')
+    expect(onError).not.toHaveBeenCalled()
+
+    // No more polls after 404
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(mockGetTaskById).toHaveBeenCalledTimes(1)
+  })
+
+  it('T18: 500 error -> keeps polling (not silent-stopped)', async () => {
+    const taskId = ref<string | null>('123')
+    mockGetTaskById.mockRejectedValueOnce({ response: { status: 500 } })
+
+    const { status } = useTaskPolling(taskId, { interval: 2000 })
+
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Transient server error does not stop polling
+    expect(status.value).toBe('polling')
+
+    mockGetTaskById.mockResolvedValueOnce(makeTask({ status: 'running' }))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(mockGetTaskById).toHaveBeenCalledTimes(2)
+  })
+
   it('cancel() → calls cancelTaskById, stops polling, sets failed', async () => {
     const taskId = ref<string | null>('123')
     mockGetTaskById.mockResolvedValue(makeTask({ status: 'running' }))
