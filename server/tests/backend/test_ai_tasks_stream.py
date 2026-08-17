@@ -104,6 +104,44 @@ def failed_task(db, family_id):
 
 
 @pytest.fixture
+def completed_literacy_task(client, auth_headers, db, family_id):
+    """Create a completed literacy task with a persisted weekly report."""
+    from datetime import date
+
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+    from packages.db.models.literacy_report import LiteracyWeeklyReport
+
+    # Get the test user (parent) id to derive a child in the same family
+    resp = client.get("/api/v1/auth/me", headers=auth_headers)
+    user_id = resp.json()["data"]["id"]
+
+    report = LiteracyWeeklyReport(
+        child_id=user_id,  # user doubles as the child row for the join test
+        week_start=date(2026, 8, 16),
+        report_json='{"week_start": "2026-08-16"}',
+        narrative="本周理财小结",
+    )
+    db.add(report)
+
+    session = db.query(AIChatSession).filter(AIChatSession.family_id == family_id).first()
+    if not session:
+        session = AIChatSession(family_id=family_id)
+        db.add(session)
+        db.flush()
+
+    task = AITaskService.create_task(
+        family_id=family_id,
+        skill_id="literacy",
+        session_id=session.id,
+        db=db,
+    )
+    task.status = "completed"
+    task.run_id = "test-run-id-literacy"
+    db.commit()
+    return task
+
+
+@pytest.fixture
 def running_task(db, family_id):
     """Create a running task (active, with run_id)."""
     from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -167,6 +205,29 @@ class TestStreamTaskEventsTerminalStates:
         content = resp.text
         assert "event: result" in content
         assert "event: end" in content
+
+    def test_completed_literacy_task_emits_report_via_family_join(
+        self, client, auth_headers, completed_literacy_task
+    ):
+        """Completed literacy task -> result via users.family_id join (no family_id col)."""
+        resp = client.get(
+            f"/api/v1/ai/tasks/detail/{completed_literacy_task.id}/stream",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        content = resp.text
+        assert "event: result" in content
+        # The narrative from the joined LiteracyWeeklyReport must be in the result
+        found = False
+        for line in content.split("\n"):
+            if line.startswith("data: ") and "report" in line:
+                try:
+                    data = json.loads(line[len("data: "):])
+                    if data.get("report", {}).get("narrative") == "本周理财小结":
+                        found = True
+                except json.JSONDecodeError:
+                    pass
+        assert found, "literacy report narrative not found in SSE result"
 
     def test_failed_task_emits_error(self, client, auth_headers, failed_task):
         """Failed task → SSE emits error event with error_message."""

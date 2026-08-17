@@ -308,9 +308,12 @@ def _load_scenario_result(task, db: Session) -> dict:
     elif scenario == "literacy":
         from packages.db.models.literacy_report import LiteracyWeeklyReport
 
+        # LiteracyWeeklyReport has no family_id column - resolve through the
+        # child's family (users.family_id) for tenant isolation.
         report = (
             db.query(LiteracyWeeklyReport)
-            .filter(LiteracyWeeklyReport.family_id == task.family_id)
+            .join(User, LiteracyWeeklyReport.child_id == User.id)
+            .filter(User.family_id == task.family_id)
             .order_by(LiteracyWeeklyReport.generated_at.desc())
             .first()
         )
