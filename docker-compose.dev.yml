@@ -23,7 +23,6 @@ services:
       - AGENT_BASE_URL=http://numina-agent:8001
       - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/.numina/data/workspace}
       - NUMINA_PROJECT_ROOT=/app
-      - REDIS_URL=${REDIS_URL:-redis://numina-redis:6379/0}
     command: uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
@@ -54,7 +53,6 @@ services:
       - NUMINA_PROJECT_ROOT=/app
       - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
       - DEERFLOW_DB_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina_deerflow
-      - REDIS_URL=${REDIS_URL:-redis://numina-redis:6379/0}
     command: uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent
     depends_on:
       backend:
@@ -168,7 +166,7 @@ services:
       - frontend-main
       - frontend-child
 
-  # Redis service for StreamBridge event buffering
+  # Redis service for StreamBridge event buffering (多实例部署时启用: --profile redis)
   redis:
     image: redis:7-alpine
     container_name: numina-redis
@@ -176,6 +174,8 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    profiles:
+      - redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

@@ -40,7 +40,6 @@ services:
       - BACKEND_BASE_URL=http://numina-backend:8000
       - NUMINA_PROJECT_ROOT=/app
       - SKIP_INITIAL_EXCHANGE_RATE_FETCH=${SKIP_INITIAL_EXCHANGE_RATE_FETCH:-}
-      - REDIS_URL=${REDIS_URL:-redis://numina-redis:6379/0}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -77,7 +76,6 @@ services:
       - NUMINA_PROJECT_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina}
       - DEERFLOW_DB_URL=${DEERFLOW_DB_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina_deerflow}
-      - REDIS_URL=${REDIS_URL:-redis://numina-redis:6379/0}
     depends_on:
       backend:
         condition: service_healthy
@@ -167,7 +165,7 @@ services:
       frontend-child:
         condition: service_started
 
-  # Redis service for StreamBridge event buffering
+  # Redis service for StreamBridge event buffering (多实例部署时启用: --profile redis)
   redis:
     image: redis:7-alpine
     container_name: numina-redis
@@ -175,6 +173,8 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    profiles:
+      - redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

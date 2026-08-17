@@ -17,8 +17,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
 
   scheduler_worker:
     environment:
@@ -34,6 +32,4 @@ services:
       - DEERFLOW_DB_URL=postgresql+asyncpg://numina:${POSTGRES_PASSWORD:-numinapass}@numina-postgres:5432/deerflow
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
