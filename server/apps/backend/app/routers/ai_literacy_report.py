@@ -147,6 +147,13 @@ async def trigger_generate_events(
     Cache hit → JSON ``{status: 'ready'}``.
     Cache miss / force → AITask tracking + bridge consumer SSE.
     """
+    # Phase 5.2: circuit breaker gate
+    from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
+
+    blocked_resp = check_circuit_blocked(current_user.family_id, "literacy", db)
+    if blocked_resp is not None:
+        return blocked_resp
+
     cid = _validate_child(
         db, child_id_str=child_id, family_id=current_user.family_id
     )

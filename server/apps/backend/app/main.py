@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import secrets
@@ -345,7 +346,20 @@ async def lifespan(app: FastAPI):
 
         signal.signal(signal.SIGTERM, _backend_sigterm_handler)
 
+    # Phase 5.1: Start orphan task detector background loop
+    from apps.backend.app.services.orphan_detector import orphan_detector_loop
+
+    orphan_task = asyncio.create_task(orphan_detector_loop())
+    logger.info("Orphan task detector started")
+
     yield
+
+    # Cancel orphan detector on shutdown
+    orphan_task.cancel()
+    try:
+        await orphan_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(

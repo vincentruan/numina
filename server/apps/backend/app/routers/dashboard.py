@@ -237,6 +237,13 @@ async def generate_narrative(
 
     family_id = user.family_id
 
+    # Phase 5.2: circuit breaker gate
+    from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
+
+    blocked_resp = check_circuit_blocked(family_id, "narrative", db)
+    if blocked_resp is not None:
+        return blocked_resp
+
     # Dynamic thresholds from family settings, fallback to module defaults
     from apps.backend.app.services.config_service import get_family_setting
 
