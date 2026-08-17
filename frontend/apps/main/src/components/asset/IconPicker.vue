@@ -258,12 +258,12 @@ function onThumbLoad(event: Event) {
 }
 
 function isSelected(icon: IconEntry): boolean {
-  return selectedIconUrl.value === getThumbUrl(icon)
+  return selectedIconUrl.value === getOriginalUrl(icon)
 }
 
 function selectIcon(icon: IconEntry) {
-  // Store thumbnail URL for display (256px WebP, good quality for list + detail)
-  const url = getThumbUrl(icon)
+  // Store original URL (thumbnails are only for grid display)
+  const url = getOriginalUrl(icon)
   selectedIconUrl.value = url
   emit('select-image', url)
 }

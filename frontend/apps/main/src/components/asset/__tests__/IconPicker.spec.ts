@@ -202,7 +202,7 @@ describe('IconPicker', () => {
 
     const emitted = wrapper.emitted('select-image')
     expect(emitted).toBeTruthy()
-    expect(emitted![0][0]).toContain('/icons/3d-thumbs/vehicles/')
+    expect(emitted![0][0]).toContain('/icons/3d/vehicles/')
     expect(emitted![0][0]).toContain('Car')
   })
 
