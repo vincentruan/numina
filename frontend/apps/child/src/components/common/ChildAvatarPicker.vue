@@ -59,12 +59,27 @@
             :class="{ selected: isSelected(icon) }"
             @click="selectIcon(icon)"
           >
-            <img
-              :src="getThumbUrl(icon)"
-              loading="lazy"
-              class="thumb-img"
-            />
+            <div class="icon-thumb">
+              <img
+                :src="getThumbUrl(icon)"
+                loading="lazy"
+                class="thumb-img"
+              />
+              <van-icon
+                name="zoom-in"
+                class="magnify-btn"
+                @click.stop="enlargeIcon(icon)"
+              />
+            </div>
           </div>
+        </div>
+
+        <!-- Enlarge preview overlay -->
+        <div v-if="enlargedUrl" class="enlarge-overlay" @click="enlargedUrl = ''">
+          <img
+            :src="enlargedUrl"
+            class="enlarge-img"
+          />
         </div>
       </div>
 
@@ -130,6 +145,13 @@ function isSelected(icon: IconEntry): boolean {
 
 function selectIcon(icon: IconEntry) {
   emit('select-image', getThumbUrl(icon))
+}
+
+const enlargedUrl = ref('')
+
+function enlargeIcon(icon: IconEntry) {
+  const folder = activeCategory.value
+  enlargedUrl.value = `/icons/3d/${folder}/${icon.fileName}`
 }
 
 const emojiInput = ref<HTMLInputElement | null>(null)
@@ -280,6 +302,49 @@ function onClosed() {
   max-width: 80%;
   max-height: 80%;
   object-fit: contain;
+}
+
+.icon-thumb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.magnify-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.enlarge-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.enlarge-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
 }
 
 .emoji-content {

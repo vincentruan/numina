@@ -29,7 +29,8 @@ COPY frontend/apps/main/scripts/generate-icon-thumbnails.ts ./scripts/
 RUN mkdir -p public/icons/3d && \
     for cat in animals art-culture buildings clothing-accessories electronics \
                entertainment furniture healthcare instruments kitchenware \
-               office-stationery plants science-tech sports tools vehicles; do \
+               office-stationery plants science-tech sports tools vehicles \
+               characters historical-figures religion-mythology flags numbers-symbols; do \
       ln -sf /app/frontend/packages/assets/src/icons/3d-things/$cat public/icons/3d/$cat; \
     done
 # Generate thumbnails with BuildKit cache mount — persists across builds so
