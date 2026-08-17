@@ -12,8 +12,11 @@ class OverviewResponse(BaseModel):
     month_over_month_change: float | None = None
     month_over_month_change_amount: float | None = None
     total_daily_cost: float = 0
-    # Rental contracts (U13): net monthly rental cash flow; null when no active contracts.
+    # Rental contracts (U13): monthly income/expense/net/deposit; null when no active contracts.
     rental_net_cash_flow: float | None = None
+    rental_monthly_income: float | None = None
+    rental_monthly_expense: float | None = None
+    rental_total_deposit: float | None = None
 
 
 class AllocationItem(SnowflakeBase):

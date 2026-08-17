@@ -315,7 +315,7 @@ KTD-13. **Redis added to docker-compose.yml** (prerequisite). Redis is NOT curre
 
 KTD-14. **`disconnect_watcher` bypass for long-running tasks** (Governs R1, R5). The agent's `runs_stream.py` has a `disconnect_watcher` task per run that monitors `request.is_disconnected()` and calls `run_mgr.cancel()`. For long-running tasks (report, import, coach, literacy), the watcher must be bypassed when `on_disconnect=continue` — the watcher should only cancel for `on_disconnect=cancel` runs.
 
-KTD-10. **Remove `_watch_report_task_completion`** (resolves OQ-3). The polling watcher becomes obsolete when StreamBridge handles event persistence natively. Agent bridge.subscribe() with on_disconnect=continue replaces the need for a separate completion watcher. Remove during U5 migration.
+KTD-10. **Keep `_watch_report_task_completion` for `on_disconnect=continue`** (corrected from original "Remove"). The original plan assumed StreamBridge makes the watcher obsolete, but this was incorrect: when `on_disconnect=continue` and the SSE client disconnects, the `_task_tracking_stream` finally block can no longer see the pipeline's end frame. The watcher fills this gap by polling `ai_reports` for completion. StreamBridge handles event replay, but not post-disconnect lifecycle tracking for continue-mode tasks. Keep the watcher as the companion mechanism.
 
 KTD-11. **Custom agents use same AITask table** (resolves OQ-4). skill_id = "agent-{agent_id}". No separate table. Keeps the unified task query path simple.
 

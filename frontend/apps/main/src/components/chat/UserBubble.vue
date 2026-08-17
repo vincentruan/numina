@@ -10,6 +10,7 @@
  * - w-fit (narrow bubble that fits content)
  * - max-width 70% (prevents overly wide bubbles)
  * - Bubble contains ONLY user text; copy + time are below the bubble
+ * - Optional avatar on the right side of the bubble row
  *
  * Markdown rendering:
  * User content is rendered as markdown (like AI responses) so formatted
@@ -18,11 +19,15 @@
 import { useI18n } from 'vue-i18n'
 import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 import CopyButton from '@/components/ai-chat/CopyButton.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 interface Props {
   content: string
   displayTime: string
   sendStatus?: 'sending' | 'sent' | 'failed'
+  avatarUrl?: string | null
+  avatarColor?: string
+  displayName?: string
 }
 
 defineProps<Props>()
@@ -36,54 +41,78 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="user-bubble">
-    <!-- Bubble: only the user's text content (DeerFlow: w-fit, right-aligned) -->
-    <div class="bubble-content">
-      <MarkdownContent :content="content" class="bubble-markdown" />
-    </div>
-
-    <!-- Send status indicator (below bubble) -->
-    <div v-if="sendStatus === 'sending'" class="send-status sending" aria-live="polite">
-      <span class="status-dot" aria-hidden="true" />
-      <span>{{ t('aiChat.sendingMessage') }}</span>
-    </div>
-    <div v-if="sendStatus === 'failed'" class="send-status failed" aria-live="polite">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span>{{ t('aiChat.sendFailed') }}</span>
-      <button class="retry-btn" :aria-label="t('aiChat.retry')" @click="emit('retry')">
-        {{ t('aiChat.retry') }}
-      </button>
-    </div>
-
-    <!-- Footer: copy + time (below bubble, right-aligned) -->
-    <div class="bubble-footer">
-      <div class="bubble-actions">
-        <CopyButton v-slot="{ copy }" :content="content">
-          <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="copy(); emit('copy')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
-          </button>
-        </CopyButton>
+  <div class="user-bubble-row">
+    <div class="user-bubble">
+      <!-- Bubble: only the user's text content (DeerFlow: w-fit, right-aligned) -->
+      <div class="bubble-content">
+        <MarkdownContent :content="content" class="bubble-markdown" />
       </div>
-      <span class="bubble-time">{{ displayTime }}</span>
+
+      <!-- Send status indicator (below bubble) -->
+      <div v-if="sendStatus === 'sending'" class="send-status sending" aria-live="polite">
+        <span class="status-dot" aria-hidden="true" />
+        <span>{{ t('aiChat.sendingMessage') }}</span>
+      </div>
+      <div v-if="sendStatus === 'failed'" class="send-status failed" aria-live="polite">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>{{ t('aiChat.sendFailed') }}</span>
+        <button class="retry-btn" :aria-label="t('aiChat.retry')" @click="emit('retry')">
+          {{ t('aiChat.retry') }}
+        </button>
+      </div>
+
+      <!-- Footer: copy + time (below bubble, right-aligned) -->
+      <div class="bubble-footer">
+        <div class="bubble-actions">
+          <CopyButton v-slot="{ copy }" :content="content">
+            <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="copy(); emit('copy')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          </CopyButton>
+        </div>
+        <span class="bubble-time">{{ displayTime }}</span>
+      </div>
     </div>
+    <!-- Avatar (right side of bubble) -->
+    <UserAvatar
+      v-if="displayName"
+      :avatar-url="avatarUrl ?? null"
+      :avatar-color="avatarColor || '#4F46E5'"
+      :display-name="displayName"
+      :size="32"
+      class="bubble-avatar"
+    />
   </div>
 </template>
 
 <style scoped>
 /* DeerFlow pattern: ml-auto + flex column → right-aligned bubble with toolbar below */
-.user-bubble {
+.user-bubble-row {
   margin-left: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 78%;
+}
+
+.user-bubble {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  max-width: 70%;
+  max-width: 100%;
   min-width: 60px;
+  flex: 1;
+}
+
+.bubble-avatar {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .bubble-content {

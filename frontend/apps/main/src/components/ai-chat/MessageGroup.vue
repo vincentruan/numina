@@ -15,6 +15,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@numina/auth'
 import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
@@ -62,6 +63,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const authStore = useAuthStore()
 
 // Human group: extract first message
 const humanMessage = computed(() =>
@@ -219,6 +221,9 @@ const subagentTaskIds = computed(() => {
       :content="humanMessage.content"
       :display-time="humanMessage.displayTime"
       :send-status="humanMessage.sendStatus"
+      :avatar-url="authStore.user?.avatar_url"
+      :avatar-color="authStore.user?.avatar_color"
+      :display-name="authStore.user?.display_name"
       @copy="emit('copy', humanMessage.content)"
     />
 

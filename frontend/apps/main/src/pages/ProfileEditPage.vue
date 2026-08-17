@@ -56,6 +56,13 @@
       @delete="onDeleteAvatar"
     />
 
+    <!-- Logo Cropper (square crop + rotate for avatar images) -->
+    <LogoCropper
+      v-model:show="showCropper"
+      :source="cropperSource"
+      @confirm="onCropperConfirm"
+    />
+
     <!-- Hidden file inputs -->
     <input
       ref="galleryInput"
@@ -83,6 +90,7 @@ import { showSuccessToast, showFailToast, showLoadingToast } from 'vant'
 import { useAuthStore } from '@numina/auth'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 import IconPicker from '@/components/asset/IconPicker.vue'
+import LogoCropper from '@/components/asset/LogoCropper.vue'
 import { updateProfile } from '@/api/auth'
 import http from '@/api'
 import type { User } from '@numina/auth'
@@ -105,6 +113,8 @@ const form = ref({
 
 const saving = ref(false)
 const showPicker = ref(false)
+const showCropper = ref(false)
+const cropperSource = ref<File | string | null>(null)
 const galleryInput = ref<HTMLInputElement | null>(null)
 const cameraInput = ref<HTMLInputElement | null>(null)
 
@@ -202,72 +212,45 @@ async function onFileSelected(event: Event) {
     return
   }
 
+  // Open cropper for square crop + rotate
+  cropperSource.value = file
+  showCropper.value = true
+  showPicker.value = false
+
+  // Reset input
+  input.value = ''
+}
+
+async function onCropperConfirm(canvas: HTMLCanvasElement) {
+  showCropper.value = false
   showLoadingToast(t('profileEdit.uploading'))
 
   try {
-    // Client-side resize to 512x512 max (KTD1)
-    const resizedFile = await resizeImage(file, 512)
+    // Convert cropped canvas to blob and upload (no watermark for avatars)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Canvas toBlob failed'))),
+        'image/jpeg',
+        0.92,
+      )
+    })
+    const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
 
-    // Upload via existing endpoint
     const formData = new FormData()
-    formData.append('file', resizedFile)
+    formData.append('file', file)
     const res = await http.post<{ url: string }>('/upload/image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     form.value.avatar_url = res.data.url
-    showPicker.value = false
     showSuccessToast(t('common.success'))
   } catch {
     showFailToast(t('profileEdit.uploadFailed'))
-  } finally {
-    // Reset input
-    input.value = ''
   }
 }
 
 function onDeleteAvatar() {
   form.value.avatar_url = null
   showPicker.value = false
-}
-
-// Resize image client-side
-function resizeImage(file: File, maxSize: number): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-
-    img.onload = () => {
-      let { width, height } = img
-      if (width > height && width > maxSize) {
-        height = (height * maxSize) / width
-        width = maxSize
-      } else if (height > maxSize) {
-        width = (width * maxSize) / height
-        height = maxSize
-      }
-
-      canvas.width = width
-      canvas.height = height
-      ctx?.drawImage(img, 0, 0, width, height)
-
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error('Failed to resize image'))
-            return
-          }
-          const resizedFile = new File([blob], file.name, { type: file.type })
-          resolve(resizedFile)
-        },
-        file.type,
-        0.9,
-      )
-    }
-
-    img.onerror = () => reject(new Error('Failed to load image'))
-    img.src = URL.createObjectURL(file)
-  })
 }
 </script>
 

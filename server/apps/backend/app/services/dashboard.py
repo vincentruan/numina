@@ -140,22 +140,37 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         mom_change_amount = round(current_net - snapshot_net, 2)
         mom_change = round((current_net - snapshot_net) / abs(snapshot_net) * 100, 2)
 
-    # Rental contracts (U13): net monthly rental cash flow; None when no active contracts
-    # so the frontend hides the metric entirely (deposit is not cash flow).
+    # Rental contracts (U13): income/expense/net/deposit; None when no active contracts
+    # so the frontend hides the metric entirely.
     rental_contracts = (
         db.query(RentalContract)
         .filter(RentalContract.family_id == family_id, RentalContract.is_active.is_(True))
         .all()
     )
     rental_net = None
+    rental_income = None
+    rental_expense = None
+    rental_deposit = None
     if rental_contracts:
-        rental_net = 0.0
+        rental_income = 0.0
+        rental_expense = 0.0
+        rental_deposit = 0.0
         for c in rental_contracts:
-            sign = 1.0 if c.role == "landlord" else -1.0
-            rental_net += sign * ExchangeRateService.convert(
+            converted_rent = ExchangeRateService.convert(
                 float(c.monthly_rent), c.currency or "CNY", default_currency, db
             )
-        rental_net = round(rental_net, 2)
+            converted_deposit = ExchangeRateService.convert(
+                float(c.deposit or 0), c.currency or "CNY", default_currency, db
+            )
+            if c.role == "landlord":
+                rental_income += converted_rent
+            else:
+                rental_expense += converted_rent
+            rental_deposit += converted_deposit
+        rental_income = round(rental_income, 2)
+        rental_expense = round(rental_expense, 2)
+        rental_net = round(rental_income - rental_expense, 2)
+        rental_deposit = round(rental_deposit, 2)
 
     return OverviewResponse(
         currency=default_currency,
@@ -167,6 +182,9 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         month_over_month_change_amount=mom_change_amount,
         total_daily_cost=total_daily_cost,
         rental_net_cash_flow=rental_net,
+        rental_monthly_income=rental_income,
+        rental_monthly_expense=rental_expense,
+        rental_total_deposit=rental_deposit,
     )
 
 
