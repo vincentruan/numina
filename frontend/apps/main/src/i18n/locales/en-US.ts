@@ -136,6 +136,8 @@ export default {
       generatedAt: 'Generated at {time}',
       empty: 'No monthly narrative yet',
       generate: 'Generate Monthly Insights',
+      retry: 'Retry',
+      retryHint: 'Task creation timed out, please retry',
       error: {
         auth_expired: 'Authentication expired',
         connect_failed: 'Connection failed',

@@ -201,6 +201,8 @@ export default {
       generatedAt: '生成于 {time}',
       empty: '暂无本月财务叙事',
       generate: '生成本月洞察',
+      retry: '重试',
+      retryHint: '任务创建超时，请重试',
       error: {
         auth_expired: '认证已过期',
         connect_failed: '连接失败',

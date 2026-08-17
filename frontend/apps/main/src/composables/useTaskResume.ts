@@ -54,10 +54,18 @@ export interface UseTaskResumeReturn {
   task: Ref<AITask | null>
   /** Whether the composable is loading/checking. */
   loading: Ref<boolean>
+  /** True when waitForTask exhausted all retries without finding a task. */
+  triggerFailed: Ref<boolean>
   /** Attempt to resume — returns true if a running task was found. */
   resume: () => Promise<boolean>
   /** Progressive retry (500ms->1s->2s->4s) to find a just-triggered task. */
   waitForTask: () => Promise<AITask | null>
+  /**
+   * Retry after trigger failure. Re-checks for a running/completed task
+   * (reuses it if found); returns false when no reusable task exists and
+   * the caller must fire a fresh trigger.
+   */
+  retryTrigger: () => Promise<boolean>
   /** Cancel the current task (delegates to useTaskPolling.cancel). */
   cancel: () => Promise<void>
   /** Clean up SSE connection and polling. */
@@ -73,6 +81,7 @@ export function useTaskResume(
   const taskId = ref<string | null>(null)
   const status = ref<TaskResumeStatus>('idle')
   const task = ref<AITask | null>(null)
+  const triggerFailed = ref(false)
   const loading = ref(false)
   const lastEventId = ref<string | null>(null)
 
@@ -190,7 +199,40 @@ export function useTaskResume(
         // best-effort; keep retrying
       }
     }
+    triggerFailed.value = true
     return null
+  }
+
+  /**
+   * Retry after trigger failure. Re-checks for a running/completed task and
+   * reuses it if found. Returns false when no reusable task exists (caller
+   * must fire a fresh trigger).
+   */
+  async function retryTrigger(): Promise<boolean> {
+    try {
+      const tasks = await getAITasks(capability)
+      const latestTask = tasks[0]
+      if (
+        latestTask?.id &&
+        ['running', 'queued', 'post_processing'].includes(latestTask.status)
+      ) {
+        // Reuse the late-appearing running task
+        triggerFailed.value = false
+        taskId.value = latestTask.id
+        task.value = latestTask
+        startSSE(latestTask.id)
+        return true
+      }
+      if (latestTask?.status === 'completed') {
+        triggerFailed.value = false
+        task.value = latestTask
+        options.onComplete?.(latestTask)
+        return true
+      }
+    } catch {
+      // fall through to fresh trigger
+    }
+    return false
   }
 
   function cleanup(): void {
@@ -211,8 +253,10 @@ export function useTaskResume(
     status,
     task,
     loading,
+    triggerFailed,
     resume,
     waitForTask,
+    retryTrigger,
     cancel: polling.cancel,
     cleanup,
     check,

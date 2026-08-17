@@ -79,6 +79,7 @@ async function triggerStream(_force = true) {
   streaming.value = true
   thinking.value = ''
   narrative.value = null
+  resumeHandle.triggerFailed.value = false
 
   // T20: progressive retry (500ms->1s->2s->4s) to locate the AITask created
   // by this trigger. Runs in background; cleanup on unmount via checkCancelled.
@@ -116,6 +117,15 @@ async function triggerStream(_force = true) {
 
 async function onGenerate() {
   await triggerStream(true)
+}
+
+// T20: retry button handler. Re-checks for a reusable task (running/completed),
+// falls back to a fresh trigger when none exists.
+async function onRetry() {
+  const reused = await resumeHandle.retryTrigger()
+  if (!reused) {
+    await triggerStream(true)
+  }
 }
 
 async function onCancel() {
@@ -220,6 +230,14 @@ function formatTime(iso: string | null): string {
     <!-- Completed narrative -->
     <div v-else-if="narrative" class="narrative-content" v-html="renderedNarrative" />
 
+    <!-- Retry button when trigger task creation failed (T20) -->
+    <div v-else-if="resumeHandle.triggerFailed" class="narrative-retry-row">
+      <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
+      <van-button plain type="primary" size="small" @click="onRetry">
+        {{ t('dashboard.narrative.retry') }}
+      </van-button>
+    </div>
+
     <!-- Empty state with generate button -->
     <div v-else-if="!loading" class="narrative-empty">
       <p class="narrative-empty-text">{{ t('dashboard.narrative.empty') }}</p>
@@ -306,6 +324,15 @@ function formatTime(iso: string | null): string {
   text-align: center;
 }
 .narrative-empty-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.narrative-retry-row {
+  padding: 16px;
+  text-align: center;
+}
+.narrative-retry-hint {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 8px;
