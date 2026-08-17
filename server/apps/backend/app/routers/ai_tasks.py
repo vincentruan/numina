@@ -347,7 +347,7 @@ async def _emit_scenario_result(task, db: Session) -> AsyncIterator[str]:
     if task.status == "completed":
         result = _load_scenario_result(task, db)
         yield f"event: result\ndata: {json.dumps(result, default=str)}\n\n"
-    elif task.status in ("failed", "cancelled", "timeout"):
+    elif task.status in ("failed", "cancelled", "timeout", "interrupted"):
         yield f"event: error\ndata: {json.dumps({'error': task.error_message or '任务异常终止'})}\n\n"
     yield "event: end\ndata: null\n\n"
 
@@ -384,7 +384,7 @@ async def stream_task_events(
         raise AppError(ErrorCode.RATE_LIMITED, "SSE 连接数已达上限")
 
     # Terminal states: emit cached result and close
-    if task.status in ("completed", "failed", "cancelled", "timeout"):
+    if task.status in ("completed", "failed", "cancelled", "timeout", "interrupted"):
         return StreamingResponse(
             _emit_scenario_result(task, db),
             media_type="text/event-stream",
