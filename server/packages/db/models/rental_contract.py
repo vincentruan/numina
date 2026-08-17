@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,8 +47,8 @@ class RentalContract(Base):
     )
     counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)  # 租客/房东姓名
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    currency: Mapped[str] = mapped_column(String(10), default="CNY")
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    currency: Mapped[str] = mapped_column(String(10), default="CNY", server_default="CNY")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

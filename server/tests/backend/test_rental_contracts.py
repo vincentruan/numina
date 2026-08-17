@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 
@@ -255,3 +257,73 @@ def test_update_negative_amount_rejected(client, auth_headers, sample_contract):
         f"/api/v1/rental-contracts/{cid}", headers=auth_headers, json={"monthly_rent": -1}
     )
     assert resp.status_code == 422
+
+
+# --- P3: cross-family isolation (convention: 404, no info leak) ---
+
+
+@pytest.fixture
+def other_family_contract(db, other_family):
+    """Create a rental contract belonging to another family."""
+    from apps.backend.app.models.rental_contract import RentalContract as RC
+    from apps.backend.app.models.user import User
+    from apps.backend.app.utils.snowflake import next_id
+
+    user = db.query(User).filter(User.family_id == other_family.id).first()
+    contract = RC(
+        id=next_id(),
+        user_id=user.id,
+        family_id=other_family.id,
+        role="landlord",
+        monthly_rent=9999,
+        start_date=date(2026, 1, 1),
+    )
+    db.add(contract)
+    db.commit()
+    db.refresh(contract)
+    return contract
+
+
+def test_other_family_contract_returns_404(client, auth_headers, other_family_contract):
+    """Cross-family detail access -> 404 (not 403) - no existence leak."""
+    response = client.get(
+        f"/api/v1/rental-contracts/{other_family_contract.id}", headers=auth_headers
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "RENTAL_CONTRACT_NOT_FOUND"
+
+
+def test_other_family_contract_excluded_from_list_and_summary(
+    client, auth_headers, other_family_contract
+):
+    """Cross-family contract never appears in list or summary."""
+    listing = client.get("/api/v1/rental-contracts", headers=auth_headers)
+    assert listing.status_code == 200
+    ids = [c["id"] for c in listing.json()["data"]]
+    assert str(other_family_contract.id) not in ids
+
+    summary = client.get("/api/v1/rental-contracts/summary", headers=auth_headers)
+    assert summary.status_code == 200
+    assert summary.json()["data"]["monthly_income"] == "0.00"
+
+
+def test_update_other_family_contract_returns_404(
+    client, auth_headers, other_family_contract
+):
+    """Cross-family update -> 404."""
+    response = client.patch(
+        f"/api/v1/rental-contracts/{other_family_contract.id}",
+        headers=auth_headers,
+        json={"monthly_rent": 1},
+    )
+    assert response.status_code == 404
+
+
+def test_delete_other_family_contract_returns_404(
+    client, auth_headers, other_family_contract
+):
+    """Cross-family delete -> 404."""
+    response = client.delete(
+        f"/api/v1/rental-contracts/{other_family_contract.id}", headers=auth_headers
+    )
+    assert response.status_code == 404

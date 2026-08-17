@@ -40,13 +40,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['user_id'], ['users.id']),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_rental_contracts_family_id', 'rental_contracts', ['family_id'])
-    op.create_index('ix_rental_contracts_user_id', 'rental_contracts', ['user_id'])
-    op.create_index('ix_rental_contracts_is_active', 'rental_contracts', ['is_active'])
+    op.create_index(op.f('ix_rental_contracts_family_id'), 'rental_contracts', ['family_id'])
+    op.create_index(op.f('ix_rental_contracts_user_id'), 'rental_contracts', ['user_id'])
+    op.create_index(op.f('ix_rental_contracts_is_active'), 'rental_contracts', ['is_active'])
 
 
 def downgrade() -> None:
-    op.drop_index('ix_rental_contracts_is_active', table_name='rental_contracts')
-    op.drop_index('ix_rental_contracts_user_id', table_name='rental_contracts')
-    op.drop_index('ix_rental_contracts_family_id', table_name='rental_contracts')
+    op.drop_index(op.f('ix_rental_contracts_is_active'), table_name='rental_contracts')
+    op.drop_index(op.f('ix_rental_contracts_user_id'), table_name='rental_contracts')
+    op.drop_index(op.f('ix_rental_contracts_family_id'), table_name='rental_contracts')
     op.drop_table('rental_contracts')

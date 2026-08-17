@@ -46,6 +46,8 @@ class ErrorCode(enum.StrEnum):
 
     # Rental contract
     RENTAL_CONTRACT_NOT_FOUND = "RENTAL_CONTRACT_NOT_FOUND"
+    # Reserved: cross-family access currently surfaces as 404 (NOT_FOUND) via the
+    # family_id-filtered query - same convention as LIABILITY_FORBIDDEN.
     RENTAL_CONTRACT_FORBIDDEN = "RENTAL_CONTRACT_FORBIDDEN"
     RENTAL_CONTRACT_INVALID_ASSET = "RENTAL_CONTRACT_INVALID_ASSET"
 
