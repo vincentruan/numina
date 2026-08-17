@@ -335,6 +335,7 @@ import { useAuthStore } from '@/stores/auth'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useReportStream } from '@/composables/useReportStream'
+import { useTaskResume } from '@/composables/useTaskResume'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
@@ -363,6 +364,16 @@ const familyStore = useFamilyStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
 const stream = useReportStream()
+// v3: useTaskResume for SSE reconnection on page re-entry
+const resumeHandle = useTaskResume('report', {
+  onComplete: async () => {
+    aiStore.clearBackgroundTask('report')
+    await loadReport()
+  },
+  onError: () => {
+    aiStore.clearBackgroundTask('report')
+  },
+})
 const { increment, decrement } = usePageLoading()
 const isOwner = authStore.user?.role === 'owner'
 
@@ -835,30 +846,19 @@ onMounted(() => {
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
-  // If a report task is still running (user navigated away while generation
-  // was in progress), resume polling so the page picks up latest progress.
-  try {
-    const task = await getAITask('report')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      reportTaskId.value = task.task_id
-      aiStore.registerBackgroundTask({
-        capability: 'report',
-        taskId: task.task_id,
-        sessionId: task.session_id || '',
-        startedAt: task.started_at || new Date().toISOString(),
-        status: task.status,
-      })
-      await stream.startPolling()
-      await loadReport()
-      aiStore.clearBackgroundTask('report')
-      reportTaskId.value = null
-      return
-    } else if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' || task.status === 'timeout') {
-      aiStore.clearBackgroundTask('report')
-      reportTaskId.value = null
-    }
-  } catch {
-    // ignore status fetch errors; fall through to normal page load
+  // v3: useTaskResume handles running task detection + SSE reconnection
+  const resumed = await resumeHandle.resume()
+  if (resumed && resumeHandle.task.value) {
+    aiStore.registerBackgroundTask({
+      capability: 'report',
+      taskId: resumeHandle.taskId.value!,
+      sessionId: resumeHandle.task.value.session_id || '',
+      startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
+      status: resumeHandle.task.value.status,
+    })
+  } else {
+    aiStore.clearBackgroundTask('report')
+    reportTaskId.value = null
   }
   loadPageData()
 })

@@ -15,7 +15,7 @@ import { marked } from 'marked'
 import { sanitizeMarkdown } from '@/utils/sanitize'
 import { streamNarrative } from '@/api/dashboard'
 import { getAITask } from '@/api/ai'
-import { useTaskPolling } from '@/composables/useTaskPolling'
+import { useTaskResume } from '@/composables/useTaskResume'
 import type { NarrativeStreamHandle } from '@/api/dashboard'
 
 const { t } = useI18n()
@@ -25,7 +25,6 @@ const thinking = ref('')
 const generatedAt = ref<string | null>(null)
 const loading = ref(true)
 const streaming = ref(false)
-const narrativeTaskId = ref<string | null>(null)
 const cancelling = ref(false)
 let streamHandle: NarrativeStreamHandle | null = null
 let taskCheckTimer: ReturnType<typeof setTimeout> | null = null
@@ -38,22 +37,35 @@ const renderedNarrative = computed(() => {
   return sanitizeMarkdown(html)
 })
 
-const isRunning = computed(() => streaming.value || narrativeTaskId.value !== null)
-
-// U17: AITask polling for out-of-page recovery + cancel.
-const { cancel: cancelPolling } = useTaskPolling(narrativeTaskId, {
+// v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
+const resumeHandle = useTaskResume('narrative', {
+  onStreamEvent: (event, data) => {
+    if (event === 'custom' && typeof data === 'object' && data !== null) {
+      const d = data as Record<string, unknown>
+      if (d.type === 'reasoning_delta') {
+        thinking.value += (d.content as string) || ''
+      } else if (d.type === 'messages') {
+        if (!narrative.value) narrative.value = ''
+        narrative.value += (d.content as string) || ''
+      } else if (d.type === 'dashboard_narrative.result') {
+        const payload = d.payload as Record<string, string> | undefined
+        if (payload?.narrative) {
+          narrative.value = payload.narrative
+        }
+      }
+    }
+  },
   onComplete: async () => {
-    narrativeTaskId.value = null
     streaming.value = false
-    // Task completed in background — reload cached narrative
     await loadCached()
   },
   onError: (task) => {
-    narrativeTaskId.value = null
     streaming.value = false
-    showToast(task.error_message || t('dashboard.narrative.error.generation_failed'))
+    showFailToast(task.error_message || t('dashboard.narrative.error.generation_failed'))
   },
 })
+
+const isRunning = computed(() => streaming.value || resumeHandle.taskId.value !== null)
 
 async function loadCached() {
   loading.value = true
@@ -76,7 +88,7 @@ async function triggerStream(_force = true) {
     try {
       const task = await getAITask('narrative')
       if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-        narrativeTaskId.value = task.task_id
+        resumeHandle.taskId.value = task.task_id
       }
     } catch {
       // best-effort
@@ -96,11 +108,11 @@ async function triggerStream(_force = true) {
       thinking.value = result.thinking || thinking.value
       generatedAt.value = new Date().toISOString()
       streaming.value = false
-      narrativeTaskId.value = null
+      resumeHandle.taskId.value = null
     },
     onError: (message) => {
       streaming.value = false
-      narrativeTaskId.value = null
+      resumeHandle.taskId.value = null
       if (message.includes('auth_expired')) {
         showFailToast(t('dashboard.narrative.error.auth_expired'))
       } else {
@@ -115,14 +127,13 @@ async function onGenerate() {
 }
 
 async function onCancel() {
-  if (!narrativeTaskId.value || cancelling.value) return
+  if (!resumeHandle.taskId.value || cancelling.value) return
   cancelling.value = true
   try {
-    // cancelPolling() internally calls cancelTaskById + stops polling — no double-cancel.
-    await cancelPolling()
+    await resumeHandle.cancel()
     streamHandle?.abort()
     streamHandle = null
-    narrativeTaskId.value = null
+    resumeHandle.taskId.value = null
     streaming.value = false
     showToast(t('aiTask.cancelled'))
   } catch {
@@ -132,26 +143,9 @@ async function onCancel() {
   }
 }
 
-// U17: resume polling if a narrative task is still running (user navigated
-// away while generation was in progress, then returned to Dashboard).
-async function resumeIfRunning() {
-  try {
-    const task = await getAITask('narrative')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      narrativeTaskId.value = task.task_id
-      return true
-    }
-    if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
-      narrativeTaskId.value = null
-    }
-  } catch {
-    // ignore
-  }
-  return false
-}
-
+// v3: resume replaced by useTaskResume
 onMounted(async () => {
-  const resumed = await resumeIfRunning()
+  const resumed = await resumeHandle.resume()
   if (!resumed) {
     await loadCached()
   } else {
@@ -163,10 +157,10 @@ onMounted(async () => {
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
-  await resumeIfRunning()
+  await resumeHandle.resume()
 })
 
-// Cleanup on unmount: stop task-check timer + abort in-flight SSE (C2/C3 fix).
+// Cleanup on unmount: stop task-check timer + abort in-flight SSE + cleanup resume.
 onUnmounted(() => {
   if (taskCheckTimer) {
     clearTimeout(taskCheckTimer)
@@ -174,6 +168,7 @@ onUnmounted(() => {
   }
   streamHandle?.abort()
   streamHandle = null
+  resumeHandle.cleanup()
 })
 
 function formatTime(iso: string | null): string {
@@ -217,7 +212,7 @@ function formatTime(iso: string | null): string {
     </div>
 
     <!-- Cancel button when running (U21) -->
-    <div v-else-if="isRunning && narrativeTaskId" class="narrative-cancel-row">
+    <div v-else-if="isRunning && resumeHandle.taskId" class="narrative-cancel-row">
       <van-button
         plain
         type="danger"

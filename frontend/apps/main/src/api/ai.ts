@@ -417,7 +417,7 @@ export const suggestAssetFields = (data: AssetSuggestRequest) =>
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
 export interface AITaskStatus {
-  status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
+  status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled' | 'interrupted'
   task_id?: string
   session_id?: string
   started_at?: string

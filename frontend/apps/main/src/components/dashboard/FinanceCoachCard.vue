@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { getFinanceCoach, getAITask } from '@/api/ai'
-import { cancelTaskById } from '@/api/ai-tasks'
+import { getFinanceCoach } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
-import { useTaskPolling } from '@/composables/useTaskPolling'
+import { useTaskResume } from '@/composables/useTaskResume'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
@@ -23,21 +22,16 @@ const loaded = ref(false)
 const visible = ref(false)
 const refreshing = ref(false)
 const expanded = ref<string[]>([])
-const coachTaskId = ref<string | null>(null)
 const cancelling = ref(false)
 
 const count = computed(() => suggestions.value.length)
 
-// U17: AITask polling for out-of-page recovery.
-// Watches coachTaskId; starts 2s polling when non-null, pauses on document.hidden.
-const { cancel: cancelPolling } = useTaskPolling(coachTaskId, {
+// v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
+const resumeHandle = useTaskResume('coach', {
   onComplete: async () => {
-    coachTaskId.value = null
-    // Task completed in background — reload cached suggestions
     await load(false)
   },
   onError: (task) => {
-    coachTaskId.value = null
     loading.value = false
     loaded.value = true
     showToast(task.error_message || t('aiTask.error.generic'))
@@ -73,10 +67,10 @@ async function load(force = false) {
     }
     suggestions.value = valid.slice(0, 3)
     visible.value = true
-    coachTaskId.value = null
+    resumeHandle.taskId.value = null
   } catch {
     visible.value = false // silent hide on failure (spec §7.2)
-    coachTaskId.value = null
+    resumeHandle.taskId.value = null
   } finally {
     loading.value = false
     loaded.value = true
@@ -84,31 +78,14 @@ async function load(force = false) {
   }
 }
 
-// U17: resume polling if a coach task is still running (user navigated away
-// while generation was in progress, then returned to Dashboard).
-async function resumeIfRunning() {
-  if (!familyStore.aiEnabled) return
-  try {
-    const task = await getAITask('coach')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      coachTaskId.value = task.task_id
-      return
-    }
-    if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
-      coachTaskId.value = null
-    }
-  } catch {
-    // ignore
-  }
-}
+// v3: resume replaced by useTaskResume
 
 async function onCancel() {
-  if (!coachTaskId.value || cancelling.value) return
+  if (!resumeHandle.taskId.value || cancelling.value) return
   cancelling.value = true
   try {
-    await cancelTaskById(coachTaskId.value)
-    await cancelPolling()
-    coachTaskId.value = null
+    await resumeHandle.cancel()
+    resumeHandle.taskId.value = null
     loading.value = false
     loaded.value = true
     showToast(t('aiTask.cancelled'))
@@ -134,8 +111,8 @@ async function onToggle(names: string[]) {
 
 onMounted(async () => {
   if (familyStore.aiEnabled) {
-    await resumeIfRunning()
-    if (!coachTaskId.value) {
+    const resumed = await resumeHandle.resume()
+    if (!resumed) {
       load(false)
     }
   } else {
@@ -148,7 +125,7 @@ onMounted(async () => {
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
-  await resumeIfRunning()
+  await resumeHandle.resume()
 })
 </script>
 
@@ -168,7 +145,7 @@ onActivated(async () => {
             <span v-if="loading" class="coach-summary coach-summary--loading">
               <!-- U21: cancel button visible when AITask is running -->
               <van-button
-                v-if="coachTaskId"
+                v-if="resumeHandle.taskId"
                 plain
                 type="danger"
                 size="mini"

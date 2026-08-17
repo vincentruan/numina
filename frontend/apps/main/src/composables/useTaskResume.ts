@@ -56,6 +56,8 @@ export interface UseTaskResumeReturn {
   loading: Ref<boolean>
   /** Attempt to resume — returns true if a running task was found. */
   resume: () => Promise<boolean>
+  /** Cancel the current task (delegates to useTaskPolling.cancel). */
+  cancel: () => Promise<void>
   /** Clean up SSE connection and polling. */
   cleanup: () => void
   /** Re-check task status (legacy compat). */
@@ -165,6 +167,7 @@ export function useTaskResume(
     streamHandle?.abort()
     streamHandle = null
     polling.stop()
+    taskId.value = null
     status.value = 'idle'
   }
 
@@ -179,6 +182,7 @@ export function useTaskResume(
     task,
     loading,
     resume,
+    cancel: polling.cancel,
     cleanup,
     check,
   }

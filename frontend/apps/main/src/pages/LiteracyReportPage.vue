@@ -55,7 +55,7 @@
           <span class="streaming-label">{{ t('literacyReport.generating') }}</span>
           <!-- U21: cancel button when AITask is running -->
           <van-button
-            v-if="literacyTaskId"
+            v-if="resumeHandle.taskId"
             plain
             type="danger"
             size="mini"
@@ -118,9 +118,7 @@ import {
 } from '@/api/literacy'
 import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api/literacy'
 import { useLiteracyStream } from '@/composables/useLiteracyStream'
-import { getAITask } from '@/api/ai'
-import { cancelTaskById } from '@/api/ai-tasks'
-import { useTaskPolling } from '@/composables/useTaskPolling'
+import { useTaskResume } from '@/composables/useTaskResume'
 
 defineOptions({ name: 'LiteracyReportPage' })
 
@@ -138,22 +136,18 @@ const currentWeekStart = ref<string | null>(null)
 const reportLoading = ref(false)
 const stream = useLiteracyStream()
 
-// U17: AITask polling for out-of-page recovery + U21 cancel support
-const literacyTaskId = ref<string | null>(null)
-const literacyCancelling = ref(false)
-const { cancel: cancelPolling } = useTaskPolling(literacyTaskId, {
+// v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
+const resumeHandle = useTaskResume('literacy', {
   onComplete: async () => {
-    literacyTaskId.value = null
-    // Task completed in background — reload the persisted report
     if (selectedChildId.value) {
       await loadReport()
     }
   },
   onError: (task) => {
-    literacyTaskId.value = null
     showToast(task.error_message || t('aiTask.error.generic'))
   },
 })
+const literacyCancelling = ref(false)
 
 const currentHistoryIndex = computed(() => {
   if (!currentWeekStart.value) return -1
@@ -288,32 +282,15 @@ watch(currentWeekStart, (val, oldVal) => {
 
 let skipNextWatch = true
 
-// U17: resume polling if a literacy task is still running (user navigated
-// away while generation was in progress, then returned to the page).
-async function resumeIfRunning() {
-  try {
-    const task = await getAITask('literacy')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      literacyTaskId.value = task.task_id
-      return true
-    }
-    if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
-      literacyTaskId.value = null
-    }
-  } catch {
-    // ignore
-  }
-  return false
-}
+// v3: resume replaced by useTaskResume
 
 async function onLiteracyCancel() {
-  if (!literacyTaskId.value || literacyCancelling.value) return
+  if (!resumeHandle.taskId.value || literacyCancelling.value) return
   literacyCancelling.value = true
   try {
-    await cancelTaskById(literacyTaskId.value)
-    await cancelPolling()
+    await resumeHandle.cancel()
     stream.abort()
-    literacyTaskId.value = null
+    resumeHandle.taskId.value = null
     showToast(t('aiTask.cancelled'))
   } catch {
     showFailToast(t('toast.operationFailed'))
@@ -325,7 +302,7 @@ async function onLiteracyCancel() {
 onMounted(async () => {
   await init()
   if (children.value.length > 0) {
-    const resumed = await resumeIfRunning()
+    const resumed = await resumeHandle.resume()
     if (!resumed) {
       loadReport()
     }

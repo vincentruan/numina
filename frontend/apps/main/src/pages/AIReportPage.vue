@@ -224,6 +224,7 @@ import { getAIReport, getAIReportMarkdown, getAITask } from '@/api/ai'
 import { cancelTaskById } from '@/api/ai-tasks'
 import type { AIReport, AIReportIndicator } from '@/types'
 import { useReportStream } from '@/composables/useReportStream'
+import { useTaskResume } from '@/composables/useTaskResume'
 import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
 import { sanitizeMarkdown } from '@/utils/sanitize'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -322,6 +323,17 @@ async function loadMarkdownPreview() {
 }
 
 const stream = useReportStream()
+
+// v3: useTaskResume for SSE reconnection on page re-entry
+const resumeHandle = useTaskResume('report', {
+  onComplete: async () => {
+    aiStore.clearBackgroundTask('report')
+    await loadExistingReport()
+  },
+  onError: () => {
+    aiStore.clearBackgroundTask('report')
+  },
+})
 
 // Whether a generation is in flight (streaming or connecting).
 const isGenerating = computed(() =>
@@ -601,44 +613,27 @@ async function onExportPdf() {
 onMounted(async () => {
   await loadExistingReport()
 
-  // If a report task is still running (possibly from a previous session or
-  // after the user navigated away), resume polling and load the result when
-  // it completes.
-  try {
-    const task = await getAITask('report')
-    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-      reportTaskId.value = task.task_id
-      aiStore.registerBackgroundTask({
-        capability: 'report',
-        taskId: task.task_id,
-        sessionId: task.session_id || '',
-        startedAt: task.started_at || new Date().toISOString(),
-        status: task.status,
-      })
-      await stream.startPolling()
-      await loadExistingReport()
-      aiStore.clearBackgroundTask('report')
-      reportTaskId.value = null
-    } else if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) {
-      aiStore.clearBackgroundTask('report')
-      reportTaskId.value = null
-      // Task was marked failed (e.g. SSE disconnect before backend fix) but the
-      // agent pipeline continued in the background (on_disconnect=continue). If
-      // the report now exists in DB, the loadExistingReport call above already
-      // loaded it. If it doesn't exist yet (pipeline still running), re-check
-      // after a short delay so the user sees progress instead of a blank state.
-      if (!currentReport.value && task.status === 'failed') {
-        retryTimer.value = setTimeout(async () => {
-          try {
-            await loadExistingReport()
-          } catch {
-            // best-effort; page already shows empty state
-          }
-        }, 3000)
+  // v3: useTaskResume handles running task detection + SSE reconnection
+  const resumed = await resumeHandle.resume()
+  if (resumed && resumeHandle.task.value) {
+    aiStore.registerBackgroundTask({
+      capability: 'report',
+      taskId: resumeHandle.taskId.value!,
+      sessionId: resumeHandle.task.value.session_id || '',
+      startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
+      status: resumeHandle.task.value.status,
+    })
+  }
+
+  // Retry check for previously failed tasks (agent pipeline may still be running)
+  if (!currentReport.value && resumeHandle.task.value?.status === 'failed') {
+    retryTimer.value = setTimeout(async () => {
+      try {
+        await loadExistingReport()
+      } catch {
+        // best-effort; page already shows empty state
       }
-    }
-  } catch {
-    // ignore status fetch errors; page already loaded existing report
+    }, 3000)
   }
 })
 
