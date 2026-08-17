@@ -312,18 +312,18 @@ watch(
       <span class="message-time">{{ displayTime }}</span>
       <div class="message-footer-spacer" />
 
-      <!-- Actions: unified pill toolbar (ChatVant MessageActions pattern) -->
+      <!-- Actions: flat icon row (ChatGPT/Claude pattern — no container, no divider) -->
       <div class="message-action-bar">
         <CopyButton v-slot="{ copy }" :content="content">
           <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="copy(); emit('copy', content)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
           </button>
         </CopyButton>
         <button class="action-btn" :aria-label="t('aiChat.regenerateAria')" @click="emit('retry')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="1 4 1 10 7 10"/>
             <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
           </svg>
@@ -336,21 +336,20 @@ watch(
           :disabled="isBranching"
           @click="emit('branch')"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <line x1="6" y1="3" x2="6" y2="15"/>
             <circle cx="18" cy="6" r="3"/>
             <circle cx="6" cy="18" r="3"/>
             <path d="M18 9a9 9 0 0 1-9 9"/>
           </svg>
         </button>
-        <span class="action-bar-divider" />
         <button
           class="action-btn"
           :class="{ 'action-btn--active': feedback === 1 }"
           :aria-label="t('aiChat.helpfulAria')"
           @click="onFeedback(1)"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
             <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
           </svg>
@@ -361,7 +360,7 @@ watch(
           :aria-label="t('aiChat.notHelpfulAria')"
           @click="onFeedback(-1)"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/>
             <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
           </svg>
@@ -592,20 +591,13 @@ watch(
   flex-shrink: 0;
 }
 
-/* Action bar: unified pill toolbar (ChatVant MessageActions pattern) */
+/* Action bar: flat icon row (ChatGPT/Claude pattern) */
 .message-action-bar {
   display: inline-flex;
   align-items: center;
-  background: var(--action-bar-bg, rgba(0, 0, 0, 0.04));
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
+  gap: 4px;
   opacity: 0;
   transition: opacity 0.2s;
-}
-
-:global([data-theme='dark'] .message-action-bar) {
-  --action-bar-bg: rgba(255, 255, 255, 0.06);
 }
 
 .assistant-message:hover .message-action-bar,
@@ -613,32 +605,28 @@ watch(
   opacity: 1;
 }
 
-/* Divider between functional actions and feedback */
-.action-bar-divider {
-  width: 1px;
-  height: 14px;
-  background: var(--action-bar-divider-bg, rgba(0, 0, 0, 0.1));
-  margin: 0 2px;
-  flex-shrink: 0;
-}
-
-:global([data-theme='dark'] .action-bar-divider) {
-  --action-bar-divider-bg: rgba(255, 255, 255, 0.12);
-}
-
 .action-btn {
-  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   color: var(--text-secondary);
-  opacity: 0.7;
-  transition: opacity 0.15s;
+  opacity: 0.55;
+  transition: opacity 0.15s, background-color 0.15s;
 }
 
 .action-btn:hover {
   opacity: 1;
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+:global([data-theme='dark']) .action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .action-btn--active {
@@ -655,38 +643,39 @@ watch(
   50% { opacity: 0.4; }
 }
 
-/* Mobile touch: always visible + larger tap targets (Apple HIG ≥ 44×44) */
+/* Mobile touch: always visible + 48×48px tap targets (Apple HIG ≥ 44×44) */
 @media (hover: none) {
   .message-action-bar {
     opacity: 1;
-    gap: 2px;
+    gap: 4px;
     flex-shrink: 0;
   }
 
   .action-btn {
-    padding: 10px;
-    /* 10px padding + 18px icon = 38px touch area, close to 44px HIG */
-    border-radius: 8px;
-    opacity: 1; /* override 0.7 default — buttons must look tappable on touch */
-    transition: background-color 0.15s;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    opacity: 0.65; /* override 0.55 — buttons must look tappable on touch */
   }
 
   .action-btn:active {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(0, 0, 0, 0.08);
+    opacity: 1;
   }
 
   :global([data-theme='dark']) .action-btn:active {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.1);
   }
 
   .action-btn svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
   }
 
-  /* Feedback buttons: more prominent to encourage interaction */
+  /* Feedback active state: subtle tint */
   .action-btn--active {
-    background-color: rgba(var(--van-primary-color-rgb, 99, 102, 241), 0.1);
+    opacity: 1;
+    background-color: rgba(99, 102, 241, 0.08);
   }
 
   /* Narrow screen: hide timestamp to prevent overflow (iPhone SE 375px) */
