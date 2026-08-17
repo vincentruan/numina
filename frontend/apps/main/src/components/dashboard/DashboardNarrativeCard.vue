@@ -348,7 +348,7 @@ function formatTime(iso: string | null): string {
   margin-bottom: 8px;
 }
 .narrative-error-text {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
 }
 .narrative-loading {
   padding: 12px 16px;

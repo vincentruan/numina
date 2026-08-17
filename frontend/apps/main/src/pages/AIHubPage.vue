@@ -1316,17 +1316,17 @@ defineExpose({
   border-radius: 8px;
   padding: 24px 16px;
   text-align: center;
-  border: 1px solid #ee0a24;
+  border: 1px solid var(--van-danger-color, #ee0a24);
 }
 
 .report-error-icon {
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   margin-bottom: 8px;
 }
 
 .report-error-text {
   font-size: 13px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   margin: 0 0 12px;
 }
 

@@ -369,7 +369,7 @@ onActivated(async () => {
 }
 .fc-error-text {
   font-size: 13px;
-  color: #ee0a24;
+  color: var(--van-danger-color, #ee0a24);
   margin: 0;
   text-align: center;
 }
