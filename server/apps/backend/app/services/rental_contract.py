@@ -1,5 +1,5 @@
 from decimal import Decimal
-
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -111,36 +111,57 @@ def delete_rental_contract(db: Session, user: User, contract_id: str) -> None:
 def get_rental_summary(db: Session, user: User) -> RentalContractSummary:
     """Aggregate active rental contracts for the user's family.
 
-    Multi-currency: all amounts are converted to the user's default_currency
-    before aggregation (same pattern as dashboard.get_overview).
+    Multi-currency: aggregate by currency (SQL GROUP BY), then convert each
+    currency group once to the user's default_currency. This is efficient for
+    the common case (single-currency family) and scales well for multi-currency.
     """
     default_currency = user.default_currency or "CNY"
-    contracts = (
-        db.query(RentalContract)
+
+    # SQL aggregate by currency: one row per currency
+    currency_groups = (
+        db.query(
+            RentalContract.currency,
+            func.sum(
+                case((RentalContract.role == "landlord", RentalContract.monthly_rent), else_=0)
+            ).label("income"),
+            func.sum(
+                case((RentalContract.role == "tenant", RentalContract.monthly_rent), else_=0)
+            ).label("expense"),
+            func.sum(RentalContract.deposit).label("deposit"),
+        )
         .filter(
             RentalContract.family_id == user.family_id,
             RentalContract.is_active == True,  # noqa: E712
         )
+        .group_by(RentalContract.currency)
         .all()
     )
 
+    # Convert each currency group once (not per-contract)
     income = Decimal("0")
     expense = Decimal("0")
     total_deposit = Decimal("0")
 
-    for c in contracts:
-        contract_currency = c.currency or "CNY"
-        rent_converted = ExchangeRateService.convert(
-            float(c.monthly_rent), contract_currency, default_currency, db
+    for currency, income_raw, expense_raw, deposit_raw in currency_groups:
+        contract_currency = currency or "CNY"
+        # Handle Decimal/None from SQL
+        income_val = float(income_raw or 0)
+        expense_val = float(expense_raw or 0)
+        deposit_val = float(deposit_raw or 0)
+
+        income_converted = ExchangeRateService.convert(
+            income_val, contract_currency, default_currency, db
         )
-        dep_converted = ExchangeRateService.convert(
-            float(c.deposit or Decimal("0")), contract_currency, default_currency, db
+        expense_converted = ExchangeRateService.convert(
+            expense_val, contract_currency, default_currency, db
         )
-        total_deposit += Decimal(str(dep_converted))
-        if c.role == "landlord":
-            income += Decimal(str(rent_converted))
-        else:
-            expense += Decimal(str(rent_converted))
+        deposit_converted = ExchangeRateService.convert(
+            deposit_val, contract_currency, default_currency, db
+        )
+
+        income += Decimal(str(income_converted))
+        expense += Decimal(str(expense_converted))
+        total_deposit += Decimal(str(deposit_converted))
 
     net = income - expense
 
