@@ -124,3 +124,78 @@ describe('useTaskResume — retry flow (T20)', () => {
     expect(mockSubscribeTaskStream).not.toHaveBeenCalled()
   })
 })
+
+describe('useTaskResume — resume() SSE path', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mockGetAITasks.mockReset()
+    mockSubscribeTaskStream.mockReset()
+    mockGetTaskById.mockReset()
+    mockCancelTaskById.mockReset()
+    mockSubscribeTaskStream.mockReturnValue({ abort: vi.fn() })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('resume() finds a running task and starts SSE', async () => {
+    const onComplete = vi.fn()
+    const resume = useTaskResume('narrative', { onComplete })
+
+    mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-running', status: 'running' })])
+
+    const resumed = await resume.resume()
+
+    expect(resumed).toBe(true)
+    expect(resume.taskId.value).toBe('task-running')
+    expect(resume.status.value).toBe('connecting')
+    expect(mockSubscribeTaskStream).toHaveBeenCalledWith(
+      'task-running',
+      expect.objectContaining({ onEvent: expect.any(Function) }),
+    )
+  })
+
+  it('resume() finds a completed task and calls onComplete', async () => {
+    const onComplete = vi.fn()
+    const resume = useTaskResume('narrative', { onComplete })
+
+    mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-done', status: 'completed' })])
+
+    const resumed = await resume.resume()
+
+    expect(resumed).toBe(false)
+    expect(resume.status.value).toBe('completed')
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-done' }))
+    expect(mockSubscribeTaskStream).not.toHaveBeenCalled()
+  })
+
+  it('resume() returns false when no running task', async () => {
+    const resume = useTaskResume('narrative')
+
+    mockGetAITasks.mockResolvedValueOnce([])
+
+    const resumed = await resume.resume()
+
+    expect(resumed).toBe(false)
+    expect(resume.taskId.value).toBeNull()
+    expect(mockSubscribeTaskStream).not.toHaveBeenCalled()
+  })
+
+  it('cleanup() aborts SSE stream and stops polling', async () => {
+    const resume = useTaskResume('narrative')
+    const mockAbort = vi.fn()
+
+    mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-1', status: 'running' })])
+    mockSubscribeTaskStream.mockReturnValue({ abort: mockAbort })
+
+    await resume.resume()
+    expect(mockSubscribeTaskStream).toHaveBeenCalled()
+
+    resume.cleanup()
+
+    expect(mockAbort).toHaveBeenCalled()
+    expect(resume.taskId.value).toBeNull()
+    expect(resume.status.value).toBe('idle')
+  })
+})
