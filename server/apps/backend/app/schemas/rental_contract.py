@@ -44,6 +44,20 @@ class RentalContractCreate(BaseModel):
     def _coerce_money(cls, v):
         return _coerce_to_decimal(v)
 
+    @field_validator("monthly_rent")
+    @classmethod
+    def _validate_monthly_rent_positive(cls, v: Decimal) -> Decimal:
+        if v is not None and v <= 0:
+            raise ValueError("monthly_rent must be positive")
+        return v
+
+    @field_validator("deposit")
+    @classmethod
+    def _validate_deposit_non_negative(cls, v: Decimal) -> Decimal:
+        if v is not None and v < 0:
+            raise ValueError("deposit must be non-negative")
+        return v
+
 
 class RentalContractUpdate(BaseModel):
     role: str | None = None
@@ -68,6 +82,20 @@ class RentalContractUpdate(BaseModel):
     def _coerce_money(cls, v):
         return _coerce_to_decimal(v)
 
+    @field_validator("monthly_rent")
+    @classmethod
+    def _validate_monthly_rent_positive(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v <= 0:
+            raise ValueError("monthly_rent must be positive")
+        return v
+
+    @field_validator("deposit")
+    @classmethod
+    def _validate_deposit_non_negative(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v < 0:
+            raise ValueError("deposit must be non-negative")
+        return v
+
 
 class RentalContractResponse(SnowflakeBase):
     id: int
@@ -76,7 +104,7 @@ class RentalContractResponse(SnowflakeBase):
     role: str
     monthly_rent: str
     deposit: str
-    start_date: date | None = None
+    start_date: date
     end_date: date | None = None
     linked_asset_id: int | None = None
     counterparty: str | None = None

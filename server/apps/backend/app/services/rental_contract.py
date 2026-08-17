@@ -10,6 +10,7 @@ from apps.backend.app.schemas.rental_contract import (
     RentalContractSummary,
     RentalContractUpdate,
 )
+from apps.backend.app.services.exchange_rate import ExchangeRateService
 from packages.db.models.asset import Asset
 
 
@@ -92,6 +93,9 @@ def update_rental_contract(
 
     for key, value in update_data.items():
         setattr(contract, key, value)
+    # Tenant contracts must not have linked_asset_id — mirror create path
+    if contract.role == "tenant":
+        contract.linked_asset_id = None
     db.commit()
     db.refresh(contract)
     return contract
@@ -105,7 +109,12 @@ def delete_rental_contract(db: Session, user: User, contract_id: str) -> None:
 
 
 def get_rental_summary(db: Session, user: User) -> RentalContractSummary:
-    """Aggregate active rental contracts for the user's family."""
+    """Aggregate active rental contracts for the user's family.
+
+    Multi-currency: all amounts are converted to the user's default_currency
+    before aggregation (same pattern as dashboard.get_overview).
+    """
+    default_currency = user.default_currency or "CNY"
     contracts = (
         db.query(RentalContract)
         .filter(
@@ -120,11 +129,18 @@ def get_rental_summary(db: Session, user: User) -> RentalContractSummary:
     total_deposit = Decimal("0")
 
     for c in contracts:
-        total_deposit += c.deposit or Decimal("0")
+        contract_currency = c.currency or "CNY"
+        rent_converted = ExchangeRateService.convert(
+            float(c.monthly_rent), contract_currency, default_currency, db
+        )
+        dep_converted = ExchangeRateService.convert(
+            float(c.deposit or Decimal("0")), contract_currency, default_currency, db
+        )
+        total_deposit += Decimal(str(dep_converted))
         if c.role == "landlord":
-            income += c.monthly_rent
+            income += Decimal(str(rent_converted))
         else:
-            expense += c.monthly_rent
+            expense += Decimal(str(rent_converted))
 
     net = income - expense
 

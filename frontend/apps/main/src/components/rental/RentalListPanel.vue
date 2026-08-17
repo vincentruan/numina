@@ -10,22 +10,22 @@
       <div class="summary-row">
         <div class="summary-item income">
           <div class="summary-label">{{ t('rental.monthlyIncome') }}</div>
-          <div class="summary-value">{{ formatConverted(summary.monthly_income, 'CNY') }}</div>
+          <div class="summary-value">{{ formatConverted(summary.monthly_income, summaryCurrency) }}</div>
         </div>
         <div class="summary-item expense">
           <div class="summary-label">{{ t('rental.monthlyExpense') }}</div>
-          <div class="summary-value">{{ formatConverted(summary.monthly_expense, 'CNY') }}</div>
+          <div class="summary-value">{{ formatConverted(summary.monthly_expense, summaryCurrency) }}</div>
         </div>
         <div class="summary-item net">
           <div class="summary-label">{{ t('rental.netCashFlow') }}</div>
           <div class="summary-value" :class="{ positive: netFlow > 0, negative: netFlow < 0 }">
-            {{ formatConverted(summary.net_cash_flow, 'CNY') }}
+            {{ formatConverted(summary.net_cash_flow, summaryCurrency) }}
           </div>
         </div>
       </div>
       <div v-if="Number(summary.total_deposit) > 0" class="deposit-row">
         <span>{{ t('rental.totalDeposit') }}</span>
-        <span>{{ formatConverted(summary.total_deposit, 'CNY') }}</span>
+        <span>{{ formatConverted(summary.total_deposit, summaryCurrency) }}</span>
       </div>
     </div>
 
@@ -83,9 +83,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showSuccessToast, showToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import type { RentalContract, RentalRequestPayload } from '@/types'
 import { useRentalContractStore } from '@/stores/rentalContract'
+import { useAuthStore } from '@/stores/auth'
 import { useCurrency } from '@/composables/useCurrency'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RentalContractCard from '@/components/rental/RentalContractCard.vue'
@@ -93,6 +94,9 @@ import RentalForm from '@/components/rental/RentalForm.vue'
 
 const { t } = useI18n()
 const store = useRentalContractStore()
+const authStore = useAuthStore()
+// Summary is aggregated server-side into the user's default currency.
+const summaryCurrency = computed(() => authStore.user?.default_currency || 'CNY')
 const { formatConverted } = useCurrency()
 
 const activeTab = ref<'active' | 'inactive'>('active')
@@ -114,7 +118,7 @@ async function load() {
   try {
     await Promise.all([store.fetchContracts(), store.fetchSummary()])
   } catch {
-    showToast(t('common.failed'))
+    showFailToast(t('common.failed'))
   }
 }
 
@@ -125,7 +129,7 @@ async function onCreate(data: RentalRequestPayload) {
     await store.fetchSummary()
     showSuccessToast(t('common.success'))
   } catch {
-    showToast(t('common.failed'))
+    showFailToast(t('common.failed'))
   }
 }
 
@@ -137,7 +141,7 @@ async function onUpdate(data: RentalRequestPayload) {
     await store.fetchSummary()
     showSuccessToast(t('common.success'))
   } catch {
-    showToast(t('common.failed'))
+    showFailToast(t('common.failed'))
   }
 }
 
@@ -148,7 +152,7 @@ async function onEndContract() {
     await store.fetchSummary()
     showSuccessToast(t('rental.deleteSuccess'))
   } catch {
-    showToast(t('common.failed'))
+    showFailToast(t('common.failed'))
   }
 }
 
