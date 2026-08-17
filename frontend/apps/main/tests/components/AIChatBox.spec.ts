@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 
 import AIChatBox from '../../src/components/ai/AIChatBox.vue'
 import { useAgentStore } from '../../src/stores/agent'
@@ -51,6 +52,12 @@ vi.mock('@/api/ai-chat', () => ({
   getThread: vi.fn(() => Promise.resolve({ thread_id: 'test-thread', title: 'Test Thread' })),
   createThread: vi.fn(() => Promise.resolve({ thread_id: 'new-thread' })),
   updateThread: vi.fn(() => Promise.resolve({ thread_id: 'test-thread', title: 'Updated Title' })),
+}))
+
+// Mock ai-tasks API (U19 task preflight)
+vi.mock('@/api/ai-tasks', () => ({
+  getChatTaskForSession: vi.fn(() => Promise.resolve(null)),
+  cancelTaskById: vi.fn(() => Promise.resolve()),
 }))
 
 // A1b (Plan B T6): useAiContext imports getAiContext from @/api/ai, which
@@ -186,7 +193,8 @@ describe('AIChatBox', () => {
         global: { stubs: vantStubs },
       })
 
-      await nextTick()
+      // Wait for async onMounted to complete (initialLoading becomes false)
+      await flushPromises()
 
       const chatHeader = wrapper.findComponent({ name: 'ChatHeader' })
       expect(chatHeader.props('activeThreadId')).toBe('thread-1')
@@ -299,7 +307,8 @@ describe('AIChatBox', () => {
         global: { stubs: vantStubs },
       })
 
-      await nextTick()
+      // Wait for async onMounted to complete (initialLoading becomes false)
+      await flushPromises()
 
       expect(wrapper.findComponent({ name: 'MessageList' }).exists()).toBe(true)
     })

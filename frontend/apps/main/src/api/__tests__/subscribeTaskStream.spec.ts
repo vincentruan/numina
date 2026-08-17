@@ -71,6 +71,7 @@ describe('subscribeTaskStream — SSE parser', () => {
 
   it('handles multiple events in a single chunk', async () => {
     const events: Array<{ event: string; data: unknown }> = []
+    let endCalled = false
 
     mockFetch.mockResolvedValue(
       makeSSEResponse([
@@ -83,17 +84,18 @@ describe('subscribeTaskStream — SSE parser', () => {
     const handle = subscribeTaskStream('task-1', {
       onEvent: (event, data) => events.push({ event, data }),
       onGap: () => {},
-      onEnd: () => {},
+      onEnd: () => { endCalled = true },
       onError: () => {},
     })
 
     await new Promise((r) => setTimeout(r, 50))
     handle.abort()
 
-    expect(events).toHaveLength(3)
+    // 'end' event calls onEnd() not onEvent(), so only 2 custom events
+    expect(events).toHaveLength(2)
     expect(events[0]).toEqual({ event: 'custom', data: { type: 'a' } })
     expect(events[1]).toEqual({ event: 'custom', data: { type: 'b' } })
-    expect(events[2]).toEqual({ event: 'end', data: null })
+    expect(endCalled).toBe(true)
   })
 
   it('handles multi-chunk reads (event and data arrive separately)', async () => {
