@@ -458,7 +458,8 @@ onMounted(() => {
   width: 80%;
   max-width: 120px;
   height: 6px;
-  background: var(--bg-secondary, #f7f8fa);
+  background: var(--bg-tertiary, #fff);
+  border: 1px solid var(--color-card-border, rgba(0, 0, 0, 0.08));
   border-radius: 3px;
   overflow: hidden;
 }
