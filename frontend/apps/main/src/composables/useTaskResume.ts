@@ -68,7 +68,9 @@ export interface UseTaskResumeReturn {
   retryTrigger: () => Promise<boolean>
   /** Cancel the current task (delegates to useTaskPolling.cancel). */
   cancel: () => Promise<void>
-  /** Clean up SSE connection and polling. */
+  /** Lightweight disconnect: abort SSE + stop polling, preserve state for resume. */
+  disconnect: () => void
+  /** Clean up SSE connection and polling (full teardown, resets state). */
   cleanup: () => void
   /** Re-check task status (legacy compat). */
   check: () => Promise<void>
@@ -235,11 +237,22 @@ export function useTaskResume(
     return false
   }
 
-  function cleanup(): void {
-    disposed = true
+  /**
+   * Lightweight disconnect: abort SSE + stop polling, but preserve
+   * taskId/status/step-state so that resume() can restore the UI when
+   * the user navigates back. Use in onUnmounted (not cleanup).
+   */
+  function disconnect(): void {
     streamHandle?.abort()
     streamHandle = null
     polling.stop()
+  }
+
+  /** Full teardown — aborts connections AND resets state. Use only when
+   *  the composable will not be resumed (e.g. component destroyed permanently). */
+  function cleanup(): void {
+    disconnect()
+    disposed = true
     taskId.value = null
     status.value = 'idle'
   }
@@ -259,6 +272,7 @@ export function useTaskResume(
     waitForTask,
     retryTrigger,
     cancel: polling.cancel,
+    disconnect,
     cleanup,
     check,
   }

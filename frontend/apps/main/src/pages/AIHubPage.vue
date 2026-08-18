@@ -881,9 +881,11 @@ onActivated(async () => {
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
 // Abort the frontend SSE reader but keep the backend pipeline running so the
 // user can navigate back and pick up progress via polling.
+// v3 fix: use disconnect() (not cleanup()) in onDeactivated to preserve
+// step-state so that resume() restores the timeline on re-entry.
 onDeactivated(() => {
   stream.abort(true)
-  resumeHandle.cleanup()
+  resumeHandle.disconnect()
 })
 onUnmounted(() => {
   stream.abort(true)

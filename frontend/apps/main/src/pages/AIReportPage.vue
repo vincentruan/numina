@@ -654,7 +654,9 @@ onUnmounted(() => {
   // Close the frontend SSE reader but keep the agent pipeline running in the
   // background. The user can leave the page and the task will still complete.
   stream.abort(true)
-  resumeHandle.cleanup()
+  // v3 fix: use disconnect() (not cleanup()) to preserve step-state so that
+  // resume() can restore the timeline when the user navigates back.
+  resumeHandle.disconnect()
   // Clear the retry timer to prevent state updates on unmounted component
   if (retryTimer.value) {
     clearTimeout(retryTimer.value)

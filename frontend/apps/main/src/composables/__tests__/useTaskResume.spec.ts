@@ -182,7 +182,25 @@ describe('useTaskResume — resume() SSE path', () => {
     expect(mockSubscribeTaskStream).not.toHaveBeenCalled()
   })
 
-  it('cleanup() aborts SSE stream and stops polling', async () => {
+  it('disconnect() aborts SSE stream and stops polling but preserves state', async () => {
+    const resume = useTaskResume('narrative')
+    const mockAbort = vi.fn()
+
+    mockGetAITasks.mockResolvedValueOnce([makeTask({ id: 'task-1', status: 'running' })])
+    mockSubscribeTaskStream.mockReturnValue({ abort: mockAbort })
+
+    await resume.resume()
+    expect(mockSubscribeTaskStream).toHaveBeenCalled()
+
+    resume.disconnect()
+
+    expect(mockAbort).toHaveBeenCalled()
+    // v3 fix: disconnect() preserves taskId and status for resume on re-entry
+    expect(resume.taskId.value).toBe('task-1')
+    expect(resume.status.value).toBe('connecting')
+  })
+
+  it('cleanup() aborts SSE stream, stops polling, AND resets state', async () => {
     const resume = useTaskResume('narrative')
     const mockAbort = vi.fn()
 
