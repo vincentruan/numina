@@ -150,13 +150,7 @@ async def trigger_finance_coach(
                 resp.text[:200],
                 task_id,
             )
-            from apps.backend.app.database import SessionLocal
-
-            _db = SessionLocal()
-            try:
-                AITaskService.fail_task(task_id, "财务建议服务异常", _db)
-            finally:
-                _db.close()
+            AITaskService.fail_task(task_id, "财务建议服务异常", db)
             err = json.dumps({"message": "财务建议服务异常", "name": "AgentError"}).encode()
             return StreamingResponse(
                 iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
@@ -172,13 +166,7 @@ async def trigger_finance_coach(
         logger.warning(
             "[finance-coach] agent trigger failed task=%s err=%s", task_id, exc
         )
-        from apps.backend.app.database import SessionLocal
-
-        _db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, f"财务建议服务中断: {type(exc).__name__}", _db)
-        finally:
-            _db.close()
+        AITaskService.fail_task(task_id, f"财务建议服务中断: {type(exc).__name__}", db)
         err = json.dumps({"message": "财务建议服务中断", "name": type(exc).__name__}).encode()
         return StreamingResponse(
             iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),

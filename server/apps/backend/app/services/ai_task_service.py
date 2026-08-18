@@ -1,10 +1,13 @@
 """AI 任务状态服务 — 管理长任务的生命周期。"""
 
+import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from packages.db.models.ai_task import AITask
+
+logger = logging.getLogger(__name__)
 
 TASK_TIMEOUT_MINUTES = 30
 
@@ -217,12 +220,18 @@ class AITaskService:
 
     @staticmethod
     def fail_task(task_id: int | str, error_message: str, db: Session) -> None:
-        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
-        if task and task.status in ("running", "post_processing", "queued"):
-            task.status = "failed"
-            task.completed_at = datetime.utcnow()
-            task.error_message = error_message[:500] if error_message else None
-            db.commit()
+        try:
+            task = db.query(AITask).filter(AITask.id == int(task_id)).first()
+            if task and task.status in ("running", "post_processing", "queued"):
+                task.status = "failed"
+                task.completed_at = datetime.utcnow()
+                task.error_message = error_message[:500] if error_message else None
+                db.commit()
+        except Exception:
+            logger.exception(
+                "[ai-task] fail_task failed — task %s may remain in running state",
+                task_id,
+            )
 
     @staticmethod
     def get_task_by_id(task_id: int | str, family_id: int | str, db: Session) -> AITask | None:

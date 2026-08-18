@@ -368,13 +368,7 @@ async def trigger_generate_events(
                 task_id,
             )
             # Mark task failed so frontend does not poll forever on a dead task
-            from apps.backend.app.database import SessionLocal
-
-            _db = SessionLocal()
-            try:
-                AITaskService.fail_task(task_id, "报告生成服务异常", _db)
-            finally:
-                _db.close()
+            AITaskService.fail_task(task_id, "报告生成服务异常", db)
             err = json.dumps(
                 {"message": "报告生成服务异常", "name": "AgentError"}
             ).encode()
@@ -392,13 +386,7 @@ async def trigger_generate_events(
             "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
         )
         # Mark task failed so frontend does not poll forever on a dead task
-        from apps.backend.app.database import SessionLocal
-
-        _db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, f"报告生成服务中断: {type(exc).__name__}", _db)
-        finally:
-            _db.close()
+        AITaskService.fail_task(task_id, f"报告生成服务中断: {type(exc).__name__}", db)
         err = json.dumps(
             {"message": "报告生成服务中断", "name": type(exc).__name__}
         ).encode()
