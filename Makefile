@@ -51,7 +51,6 @@ DIST_DIR ?= dist
 
 .PHONY: help check install \
         setup setup-keys setup-env setup-env-db setup-data setup-db setup-db-mysql setup-db-postgres setup-invitation-codes \
-        _ensure-server-deps _ensure-frontend-deps \
         dev-backend dev-agent dev-worker dev-frontend dev-child dev-all stop-dev-all \
         build build-main build-child \
         typecheck lint format \
@@ -441,42 +440,20 @@ setup: setup-data setup-env setup-db
 # 本地开发 (热重载服务，阻塞终端)
 # ══════════════════════════════════════════════════════════
 
-# 依赖检查：确保 uv sync / pnpm install 至少运行过一次，且与 lockfile 同步
-_ensure-server-deps:
-	@if [ ! -d "$(SERVER_DIR)/.venv" ]; then \
-		echo ".venv 不存在，正在安装服务端依赖..."; \
-		cd $(SERVER_DIR) && $(UV) sync --extra backend --extra agent --extra worker --all-groups; \
-		echo "✓ 服务端依赖安装完成"; \
-	elif [ "$(SERVER_DIR)/uv.lock" -nt "$(SERVER_DIR)/.venv" ] || [ "$(SERVER_DIR)/pyproject.toml" -nt "$(SERVER_DIR)/.venv" ]; then \
-		echo "lockfile/pyproject.toml 已更新，正在同步服务端依赖..."; \
-		cd $(SERVER_DIR) && $(UV) sync --extra backend --extra agent --extra worker --all-groups; \
-		echo "✓ 服务端依赖同步完成"; \
-	fi
-
-_ensure-frontend-deps:
-	@if [ ! -d "$(FRONTEND_DIR)/node_modules" ]; then \
-		echo "node_modules 不存在，正在安装前端依赖..."; \
-		cd $(FRONTEND_DIR) && $(PNPM) install; \
-		echo "✓ 前端依赖安装完成"; \
-	elif [ "$(FRONTEND_DIR)/pnpm-lock.yaml" -nt "$(FRONTEND_DIR)/node_modules" ]; then \
-		echo "pnpm-lock.yaml 已更新，正在同步前端依赖..."; \
-		cd $(FRONTEND_DIR) && $(PNPM) install; \
-		echo "✓ 前端依赖同步完成"; \
-	fi
-
-dev-backend: _ensure-server-deps
+# 依赖检查：复用 install，uv sync / pnpm install 幂等，已同步时秒级完成
+dev-backend: install
 	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000
 
-dev-agent: _ensure-server-deps
+dev-agent: install
 	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001
 
-dev-worker: _ensure-server-deps
+dev-worker: install
 	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002
 
-dev-frontend: _ensure-frontend-deps
+dev-frontend: install
 	@cd $(MAIN_APP) && $(PNPM) dev --host 0.0.0.0
 
-dev-child: _ensure-frontend-deps
+dev-child: install
 	@cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0
 
 dev-all:
