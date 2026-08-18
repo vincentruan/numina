@@ -26,6 +26,29 @@ PORTS=(8000 8001 8002 5173 5174)
 
 # ── helpers ──────────────────────────────────────────────────────────
 
+check_deps() {
+    # 服务端依赖：不存在则安装，lockfile/pyproject.toml 更新则同步
+    if [ ! -d "$SERVER_DIR/.venv" ]; then
+        echo ".venv 不存在，正在安装服务端依赖..."
+        (cd "$SERVER_DIR" && uv sync --extra backend --extra agent --extra worker --all-groups)
+        echo "✓ 服务端依赖安装完成"
+    elif [ "$SERVER_DIR/uv.lock" -nt "$SERVER_DIR/.venv" ] || [ "$SERVER_DIR/pyproject.toml" -nt "$SERVER_DIR/.venv" ]; then
+        echo "lockfile/pyproject.toml 已更新，正在同步服务端依赖..."
+        (cd "$SERVER_DIR" && uv sync --extra backend --extra agent --extra worker --all-groups)
+        echo "✓ 服务端依赖同步完成"
+    fi
+    # 前端依赖：不存在则安装，lockfile 更新则同步
+    if [ ! -d "frontend/node_modules" ]; then
+        echo "node_modules 不存在，正在安装前端依赖..."
+        (cd frontend && pnpm install)
+        echo "✓ 前端依赖安装完成"
+    elif [ "frontend/pnpm-lock.yaml" -nt "frontend/node_modules" ]; then
+        echo "pnpm-lock.yaml 已更新，正在同步前端依赖..."
+        (cd frontend && pnpm install)
+        echo "✓ 前端依赖同步完成"
+    fi
+}
+
 check_ports() {
     local occupied=0
     for port in "${PORTS[@]}"; do
@@ -285,6 +308,7 @@ launch_background() {
 # ── main ─────────────────────────────────────────────────────────────
 
 main() {
+    check_deps
     check_ports || exit 1
 
     if command -v tmux >/dev/null 2>&1; then
