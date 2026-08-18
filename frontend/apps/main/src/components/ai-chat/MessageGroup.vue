@@ -247,6 +247,7 @@ const subagentTaskIds = computed(() => {
         :feedback="assistantMessage.feedback"
         :can-branch="canBranch && !isLoading"
         :is-branching="isBranching"
+        :retrying="isLoading"
         @retry="emit('retry')"
         @copy="emit('copy', assistantCleanContent)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"

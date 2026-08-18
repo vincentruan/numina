@@ -41,6 +41,7 @@ interface Props {
   artifacts?: Array<{ id: string; title: string; kind: string; url?: string; path?: string }>
   canBranch?: boolean
   isBranching?: boolean
+  retrying?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -56,6 +57,7 @@ const props = withDefaults(defineProps<Props>(), {
   artifacts: undefined,
   canBranch: false,
   isBranching: false,
+  retrying: false,
 })
 
 const emit = defineEmits<{
@@ -322,8 +324,8 @@ watch(
             </svg>
           </button>
         </CopyButton>
-        <button class="action-btn" :aria-label="t('aiChat.regenerateAria')" @click="emit('retry')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <button class="action-btn" :aria-label="t('aiChat.regenerateAria')" :disabled="retrying" @click="emit('retry')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" :class="{ 'action-btn--spinning': retrying }">
             <polyline points="1 4 1 10 7 10"/>
             <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
           </svg>
@@ -670,6 +672,15 @@ watch(
   .action-btn svg {
     width: 20px;
     height: 20px;
+  }
+
+.action-btn--spinning {
+    animation: spin-refresh 0.8s linear infinite;
+  }
+
+@keyframes spin-refresh {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   /* Feedback active state: subtle tint */

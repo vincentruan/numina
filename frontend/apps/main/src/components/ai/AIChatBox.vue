@@ -606,7 +606,11 @@ function handleStop() {
 
 async function handleRetry() {
   if (store.activeThreadId) {
-    await chat.retry(store.activeThreadId)
+    try {
+      await chat.retry(store.activeThreadId)
+    } catch (err) {
+      showFailToast((err as Error).message || t('aiChat.sendFailed'))
+    }
   }
 }
 

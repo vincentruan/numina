@@ -1757,8 +1757,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (isLoading.value) return
     const lastHuman = [...messages.value].reverse().find(m => m.type === 'human')
     if (lastHuman) {
+      // Truncate BEFORE the last human message (not after it).
+      // sendMessage → addOptimisticUserMessage will re-add it with a fresh id,
+      // so keeping the original would produce two identical user bubbles.
       const lastIdx = messages.value.lastIndexOf(lastHuman)
-      messages.value = messages.value.slice(0, lastIdx + 1)
+      messages.value = messages.value.slice(0, lastIdx)
       await sendMessage(lastHuman.content, undefined, threadId || currentThreadId || undefined)
     }
   }
