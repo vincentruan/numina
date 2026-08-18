@@ -36,8 +36,6 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     handleGoalCommand: vi.fn(),
     showPrevVersion: vi.fn(),
     showNextVersion: vi.fn(),
-    hasPrevVersion: vi.fn(() => false),
-    isShowingSuperseded: vi.fn(() => false),
   }),
   // parseGoalCommand is a pure module-level export used by AIChatBox to detect
   // /goal commands before they reach the agent.

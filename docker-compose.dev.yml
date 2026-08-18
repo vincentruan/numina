@@ -24,7 +24,9 @@ services:
       - AGENT_BASE_URL=http://numina-agent:8001
       - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/.numina/data/workspace}
       - NUMINA_PROJECT_ROOT=/app
-    command: uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend
+    command: >
+      sh -c "uv sync --extra backend &&
+             uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
@@ -55,7 +57,9 @@ services:
       - NUMINA_PROJECT_ROOT=/app
       - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
       - DEERFLOW_DB_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina_deerflow
-    command: uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent
+    command: >
+      sh -c "uv sync --extra agent &&
+             uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent"
     depends_on:
       backend:
         condition: service_healthy
@@ -88,7 +92,9 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
       - NUMINA_PROJECT_ROOT=/app
-    command: uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker
+    command: >
+      sh -c "uv sync --extra scheduler-worker &&
+             uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker"
     depends_on:
       backend:
         condition: service_healthy

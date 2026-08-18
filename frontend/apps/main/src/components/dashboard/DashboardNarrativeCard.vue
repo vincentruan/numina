@@ -230,10 +230,10 @@ function formatTime(iso: string | null): string {
               {{ t('dashboard.narrative.generatedAt', { time: formatTime(generatedAt) }) }}
             </span>
             <span v-else-if="blockReason" class="narrative-status narrative-status--empty">
-              {{ t('dashboard.financeCoach.empty') }}
+              {{ t('dashboard.narrative.empty') }}
             </span>
             <span v-else-if="!loading" class="narrative-status narrative-status--empty">
-              {{ t('dashboard.financeCoach.empty') }}
+              {{ t('dashboard.narrative.empty') }}
             </span>
             <span v-else class="narrative-status">
               <van-loading size="12px" type="spinner" />

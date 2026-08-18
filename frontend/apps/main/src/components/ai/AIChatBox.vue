@@ -790,8 +790,8 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
           @branch="handleBranch"
           @clarification-submit="handleClarificationSubmit"
           @feedback="handleFeedback"
-          @show-prev-version="(turnIndex: number) => chat.showPrevVersion(turnIndex)"
-          @show-next-version="(turnIndex: number) => chat.showNextVersion(turnIndex)"
+          @show-prev-version="(humanMessageId: string) => chat.showPrevVersion(humanMessageId)"
+          @show-next-version="(humanMessageId: string) => chat.showNextVersion(humanMessageId)"
         />
       <!-- Suggestion chips above input (from SSE custom events) -->
       <SuggestionChips

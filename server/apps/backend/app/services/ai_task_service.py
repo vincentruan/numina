@@ -220,6 +220,10 @@ class AITaskService:
 
     @staticmethod
     def fail_task(task_id: int | str, error_message: str, db: Session) -> None:
+        """Mark a task as failed with error message.
+
+        Rolls back the session on failure to prevent leaving it in a bad state.
+        """
         try:
             task = db.query(AITask).filter(AITask.id == int(task_id)).first()
             if task and task.status in ("running", "post_processing", "queued"):
@@ -228,6 +232,14 @@ class AITaskService:
                 task.error_message = error_message[:500] if error_message else None
                 db.commit()
         except Exception:
+            # Rollback to prevent leaving the session in a bad state.
+            # Guard the rollback itself — if the session is fatally broken
+            # (connection lost, pool exhausted), rollback could raise a
+            # secondary exception that masks the original error.
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.exception(
                 "[ai-task] fail_task failed — task %s may remain in running state",
                 task_id,

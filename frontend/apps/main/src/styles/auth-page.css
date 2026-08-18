@@ -1,0 +1,204 @@
+/* Shared auth page styles - deer canvas, glass-morphism form fields, buttons */
+
+/* Background particle canvas layout */
+.deer-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.deer-canvas--bg {
+  z-index: 0;
+}
+
+.deer-canvas--deer {
+  z-index: 1;
+  mask-repeat: no-repeat;
+  mask-position: center center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center center;
+  -webkit-mask-size: contain;
+}
+
+@media (min-width: 768px) {
+  .deer-canvas--deer {
+    mask-size: 72vh;
+    -webkit-mask-size: 72vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deer-canvas {
+    display: none;
+  }
+}
+
+/* Auth page layout */
+.auth-page {
+  min-height: 100vh;
+  background: #010120;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: min(15vh, 60px);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.auth-logo {
+  width: 220px;
+  height: auto;
+  display: block;
+  margin: 0 auto 10px;
+}
+
+.auth-title {
+  font-size: 28px;
+  font-weight: 500;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 8px;
+}
+
+/* Glass-morphism form */
+.auth-form {
+  width: 100%;
+  max-width: 400px;
+  padding: 0 16px;
+}
+
+/* Strip Vant inset group card styling */
+.auth-form :deep(.van-cell-group--inset) {
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  overflow: visible;
+}
+
+/* Dark theme overrides for Vant components in auth form */
+.auth-form :deep(.van-cell-group) {
+  background: transparent;
+}
+
+/* Glass-morphism input fields */
+.auth-form :deep(.van-cell) {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid rgba(189, 187, 255, 0.35);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+  box-shadow:
+    0 4px 16px rgba(1, 1, 32, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Hide Vant's default bottom hairline divider */
+.auth-form :deep(.van-cell)::after {
+  display: none;
+}
+
+.auth-form :deep(.van-cell):focus-within {
+  border-color: #bdbbff;
+  background: rgba(189, 187, 255, 0.1);
+  box-shadow:
+    0 0 0 3px rgba(189, 187, 255, 0.3),
+    0 0 18px rgba(189, 187, 255, 0.55),
+    0 0 40px rgba(189, 187, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.auth-form :deep(.van-field__label) {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.auth-form :deep(.van-field__control) {
+  color: #fff;
+  caret-color: #bdbbff;
+}
+
+.auth-form :deep(.van-field__placeholder) {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.auth-form :deep(.van-field__right-icon) {
+  color: rgba(189, 187, 255, 0.8);
+}
+
+/* Password field wrapper */
+.password-field-wrapper {
+  position: relative;
+}
+
+.password-field-wrapper :deep(.van-field__right-icon) {
+  cursor: pointer;
+}
+
+/* Glass-morphism button */
+.form-actions {
+  padding: 20px 0 0;
+}
+
+.form-actions :deep(.van-button--primary) {
+  --van-button-primary-background: rgba(255, 255, 255, 0.12);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.6);
+  --van-button-primary-color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  transition: box-shadow 0.25s, background 0.25s, border-color 0.25s;
+  box-shadow:
+    0 0 0 1px rgba(189, 187, 255, 0.15),
+    0 0 20px rgba(189, 187, 255, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.form-actions :deep(.van-button--primary:active) {
+  --van-button-primary-background: rgba(255, 255, 255, 0.2);
+  --van-button-primary-border-color: #bdbbff;
+  box-shadow:
+    0 0 0 3px rgba(189, 187, 255, 0.35),
+    0 0 28px rgba(189, 187, 255, 0.55),
+    0 0 56px rgba(189, 187, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Auth page links */
+.auth-links {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.auth-links a {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.auth-links .divider {
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 12px;
+}

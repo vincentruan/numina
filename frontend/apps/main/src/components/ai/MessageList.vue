@@ -15,8 +15,8 @@ const props = defineProps<{
   canBranch?: boolean
   branchingMessageId?: string | null
   answeredInterruptIds?: Set<string>
-  supersededGroups?: Map<number, MessageGroupType[]>
-  supersededVersionIndex?: Map<number, number>
+  supersededGroups?: Map<string, MessageGroupType[]>
+  supersededVersionIndex?: Map<string, number>
 }>()
 
 const emit = defineEmits<{
@@ -27,8 +27,8 @@ const emit = defineEmits<{
   branch: [messageId: string, messageIds: string[]]
   clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
   feedback: [messageId: string, value: 1 | -1]
-  showPrevVersion: [turnIndex: number]
-  showNextVersion: [turnIndex: number]
+  showPrevVersion: [humanMessageId: string]
+  showNextVersion: [humanMessageId: string]
 }>()
 
 const { t } = useI18n()
@@ -56,22 +56,33 @@ const lastAssistantGroupIndex = computed(() => {
 })
 
 /**
- * Compute the turn index for each group.
- * A "turn" is a human message + all subsequent assistant/tool groups until the
- * next human message. This maps each group index → its turn index.
+ * Shared helper: map each group index → the human message id of its turn.
+ * A "turn" starts at a human message and includes all subsequent assistant/tool
+ * groups until the next human message. Uses the human message's stable `id`
+ * (not positional index) so the mapping survives visible-array shifts when
+ * superseded groups have a different count than live groups.
  */
-const groupTurnIndices = computed(() => {
-  const groups = messageGroups.value
-  const indices = new Map<number, number>()
-  let turnIdx = 0
+function computeHumanMessageIds(groups: MessageGroupType[]): Map<number, string> {
+  const ids = new Map<number, string>()
+  let currentHumanId: string | undefined
   for (let i = 0; i < groups.length; i++) {
     if (groups[i].type === 'human') {
-      turnIdx = i
+      const humanMsg = groups[i].messages.find(m => m.type === 'human')
+      currentHumanId = humanMsg?.id
     }
-    indices.set(i, turnIdx)
+    if (currentHumanId) ids.set(i, currentHumanId)
   }
-  return indices
-})
+  return ids
+}
+
+/**
+ * Map each VISIBLE group index → the human message id of its turn.
+ * Computed over visibleMessageGroups so the indices correspond to the
+ * positions the template iterates.
+ */
+const groupToHumanMessageId = computed(() =>
+  computeHumanMessageIds(visibleMessageGroups.value),
+)
 
 /**
  * Visible groups with retry version pagination applied.
@@ -82,6 +93,10 @@ const groupTurnIndices = computed(() => {
  * Algorithm: for each turn that has superseded groups, check the version index.
  * - Version 1 (default): show the LIVE groups from messageGroups (the new response).
  * - Version 0: replace the live assistant groups for that turn with the superseded ones.
+ *
+ * Uses stable human message ids (not positional turn indices) to look up
+ * superseded/version maps, so the mapping is immune to visible-array shifts
+ * when an earlier turn's superseded groups have a different count.
  */
 const visibleMessageGroups = computed(() => {
   const groups = messageGroups.value
@@ -90,33 +105,27 @@ const visibleMessageGroups = computed(() => {
 
   if (!superseded || superseded.size === 0) return groups
 
-  // Compute turn index for each group.
-  const turnIndices = new Map<number, number>()
-  let turnIdx = 0
-  for (let i = 0; i < groups.length; i++) {
-    if (groups[i].type === 'human') turnIdx = i
-    turnIndices.set(i, turnIdx)
-  }
+  // Compute human message id for each raw group (shared helper).
+  const humanIds = computeHumanMessageIds(groups)
 
   // Build the result: for turns with version 0, replace live assistant groups
   // with superseded groups.
   const result: MessageGroupType[] = []
   let i = 0
   while (i < groups.length) {
-    const tIdx = turnIndices.get(i) ?? -1
-    const verIdx = versionMap?.get(tIdx) ?? 1
+    const hId = humanIds.get(i) ?? ''
+    const verIdx = versionMap?.get(hId) ?? 1
 
-    if (superseded.has(tIdx) && verIdx === 0) {
-      // Find the human group and all following assistant groups for this turn.
+    if (hId && superseded.has(hId) && verIdx === 0) {
       // Keep the human group, replace the rest with superseded groups.
       result.push(groups[i]) // human group
       i++
       // Skip all non-human groups for this turn.
-      while (i < groups.length && turnIndices.get(i) === tIdx && groups[i].type !== 'human') {
+      while (i < groups.length && humanIds.get(i) === hId && groups[i].type !== 'human') {
         i++
       }
       // Inject superseded groups.
-      const supGroups = superseded.get(tIdx)
+      const supGroups = superseded.get(hId)
       if (supGroups) {
         result.push(...supGroups)
       }
@@ -130,11 +139,12 @@ const visibleMessageGroups = computed(() => {
 })
 
 /**
- * Turn indices that have superseded groups (for pagination control placement).
+ * Human message ids that have superseded groups (for pagination control placement).
+ * Uses the same stable string keys as supersededGroups.
  */
 const turnsWithSuperseded = computed(() => {
   const superseded = props.supersededGroups
-  if (!superseded || superseded.size === 0) return new Set<number>()
+  if (!superseded || superseded.size === 0) return new Set<string>()
   return new Set(superseded.keys())
 })
 
@@ -176,9 +186,9 @@ function getPrevGroupPlanSteps(index: number): PlanStep[] | undefined {
 function lastGroupForTurn(index: number): boolean {
   const groups = visibleMessageGroups.value
   if (index >= groups.length - 1) return true
-  const currentTurn = groupTurnIndices.value.get(index) ?? -1
-  const nextTurn = groupTurnIndices.value.get(index + 1) ?? -1
-  return currentTurn !== nextTurn
+  const currentHumanId = groupToHumanMessageId.value.get(index) ?? ''
+  const nextHumanId = groupToHumanMessageId.value.get(index + 1) ?? ''
+  return currentHumanId !== nextHumanId
 }
 
 // ── Auto-scroll with user-interrupt (R5) + MutationObserver (P1) ──
@@ -338,15 +348,15 @@ onUnmounted(() => {
         />
         <!-- Retry version pagination control (DeerFlow §2.1: < prev/next >) -->
         <div
-          v-if="turnsWithSuperseded.has(groupTurnIndices.get(index) ?? -1) && lastGroupForTurn(index)"
+          v-if="turnsWithSuperseded.has(groupToHumanMessageId.get(index) ?? '') && lastGroupForTurn(index)"
           class="version-pagination"
         >
           <button
-            v-if="supersededVersionIndex?.get(groupTurnIndices.get(index) ?? -1) === 1"
+            v-if="supersededVersionIndex?.get(groupToHumanMessageId.get(index) ?? '') === 1"
             class="version-nav-btn"
             type="button"
             :aria-label="t('aiChat.prevVersion')"
-            @click="emit('showPrevVersion', groupTurnIndices.get(index) ?? -1)"
+            @click="emit('showPrevVersion', groupToHumanMessageId.get(index) ?? '')"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <polyline points="15 18 9 12 15 6"/>
@@ -354,11 +364,11 @@ onUnmounted(() => {
             <span>{{ t('aiChat.prevVersion') }}</span>
           </button>
           <button
-            v-if="supersededVersionIndex?.get(groupTurnIndices.get(index) ?? -1) === 0"
+            v-if="supersededVersionIndex?.get(groupToHumanMessageId.get(index) ?? '') === 0"
             class="version-nav-btn"
             type="button"
             :aria-label="t('aiChat.nextVersion')"
-            @click="emit('showNextVersion', groupTurnIndices.get(index) ?? -1)"
+            @click="emit('showNextVersion', groupToHumanMessageId.get(index) ?? '')"
           >
             <span>{{ t('aiChat.nextVersion') }}</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
