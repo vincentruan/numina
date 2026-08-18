@@ -26,8 +26,11 @@ const loading = ref(true)
 const streaming = ref(false)
 const cancelling = ref(false)
 const blockReason = ref<NarrativeBlockReason | null>(null)
+const expanded = ref<string[]>([])
 let streamHandle: NarrativeStreamHandle | null = null
 let taskCheckTimer: ReturnType<typeof setTimeout> | null = null
+
+const hasContent = computed(() => narrative.value !== null && narrative.value !== '')
 
 const renderedNarrative = computed(() => {
   if (!narrative.value) return ''
@@ -118,10 +121,12 @@ async function triggerStream(_force = true) {
       streaming.value = false
       resumeHandle.taskId.value = null
       if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
+      // Only toast auth_expired (global condition needing user action).
+      // Other errors (circuit breaker, agent unavailable, network) are shown
+      // inline via the template's error state — not as misleading toasts
+      // on page load. Matches FinanceCoachCard's silent-error pattern.
       if (message.includes('auth_expired')) {
         showFailToast(t('dashboard.narrative.error.auth_expired'))
-      } else {
-        showFailToast(t('dashboard.narrative.error.generation_failed'))
       }
     },
   })
@@ -198,126 +203,157 @@ function formatTime(iso: string | null): string {
 
 <template>
   <van-cell-group inset class="narrative-card" data-test="dashboard-narrative-card">
-    <div class="narrative-header">
-      <span class="narrative-title">
-        <span class="narrative-icon">📈</span>
-        {{ t('dashboard.narrative.title') }}
-      </span>
-      <span v-if="isRunning" class="narrative-status narrative-status--running">
-        <van-loading size="12" type="spinner" color="var(--van-primary-color)" />
-        {{ t('aiTask.status.running') }}
-      </span>
-      <span v-else-if="generatedAt" class="narrative-status">
-        {{ t('dashboard.narrative.generatedAt', { time: formatTime(generatedAt) }) }}
-      </span>
-    </div>
+    <van-collapse v-model="expanded">
+      <van-collapse-item name="narrative">
+        <template #title>
+          <div class="narrative-header">
+            <span class="narrative-title">
+              <span class="narrative-icon">📈</span>
+              {{ t('dashboard.narrative.title') }}
+            </span>
+            <span v-if="isRunning" class="narrative-status narrative-status--running">
+              <van-button
+                v-if="resumeHandle.taskId"
+                plain
+                type="danger"
+                size="mini"
+                :loading="cancelling"
+                :disabled="cancelling"
+                class="narrative-cancel-btn"
+                @click.stop="onCancel"
+              >
+                {{ t('aiTask.cancelBtn') }}
+              </van-button>
+              <van-loading v-else size="12px" type="spinner" />
+            </span>
+            <span v-else-if="generatedAt" class="narrative-status">
+              {{ t('dashboard.narrative.generatedAt', { time: formatTime(generatedAt) }) }}
+            </span>
+            <span v-else-if="blockReason" class="narrative-status narrative-status--empty">
+              {{ t('dashboard.financeCoach.empty') }}
+            </span>
+            <span v-else-if="!loading" class="narrative-status narrative-status--empty">
+              {{ t('dashboard.financeCoach.empty') }}
+            </span>
+            <span v-else class="narrative-status">
+              <van-loading size="12px" type="spinner" />
+            </span>
+          </div>
+        </template>
 
-    <!-- Streaming preview -->
-    <div v-if="streaming" class="narrative-streaming">
-      <div v-if="thinking" class="narrative-thinking">
-        <van-collapse>
-          <van-collapse-item :title="t('dashboard.narrative.thinking')" name="thinking">
-            <div class="narrative-thinking-text">{{ thinking }}</div>
-          </van-collapse-item>
-        </van-collapse>
-      </div>
-      <div v-if="narrative" class="narrative-preview" v-html="renderedNarrative" />
-      <van-skeleton v-else title :row="3" animate />
-    </div>
+        <!-- Streaming preview -->
+        <div v-if="streaming" class="narrative-streaming">
+          <div v-if="thinking" class="narrative-thinking">
+            <van-collapse>
+              <van-collapse-item :title="t('dashboard.narrative.thinking')" name="thinking">
+                <div class="narrative-thinking-text">{{ thinking }}</div>
+              </van-collapse-item>
+            </van-collapse>
+          </div>
+          <div v-if="narrative" class="narrative-preview" v-html="renderedNarrative" />
+          <van-skeleton v-else title :row="3" animate />
+        </div>
 
-    <!-- Cancel button when running (U21) -->
-    <div v-else-if="isRunning && resumeHandle.taskId" class="narrative-cancel-row">
-      <van-button
-        plain
-        type="danger"
-        size="small"
-        :loading="cancelling"
-        :disabled="cancelling"
-        @click="onCancel"
-      >
-        {{ t('aiTask.cancelBtn') }}
-      </van-button>
-    </div>
+        <!-- Completed narrative -->
+        <div v-else-if="hasContent" class="narrative-content" v-html="renderedNarrative" />
 
-    <!-- Completed narrative -->
-    <div v-else-if="narrative" class="narrative-content" v-html="renderedNarrative" />
+        <!-- Threshold gate: clear reason why generation is unavailable -->
+        <div v-else-if="blockReason" class="narrative-blocked">
+          <p class="narrative-blocked-text">
+            {{ blockReason.reason === 'insufficient_assets'
+              ? t('dashboard.narrative.blocked.insufficient_assets', {
+                  count: blockReason.asset_count ?? 0,
+                  threshold: blockReason.threshold ?? 5,
+                })
+              : t('dashboard.narrative.blocked.insufficient_history')
+            }}
+          </p>
+        </div>
 
-    <!-- Threshold gate: clear reason why generation is unavailable -->
-    <div v-else-if="blockReason" class="narrative-blocked">
-      <p class="narrative-blocked-text">
-        {{ blockReason.reason === 'insufficient_assets'
-          ? t('dashboard.narrative.blocked.insufficient_assets', {
-              count: blockReason.asset_count ?? 0,
-              threshold: blockReason.threshold ?? 5,
-            })
-          : t('dashboard.narrative.blocked.insufficient_history')
-        }}
-      </p>
-    </div>
+        <!-- Retry button when trigger task creation failed (T20) -->
+        <div v-else-if="resumeHandle.triggerFailed" class="narrative-retry-row">
+          <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
+          <van-button plain type="primary" size="small" @click="onRetry">
+            {{ t('dashboard.narrative.retry') }}
+          </van-button>
+        </div>
 
-    <!-- Retry button when trigger task creation failed (T20) -->
-    <div v-else-if="resumeHandle.triggerFailed" class="narrative-retry-row">
-      <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
-      <van-button plain type="primary" size="small" @click="onRetry">
-        {{ t('dashboard.narrative.retry') }}
-      </van-button>
-    </div>
+        <!-- Inline error when task failed (replaces error toast) -->
+        <div v-else-if="resumeHandle.status.value === 'failed'" class="narrative-retry-row">
+          <p class="narrative-retry-hint narrative-error-text">
+            {{ resumeHandle.task.value?.error_message || t('dashboard.narrative.error.generation_failed') }}
+          </p>
+          <van-button plain type="primary" size="small" @click="onRetry">
+            {{ t('dashboard.narrative.retry') }}
+          </van-button>
+        </div>
 
-    <!-- Inline error when task failed (replaces error toast) -->
-    <div v-else-if="resumeHandle.status.value === 'failed'" class="narrative-retry-row">
-      <p class="narrative-retry-hint narrative-error-text">
-        {{ resumeHandle.task.value?.error_message || t('dashboard.narrative.error.generation_failed') }}
-      </p>
-      <van-button plain type="primary" size="small" @click="onRetry">
-        {{ t('dashboard.narrative.retry') }}
-      </van-button>
-    </div>
+        <!-- Empty state with generate button -->
+        <div v-else-if="!loading" class="narrative-empty">
+          <p class="narrative-empty-text">{{ t('dashboard.narrative.empty') }}</p>
+          <van-button plain type="primary" size="small" :loading="loading" @click="onGenerate">
+            {{ t('dashboard.narrative.generate') }}
+          </van-button>
+        </div>
 
-    <!-- Empty state with generate button -->
-    <div v-else-if="!loading" class="narrative-empty">
-      <p class="narrative-empty-text">{{ t('dashboard.narrative.empty') }}</p>
-      <van-button plain type="primary" size="small" :loading="loading" @click="onGenerate">
-        {{ t('dashboard.narrative.generate') }}
-      </van-button>
-    </div>
-
-    <!-- Loading initial state -->
-    <div v-else class="narrative-loading">
-      <van-skeleton title :row="2" animate />
-    </div>
+        <!-- Loading initial state -->
+        <div v-else class="narrative-loading">
+          <van-skeleton title :row="2" animate />
+        </div>
+      </van-collapse-item>
+    </van-collapse>
   </van-cell-group>
 </template>
 
 <style scoped>
 .narrative-card {
-  margin: 12px 0;
+  display: block;
+  margin: 8px 0;
+}
+.narrative-card :deep(.van-collapse-item__title) {
+  justify-content: flex-start;
+}
+.narrative-card :deep(.van-cell__title) {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.narrative-card :deep(.van-cell__value) {
+  flex: none;
+  width: 0;
 }
 .narrative-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px 8px;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
 }
 .narrative-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
-  color: var(--text-primary);
 }
 .narrative-icon {
   font-size: 16px;
 }
 .narrative-status {
+  margin-left: 8px;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--van-text-color-2);
 }
 .narrative-status--running {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--van-primary-color);
+}
+.narrative-cancel-btn {
+  margin-left: 4px;
+}
+.narrative-status--empty {
+  color: var(--van-text-color-3);
 }
 .narrative-streaming {
   padding: 0 16px 12px;
@@ -339,11 +375,6 @@ function formatTime(iso: string | null): string {
   line-height: 1.6;
   color: var(--text-primary);
   opacity: 0.85;
-}
-.narrative-cancel-row {
-  display: flex;
-  justify-content: center;
-  padding: 12px 16px;
 }
 .narrative-content {
   padding: 0 16px 16px;

@@ -298,7 +298,8 @@ async function loadExistingReport() {
       reportGeneratedAt.value = res.data.generated_at ?? null
     }
   } catch {
-    showFailToast(t('toast.operationFailed'))
+    // No report yet or non-critical fetch error — template handles
+    // empty state and inline error display. Matches AIHubPage pattern.
   }
 }
 
