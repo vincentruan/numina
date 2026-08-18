@@ -281,6 +281,9 @@ async def generate_narrative(
             "first_sentence": "",
             "thinking": "",
             "generated_at": None,
+            "reason": "insufficient_assets",
+            "asset_count": overview.asset_count,
+            "threshold": _min_asset_count,
         })
 
     # History check uses a short-lived session (P0 fix — don't hold request db)
@@ -290,6 +293,7 @@ async def generate_narrative(
             "first_sentence": "",
             "thinking": "",
             "generated_at": None,
+            "reason": "insufficient_history",
         })
 
     # 3. Build context — uses request-scoped db for insights

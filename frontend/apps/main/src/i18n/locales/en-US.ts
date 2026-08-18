@@ -138,6 +138,10 @@ export default {
       generate: 'Generate Monthly Insights',
       retry: 'Retry',
       retryHint: 'Task creation timed out, please retry',
+      blocked: {
+        insufficient_assets: 'At least {threshold} assets are required for monthly insights (currently {count}). Add more assets and try again.',
+        insufficient_history: 'At least 1 month of asset snapshot history is required. The system keeps recording — please try again later.',
+      },
       error: {
         auth_expired: 'Authentication expired',
         connect_failed: 'Connection failed',

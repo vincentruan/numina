@@ -203,6 +203,10 @@ export default {
       generate: '生成本月洞察',
       retry: '重试',
       retryHint: '任务创建超时，请重试',
+      blocked: {
+        insufficient_assets: '需要至少 {threshold} 项资产才能生成本月洞察（当前 {count} 项）。添加更多资产后再试试吧。',
+        insufficient_history: '需要至少 1 个月的资产快照历史才能生成本月洞察。系统会持续记录，请稍后再试。',
+      },
       error: {
         auth_expired: '认证已过期',
         connect_failed: '连接失败',

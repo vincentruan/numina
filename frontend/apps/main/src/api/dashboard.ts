@@ -209,6 +209,12 @@ export interface NarrativeResponse {
   first_sentence: string
   thinking: string
   generated_at: string | null
+  /** Why generation was skipped (threshold gate). */
+  reason?: 'insufficient_assets' | 'insufficient_history'
+  /** Current asset count (when reason = insufficient_assets). */
+  asset_count?: number
+  /** Required minimum (when reason = insufficient_assets). */
+  threshold?: number
 }
 
 export function getNarrative(force = false) {
@@ -219,10 +225,17 @@ export function getNarrative(force = false) {
 
 // ── Narrative SSE streaming ─────────────────────────────────────────────────
 
+export interface NarrativeBlockReason {
+  reason: 'insufficient_assets' | 'insufficient_history'
+  asset_count?: number
+  threshold?: number
+}
+
 export interface NarrativeStreamCallbacks {
   onReasoningDelta: (content: string) => void
   onNarrativeDelta: (content: string) => void
   onDone: (result: { narrative: string; thinking: string }) => void
+  onBlocked: (info: NarrativeBlockReason) => void
   onError: (message: string) => void
 }
 
@@ -301,10 +314,18 @@ async function runNarrativeStream(
   if (contentType.includes('application/json')) {
     try {
       const data = (await res.json()) as NarrativeResponse
-      callbacks.onDone({
-        narrative: data.narrative || '',
-        thinking: data.thinking || '',
-      })
+      if (data.reason) {
+        callbacks.onBlocked({
+          reason: data.reason,
+          asset_count: data.asset_count,
+          threshold: data.threshold,
+        })
+      } else {
+        callbacks.onDone({
+          narrative: data.narrative || '',
+          thinking: data.thinking || '',
+        })
+      }
     } catch {
       callbacks.onError('dashboard.narrative.error.parse_failed')
     }

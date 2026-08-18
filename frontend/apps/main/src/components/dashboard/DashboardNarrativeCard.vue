@@ -15,7 +15,7 @@ import { marked } from 'marked'
 import { sanitizeMarkdown } from '@/utils/sanitize'
 import { streamNarrative } from '@/api/dashboard'
 import { useTaskResume } from '@/composables/useTaskResume'
-import type { NarrativeStreamHandle } from '@/api/dashboard'
+import type { NarrativeBlockReason, NarrativeStreamHandle } from '@/api/dashboard'
 
 const { t } = useI18n()
 
@@ -25,6 +25,7 @@ const generatedAt = ref<string | null>(null)
 const loading = ref(true)
 const streaming = ref(false)
 const cancelling = ref(false)
+const blockReason = ref<NarrativeBlockReason | null>(null)
 let streamHandle: NarrativeStreamHandle | null = null
 let taskCheckTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -79,6 +80,7 @@ async function triggerStream(_force = true) {
   streaming.value = true
   thinking.value = ''
   narrative.value = null
+  blockReason.value = null
   resumeHandle.triggerFailed.value = false
 
   // T20: progressive retry (500ms->1s->2s->4s) to locate the AITask created
@@ -102,10 +104,20 @@ async function triggerStream(_force = true) {
       generatedAt.value = new Date().toISOString()
       streaming.value = false
       resumeHandle.taskId.value = null
+      // Cancel T20 timer — no task expected (cache hit)
+      if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
+    },
+    onBlocked: (info) => {
+      blockReason.value = info
+      streaming.value = false
+      resumeHandle.taskId.value = null
+      // Cancel T20 timer — no task expected (threshold gate)
+      if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
     },
     onError: (message) => {
       streaming.value = false
       resumeHandle.taskId.value = null
+      if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
       if (message.includes('auth_expired')) {
         showFailToast(t('dashboard.narrative.error.auth_expired'))
       } else {
@@ -230,6 +242,19 @@ function formatTime(iso: string | null): string {
     <!-- Completed narrative -->
     <div v-else-if="narrative" class="narrative-content" v-html="renderedNarrative" />
 
+    <!-- Threshold gate: clear reason why generation is unavailable -->
+    <div v-else-if="blockReason" class="narrative-blocked">
+      <p class="narrative-blocked-text">
+        {{ blockReason.reason === 'insufficient_assets'
+          ? t('dashboard.narrative.blocked.insufficient_assets', {
+              count: blockReason.asset_count ?? 0,
+              threshold: blockReason.threshold ?? 5,
+            })
+          : t('dashboard.narrative.blocked.insufficient_history')
+        }}
+      </p>
+    </div>
+
     <!-- Retry button when trigger task creation failed (T20) -->
     <div v-else-if="resumeHandle.triggerFailed" class="narrative-retry-row">
       <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
@@ -337,6 +362,15 @@ function formatTime(iso: string | null): string {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 8px;
+}
+.narrative-blocked {
+  padding: 12px 16px;
+}
+.narrative-blocked-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
 }
 .narrative-retry-row {
   padding: 16px;
