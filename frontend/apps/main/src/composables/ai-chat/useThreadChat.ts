@@ -1081,7 +1081,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     },
   ): Promise<void> {
     const {
-      mode,
       threadId,
       modeConfig,
       source,
@@ -1996,6 +1995,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   /** Navigate to the previous (superseded) version for a given turn. */
   function showPrevVersion(humanMessageId: string) {
+    if (!supersededGroups.value.has(humanMessageId)) return
     const currentIdx = supersededVersionIndex.value.get(humanMessageId) ?? 1
     if (currentIdx > 0) {
       supersededVersionIndex.value = new Map([
@@ -2007,6 +2007,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   /** Navigate back to the current (latest) version for a given turn. */
   function showNextVersion(humanMessageId: string) {
+    if (!supersededGroups.value.has(humanMessageId)) return
     const currentIdx = supersededVersionIndex.value.get(humanMessageId) ?? 1
     if (currentIdx < 1) {
       supersededVersionIndex.value = new Map([

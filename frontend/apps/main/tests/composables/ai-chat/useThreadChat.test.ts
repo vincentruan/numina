@@ -50,7 +50,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     expect(chat.planningSteps.value).toHaveLength(1)
     expect(chat.planningSteps.value[0].toolName).toBe('web_search')
@@ -68,7 +68,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     // After stream ends, suggestions are cleared from standalone ref (Issue 1 fix)
     // and attached inline to the last AI message instead
@@ -87,7 +87,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     expect(chat.runId.value).toBe('run-abc')
   })
@@ -105,7 +105,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     // metadata event has been processed, so runId is captured
     expect(chat.runId.value).toBe('run-xyz')
@@ -134,7 +134,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     const aiMsg = chat.messages.value.find(m => m.id === 'ai-1')
     expect(aiMsg?.usageMetadata).toEqual({ inputTokens: 100, outputTokens: 50 })
@@ -157,10 +157,10 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
     expect(chat.planningSteps.value).toHaveLength(1)
 
-    await chat.sendMessage('follow-up', undefined, 'thread-1')
+    await chat.sendMessage('follow-up', { threadId: 'thread-1' })
     expect(chat.planningSteps.value).toHaveLength(0)
   })
 
@@ -185,7 +185,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    const promise = chat.sendMessage('hello', undefined, 'thread-1')
+    const promise = chat.sendMessage('hello', { threadId: 'thread-1' })
 
     // Advance through first retry delay (1s)
     await vi.advanceTimersByTimeAsync(1000)
@@ -232,7 +232,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    const promise = chat.sendMessage('帮我看看家庭财务近况', undefined, 'thread-1')
+    const promise = chat.sendMessage('帮我看看家庭财务近况', { threadId: 'thread-1' })
     await vi.advanceTimersByTimeAsync(1000)
     await promise
 
@@ -261,7 +261,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    const promise = chat.sendMessage('hello', undefined, 'thread-1')
+    const promise = chat.sendMessage('hello', { threadId: 'thread-1' })
 
     // Advance through retry delays: 1s, 2s, 4s
     await vi.advanceTimersByTimeAsync(1000)
@@ -302,7 +302,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     const humanMessages = chat.messages.value.filter(m => m.type === 'human')
     expect(humanMessages).toHaveLength(1)
@@ -320,7 +320,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     const humanMsg = chat.messages.value.find(m => m.type === 'human')
     expect(humanMsg?.sendStatus).toBe('sent')
@@ -371,7 +371,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     } as never)
 
     const chat = useThreadChat()
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
 
     const aiMessages = chat.messages.value.filter(m => m.type === 'ai')
     expect(aiMessages).toHaveLength(2)
@@ -398,7 +398,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream1, cancel: vi.fn() },
     } as never)
-    await chat.sendMessage('first', undefined, 'thread-1')
+    await chat.sendMessage('first', { threadId: 'thread-1' })
 
     // Turn 2: follow-up on the same thread
     const mockStream2 = makeMockStream([
@@ -409,7 +409,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
     vi.mocked(getClient).mockReturnValue({
       runs: { stream: () => mockStream2, cancel: vi.fn() },
     } as never)
-    await chat.sendMessage('second', undefined, 'thread-1')
+    await chat.sendMessage('second', { threadId: 'thread-1' })
 
     // The follow-up user message must transition to 'sent', not stay 'sending'
     const humanMessages = chat.messages.value.filter(m => m.type === 'human')

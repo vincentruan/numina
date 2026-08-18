@@ -167,6 +167,6 @@ async function onSubmit() {
 }
 </script>
 
-<style>
+<style scoped>
 @import '@/styles/auth-page.css';
 </style>

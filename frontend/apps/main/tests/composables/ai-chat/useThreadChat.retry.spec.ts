@@ -124,6 +124,7 @@ describe('useThreadChat - retry() logic', () => {
 
   describe('version navigation (stable id keys)', () => {
     it('showPrevVersion decrements version index', () => {
+      chat.supersededGroups.value = new Map([['h1', []]])
       chat.supersededVersionIndex.value = new Map([['h1', 1]])
 
       chat.showPrevVersion('h1')
@@ -132,6 +133,7 @@ describe('useThreadChat - retry() logic', () => {
     })
 
     it('showNextVersion increments version index', () => {
+      chat.supersededGroups.value = new Map([['h1', []]])
       chat.supersededVersionIndex.value = new Map([['h1', 0]])
 
       chat.showNextVersion('h1')
@@ -140,6 +142,7 @@ describe('useThreadChat - retry() logic', () => {
     })
 
     it('showPrevVersion does not go below 0', () => {
+      chat.supersededGroups.value = new Map([['h1', []]])
       chat.supersededVersionIndex.value = new Map([['h1', 0]])
 
       chat.showPrevVersion('h1')
@@ -148,6 +151,7 @@ describe('useThreadChat - retry() logic', () => {
     })
 
     it('showNextVersion does not go above 1', () => {
+      chat.supersededGroups.value = new Map([['h1', []]])
       chat.supersededVersionIndex.value = new Map([['h1', 1]])
 
       chat.showNextVersion('h1')
@@ -156,12 +160,15 @@ describe('useThreadChat - retry() logic', () => {
     })
 
     it('showPrevVersion with unknown id is a no-op', () => {
+      chat.supersededGroups.value = new Map([['h1', []]])
       chat.supersededVersionIndex.value = new Map([['h1', 1]])
 
       chat.showPrevVersion('unknown-id')
 
-      // Default for unknown is 1, so it goes to 0
-      expect(chat.supersededVersionIndex.value.get('unknown-id')).toBe(0)
+      // Guard: unknown id should not create an entry
+      expect(chat.supersededVersionIndex.value.has('unknown-id')).toBe(false)
+      // Existing entry unchanged
+      expect(chat.supersededVersionIndex.value.get('h1')).toBe(1)
     })
   })
 })

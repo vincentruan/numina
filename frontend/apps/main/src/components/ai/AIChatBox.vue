@@ -270,7 +270,7 @@ async function onChatTaskRetry() {
   chatTaskStatus.value = 'idle'
   chatTaskError.value = null
   try {
-    await chat.sendMessage(lastUser.content, undefined, threadId)
+    await chat.sendMessage(lastUser.content, { threadId })
   } finally {
     chatTaskRetrying.value = false
   }
@@ -521,13 +521,18 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
     }
     // Hide skeleton once thread is created - streaming will show actual content
     initialLoading.value = false
-    await chat.sendMessage(payload.text, payload.mode, thread.thread_id, {
-      thinking_enabled: payload.thinking_enabled,
-      is_plan_mode: payload.is_plan_mode,
-      subagent_enabled: payload.subagent_enabled,
-      reasoning_effort: payload.reasoning_effort,
-      websearch_enabled: payload.websearch_enabled,
-    }, source)
+    await chat.sendMessage(payload.text, {
+      mode: payload.mode,
+      threadId: thread.thread_id,
+      modeConfig: {
+        thinking_enabled: payload.thinking_enabled,
+        is_plan_mode: payload.is_plan_mode,
+        subagent_enabled: payload.subagent_enabled,
+        reasoning_effort: payload.reasoning_effort,
+        websearch_enabled: payload.websearch_enabled,
+      },
+      source,
+    })
     // Send started successfully — clear the one-shot pending message (so a
     // re-mount does not re-send) and any recovered draft so it doesn't linger
     // in the (now-hidden) welcome InputBox on a later new-chat.
@@ -567,12 +572,16 @@ async function handleSendMessage(payload: SubmitPayload) {
       (goal) => setLocalGoal(goal ?? null),
     )
     if (saved && goalCommand.kind === 'set') {
-      await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
-        thinking_enabled: payload.thinking_enabled,
-        is_plan_mode: payload.is_plan_mode,
-        subagent_enabled: payload.subagent_enabled,
-        reasoning_effort: payload.reasoning_effort,
-        websearch_enabled: payload.websearch_enabled,
+      await chat.sendMessage(payload.text, {
+        mode: payload.mode,
+        threadId: store.activeThreadId,
+        modeConfig: {
+          thinking_enabled: payload.thinking_enabled,
+          is_plan_mode: payload.is_plan_mode,
+          subagent_enabled: payload.subagent_enabled,
+          reasoning_effort: payload.reasoning_effort,
+          websearch_enabled: payload.websearch_enabled,
+        },
       })
     }
     return
@@ -585,13 +594,18 @@ async function handleSendMessage(payload: SubmitPayload) {
     await chat.handleCompact(store.activeThreadId)
     return
   }
-  await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
-    thinking_enabled: payload.thinking_enabled,
-    is_plan_mode: payload.is_plan_mode,
-    subagent_enabled: payload.subagent_enabled,
-    reasoning_effort: payload.reasoning_effort,
-    websearch_enabled: payload.websearch_enabled,
-  }, undefined, undefined, payload.files)
+  await chat.sendMessage(payload.text, {
+    mode: payload.mode,
+    threadId: store.activeThreadId,
+    modeConfig: {
+      thinking_enabled: payload.thinking_enabled,
+      is_plan_mode: payload.is_plan_mode,
+      subagent_enabled: payload.subagent_enabled,
+      reasoning_effort: payload.reasoning_effort,
+      websearch_enabled: payload.websearch_enabled,
+    },
+    files: payload.files,
+  })
   // Clear attachments after successful send
   chatAttachments.value = []
 }
@@ -641,7 +655,7 @@ async function handleSuggestionClick(text: string) {
       ]
     }
   }
-  await chat.sendMessage(text, undefined, store.activeThreadId)
+  await chat.sendMessage(text, { threadId: store.activeThreadId })
 }
 
 const VALID_ARTIFACT_KINDS = ['data', 'link', 'image', 'file', 'other', 'report'] as const
