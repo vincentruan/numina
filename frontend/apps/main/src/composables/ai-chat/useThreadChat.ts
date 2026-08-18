@@ -17,6 +17,7 @@ import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 import { useChatSessionStore } from '@/stores/chatSession'
+import type { MessageGroup } from '@/types/ai-chat/message-group'
 
 export type { ChatMessage }
 
@@ -594,6 +595,15 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Mirrors DeerFlow `summarizedRef`.
    */
   const summarizedIds = ref<Set<string>>(new Set())
+  // ── Retry version pagination (DeerFlow §2.1: superseded groups) ──
+  // When the user retries the latest turn, the previous assistant response is
+  // saved here instead of discarded. MessageList renders a < prev/next > control
+  // so the user can flip between versions. Keys: turnIndex (group index of the
+  // human message that started the turn).
+  const supersededGroups = ref<Map<number, MessageGroup[]>>(new Map())
+  // Which version index the user is currently viewing for each turn. 0 = old,
+  // 1 = new (current). Defaults to 1 (always show latest after retry).
+  const supersededVersionIndex = ref<Map<number, number>>(new Map())
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
   let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -1059,6 +1069,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     additionalKwargs?: Record<string, unknown>,
     /** Uploaded file attachments (images/documents) to include in the message. */
     files?: Array<{ path: string; filename: string; mime_type?: string }>,
+    /**
+     * When true, the SSE title handler skips updating the session title.
+     * Used by retry() so the original LLM-generated (or user-renamed) title
+     * is preserved — the backend would otherwise regenerate a title from the
+     * re-sent user message and overwrite the existing one.
+     */
+    retryPreserveTitle?: boolean,
   ): Promise<void> {
     // If a previous stream is still marked as loading (e.g. dropped connection
     // that hasn't fully cleaned up, or user clicked retry mid-stream), cancel
@@ -1245,7 +1262,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // yielding, so any non-empty title here is display-safe.
             // Updates the session store in-place so the sidebar reflects the
             // title without HTTP polling.
-            if (data.title && currentThreadId) {
+            if (data.title && currentThreadId && !retryPreserveTitle) {
               // Lazy store access — avoids requiring Pinia at composable
               // creation time (tests create useThreadChat without Pinia).
               const sessionStore = useChatSessionStore()
@@ -1630,6 +1647,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // don't linger. Also clears summarizedIds so a fresh run can recapture.
     transientBridge.value = []
     summarizedIds.value = new Set()
+    // Retry pagination: clear superseded groups on thread switch.
+    supersededGroups.value = new Map()
+    supersededVersionIndex.value = new Map()
 
     isLoading.value = true
     error.value = null
@@ -1757,12 +1777,40 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (isLoading.value) return
     const lastHuman = [...messages.value].reverse().find(m => m.type === 'human')
     if (lastHuman) {
+      // Save the current assistant groups as superseded BEFORE truncating.
+      // This lets MessageList render a < prev/next > control so the user can
+      // flip between the old and new AI response (DeerFlow §2.1 pattern).
+      const { getMessageGroups } = await import('@/utils/ai-chat/messageGroups')
+      const { deduplicateMessages } = await import('@/utils/ai-chat/message-identity')
+      const deduped = deduplicateMessages(messages.value)
+      const allGroups = getMessageGroups(deduped)
+      const lastHumanIdx = allGroups.findIndex(g => g.type === 'human' && g.id === lastHuman.id)
+      if (lastHumanIdx >= 0) {
+        const turnGroups = allGroups.slice(lastHumanIdx + 1)
+        const assistantGroups = turnGroups.filter(g =>
+          g.type === 'assistant' || g.type === 'assistant:processing'
+            || g.type === 'assistant:present-files' || g.type === 'assistant:subagent',
+        )
+        if (assistantGroups.length > 0) {
+          // Replace any previous superseded set for this turn (user retried twice).
+          supersededGroups.value = new Map([
+            ...[...supersededGroups.value].filter(([k]) => k !== lastHumanIdx),
+            [lastHumanIdx, assistantGroups],
+          ])
+          // Default to showing the NEW response (version 1).
+          supersededVersionIndex.value = new Map([
+            ...[...supersededVersionIndex.value].filter(([k]) => k !== lastHumanIdx),
+            [lastHumanIdx, 1],
+          ])
+        }
+      }
+
       // Truncate BEFORE the last human message (not after it).
       // sendMessage → addOptimisticUserMessage will re-add it with a fresh id,
       // so keeping the original would produce two identical user bubbles.
       const lastIdx = messages.value.lastIndexOf(lastHuman)
       messages.value = messages.value.slice(0, lastIdx)
-      await sendMessage(lastHuman.content, undefined, threadId || currentThreadId || undefined)
+      await sendMessage(lastHuman.content, undefined, threadId || currentThreadId || undefined, undefined, undefined, undefined, undefined, true)
     }
   }
 
@@ -1869,22 +1917,15 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // thread switch) so rescued turns never leak across chat views.
     transientBridge.value = []
     summarizedIds.value = new Set()
+    // Retry pagination: clear superseded groups on thread switch / new chat.
+    supersededGroups.value = new Map()
+    supersededVersionIndex.value = new Map()
   }
 
   /**
-   * Submit a clarification answer as a NEW HumanMessage (DeerFlow pattern).
-   *
-   * DeerFlow's ClarificationMiddleware intercepts ``ask_clarification`` and
-   * ends the run (``Command(goto=END)``) with a
-   * ``ToolMessage(artifact={human_input})``. The user's answer is NOT sent via
-   * a resume endpoint - it's a new ``HumanMessage`` carrying
-   * ``additional_kwargs.human_input_response`` (structured) + ``hide_from_ui``
-   * (so it doesn't render as a duplicate chat bubble). The message text follows
-   * DeerFlow's ``buildHumanInputResponseText`` format so the LLM sees a
-   * natural-language answer.
-   *
-   * ``answeredInterruptIds`` (computed from message history) automatically
-   * marks the clarification card as 'answered' once the response message lands.
+   * Handle clarification answer submission
+   * Sends the answer as a new HumanMessage with human_input_response (DeerFlow
+   * ClarificationMiddleware pattern) - NOT a resume endpoint.
    */
   async function submitClarification(
     threadId: string,
@@ -1919,11 +1960,47 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     })
   }
 
+  // ── Retry version navigation ──
+
+  /** Navigate to the previous (superseded) version for a given turn. */
+  function showPrevVersion(turnIndex: number) {
+    const currentIdx = supersededVersionIndex.value.get(turnIndex) ?? 1
+    if (currentIdx > 0) {
+      supersededVersionIndex.value = new Map([
+        ...supersededVersionIndex.value,
+        [turnIndex, currentIdx - 1],
+      ])
+    }
+  }
+
+  /** Navigate back to the current (latest) version for a given turn. */
+  function showNextVersion(turnIndex: number) {
+    const currentIdx = supersededVersionIndex.value.get(turnIndex) ?? 1
+    if (currentIdx < 1) {
+      supersededVersionIndex.value = new Map([
+        ...supersededVersionIndex.value,
+        [turnIndex, 1],
+      ])
+    }
+  }
+
+  /** Whether a previous version exists for a given turn (for UI arrow visibility). */
+  function hasPrevVersion(turnIndex: number): boolean {
+    return supersededGroups.value.has(turnIndex) && (supersededVersionIndex.value.get(turnIndex) ?? 1) > 0
+  }
+
+  /** Whether we're showing a superseded version (next arrow should appear). */
+  function isShowingSuperseded(turnIndex: number): boolean {
+    return supersededGroups.value.has(turnIndex) && (supersededVersionIndex.value.get(turnIndex) ?? 1) === 0
+  }
+
   return {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, runId,
     todos, serverGoal,
+    supersededGroups, supersededVersionIndex,
     sendMessage, cancelStream, loadHistory, retry, clearMessages, submitClarification,
     submitFeedback, handleCompact, handleGoalCommand,
+    showPrevVersion, showNextVersion, hasPrevVersion, isShowingSuperseded,
   }
 }

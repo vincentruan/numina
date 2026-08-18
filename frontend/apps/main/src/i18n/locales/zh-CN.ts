@@ -316,6 +316,9 @@ export default {
     errorTimeout: '响应超时，请重试',
     errorReconnectFailed: '连接中断，已尝试 {attempts} 次重连，请手动重试',
     connectionBrokenRetry: '连接中断，点击重试',
+    // Retry version pagination (DeerFlow pattern)
+    prevVersion: '上一版',
+    nextVersion: '下一版',
     historyTitle: '会话历史',
     loadingHistory: '加载历史中…',
     noHistory: '暂无历史会话',

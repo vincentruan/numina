@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'v
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
 import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
-import type { ChatMessage } from '@/types/ai-chat/message-group'
+import type { ChatMessage, MessageGroup as MessageGroupType } from '@/types/ai-chat/message-group'
 import type { PlanStep } from '@/types/agent-stream'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 import { extractLegacyFields } from '@/utils/ai-chat/messageAdapter'
@@ -15,6 +15,8 @@ const props = defineProps<{
   canBranch?: boolean
   branchingMessageId?: string | null
   answeredInterruptIds?: Set<string>
+  supersededGroups?: Map<number, MessageGroupType[]>
+  supersededVersionIndex?: Map<number, number>
 }>()
 
 const emit = defineEmits<{
@@ -25,6 +27,8 @@ const emit = defineEmits<{
   branch: [messageId: string, messageIds: string[]]
   clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
   feedback: [messageId: string, value: 1 | -1]
+  showPrevVersion: [turnIndex: number]
+  showNextVersion: [turnIndex: number]
 }>()
 
 const { t } = useI18n()
@@ -44,11 +48,94 @@ const messageGroups = useMessageGroups(toRef(props, 'messages'))
  * and pending tool calls couldn't show a running spinner.
  */
 const lastAssistantGroupIndex = computed(() => {
-  const groups = messageGroups.value
+  const groups = visibleMessageGroups.value
   for (let i = groups.length - 1; i >= 0; i--) {
     if (groups[i].type === 'assistant' || groups[i].type.startsWith('assistant:')) return i
   }
   return -1
+})
+
+/**
+ * Compute the turn index for each group.
+ * A "turn" is a human message + all subsequent assistant/tool groups until the
+ * next human message. This maps each group index → its turn index.
+ */
+const groupTurnIndices = computed(() => {
+  const groups = messageGroups.value
+  const indices = new Map<number, number>()
+  let turnIdx = 0
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].type === 'human') {
+      turnIdx = i
+    }
+    indices.set(i, turnIdx)
+  }
+  return indices
+})
+
+/**
+ * Visible groups with retry version pagination applied.
+ *
+ * When the user retried a turn and there are superseded groups, only the
+ * version the user is currently viewing is shown.
+ *
+ * Algorithm: for each turn that has superseded groups, check the version index.
+ * - Version 1 (default): show the LIVE groups from messageGroups (the new response).
+ * - Version 0: replace the live assistant groups for that turn with the superseded ones.
+ */
+const visibleMessageGroups = computed(() => {
+  const groups = messageGroups.value
+  const superseded = props.supersededGroups
+  const versionMap = props.supersededVersionIndex
+
+  if (!superseded || superseded.size === 0) return groups
+
+  // Compute turn index for each group.
+  const turnIndices = new Map<number, number>()
+  let turnIdx = 0
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].type === 'human') turnIdx = i
+    turnIndices.set(i, turnIdx)
+  }
+
+  // Build the result: for turns with version 0, replace live assistant groups
+  // with superseded groups.
+  const result: MessageGroupType[] = []
+  let i = 0
+  while (i < groups.length) {
+    const tIdx = turnIndices.get(i) ?? -1
+    const verIdx = versionMap?.get(tIdx) ?? 1
+
+    if (superseded.has(tIdx) && verIdx === 0) {
+      // Find the human group and all following assistant groups for this turn.
+      // Keep the human group, replace the rest with superseded groups.
+      result.push(groups[i]) // human group
+      i++
+      // Skip all non-human groups for this turn.
+      while (i < groups.length && turnIndices.get(i) === tIdx && groups[i].type !== 'human') {
+        i++
+      }
+      // Inject superseded groups.
+      const supGroups = superseded.get(tIdx)
+      if (supGroups) {
+        result.push(...supGroups)
+      }
+    } else {
+      result.push(groups[i])
+      i++
+    }
+  }
+
+  return result
+})
+
+/**
+ * Turn indices that have superseded groups (for pagination control placement).
+ */
+const turnsWithSuperseded = computed(() => {
+  const superseded = props.supersededGroups
+  if (!superseded || superseded.size === 0) return new Set<number>()
+  return new Set(superseded.keys())
 })
 
 /**
@@ -73,13 +160,25 @@ const showThinkingIndicator = computed(() => {
  */
 function getPrevGroupPlanSteps(index: number): PlanStep[] | undefined {
   if (index === 0) return undefined
-  const prevGroup = messageGroups.value[index - 1]
+  const prevGroup = visibleMessageGroups.value[index - 1]
   if (!prevGroup) return undefined
   // Only look at the first AI message in the previous group
   const firstAiMsg = prevGroup.messages.find(m => m.type === 'ai')
   if (!firstAiMsg) return undefined
   const legacy = extractLegacyFields(firstAiMsg)
   return legacy?.planSteps
+}
+
+/**
+ * Check if the current group is the last group for its turn.
+ * Used to position the pagination control after the last group of a retried turn.
+ */
+function lastGroupForTurn(index: number): boolean {
+  const groups = visibleMessageGroups.value
+  if (index >= groups.length - 1) return true
+  const currentTurn = groupTurnIndices.value.get(index) ?? -1
+  const nextTurn = groupTurnIndices.value.get(index + 1) ?? -1
+  return currentTurn !== nextTurn
 }
 
 // ── Auto-scroll with user-interrupt (R5) + MutationObserver (P1) ──
@@ -220,24 +319,54 @@ onUnmounted(() => {
       <p>{{ t('aiChat.startConversation') }}</p>
     </div>
     <div v-else class="message-list-content">
-      <MessageGroup
-        v-for="(group, index) in messageGroups"
-        :key="group.id ?? index"
-        :group="group"
-        :thread-id="threadId"
-        :is-loading="isStreaming && index === lastAssistantGroupIndex"
-        :is-last-assistant="index === lastAssistantGroupIndex"
-        :can-branch="canBranch"
-        :branching-message-id="branchingMessageId"
-        :answered-interrupt-ids="answeredInterruptIds"
-        :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
-        @suggestion-click="(text: string) => emit('suggestionClick', text)"
-        @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
-        @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
-        @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
-        @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
-        @retry="emit('retry')"
-      />
+      <template v-for="(group, index) in visibleMessageGroups" :key="group.id ?? index">
+        <MessageGroup
+          :group="group"
+          :thread-id="threadId"
+          :is-loading="isStreaming && index === lastAssistantGroupIndex"
+          :is-last-assistant="index === lastAssistantGroupIndex"
+          :can-branch="canBranch"
+          :branching-message-id="branchingMessageId"
+          :answered-interrupt-ids="answeredInterruptIds"
+          :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
+          @suggestion-click="(text: string) => emit('suggestionClick', text)"
+          @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
+          @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
+          @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
+          @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
+          @retry="emit('retry')"
+        />
+        <!-- Retry version pagination control (DeerFlow §2.1: < prev/next >) -->
+        <div
+          v-if="turnsWithSuperseded.has(groupTurnIndices.get(index) ?? -1) && lastGroupForTurn(index)"
+          class="version-pagination"
+        >
+          <button
+            v-if="supersededVersionIndex?.get(groupTurnIndices.get(index) ?? -1) === 1"
+            class="version-nav-btn"
+            type="button"
+            :aria-label="t('aiChat.prevVersion')"
+            @click="emit('showPrevVersion', groupTurnIndices.get(index) ?? -1)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            <span>{{ t('aiChat.prevVersion') }}</span>
+          </button>
+          <button
+            v-if="supersededVersionIndex?.get(groupTurnIndices.get(index) ?? -1) === 0"
+            class="version-nav-btn"
+            type="button"
+            :aria-label="t('aiChat.nextVersion')"
+            @click="emit('showNextVersion', groupTurnIndices.get(index) ?? -1)"
+          >
+            <span>{{ t('aiChat.nextVersion') }}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+      </template>
       <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
       <div v-if="showThinkingIndicator" class="thinking-placeholder">
         <StreamingIndicator :visible="true" />
@@ -335,5 +464,37 @@ onUnmounted(() => {
 .scroll-btn-leave-to {
   opacity: 0;
   transform: translateY(8px) scale(0.8);
+}
+
+/* Retry version pagination (DeerFlow §2.1: < prev/next > control) */
+.version-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.version-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--van-background-2, #f7f8fa);
+  color: var(--van-text-color-2, #646566);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.version-nav-btn:hover {
+  background: var(--van-active-color, rgba(0, 0, 0, 0.06));
+  color: var(--van-text-color, #323233);
+}
+
+.version-nav-btn:active {
+  transform: scale(0.96);
 }
 </style>

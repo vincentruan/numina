@@ -781,6 +781,8 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
           :can-branch="canBranch"
           :branching-message-id="branchingMessageId"
           :answered-interrupt-ids="chat.answeredInterruptIds.value"
+          :superseded-groups="chat.supersededGroups.value"
+          :superseded-version-index="chat.supersededVersionIndex.value"
           @retry="handleRetry"
           @stop="handleStopStream"
           @suggestion-click="handleSuggestionClick"
@@ -788,6 +790,8 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
           @branch="handleBranch"
           @clarification-submit="handleClarificationSubmit"
           @feedback="handleFeedback"
+          @show-prev-version="(turnIndex: number) => chat.showPrevVersion(turnIndex)"
+          @show-next-version="(turnIndex: number) => chat.showNextVersion(turnIndex)"
         />
       <!-- Suggestion chips above input (from SSE custom events) -->
       <SuggestionChips
