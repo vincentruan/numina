@@ -36,6 +36,18 @@
       </div>
     </div>
 
+    <!-- Dashboard Narrative Card (collapsed header — van-cell-group inset) -->
+    <div class="skeleton-card skeleton-collapse-card">
+      <div class="skeleton-card-header">
+        <div class="skeleton-icon-circle">
+          <van-skeleton :row="1" row-width="18px" animate />
+        </div>
+        <van-skeleton :row="1" row-width="64px" animate />
+        <div class="skeleton-card-header-spacer" />
+        <van-skeleton :row="1" row-width="24px" animate />
+      </div>
+    </div>
+
     <!-- Literacy Status Card (header + child rows — van-cell-group inset) -->
     <div class="skeleton-card skeleton-collapse-card skeleton-literacy">
       <div class="skeleton-literacy-header">
@@ -65,14 +77,15 @@
       </div>
     </div>
 
-    <!-- Pending Approvals Section (owner-only; skeleton always shown since role is
-         not known during initial load; self-gates via v-if on auth store) -->
-    <div v-if="authStore.user?.role === 'owner'" class="skeleton-card skeleton-approvals">
-      <div class="skeleton-approvals-header">
-        <van-skeleton :row="1" row-width="64px" animate />
-        <div class="skeleton-badge">
-          <van-skeleton :row="1" row-width="16px" animate />
+    <!-- Pending Approvals Section (owner-only; collapsed header, no badge during skeleton) -->
+    <div v-if="authStore.user?.role === 'owner'" class="skeleton-card skeleton-collapse-card">
+      <div class="skeleton-card-header">
+        <div class="skeleton-icon-circle">
+          <van-skeleton :row="1" row-width="18px" animate />
         </div>
+        <van-skeleton :row="1" row-width="64px" animate />
+        <div class="skeleton-card-header-spacer" />
+        <van-skeleton :row="1" row-width="24px" animate />
       </div>
     </div>
 
@@ -300,27 +313,6 @@ const authStore = useAuthStore()
 .skeleton-literacy-badge :deep(.van-skeleton__row) {
   height: 20px !important;
   border-radius: 10px;
-}
-
-/* ── Pending Approvals ── */
-.skeleton-approvals {
-  margin: 0 16px 12px;
-  padding: 12px 16px;
-}
-.skeleton-approvals-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.skeleton-badge {
-  background: var(--color-danger, #ee0a24);
-  border-radius: 10px;
-  padding: 2px 8px;
-  opacity: 0.6;
-}
-.skeleton-badge :deep(.van-skeleton__row) {
-  height: 12px !important;
-  background: rgba(255, 255, 255, 0.5) !important;
 }
 
 /* ── Focus Top-3 Card ── */
