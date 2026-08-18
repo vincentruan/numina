@@ -8,6 +8,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
+      - backend-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
@@ -42,6 +43,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
+      - agent-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     environment:
       - TZ=Asia/Shanghai
@@ -73,6 +75,7 @@ services:
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
+      - worker-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
@@ -188,3 +191,6 @@ volumes:
   frontend_child_node_modules:
   frontend_auth_node_modules:
   redis_data:
+  backend-venv:
+  agent-venv:
+  worker-venv:

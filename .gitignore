@@ -188,6 +188,7 @@ server/apps/backend/data/
 
 # Dogfood audit output (screenshots, reports — local only)
 dogfood-output/
+tests/reports/ui-audit-*.md
 tests/smoke-results.json
 
 # Playwright E2E Tests
