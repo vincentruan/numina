@@ -182,19 +182,14 @@ launch_tmux() {
     tmux select-pane -t "$p_backend"
 
     # ── Attach / keep-alive ─────────────────────────────────────────
-    trap '
-        if [ -n "${TMUX:-}" ] && [ -n "${window_flag:-}" ]; then
-            tmux kill-window -t "'"$tw"'" 2>/dev/null || true
-        else
-            tmux kill-session -t "'"$SESSION"'" 2>/dev/null || true
-        fi
-    ' INT TERM
-
+    # When already inside tmux, the window was just created — return immediately.
+    # Don't block (the old `sleep 3600 & wait` pattern kept `make dev-all`
+    # hanging; cleanup-on-signal was unreliable because the trap missed SIGHUP/EXIT).
+    # When NOT inside tmux, attach to the standalone session (blocks until detach).
     if [ -n "${TMUX:-}" ]; then
         tmux select-window -t "$tw"
         echo "[numina-dev] 在 tmux window 中运行。"
         echo "  停止: make stop-dev-all"
-        sleep 3600 & wait $!
     else
         exec tmux attach-session -t "$SESSION"
     fi
