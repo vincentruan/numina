@@ -343,7 +343,7 @@ function formatTime(iso: string | null): string {
 .narrative-status {
   margin-left: 8px;
   font-size: 12px;
-  color: var(--van-text-color-2);
+  color: var(--text-secondary);
 }
 .narrative-status--running {
   display: inline-flex;
@@ -353,7 +353,8 @@ function formatTime(iso: string | null): string {
   margin-left: 4px;
 }
 .narrative-status--empty {
-  color: var(--van-text-color-3);
+  color: var(--text-secondary);
+  opacity: 0.6;
 }
 .narrative-streaming {
   padding: 0 16px 12px;
