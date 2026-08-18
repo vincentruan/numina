@@ -236,6 +236,7 @@ onUnmounted(() => {
         @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
         @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
         @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
+        @retry="emit('retry')"
       />
       <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
       <div v-if="showThinkingIndicator" class="thinking-placeholder">
