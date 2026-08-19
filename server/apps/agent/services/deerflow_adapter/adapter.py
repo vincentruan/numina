@@ -537,27 +537,36 @@ class DeerFlowAdapter:
             if event_type == "messages-tuple" and isinstance(event_data, dict):
                 yield ("messages", event_data)
             elif event_type == "values" and isinstance(event_data, dict):
-                # Clean fallback title (DeerFlow sync after_model produces the
-                # raw JSON context wrapper as title because _build_prompt wraps
-                # user text as JSON; TitleMiddleware truncates that). Replace
-                # with the original user text so the frontend sees a clean
-                # title via the values SSE event — matches DeerFlow's native
-                # title-via-values delivery mechanism.
+                # DeerFlow's sync ``after_model`` writes a fallback title (the
+                # raw JSON context wrapper) to the checkpoint. Numina generates
+                # a proper LLM title post-stream and publishes it via
+                # ``bridge.publish`` in worker.py — the adapter must NOT forward
+                # the stale checkpoint title to the frontend.
+                #
+                # On follow-up turns the checkpoint still carries the stale
+                # fallback from the first run (Numina writes the LLM title to
+                # the DB, not to the checkpoint). The old code replaced the
+                # fallback with ``context.free_text`` (the CURRENT turn's user
+                # message), which overwrote the first-turn LLM title with the
+                # follow-up text — the "追问修改标题" bug.
+                #
+                # Fix: drop the fallback title from the values event entirely.
+                # DeerFlow parity — title is generated only on the first
+                # exchange. The frontend already has a temp title from
+                # ``handleStartChat`` during streaming, and the LLM title
+                # arrives via ``bridge.publish`` after the stream on the first
+                # turn. On follow-up, no title event means the existing session
+                # title is preserved.
                 raw_title = event_data.get("title")
                 if raw_title and isinstance(raw_title, str):
                     from apps.agent.services.runtime.run_extras import (
                         _is_fallback_title,
-                        _text_fallback_title,
-                        strip_language_prefix,
                     )
 
                     if _is_fallback_title(raw_title):
-                        # Strip language prefix so the fallback title shows
-                        # the user's actual message, not the internal directive.
-                        clean_text = strip_language_prefix(context.free_text or "")
-                        clean = _text_fallback_title(clean_text)
-                        if clean:
-                            event_data = {**event_data, "title": clean}
+                        event_data = {
+                            k: v for k, v in event_data.items() if k != "title"
+                        }
                 yield ("values", event_data)
             elif event_type == "end":
                 yield ("end", event_data)
