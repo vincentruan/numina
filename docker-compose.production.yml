@@ -33,7 +33,7 @@ services:
       - DB_MAX_OVERFLOW=2
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ENVIRONMENT=production
       - CORS_ORIGINS=${CORS_ORIGINS:-["https://numina.xiaoshutiao.space","https://xiaoshutiao.space"]}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - AGENT_BASE_URL=http://numina-agent:8001
