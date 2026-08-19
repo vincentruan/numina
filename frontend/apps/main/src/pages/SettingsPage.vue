@@ -347,6 +347,35 @@
         clearable
       />
     </van-dialog>
+
+    <!-- Error detail popup -->
+    <van-popup
+      v-model:show="showTestErrorPopup"
+      position="bottom"
+      round
+      :style="{ maxHeight: '65vh' }"
+    >
+      <div class="error-popup">
+        <div class="error-popup__header">
+          <span class="error-popup__title">{{ t('aiConfig.testErrorTitle') }}</span>
+          <van-icon name="cross" size="20" @click="showTestErrorPopup = false" />
+        </div>
+        <div class="error-popup__summary">{{ testErrorMessage }}</div>
+        <div v-if="testErrorJson" class="error-popup__section-label">{{ t('aiConfig.testErrorRaw') }}</div>
+        <div v-if="testErrorJson" class="error-popup__code">
+          <pre>{{ testErrorJson }}</pre>
+        </div>
+        <van-button
+          size="small"
+          plain
+          icon="description"
+          class="error-popup__copy"
+          @click="copyTestError"
+        >
+          {{ testErrorCopied ? t('aiConfig.testErrorCopied') : t('aiConfig.testErrorCopy') }}
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -455,6 +484,32 @@ onActivated(async () => {
 
 // AI toggle — reads from family-level flag (familyStore.aiEnabled)
 const togglingAI = ref(false)
+
+// Test error popup state
+const showTestErrorPopup = ref(false)
+const testErrorMessage = ref('')
+const testErrorDetail = ref<Record<string, unknown> | null>(null)
+const testErrorCopied = ref(false)
+
+const testErrorJson = computed(() => {
+  if (!testErrorDetail.value) return ''
+  return JSON.stringify(testErrorDetail.value, null, 2)
+})
+
+function copyTestError() {
+  const parts: string[] = [testErrorMessage.value]
+  if (testErrorDetail.value) parts.push(JSON.stringify(testErrorDetail.value, null, 2))
+  navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+    testErrorCopied.value = true
+    setTimeout(() => { testErrorCopied.value = false }, 2000)
+  })
+}
+
+function openTestErrorPopup(message: string, detail?: Record<string, unknown> | null) {
+  testErrorMessage.value = message
+  testErrorDetail.value = detail ?? null
+  showTestErrorPopup.value = true
+}
 // A config is "ready" when it has a model ID and an API key configured.
 // `ai_api_key_masked` is non-null only when the backend has stored an encrypted key.
 const hasAnyModel = computed(() =>
@@ -546,11 +601,14 @@ async function onToggleAI(val: boolean) {
           }
           // else: connected without fallback — no toast needed, AI is enabled
         } else {
-          // All providers failed — show detailed message with fallback count
+          // All providers failed — show detailed error in popup
           const fallbackNote = data.fallback_count
             ? ` (已尝试 ${data.fallback_count + 1} 个候选模型)`
             : ''
-          showFailToast(`${data.message || t('toast.aiTestFailed')}${fallbackNote}`)
+          openTestErrorPopup(
+            `${data.message || t('toast.aiTestFailed')}${fallbackNote}`,
+            data.error_detail,
+          )
         }
       } catch {
         // Test endpoint itself failed — not critical, the toggle was already saved.
@@ -860,5 +918,65 @@ async function onLogout() {
   gap: 4px;
   font-size: 13px;
   color: var(--text-secondary, var(--van-text-color-2));
+}
+
+/* Error popup */
+.error-popup {
+  padding: 16px;
+  max-height: 65vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.error-popup__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.error-popup__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.error-popup__summary {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-all;
+  margin-bottom: 12px;
+}
+
+.error-popup__section-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.error-popup__code {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 35vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+}
+
+.error-popup__code pre {
+  margin: 0;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+  user-select: all;
+}
+
+.error-popup__copy {
+  align-self: flex-end;
 }
 </style>

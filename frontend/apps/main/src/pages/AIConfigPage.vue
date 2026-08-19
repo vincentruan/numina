@@ -213,6 +213,35 @@
         <span>{{ t('aiConfig.nonOwnerTip') }}</span>
       </div>
     </template>
+
+    <!-- Error detail popup -->
+    <van-popup
+      v-model:show="showErrorPopup"
+      position="bottom"
+      round
+      :style="{ maxHeight: '65vh' }"
+    >
+      <div class="error-popup">
+        <div class="error-popup__header">
+          <span class="error-popup__title">{{ t('aiConfig.testErrorTitle') }}</span>
+          <van-icon name="cross" size="20" @click="showErrorPopup = false" />
+        </div>
+        <div class="error-popup__summary">{{ errorMessage }}</div>
+        <div v-if="errorJson" class="error-popup__section-label">{{ t('aiConfig.testErrorRaw') }}</div>
+        <div v-if="errorJson" class="error-popup__code">
+          <pre>{{ errorJson }}</pre>
+        </div>
+        <van-button
+          size="small"
+          plain
+          icon="description"
+          class="error-popup__copy"
+          @click="copyError"
+        >
+          {{ copiedError ? t('aiConfig.testErrorCopied') : t('aiConfig.testErrorCopy') }}
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -240,6 +269,32 @@ const testPassedKeys = ref<Set<string>>(new Set())
 const revealedKeys = ref<Record<string, string>>({})
 const revealingId = ref<string | null>(null)
 const resettingCircuitId = ref<string | null>(null)
+
+// Error popup state
+const showErrorPopup = ref(false)
+const errorMessage = ref('')
+const errorDetail = ref<Record<string, unknown> | null>(null)
+const copiedError = ref(false)
+
+const errorJson = computed(() => {
+  if (!errorDetail.value) return ''
+  return JSON.stringify(errorDetail.value, null, 2)
+})
+
+function copyError() {
+  const parts: string[] = [errorMessage.value]
+  if (errorDetail.value) parts.push(JSON.stringify(errorDetail.value, null, 2))
+  navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+    copiedError.value = true
+    setTimeout(() => { copiedError.value = false }, 2000)
+  })
+}
+
+function openErrorPopup(message: string, detail?: Record<string, unknown> | null) {
+  errorMessage.value = message
+  errorDetail.value = detail ?? null
+  showErrorPopup.value = true
+}
 
 const draggableConfigs = computed({
   get: () => aiStore.configs,
@@ -398,11 +453,14 @@ async function onTestModel(configId: string, slot: number) {
       showSuccessToast(t('aiConfig.testSuccess'))
     } else {
       testPassedKeys.value.delete(key)
-      showFailToast(`${t('aiConfig.testFailed')}: ${res.data.message ?? ''}`)
+      openErrorPopup(
+        res.data.message || t('aiConfig.testFailed'),
+        res.data.error_detail,
+      )
     }
   } catch {
     testPassedKeys.value.delete(key)
-    showFailToast(t('aiConfig.testFailed'))
+    openErrorPopup(t('aiConfig.testFailed'))
   } finally {
     testingKeys.value = new Set([...testingKeys.value].filter((k) => k !== key))
   }
@@ -839,5 +897,65 @@ onMounted(async () => {
   padding: 16px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+/* Error popup */
+.error-popup {
+  padding: 16px;
+  max-height: 65vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.error-popup__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.error-popup__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.error-popup__summary {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-all;
+  margin-bottom: 12px;
+}
+
+.error-popup__section-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.error-popup__code {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 35vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+}
+
+.error-popup__code pre {
+  margin: 0;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+  user-select: all;
+}
+
+.error-popup__copy {
+  align-self: flex-end;
 }
 </style>

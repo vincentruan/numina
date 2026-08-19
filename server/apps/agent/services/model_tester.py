@@ -10,6 +10,30 @@ from apps.agent.services.vision_test_image import (
 )
 
 
+def _extract_error_detail(exc: Exception) -> dict:
+    """Extract structured error detail from an LLM/API exception.
+
+    Returns a dict with status_code, error_type, and error_body for
+    API errors, or a minimal dict with just error_type for other errors.
+    """
+    detail: dict = {"error_type": type(exc).__name__}
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        detail["status_code"] = status
+    body = getattr(exc, "body", None)
+    if body is not None:
+        try:
+            if hasattr(body, "model_dump"):
+                detail["error_body"] = body.model_dump()
+            elif isinstance(body, dict):
+                detail["error_body"] = body
+            else:
+                detail["error_body"] = {"raw": str(body)}
+        except Exception:
+            detail["error_body"] = {"raw": str(body)}
+    return detail
+
+
 def _make_client(provider, api_key, model_id, base_url, vision_model_id, timeout):
     return get_llm_client(
         provider=provider,
@@ -38,7 +62,12 @@ async def test_connection(provider, api_key, model_id, base_url=None):
         msg = str(e)
         if "timeout" in msg.lower() or "timed out" in msg.lower():
             return {"connected": False, "message": "主模型连接超时（30秒）", "latency_ms": None}
-        return {"connected": False, "message": f"主模型连接失败: {msg}", "latency_ms": None}
+        return {
+            "connected": False,
+            "message": f"主模型连接失败: {msg}",
+            "latency_ms": None,
+            "error_detail": _extract_error_detail(e),
+        }
 
 
 async def test_thinking(provider, api_key, model_id, base_url=None):

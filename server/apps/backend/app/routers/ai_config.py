@@ -762,6 +762,7 @@ async def test_ai_config(
             connected=False,
             message=msg,
             latency_ms=data.get("latency_ms"),
+            error_detail=data.get("error_detail"),
             thinking_success=data.get("thinking_success"),
             thinking_message=data.get("thinking_message"),
             thinking_latency_ms=data.get("thinking_latency_ms"),

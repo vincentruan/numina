@@ -114,12 +114,20 @@ export interface ModelTestResult {
   connected: boolean
   message: string | null
   latency_ms: number | null
+  error_detail: Record<string, unknown> | null
   // Fallback info: which provider/model was actually used
   used_config_id: string | null
   used_provider_name: string | null
   used_model_id: string | null
   used_circuit_state: string | null
   fallback_count: number
+  // Extended test results (thinking / vision / OCR)
+  thinking_success: boolean | null
+  thinking_message: string | null
+  vision_success: boolean | null
+  vision_message: string | null
+  vision_text_success: boolean | null
+  vision_text_message: string | null
 }
 
 export const testProviderConfig = (id: string) =>

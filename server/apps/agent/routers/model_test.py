@@ -51,6 +51,7 @@ async def run_model_test(
         connected=conn["connected"],
         message=conn["message"],
         latency_ms=conn.get("latency_ms"),
+        error_detail=conn.get("error_detail"),
         thinking_success=think["success"] if think else None,
         thinking_message=think["message"] if think else None,
         thinking_latency_ms=think.get("latency_ms") if think else None,

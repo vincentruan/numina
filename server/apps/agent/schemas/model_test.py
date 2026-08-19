@@ -18,6 +18,7 @@ class ModelTestResult(BaseModel):
     connected: bool
     message: str
     latency_ms: int | None = None
+    error_detail: dict | None = None
     thinking_success: bool | None = None
     thinking_message: str | None = None
     thinking_latency_ms: int | None = None
