@@ -42,6 +42,14 @@ class TestClassifyErrorType:
     def test_410_is_permanent_account(self):
         assert classify_error_type(410) == "permanent_account"
 
+    def test_402_is_permanent_account(self):
+        """402 Payment Required must open circuit immediately."""
+        assert classify_error_type(402) == "permanent_account"
+
+    def test_402_with_billing_message_is_permanent_account(self):
+        """402 with any message still classified by status code."""
+        assert classify_error_type(402, "Your credit balance is insufficient") == "permanent_account"
+
     def test_429_is_transient_rate_limit(self):
         assert classify_error_type(429) == "transient_rate_limit"
 
@@ -71,6 +79,21 @@ class TestClassifyErrorType:
 
     def test_usage_restricted_is_permanent_account(self):
         assert classify_error_type(0, "Usage is restricted") == "permanent_account"
+
+    def test_insufficient_funds_is_permanent_account(self):
+        assert classify_error_type(0, "insufficient funds for this request") == "permanent_account"
+
+    def test_no_credits_is_permanent_account(self):
+        assert classify_error_type(0, "You have no credits remaining") == "permanent_account"
+
+    def test_payment_required_message_is_permanent_account(self):
+        assert classify_error_type(0, "payment required to continue") == "permanent_account"
+
+    def test_subscription_expired_is_permanent_account(self):
+        assert classify_error_type(0, "Your subscription has expired") == "permanent_account"
+
+    def test_plan_limit_reached_is_permanent_account(self):
+        assert classify_error_type(0, "plan limit reached for this month") == "permanent_account"
 
     def test_unknown_code_is_transient_network(self):
         assert classify_error_type(0, "something unknown") == "transient_timeout"
