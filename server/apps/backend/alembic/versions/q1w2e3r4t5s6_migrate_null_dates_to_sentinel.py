@@ -34,25 +34,26 @@ def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
 
-    # liabilities.end_date
+    # Use sa.text() with named params for cross-DB compatibility (SQLite + PostgreSQL).
+    # exec_driver_sql uses raw DBAPI placeholders (? for SQLite, %s for psycopg2).
     if _column_exists(inspector, "liabilities", "end_date"):
-        conn.exec_driver_sql(
-            "UPDATE liabilities SET end_date = ? WHERE end_date IS NULL",
-            (SENTINEL_DATE,),
+        conn.execute(
+            sa.text("UPDATE liabilities SET end_date = :d WHERE end_date IS NULL"),
+            {"d": SENTINEL_DATE},
         )
 
-    # assets.maturity_date
     if _column_exists(inspector, "assets", "maturity_date"):
-        conn.exec_driver_sql(
-            "UPDATE assets SET maturity_date = ? WHERE maturity_date IS NULL",
-            (SENTINEL_DATE,),
+        conn.execute(
+            sa.text("UPDATE assets SET maturity_date = :d WHERE maturity_date IS NULL"),
+            {"d": SENTINEL_DATE},
         )
 
-    # assets.warranty_expiry_date
     if _column_exists(inspector, "assets", "warranty_expiry_date"):
-        conn.exec_driver_sql(
-            "UPDATE assets SET warranty_expiry_date = ? WHERE warranty_expiry_date IS NULL",
-            (SENTINEL_DATE,),
+        conn.execute(
+            sa.text(
+                "UPDATE assets SET warranty_expiry_date = :d WHERE warranty_expiry_date IS NULL"
+            ),
+            {"d": SENTINEL_DATE},
         )
 
 
@@ -62,19 +63,21 @@ def downgrade() -> None:
     inspector = sa.inspect(conn)
 
     if _column_exists(inspector, "liabilities", "end_date"):
-        conn.exec_driver_sql(
-            "UPDATE liabilities SET end_date = NULL WHERE end_date = ?",
-            (SENTINEL_DATE,),
+        conn.execute(
+            sa.text("UPDATE liabilities SET end_date = NULL WHERE end_date = :d"),
+            {"d": SENTINEL_DATE},
         )
 
     if _column_exists(inspector, "assets", "maturity_date"):
-        conn.exec_driver_sql(
-            "UPDATE assets SET maturity_date = NULL WHERE maturity_date = ?",
-            (SENTINEL_DATE,),
+        conn.execute(
+            sa.text("UPDATE assets SET maturity_date = NULL WHERE maturity_date = :d"),
+            {"d": SENTINEL_DATE},
         )
 
     if _column_exists(inspector, "assets", "warranty_expiry_date"):
-        conn.exec_driver_sql(
-            "UPDATE assets SET warranty_expiry_date = NULL WHERE warranty_expiry_date = ?",
-            (SENTINEL_DATE,),
+        conn.execute(
+            sa.text(
+                "UPDATE assets SET warranty_expiry_date = NULL WHERE warranty_expiry_date = :d"
+            ),
+            {"d": SENTINEL_DATE},
         )
