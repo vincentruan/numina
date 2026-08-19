@@ -279,8 +279,21 @@ def get_expected_columns_from_model(table_name: str) -> dict[str, Any]:
                 arg = column.server_default.arg
                 # Check if it's a SQL function expression
                 if isinstance(arg, str):
-                    default_val = arg
-                    default_type = "sql_expr"
+                    # For string-typed columns (VARCHAR, TEXT, etc.), a plain string
+                    # server_default is a literal value that must be quoted in DDL.
+                    # For non-string columns (BOOLEAN, INTEGER, etc.), treat it as a
+                    # SQL expression (e.g. server_default="true" → DEFAULT true).
+                    col_type_upper = str(column.type).upper()
+                    _is_string_col = any(
+                        t in col_type_upper
+                        for t in ("VARCHAR", "TEXT", "CHAR", "STRING")
+                    )
+                    if _is_string_col:
+                        default_val = arg
+                        default_type = "scalar"
+                    else:
+                        default_val = arg
+                        default_type = "sql_expr"
                 elif hasattr(arg, "text") and isinstance(
                     getattr(arg, "text", None), str
                 ):
