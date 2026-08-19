@@ -344,9 +344,17 @@ a {
 }
 
 /* NProgress — top progress bar + spinner */
+/* Force fixed positioning: parent: '#app' triggers nprogress.css's
+   .nprogress-custom-parent rule which switches bar/spinner to position: absolute,
+   making them invisible when the page is scrolled down. */
 #nprogress .bar {
   background: var(--van-primary-color, #7c6bff) !important;
   height: 3px !important;
+  position: fixed !important;
+}
+
+#nprogress .spinner {
+  position: fixed !important;
 }
 
 #nprogress .peg {
