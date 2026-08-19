@@ -475,9 +475,12 @@ async def _repair_report_json_via_llm(
 
     Uses the family's selected provider (``ai_provider``/``ai_model_id``/
     ``api_key``/``ai_base_url`` keys) to issue a single follow-up completion
-    asking the LLM to re-emit a corrected indicators JSON. Returns the parsed
-    dict (via ``parse_report_json``) on success, or ``None`` if the provider is
-    unavailable or the repair still fails.
+    asking the LLM to re-emit a corrected indicators JSON. The repair prompt
+    instructs the LLM to preserve the original output's language — this is a
+    structural repair step, NOT a translation step.
+
+    Returns the parsed dict (via ``parse_report_json``) on success, or ``None``
+    if the provider is unavailable or the repair still fails.
     """
     if not provider:
         return None
@@ -492,18 +495,27 @@ async def _repair_report_json_via_llm(
             timeout=60.0,
         )
         error_summary = "; ".join(validation_errors[:5])
+        # Repair prompt is always English (prompt language ≠ output language).
+        # The LLM must preserve the original output's language — this is a
+        # structural fix, not a translation.
         repair_prompt = (
-            "你之前输出的家庭资产报告 JSON 未通过校验。\n"
-            f"校验错误：{error_summary}\n\n"
-            "请重新输出一个严格符合以下结构的 JSON（不要包含任何 markdown 代码块、"
-            "解释文字或额外内容）：\n"
+            "The family asset report JSON you previously output failed validation.\n"
+            f"Validation errors: {error_summary}\n\n"
+            "Please re-output a valid JSON that strictly conforms to the following "
+            "structure (do NOT include any markdown code blocks, explanations, or "
+            "extra content):\n"
             '{"overall_score": <number>, "indicators": ['
             '{"name": "<string>", "data": {"items": ['
             '{"key": "<string>", "zh": "<string>", "en": "<string>", "value": <number>}'
             "]}}]}\n\n"
-            "要求：indicators 非空；每个 indicator 必须有 data.items 非空数组；"
-            "value 必须是数字。只输出 JSON 本身。\n\n"
-            f"原始输出片段（供参考）：\n{ai_text[-4000:]}"
+            "Requirements: indicators must be non-empty; each indicator must have "
+            "a non-empty data.items array; value must be a number. Output ONLY the "
+            "JSON itself.\n\n"
+            "IMPORTANT: Preserve the EXACT SAME language as the original output "
+            "below. This is a structural repair — do NOT translate or change the "
+            "language of any text fields (label, narrative, suggestions, summary). "
+            "Keep them in whatever language they were originally written in.\n\n"
+            f"Original output fragment (for reference):\n{ai_text[-4000:]}"
         )
         repaired_text = await llm.complete(repair_prompt, max_tokens=4000)
         return parse_report_json(repaired_text)
