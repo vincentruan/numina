@@ -124,7 +124,7 @@
         v-if="reportTaskId"
         plain
         type="danger"
-        size="mini"
+        size="small"
         :loading="reportCancelling"
         :disabled="reportCancelling"
         class="report-cancel-btn"

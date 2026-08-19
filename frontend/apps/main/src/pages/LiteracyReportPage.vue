@@ -58,7 +58,7 @@
             v-if="resumeHandle.taskId"
             plain
             type="danger"
-            size="mini"
+            size="small"
             :loading="literacyCancelling"
             :disabled="literacyCancelling"
             class="streaming-cancel-btn"

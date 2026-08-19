@@ -817,14 +817,14 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
       <div v-if="chatTaskStatus === 'running'" class="chat-task-banner chat-task-banner--running">
         <van-loading size="14" type="spinner" color="var(--van-primary-color)" />
         <span class="chat-task-banner__text">{{ t('aiChat.chatTaskRunning') }}</span>
-        <van-button plain type="danger" size="mini" @click="onChatTaskCancel">
+        <van-button plain type="danger" size="small" @click="onChatTaskCancel">
           {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
       <div v-else-if="chatTaskStatus === 'failed' || chatTaskStatus === 'interrupted'" class="chat-task-banner chat-task-banner--error">
         <van-icon name="warning-o" size="16" />
         <span class="chat-task-banner__text">{{ chatTaskError || t('aiChat.chatTaskFailed') }}</span>
-        <van-button plain type="primary" size="mini" @click="onChatTaskRetry">
+        <van-button plain type="primary" size="small" @click="onChatTaskRetry">
           {{ t('aiTask.retry') }}
         </van-button>
       </div>
