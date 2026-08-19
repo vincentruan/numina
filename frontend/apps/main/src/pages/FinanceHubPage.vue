@@ -83,7 +83,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onActivated, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AssetListSkeleton from '@/components/asset/AssetListSkeleton.vue'
 import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
@@ -105,6 +105,7 @@ defineOptions({ name: 'FinanceHub' })
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const dashboardStore = useDashboardStore()
 const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
@@ -173,6 +174,14 @@ watch(
     }
   },
 )
+// Sync user-initiated tab switches back to the URL (router.replace, no new history
+// entry). Without this, router.back() from a detail page restores the stale URL
+// (usually ?tab=assets), so applyQueryTab() on onActivated resets to the wrong tab.
+watch(activeTab, (tab) => {
+  if (route.query.tab !== tab) {
+    router.replace({ query: { ...route.query, tab } })
+  }
+})
 function applyQueryTab() {
   const q = route.query.tab
   if (q === 'assets' || q === 'liabilities' || q === 'wishes' || q === 'rentals') {

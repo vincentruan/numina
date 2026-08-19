@@ -192,7 +192,11 @@ async function onSubmit() {
       await createWish(payload)
       showSuccessToast(t('toast.wishAdded'))
     }
-    router.back()
+    if (!isEdit.value) {
+      router.replace({ path: '/finance', query: { tab: 'wishes' } })
+    } else {
+      router.back()
+    }
   } finally {
     submitting.value = false
   }
