@@ -6,6 +6,8 @@ export interface DeviceCheckUser {
   username: string | null
   family_name: string
   avatar_color: string
+  avatar_url: string | null
+  avatar_token: string | null
   role: string
   second_factor_type: string | null
   has_passkey: boolean

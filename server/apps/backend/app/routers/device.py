@@ -461,6 +461,8 @@ def check_device(
                 username=user.username,
                 family_name=family_map.get(user.family_id, ""),
                 avatar_color=user.avatar_color,
+                avatar_url=user.avatar_url,
+                avatar_token=user.avatar_token,
                 role=user.role,
                 second_factor_type=second_factor_type,
                 has_passkey=has_passkey,

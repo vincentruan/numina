@@ -33,6 +33,8 @@ class DeviceCheckUserItem(SnowflakeBase):
     username: str | None
     family_name: str
     avatar_color: str
+    avatar_url: str | None = None
+    avatar_token: str | None = None
     role: str
     second_factor_type: str | None
     has_passkey: bool
