@@ -18,6 +18,7 @@ from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.asset_lifecycle_event import (
     AssetLifecycleEvent,
 )
+from apps.backend.app.models.balance_correction import BalanceCorrection
 from apps.backend.app.models.blind_box_config import BlindBoxConfig
 from apps.backend.app.models.blind_box_draw import BlindBoxDraw
 from apps.backend.app.models.blind_box_gift import BlindBoxGift

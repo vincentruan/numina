@@ -27,6 +27,7 @@ class Liability(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
     category: Mapped[str] = mapped_column(String(30), nullable=False)  # mortgage/car_loan/credit_card/personal_loan/other
+    repayment_method: Mapped[str] = mapped_column(String(30), nullable=False, default="equal_payment", server_default="equal_payment")  # equal_payment/equal_principal/interest_only/bullet/minimum_payment
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     # Money fields are NUMERIC(18,2) — Decimal in Python, serialized as str on
     # the wire (SnowflakeBase money-as-str convention, CLAUDE.md §bigint). Was

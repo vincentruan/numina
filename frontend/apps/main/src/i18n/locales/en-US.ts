@@ -839,6 +839,7 @@ export default {
     lifespanPlaceholder: 'Enter years',
     lifespanUnitYears: 'years',
     lifespanUnlimited: 'Unlimited',
+    infinitePeriod: 'No expiry',
     locationLabel: 'Location',
     locationPlaceholder: 'Optional, e.g. Study room',
     maintenanceLabel: 'Annual Maintenance',
@@ -968,6 +969,7 @@ export default {
     endDate: 'End Date',
     endDateOptional: 'Select end date (optional)',
     selectEndDate: 'Select end date',
+    infinitePeriod: 'No expiry',
     institution: 'Institution',
     institutionPlaceholder: 'Enter institution (optional)',
     notes: 'Notes',
@@ -1073,7 +1075,12 @@ export default {
       extraPlaceholder: 'Enter extra monthly payment',
       invalidExtra: 'Enter a valid non-negative amount',
       immediatePayoff: 'Pay off now',
-      askAi: 'Ask AI to optimize repayment'
+      askAi: 'Ask AI to optimize repayment',
+      // U5: multi-method display
+      paymentRange: 'Payment Range',
+      monthlyInterest: 'Monthly Interest',
+      bulletPrincipal: 'Principal at Maturity',
+      bulletTotal: 'Lump Sum at Maturity',
     },
     // Literacy weekly report status card
     literacyReport: 'Literacy Report',
@@ -1081,6 +1088,20 @@ export default {
     literacyReady: 'Generated',
     literacyGenerating: 'Generating',
     literacyNone: 'Not generated',
+    // U2: repayment method
+    repaymentMethod: 'Repayment Method',
+    selectRepaymentMethod: 'Select repayment method',
+    methodEqualPayment: 'Equal Payment',
+    methodEqualPrincipal: 'Equal Principal',
+    methodInterestOnly: 'Interest Only',
+    methodBullet: 'Bullet Repayment',
+    methodMinimumPayment: 'Minimum Payment',
+    // U4: payment date + history
+    paymentDate: 'Payment Date',
+    paymentHistory: 'Payment History',
+    paymentSourceSystem: 'System',
+    paymentSourceManual: 'Manual',
+    noPaymentRecords: 'No payment records',
   },
   rental: {
     title: 'Rentals',

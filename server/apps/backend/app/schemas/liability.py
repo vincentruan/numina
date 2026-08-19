@@ -30,6 +30,7 @@ def _coerce_money_str(v: Any) -> str | None:
 
 class LiabilityCreate(BaseModel):
     category: str
+    repayment_method: str = "equal_payment"
     name: str
     original_amount: Decimal
     remaining_amount: Decimal
@@ -41,6 +42,18 @@ class LiabilityCreate(BaseModel):
     linked_asset_id: int | None = None
     notes: str | None = None
     currency: str = "CNY"
+    # Retroactive creation (U3): when generate_history=True and start_date < today,
+    # auto-generate historical PaymentRecord rows with source="system".
+    generate_history: bool = False
+    total_periods: int | None = None
+
+    @field_validator("repayment_method")
+    @classmethod
+    def _validate_method(cls, v: str) -> str:
+        from packages.domain.liability_calculator import VALID_METHODS
+        if v not in VALID_METHODS:
+            raise ValueError(f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}")
+        return v
 
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
@@ -50,6 +63,7 @@ class LiabilityCreate(BaseModel):
 
 class LiabilityUpdate(BaseModel):
     category: str | None = None
+    repayment_method: str | None = None
     name: str | None = None
     original_amount: Decimal | None = None
     remaining_amount: Decimal | None = None
@@ -61,6 +75,16 @@ class LiabilityUpdate(BaseModel):
     linked_asset_id: int | None = None
     notes: str | None = None
     currency: str | None = None
+
+    @field_validator("repayment_method")
+    @classmethod
+    def _validate_method(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        from packages.domain.liability_calculator import VALID_METHODS
+        if v not in VALID_METHODS:
+            raise ValueError(f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}")
+        return v
 
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
@@ -84,6 +108,7 @@ class PaymentRecordResponse(SnowflakeBase):
     amount: str
     paid_at: datetime
     notes: str | None = None
+    source: str = "manual"
 
     @field_validator("amount", mode="before")
     @classmethod
@@ -115,6 +140,7 @@ class LiabilityResponse(SnowflakeBase):
     user_id: int
     family_id: int
     category: str
+    repayment_method: str
     name: str
     # Money fields serialized as str (2 decimals) per the money-as-str convention.
     original_amount: str
@@ -146,3 +172,32 @@ class LiabilityDetailResponse(LiabilityResponse):
     """
 
     linked_asset: LinkedAssetSummary | None = None
+
+
+class BalanceCorrectionRequest(BaseModel):
+    """Post-creation balance adjustment request (U3).
+
+    Signed amount: positive increases remaining debt, negative decreases it.
+    """
+
+    amount: Decimal
+    reason: str | None = None
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_to_decimal(v)
+
+
+class BalanceCorrectionResponse(SnowflakeBase):
+    id: int
+    liability_id: int
+    amount: str
+    reason: str | None = None
+    created_by: int
+    created_at: datetime | None = None
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _coerce_money(cls, v):
+        return _coerce_money_str(v)
