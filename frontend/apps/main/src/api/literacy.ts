@@ -29,6 +29,8 @@ export interface WeeklyReportResponse {
 export interface ReportChild {
   child_id: string
   display_name: string
+  avatar_url: string | null
+  avatar_color: string
   latest_week_start: string | null
 }
 

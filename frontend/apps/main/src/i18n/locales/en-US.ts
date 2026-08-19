@@ -1401,6 +1401,10 @@ export default {
     grantReasonPlaceholder: 'e.g. Great job today!',
     grantConfirm: 'Confirm',
     grantDefaultReason: 'Parent reward',
+    literacyReportEntry: 'Literacy Report',
+    literacyReportReady: 'Report ready',
+    literacyReportNone: 'No report yet',
+    literacyReportGenerating: 'Generating…',
     dayDetail: {
       pageTitle: 'Day Detail',
       loading: 'Loading...',
@@ -1514,10 +1518,6 @@ export default {
     editChildSave: 'Save',
     editChildSaved: 'Info updated',
     editChildFailed: 'Update failed, please retry',
-    literacyReportEntry: 'Literacy Report',
-    literacyReportReady: 'Report ready',
-    literacyReportNone: 'No report yet',
-    literacyReportGenerating: 'Generating…',
   },
   secondFactor: {
     title: 'Two-Factor Authentication',

@@ -1632,6 +1632,10 @@ export default {
     wishPriorityMediumShort: '中',
     wishPriorityLowShort: '低',
     wishRejectionReasonLabel: '拒绝原因',
+    literacyReportEntry: '启蒙周报',
+    literacyReportReady: '本周报告已生成',
+    literacyReportNone: '本周报告未生成',
+    literacyReportGenerating: '报告生成中…',
     dayDetail: {
       pageTitle: '当日明细',
       loading: '加载中...',
@@ -1736,10 +1740,6 @@ export default {
     childActiveWishes: '进行中心愿',
     childPendingChores: '待审家务',
     childPendingWishes: '待审心愿',
-    literacyReportEntry: '启蒙周报',
-    literacyReportReady: '本周报告已生成',
-    literacyReportNone: '本周报告未生成',
-    literacyReportGenerating: '报告生成中…',
   },
   secondFactor: {
     title: '二阶段验证',
