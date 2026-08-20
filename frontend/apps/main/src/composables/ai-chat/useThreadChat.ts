@@ -605,6 +605,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // Which version index the user is currently viewing for each turn. 0 = old,
   // 1 = new (current). Defaults to 1 (always show latest after retry).
   const supersededVersionIndex = ref<Map<string, number>>(new Map())
+  /**
+   * Message IDs removed by retry() truncation. mergeValuesMessages filters
+   * these out so the backend's values event (which reflects the full checkpoint
+   * state, including the failed turn) doesn't re-add old AI messages that the
+   * frontend intentionally discarded. Cleared when the retry stream completes.
+   */
+  const retryTruncatedIds = ref<Set<string>>(new Set())
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
   let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -690,6 +697,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Tool results: add as separate tool message.
    */
   function mergeMessagesTuple(chunk: MessagesTupleData): void {
+    // Filter out chunks for messages that were truncated by retry(). The
+    // backend may replay these from the checkpoint during the retry stream.
+    if (retryTruncatedIds.value.size > 0 && chunk.id && retryTruncatedIds.value.has(chunk.id)) {
+      return
+    }
     if (chunk.type === 'ai') {
       console.log('[useThreadChat] AI message chunk received:', {
         id: chunk.id,
@@ -835,8 +847,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // message — the values event is the ONLY source of user messages. Include
     // human messages only when messages.value is empty (initial hydration).
     const isInitialLoad = messages.value.length === 0
+    const truncatedIds = retryTruncatedIds.value
     const newOnes = mapped.filter(m => {
       if (existingIds.has(m.id)) return false
+      // Filter out messages that were truncated by retry(). The backend
+      // checkpoint still contains these (from the failed attempt), and its
+      // values event would otherwise re-add old AI messages.
+      if (truncatedIds.size > 0 && truncatedIds.has(m.id)) return false
       if (m.type === 'human' && !isInitialLoad) return false
       return true
     })
@@ -1107,6 +1124,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     userCancelled = false
     abortController = new AbortController()
 
+    try {
     const userMsg = addOptimisticUserMessage(text, additionalKwargs)
 
     // Resolve thread before streaming
@@ -1615,6 +1633,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       deleteThread(currentThreadId).catch(() => {})
       currentThreadId = null
     }
+    } finally {
+      // Safety net: ensure isLoading is always reset even if an unexpected
+      // exception escapes the try block (e.g. bugs in message merging logic).
+      // Without this, the retry button stays spinning forever.
+      isLoading.value = false
+    }
   }
 
   function cancelStream() {
@@ -1662,6 +1686,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // Retry pagination: clear superseded groups on thread switch.
     supersededGroups.value = new Map()
     supersededVersionIndex.value = new Map()
+    retryTruncatedIds.value = new Set()
 
     isLoading.value = true
     error.value = null
@@ -1827,17 +1852,59 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       // Save original messages in case sendMessage fails — we'll restore them.
       const originalMessages = [...messages.value]
       const lastIdx = messages.value.lastIndexOf(lastHuman)
+
+      // Record IDs of messages being truncated so mergeValuesMessages can
+      // filter them out. The backend checkpoint still contains these messages
+      // (from the failed attempt), and its values event would otherwise
+      // re-add them to the frontend messages array.
+      const truncatedIds = new Set(
+        messages.value.slice(lastIdx).map(m => m.id),
+      )
+      retryTruncatedIds.value = truncatedIds
+
       try {
         messages.value = messages.value.slice(0, lastIdx)
+
+        // Retry checkpoint forking: call the backend retry-prepare endpoint
+        // which forks the pre-failure checkpoint so the retry reads clean
+        // state (1 user message instead of 2). The fork is server-side —
+        // no checkpoint_id needs to be passed through the stream config.
+        // Falls back to a normal retry if the endpoint fails or returns
+        // retry_from_checkpoint: false.
+        const effectiveThreadId = threadId || currentThreadId
+        if (effectiveThreadId) {
+          try {
+            const { retryPrepare } = await import('@/api/ai-chat')
+            await retryPrepare(effectiveThreadId)
+          } catch {
+            // Non-fatal: fall back to a normal retry. The fork is best-effort;
+            // the retryTruncatedIds filter still prevents old content from
+            // reappearing in the UI.
+          }
+        }
+
+        // NOTE: do NOT pass retryPreserveTitle here. The backend's
+        // sync_title_from_checkpoint (run_extras) gates title generation on
+        // _should_generate_title (first exchange only + no proper DB title),
+        // so it already avoids overwriting an existing real title. When the
+        // FIRST request fails before generating a real title (model error,
+        // network drop, etc.), the DB may hold a truncated-text fallback or
+        // nothing at all — the retry must be able to replace it with a proper
+        // LLM-generated title via the values event. Passing
+        // retryPreserveTitle: true blocked that update, leaving the sidebar
+        // stuck on the temporary (user-text) title.
         await sendMessage(lastHuman.content, {
-          threadId: threadId || currentThreadId || undefined,
-          retryPreserveTitle: true,
+          threadId: effectiveThreadId || undefined,
         })
       } catch (err) {
         // Restore original messages on failure so user's message stays visible,
         // then re-throw so the caller (handleRetry) can show a toast.
         messages.value = originalMessages
         throw err
+      } finally {
+        // Clear truncated IDs after the retry stream completes (success or
+        // failure). Subsequent values events should not be filtered.
+        retryTruncatedIds.value = new Set()
       }
     }
   }
@@ -1948,6 +2015,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // Retry pagination: clear superseded groups on thread switch / new chat.
     supersededGroups.value = new Map()
     supersededVersionIndex.value = new Map()
+    retryTruncatedIds.value = new Set()
   }
 
   /**

@@ -231,6 +231,25 @@ class ThreadCompactResponse(BaseModel):
     )
 
 
+class RetryPrepareResponse(BaseModel):
+    """Response from retry-prepare endpoint.
+
+    Returns the checkpoint to fork from so a retry can skip the failed user
+    message. The frontend passes ``checkpoint_id`` back to ``/runs/stream``
+    via ``config.configurable.checkpoint_id``, causing the checkpointer to
+    load state from that checkpoint (before the failed message was added)
+    instead of the head (which contains the failed message).
+
+    - ``checkpoint_id``: ID of the checkpoint to fork from
+    - ``checkpoint_ns``: Namespace (always "" for main thread)
+    - ``retry_from_checkpoint``: True when a valid checkpoint was found
+    """
+
+    checkpoint_id: str | None = None
+    checkpoint_ns: str = ""
+    retry_from_checkpoint: bool = False
+
+
 class HistoryEntry(BaseModel):
     checkpoint_id: str
     parent_checkpoint_id: str | None = None
@@ -1452,3 +1471,119 @@ async def compact_thread_endpoint(
         logger.exception("Failed to compact thread %s", thread_id)
         raise HTTPException(status_code=503, detail="压缩对话历史失败") from None
     return ThreadCompactResponse(**result_to_dict(result))
+
+
+# ---------------------------------------------------------------------------
+# Retry-prepare endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{thread_id}/retry-prepare", response_model=RetryPrepareResponse)
+async def retry_prepare(
+    thread_id: str,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> RetryPrepareResponse:
+    """Fork the pre-failure checkpoint so a retry reads clean state.
+
+    When the first request fails, the head checkpoint retains the failed user
+    message. On retry, the agent would append a second user message to that
+    head, giving ``len(user_messages) == 2`` and causing the title middleware
+    to skip title generation (requires exactly 1 user message).
+
+    This endpoint finds the checkpoint with one fewer user message than the
+    head (the state before the failed message was added), deep-copies it, and
+    writes the copy back to the same thread with a fresh checkpoint_id.  Because
+    LangGraph's ``alist`` returns the **latest checkpoint_id** as the head
+    (no parent-chain filtering), the fork — with its time-based uuid6 ID —
+    naturally becomes the new head. The agent's next stream reads from the
+    fork (1 user message) instead of the original head (2 user messages).
+
+    Returns ``retry_from_checkpoint: false`` when no fork is needed (head
+    already has ≤ 1 user message) or no suitable checkpoint is found.
+
+    # [Numina Extension] — retry checkpoint fork for title generation
+    """
+    import copy as _copy
+
+    checkpointer = get_checkpointer()
+
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    head_tuple = await checkpointer.aget_tuple(config)
+    if head_tuple is None:
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    # Family ownership check
+    head_meta = getattr(head_tuple, "metadata", {}) or {}
+    head_family_id = head_meta.get("family_id")
+    if not head_family_id or str(head_family_id) != str(verified.family_id):
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
+    head_messages = _checkpoint_messages(head_tuple)
+    head_user_count = sum(
+        1 for m in head_messages if getattr(m, "type", None) == "human"
+        or (isinstance(m, dict) and m.get("type") == "human")
+    )
+
+    if head_user_count <= 1:
+        # No failed message to skip — normal retry path, no fork needed.
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    # Scan history for a checkpoint with (head_user_count - 1) user messages.
+    # ``alist`` yields newest-first; the first match is the most recent
+    # checkpoint before the failed user message was added.
+    target_user_count = head_user_count - 1
+    fork_source: Any = None
+    try:
+        async for checkpoint_tuple in checkpointer.alist(config, limit=100):
+            ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
+            ckpt_family_id = ckpt_meta.get("family_id")
+            if ckpt_family_id and str(ckpt_family_id) != str(verified.family_id):
+                continue
+
+            ckpt_messages = _checkpoint_messages(checkpoint_tuple)
+            ckpt_user_count = sum(
+                1 for m in ckpt_messages if getattr(m, "type", None) == "human"
+                or (isinstance(m, dict) and m.get("type") == "human")
+            )
+            if ckpt_user_count == target_user_count:
+                fork_source = checkpoint_tuple
+                break
+    except Exception:
+        logger.exception("Failed to scan checkpoint history for retry thread %s", thread_id)
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    if fork_source is None:
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    # Deep-copy the pre-failure checkpoint and write it back to the SAME
+    # thread_id with a fresh uuid6 checkpoint_id.  The new ID is time-based
+    # and therefore higher than the head's ID, so ``alist`` (which returns
+    # the latest checkpoint_id) will return this fork as the head.
+    fork_ckpt = _copy.deepcopy(getattr(fork_source, "checkpoint", {}) or {})
+    fork_meta = _copy.deepcopy(getattr(fork_source, "metadata", {}) or {})
+    fork_ckpt["id"] = str(uuid6())
+    fork_meta.update(
+        {
+            "source": "retry_fork",
+            "updated_at": now_iso(),
+            "family_id": x_family_id,
+            "retry_fork_from": _checkpoint_id(fork_source),
+        }
+    )
+
+    # Write the fork to the same thread.  ``aput`` generates a new
+    # checkpoint_id from ``fork_ckpt["id"]``; because it's a fresh uuid6,
+    # it's higher than the head's ID and becomes the new head.
+    new_versions = dict(fork_ckpt.get("channel_versions", {}) or {})
+    try:
+        await checkpointer.aput(config, fork_ckpt, fork_meta, new_versions)
+    except Exception:
+        logger.exception("Failed to write retry fork checkpoint for thread %s", thread_id)
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    return RetryPrepareResponse(
+        checkpoint_id=fork_ckpt["id"],
+        checkpoint_ns="",
+        retry_from_checkpoint=True,
+    )
