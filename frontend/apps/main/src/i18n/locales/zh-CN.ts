@@ -1246,6 +1246,12 @@ export default {
     methodInterestOnly: '先息后本',
     methodBullet: '一次性还本',
     methodMinimumPayment: '最低还款',
+    // U3/U5: total_periods + retroactive history
+    totalPeriods: '还款期数(月)',
+    totalPeriodsPlaceholder: '输入期数',
+    totalPeriodsRequired: '请输入还款期数',
+    totalPeriodsDerived: '自动计算',
+    generateHistory: '生成历史还款记录',
     // U4: payment date + history
     paymentDate: '还款日期',
     paymentHistory: '还款记录',

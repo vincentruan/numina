@@ -58,6 +58,7 @@
             :ref="setSwipeRef(wish.id)"
             :left-width="0"
             :right-width="swipeRightWidth(wish)"
+            :style="swipeCellStyle(wish)"
             class="wish-swipe"
             stop-propagation
           >
@@ -351,12 +352,18 @@ function wishProgress(wish: Wish): number {
 }
 
 // ── Swipe actions ──
-// Each action button is 70px wide. Return 0 for realized (no swipe).
+// Each action button is 80px wide. Return 0 for realized (no swipe).
 function swipeRightWidth(wish: Wish): number {
   if (wish.status === 'pending') {
-    return wish.converts_to_asset ? 70 : 140
+    return wish.converts_to_asset ? 80 : 160
   }
-  return 70 // cancelled (reactivate) or realized (copy)
+  return 80 // cancelled (reactivate) or realized (copy)
+}
+
+// CSS custom property for right container width (flex children need parent width to size correctly)
+function swipeCellStyle(wish: Wish): Record<string, string> {
+  const w = swipeRightWidth(wish)
+  return w > 0 ? { '--swipe-right-width': `${w}px` } : {}
 }
 
 async function onSwipeComplete(wish: Wish) {
@@ -372,7 +379,7 @@ async function onSwipeComplete(wish: Wish) {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message })
     await completeWish(wish.id)
-    await wishStore.fetchWish(wish.id)
+    await refreshWishes()
     closeSwipe(wish.id)
     showSuccessToast(t('toast.wishCompleted'))
   } catch {
@@ -384,6 +391,7 @@ async function onSwipeCancel(wish: Wish) {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmCancel') })
     await wishStore.updateWish(wish.id, { status: 'cancelled' })
+    await refreshWishes()
     closeSwipe(wish.id)
     showSuccessToast(t('toast.wishCancelled'))
   } catch {
@@ -394,6 +402,7 @@ async function onSwipeCancel(wish: Wish) {
 async function onSwipeReactivate(wish: Wish) {
   try {
     await wishStore.updateWish(wish.id, { status: 'pending' })
+    await refreshWishes()
     closeSwipe(wish.id)
     showSuccessToast(t('toast.wishReactivated'))
   } catch {
@@ -412,9 +421,14 @@ async function onSwipeCopy(wish: Wish) {
   }
 }
 
-async function loadWishes() {
+/** Re-fetch wishes from store and sync local ref (after mutations). */
+async function refreshWishes() {
   await wishStore.fetchWishes()
   wishes.value = wishStore.wishes
+}
+
+async function loadWishes() {
+  await refreshWishes()
   if (!dashboardStore.overview) {
     dashboardStore.fetchOverview().catch(() => {})
   }
@@ -533,12 +547,13 @@ defineExpose({
   overflow: hidden;
 }
 
-.swipe-action-btn {
-  height: 100%;
-  min-width: 70px;
-  font-size: 13px;
-  font-weight: 500;
+/* Force swipe action buttons to share width equally via flexbox */
+.wish-swipe :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
 }
+
+@import '@/styles/swipe-actions.css';
 
 .wish-list {
   list-style: none;

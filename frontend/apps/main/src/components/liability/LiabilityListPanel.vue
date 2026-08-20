@@ -343,6 +343,7 @@ function confirmDelete(item: Liability) {
 async function onReactivate(item: Liability) {
   try {
     await liabilityStore.updateLiability(item.id, { is_active: true })
+    await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
     showSuccessToast(t('toast.liabilityReactivated'))
   } catch {
     showFailToast(t('toast.operationFailed'))
@@ -351,6 +352,7 @@ async function onReactivate(item: Liability) {
 
 async function executeDelete() {
   await liabilityStore.deleteLiability(deleteSheet.value.liabilityId)
+  await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
   showSuccessToast(t('toast.deleteSuccess'))
   deleteSheet.value.show = false
 }
@@ -383,6 +385,7 @@ async function submitPayment() {
     return
   }
   await liabilityStore.recordPayment(payTarget.value!.id, amount)
+  await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
   showSuccessToast(t('toast.paymentSuccess'))
   payDialogVisible.value = false
 }

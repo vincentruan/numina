@@ -20,8 +20,8 @@ from apps.backend.app.schemas.liability_simulate import (
     SimulateRequest,
     SimulateResponse,
 )
-from apps.backend.app.services import liability as liability_service
 from apps.backend.app.services import balance_correction as correction_service
+from apps.backend.app.services import liability as liability_service
 from apps.backend.app.services.activity import record_activity
 from packages.domain.liability_calculator import calc_amortization
 
@@ -156,7 +156,7 @@ def record_payment(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    liability = liability_service.record_payment(db, user, liability_id, req.amount)
+    liability = liability_service.record_payment(db, user, liability_id, req.amount, req.paid_at)
     record_activity(db, user, "payment", "liability", liability_id, f"还款「{liability.name}」", float(req.amount))
     return liability
 

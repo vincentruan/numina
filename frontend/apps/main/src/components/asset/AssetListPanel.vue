@@ -121,6 +121,7 @@
                       :ref="setAssetSwipeRef(asset.id)"
                       :left-width="0"
                       :right-width="assetSwipeWidth(asset)"
+                      :style="assetSwipeStyle(asset)"
                       class="asset-swipe"
                       stop-propagation
                       :disabled="!assetHasSwipe(asset)"
@@ -753,7 +754,13 @@ function assetHasSwipe(asset: Asset): boolean {
 }
 function assetSwipeWidth(asset: Asset): number {
   if (!assetHasSwipe(asset)) return 0
-  return 140 // 2 buttons × 70px
+  return 160 // 2 buttons × 80px
+}
+
+// CSS custom property for right container width (flex children need parent width to size correctly)
+function assetSwipeStyle(asset: Asset): Record<string, string> {
+  const w = assetSwipeWidth(asset)
+  return w > 0 ? { '--swipe-right-width': `${w}px` } : {}
 }
 
 async function onSwipeMarkIdle(asset: Asset) {
@@ -898,12 +905,13 @@ defineExpose({
   overflow: hidden;
 }
 
-.swipe-action-btn {
-  height: 100%;
-  min-width: 70px;
-  font-size: 13px;
-  font-weight: 500;
+/* Force swipe action buttons to share width equally via flexbox */
+.asset-swipe :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
 }
+
+@import '@/styles/swipe-actions.css';
 
 /* Toolbar Icons */
 :deep(.toolbar-slot) {

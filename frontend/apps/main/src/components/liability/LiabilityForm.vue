@@ -144,6 +144,28 @@
         />
       </van-popup>
 
+      <!-- U5: total_periods input (required for equal_principal, interest_only, bullet) -->
+      <van-field
+        v-if="needsTotalPeriods"
+        v-model="form.total_periods"
+        type="number" inputmode="numeric"
+        :label="t('liability.totalPeriods')"
+        :placeholder="derivedPeriods ? String(derivedPeriods) : t('liability.totalPeriodsPlaceholder')"
+        :readonly="!!derivedPeriods"
+        :rules="[{ required: !derivedPeriods, message: t('liability.totalPeriodsRequired') }]"
+      >
+        <template v-if="derivedPeriods" #right-icon>
+          <span class="field-hint">{{ t('liability.totalPeriodsDerived') }}</span>
+        </template>
+      </van-field>
+
+      <!-- U3: retroactive history toggle (only when start_date is in the past) -->
+      <van-cell v-if="canGenerateHistory" :title="t('liability.generateHistory')" :center="true">
+        <template #right-icon>
+          <van-switch v-model="generateHistory" size="20px" />
+        </template>
+      </van-cell>
+
       <van-field v-model="form.institution" :label="t('liability.institution')" :placeholder="t('liability.institutionPlaceholder')" />
 
       <!-- L7 (KTD-3): optional collateral asset picker. -->
@@ -212,6 +234,7 @@ interface FormState {
   start_date: string
   end_date: string
   repayment_method: string
+  total_periods: string
   institution: string
   linked_asset_id: string | null
   notes: string
@@ -228,6 +251,7 @@ const form = ref<FormState>({
   start_date: '',
   end_date: '',
   repayment_method: 'equal_payment',
+  total_periods: '',
   institution: '',
   linked_asset_id: null,
   notes: ''
@@ -258,7 +282,7 @@ watch(() => props.initialData, (data) => {
     if (data.end_date !== undefined) {
       form.value.end_date = String(data.end_date ?? '')
       // Sentinel 2100-01-01 or empty → treat as infinite
-      if (data.end_date === '2100-01-01' || data.end_date === null) {
+      if (data.end_date === INFINITE_DATE_SENTINEL || data.end_date === null) {
         isEndInfinite.value = true
         form.value.end_date = ''
       }
@@ -276,8 +300,7 @@ const showEndPicker = ref(false)
 const showMethodPicker = ref(false)
 
 // Date picker range: ~126 years (1950 to current+50y)
-const DATE_PICKER_MIN_DATE = new Date(1950, 0, 1)
-const DATE_PICKER_MAX_DATE = new Date(new Date().getFullYear() + 50, 11, 31)
+import { DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL } from '@/constants/dates'
 
 // "无限期" toggle for end_date
 const isEndInfinite = ref(false)
@@ -328,6 +351,28 @@ function onMethodConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.repayment_method = selectedValues[0] ?? 'equal_payment'
   showMethodPicker.value = false
 }
+
+// Methods that require total_periods for amortization calculation
+const METHODS_REQUIRING_PERIODS = ['equal_principal', 'interest_only', 'bullet']
+const needsTotalPeriods = computed(() => METHODS_REQUIRING_PERIODS.includes(form.value.repayment_method))
+
+// Auto-derive total_periods from start_date + end_date when both are set
+const derivedPeriods = computed(() => {
+  if (!form.value.start_date || !form.value.end_date || form.value.end_date === '2100-01-01') return null
+  const start = new Date(form.value.start_date)
+  const end = new Date(form.value.end_date)
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return null
+  const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+  return months > 0 ? months : null
+})
+
+// Show generate_history toggle when start_date is in the past
+const canGenerateHistory = computed(() => {
+  if (!form.value.start_date) return false
+  const start = new Date(form.value.start_date)
+  return isNaN(start.getTime()) ? false : start < new Date()
+})
+const generateHistory = ref(false)
 
 // L7 (KTD-3): collateral asset picker. Fetches family assets once on mount;
 // a leading "无" option (value '') unsets the link. Value is the asset id.
@@ -383,6 +428,8 @@ function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
 }
 
 function onSubmit() {
+  // Determine total_periods: derived from dates takes priority, then manual input
+  const periods = derivedPeriods.value ?? (form.value.total_periods ? Number(form.value.total_periods) : null)
   const data: LiabilityRequestPayload = {
     name: form.value.name,
     category: form.value.category,
@@ -394,6 +441,8 @@ function onSubmit() {
     start_date: form.value.start_date || undefined,
     end_date: isEndInfinite.value ? undefined : (form.value.end_date || undefined),
     repayment_method: form.value.repayment_method,
+    total_periods: periods,
+    generate_history: canGenerateHistory.value && generateHistory.value ? true : undefined,
     institution: form.value.institution || undefined,
     linked_asset_id: form.value.linked_asset_id ?? null,
     notes: form.value.notes || undefined
@@ -406,6 +455,10 @@ function onSubmit() {
 .field-prefix {
   color: var(--text-primary);
   margin-right: 4px;
+}
+.field-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .form-actions {
   padding: 16px;

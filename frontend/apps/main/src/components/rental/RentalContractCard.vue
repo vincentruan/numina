@@ -3,7 +3,8 @@
     :disabled="!contract.is_active"
     class="rental-swipe"
     :left-width="0"
-    :right-width="contract.is_active ? 140 : 0"
+    :right-width="contract.is_active ? 160 : 0"
+    :style="rentalSwipeStyle"
     stop-propagation
   >
     <div class="rental-card" :class="{ inactive: !contract.is_active }" @click="$emit('click')">
@@ -57,6 +58,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RentalContract } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
@@ -73,6 +75,11 @@ defineEmits<{
   edit: []
   end: []
 }>()
+
+// CSS custom property for right container width
+const rentalSwipeStyle = computed<Record<string, string>>(() => ({
+  '--swipe-right-width': '160px',
+}))
 </script>
 
 <style scoped>
@@ -81,12 +88,15 @@ defineEmits<{
   border-radius: 12px;
   overflow: hidden;
 }
-.swipe-action-btn {
-  height: 100%;
-  min-width: 70px;
-  font-size: 13px;
-  font-weight: 500;
+
+/* Force swipe action buttons to share width equally via flexbox */
+.rental-swipe :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
 }
+
+@import '@/styles/swipe-actions.css';
+
 .rental-card {
   background: var(--card-bg);
   border-radius: 12px;

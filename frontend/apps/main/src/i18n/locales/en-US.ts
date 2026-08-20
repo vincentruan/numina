@@ -1099,6 +1099,12 @@ export default {
     methodInterestOnly: 'Interest Only',
     methodBullet: 'Bullet Repayment',
     methodMinimumPayment: 'Minimum Payment',
+    // U3/U5: total_periods + retroactive history
+    totalPeriods: 'Term (months)',
+    totalPeriodsPlaceholder: 'Enter term',
+    totalPeriodsRequired: 'Please enter term',
+    totalPeriodsDerived: 'Auto-calculated',
+    generateHistory: 'Generate payment history',
     // U4: payment date + history
     paymentDate: 'Payment Date',
     paymentHistory: 'Payment History',

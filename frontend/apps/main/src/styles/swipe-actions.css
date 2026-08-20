@@ -1,0 +1,19 @@
+/**
+ * Shared styles for Vant SwipeCell action buttons.
+ * Used by AssetListPanel, LiabilityCard, RentalContractCard, WishListPanel.
+ *
+ * Parent must set explicit width via CSS custom property:
+ *   .my-swipe :deep(.van-swipe-cell__right) { width: var(--swipe-right-width, auto); display: flex; }
+ * Then child buttons use flex: 1 to share the width equally.
+ */
+.swipe-action-btn {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 0;
+}

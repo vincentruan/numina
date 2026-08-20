@@ -28,6 +28,14 @@ def _coerce_money_str(v: Any) -> str | None:
     return str(Decimal(v).quantize(Decimal("0.01")))
 
 
+def _validate_repayment_method(v: str) -> str:
+    """Validate that v is a known repayment method. Shared by Create/Update schemas."""
+    from packages.domain.liability_calculator import VALID_METHODS
+    if v not in VALID_METHODS:
+        raise ValueError(f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}")
+    return v
+
+
 class LiabilityCreate(BaseModel):
     category: str
     repayment_method: str = "equal_payment"
@@ -50,10 +58,7 @@ class LiabilityCreate(BaseModel):
     @field_validator("repayment_method")
     @classmethod
     def _validate_method(cls, v: str) -> str:
-        from packages.domain.liability_calculator import VALID_METHODS
-        if v not in VALID_METHODS:
-            raise ValueError(f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}")
-        return v
+        return _validate_repayment_method(v)
 
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
@@ -81,10 +86,7 @@ class LiabilityUpdate(BaseModel):
     def _validate_method(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        from packages.domain.liability_calculator import VALID_METHODS
-        if v not in VALID_METHODS:
-            raise ValueError(f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}")
-        return v
+        return _validate_repayment_method(v)
 
     @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
     @classmethod
@@ -94,6 +96,7 @@ class LiabilityUpdate(BaseModel):
 
 class PaymentRequest(BaseModel):
     amount: Decimal
+    paid_at: date | None = None
 
     @field_validator("amount", mode="before")
     @classmethod

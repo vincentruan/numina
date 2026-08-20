@@ -356,6 +356,7 @@ import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
 import LogoCropper from './LogoCropper.vue'
+import { DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL } from '@/constants/dates'
 import IconPicker from './IconPicker.vue'
 import { useWatermark } from '@/composables/useWatermark'
 import { getIconId } from '@/utils/icon'
@@ -607,7 +608,7 @@ watch(() => props.initialData, (data) => {
     if (data.usage_frequency !== undefined) form.value.usage_frequency = data.usage_frequency ?? ''
     if (data.warranty_expiry_date !== undefined) {
       form.value.warranty_expiry_date = String(data.warranty_expiry_date ?? '')
-      if (data.warranty_expiry_date === '2100-01-01' || data.warranty_expiry_date === null) {
+      if (data.warranty_expiry_date === INFINITE_DATE_SENTINEL || data.warranty_expiry_date === null) {
         isWarrantyInfinite.value = true
         form.value.warranty_expiry_date = ''
       }
@@ -618,7 +619,7 @@ watch(() => props.initialData, (data) => {
     if (data.interest_rate !== undefined) form.value.interest_rate = String(data.interest_rate ?? '')
     if (data.maturity_date !== undefined) {
       form.value.maturity_date = String(data.maturity_date ?? '')
-      if (data.maturity_date === '2100-01-01' || data.maturity_date === null) {
+      if (data.maturity_date === INFINITE_DATE_SENTINEL || data.maturity_date === null) {
         isMaturityInfinite.value = true
         form.value.maturity_date = ''
       }
@@ -667,9 +668,8 @@ const showStatusPicker = ref(false)
 const showMaturityPicker = ref(false)
 const showWarrantyPicker = ref(false)
 
-// Date picker range: ~126 years (1950 to current+50y)
-const DATE_PICKER_MIN_DATE = new Date(1950, 0, 1)
-const DATE_PICKER_MAX_DATE = new Date(new Date().getFullYear() + 50, 11, 31)
+// Date picker range: shared constants (1950 to current+50y)
+// DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL imported from constants/dates
 
 // "无限期" toggles for maturity_date and warranty_expiry_date
 const isMaturityInfinite = ref(false)

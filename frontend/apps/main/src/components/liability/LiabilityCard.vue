@@ -1,5 +1,5 @@
 <template>
-  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell" :right-width="128">
+  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell" :right-width="160" :style="liabilitySwipeStyle">
     <div
       class="liability-card"
       :class="{ 'is-selected': selected, 'select-mode': selectMode }"
@@ -114,6 +114,11 @@ const emit = defineEmits<{
   longpress: [liability: Liability]
 }>()
 
+// CSS custom property for right container width
+const liabilitySwipeStyle = computed<Record<string, string>>(() => ({
+  '--swipe-right-width': '160px',
+}))
+
 const { t } = useI18n()
 const currency = useCurrency()
 
@@ -187,6 +192,15 @@ function handleClick() {
   touch-action: pan-y;
 }
 
+/* Force swipe action buttons to share width equally via flexbox */
+.liability-swipe-cell :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
+}
+
+/* Swipe action buttons */
+@import '@/styles/swipe-actions.css';
+
 .liability-card {
   background: var(--card-bg);
   border-radius: 16px;
@@ -226,14 +240,6 @@ function handleClick() {
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
-}
-
-/* Swipe action buttons */
-.swipe-action-btn {
-  height: 100%;
-  min-width: 64px;
-  font-size: 13px;
-  font-weight: 500;
 }
 
 .swipe-action-btn--reactivate {

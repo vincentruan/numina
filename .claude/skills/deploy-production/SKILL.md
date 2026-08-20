@@ -135,7 +135,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd $DEPLOY_REMOTE_DIR &&
   echo "=== Check migration state ===" &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
-    cd /app && uv run alembic current && echo \"---\" && uv run alembic heads
+    cd /app && uv run alembic -c apps/backend/alembic.ini current && echo \"---\" && uv run alembic -c apps/backend/alembic.ini heads
   "
 '
 ```
@@ -149,7 +149,7 @@ set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd $DEPLOY_REMOTE_DIR &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
-    cd /app && uv run alembic upgrade head 2>&1
+    cd /app && uv run alembic -c apps/backend/alembic.ini upgrade head 2>&1
   "
 '
 ```
@@ -218,10 +218,10 @@ set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd ~/data/numina &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
-    cd /app && uv run alembic current && echo \"---\" && uv run alembic heads
+    cd /app && uv run alembic -c apps/backend/alembic.ini current && echo \"---\" && uv run alembic -c apps/backend/alembic.ini heads
   " &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
-    cd /app && uv run alembic upgrade head 2>&1
+    cd /app && uv run alembic -c apps/backend/alembic.ini upgrade head 2>&1
   "
 '
 ```
@@ -360,7 +360,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd $DEPLOY_REMOTE_DIR &&
   echo "=== Check migration state ===" &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
-    cd /app && uv run alembic current && echo \"---\" && uv run alembic heads
+    cd /app && uv run alembic -c apps/backend/alembic.ini current && echo \"---\" && uv run alembic -c apps/backend/alembic.ini heads
   "
 '
 ```
@@ -371,7 +371,7 @@ If current ≠ head → run upgrade:
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd $DEPLOY_REMOTE_DIR &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
-    cd /app && uv run alembic upgrade head 2>&1
+    cd /app && uv run alembic -c apps/backend/alembic.ini upgrade head 2>&1
   " &&
   echo "=== Restart backend ===" &&
   sudo docker compose -f docker-compose.production.yml restart backend
@@ -383,6 +383,80 @@ If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures
 ### Step 5: Health Check
 
 Same as Mode A Step 6.
+
+### Step 6: Verify Frontend Content (Post-Deploy)
+
+After recreating containers, verify the frontend actually contains the new code:
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  echo "=== Search for feature-specific strings in JS bundles ===" &&
+  sudo docker exec numina-frontend-main sh -c "grep -rl \"<unique-string-from-your-change>\" /usr/share/nginx/html/assets/*.js 2>/dev/null | head -3"
+'
+```
+
+If grep returns empty → **the container is running stale code**. Rebuild with `--no-cache` (see Gotchas below).
+
+### ⚠️ Mode C Gotchas (Mac → amd64 server)
+
+These are pitfalls discovered from real deployments. Read before every Mode C deploy.
+
+#### 1. `make build-local` uses Docker cache — frontend may not rebuild
+
+`docker compose build` caches layers. If only `.vue`/`.ts` files changed but `package.json`/`pnpm-lock.yaml` didn't, the frontend build layer is served from cache — **new code is NOT in the image**.
+
+**Detection:** Container "Up" time stays the same after `docker compose up -d`, or grep for new feature strings returns empty.
+
+**Fix:** Force rebuild frontend only:
+```bash
+export DOCKER_DEFAULT_PLATFORM=linux/amd64
+DOCKER_BUILDKIT=1 docker compose -f docker-compose.production.yml build --no-cache frontend-main frontend-child
+```
+
+Then re-tag and re-deploy:
+```bash
+docker tag ghcr.io/vincentruan/numina/frontend-main:latest numina/frontend-main:latest
+docker tag ghcr.io/vincentruan/numina/frontend-child:latest numina/frontend-child:latest
+docker save numina/frontend-main:latest numina/frontend-child:latest | gzip > dist/frontend-amd64.tar.gz
+# rsync + docker load + docker compose up -d (same as deploy-remote steps)
+```
+
+#### 2. `DOCKER_DEFAULT_PLATFORM` is mandatory on Apple Silicon
+
+`make build-local` sets `DOCKER_PLATFORM=linux/amd64` via Makefile env. But if you manually run `docker compose build` (e.g. to add `--no-cache`), the env var is **NOT inherited** — you get arm64 images that silently fail on amd64 servers.
+
+**Symptom:** Container restarts with `exec format error` or stays in restart loop. Check with:
+```bash
+docker inspect numina/frontend-main:latest --format '{{.Architecture}}'
+# Must say "amd64", NOT "arm64"
+```
+
+**Rule:** Every manual `docker compose build` on Mac MUST prefix with:
+```bash
+export DOCKER_DEFAULT_PLATFORM=linux/amd64
+```
+
+#### 3. `make build-local` re-tag fallback may fail
+
+The Makefile re-tags compose-generated images (e.g. `numina_backend`) as `numina/backend:latest`. If the compose project name differs from the directory name, the fallback `numina_backend` image won't exist. The build succeeded — images are at `ghcr.io/vincentruan/numina/<service>:latest`. Just re-tag manually:
+```bash
+for svc in backend agent scheduler-worker frontend-main frontend-child; do
+  docker tag ghcr.io/vincentruan/numina/$svc:latest numina/$svc:latest
+done
+```
+
+#### 4. Alembic path inside backend container
+
+The backend container has `alembic.ini` at `/app/apps/backend/alembic.ini` with `script_location = apps/backend/alembic` (relative). Run alembic from `/app` with explicit config:
+```bash
+sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
+  cd /app && uv run alembic -c apps/backend/alembic.ini current &&
+  uv run alembic -c apps/backend/alembic.ini heads
+'
+```
+
+Running from `/app/apps/backend` fails because the relative `script_location` resolves to a non-existent nested path.
 
 ---
 
@@ -458,3 +532,6 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Services building instead of pulling (Mode C) | Server `.env` missing `*_IMAGE` vars — set them to `numina/<service>:latest` |
 | Services building instead of pulling | `.env` missing `*_IMAGE` vars — add `BACKEND_IMAGE=ghcr.io/vincentruan/numina/backend:latest` etc. |
 | Double CSP headers (browser console) | Outer nginx must NOT add CSP — inner nginx (frontend container) handles it with nonce injection |
+| Frontend unchanged after Mode C deploy | Docker cache served stale layers. Rebuild with `--no-cache` + `DOCKER_DEFAULT_PLATFORM=linux/amd64`. Verify by grepping feature strings in container JS bundles |
+| Container restarts / `exec format error` | Architecture mismatch: arm64 image on amd64 server. Rebuild with `export DOCKER_DEFAULT_PLATFORM=linux/amd64`. Verify: `docker inspect --format '{{.Architecture}}' numina/<svc>:latest` |
+| `alembic current` fails with "No 'script_location' key" | Wrong working directory. Must run from `/app` with `-c apps/backend/alembic.ini`, not from `/app/apps/backend` |

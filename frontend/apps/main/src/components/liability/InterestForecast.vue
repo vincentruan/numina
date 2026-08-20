@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { simulateLiability } from '@/api/liabilities'
 import type { Liability, LiabilitySimResult } from '@/types'
+import { INFINITE_DATE_SENTINEL } from '@/constants/dates'
 import SimulateExtraDialog from './SimulateExtraDialog.vue'
 
 const props = defineProps<{ liability: Liability }>()
@@ -14,6 +15,17 @@ const { format } = useCurrency()
 const shouldRender = () => (props.liability.interest_rate ?? 0) > 0
 
 const repaymentMethod = computed(() => props.liability.repayment_method ?? 'equal_payment')
+// Derive total_periods from start_date and end_date (months between them)
+const derivedTotalPeriods = computed(() => {
+  const start = props.liability.start_date
+  const end = props.liability.end_date
+  if (!start || !end || end === INFINITE_DATE_SENTINEL) return null
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) return null
+  const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth())
+  return months > 0 ? months : null
+})
 // Extra-payment scenarios only apply to equal_payment and minimum_payment
 const showExtraScenarios = computed(() =>
   repaymentMethod.value === 'equal_payment' || repaymentMethod.value === 'minimum_payment'
@@ -33,6 +45,7 @@ async function runSim(extra: string): Promise<LiabilitySimResult | null> {
       monthly_payment: props.liability.monthly_payment ? String(props.liability.monthly_payment) : undefined,
       extra_monthly: extra,
       repayment_method: repaymentMethod.value,
+      total_periods: derivedTotalPeriods.value,
     })
     return r.data
   } catch {

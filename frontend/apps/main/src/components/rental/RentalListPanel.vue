@@ -151,7 +151,7 @@ async function onEndContract() {
   if (!selected.value) return
   try {
     await store.deactivateContract(selected.value.id)
-    await store.fetchSummary()
+    await Promise.all([store.fetchContracts(), store.fetchSummary()])
     showSuccessToast(t('rental.deleteSuccess'))
   } catch {
     showFailToast(t('common.failed'))
@@ -186,7 +186,7 @@ async function onSwipeEnd(contract: RentalContract) {
     })
     selected.value = contract
     await store.deactivateContract(contract.id)
-    await store.fetchSummary()
+    await Promise.all([store.fetchContracts(), store.fetchSummary()])
     showSuccessToast(t('rental.deleteSuccess'))
   } catch {
     // user cancelled dialog
