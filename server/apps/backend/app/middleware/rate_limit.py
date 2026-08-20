@@ -27,6 +27,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from apps.backend.app.config import settings
+from apps.backend.app.error_handlers import app_error_handler
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.security_log import (
     SecurityEventType,
@@ -196,7 +197,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Note: For distributed deployments, replace with cache layer
         if not self._check_rate_limit(client_id):
             _log_security_event(SecurityEventType.GLOBAL_RATE_LIMITED, client_id=client_id, path=request.url.path)
-            raise AppError(ErrorCode.RATE_LIMITED)
+            # BaseHTTPMiddleware exceptions bypass FastAPI's exception handlers,
+            # so call app_error_handler directly to return a proper 429 response.
+            return await app_error_handler(request, AppError(ErrorCode.RATE_LIMITED))
 
         return await call_next(request)
 
