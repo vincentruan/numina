@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'v
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
 import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
-import type { ChatMessage, MessageGroup as MessageGroupType } from '@/types/ai-chat/message-group'
+import type { ChatMessage } from '@/types/ai-chat/message-group'
 import type { PlanStep } from '@/types/agent-stream'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 import { extractLegacyFields } from '@/utils/ai-chat/messageAdapter'
@@ -15,8 +15,6 @@ const props = defineProps<{
   canBranch?: boolean
   branchingMessageId?: string | null
   answeredInterruptIds?: Set<string>
-  supersededGroups?: Map<string, MessageGroupType[]>
-  supersededVersionIndex?: Map<string, number>
 }>()
 
 const emit = defineEmits<{
@@ -27,8 +25,6 @@ const emit = defineEmits<{
   branch: [messageId: string, messageIds: string[]]
   clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
   feedback: [messageId: string, value: 1 | -1]
-  showPrevVersion: [humanMessageId: string]
-  showNextVersion: [humanMessageId: string]
 }>()
 
 const { t } = useI18n()
@@ -56,99 +52,6 @@ const lastAssistantGroupIndex = computed(() => {
 })
 
 /**
- * Shared helper: map each group index → the human message id of its turn.
- * A "turn" starts at a human message and includes all subsequent assistant/tool
- * groups until the next human message. Uses the human message's stable `id`
- * (not positional index) so the mapping survives visible-array shifts when
- * superseded groups have a different count than live groups.
- */
-function computeHumanMessageIds(groups: MessageGroupType[]): Map<number, string> {
-  const ids = new Map<number, string>()
-  let currentHumanId: string | undefined
-  for (let i = 0; i < groups.length; i++) {
-    if (groups[i].type === 'human') {
-      const humanMsg = groups[i].messages.find(m => m.type === 'human')
-      currentHumanId = humanMsg?.id
-    }
-    if (currentHumanId) ids.set(i, currentHumanId)
-  }
-  return ids
-}
-
-/**
- * Map each VISIBLE group index → the human message id of its turn.
- * Computed over visibleMessageGroups so the indices correspond to the
- * positions the template iterates.
- */
-const groupToHumanMessageId = computed(() =>
-  computeHumanMessageIds(visibleMessageGroups.value),
-)
-
-/**
- * Visible groups with retry version pagination applied.
- *
- * When the user retried a turn and there are superseded groups, only the
- * version the user is currently viewing is shown.
- *
- * Algorithm: for each turn that has superseded groups, check the version index.
- * - Version 1 (default): show the LIVE groups from messageGroups (the new response).
- * - Version 0: replace the live assistant groups for that turn with the superseded ones.
- *
- * Uses stable human message ids (not positional turn indices) to look up
- * superseded/version maps, so the mapping is immune to visible-array shifts
- * when an earlier turn's superseded groups have a different count.
- */
-const visibleMessageGroups = computed(() => {
-  const groups = messageGroups.value
-  const superseded = props.supersededGroups
-  const versionMap = props.supersededVersionIndex
-
-  if (!superseded || superseded.size === 0) return groups
-
-  // Compute human message id for each raw group (shared helper).
-  const humanIds = computeHumanMessageIds(groups)
-
-  // Build the result: for turns with version 0, replace live assistant groups
-  // with superseded groups.
-  const result: MessageGroupType[] = []
-  let i = 0
-  while (i < groups.length) {
-    const hId = humanIds.get(i) ?? ''
-    const verIdx = versionMap?.get(hId) ?? 1
-
-    if (hId && superseded.has(hId) && verIdx === 0) {
-      // Keep the human group, replace the rest with superseded groups.
-      result.push(groups[i]) // human group
-      i++
-      // Skip all non-human groups for this turn.
-      while (i < groups.length && humanIds.get(i) === hId && groups[i].type !== 'human') {
-        i++
-      }
-      // Inject superseded groups.
-      const supGroups = superseded.get(hId)
-      if (supGroups) {
-        result.push(...supGroups)
-      }
-    } else {
-      result.push(groups[i])
-      i++
-    }
-  }
-
-  return result
-})
-
-/**
- * Human message ids that have superseded groups (for pagination control placement).
- * Uses the same stable string keys as supersededGroups.
- */
-const turnsWithSuperseded = computed(() => {
-  const superseded = props.supersededGroups
-  if (!superseded || superseded.size === 0) return new Set<string>()
-  return new Set(superseded.keys())
-})
-
-/**
  * Show the three-dot thinking indicator while the user's message has been sent
  * but no assistant-type group exists yet (the AI hasn't produced any text or
  * tool-call chunk). Once an assistant / assistant:processing / etc. group
@@ -164,31 +67,27 @@ const showThinkingIndicator = computed(() => {
 })
 
 /**
+ * Visible groups — direct alias for messageGroups.
+ * Previously this applied retry version pagination (superseded groups), but
+ * we now fork the checkpoint server-side in retryPrepare so the old content
+ * never reaches the frontend. This alias is kept for template compatibility.
+ */
+const visibleMessageGroups = computed(() => messageGroups.value)
+
+/**
  * Get planSteps from the previous group (for detecting redundant completion summaries).
  * DeerFlow pattern: when todos are complete, the final "已完成！" message is redundant
  * because the todo list itself is the final output.
  */
 function getPrevGroupPlanSteps(index: number): PlanStep[] | undefined {
   if (index === 0) return undefined
-  const prevGroup = visibleMessageGroups.value[index - 1]
+  const prevGroup = messageGroups.value[index - 1]
   if (!prevGroup) return undefined
   // Only look at the first AI message in the previous group
   const firstAiMsg = prevGroup.messages.find(m => m.type === 'ai')
   if (!firstAiMsg) return undefined
   const legacy = extractLegacyFields(firstAiMsg)
   return legacy?.planSteps
-}
-
-/**
- * Check if the current group is the last group for its turn.
- * Used to position the pagination control after the last group of a retried turn.
- */
-function lastGroupForTurn(index: number): boolean {
-  const groups = visibleMessageGroups.value
-  if (index >= groups.length - 1) return true
-  const currentHumanId = groupToHumanMessageId.value.get(index) ?? ''
-  const nextHumanId = groupToHumanMessageId.value.get(index + 1) ?? ''
-  return currentHumanId !== nextHumanId
 }
 
 // ── Auto-scroll with user-interrupt (R5) + MutationObserver (P1) ──
@@ -346,36 +245,6 @@ onUnmounted(() => {
           @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
           @retry="emit('retry')"
         />
-        <!-- Retry version pagination control (DeerFlow §2.1: < prev/next >) -->
-        <div
-          v-if="turnsWithSuperseded.has(groupToHumanMessageId.get(index) ?? '') && lastGroupForTurn(index)"
-          class="version-pagination"
-        >
-          <button
-            v-if="supersededVersionIndex?.get(groupToHumanMessageId.get(index) ?? '') === 1"
-            class="version-nav-btn"
-            type="button"
-            :aria-label="t('aiChat.prevVersion')"
-            @click="emit('showPrevVersion', groupToHumanMessageId.get(index) ?? '')"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            <span>{{ t('aiChat.prevVersion') }}</span>
-          </button>
-          <button
-            v-if="supersededVersionIndex?.get(groupToHumanMessageId.get(index) ?? '') === 0"
-            class="version-nav-btn"
-            type="button"
-            :aria-label="t('aiChat.nextVersion')"
-            @click="emit('showNextVersion', groupToHumanMessageId.get(index) ?? '')"
-          >
-            <span>{{ t('aiChat.nextVersion') }}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </button>
-        </div>
       </template>
       <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
       <div v-if="showThinkingIndicator" class="thinking-placeholder">
@@ -474,37 +343,5 @@ onUnmounted(() => {
 .scroll-btn-leave-to {
   opacity: 0;
   transform: translateY(8px) scale(0.8);
-}
-
-/* Retry version pagination (DeerFlow §2.1: < prev/next > control) */
-.version-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 0;
-}
-
-.version-nav-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: var(--van-background-2, #f7f8fa);
-  color: var(--van-text-color-2, #646566);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.version-nav-btn:hover {
-  background: var(--van-active-color, rgba(0, 0, 0, 0.06));
-  color: var(--van-text-color, #323233);
-}
-
-.version-nav-btn:active {
-  transform: scale(0.96);
 }
 </style>

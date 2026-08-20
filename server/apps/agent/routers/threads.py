@@ -11,6 +11,7 @@ import contextlib
 import logging
 import shutil
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -346,43 +347,28 @@ async def _find_branch_checkpoint(
     """Find the checkpoint containing the target message IDs.
 
     DeerFlow 参考：threads.py:135-145
-    Scans checkpoint history (limit 100) and returns the first tuple whose
-    ``channel_values.messages`` contains a message whose id is in
-    ``target_message_ids``. Returns ``None`` when no match is found.
-
-    The scan is newest-first (``alist`` yields newest-first), so the first
-    checkpoint holding the target messages IS the thread's latest turn that
-    contains them. The returned bool is whether those target messages form
-    the tail visible assistant turn in that checkpoint (i.e. the branch is
-    from the genuinely latest turn, safe to clone workspace files). Resolving
-    both the source checkpoint and the latest-turn decision in ONE scan
-    avoids a second ``alist`` call and its TOCTOU window (a concurrent run
-    checkpointing a newer turn between scans would otherwise downgrade a
-    latest-turn branch to ``skipped_historical_turn``).
+    Uses ``_scan_checkpoints`` with a predicate that checks whether any message
+    in the checkpoint matches the target IDs. The bool return indicates whether
+    those target messages form the tail visible assistant turn (i.e. the branch
+    is from the genuinely latest turn, safe to clone workspace files).
     """
-    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-    try:
-        async for checkpoint_tuple in checkpointer.alist(
-            config, limit=_BRANCH_HISTORY_SCAN_LIMIT
-        ):
-            messages = _checkpoint_messages(checkpoint_tuple)
-            for msg in messages:
-                msg_id = getattr(msg, "id", None) or (
-                    msg.get("id") if isinstance(msg, dict) else None
-                )
-                if msg_id and msg_id in target_message_ids:
-                    is_latest_turn = _matches_branch_target(
-                        messages, target_message_ids
-                    )
-                    return checkpoint_tuple, is_latest_turn
-    except Exception:
-        logger.warning(
-            "Failed to scan checkpoints for thread %s; branch cannot resolve source turn",
-            thread_id,
-            exc_info=True,
+
+    def _predicate(tup: Any) -> bool:
+        messages = _checkpoint_messages(tup)
+        return any(
+            _message_id(msg) in target_message_ids for msg in messages
         )
+
+    checkpoint_tuple = await _scan_checkpoints(
+        checkpointer, thread_id, predicate=_predicate
+    )
+    if checkpoint_tuple is None:
         return None
-    return None
+
+    # Check whether the matched messages are the latest visible assistant turn
+    messages = _checkpoint_messages(checkpoint_tuple)
+    is_latest_turn = _matches_branch_target(messages, target_message_ids)
+    return checkpoint_tuple, is_latest_turn
 
 
 def _checkpoint_id(checkpoint_tuple) -> str | None:
@@ -421,6 +407,47 @@ def _default_branch_display_name(
 # Cap on checkpoint history scan when resolving the latest turn (matches
 # DeerFlow _BRANCH_HISTORY_SCAN_LIMIT).
 _BRANCH_HISTORY_SCAN_LIMIT = 100
+
+
+async def _scan_checkpoints(
+    checkpointer,
+    thread_id: str,
+    *,
+    predicate: Callable[[Any], bool],
+    limit: int = _BRANCH_HISTORY_SCAN_LIMIT,
+    family_id: str | None = None,
+) -> Any | None:
+    """Scan checkpoint history newest-first, returning the first match.
+
+    Shared helper used by both ``_find_branch_checkpoint`` and ``retry_prepare``.
+    The scan yields newest-first (``alist`` default), so the first predicate
+    match is the most recent checkpoint satisfying the condition.
+
+    Args:
+        checkpointer: LangGraph checkpointer instance.
+        thread_id: Thread to scan.
+        predicate: Called with each CheckpointTuple. Return True to accept.
+        limit: Max checkpoints to scan (newest-first).
+        family_id: If set, verify head metadata matches. Individual checkpoints
+            with mismatched family_id are silently skipped (defense-in-depth;
+            head-level ownership is checked by the caller).
+
+    Returns:
+        The first CheckpointTuple matching *predicate*, or None.
+    """
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    try:
+        async for checkpoint_tuple in checkpointer.alist(config, limit=limit):
+            if family_id:
+                meta = getattr(checkpoint_tuple, "metadata", {}) or {}
+                ckpt_family = meta.get("family_id")
+                if ckpt_family and str(ckpt_family) != str(family_id):
+                    continue
+            if predicate(checkpoint_tuple):
+                return checkpoint_tuple
+    except Exception:
+        logger.exception("Failed to scan checkpoints for thread %s", thread_id)
+    return None
 
 
 def _checkpoint_messages(checkpoint_tuple) -> list[Any]:
@@ -1530,30 +1557,26 @@ async def retry_prepare(
         return RetryPrepareResponse(retry_from_checkpoint=False)
 
     # Scan history for a checkpoint with (head_user_count - 1) user messages.
-    # ``alist`` yields newest-first; the first match is the most recent
-    # checkpoint before the failed user message was added.
+    # Uses shared _scan_checkpoints helper (newest-first, returns first match).
     target_user_count = head_user_count - 1
-    fork_source: Any = None
-    try:
-        async for checkpoint_tuple in checkpointer.alist(config, limit=100):
-            ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
-            ckpt_family_id = ckpt_meta.get("family_id")
-            if ckpt_family_id and str(ckpt_family_id) != str(verified.family_id):
-                continue
 
-            ckpt_messages = _checkpoint_messages(checkpoint_tuple)
-            ckpt_user_count = sum(
-                1 for m in ckpt_messages if getattr(m, "type", None) == "human"
-                or (isinstance(m, dict) and m.get("type") == "human")
-            )
-            if ckpt_user_count == target_user_count:
-                fork_source = checkpoint_tuple
-                break
-    except Exception:
-        logger.exception("Failed to scan checkpoint history for retry thread %s", thread_id)
-        return RetryPrepareResponse(retry_from_checkpoint=False)
+    def _is_pre_failure(tup: Any) -> bool:
+        messages = _checkpoint_messages(tup)
+        count = sum(
+            1 for m in messages if getattr(m, "type", None) == "human"
+            or (isinstance(m, dict) and m.get("type") == "human")
+        )
+        return count == target_user_count
 
+    fork_source = await _scan_checkpoints(
+        checkpointer, thread_id, predicate=_is_pre_failure
+    )
     if fork_source is None:
+        logger.info(
+            "retry-prepare: no pre-failure checkpoint found for thread %s "
+            "(head has %d user messages, none with %d)",
+            thread_id, head_user_count, target_user_count,
+        )
         return RetryPrepareResponse(retry_from_checkpoint=False)
 
     # Deep-copy the pre-failure checkpoint and write it back to the SAME

@@ -595,21 +595,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Mirrors DeerFlow `summarizedRef`.
    */
   const summarizedIds = ref<Set<string>>(new Set())
-  // ── Retry version pagination (DeerFlow §2.1: superseded groups) ──
-  // When the user retries the latest turn, the previous assistant response is
-  // saved here instead of discarded. MessageList renders a < prev/next > control
-  // so the user can flip between versions. Keys: human message id (stable
-  // identifier — NOT positional index, which breaks when superseded groups
-  // have a different count than live groups and shift later turns).
-  const supersededGroups = ref<Map<string, MessageGroup[]>>(new Map())
-  // Which version index the user is currently viewing for each turn. 0 = old,
-  // 1 = new (current). Defaults to 1 (always show latest after retry).
-  const supersededVersionIndex = ref<Map<string, number>>(new Map())
   /**
    * Message IDs removed by retry() truncation. mergeValuesMessages filters
    * these out so the backend's values event (which reflects the full checkpoint
    * state, including the failed turn) doesn't re-add old AI messages that the
    * frontend intentionally discarded. Cleared when the retry stream completes.
+   *
+   * Unlike DeerFlow's supersededRunIds (which hides messages in the same
+   * thread), we fork the checkpoint server-side so the old content never
+   * reaches the frontend. retryTruncatedIds is a safety net for edge cases
+   * where the fork doesn't fully isolate the retry state.
    */
   const retryTruncatedIds = ref<Set<string>>(new Set())
   let abortController: AbortController | null = null
@@ -1683,9 +1678,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // don't linger. Also clears summarizedIds so a fresh run can recapture.
     transientBridge.value = []
     summarizedIds.value = new Set()
-    // Retry pagination: clear superseded groups on thread switch.
-    supersededGroups.value = new Map()
-    supersededVersionIndex.value = new Map()
+    // Retry safety net: clear truncated IDs on thread switch so they don't
+    // leak into the next conversation's values events.
     retryTruncatedIds.value = new Set()
 
     isLoading.value = true
@@ -1814,38 +1808,6 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (isLoading.value) return
     const lastHuman = [...messages.value].reverse().find(m => m.type === 'human')
     if (lastHuman) {
-      // Save the current assistant groups as superseded BEFORE truncating.
-      // This lets MessageList render a < prev/next > control so the user can
-      // flip between the old and new AI response (DeerFlow §2.1 pattern).
-      // Key by human message id (stable) — not positional index — so the
-      // mapping survives visible-array shifts when superseded groups have a
-      // different count than live groups.
-      const { getMessageGroups } = await import('@/utils/ai-chat/messageGroups')
-      const { deduplicateMessages } = await import('@/utils/ai-chat/message-identity')
-      const deduped = deduplicateMessages(messages.value)
-      const allGroups = getMessageGroups(deduped)
-      const lastHumanId = lastHuman.id
-      const lastHumanIdx = allGroups.findIndex(g => g.type === 'human' && g.id === lastHumanId)
-      if (lastHumanIdx >= 0) {
-        const turnGroups = allGroups.slice(lastHumanIdx + 1)
-        const assistantGroups = turnGroups.filter(g =>
-          g.type === 'assistant' || g.type === 'assistant:processing'
-            || g.type === 'assistant:present-files' || g.type === 'assistant:subagent',
-        )
-        if (assistantGroups.length > 0) {
-          // Replace any previous superseded set for this turn (user retried twice).
-          supersededGroups.value = new Map([
-            ...[...supersededGroups.value].filter(([k]) => k !== lastHumanId),
-            [lastHumanId, assistantGroups],
-          ])
-          // Default to showing the NEW response (version 1).
-          supersededVersionIndex.value = new Map([
-            ...[...supersededVersionIndex.value].filter(([k]) => k !== lastHumanId),
-            [lastHumanId, 1],
-          ])
-        }
-      }
-
       // Truncate BEFORE the last human message (not after it).
       // sendMessage → addOptimisticUserMessage will re-add it with a fresh id,
       // so keeping the original would produce two identical user bubbles.
@@ -1856,7 +1818,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       // Record IDs of messages being truncated so mergeValuesMessages can
       // filter them out. The backend checkpoint still contains these messages
       // (from the failed attempt), and its values event would otherwise
-      // re-add them to the frontend messages array.
+      // re-add them to the frontend messages array. This is a safety net —
+      // the server-side checkpoint fork in retryPrepare should prevent the
+      // old content from reaching the frontend in the first place.
       const truncatedIds = new Set(
         messages.value.slice(lastIdx).map(m => m.id),
       )
@@ -1876,10 +1840,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           try {
             const { retryPrepare } = await import('@/api/ai-chat')
             await retryPrepare(effectiveThreadId)
-          } catch {
+          } catch (err) {
             // Non-fatal: fall back to a normal retry. The fork is best-effort;
             // the retryTruncatedIds filter still prevents old content from
             // reappearing in the UI.
+            if (!(err as Error).message?.includes('404')) {
+              console.warn('[useThreadChat] retryPrepare failed, falling back:', err)
+            }
           }
         }
 
@@ -2012,9 +1979,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // thread switch) so rescued turns never leak across chat views.
     transientBridge.value = []
     summarizedIds.value = new Set()
-    // Retry pagination: clear superseded groups on thread switch / new chat.
-    supersededGroups.value = new Map()
-    supersededVersionIndex.value = new Map()
+    // Retry safety net: clear truncated IDs on new chat so they don't leak.
     retryTruncatedIds.value = new Set()
   }
 
@@ -2059,39 +2024,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     })
   }
 
-  // ── Retry version navigation ──
-
-  /** Navigate to the previous (superseded) version for a given turn. */
-  function showPrevVersion(humanMessageId: string) {
-    if (!supersededGroups.value.has(humanMessageId)) return
-    const currentIdx = supersededVersionIndex.value.get(humanMessageId) ?? 1
-    if (currentIdx > 0) {
-      supersededVersionIndex.value = new Map([
-        ...supersededVersionIndex.value,
-        [humanMessageId, currentIdx - 1],
-      ])
-    }
-  }
-
-  /** Navigate back to the current (latest) version for a given turn. */
-  function showNextVersion(humanMessageId: string) {
-    if (!supersededGroups.value.has(humanMessageId)) return
-    const currentIdx = supersededVersionIndex.value.get(humanMessageId) ?? 1
-    if (currentIdx < 1) {
-      supersededVersionIndex.value = new Map([
-        ...supersededVersionIndex.value,
-        [humanMessageId, 1],
-      ])
-    }
-  }
-
   return {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, runId,
     todos, serverGoal,
-    supersededGroups, supersededVersionIndex,
     sendMessage, cancelStream, loadHistory, retry, clearMessages, submitClarification,
     submitFeedback, handleCompact, handleGoalCommand,
-    showPrevVersion, showNextVersion,
   }
 }
