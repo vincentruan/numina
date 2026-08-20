@@ -36,6 +36,8 @@
         :key="c.id"
         :contract="c"
         @click="selected = c"
+        @edit="onSwipeEdit(c)"
+        @end="onSwipeEnd(c)"
       />
     </div>
     <EmptyState
@@ -83,7 +85,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import type { RentalContract, RentalRequestPayload } from '@/types'
 import { useRentalContractStore } from '@/stores/rentalContract'
 import { useAuthStore } from '@/stores/auth'
@@ -167,6 +169,27 @@ function onAction(action: { value?: string }) {
     showEdit.value = true
   } else if (action.value === 'end') {
     showEndConfirm.value = true
+  }
+}
+
+// ── Swipe actions ──
+function onSwipeEdit(contract: RentalContract) {
+  selected.value = contract
+  showEdit.value = true
+}
+
+async function onSwipeEnd(contract: RentalContract) {
+  try {
+    await showConfirmDialog({
+      title: t('common.confirm'),
+      message: t('rental.deleteConfirm'),
+    })
+    selected.value = contract
+    await store.deactivateContract(contract.id)
+    await store.fetchSummary()
+    showSuccessToast(t('rental.deleteSuccess'))
+  } catch {
+    // user cancelled dialog
   }
 }
 

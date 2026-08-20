@@ -25,6 +25,14 @@ export function realizeWish(id: string, data: WishRealizeRequest) {
   return http.post(`/wishes/${id}/realize`, data)
 }
 
+export function completeWish(id: string) {
+  return http.post<Wish>(`/wishes/${id}/complete`)
+}
+
+export function copyWish(id: string) {
+  return http.post<Wish>(`/wishes/${id}/copy`)
+}
+
 // Per-wish opt-out of the high-interest-debt linkage hint.
 // T3 added the backend route (PATCH /wishes/{id}/ignore-debt-warning, body {ignore}).
 export function setIgnoreDebtWarning(id: string, ignore: boolean) {

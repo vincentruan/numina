@@ -1,33 +1,59 @@
 <template>
-  <div class="rental-card" :class="{ inactive: !contract.is_active }" @click="$emit('click')">
-    <div class="card-header">
-      <span class="role-badge" :class="contract.role">
-        <van-icon :name="contract.role === 'landlord' ? 'arrow-down' : 'arrow-up'" />
-        {{ contract.role === 'landlord' ? t('rental.roleLandlord') : t('rental.roleTenant') }}
-      </span>
-      <span v-if="contract.is_active" class="status active">{{ t('rental.active') }}</span>
-      <span v-else class="status inactive">{{ t('rental.inactive') }}</span>
+  <van-swipe-cell
+    :disabled="!contract.is_active"
+    class="rental-swipe"
+    :left-width="0"
+    :right-width="contract.is_active ? 140 : 0"
+    stop-propagation
+  >
+    <div class="rental-card" :class="{ inactive: !contract.is_active }" @click="$emit('click')">
+      <div class="card-header">
+        <span class="role-badge" :class="contract.role">
+          <van-icon :name="contract.role === 'landlord' ? 'arrow-down' : 'arrow-up'" />
+          {{ contract.role === 'landlord' ? t('rental.roleLandlord') : t('rental.roleTenant') }}
+        </span>
+        <span v-if="contract.is_active" class="status active">{{ t('rental.active') }}</span>
+        <span v-else class="status inactive">{{ t('rental.inactive') }}</span>
+      </div>
+      <div class="card-body">
+        <div class="rent-amount">{{ formatConverted(contract.monthly_rent, contract.currency) }}</div>
+        <div class="rent-label">{{ t('rental.monthlyRent') }}</div>
+      </div>
+      <div class="card-meta">
+        <span v-if="contract.counterparty" class="meta-item">
+          <van-icon name="user-o" />
+          {{ contract.counterparty }}
+        </span>
+        <span class="meta-item">
+          <van-icon name="calendar-o" />
+          {{ contract.start_date }} ~ {{ contract.end_date || t('rental.openEnded') }}
+        </span>
+        <span v-if="Number(contract.deposit) > 0" class="meta-item">
+          <van-icon name="cash-back-record" />
+          {{ t('rental.deposit') }} {{ formatConverted(contract.deposit, contract.currency) }}
+        </span>
+      </div>
+      <div v-if="contract.notes" class="card-notes">{{ contract.notes }}</div>
     </div>
-    <div class="card-body">
-      <div class="rent-amount">{{ formatConverted(contract.monthly_rent, contract.currency) }}</div>
-      <div class="rent-label">{{ t('rental.monthlyRent') }}</div>
-    </div>
-    <div class="card-meta">
-      <span v-if="contract.counterparty" class="meta-item">
-        <van-icon name="user-o" />
-        {{ contract.counterparty }}
-      </span>
-      <span class="meta-item">
-        <van-icon name="calendar-o" />
-        {{ contract.start_date }} ~ {{ contract.end_date || t('rental.openEnded') }}
-      </span>
-      <span v-if="Number(contract.deposit) > 0" class="meta-item">
-        <van-icon name="cash-back-record" />
-        {{ t('rental.deposit') }} {{ formatConverted(contract.deposit, contract.currency) }}
-      </span>
-    </div>
-    <div v-if="contract.notes" class="card-notes">{{ contract.notes }}</div>
-  </div>
+
+    <!-- Swipe right actions: active contracts only -->
+    <template v-if="contract.is_active" #right>
+      <van-button
+        square
+        type="danger"
+        class="swipe-action-btn"
+        :text="t('rental.endContract')"
+        @click.stop="$emit('end')"
+      />
+      <van-button
+        square
+        type="primary"
+        class="swipe-action-btn"
+        :text="t('rental.editContract')"
+        @click.stop="$emit('edit')"
+      />
+    </template>
+  </van-swipe-cell>
 </template>
 
 <script setup lang="ts">
@@ -44,10 +70,23 @@ defineProps<{
 
 defineEmits<{
   click: []
+  edit: []
+  end: []
 }>()
 </script>
 
 <style scoped>
+.rental-swipe {
+  touch-action: pan-y;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.swipe-action-btn {
+  height: 100%;
+  min-width: 70px;
+  font-size: 13px;
+  font-weight: 500;
+}
 .rental-card {
   background: var(--card-bg);
   border-radius: 12px;

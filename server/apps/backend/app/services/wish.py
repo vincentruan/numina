@@ -142,6 +142,69 @@ def delete_wish(db: Session, user: User, wish_id: int) -> None:
     db.commit()
 
 
+def complete_wish(db: Session, user: User, wish_id: int) -> Wish:
+    """Mark a non-asset wish as realized (experience / travel etc.).
+
+    Unlike realize_wish this does NOT create an Asset — the wish is simply
+    flipped to status='realized' with fulfilled_at set.  Only allowed when
+    converts_to_asset is False.
+    """
+    wish = get_wish(db, user, wish_id)
+
+    if wish.status == "realized":
+        raise AppError(ErrorCode.VALIDATION_ERROR)
+
+    if wish.converts_to_asset:
+        raise AppError(ErrorCode.VALIDATION_ERROR)
+
+    if wish.user_id != user.id:
+        raise AppError(ErrorCode.FORBIDDEN)
+
+    wish.status = "realized"
+    wish.fulfilled_at = datetime.now(UTC)
+
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "dashboard-narrative")
+    invalidate_skill(db, user.family_id, "wish_advice")
+    db.commit()
+    db.refresh(wish)
+    _attach_savings_count(db, wish)
+    return wish
+
+
+def copy_wish(db: Session, user: User, wish_id: int) -> Wish:
+    """Duplicate an existing wish as a new pending wish.
+
+    Copies: name, description, expected_price, priority, category_id, currency,
+    converts_to_asset, target_date, monthly_saving.
+    Resets: status=pending, saved_amount=0, realized_asset_id=None,
+    fulfilled_at=None, ignore_debt_warning=False.
+    """
+    source = get_wish(db, user, wish_id)
+
+    new_wish = Wish(
+        family_id=user.family_id,
+        user_id=user.id,
+        name=source.name,
+        description=source.description,
+        expected_price=source.expected_price,
+        priority=source.priority,
+        category_id=source.category_id,
+        currency=source.currency,
+        converts_to_asset=source.converts_to_asset,
+        target_date=source.target_date,
+        monthly_saving=source.monthly_saving,
+    )
+    db.add(new_wish)
+    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "dashboard-narrative")
+    invalidate_skill(db, user.family_id, "wish_advice")
+    db.commit()
+    db.refresh(new_wish)
+    _attach_savings_count(db, new_wish)
+    return new_wish
+
+
 def realize_wish(
     db: Session, user: User, wish_id: int, req: WishRealizeRequest
 ) -> Asset:

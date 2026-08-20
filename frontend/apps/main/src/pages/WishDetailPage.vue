@@ -103,6 +103,9 @@
           <van-button v-if="wish.converts_to_asset" block type="primary" @click="showRealizeDialog = true">
             {{ t('wish.convertToAsset') }}
           </van-button>
+          <van-button v-else block type="success" :loading="completing" @click="onComplete">
+            {{ t('wish.markComplete') }}
+          </van-button>
           <!-- Passive '问 AI 规划储蓄' button → /ai/chat?source=wish_detail&id= -->
           <van-button block type="default" plain @click="router.push({ name: 'AIChat', query: { source: 'wish_detail', id: wish.id } })">
             {{ t('wish.advice.askPlanSavings') }}
@@ -123,6 +126,9 @@
           </van-button>
         </template>
         <template v-else>
+          <van-button block type="success" plain :loading="copying" @click="onCopy">
+            {{ t('wish.copyWish') }}
+          </van-button>
           <van-button block type="primary" plain @click="$router.push(`/wishes/${wish.id}/edit`)">
             {{ t('common.edit') }}
           </van-button>
@@ -233,7 +239,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { getCategories } from '@/api/categories'
 import type { Category, Wish } from '@/types'
-import { realizeWish, setIgnoreDebtWarning as setIgnoreDebtWarningApi } from '@/api/wishes'
+import { completeWish, copyWish, realizeWish, setIgnoreDebtWarning as setIgnoreDebtWarningApi } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import WishSavingsProgress from '@/components/wishes/WishSavingsProgress.vue'
 import WishSavingsRecordDialog from '@/components/wishes/WishSavingsRecordDialog.vue'
@@ -259,6 +265,8 @@ const { ensureRate } = useExchangeRate()
 // Realize dialog
 const showRealizeDialog = ref(false)
 const realizing = ref(false)
+const completing = ref(false)
+const copying = ref(false)
 const showDatePicker = ref(false)
 const showCategoryPicker = ref(false)
 
@@ -360,6 +368,48 @@ async function onRealize() {
     showFailToast(t('toast.operationFailed'))
   } finally {
     realizing.value = false
+  }
+}
+
+async function onComplete() {
+  if (!wish.value) return
+  const saved = Number(wish.value.saved_amount || 0)
+  const expected = Number(wish.value.expected_price || 0)
+  const insufficient = expected > 0 && saved < expected
+  const message = insufficient
+    ? t('toast.confirmCompleteInsufficient', {
+      saved: currency.formatConverted(saved, wish.value.currency),
+      expected: currency.formatConverted(expected, wish.value.currency),
+    })
+    : t('toast.confirmComplete')
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message })
+  } catch {
+    return // user cancelled dialog
+  }
+  try {
+    completing.value = true
+    await completeWish(wish.value.id)
+    await wishStore.fetchWish(wish.value.id)
+    showSuccessToast(t('toast.wishCompleted'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    completing.value = false
+  }
+}
+
+async function onCopy() {
+  if (!wish.value) return
+  try {
+    copying.value = true
+    const res = await copyWish(wish.value.id)
+    showSuccessToast(t('toast.wishCopied'))
+    router.push(`/wishes/${res.data.id}`)
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  } finally {
+    copying.value = false
   }
 }
 
