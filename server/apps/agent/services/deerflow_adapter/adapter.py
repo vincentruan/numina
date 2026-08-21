@@ -416,6 +416,7 @@ class DeerFlowAdapter:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        checkpoint_id: str | None = None,
     ) -> AsyncGenerator[Any, None]:
         """Yield raw LangGraph StreamEvents from DeerFlowClient.stream()."""
         # Set the original user content ContextVar so DeerFlow's
@@ -446,6 +447,14 @@ class DeerFlowAdapter:
             if plan_mode is not None:
                 stream_kwargs["plan_mode"] = plan_mode
 
+            # Retry checkpoint forking: when checkpoint_id is set, we need to
+            # pass it to the checkpointer so it reads from that checkpoint
+            # (before the failed message) instead of the head.
+            # DeerFlowClient._get_runnable_config() does not extract checkpoint_id
+            # from kwargs, so we monkey-patch it temporarily (no vendored edits).
+            if checkpoint_id is not None:
+                stream_kwargs["checkpoint_id"] = checkpoint_id
+
             async with _get_semaphore():
                 loop = asyncio.get_running_loop()
                 queue: asyncio.Queue[Any] = asyncio.Queue()
@@ -453,11 +462,34 @@ class DeerFlowAdapter:
                 def _produce() -> None:
                     try:
                         with self._family_config_context():
-                            message = self._build_prompt(skill_name, context)
-                            for event in self._client.stream(
-                                message, thread_id=thread_id, **stream_kwargs
-                            ):
-                                loop.call_soon_threadsafe(queue.put_nowait, event)
+                            # Monkey-patch _get_runnable_config to inject checkpoint_id
+                            # into the configurable. This is needed because DeerFlowClient's
+                            # stock _get_runnable_config does not extract checkpoint_id from
+                            # kwargs, so the checkpointer would always read from the head.
+                            # The patch is temporary and scoped to this single stream() call.
+                            if checkpoint_id is not None:
+                                from unittest.mock import patch
+
+                                original_get_runnable_config = self._client._get_runnable_config
+
+                                def patched_get_runnable_config(tid: str, **overrides):
+                                    overrides["checkpoint_id"] = checkpoint_id
+                                    return original_get_runnable_config(tid, **overrides)
+
+                                patch_cm = patch.object(
+                                    self._client,
+                                    "_get_runnable_config",
+                                    patched_get_runnable_config,
+                                )
+                            else:
+                                patch_cm = contextlib.nullcontext()
+
+                            with patch_cm:
+                                message = self._build_prompt(skill_name, context)
+                                for event in self._client.stream(
+                                    message, thread_id=thread_id, **stream_kwargs
+                                ):
+                                    loop.call_soon_threadsafe(queue.put_nowait, event)
                     except Exception as e:
                         loop.call_soon_threadsafe(queue.put_nowait, e)
                     finally:
@@ -501,6 +533,7 @@ class DeerFlowAdapter:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        checkpoint_id: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         """Yield (sse_event_type, data) tuples from DeerFlowClient.stream().
 
@@ -524,6 +557,7 @@ class DeerFlowAdapter:
             enable_thinking,
             subagent_enabled=subagent_enabled,
             plan_mode=plan_mode,
+            checkpoint_id=checkpoint_id,
         ):
             if isinstance(event, BaseException):
                 yield ("error", {"error": str(event)})

@@ -1090,6 +1090,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
        * re-sent user message and overwrite the existing one.
        */
       retryPreserveTitle?: boolean
+      /**
+       * Checkpoint ID to fork from for retry. When set, the backend loads
+       * state from this checkpoint (before the failed user message) instead
+       * of the head, skipping the failed message entirely.
+       */
+      checkpointId?: string | null
     },
   ): Promise<void> {
     const {
@@ -1099,6 +1105,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       additionalKwargs,
       files,
       retryPreserveTitle,
+      checkpointId,
     } = sendOptions || {}
 
     // If a previous stream is still marked as loading (e.g. dropped connection
@@ -1217,6 +1224,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           if (modeConfig.subagent_enabled !== undefined) configurable.subagent_enabled = modeConfig.subagent_enabled
           if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
           if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
+        }
+        // Retry checkpoint forking: when checkpointId is set (from retryPrepare),
+        // pass it to the backend so the checkpointer loads from that checkpoint
+        // (before the failed user message) instead of the head.
+        if (checkpointId) {
+          configurable.checkpoint_id = checkpointId
         }
         // Prepend language directive so the backend LLM responds in the
         // user's UI language (SKILL.md: output language is controlled by user
@@ -1830,20 +1843,23 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         messages.value = messages.value.slice(0, lastIdx)
 
         // Retry checkpoint forking: call the backend retry-prepare endpoint
-        // which forks the pre-failure checkpoint so the retry reads clean
-        // state (1 user message instead of 2). The fork is server-side —
-        // no checkpoint_id needs to be passed through the stream config.
+        // which returns the checkpoint_id of the pre-failure checkpoint.
+        // We pass this to sendMessage via checkpointId so the backend can
+        // fork from that checkpoint (skipping the failed message).
         // Falls back to a normal retry if the endpoint fails or returns
         // retry_from_checkpoint: false.
         const effectiveThreadId = threadId || currentThreadId
+        let checkpointId: string | null = null
         if (effectiveThreadId) {
           try {
             const { retryPrepare } = await import('@/api/ai-chat')
-            await retryPrepare(effectiveThreadId)
+            const res = await retryPrepare(effectiveThreadId)
+            if (res.retry_from_checkpoint && res.checkpoint_id) {
+              checkpointId = res.checkpoint_id
+            }
           } catch (err) {
-            // Non-fatal: fall back to a normal retry. The fork is best-effort;
-            // the retryTruncatedIds filter still prevents old content from
-            // reappearing in the UI.
+            // Non-fatal: fall back to a normal retry. The retryTruncatedIds
+            // filter still prevents old content from reappearing in the UI.
             if (!(err as Error).message?.includes('404')) {
               console.warn('[useThreadChat] retryPrepare failed, falling back:', err)
             }
@@ -1862,6 +1878,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // stuck on the temporary (user-text) title.
         await sendMessage(lastHuman.content, {
           threadId: effectiveThreadId || undefined,
+          checkpointId,
         })
       } catch (err) {
         // Restore original messages on failure so user's message stays visible,

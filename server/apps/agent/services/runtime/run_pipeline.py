@@ -234,6 +234,12 @@ class RunPipeline:
         # web-search capability and custom skills — accepting it here avoids
         # a redundant round-trip).
         preloaded_ai_config: dict[str, Any] | None = None,
+        # Optional: checkpoint ID to fork from (retry checkpoint forking).
+        # When set, the adapter passes it to DeerFlowClient.stream so the
+        # checkpointer loads state from that checkpoint instead of the head.
+        # This skips the failed user message that the head retains after a
+        # failed first turn.  Pass None (default) for normal head-based runs.
+        checkpoint_id: str | None = None,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -253,6 +259,7 @@ class RunPipeline:
         self._available_skills = available_skills
         self._middlewares = middlewares
         self._preloaded_ai_config = preloaded_ai_config
+        self.checkpoint_id = checkpoint_id
 
         # Populated by __aenter__
         self._providers: list[dict[str, Any]] = []
@@ -634,6 +641,7 @@ class RunPipeline:
             context=redacted,
             thread_id=self.thread_id,
             enable_thinking=enable_thinking,
+            checkpoint_id=self.checkpoint_id,
         ):
             if self.record.abort_event.is_set():
                 break

@@ -1313,6 +1313,9 @@ async def _run_numina_agent(
     call_plan_mode = bool(configurable.get("is_plan_mode", False))
     call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
     call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
+    # Retry checkpoint forking: when the frontend passes checkpoint_id
+    # (from retryPrepare), fork from that checkpoint instead of the head.
+    call_checkpoint_id = configurable.get("checkpoint_id") if isinstance(configurable.get("checkpoint_id"), str) else None
 
     # Web-search behavioral guidance lives in the skill files:
     # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
@@ -1375,6 +1378,7 @@ async def _run_numina_agent(
         skip_active_skill=is_slash_message,
         middlewares=None,
         preloaded_ai_config=ai_config,
+        checkpoint_id=call_checkpoint_id,
     ) as p:
         # For slash-activated skills (U2), set the skill context manually
         # after the pipeline's __aenter__ (which skipped set_active_skill).

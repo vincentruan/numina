@@ -1531,8 +1531,6 @@ async def retry_prepare(
 
     # [Numina Extension] — retry checkpoint fork for title generation
     """
-    import copy as _copy
-
     checkpointer = get_checkpointer()
 
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -1579,34 +1577,17 @@ async def retry_prepare(
         )
         return RetryPrepareResponse(retry_from_checkpoint=False)
 
-    # Deep-copy the pre-failure checkpoint and write it back to the SAME
-    # thread_id with a fresh uuid6 checkpoint_id.  The new ID is time-based
-    # and therefore higher than the head's ID, so ``alist`` (which returns
-    # the latest checkpoint_id) will return this fork as the head.
-    fork_ckpt = _copy.deepcopy(getattr(fork_source, "checkpoint", {}) or {})
-    fork_meta = _copy.deepcopy(getattr(fork_source, "metadata", {}) or {})
-    fork_ckpt["id"] = str(uuid6())
-    fork_meta.update(
-        {
-            "source": "retry_fork",
-            "updated_at": now_iso(),
-            "family_id": x_family_id,
-            "retry_fork_from": _checkpoint_id(fork_source),
-        }
-    )
-
-    # Write the fork to the same thread.  ``aput`` generates a new
-    # checkpoint_id from ``fork_ckpt["id"]``; because it's a fresh uuid6,
-    # it's higher than the head's ID and becomes the new head.
-    new_versions = dict(fork_ckpt.get("channel_versions", {}) or {})
-    try:
-        await checkpointer.aput(config, fork_ckpt, fork_meta, new_versions)
-    except Exception:
-        logger.exception("Failed to write retry fork checkpoint for thread %s", thread_id)
+    # Return the checkpoint_id of the pre-failure checkpoint.
+    # The frontend passes this to /runs/stream via config.configurable.checkpoint_id,
+    # so the checkpointer reads from that checkpoint (before the failed message)
+    # instead of the head. This matches DeerFlow's regenerate/prepare pattern
+    # — no checkpoint is written, the fork is a temporary read point.
+    checkpoint_id = _checkpoint_id(fork_source)
+    if checkpoint_id is None:
         return RetryPrepareResponse(retry_from_checkpoint=False)
 
     return RetryPrepareResponse(
-        checkpoint_id=fork_ckpt["id"],
+        checkpoint_id=checkpoint_id,
         checkpoint_ns="",
         retry_from_checkpoint=True,
     )
