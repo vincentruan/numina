@@ -644,7 +644,6 @@ export default {
       answered: '已回答',
       error: '提交失败',
       retry: '重试',
-      superseded: '已被新问题替代',
       customInput: '或输入自定义回答...',
       inputPlaceholder: '请输入您的回答...',
     },

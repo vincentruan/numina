@@ -30,7 +30,7 @@ const props = withDefaults(defineProps<{
   options?: Option[]
   context?: string
   choiceWithOther?: boolean
-  status?: 'pending' | 'submitting' | 'answered' | 'superseded'
+  status?: 'pending' | 'submitting' | 'answered'
   answer?: string
   threadId: string
   interruptId: string
@@ -51,7 +51,6 @@ const isComposing = ref(false)
 const isInteractive = computed(() => props.status === 'pending')
 const isSubmitting = computed(() => props.status === 'submitting')
 const isAnswered = computed(() => props.status === 'answered')
-const isSuperseded = computed(() => props.status === 'superseded')
 
 const hasOptions = computed(() => (props.options?.length ?? 0) > 0)
 
@@ -199,10 +198,6 @@ function handleCustomKeydown(e: KeyboardEvent) {
       <span>{{ t('aiChat.clarification.submitting') }}</span>
     </div>
 
-    <!-- Superseded state -->
-    <div v-if="isSuperseded" class="card-superseded" aria-live="polite">
-      <span>{{ t('aiChat.clarification.superseded') }}</span>
-    </div>
   </div>
 </template>
 
@@ -217,10 +212,6 @@ function handleCustomKeydown(e: KeyboardEvent) {
   border-radius: 8px;
 }
 
-.human-input-card.superseded {
-  opacity: 0.5;
-  pointer-events: none;
-}
 
 /* Header */
 .card-header {
@@ -400,12 +391,6 @@ function handleCustomKeydown(e: KeyboardEvent) {
   color: var(--van-primary-color);
 }
 
-/* Superseded */
-.card-superseded {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-style: italic;
-}
 
 /* Screen-reader only utility */
 .sr-only {

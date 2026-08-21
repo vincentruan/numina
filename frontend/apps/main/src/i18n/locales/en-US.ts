@@ -478,7 +478,6 @@ export default {
       answered: 'Answered',
       error: 'Submission failed',
       retry: 'Retry',
-      superseded: 'Superseded by new question',
       customInput: 'Or type a custom answer...',
       inputPlaceholder: 'Type your answer...',
     },

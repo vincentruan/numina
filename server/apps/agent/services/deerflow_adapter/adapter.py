@@ -447,11 +447,9 @@ class DeerFlowAdapter:
             if plan_mode is not None:
                 stream_kwargs["plan_mode"] = plan_mode
 
-            # Retry checkpoint forking: when checkpoint_id is set, we need to
-            # pass it to the checkpointer so it reads from that checkpoint
-            # (before the failed message) instead of the head.
-            # DeerFlowClient._get_runnable_config() does not extract checkpoint_id
-            # from kwargs, so we monkey-patch it temporarily (no vendored edits).
+            # Retry checkpoint forking: when checkpoint_id is set, pass it through
+            # stream_kwargs. NuminaDeerFlowClient._get_runnable_config() extracts it
+            # from overrides and includes it in the configurable dict for the checkpointer.
             if checkpoint_id is not None:
                 stream_kwargs["checkpoint_id"] = checkpoint_id
 
