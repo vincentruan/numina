@@ -207,8 +207,6 @@ export default {
     stopGeneration: 'Stop',
     generationStopped: 'Generation stopped',
     scrollToBottom: 'Latest reply',
-    prevVersion: 'Previous',
-    nextVersion: 'Next',
     thinkSummarySearched: 'Searched web',
     thinkSummaryTools: 'Used {n} tools',
     toolCallFailed: 'Tool failed, continuing',
