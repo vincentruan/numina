@@ -1,7 +1,7 @@
 ---
 title: JTI Revocation Must Be Persisted to Database, Not Held In-Memory
 date: 2026-04-27
-category: docs/solutions/best-practices
+category: best-practices
 module: backend
 problem_type: best_practice
 component: authentication

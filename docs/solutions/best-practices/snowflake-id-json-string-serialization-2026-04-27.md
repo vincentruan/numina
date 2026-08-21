@@ -1,7 +1,7 @@
 ---
 title: Snowflake IDs Must Be Serialized as Strings at the JSON Boundary
 date: 2026-04-27
-category: docs/solutions/best-practices
+category: best-practices
 module: backend
 problem_type: best_practice
 component: database

@@ -1,7 +1,7 @@
 ---
 title: "Vue 3 i18n Locale Switching with localStorage Persistence"
 date: 2026-05-15
-category: docs/solutions/developer-experience
+category: developer-experience
 module: frontend/apps/child i18n
 problem_type: developer_experience
 component: tooling

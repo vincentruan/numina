@@ -1,6 +1,7 @@
 ---
 title: Three-State Circuit Breaker with Cascade Retry for Multi-Provider AI
 date: 2026-05-20
+last_updated: 2026-08-19
 category: architecture-patterns
 module: ai-provider
 problem_type: architecture_pattern
@@ -10,7 +11,7 @@ applies_when:
   - Integrating with multiple external AI providers (OpenAI, Anthropic, DashScope)
   - Provider failures should cascade to secondary providers instead of returning errors
   - Rate-limited providers need gradual recovery instead of full-traffic slam
-  - Permanent auth errors (401/403) must be distinguished from transient failures (429/5xx)
+  - Permanent auth errors (401/403) and billing exhaustion (402) must be distinguished from transient failures (429/5xx)
   - Provider quota resets follow predictable time patterns (e.g., DashScope at :01/:31)
 tags: [circuit-breaker, multi-provider, cascade-retry, half-open, rate-limiting, failover, resilience]
 related_files:
@@ -61,10 +62,18 @@ Classify errors at the agent layer before reporting to backend:
 def classify_error_type(error_code: int, error_message: str | None = None) -> str:
     if error_code in (401, 403):
         return "permanent_auth"
+    if error_code == 402:
+        # Payment Required — provider account has no credit / quota exhausted.
+        # Treat as permanent_account so the circuit opens immediately and
+        # cascade retry moves to the next provider.
+        return "permanent_account"
     if error_code == 410:
         return "permanent_account"
-    if error_message and "invalid key" in error_message.lower():
-        return "permanent_auth"
+    if error_message and any(kw in error_message.lower() for kw in (
+        "invalid key", "insufficient funds", "no credits",
+        "payment required", "subscription expired",
+    )):
+        return "permanent_account"
     if error_code == 429:
         return "transient_rate_limit"
     if error_code in (500, 502, 503, 504):

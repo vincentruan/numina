@@ -2,7 +2,7 @@
 title: CLAUDE.md Files Should Be Scoped to Module Consumers, Not Human Readers
 date: 2026-04-27
 last_updated: 2026-05-14
-category: docs/solutions/developer-experience
+category: developer-experience
 module: documentation
 problem_type: developer_experience
 component: documentation

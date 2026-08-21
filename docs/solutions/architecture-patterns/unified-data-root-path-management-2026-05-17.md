@@ -1,7 +1,7 @@
 ---
 title: "Unified DATA_ROOT path management for multi-service monorepo"
 date: 2026-05-17
-category: docs/solutions/architecture-patterns
+category: architecture-patterns
 module: server
 problem_type: architecture_pattern
 component: service_object

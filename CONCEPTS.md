@@ -13,6 +13,12 @@ The set of system fixed-flow capability ids that an owner cannot shadow with a c
 ### ChatAdapter
 The chat-specific adapter that owns prompt resolution (family override → default `default_system_prompt.md`), MCP SSE URL construction (with `family_id` validation), and DeerFlow stream delegation for the conversational app. It wraps the system prompt in XML tags for privilege separation (DeerFlow has no native system role) and is the per-app runner's delegation target for the `numina` (chat) app. It survives the unified-dispatch refactor; the earlier `Orchestrator` that branched chat-vs-skill is deleted.
 
+### NuminaDeerFlowClient
+DeerFlowClient subclass (in `server/apps/agent/services/deerflow_adapter/numina_deerflow_client.py`) that extends `_get_runnable_config()` to extract `checkpoint_id` from kwargs and include it in the `configurable` dict for the LangGraph checkpointer. Replaced the earlier `unittest.mock.patch` approach that monkey-patched the private method on the base class — the subclass is type-safe, scope-safe (instance method, no global state), and concurrency-safe. Used by `family_adapter_cache.py` and `client_factory.py` instead of the raw `DeerFlowClient`.
+
+### Checkpoint fork
+Retry mechanism for AI chat: when an assistant response fails mid-stream, the frontend saves the checkpoint ID from the last successful `values` SSE event. On retry, the backend passes `checkpoint_id` to `NuminaDeerFlowClient`, which forks the LangGraph run from that checkpoint (before the failed message) instead of from the head. This produces a clean regeneration without duplicating prior messages. The adapter drops fallback titles from `values` events on follow-up turns to prevent the stale checkpoint title from overwriting the LLM-generated session title.
+
 ### sandbox_family_id
 A coroutine-scoped ContextVar carrying the tenant family id that scopes every agent sandbox file operation (`write_file`, `read_file`, `str_replace`) under `AGENT_DATA_DIR/{family_id}/sandboxes/...`. It is set at the `worker.run_agent` dispatch boundary before any branch runs and reset in a `finally`, and must be propagated into executor threads via `copy_context().run` because `loop.run_in_executor` does not copy contextvars — without propagation the provider resolves empty path mappings and file tools fail open (return success without writing).
 
