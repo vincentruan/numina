@@ -1682,6 +1682,33 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     )
   }
 
+  /**
+   * Abort the local SSE connection WITHOUT sending server-side cancel.
+   *
+   * Used by onUnmounted (page navigation) — the agent run continues in the
+   * background (on_disconnect=continue) so the user can recover via
+   * checkChatTask() + loadHistory() when they return. Contrast with
+   * cancelStream() which sends client.runs.cancel() to the agent.
+   */
+  function abortLocalStream() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+    if (streamTimeoutId !== null) {
+      clearTimeout(streamTimeoutId)
+      streamTimeoutId = null
+    }
+    if (retryDelayId !== null) {
+      clearTimeout(retryDelayId)
+      retryDelayId = null
+    }
+    // Do NOT set userCancelled — the retry loop should treat this as a
+    // transient disconnect, not a deliberate cancel.
+    // Do NOT call client.runs.cancel() — the agent continues running.
+    isLoading.value = false
+  }
+
   async function loadHistory(threadId: string, retries = 1): Promise<void> {
     // Cancel any ongoing stream before loading new history
     cancelStream()
@@ -2045,7 +2072,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, runId,
     todos, serverGoal,
-    sendMessage, cancelStream, loadHistory, retry, clearMessages, submitClarification,
+    sendMessage, cancelStream, abortLocalStream, loadHistory, retry, clearMessages, submitClarification,
     submitFeedback, handleCompact, handleGoalCommand,
   }
 }

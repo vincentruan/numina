@@ -1499,6 +1499,19 @@ async def _run_numina_agent(
             status=record.status.value if hasattr(record.status, "value") else str(record.status),
         )
 
+        # 6. Emit chat.completed custom event for backend lifecycle tracking.
+        # When the frontend SSE proxy breaks (user navigates away), the backend
+        # spawns a _spawn_lifecycle_consumer that subscribes to the bridge
+        # independently. This custom event signals successful completion so the
+        # lifecycle consumer can call the on_result callback (if any). The
+        # END_SENTINEL (published by RunPipeline.__aexit__) signals the stream
+        # end, which triggers complete_task() in the lifecycle consumer.
+        await bridge.publish(
+            p.run_id,
+            "custom",
+            {"type": "chat.completed", "thread_id": thread_id},
+        )
+
 
 # Synthetic trigger for literacy-weekly-report runs.
 _SYNTHETIC_LITERACY_REPORT_TRIGGER = "/literacy-weekly-report"

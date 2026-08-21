@@ -8,7 +8,7 @@
  *   - Out-of-page: useTaskPolling recovers progress/result via AITask
  * Cancel button when running (U21).
  */
-import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { marked } from 'marked'
@@ -179,14 +179,24 @@ onActivated(async () => {
   await resumeHandle.resume()
 })
 
+// Dashboard is KeepAlive-cached — onDeactivated fires on navigation away,
+// onUnmounted only fires when the component is permanently destroyed.
+// Use disconnect() (lightweight) on deactivate, cleanup() on full unmount.
+onDeactivated(() => {
+  if (taskCheckTimer) {
+    clearTimeout(taskCheckTimer)
+    taskCheckTimer = null
+  }
+  streamHandle?.abort()
+  resumeHandle.disconnect()
+})
+
 // Cleanup on unmount: stop task-check timer + abort in-flight SSE + cleanup resume.
 onUnmounted(() => {
   if (taskCheckTimer) {
     clearTimeout(taskCheckTimer)
     taskCheckTimer = null
   }
-  streamHandle?.abort()
-  streamHandle = null
   resumeHandle.cleanup()
 })
 

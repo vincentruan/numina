@@ -40,6 +40,7 @@ from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.schemas.file_record import FileRecordResponse
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
+from apps.backend.app.services.bridge_consumer import _spawn_lifecycle_consumer
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.storage.service import StorageService
 
@@ -303,6 +304,11 @@ async def chat_stream(
         request_json = {
             "family_id": _family_id,
             "user_id": _user_id,
+            # on_disconnect=continue: when the frontend SSE proxy breaks
+            # (user navigates away), the agent must NOT cancel the background
+            # run. The AITask stays "running" so the frontend can detect it
+            # on return via checkChatTask() and recover via loadHistory().
+            "on_disconnect": "continue",
             "input": {
                 "messages": [{"role": "user", "content": body.question}],
             },
@@ -319,6 +325,8 @@ async def chat_stream(
         }
 
         answer_chunks: list[str] = []
+        chat_run_id: str | None = None
+        client_disconnected = False
         try:
             agent_client = AgentClient(
                 _family_id, _user_id, timeout=130.0
@@ -329,6 +337,16 @@ async def chat_stream(
                 json=request_json,
                 headers={"X-Thread-Id": str(session_id)},
             ) as resp:
+                # Extract run_id from Content-Location for lifecycle tracking.
+                # Needed when the proxy loop exits due to client disconnect —
+                # the lifecycle consumer uses run_id to subscribe to the bridge
+                # and detect agent completion independently.
+                chat_run_id = AITaskService.extract_and_attach_run_id(
+                    str(ai_task_id),
+                    resp.headers.get("Content-Location"),
+                    _family_id,
+                ) if resp.headers.get("Content-Location") else None
+
                 # runs.py returns SSE directly — passthrough with SSE-aware parsing
                 sse_buffer: list[str] = []
                 async for line in resp.aiter_lines():
@@ -366,6 +384,7 @@ async def chat_stream(
                         logger.info(
                             "chat_stream client disconnected session=%s", session_id
                         )
+                        client_disconnected = True
                         break
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
@@ -403,16 +422,48 @@ async def chat_stream(
                     + b"\n"
                 )
 
-        # U18: Mark AITask as completed after successful stream (no exception)
+        # U18: Mark AITask lifecycle after proxy loop exit.
+        # Natural completion (stream ended) → complete_task immediately.
+        # Client disconnect (user navigated away) → agent keeps running
+        # (on_disconnect=continue); spawn a lifecycle consumer to detect
+        # agent completion via the bridge and mark the AITask later.
         if ai_task_id is not None:
-            try:
-                _cdb = SessionLocal()
+            if client_disconnected:
+                if chat_run_id:
+                    logger.info(
+                        "[chat-stream] client disconnected, spawning lifecycle consumer task=%s run=%s",
+                        ai_task_id, chat_run_id,
+                    )
+                    _spawn_lifecycle_consumer(
+                        task_id=str(ai_task_id),
+                        family_id=current_user.family_id,
+                        run_id=chat_run_id,
+                    )
+                else:
+                    # No run_id extracted yet (agent may not have started) —
+                    # the agent will finish but we can't track it via bridge.
+                    # Mark completed as best-effort; checkpointer preserves messages.
+                    logger.warning(
+                        "[chat-stream] client disconnected but no run_id for task=%s",
+                        ai_task_id,
+                    )
+                    try:
+                        _cdb = SessionLocal()
+                        try:
+                            AITaskService.complete_task(ai_task_id, _cdb)
+                        finally:
+                            _cdb.close()
+                    except Exception:
+                        logger.warning("[chat-stream] AITask complete failed task=%s", ai_task_id, exc_info=True)
+            else:
                 try:
-                    AITaskService.complete_task(ai_task_id, _cdb)
-                finally:
-                    _cdb.close()
-            except Exception:
-                logger.warning("[chat-stream] AITask complete failed task=%s", ai_task_id, exc_info=True)
+                    _cdb = SessionLocal()
+                    try:
+                        AITaskService.complete_task(ai_task_id, _cdb)
+                    finally:
+                        _cdb.close()
+                except Exception:
+                    logger.warning("[chat-stream] AITask complete failed task=%s", ai_task_id, exc_info=True)
 
     return StreamingResponse(
         proxy_stream(),

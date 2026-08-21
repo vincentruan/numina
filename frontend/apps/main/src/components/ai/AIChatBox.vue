@@ -416,10 +416,12 @@ onMounted(async () => {
 
 // Cleanup on unmount
 onUnmounted(() => {
-  // #8: cancel any in-flight stream + retry loop so the for-await and retry
-  // timers don't keep mutating refs / firing network requests for up to 120s
-  // after navigation away from the chat page.
-  chat.cancelStream()
+  // #8: Abort the local SSE connection so the proxy loop exits cleanly.
+  // Use abortLocalStream (not cancelStream) — the agent run continues in the
+  // background (on_disconnect=continue) so the user can recover via
+  // checkChatTask() + loadHistory() when they return. cancelStream would send
+  // client.runs.cancel() to the agent, killing the background run.
+  chat.abortLocalStream()
   // U19: stop AITask polling timer on unmount.
   stopChatTaskPolling()
 })
