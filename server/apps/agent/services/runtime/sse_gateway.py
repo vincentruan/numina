@@ -25,7 +25,7 @@ from deerflow.runtime import (
 )
 from fastapi import HTTPException, Request
 
-from packages.db.stream_bridge import StreamGap
+from packages.stream_bridge import StreamGap
 
 from .lifespan import get_run_manager, get_stream_bridge
 from .worker import run_agent

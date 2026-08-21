@@ -52,13 +52,13 @@ async def bridge_consumer(
     import os
 
     from apps.backend.app.services.ai_task_service import AITaskService
-    from packages.db.stream_bridge import (
+    from packages.stream_bridge import (
         END_SENTINEL,
         HEARTBEAT_SENTINEL,
         StreamGap,
         make_stream_bridge,
     )
-    from packages.db.stream_bridge.config import StreamBridgeConfig
+    from packages.stream_bridge.config import StreamBridgeConfig
 
     # Resolve run_id: prefer caller-provided value (avoids DB lookup race),
     # fall back to querying the AITask table.

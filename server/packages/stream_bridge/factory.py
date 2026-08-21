@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 
-from deerflow.runtime.stream_bridge import MemoryStreamBridge, StreamBridge
-
+from .base import StreamBridge
 from .config import StreamBridgeConfig
+from .memory import MemoryStreamBridge
 from .redis import NuminaRedisStreamBridge
 
 logger = logging.getLogger(__name__)

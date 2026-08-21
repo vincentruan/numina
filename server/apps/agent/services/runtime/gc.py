@@ -239,8 +239,8 @@ async def reconcile_orphaned_runs(
                     try:
                         import os as _os
 
-                        from packages.db.stream_bridge import make_stream_bridge
-                        from packages.db.stream_bridge.config import StreamBridgeConfig
+                        from packages.stream_bridge import make_stream_bridge
+                        from packages.stream_bridge.config import StreamBridgeConfig
 
                         # Create bridge and publish end marker
                         config = StreamBridgeConfig(
