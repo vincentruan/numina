@@ -56,9 +56,11 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, cast
 
-from deerflow.client import DeerFlowClient
 from deerflow.config.app_config import reload_app_config
 
+from apps.agent.services.deerflow_adapter.numina_deerflow_client import (
+    NuminaDeerFlowClient,
+)
 from packages.core.model_entry import build_model_entry
 
 logger = logging.getLogger(__name__)
@@ -252,7 +254,7 @@ _MAX_CACHE_SIZE = 100
 # where two threads both pass the size check and both insert).
 _adapter_cache: OrderedDict[
     tuple[str, str, bool, bool, str, str, tuple[int, ...], bool, frozenset[str] | None],
-    tuple[DeerFlowClient, Path] | None,
+    tuple[NuminaDeerFlowClient, Path] | None,
 ] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
@@ -523,8 +525,8 @@ def get_family_adapter(
     middlewares: list[Any] | None = None,
     memory_enabled: bool = True,
     available_skills: set[str] | None = None,
-) -> tuple[DeerFlowClient, Path]:
-    """获取家庭的 DeerFlowClient 实例（带缓存）。
+) -> tuple[NuminaDeerFlowClient, Path]:
+    """获取家庭的 NuminaDeerFlowClient 实例（带缓存）。
 
     Each client receives the shared checkpointer so multi-turn conversation
     state is persisted across requests. DeerFlow namespaces state by thread_id,
@@ -660,7 +662,7 @@ def get_family_adapter(
             os.environ["DEER_FLOW_CONFIG_PATH"] = str(temp_config_path)
             try:
                 reload_app_config(str(temp_config_path))
-                client = DeerFlowClient(
+                client = NuminaDeerFlowClient(
                     config_path=str(temp_config_path),
                     checkpointer=checkpointer,
                     model_name="main",  # Use explicit model name to avoid config.models[0] IndexError
@@ -682,7 +684,7 @@ def get_family_adapter(
                     os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
 
         with _cache_lock:
-            stored_entry: tuple[DeerFlowClient, Path] = (client, temp_config_path)
+            stored_entry: tuple[NuminaDeerFlowClient, Path] = (client, temp_config_path)
             _adapter_cache[cache_key] = stored_entry
 
         logger.info(

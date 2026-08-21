@@ -462,34 +462,15 @@ class DeerFlowAdapter:
                 def _produce() -> None:
                     try:
                         with self._family_config_context():
-                            # Monkey-patch _get_runnable_config to inject checkpoint_id
-                            # into the configurable. This is needed because DeerFlowClient's
-                            # stock _get_runnable_config does not extract checkpoint_id from
-                            # kwargs, so the checkpointer would always read from the head.
-                            # The patch is temporary and scoped to this single stream() call.
-                            if checkpoint_id is not None:
-                                from unittest.mock import patch
-
-                                original_get_runnable_config = self._client._get_runnable_config
-
-                                def patched_get_runnable_config(tid: str, **overrides):
-                                    overrides["checkpoint_id"] = checkpoint_id
-                                    return original_get_runnable_config(tid, **overrides)
-
-                                patch_cm = patch.object(
-                                    self._client,
-                                    "_get_runnable_config",
-                                    patched_get_runnable_config,
-                                )
-                            else:
-                                patch_cm = contextlib.nullcontext()
-
-                            with patch_cm:
-                                message = self._build_prompt(skill_name, context)
-                                for event in self._client.stream(
-                                    message, thread_id=thread_id, **stream_kwargs
-                                ):
-                                    loop.call_soon_threadsafe(queue.put_nowait, event)
+                            # NuminaDeerFlowClient natively supports checkpoint_id
+                            # in stream_kwargs, which is passed through to
+                            # _get_runnable_config and included in the configurable
+                            # dict for the checkpointer.
+                            message = self._build_prompt(skill_name, context)
+                            for event in self._client.stream(
+                                message, thread_id=thread_id, **stream_kwargs
+                            ):
+                                loop.call_soon_threadsafe(queue.put_nowait, event)
                     except Exception as e:
                         loop.call_soon_threadsafe(queue.put_nowait, e)
                     finally:
