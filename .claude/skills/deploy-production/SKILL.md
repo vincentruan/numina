@@ -44,13 +44,30 @@ set -a && source .claude/deploy.env && set +a
 
 **Docker permissions** — prepend `sudo` if the deploy user is not in the `docker` group.
 
+### Dual Supabase Database Architecture
+
+Production uses **two separate Supabase PostgreSQL databases** on the same Supabase project:
+
+| Database | Env var | Used by | Purpose |
+|----------|---------|---------|---------|
+| `numina` | `DATABASE_URL` | backend, agent, scheduler_worker | Application data (users, assets, families, alembic-managed) |
+| `numina_deerflow` | `DEERFLOW_DB_URL` | agent only | DeerFlow checkpoint data (checkpoints, blobs, writes) |
+
+**Why separate:** Both use `alembic_version` table. Sharing one DB causes DeerFlow's `bootstrap.py` to read Numina's alembic revision and fail with `Can't locate revision identified by '...'`.
+
+**Key facts:**
+- Same Supabase project → same user/password, different database names
+- `DEERFLOW_DB_URL` must use **direct connection port 5432** (not pooler port 6543) — pooler transaction mode doesn't support the prepared statements DeerFlow needs
+- DeerFlow self-initializes its schema on agent startup via `init_engine()` — **no manual migration step needed** for the DeerFlow DB
+- If the `numina_deerflow` database doesn't exist yet, create it via direct connection (port 5432): `CREATE DATABASE numina_deerflow;`
+
 ## Server Directory Layout
 
 The production server's deploy directory needs only these files (not a full git clone for Mode A):
 
 ```
 ~/data/numina/
-├── .env                              # Secrets + *_IMAGE vars (manual, not in git)
+├── .env                              # Secrets + *_IMAGE vars + DATABASE_URL + DEERFLOW_DB_URL (manual, not in git)
 ├── docker-compose.production.yml     # Compose config (synced from repo)
 ├── nginx.production.conf             # Nginx config (synced from repo)
 ├── system-config.yaml                # AI model metadata (synced from repo)
@@ -144,6 +161,8 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 
 If current ≠ head → run upgrade:
 
+> **Note:** This only applies to the **Numina database** (`DATABASE_URL`). The **DeerFlow checkpoint database** (`DEERFLOW_DB_URL`) is self-managing — DeerFlow's `init_engine()` creates/updates its own schema on agent startup. No manual migration step needed for DeerFlow.
+
 ```bash
 set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
@@ -191,7 +210,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 '
 ```
 
-**Success:** 6 services running, backend `(healthy)`, `/api/health` returns `{"status":"ok"}`.
+**Success:** 6 services running, backend `(healthy)`, agent `(healthy)`, `/api/health` returns `{"status":"ok"}`.
 
 ---
 
@@ -331,9 +350,15 @@ AGENT_IMAGE=numina/agent:latest
 SCHEDULER_WORKER_IMAGE=numina/scheduler-worker:latest
 FRONTEND_MAIN_IMAGE=numina/frontend-main:latest
 FRONTEND_CHILD_IMAGE=numina/frontend-child:latest
+
+# Dual Supabase databases:
+DATABASE_URL=postgresql://numina:<password>@<supabase-host>:5432/numina
+DEERFLOW_DB_URL=postgresql://numina:<password>@<supabase-host>:5432/numina_deerflow
 ```
 
-**Switching back to Mode A:** restore the `ghcr.io/...` values (or remove the `*_IMAGE` lines to use defaults).
+> **⚠️ `DEERFLOW_DB_URL` must use direct connection port (5432), NOT the Supabase pooler port (6543).** Pooler transaction mode doesn't support the prepared statements DeerFlow needs.
+
+**Switching back to Mode A:** restore the `ghcr.io/...` image values (or remove the `*_IMAGE` lines to use defaults). Database URLs stay the same regardless of deploy mode.
 
 ### Step 3: Deploy to Remote
 
@@ -535,3 +560,6 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Frontend unchanged after Mode C deploy | Docker cache served stale layers. Rebuild with `--no-cache` + `DOCKER_DEFAULT_PLATFORM=linux/amd64`. Verify by grepping feature strings in container JS bundles |
 | Container restarts / `exec format error` | Architecture mismatch: arm64 image on amd64 server. Rebuild with `export DOCKER_DEFAULT_PLATFORM=linux/amd64`. Verify: `docker inspect --format '{{.Architecture}}' numina/<svc>:latest` |
 | `alembic current` fails with "No 'script_location' key" | Wrong working directory. Must run from `/app` with `-c apps/backend/alembic.ini`, not from `/app/apps/backend` |
+| Agent unhealthy / DeerFlow init failed | Check `DEERFLOW_DB_URL` in `.env` — must point to `numina_deerflow` database on port 5432 (not pooler 6543). Check agent logs: `sudo docker compose -f docker-compose.production.yml logs --tail 50 agent` |
+| `Can't locate revision identified by '...'` | DeerFlow reading Numina's `alembic_version` — `DEERFLOW_DB_URL` and `DATABASE_URL` point to the same database. Fix: ensure `DEERFLOW_DB_URL` targets the separate `numina_deerflow` database |
+| DeerFlow checkpoint data lost after deploy | Check `DEERFLOW_DB_URL` hasn't reverted to SQLite default — verify `.env` has the PostgreSQL URL. SQLite path: `.numina/data/db/deerflow-checkpoints.db` |
