@@ -32,7 +32,10 @@ from apps.backend.app.services.ai_result_parser import (
     _validate_json,
 )
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.bridge_consumer import consume_task_stream
+from apps.backend.app.services.bridge_consumer import (
+    _spawn_lifecycle_consumer,
+    consume_task_stream,
+)
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import SKILL_TTL
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
@@ -152,9 +155,7 @@ async def _stream_asset_report_sse(
         yield f"event: error\ndata: {err.decode()}\n\n".encode()
 
 
-async def _watch_report_task_completion(
-    *, task_id: str, family_id: int
-) -> None:
+async def _watch_report_task_completion(*, task_id: str, family_id: int) -> None:
     """Background watcher for report task completion after client disconnect.
 
     When the SSE client disconnects while the agent pipeline is still running
@@ -218,9 +219,7 @@ async def _watch_report_task_completion(
         finally:
             db.close()
     except Exception as exc:
-        logger.warning(
-            "[report-watcher] watcher failed task=%s err=%s", task_id, exc
-        )
+        logger.warning("[report-watcher] watcher failed task=%s err=%s", task_id, exc)
 
 
 @router.post("/generate/events")
@@ -395,12 +394,21 @@ async def trigger_generate_events(
             media_type="text/event-stream",
         )
 
+    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    # The asset-report worker persists results directly (ai_reports table),
+    # so no on_result callback is needed — lifecycle consumer only handles
+    # complete_task/fail_task on stream end/error.
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=run_id,
+    )
+
     # U5: Subscribe to Redis stream via bridge_consumer (replaces HTTP proxy)
     # bridge_consumer handles:
     # - Last-Event-ID reconnection
     # - StreamGap detection and recovery
     # - Heartbeat sentinels
-    # - Task status updates (complete/fail on end/error)
     # U6: Extract Last-Event-ID from request headers for reconnection
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
