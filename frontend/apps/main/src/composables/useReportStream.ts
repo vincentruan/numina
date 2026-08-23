@@ -273,7 +273,9 @@ export function useReportStream(): UseReportStreamReturn {
     } else if (data?.status === 'error') {
       status.value = 'error'
       errorMessage.value = errorMessage.value || t('toast.aiGenerateFailed')
-    } else {
+    } else if (status.value !== 'error') {
+      // Only transition to 'completed' if not already in error state.
+      // An error event may have been received before this end frame.
       status.value = 'completed'
       if (!generatedAt.value) {
         generatedAt.value = new Date().toISOString()
@@ -439,9 +441,9 @@ export function useReportStream(): UseReportStreamReturn {
             } else if (event === 'custom' && data) {
               handleCustom(data as Parameters<typeof handleCustom>[0])
             } else if (event === 'error' && data) {
-              const errData = data as { message?: string }
+              const errData = data as { error?: string; message?: string }
               status.value = 'error'
-              errorMessage.value = errData.message || t('toast.aiGenerateFailed')
+              errorMessage.value = errData.error || errData.message || t('toast.aiGenerateFailed')
             } else if (event === 'gap') {
               // U6: Handle gap event - cursor beyond retained buffer
               // Reload durable state from DB and resume from current tail

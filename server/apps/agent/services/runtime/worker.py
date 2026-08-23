@@ -731,6 +731,16 @@ async def _run_asset_report_pipeline(
                     "报告结构化输出校验失败",
                     error_type="ReportValidationError",
                 )
+                # Publish error event to bridge so frontend SSE receives it
+                # before the end frame (lifecycle consumer will fail the task).
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {
+                        "error": "报告结构化输出校验失败，请重试",
+                        "error_type": "ReportValidationError",
+                    },
+                )
             elif step2_payload is not None:
                 logger.info(
                     "[_run_asset_report_pipeline] Extracted report JSON: "
@@ -782,6 +792,16 @@ async def _run_asset_report_pipeline(
                     p.set_error(
                         "结构化结果保存失败，可参考上方文本",
                         error_type=type(persist_exc).__name__,
+                    )
+                    # Publish error event to bridge so frontend SSE receives it
+                    # before the end frame (lifecycle consumer will fail the task).
+                    await bridge.publish(
+                        p.run_id,
+                        "error",
+                        {
+                            "error": "报告保存失败，请重试",
+                            "error_type": type(persist_exc).__name__,
+                        },
                     )
 
         # Set report session title (localized by user language).

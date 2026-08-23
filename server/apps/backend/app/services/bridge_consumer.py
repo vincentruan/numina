@@ -128,6 +128,40 @@ async def bridge_consumer(
         await bridge.close()
 
 
+def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
+    """Verify the task produced its expected result in the DB.
+
+    For report tasks, checks that a row exists in ``ai_reports`` for this
+    family.  For other task types, returns True (the agent's ``set_error``
+    already controls the pipeline status; we trust it).
+
+    Returns False only when the task type expects persisted data that is
+    missing — indicating the pipeline silently failed.
+    Returns True (trust the pipeline) when the task cannot be looked up
+    (e.g. invalid ID in tests).
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    try:
+        task = AITaskService.get_task_by_id(task_id, family_id, db)
+    except (ValueError, TypeError):
+        # Invalid task_id (e.g. non-numeric mock in tests) — trust pipeline
+        return True
+    if not task:
+        return False
+    if task.skill_id == "report":
+        from apps.backend.app.models.ai_report import AIReport
+
+        return (
+            db.query(AIReport)
+            .filter(AIReport.family_id == int(family_id))
+            .first()
+            is not None
+        )
+    # Other task types: trust the pipeline status
+    return True
+
+
 def _map_to_safe_message(exc: Exception) -> str:
     """Map internal exceptions to user-safe SSE error messages.
 
@@ -188,7 +222,27 @@ def _spawn_lifecycle_consumer(
                             exc_info=True,
                         )
                 elif event_type == "end":
-                    AITaskService.complete_task(task_id, db)
+                    # Verify the task produced its expected result before
+                    # marking complete.  For report tasks, the pipeline writes
+                    # to ai_reports *before* publish_end, so a missing row
+                    # means the pipeline failed (e.g. JSON validation error)
+                    # even though the run finished without exception.
+                    if _verify_task_result(task_id, family_id, db):
+                        AITaskService.complete_task(task_id, db)
+                        logger.info(
+                            "[lifecycle] task %s completed (result verified)",
+                            task_id,
+                        )
+                    else:
+                        AITaskService.fail_task(
+                            task_id,
+                            "任务完成但未生成预期结果",
+                            db,
+                        )
+                        logger.warning(
+                            "[lifecycle] task %s failed (result not found)",
+                            task_id,
+                        )
                     return
                 elif event_type == "gap":
                     logger.warning(
@@ -237,13 +291,34 @@ async def consume_task_stream(
         SSE-formatted strings (e.g., "event: update\\ndata: {...}\\n\\n")
     """
     try:
+        error_seen = False
         async for event in bridge_consumer(task_id, family_id, last_event_id, run_id=run_id):
             event_type = event["event"]
             event_data = event["data"]
 
             if event_type == "heartbeat":
                 yield ": heartbeat\n\n"
+            elif event_type == "error":
+                error_seen = True
+                yield f"event: error\ndata: {json.dumps(event_data, default=str)}\n\n"
             elif event_type == "end":
+                # If no explicit error event was received, check AITask status.
+                # The lifecycle consumer verifies the result and may have set
+                # the task to "failed" (e.g. report data not persisted).
+                if not error_seen:
+                    await asyncio.sleep(0.5)  # let lifecycle consumer finish DB write
+                    _db = SessionLocal()
+                    try:
+                        from apps.backend.app.services.ai_task_service import (
+                            AITaskService,
+                        )
+
+                        _task = AITaskService.get_task_by_id(task_id, family_id, _db)
+                        if _task and _task.status == "failed":
+                            error_msg = _task.error_message or "任务执行失败"
+                            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+                    finally:
+                        _db.close()
                 yield f"event: end\ndata: {json.dumps(None)}\n\n"
                 return
             elif event_type == "gap":
