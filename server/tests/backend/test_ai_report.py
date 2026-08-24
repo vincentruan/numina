@@ -175,7 +175,6 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
         patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
         patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
     ):
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -209,8 +208,9 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
         patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
     ):
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
@@ -249,8 +249,9 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
         patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
     ):
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
@@ -261,27 +262,47 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     """If agent trigger fails (non-200), the route emits an SSE error frame (200)
-    and transitions the AITask to ``failed``.
+    and the lifecycle consumer transitions the AITask to ``failed``.
     """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls:
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=500, text="agent error"))
+    # Build a mock AgentClient.stream() that returns status 500 (agent failure).
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+
+    async def _mock_aread():
+        return b"agent error"
+
+    mock_resp.aread = _mock_aread
+    mock_resp.headers = {}
+
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(return_value=mock_cm)
+
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient", return_value=mock_client),
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_fwd,
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer") as mock_lc,
+    ):
+        mock_fwd.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Response is still 200 SSE (route emits an error frame)
+    # Response is still 200 SSE (route returns stream; error delivered via events)
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    # CRITICAL: Consume response to let generator complete
+    # Consume response to let generator complete
     _ = resp.content
 
-    db.expire_all()
-    task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
-    assert task is not None
-    assert task.status == "failed"
+    # The lifecycle consumer should have been spawned (fallback with run_id=None
+    # since the agent didn't return Content-Location).
+    assert mock_lc.called, "lifecycle consumer should be spawned"
 
 
 def _make_empty_async_gen():

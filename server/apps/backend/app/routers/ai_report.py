@@ -7,7 +7,6 @@
 
 import asyncio
 import contextlib
-import json
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -211,100 +210,65 @@ async def trigger_generate_events(
     family_id = current_user.family_id
     user_id = str(current_user.id)
 
-    # Phase 1: Backend-owned buffer.
-    # Trigger agent, consume its HTTP SSE response in a background task,
-    # and publish events to the shared backend-owned bridge.
-    # The frontend SSE endpoint subscribes to the same bridge.
+    # Phase 1: Backend-owned buffer (single streaming POST — no double trigger).
+    # The agent is triggered once via streaming POST; _pump_agent_sse_to_bridge
+    # consumes its SSE response and publishes to the shared bridge.
+    # The on_run_id callback spawns the lifecycle consumer as soon as the
+    # agent's Content-Location header is available (before body is consumed).
     agent_client = AgentClient(family_id, user_id, timeout=300.0)
     agent_url = f"/internal/gateway/runs/asset-report/{session_id}"
     shared_bridge = get_shared_bridge()
-    run_id: str | None = None
+    agent_trigger_body = {
+        "family_id": str(family_id),
+        "user_id": str(user_id),
+        "language": current_user.language,
+        "on_disconnect": "continue",
+    }
 
-    # Trigger agent and extract run_id from response headers.
-    # We use a non-streaming POST here because the actual SSE consumption
-    # happens in the background _pump_agent_sse_to_bridge task below.
-    try:
-        resp = await agent_client.post(
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": str(user_id),
-                "language": current_user.language,
-                "on_disconnect": "continue",
-            },
+    # Track whether the lifecycle consumer was spawned via the callback.
+    # Fallback: spawn with run_id=None if the agent omits Content-Location.
+    lifecycle_spawned = [False]
+
+    def _on_run_id(cl_run_id: str) -> None:
+        resolved = AITaskService.extract_and_attach_run_id(
+            task_id, cl_run_id, family_id
         )
-        if resp.status_code != 200:
-            logger.warning(
-                "[asset-report] agent trigger failed: status=%s body=%s task=%s",
-                resp.status_code,
-                resp.text[:200],
-                task_id,
-            )
-            AITaskService.fail_task(task_id, "报告生成服务异常", db)
-            err = json.dumps(
-                {"error": "报告生成服务异常", "error_type": "AgentError"}
-            )
-            return StreamingResponse(
-                iter([f"event: error\ndata: {err}\n\n".encode()]),
-                media_type="text/event-stream",
+        if resolved and not lifecycle_spawned[0]:
+            lifecycle_spawned[0] = True
+            _spawn_lifecycle_consumer(
+                task_id=task_id,
+                family_id=family_id,
+                run_id=resolved,
+                bridge=shared_bridge,
             )
 
-        run_id = AITaskService.extract_and_attach_run_id(
-            task_id, resp.headers.get("Content-Location"), family_id
+    # Spawn background pump: one streaming POST → shared bridge.
+    asyncio.create_task(
+        _pump_agent_sse_to_bridge(
+            agent_client=agent_client,
+            agent_url=agent_url,
+            json_body=agent_trigger_body,
+            bridge=shared_bridge,
+            run_id="",  # resolved from Content-Location inside the pump
+            task_id=task_id,
+            on_run_id=_on_run_id,
         )
-    except Exception as exc:
+    )
+
+    # Fallback: if the agent didn't provide Content-Location, the callback
+    # never fired.  Spawn lifecycle consumer with run_id=None — it queries
+    # the AITask table when needed (best-effort).
+    if not lifecycle_spawned[0]:
         logger.warning(
-            "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
-        )
-        AITaskService.fail_task(
-            task_id, f"报告生成服务中断: {type(exc).__name__}", db
-        )
-        err = json.dumps(
-            {"error": "报告生成服务中断", "error_type": type(exc).__name__}
-        )
-        return StreamingResponse(
-            iter([f"event: error\ndata: {err}\n\n".encode()]),
-            media_type="text/event-stream",
-        )
-
-    if not run_id:
-        # No run_id from agent — the agent may not have started yet or the
-        # Content-Location header was missing. The lifecycle consumer and SSE
-        # forwarder will look up run_id from the AITask table when available.
-        logger.warning(
-            "[asset-report] agent returned no run_id task=%s — "
-            "lifecycle consumer will resolve from DB",
+            "[asset-report] lifecycle consumer spawned without run_id task=%s",
             task_id,
         )
-
-    # Spawn background task: consume agent HTTP SSE → publish to shared bridge.
-    # This survives frontend disconnect (the agent keeps running with
-    # on_disconnect=continue, and this pump keeps consuming its SSE output).
-    # Only spawn when we have a run_id (the agent returned one).
-    if run_id:
-        asyncio.create_task(
-            _pump_agent_sse_to_bridge(
-                agent_client=agent_client,
-                agent_url=agent_url,
-                json_body={
-                    "family_id": str(family_id),
-                    "user_id": str(user_id),
-                    "language": current_user.language,
-                    "on_disconnect": "continue",
-                },
-                bridge=shared_bridge,
-                run_id=run_id,
-                task_id=task_id,
-            )
+        _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=None,
+            bridge=shared_bridge,
         )
-
-    # Lifecycle consumer: subscribes to shared bridge, handles complete/fail.
-    _spawn_lifecycle_consumer(
-        task_id=task_id,
-        family_id=family_id,
-        run_id=run_id,
-        bridge=shared_bridge,
-    )
 
     # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     last_event_id = request.headers.get("Last-Event-ID")
@@ -312,7 +276,7 @@ async def trigger_generate_events(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=run_id,
+        run_id=None,  # resolved from AITask table by bridge_consumer
         bridge=shared_bridge,
     )
 

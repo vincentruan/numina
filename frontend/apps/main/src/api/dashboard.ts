@@ -1,4 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
+import { readSSEStream } from '@/utils/sseReader'
 import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse } from '@/types'
 
 export interface ExpiringSoonItem {
@@ -338,72 +339,58 @@ async function runNarrativeStream(
     return
   }
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let currentEvent = ''
   let narrativeBuffer = ''
   let thinkingBuffer = ''
+  let errored = false
 
   try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('event:')) {
-          currentEvent = line.slice(6).trim()
-          continue
-        }
-        if (!line.startsWith('data:')) continue
-        const dataStr = line.slice(5).trim()
-        if (!dataStr || dataStr === '[DONE]') {
-          currentEvent = ''
-          continue
-        }
-
-        try {
-          const parsed = JSON.parse(dataStr)
-          const event = currentEvent || 'message'
-          currentEvent = ''
-
-          if (event === 'custom' && parsed.type === 'reasoning_delta') {
-            const content = parsed.content || ''
-            thinkingBuffer += content
-            callbacks.onReasoningDelta(content)
-          } else if (event === 'messages' && parsed.type === 'ai') {
-            const content = parsed.content || ''
-            narrativeBuffer += content
-            callbacks.onNarrativeDelta(content)
-          } else if (event === 'custom' && parsed.type === 'dashboard_narrative.result') {
-            const payload = parsed.payload || {}
-            callbacks.onDone({
-              narrative: payload.narrative || narrativeBuffer,
-              thinking: payload.thinking || thinkingBuffer,
-            })
-          } else if (event === 'error') {
-            callbacks.onError(parsed.message || 'dashboard.narrative.error.generation_failed')
-            return
-          } else if (event === 'end') {
-            // stream ended without explicit result — use buffers
-            callbacks.onDone({
-              narrative: narrativeBuffer,
-              thinking: thinkingBuffer,
-            })
+    await readSSEStream(res, {
+      onMessage: (event, data) => {
+        if (errored) return
+        if (event === 'messages' && data) {
+          const msg = data as { type?: string; content?: string }
+          if (msg.type === 'ai' && msg.content) {
+            narrativeBuffer += msg.content
+            callbacks.onNarrativeDelta(msg.content)
           }
-        } catch {
-          // non-JSON data line; skip
         }
-        currentEvent = ''
-      }
-    }
-
-    // Stream ended naturally (no explicit end frame)
-    if (narrativeBuffer || thinkingBuffer) {
+      },
+      onCustom: (data) => {
+        if (errored) return
+        const custom = data as { type?: string; content?: string }
+        if (custom.type === 'reasoning_delta' && custom.content) {
+          thinkingBuffer += custom.content
+          callbacks.onReasoningDelta(custom.content)
+        } else if (custom.type === 'dashboard_narrative.result') {
+          const payload = (data as { payload?: Record<string, unknown> }).payload || {}
+          callbacks.onDone({
+            narrative: String(payload.narrative || narrativeBuffer),
+            thinking: String(payload.thinking || thinkingBuffer),
+          })
+        }
+      },
+      onError: (data) => {
+        errored = true
+        const errData = data as { error?: string; message?: string }
+        callbacks.onError(errData.error || errData.message || 'dashboard.narrative.error.generation_failed')
+      },
+      onEnd: (data) => {
+        if (errored) return
+        const endData = data as { status?: string } | undefined
+        if (endData?.status === 'error') {
+          errored = true
+          callbacks.onError('dashboard.narrative.error.generation_failed')
+        } else if (endData?.status !== 'complete' && endData?.status !== 'completed') {
+          // end frame with non-terminal status — use accumulated buffers.
+          callbacks.onDone({
+            narrative: narrativeBuffer,
+            thinking: thinkingBuffer,
+          })
+        }
+      },
+    })
+    // Stream ended naturally — deliver accumulated content if not yet done.
+    if (!errored && (narrativeBuffer || thinkingBuffer)) {
       callbacks.onDone({
         narrative: narrativeBuffer,
         thinking: thinkingBuffer,

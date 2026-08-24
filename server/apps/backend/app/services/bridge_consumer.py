@@ -81,6 +81,7 @@ async def _pump_agent_sse_to_bridge(
     bridge: Any,
     run_id: str,
     task_id: str,
+    on_run_id: Callable[[str], None] | None = None,
 ) -> None:
     """Consume agent HTTP SSE response and publish events to the shared bridge.
 
@@ -100,6 +101,10 @@ async def _pump_agent_sse_to_bridge(
         bridge: Shared backend StreamBridge instance.
         run_id: Agent run ID for bridge publishing.
         task_id: AITask ID for logging.
+        on_run_id: Optional callback invoked with the run_id extracted from
+            the agent's response ``Content-Location`` header.  Callers use
+            this to spawn lifecycle consumers before the response body is
+            fully consumed, avoiding a second HTTP trigger.
     """
     try:
         async with agent_client.stream(
@@ -107,6 +112,20 @@ async def _pump_agent_sse_to_bridge(
             agent_url,
             json=json_body,
         ) as resp:
+            # Early extraction: Content-Location is in response headers,
+            # available before the body is consumed.
+            if on_run_id is not None:
+                cl = resp.headers.get("Content-Location")
+                if cl:
+                    try:
+                        on_run_id(cl)
+                    except Exception:
+                        logger.warning(
+                            "[agent-pump] on_run_id callback failed task=%s",
+                            task_id,
+                            exc_info=True,
+                        )
+
             if resp.status_code != 200:
                 body = await resp.aread()
                 logger.warning(
@@ -449,7 +468,6 @@ async def consume_task_stream(
                 yield f"event: error\ndata: {json.dumps(event_data, default=str)}\n\n"
             elif event_type == "end":
                 if not error_seen:
-                    await asyncio.sleep(0.5)
                     _db = SessionLocal()
                     try:
                         from apps.backend.app.services.ai_task_service import (

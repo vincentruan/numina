@@ -34,7 +34,8 @@ async def init_runtime(app: FastAPI) -> None:
 
     # [Copied from DeerFlow Reference] — StreamBridge with bounded queue
     # [Integrated with Numina Multi-Tenant] — single shared instance
-    # [Cache Abstraction] — Memory bridge by default, Redis when configured
+    # Agent always uses in-memory bridge (DeerFlow native); backend owns the
+    # cross-process buffer.  No Redis, no cross-process bridge in the agent.
     """
     # Agent always uses in-memory StreamBridge (DeerFlow native pattern).
     # The agent is a producer — it publishes events to the bridge, and the

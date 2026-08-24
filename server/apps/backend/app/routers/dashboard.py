@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Literal
@@ -31,8 +32,10 @@ from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
+    _pump_agent_sse_to_bridge,
     _spawn_lifecycle_consumer,
     consume_task_stream,
+    get_shared_bridge,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
@@ -374,9 +377,11 @@ async def generate_narrative(
                 task_id,
             )
             AITaskService.fail_task(task_id, "叙事生成服务异常", db)
-            err = json.dumps({"message": "叙事生成服务异常", "name": "AgentError"}).encode()
+            err = json.dumps(
+                {"error": "叙事生成服务异常", "error_type": "AgentError"}
+            )
             return StreamingResponse(
-                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+                iter([f"event: error\ndata: {err}\n\n".encode()]),
                 media_type="text/event-stream",
             )
 
@@ -387,13 +392,45 @@ async def generate_narrative(
     except Exception as exc:
         logger.warning("[narrative] agent trigger failed task=%s err=%s", task_id, exc)
         AITaskService.fail_task(task_id, f"叙事生成服务中断: {type(exc).__name__}", db)
-        err = json.dumps({"message": "叙事生成服务中断", "name": type(exc).__name__}).encode()
+        err = json.dumps(
+            {"error": "叙事生成服务中断", "error_type": type(exc).__name__}
+        )
         return StreamingResponse(
-            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
+            iter([f"event: error\ndata: {err}\n\n".encode()]),
             media_type="text/event-stream",
         )
 
-    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    # Phase 1: Backend-owned buffer.
+    shared_bridge = get_shared_bridge()
+
+    if not run_id:
+        logger.warning(
+            "[narrative] agent returned no run_id task=%s — "
+            "lifecycle consumer will resolve from DB",
+            task_id,
+        )
+
+    # Spawn background task: consume agent HTTP SSE → publish to shared bridge.
+    if run_id:
+        asyncio.create_task(
+            _pump_agent_sse_to_bridge(
+                agent_client=agent_client,
+                agent_url=agent_url,
+                json_body={
+                    "family_id": str(family_id),
+                    "user_id": str(user.id),
+                    "language": user.language,
+                    "on_disconnect": "continue",
+                    "task_id": task_id,
+                    "input": {"messages": [{"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
+                },
+                bridge=shared_bridge,
+                run_id=run_id,
+                task_id=task_id,
+            )
+        )
+
+    # Lifecycle consumer: subscribes to shared bridge, handles complete/fail.
     from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     async def _persist_narrative_result(_event_type: str, data: dict) -> None:
@@ -412,15 +449,17 @@ async def generate_narrative(
         family_id=family_id,
         run_id=run_id,
         on_result=_persist_narrative_result,
+        bridge=shared_bridge,
     )
 
-
+    # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
         run_id=run_id,
+        bridge=shared_bridge,
     )
 
     return StreamingResponse(

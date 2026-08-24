@@ -180,9 +180,10 @@ async def _terminal_record_stream_missing(
     ):
         return False
 
-    # Check if stream exists and has events
-    # For DeerFlow's RedisStreamBridge, we can check stream_exists()
-    # For MemoryStreamBridge, we assume stream is gone if record is terminal
+    # Check if stream exists and has events.
+    # The agent always uses MemoryStreamBridge (no Redis).  stream_exists()
+    # is a RedisStreamBridge method — for memory bridge we fall through to
+    # the terminal-status check below.
     if hasattr(bridge, "stream_exists"):
         exists = await bridge.stream_exists(record.run_id)
         return not exists

@@ -1,14 +1,10 @@
 """AI 问答助手端点。
 
-SSE event type mapping from the agent's internal NDJSON event types to
-the public SSE event names used in the three-track protocol:
-
-    token.stream     → messages   (AI text/thinking tokens)
-    session.start    → session.start
-    phase.*          → custom     (connection/thinking/answering phases)
-    tool.call/result → custom     (tool execution progress)
-    capability.end   → end        (stream complete)
-    capability.error → error      (stream error)
+``/chat/stream`` transparently proxies the agent's LangGraph Platform SSE
+event stream. The agent emits the three-track protocol
+(``messages`` / ``values`` / ``custom`` / ``end`` / ``error``); this
+endpoint prepends a backend-synthesised ``session.start`` event and
+forwards everything else verbatim.
 """
 
 import json
@@ -240,14 +236,7 @@ async def chat_stream(
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
-    """流式问答，透传 agent 的 NDJSON 事件流，并根据 Accept header 决定输出格式。
-
-    - `Accept: text/event-stream` → SSE 格式（默认，新版前端）
-    - 其他 Accept → NDJSON 格式（向后兼容，旧版前端）
-    """
-    # U5: Backward compatibility — detect preferred output format from Accept header
-    accept_header = request.headers.get("Accept", "")
-    use_sse = "text/event-stream" in accept_header or not accept_header
+    """流式问答，透传 agent 的 LangGraph Platform SSE 事件流。"""
     if body.session_id is not None:
         session = _get_session_for_family(body.session_id, current_user.family_id, db)
         if session is None:
@@ -282,20 +271,19 @@ async def chat_stream(
     _family_id = str(current_user.family_id)
     _user_id = str(current_user.id)
 
+    # Chat uses a direct SSE proxy (not pump→bridge→forward like report/coach/
+    # literacy/narrative).  Rationale: chat is interactive — the frontend must
+    # stay connected for real-time message delivery, and there is no "task
+    # result" to cache or reconnect to mid-turn.  The lifecycle consumer is
+    # only spawned on client disconnect (on_disconnect=continue), so the agent
+    # run can complete and the AITask can be finalised after the user navigates
+    # away.  This is the closest pattern to DeerFlow's native "HTTP response =
+    # event stream" model.  The backend-owned buffer pattern is reserved for
+    # async task-like skills that need reconnection and lifecycle management.
     async def proxy_stream():
-        # Emit session.start as first event (SSE or NDJSON depending on Accept header)
+        # Emit session.start as first event (backend-synthesised, not from agent)
         start_event = {"session_id": str(session_id), "task_id": task_id}
-        if use_sse:
-            yield f"event: session.start\ndata: {json.dumps(start_event, ensure_ascii=False)}\n\n".encode()
-        else:
-            yield (
-                json.dumps(
-                    {"type": "session.start", **start_event},
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ).encode()
-                + b"\n"
-            )
+        yield f"event: session.start\ndata: {json.dumps(start_event, ensure_ascii=False)}\n\n".encode()
 
         # Route to the internal gateway endpoint (X-Agent-Token auth, bypasses R1 409 gate).
         # When agent_id is absent, fall back to the 数鸣 system agent (NUMINA_AGENT_ID).
@@ -324,7 +312,6 @@ async def chat_stream(
             },
         }
 
-        answer_chunks: list[str] = []
         chat_run_id: str | None = None
         client_disconnected = False
         try:
@@ -354,28 +341,6 @@ async def chat_stream(
                         # Complete SSE event — forward it
                         full_event = "\n".join(sse_buffer) + "\n\n"
                         yield full_event.encode()
-
-                        # Parse event type and data for answer token collection
-                        event_type = ""
-                        data_text = ""
-                        for ev_line in sse_buffer:
-                            if ev_line.startswith("event: "):
-                                event_type = ev_line[7:]
-                            elif ev_line.startswith("data: "):
-                                data_text = ev_line[6:]
-
-                        if event_type == "messages" and data_text:
-                            try:
-                                msg_data = json.loads(data_text)
-                                if (
-                                    isinstance(msg_data, dict)
-                                    and msg_data.get("type") == "ai"
-                                    and msg_data.get("content")
-                                ):
-                                    answer_chunks.append(msg_data["content"])
-                            except json.JSONDecodeError:
-                                pass
-
                         sse_buffer = []
                     elif line.strip():
                         sse_buffer.append(line)
@@ -406,21 +371,6 @@ async def chat_stream(
                     ensure_ascii=False,
                 )
                 yield f"event: error\ndata: {err_payload}\n\n".encode()
-            else:
-                yield (
-                    json.dumps(
-                        {
-                            "type": "capability.error",
-                            "error": {
-                                "message": "抱歉，AI 服务暂时不可用。",
-                                "code": "backend_proxy_error",
-                            },
-                        },
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ).encode()
-                    + b"\n"
-                )
 
         # U18: Mark AITask lifecycle after proxy loop exit.
         # Natural completion (stream ended) → complete_task immediately.
@@ -467,10 +417,8 @@ async def chat_stream(
 
     return StreamingResponse(
         proxy_stream(),
-        media_type="text/event-stream"
-        if use_sse
-        else "application/x-ndjson; charset=utf-8",
-        headers=_SSE_HEADERS if use_sse else {},
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
     )
 
 
