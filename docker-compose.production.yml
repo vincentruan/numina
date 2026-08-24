@@ -81,12 +81,8 @@ services:
       - NUMINA_PROJECT_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina}
       - DEERFLOW_DB_URL=${DEERFLOW_DB_URL:-postgresql://numina:numinapass@numina-postgres:5432/numina_deerflow}
-      - STREAM_BRIDGE_TYPE=redis
-      - REDIS_URL=redis://numina-redis:6379/0
     depends_on:
       backend:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]

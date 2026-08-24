@@ -39,7 +39,7 @@ def _fake_agent_trigger(status_code: int = 200, body: dict | None = None) -> Any
 def _fake_bridge_stream(frames: list[tuple[str, dict]]) -> Any:
     """Build a fake consume_task_stream async generator yielding SSE text."""
 
-    async def _stream(task_id: str, family_id: int, last_event_id: str | None = None, run_id: str | None = None):
+    async def _stream(task_id: str, family_id: int, last_event_id: str | None = None, run_id: str | None = None, **kwargs):
         for event, data in frames:
             yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
         yield "event: end\ndata: null\n\n"

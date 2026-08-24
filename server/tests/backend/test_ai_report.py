@@ -155,7 +155,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None):
+    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None, **kwargs):
         # Simulate the bridge consumer completing the task on end event
         from apps.backend.app.services.ai_task_service import AITaskService
         from apps.backend.app.database import SessionLocal
@@ -172,6 +172,8 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
         patch("apps.backend.app.routers.ai_report.consume_task_stream", _fake_stream),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
     ):
         mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)

@@ -1,11 +1,15 @@
-"""Backend-side Redis stream subscriber for AI task event consumption.
+"""Backend-side event buffer and SSE consumer for AI task event delivery.
 
-This module provides the bridge_consumer that subscribes to Redis streams
-published by the agent's StreamBridge, enabling backend SSE endpoints to
-consume task events with reconnection support.
+Phase 1 architecture (backend-owned buffer):
+  - Agent uses DeerFlow-native in-memory bridge (producer).
+  - Backend consumes agent's HTTP SSE response via ``_pump_agent_sse_to_bridge()``
+    and publishes events to a shared backend-owned StreamBridge.
+  - Frontend SSE endpoints subscribe to the shared bridge for event delivery.
+  - Lifecycle consumer subscribes to the shared bridge for task finalization.
 
-Replaces the direct HTTP proxy pattern (ai_report.py:_stream_asset_report_sse)
-with Redis Stream subscription for cross-process event delivery.
+The shared bridge is a singleton per backend process (memory or Redis-backed).
+Redis is only used when the backend needs cross-node buffer sharing (cluster);
+single-instance deployments use the in-memory bridge with zero external deps.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any
 
@@ -20,9 +25,144 @@ from packages.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-# Cache bridge type at module load to avoid per-call env reads.
-# Override via STREAM_BRIDGE_TYPE env var before process start.
-_BRIDGE_TYPE: str = __import__("os").getenv("STREAM_BRIDGE_TYPE", "memory")
+# Bridge type for the backend-owned buffer.  "memory" (default) for single
+# instance; "redis" for cluster deployments.  Only the backend accesses this
+# bridge — the agent uses its own in-memory bridge (DeerFlow native).
+_BRIDGE_TYPE: str = os.getenv("STREAM_BRIDGE_TYPE", "memory")
+
+# ---------------------------------------------------------------------------
+# Shared bridge singleton (backend-owned buffer)
+# ---------------------------------------------------------------------------
+
+_shared_bridge: Any = None
+
+
+def get_shared_bridge() -> Any:
+    """Return the backend-owned shared StreamBridge singleton.
+
+    Creates on first call using ``STREAM_BRIDGE_TYPE`` env var.
+    The singleton lives for the process lifetime (FastAPI lifespan manages
+    cleanup via ``close_shared_bridge()``).
+    """
+    global _shared_bridge
+    if _shared_bridge is None:
+        from packages.stream_bridge import make_stream_bridge
+        from packages.stream_bridge.config import StreamBridgeConfig
+
+        config = StreamBridgeConfig(
+            type=_BRIDGE_TYPE,
+            redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            queue_maxsize=256,
+            stream_ttl_seconds=86400,
+        )
+        _shared_bridge = make_stream_bridge(config)
+        logger.info("Created shared backend bridge (type=%s)", _BRIDGE_TYPE)
+    return _shared_bridge
+
+
+async def close_shared_bridge() -> None:
+    """Close the shared bridge.  Call from FastAPI shutdown."""
+    global _shared_bridge
+    if _shared_bridge is not None:
+        await _shared_bridge.close()
+        _shared_bridge = None
+
+
+# ---------------------------------------------------------------------------
+# Agent SSE pump (agent HTTP SSE → shared bridge)
+# ---------------------------------------------------------------------------
+
+
+async def _pump_agent_sse_to_bridge(
+    *,
+    agent_client: Any,
+    agent_url: str,
+    json_body: dict[str, Any],
+    bridge: Any,
+    run_id: str,
+    task_id: str,
+) -> None:
+    """Consume agent HTTP SSE response and publish events to the shared bridge.
+
+    This is the bridge between the agent's HTTP SSE output and the backend's
+    shared event buffer.  It reads the agent's streaming HTTP response line by
+    line, parses SSE frames, and publishes each event to the backend-owned
+    bridge for downstream consumption (frontend SSE + lifecycle consumer).
+
+    Runs as a background ``asyncio.Task`` so it survives frontend disconnect.
+    The agent's ``on_disconnect=continue`` ensures the agent keeps producing
+    events even if this pump's HTTP connection drops.
+
+    Args:
+        agent_client: ``AgentClient`` instance (injects auth headers).
+        agent_url: Agent endpoint URL (e.g. ``/internal/gateway/runs/asset-report/{thread_id}``).
+        json_body: Request body for the agent trigger.
+        bridge: Shared backend StreamBridge instance.
+        run_id: Agent run ID for bridge publishing.
+        task_id: AITask ID for logging.
+    """
+    try:
+        async with agent_client.stream(
+            "POST",
+            agent_url,
+            json=json_body,
+        ) as resp:
+            if resp.status_code != 200:
+                body = await resp.aread()
+                logger.warning(
+                    "[agent-pump] non-200: status=%s body=%s task=%s",
+                    resp.status_code,
+                    body[:200],
+                    task_id,
+                )
+                await bridge.publish(
+                    run_id,
+                    "error",
+                    {"error": "报告生成服务异常", "error_type": "AgentError"},
+                )
+                await bridge.publish_end(run_id)
+                return
+
+            current_event = ""
+            async for line in resp.aiter_lines():
+                if line.startswith("event:"):
+                    current_event = line[6:].strip()
+                elif line.startswith("data:"):
+                    data_str = line[5:].strip()
+                    if data_str and data_str != "[DONE]":
+                        try:
+                            data = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            data = data_str
+                        event_type = current_event or "message"
+                        # Skip internal agent events not meant for the frontend
+                        if event_type not in ("heartbeat",):
+                            await bridge.publish(run_id, event_type, data)
+                    current_event = ""
+                elif line.startswith("id:"):
+                    pass  # SSE event ID — frontend concern, not buffered
+                elif line == "":
+                    current_event = ""  # Blank line = event boundary
+
+    except Exception as exc:
+        logger.warning(
+            "[agent-pump] stream failed task=%s err=%s",
+            task_id,
+            exc,
+            exc_info=True,
+        )
+        await bridge.publish(
+            run_id,
+            "error",
+            {"error": "报告生成服务中断", "error_type": type(exc).__name__},
+        )
+    finally:
+        await bridge.publish_end(run_id)
+
+
+# ---------------------------------------------------------------------------
+# Bridge subscriber (shared bridge → events)
+# ---------------------------------------------------------------------------
 
 
 async def bridge_consumer(
@@ -30,11 +170,13 @@ async def bridge_consumer(
     family_id: int,
     last_event_id: str | None = None,
     run_id: str | None = None,
+    *,
+    bridge: Any | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Consume events from a task's Redis stream.
+    """Consume events from the backend-owned shared bridge.
 
-    Subscribes to the Redis stream published by the agent's StreamBridge
-    for the given task_id. Yields events as dicts with 'event' and 'data' keys.
+    Subscribes to the shared StreamBridge for the given run_id.
+    Yields events as dicts with 'event' and 'data' keys.
 
     Args:
         task_id: AITask primary key (used to look up the run_id)
@@ -42,23 +184,18 @@ async def bridge_consumer(
         last_event_id: Optional SSE Last-Event-ID for reconnection
         run_id: Pre-resolved agent RunRecord UUID. When provided, skips the
                 DB lookup (avoids race with attach_run_id commit).
+        bridge: Optional shared bridge instance.  When None, creates a
+                per-call bridge (backward compatibility for tests).
 
     Yields:
         Dict with 'event' (str) and 'data' (Any) keys
-
-    Raises:
-        RuntimeError: If Redis connection fails or stream not found
     """
-    import os
-
     from apps.backend.app.services.ai_task_service import AITaskService
     from packages.stream_bridge import (
         END_SENTINEL,
         HEARTBEAT_SENTINEL,
         StreamGap,
-        make_stream_bridge,
     )
-    from packages.stream_bridge.config import StreamBridgeConfig
 
     # Resolve run_id: prefer caller-provided value (avoids DB lookup race),
     # fall back to querying the AITask table.
@@ -69,46 +206,32 @@ async def bridge_consumer(
             if not task:
                 raise RuntimeError(f"Task {task_id} not found")
             if not task.run_id:
-                raise RuntimeError(f"Task {task_id} has no run_id (agent may not have started yet)")
+                raise RuntimeError(
+                    f"Task {task_id} has no run_id (agent may not have started yet)"
+                )
             run_id = task.run_id
         finally:
             db.close()
 
-    # Create Redis bridge (or memory bridge for dev)
-    # In production, this reads from the same Redis instance the agent writes to
-    bridge_type = _BRIDGE_TYPE
-    config = StreamBridgeConfig(
-        type=bridge_type,
-        redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-        queue_maxsize=256,
-        stream_ttl_seconds=86400,
-    )
-    bridge = make_stream_bridge(config)
+    # Use shared bridge or create per-call bridge (for tests)
+    own_bridge = bridge is None
+    if own_bridge:
+        bridge = get_shared_bridge()
 
     try:
-        # Subscribe to the task's stream using run_id (not task_id)
-        # The bridge.subscribe() method handles:
-        # - Last-Event-ID replay
-        # - StreamGap detection (cursor beyond retained buffer)
-        # - Heartbeat sentinels (every 15s)
-        # - End sentinel (stream closed)
         async for entry in bridge.subscribe(
             run_id=run_id,
             last_event_id=last_event_id,
         ):
             if entry is HEARTBEAT_SENTINEL:
-                # Yield heartbeat as a special event
                 yield {"event": "heartbeat", "data": None}
                 continue
 
             if entry is END_SENTINEL:
-                # Stream ended - yield end event and stop
                 yield {"event": "end", "data": None}
                 return
 
             if isinstance(entry, StreamGap):
-                # Gap detected - cursor beyond retained buffer
-                # Yield gap event with recovery info
                 yield {
                     "event": "gap",
                     "data": {
@@ -120,20 +243,24 @@ async def bridge_consumer(
                 }
                 return
 
-            # Regular event - yield as-is
             yield {"event": entry.event, "data": entry.data}
 
     finally:
-        # Cleanup bridge resources
-        await bridge.close()
+        if own_bridge:
+            await bridge.close()
+
+
+# ---------------------------------------------------------------------------
+# Task result verification
+# ---------------------------------------------------------------------------
 
 
 def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
     """Verify the task produced its expected result in the DB.
 
     For report tasks, checks that a row exists in ``ai_reports`` for this
-    family.  For other task types, returns True (the agent's ``set_error``
-    already controls the pipeline status; we trust it).
+    family within the last 10 minutes.  For other task types, returns True
+    (the agent's ``set_error`` already controls the pipeline status).
 
     Returns False only when the task type expects persisted data that is
     missing — indicating the pipeline silently failed.
@@ -145,29 +272,34 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
     try:
         task = AITaskService.get_task_by_id(task_id, family_id, db)
     except (ValueError, TypeError):
-        # Invalid task_id (e.g. non-numeric mock in tests) — trust pipeline
         return True
     if not task:
         return False
     if task.skill_id == "report":
+        from datetime import UTC, datetime, timedelta
+
         from apps.backend.app.models.ai_report import AIReport
 
-        return (
+        cutoff = datetime.now(UTC) - timedelta(minutes=10)
+        recent_report = (
             db.query(AIReport)
-            .filter(AIReport.family_id == int(family_id))
+            .filter(
+                AIReport.family_id == int(family_id),
+                AIReport.generated_at >= cutoff,
+            )
             .first()
-            is not None
         )
-    # Other task types: trust the pipeline status
+        return recent_report is not None
     return True
 
 
-def _map_to_safe_message(exc: Exception) -> str:
-    """Map internal exceptions to user-safe SSE error messages.
+# ---------------------------------------------------------------------------
+# Safe error message mapping
+# ---------------------------------------------------------------------------
 
-    Prevents leaking internal paths, DB connection strings, or stack traces
-    to the SSE client. (F12 fix)
-    """
+
+def _map_to_safe_message(exc: Exception) -> str:
+    """Map internal exceptions to user-safe SSE error messages."""
     if isinstance(exc, RuntimeError):
         msg = str(exc)
         if "not found" in msg.lower():
@@ -176,39 +308,44 @@ def _map_to_safe_message(exc: Exception) -> str:
     return "服务异常"
 
 
+# ---------------------------------------------------------------------------
+# Lifecycle consumer (independent background task)
+# ---------------------------------------------------------------------------
+
+
 def _spawn_lifecycle_consumer(
     task_id: str,
     family_id: int,
     run_id: str | None,
     on_result: Callable[[str, Any], Coroutine[Any, Any, None]] | None = None,
+    *,
+    bridge: Any | None = None,
 ) -> asyncio.Task[None]:
     """Spawn an independent background consumer for task lifecycle management.
 
-    This task subscribes to the bridge stream independently of any SSE client.
-    It handles:
-    - Calling ``complete_task()`` when the stream ends normally
-    - Calling ``fail_task()`` if an exception occurs
-    - Optional ``on_result(event_type, data)`` callback for result persistence
-
-    The returned ``asyncio.Task`` survives SSE client disconnect, ensuring
-    the task lifecycle is always finalized. (F1 fix)
+    Subscribes to the shared bridge independently of any SSE client.
+    Handles complete_task / fail_task on stream end.
 
     Args:
         task_id: AITask primary key
         family_id: Family ID for tenant isolation
         run_id: Pre-resolved agent RunRecord UUID
         on_result: Optional async callback invoked for each ``custom`` event.
-                   Use this to persist scenario results (e.g. upsert_skill_result).
+        bridge: Optional shared bridge.  When None, uses get_shared_bridge().
 
     Returns:
         An ``asyncio.Task`` running the background consumer.
     """
     from apps.backend.app.services.ai_task_service import AITaskService
 
+    effective_bridge = bridge or get_shared_bridge()
+
     async def _consume() -> None:
         db = SessionLocal()
         try:
-            async for event in bridge_consumer(task_id, family_id, run_id=run_id):
+            async for event in bridge_consumer(
+                task_id, family_id, run_id=run_id, bridge=effective_bridge
+            ):
                 event_type = event["event"]
                 event_data = event["data"]
 
@@ -222,11 +359,6 @@ def _spawn_lifecycle_consumer(
                             exc_info=True,
                         )
                 elif event_type == "end":
-                    # Verify the task produced its expected result before
-                    # marking complete.  For report tasks, the pipeline writes
-                    # to ai_reports *before* publish_end, so a missing row
-                    # means the pipeline failed (e.g. JSON validation error)
-                    # even though the run finished without exception.
                     if _verify_task_result(task_id, family_id, db):
                         AITaskService.complete_task(task_id, db)
                         logger.info(
@@ -268,31 +400,45 @@ def _spawn_lifecycle_consumer(
     return asyncio.create_task(_consume())
 
 
+# ---------------------------------------------------------------------------
+# SSE forwarder (shared bridge → SSE text for frontend)
+# ---------------------------------------------------------------------------
+
+
 async def consume_task_stream(
     task_id: str,
     family_id: int,
     last_event_id: str | None = None,
     run_id: str | None = None,
+    *,
+    bridge: Any | None = None,
 ) -> AsyncIterator[str]:
     """SSE event forwarder — yields SSE-formatted strings.
 
-    Pure relay: subscribes to the bridge stream and formats events as SSE text.
-    Lifecycle management (complete_task / fail_task) is handled separately by
-    ``_spawn_lifecycle_consumer`` — callers must spawn that before using this
-    forwarder. This separation ensures task completion survives SSE disconnect.
+    Subscribes to the shared bridge and formats events as SSE text.
+    Lifecycle management is handled by ``_spawn_lifecycle_consumer``.
 
     Args:
         task_id: AITask primary key
         family_id: Family ID for tenant isolation
         last_event_id: Optional SSE Last-Event-ID for reconnection
-        run_id: Pre-resolved agent RunRecord UUID (avoids DB lookup race)
+        run_id: Pre-resolved agent RunRecord UUID
+        bridge: Optional shared bridge.  When None, uses get_shared_bridge().
 
     Yields:
         SSE-formatted strings (e.g., "event: update\\ndata: {...}\\n\\n")
     """
+    effective_bridge = bridge or get_shared_bridge()
+
     try:
         error_seen = False
-        async for event in bridge_consumer(task_id, family_id, last_event_id, run_id=run_id):
+        async for event in bridge_consumer(
+            task_id,
+            family_id,
+            last_event_id,
+            run_id=run_id,
+            bridge=effective_bridge,
+        ):
             event_type = event["event"]
             event_data = event["data"]
 
@@ -302,18 +448,17 @@ async def consume_task_stream(
                 error_seen = True
                 yield f"event: error\ndata: {json.dumps(event_data, default=str)}\n\n"
             elif event_type == "end":
-                # If no explicit error event was received, check AITask status.
-                # The lifecycle consumer verifies the result and may have set
-                # the task to "failed" (e.g. report data not persisted).
                 if not error_seen:
-                    await asyncio.sleep(0.5)  # let lifecycle consumer finish DB write
+                    await asyncio.sleep(0.5)
                     _db = SessionLocal()
                     try:
                         from apps.backend.app.services.ai_task_service import (
                             AITaskService,
                         )
 
-                        _task = AITaskService.get_task_by_id(task_id, family_id, _db)
+                        _task = AITaskService.get_task_by_id(
+                            task_id, family_id, _db
+                        )
                         if _task and _task.status == "failed":
                             error_msg = _task.error_message or "任务执行失败"
                             yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
@@ -328,6 +473,8 @@ async def consume_task_stream(
                 yield f"event: {event_type}\ndata: {json.dumps(event_data, default=str)}\n\n"
 
     except Exception as e:
-        logger.error(f"Error consuming task stream {task_id}: {e}", exc_info=True)
+        logger.error(
+            f"Error consuming task stream {task_id}: {e}", exc_info=True
+        )
         safe_msg = _map_to_safe_message(e)
         yield f"event: error\ndata: {json.dumps({'error': safe_msg})}\n\n"

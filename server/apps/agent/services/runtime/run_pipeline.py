@@ -473,7 +473,10 @@ class RunPipeline:
             end_payload["usage"] = self.cumulative_usage
         await self.bridge.publish(self.run_id, "end", end_payload)
         await self.bridge.publish_end(self.run_id)
-        _track_task(asyncio.create_task(self.bridge.cleanup(self.run_id, delay=60)))
+        # Buffer lifecycle is the backend's responsibility (Phase 1 refactor).
+        # The agent no longer calls bridge.cleanup() — the backend-owned buffer
+        # manages TTL based on AITask lifecycle, not a fixed 60s delay.
+        # Previously: _track_task(asyncio.create_task(self.bridge.cleanup(self.run_id, delay=60)))
         _track_task(
             asyncio.create_task(
                 schedule_run_cleanup(self.run_manager, self.run_id, delay=300)
