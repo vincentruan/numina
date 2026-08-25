@@ -5,6 +5,10 @@ services:
       dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-28000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
@@ -15,7 +19,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
       - SECRET_KEY=${SECRET_KEY:-}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -40,6 +44,8 @@ services:
       dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
+    ports:
+      - "${AGENT_PORT:-28001}:8001"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -50,12 +56,13 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
+      - SECRET_KEY=${SECRET_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - NUMINA_PROJECT_ROOT=/app
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
       - DEERFLOW_DB_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina_deerflow
     command: >
       sh -c "uv sync --extra agent &&
@@ -76,6 +83,10 @@ services:
       dockerfile: apps/scheduler_worker/Dockerfile
     container_name: numina-scheduler-worker
     restart: unless-stopped
+    ports:
+      - "${WORKER_PORT:-28002}:8002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
@@ -86,14 +97,14 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
       - SECRET_KEY=${SECRET_KEY:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
       - NUMINA_PROJECT_ROOT=/app
     command: >
-      sh -c "uv sync --extra scheduler-worker &&
+      sh -c "uv sync --extra backend &&
              uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker"
     depends_on:
       backend:
@@ -131,7 +142,7 @@ services:
              npm install --ignore-scripts &&
              cp /tmp/package.json.orig package.json &&
              trap - EXIT &&
-             npx vite --host 0.0.0.0 --port 5173"
+             npx vite --host 0.0.0.0 --port 25173"
 
   frontend-child:
     build: !reset null
@@ -159,7 +170,7 @@ services:
              npm install --ignore-scripts &&
              cp /tmp/package.json.orig package.json &&
              trap - EXIT &&
-             npx vite --host 0.0.0.0 --port 5174"
+             npx vite --host 0.0.0.0 --port 25174"
 
   nginx:
     image: nginx:alpine

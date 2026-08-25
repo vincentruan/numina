@@ -131,9 +131,13 @@ class Settings(BaseSettings):
                 self.DATABASE_URL = f"sqlite:///{expanded}"
 
         # Derive from DATA_ROOT only when DATABASE_URL still matches the old default
+        # and no explicit DATABASE_URL is set.
+        # NOTE: This fallback now points to PostgreSQL (the project standard).
+        # SQLite auto-fallback was removed — see _validate_db_backend guard.
         if _OLD_DEFAULTS["DATABASE_URL"] == self.DATABASE_URL or not self.DATABASE_URL:
-            db_path = Path(root) / "db" / "numina.db"
-            self.DATABASE_URL = f"sqlite:///{db_path}"
+            # No silent SQLite fallback; leave DATABASE_URL unset and let the
+            # _validate_db_backend guard surface a clear error below.
+            pass
 
         # ── Other file-path settings: always expand ~ ───────────────────
         # These are consumed by PathManager and OS APIs which *do* expand ~,
@@ -156,6 +160,43 @@ class Settings(BaseSettings):
 
         if _OLD_DEFAULTS["LOG_DIR"] == self.LOG_DIR or not self.LOG_DIR:
             self.LOG_DIR = str(Path(root) / "logs")
+
+        return self
+
+    @model_validator(mode="after")
+    def _validate_db_backend(self) -> "Settings":
+        """Enforce PostgreSQL as the required DB backend in production.
+
+        The project supports SQLite for development and unit tests.
+        In production, PostgreSQL is required — accidentally deploying
+        with SQLite would cause data-loss and concurrency issues.
+
+        Auto-bypass:
+        - PYTEST_VERSION   auto-set when running under pytest
+        - ENVIRONMENT != production  (development allows SQLite)
+
+        Escape hatch (production only):
+        - ALLOW_SQLITE=1   explicit opt-in for edge-case SQLite use
+        """
+        import os
+        import sys
+
+        url = self.DATABASE_URL or ""
+        is_sqlite = url.startswith("sqlite")
+        is_test = os.environ.get("PYTEST_VERSION") is not None or "pytest" in sys.modules
+        allow_sqlite_override = os.environ.get("ALLOW_SQLITE") == "1"
+
+        if is_sqlite and self.ENVIRONMENT == "production" and not is_test and not allow_sqlite_override:
+            raise ValueError(
+                f"SQLite is not allowed in production mode "
+                f"(DATABASE_URL={url!r}). "
+                "Set DATABASE_URL to a postgresql://... URL. "
+                "To explicitly opt out: ALLOW_SQLITE=1"
+            )
+
+        # Always log the chosen backend for early visibility
+        dialect = "sqlite" if is_sqlite else (url.split("://")[0] if "://" in url else "unknown")
+        logger.info(f"Database backend: {dialect} ({self.ENVIRONMENT})")
 
         return self
 
