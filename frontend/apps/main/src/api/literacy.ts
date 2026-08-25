@@ -50,7 +50,10 @@ export interface ReportHistoryResponse {
 export async function getReport(childId: string, weekStart?: string): Promise<WeeklyReportResponse> {
   const params: Record<string, string> = { child_id: childId }
   if (weekStart) params.week_start = weekStart
-  const res = await http.get<WeeklyReportResponse>('/literacy-reports', { params })
+  const res = await http.get<WeeklyReportResponse>('/literacy-reports', {
+    params,
+    _silentErrorCodes: ['LITERACY_REPORT_NOT_FOUND'],
+  })
   return res.data
 }
 
