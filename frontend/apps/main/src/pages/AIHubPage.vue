@@ -356,7 +356,7 @@ import InputBox from '@/components/ai-chat/InputBox.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import AiGatedCard from '@/components/ai/AiGatedCard.vue'
-import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
+import { getXiaomingDefaultPrompt, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
@@ -806,7 +806,7 @@ function handleNuminaConsult() {
           name: 'AIChat',
           query: {
             agentId,
-            q: XIAOMING_DEFAULT_PROMPT,
+            q: getXiaomingDefaultPrompt(t),
             newSession: '1',
             source: 'system_default',
             // webSearch 状态继承自 AI Hub 页面的当前选择

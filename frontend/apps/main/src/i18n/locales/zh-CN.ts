@@ -189,6 +189,9 @@ export default {
       disclaimer: '基于你录入的数据，仅供参考',
       count: '{count} 条建议',
       empty: '暂无建议',
+      error: {
+        auth_expired: '认证已过期，请重新登录',
+      },
     },
     narrative: {
       title: '本月洞察',
@@ -548,6 +551,12 @@ export default {
     tokenUsageSearchGeneric: '搜索',
     tokenUsageToolAction: '工具调用',
     tokenUsageTodoAction: '任务更新',
+    // Numina agent default prompt (auto-sent on new session from AI Hub)
+    xiaomingDefaultPrompt: `帮我看看家庭财务近况，我想快速了解有没有需要关注的变化。
+
+请基于当前数据给我一份简要总结：先一句话概括整体状态，再列出值得关注的发现和具体可操作的建议。异常优先，没变化就如实说稳定。建议请精确到金额或账户，避免空泛表达。数据不足的地方也请提醒我补录。
+
+语气温暖一些，像家人间聊天。`,
     // Welcome page keys
     welcomeTitle: 'Numina AI',
     welcomeSubtitle: '家庭资产管理助手',

@@ -124,6 +124,9 @@ export default {
       disclaimer: 'Based on your entries, for reference only',
       count: '{count} suggestions',
       empty: 'No suggestions',
+      error: {
+        auth_expired: 'Session expired, please log in again',
+      },
     },
     narrative: {
       title: 'Monthly Insights',
@@ -238,6 +241,12 @@ export default {
     panelImage: 'Upload image',
     retry: 'Retry',
     retrying: 'Regenerating',
+    // Numina agent default prompt (auto-sent on new session from AI Hub)
+    xiaomingDefaultPrompt: `Help me check how my family's finances are doing — I'd like a quick overview of anything that needs my attention.
+
+Please give me a brief summary based on the current data: start with a one-sentence overall snapshot, then highlight noteworthy findings and specific, actionable recommendations. Prioritize anomalies; if nothing has changed, just say things are stable. Be precise with amounts and account names — avoid vague language. Also remind me to fill in any gaps where data is missing.
+
+Keep the tone warm, like a chat between family members.`,
     // Welcome page keys
     welcomeTitle: 'Numina AI',
     welcomeSubtitle: 'Family asset management assistant',
