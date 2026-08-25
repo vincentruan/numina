@@ -10,6 +10,7 @@ from packages.db.models.ai_task import AITask
 logger = logging.getLogger(__name__)
 
 TASK_TIMEOUT_MINUTES = 30
+QUEUED_TIMEOUT_MINUTES = 240  # 4 hours — queued tasks waiting longer are stale
 
 
 def extract_run_id_from_content_location(content_location: str | None) -> str | None:
@@ -98,6 +99,7 @@ class AITaskService:
         task = AITask(
             family_id=int(family_id),
             skill_id=skill_id,
+            capability=skill_id,  # Legacy column mirrors skill_id
             status="running",
             session_id=session_id,
             started_at=datetime.utcnow(),
@@ -132,10 +134,12 @@ class AITaskService:
         task = AITask(
             family_id=int(family_id),
             skill_id=skill_id,
+            capability=skill_id,  # Legacy column mirrors skill_id
             status="queued",
             session_id=session_id,
             started_at=datetime.utcnow(),
             queue_position=None,
+            lease_expires_at=datetime.utcnow() + timedelta(minutes=QUEUED_TIMEOUT_MINUTES),
         )
         db.add(task)
         try:
@@ -162,6 +166,16 @@ class AITaskService:
         )
         if task is None:
             return None
+        # Staleness check — queued tasks waiting too long are timed out
+        cutoff = datetime.utcnow() - timedelta(minutes=QUEUED_TIMEOUT_MINUTES)
+        if task.started_at < cutoff:
+            try:
+                task.status = "timeout"
+                task.completed_at = datetime.utcnow()
+                db.commit()
+            except Exception:
+                db.rollback()
+            return None
         # Compute position dynamically: count tasks queued before this one
         # (by started_at)
         position = (
@@ -175,6 +189,45 @@ class AITaskService:
         ) or 1
         task.queue_position = position
         return task
+
+    @staticmethod
+    def _try_promote_next(family_id: int | str, db: Session) -> None:
+        """Promote the next queued task if the family has no running tasks.
+
+        Called automatically by complete_task / fail_task.  Only promotes when
+        no other task is actively running for the family (respects the
+        per-family single-running constraint).  The promoted task's router
+        endpoint is expected to reconnect on the next frontend poll.
+        """
+        try:
+            still_running = (
+                db.query(AITask)
+                .filter(
+                    AITask.family_id == int(family_id),
+                    AITask.status.in_(["running", "post_processing"]),
+                )
+                .first()
+            )
+            if still_running:
+                return
+            queued = AITaskService.get_next_queued_task(family_id, db)
+            if not queued:
+                return
+            queued.status = "running"
+            queued.started_at = datetime.utcnow()
+            queued.queue_position = None
+            queued.lease_expires_at = datetime.utcnow() + timedelta(seconds=120)
+            db.commit()
+            logger.info(
+                "[ai-task] auto-promoted queued task=%s family=%s skill=%s",
+                queued.id, family_id, queued.skill_id,
+            )
+        except Exception:
+            db.rollback()
+            logger.warning(
+                "[ai-task] _try_promote_next failed family=%s",
+                family_id, exc_info=True,
+            )
 
     @staticmethod
     def promote_queued_task(task_id: int | str, db: Session) -> None:
@@ -217,6 +270,7 @@ class AITaskService:
             task.status = "completed"
             task.completed_at = datetime.utcnow()
             db.commit()
+            AITaskService._try_promote_next(task.family_id, db)
 
     @staticmethod
     def fail_task(task_id: int | str, error_message: str, db: Session) -> None:
@@ -227,10 +281,12 @@ class AITaskService:
         try:
             task = db.query(AITask).filter(AITask.id == int(task_id)).first()
             if task and task.status in ("running", "post_processing", "queued"):
+                family_id = task.family_id
                 task.status = "failed"
                 task.completed_at = datetime.utcnow()
                 task.error_message = error_message[:500] if error_message else None
                 db.commit()
+                AITaskService._try_promote_next(family_id, db)
         except Exception:
             # Rollback to prevent leaving the session in a bad state.
             # Guard the rollback itself — if the session is fatally broken
