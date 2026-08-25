@@ -2997,6 +2997,12 @@ export default {
     testModelVision: '测试视觉',
     testSuccess: '测试通过',
     testFailed: '测试失败',
+    testError: {
+      noApiKey: '未配置 API Key',
+      decryptFailed: 'API Key 解密失败，请重新配置',
+      noModelId: '未配置主模型 ID',
+      noCandidates: '无可测试的模型',
+    },
     testErrorTitle: '测试失败详情',
     testErrorCopy: '复制错误信息',
     testErrorCopied: '已复制',

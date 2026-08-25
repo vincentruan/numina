@@ -113,6 +113,7 @@ export const getProviderDefaults = (modelId: string) =>
 export interface ModelTestResult {
   connected: boolean
   message: string | null
+  error_code: string | null
   latency_ms: number | null
   error_detail: Record<string, unknown> | null
   // Fallback info: which provider/model was actually used

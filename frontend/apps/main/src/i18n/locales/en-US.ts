@@ -2557,6 +2557,12 @@ export default {
     testModelVision: 'Test Vision',
     testSuccess: 'Test passed',
     testFailed: 'Test failed',
+    testError: {
+      noApiKey: 'API Key is not configured',
+      decryptFailed: 'API Key decryption failed, please reconfigure',
+      noModelId: 'Primary model ID is not configured',
+      noCandidates: 'No models available for testing',
+    },
     testErrorTitle: 'Test Failure Details',
     testErrorCopy: 'Copy Error',
     testErrorCopied: 'Copied',

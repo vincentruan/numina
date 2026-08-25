@@ -451,12 +451,14 @@ async function onTestModel(configId: string, slot: number) {
     if (res.data.connected) {
       testPassedKeys.value = new Set([...testPassedKeys.value, key])
       showSuccessToast(t('aiConfig.testSuccess'))
+      // Refresh configs to reflect circuit state reset
+      await aiStore.fetchConfigs()
     } else {
       testPassedKeys.value.delete(key)
-      openErrorPopup(
-        res.data.message || t('aiConfig.testFailed'),
-        res.data.error_detail,
-      )
+      const msg = res.data.error_code
+        ? t(`aiConfig.testError.${res.data.error_code}`)
+        : (res.data.message || t('aiConfig.testFailed'))
+      openErrorPopup(msg, res.data.error_detail)
     }
   } catch {
     testPassedKeys.value.delete(key)
