@@ -7,6 +7,8 @@
  *   - In-page: streamNarrative SSE (real-time streaming preview)
  *   - Out-of-page: useTaskPolling recovers progress/result via AITask
  * Cancel button when running (U21).
+ *
+ * task_id is delivered as the first SSE metadata event — no polling needed.
  */
 import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -25,10 +27,10 @@ const generatedAt = ref<string | null>(null)
 const loading = ref(true)
 const streaming = ref(false)
 const cancelling = ref(false)
+const queued = ref(false)
 const blockReason = ref<NarrativeBlockReason | null>(null)
 const expanded = ref<string[]>([])
 let streamHandle: NarrativeStreamHandle | null = null
-let taskCheckTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasContent = computed(() => narrative.value !== null && narrative.value !== '')
 
@@ -60,10 +62,13 @@ const resumeHandle = useTaskResume('narrative', {
   },
   onComplete: async () => {
     streaming.value = false
+    queued.value = false
+    // Task just finished — fetch the persisted result (may be JSON cache).
     await loadCached()
   },
   onError: () => {
     streaming.value = false
+    queued.value = false
     // Don't toast here — the template shows inline error + retry instead
   },
 })
@@ -79,21 +84,30 @@ async function loadCached() {
   }
 }
 
-async function triggerStream(_force = true) {
+async function triggerStream(force = true) {
+  // Only reset existing content when explicitly forcing regeneration.
+  // On cache check (force=false), preserve current narrative to avoid
+  // visible flicker when the backend returns cached JSON immediately.
+  if (force) {
+    thinking.value = ''
+    narrative.value = null
+    blockReason.value = null
+  }
   streaming.value = true
-  thinking.value = ''
-  narrative.value = null
-  blockReason.value = null
+  cancelling.value = false
+  queued.value = false
   resumeHandle.triggerFailed.value = false
-
-  // T20: progressive retry (500ms->1s->2s->4s) to locate the AITask created
-  // by this trigger. Runs in background; cleanup on unmount via checkCancelled.
-  taskCheckTimer = setTimeout(async () => {
-    taskCheckTimer = null
-    await resumeHandle.waitForTask()
-  }, 500)
+  resumeHandle.taskId.value = null
 
   streamHandle = await streamNarrative({
+    onTaskId: (taskId) => {
+      resumeHandle.taskId.value = taskId
+      queued.value = false
+    },
+    onQueued: (info) => {
+      resumeHandle.taskId.value = info.taskId
+      queued.value = true
+    },
     onReasoningDelta: (content) => {
       thinking.value += content
     },
@@ -104,39 +118,34 @@ async function triggerStream(_force = true) {
     onDone: (result) => {
       narrative.value = result.narrative || narrative.value
       thinking.value = result.thinking || thinking.value
-      generatedAt.value = new Date().toISOString()
+      // Use backend timestamp for cache hits, current time for fresh generation
+      generatedAt.value = result.generatedAt || new Date().toISOString()
       streaming.value = false
+      queued.value = false
       resumeHandle.taskId.value = null
-      // Cancel T20 timer — no task expected (cache hit)
-      if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
     },
     onBlocked: (info) => {
       blockReason.value = info
       streaming.value = false
+      queued.value = false
       resumeHandle.taskId.value = null
-      // Cancel T20 timer — no task expected (threshold gate)
-      if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
     },
     onError: (message) => {
       streaming.value = false
+      queued.value = false
       resumeHandle.taskId.value = null
-      if (taskCheckTimer) { clearTimeout(taskCheckTimer); taskCheckTimer = null }
-      // Only toast auth_expired (global condition needing user action).
-      // Other errors (circuit breaker, agent unavailable, network) are shown
-      // inline via the template's error state — not as misleading toasts
-      // on page load. Matches FinanceCoachCard's silent-error pattern.
       if (message.includes('auth_expired')) {
         showFailToast(t('dashboard.narrative.error.auth_expired'))
       }
     },
-  })
+  }, force)
 }
 
 async function onGenerate() {
   await triggerStream(true)
 }
 
-// T20: retry button handler. Re-checks for a reusable task (running/completed),
+// Retry button handler. Re-checks for a reusable task (running/completed),
 // falls back to a fresh trigger when none exists.
 async function onRetry() {
   const reused = await resumeHandle.retryTrigger()
@@ -154,6 +163,7 @@ async function onCancel() {
     streamHandle = null
     resumeHandle.taskId.value = null
     streaming.value = false
+    queued.value = false
     showToast(t('aiTask.cancelled'))
   } catch {
     showFailToast(t('toast.operationFailed'))
@@ -172,10 +182,12 @@ onMounted(async () => {
   }
 })
 
-// Dashboard is KeepAlive-cached; onActivated re-runs resume logic.
+// Dashboard is KeepAlive-cached; onActivated re-checks for running tasks.
+// If content is already loaded, skip re-fetch to avoid flicker.
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
+  if (hasContent.value) return
   await resumeHandle.resume()
 })
 
@@ -183,20 +195,12 @@ onActivated(async () => {
 // onUnmounted only fires when the component is permanently destroyed.
 // Use disconnect() (lightweight) on deactivate, cleanup() on full unmount.
 onDeactivated(() => {
-  if (taskCheckTimer) {
-    clearTimeout(taskCheckTimer)
-    taskCheckTimer = null
-  }
   streamHandle?.abort()
   resumeHandle.disconnect()
 })
 
-// Cleanup on unmount: stop task-check timer + abort in-flight SSE + cleanup resume.
+// Cleanup on unmount: abort in-flight SSE + cleanup resume.
 onUnmounted(() => {
-  if (taskCheckTimer) {
-    clearTimeout(taskCheckTimer)
-    taskCheckTimer = null
-  }
   resumeHandle.cleanup()
 })
 
@@ -218,7 +222,10 @@ function formatTime(iso: string | null): string {
         <template #title>
           <div class="narrative-header">
             <span class="narrative-title">
-              <span class="narrative-icon">📈</span>
+              <span class="narrative-icon">
+                <van-loading v-if="isRunning" size="16px" type="spinner" color="#1989fa" />
+                <span v-else>📈</span>
+              </span>
               {{ t('dashboard.narrative.title') }}
             </span>
             <span v-if="isRunning" class="narrative-status narrative-status--running">
@@ -348,6 +355,12 @@ function formatTime(iso: string | null): string {
   font-weight: 600;
 }
 .narrative-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4em;
+  height: 1.4em;
+  flex-shrink: 0;
   font-size: 16px;
 }
 .narrative-status {

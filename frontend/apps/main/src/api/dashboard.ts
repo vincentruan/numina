@@ -235,9 +235,13 @@ export interface NarrativeBlockReason {
 export interface NarrativeStreamCallbacks {
   onReasoningDelta: (content: string) => void
   onNarrativeDelta: (content: string) => void
-  onDone: (result: { narrative: string; thinking: string }) => void
+  onDone: (result: { narrative: string; thinking: string; generatedAt?: string }) => void
   onBlocked: (info: NarrativeBlockReason) => void
   onError: (message: string) => void
+  /** Called when the SSE stream emits the initial task_id metadata event. */
+  onTaskId?: (taskId: string) => void
+  /** Called when the backend returns 202 (task queued behind another running task). */
+  onQueued?: (info: { taskId: string; queuePosition: number }) => void
 }
 
 export interface NarrativeStreamHandle {
@@ -256,11 +260,12 @@ export interface NarrativeStreamHandle {
  */
 export async function streamNarrative(
   callbacks: NarrativeStreamCallbacks,
+  force = false,
 ): Promise<NarrativeStreamHandle> {
   const controller = new AbortController()
 
   // fire-and-forget: kick off the stream, return handle immediately
-  void runNarrativeStream(controller, callbacks)
+  void runNarrativeStream(controller, callbacks, force)
 
   return { abort: () => controller.abort() }
 }
@@ -268,8 +273,9 @@ export async function streamNarrative(
 async function runNarrativeStream(
   controller: AbortController,
   callbacks: NarrativeStreamCallbacks,
+  force: boolean,
 ): Promise<void> {
-  const url = '/api/v1/dashboard/narrative'
+  const url = `/api/v1/dashboard/narrative${force ? '?force=true' : ''}`
   const headers: Record<string, string> = {
     Accept: 'text/event-stream',
   }
@@ -310,11 +316,20 @@ async function runNarrativeStream(
     return
   }
 
-  // JSON response: cache hit or threshold miss
+  // JSON response: cache hit, threshold miss, or 202 queued
   const contentType = res.headers.get('Content-Type') || ''
   if (contentType.includes('application/json')) {
     try {
-      const data = (await res.json()) as NarrativeResponse
+      const json = (await res.json()) as Record<string, unknown>
+      // 202 queued — another AI task is running, this one is queued
+      if (res.status === 202 && json.status === 'queued') {
+        callbacks.onQueued?.({
+          taskId: String(json.task_id ?? ''),
+          queuePosition: Number(json.queue_position ?? 0),
+        })
+        return
+      }
+      const data = json as unknown as NarrativeResponse
       if (data.reason) {
         callbacks.onBlocked({
           reason: data.reason,
@@ -325,6 +340,7 @@ async function runNarrativeStream(
         callbacks.onDone({
           narrative: data.narrative || '',
           thinking: data.thinking || '',
+          generatedAt: data.generated_at || undefined,
         })
       }
     } catch {
@@ -367,6 +383,12 @@ async function runNarrativeStream(
             narrative: String(payload.narrative || narrativeBuffer),
             thinking: String(payload.thinking || thinkingBuffer),
           })
+        }
+      },
+      onMetadata: (data) => {
+        const meta = data as { task_id?: string }
+        if (meta?.task_id) {
+          callbacks.onTaskId?.(meta.task_id)
         }
       },
       onError: (data) => {
