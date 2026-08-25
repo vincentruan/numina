@@ -561,7 +561,7 @@ async def trigger_dashboard_narrative_run(
         config=None,
         metadata={"app": "dashboard-narrative"},
         on_disconnect=body.on_disconnect,
-        multitask_strategy="reject",
+        multitask_strategy="interrupt",
     )
 
     record = await start_run(

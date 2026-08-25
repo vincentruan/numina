@@ -305,7 +305,7 @@ class LoginStep1Request(BaseModel):
         return validate_username(v)
 
 
-class LoginStep1Response(BaseModel):
+class LoginStep1Response(SnowflakeBase):
     temp_token: str | None = None          # present when second_factor_required=True
     second_factor_required: bool
     second_factor_type: str | None = None  # 'numeric_pin' | 'emoji_pin' | 'totp'

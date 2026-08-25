@@ -194,7 +194,7 @@ async def trigger_generate_events(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": task.id,
+                    "task_id": str(task.id),
                     "queue_position": task.queue_position,
                 },
             )
@@ -226,15 +226,14 @@ async def trigger_generate_events(
     }
 
     # Track whether the lifecycle consumer was spawned via the callback.
-    # Fallback: spawn with run_id=None if the agent omits Content-Location.
-    lifecycle_spawned = [False]
+    lifecycle_spawned = asyncio.Event()
 
     def _on_run_id(cl_run_id: str) -> None:
         resolved = AITaskService.extract_and_attach_run_id(
             task_id, cl_run_id, family_id
         )
-        if resolved and not lifecycle_spawned[0]:
-            lifecycle_spawned[0] = True
+        if resolved and not lifecycle_spawned.is_set():
+            lifecycle_spawned.set()
             _spawn_lifecycle_consumer(
                 task_id=task_id,
                 family_id=family_id,
@@ -243,7 +242,8 @@ async def trigger_generate_events(
             )
 
     # Spawn background pump: one streaming POST → shared bridge.
-    asyncio.create_task(
+    # (Keep a reference so the task is not garbage-collected mid-flight.)
+    _pump_task = asyncio.create_task(
         _pump_agent_sse_to_bridge(
             agent_client=agent_client,
             agent_url=agent_url,
@@ -255,14 +255,19 @@ async def trigger_generate_events(
         )
     )
 
-    # Fallback: if the agent didn't provide Content-Location, the callback
-    # never fired.  Spawn lifecycle consumer with run_id=None — it queries
-    # the AITask table when needed (best-effort).
-    if not lifecycle_spawned[0]:
+    # Wait for pump to extract Content-Location from agent's response headers.
+    # The pump's ``on_run_id`` callback sets ``lifecycle_spawned`` synchronously.
+    # Give the pump up to 2 seconds to get the headers (should be nearly instant).
+    # If the pump hasn't resolved the run_id after this, fall back to run_id=None.
+    try:
+        await asyncio.wait_for(lifecycle_spawned.wait(), timeout=2.0)
+    except TimeoutError:
         logger.warning(
-            "[asset-report] lifecycle consumer spawned without run_id task=%s",
+            "[asset-report] pump did not resolve run_id within 2s, using fallback task=%s",
             task_id,
         )
+
+    if not lifecycle_spawned.is_set():
         _spawn_lifecycle_consumer(
             task_id=task_id,
             family_id=family_id,

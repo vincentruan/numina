@@ -1,4 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
+import { readSSEStream } from '@/utils/sseReader'
 import type { AIReport, FinanceCoachResponse, FinanceSuggestion } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────
@@ -754,6 +755,151 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
     }
   }
   return { status: 'streaming', report: { suggestions } }
+}
+
+// ── finance_coach streaming (unified SSE pattern) ───────────────────────────
+//
+// Replaces getFinanceCoach for the unified trigger flow. Handles all three
+// backend response modes: cached JSON 200, queued 202, and SSE generation.
+// The SSE stream emits an initial metadata event with task_id so the frontend
+// can immediately enable cancellation.
+
+export interface FinanceCoachStreamCallbacks {
+  onDone: (suggestions: FinanceSuggestion[]) => void
+  onError: (message: string) => void
+  /** Called when the SSE stream emits the initial task_id metadata event. */
+  onTaskId?: (taskId: string) => void
+  /** Called when the backend returns 202 (task queued behind another running task). */
+  onQueued?: (info: { taskId: string; queuePosition: number }) => void
+}
+
+export interface FinanceCoachStreamHandle {
+  abort: () => void
+}
+
+export async function streamFinanceCoach(
+  callbacks: FinanceCoachStreamCallbacks,
+  force = false,
+): Promise<FinanceCoachStreamHandle> {
+  const controller = new AbortController()
+
+  void runFinanceCoachStream(controller, callbacks, force)
+
+  return { abort: () => controller.abort() }
+}
+
+async function runFinanceCoachStream(
+  controller: AbortController,
+  callbacks: FinanceCoachStreamCallbacks,
+  force: boolean,
+): Promise<void> {
+  const url = `/api/v1/ai/finance-coach/generate?force=${force}`
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    })
+    if (res.status === 401) {
+      try {
+        await refreshTokenIfNeeded()
+      } catch {
+        callbacks.onError('auth_expired')
+        return
+      }
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        signal: controller.signal,
+      })
+    }
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('finance_coach.error.connect_failed')
+    }
+    return
+  }
+
+  if (!res.ok) {
+    callbacks.onError(`finance_coach.error.request_failed:${res.status}`)
+    return
+  }
+
+  const ct = res.headers.get('Content-Type') || ''
+
+  // JSON response: cached result or 202 queued
+  if (ct.includes('application/json')) {
+    try {
+      const json = (await res.json()) as Record<string, unknown>
+      // 202 queued
+      if (res.status === 202 && json.status === 'queued') {
+        callbacks.onQueued?.({
+          taskId: String(json.task_id ?? ''),
+          queuePosition: Number(json.queue_position ?? 0),
+        })
+        return
+      }
+      // Cached result
+      const report = json.report as { suggestions?: FinanceSuggestion[] } | undefined
+      callbacks.onDone(report?.suggestions ?? [])
+    } catch {
+      callbacks.onError('finance_coach.error.parse_failed')
+    }
+    return
+  }
+
+  // SSE stream
+  if (!res.body) {
+    callbacks.onError('finance_coach.error.stream_unavailable')
+    return
+  }
+
+  let errored = false
+
+  try {
+    await readSSEStream(res, {
+      onMessage: () => {
+        // Coach doesn't emit messages frames — no-op
+      },
+      onCustom: (data) => {
+        if (errored) return
+        const custom = data as { type?: string; payload?: { suggestions?: FinanceSuggestion[] } }
+        if (custom.type === 'finance_coach.result' && custom.payload?.suggestions) {
+          callbacks.onDone(custom.payload.suggestions)
+        }
+      },
+      onMetadata: (data) => {
+        const meta = data as { task_id?: string }
+        if (meta?.task_id) {
+          callbacks.onTaskId?.(meta.task_id)
+        }
+      },
+      onError: (data) => {
+        errored = true
+        const errData = data as { error?: string; message?: string }
+        callbacks.onError(errData.error || errData.message || 'finance_coach.error.generation_failed')
+      },
+      onEnd: (data) => {
+        if (errored) return
+        const endData = data as { status?: string } | undefined
+        if (endData?.status === 'error') {
+          errored = true
+          callbacks.onError('finance_coach.error.generation_failed')
+        }
+      },
+    })
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('finance_coach.error.connection_interrupted')
+    }
+  }
 }
 
 // ── /ai/context (A1b greenfield chat prefill, Plan B T6) ─────────────────────

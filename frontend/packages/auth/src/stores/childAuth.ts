@@ -27,7 +27,7 @@ export interface ChildLoginStep1Result {
   temp_token?: string
   second_factor_type?: string
   // user info always present
-  user_id?: number
+  user_id?: string
   display_name?: string
   avatar_color?: string
 }

@@ -675,12 +675,49 @@ class RunPipeline:
             if sse_type == "messages" and isinstance(data, dict):
                 msg_type = data.get("type")
                 if msg_type == "ai":
+                    # DeerFlow error-fallback detection (P0 fix):
+                    # When LLMErrorHandlingMiddleware exhausts retries, it returns
+                    # a graceful AIMessage with ``deerflow_error_fallback=True``
+                    # instead of raising.  Numina's provider-fallback loop in
+                    # ``run_skill`` only triggers on exceptions, so we must
+                    # detect this signal and raise to activate multi-provider
+                    # failover.
+                    additional_kwargs = data.get("additional_kwargs") or {}
+                    if additional_kwargs.get("deerflow_error_fallback"):
+                        error_reason = additional_kwargs.get(
+                            "error_reason", "unknown"
+                        )
+                        error_detail = additional_kwargs.get(
+                            "error_detail", ""
+                        )
+                        logger.warning(
+                            "[%s] run=%s DeerFlow error fallback detected: "
+                            "reason=%s detail=%s",
+                            self.app_name,
+                            self.run_id,
+                            error_reason,
+                            error_detail[:200],
+                        )
+                        if not self.ai_response_parts:
+                            # No content produced yet — raise to trigger
+                            # provider fallback in ``run_skill``.
+                            raise RuntimeError(
+                                f"DeerFlow provider fallback ({error_reason}): "
+                                f"{error_detail}"
+                            )
+                        # Content already streamed — cannot retry.
+                        # Mark as error so the lifecycle consumer fails the task.
+                        self.set_error(
+                            error_detail or f"AI provider failed: {error_reason}",
+                            error_type="DeerFlowFallback",
+                        )
+                        break
+
                     # Reasoning-delta path (dashboard-narrative, literacy-report):
                     # extract reasoning_content, publish as reasoning_delta custom
                     # event, forward content-only message (strip reasoning to
                     # avoid duplication).
                     if enable_reasoning_delta:
-                        additional_kwargs = data.get("additional_kwargs") or {}
                         reasoning = additional_kwargs.get("reasoning_content")
                         if isinstance(reasoning, str) and reasoning:
                             self.thinking_parts.append(reasoning)
@@ -855,16 +892,26 @@ async def _resolve_numina_mcp_servers(
 
     try:
         mcp_servers = await client.get_enabled_mcp_servers()
+        from packages.security.service_auth.agent_jwt import create_agent_token
+
+        expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
         for srv in mcp_servers:
-            if srv.get("name") == "Numina Backend MCP":
-                expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                actual_url = (srv.get("url") or "").rstrip("/")
+            actual_url = (srv.get("url") or "").rstrip("/")
+            # Inject auth headers into ANY server pointing at the backend's
+            # internal MCP SSE endpoint — not just the one named
+            # "Numina Backend MCP".  Legacy records (e.g. "numina-family-data",
+            # type=general) point at the same URL and previously missed headers,
+            # causing a 401 on the MCP SSE handshake.
+            is_backend_mcp = (
+                srv.get("name") == "Numina Backend MCP"
+                or "/internal/mcp/" in (srv.get("url") or "")
+                or actual_url == f"{expected_prefix}/api/v1/internal/mcp/{family_id}/sse"
+            )
+            if is_backend_mcp:
                 if not actual_url.startswith(expected_prefix):
                     srv["url"] = (
                         expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
                     )
-                from packages.security.service_auth.agent_jwt import create_agent_token
-
                 mcp_headers: dict[str, str] = {
                     "X-Agent-Token": create_agent_token(family_id),
                     "X-Family-Id": family_id,
@@ -872,7 +919,6 @@ async def _resolve_numina_mcp_servers(
                 if user_id:
                     mcp_headers["X-Caller-User-Id"] = user_id
                 srv["headers"] = mcp_headers
-                break
         return mcp_servers
     except Exception as exc:
         logger.warning(

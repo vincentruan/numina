@@ -21,7 +21,11 @@ class AITask(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
-    skill_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    # Legacy `capability` column kept for backward compatibility — always mirrors
+    # ``skill_id`` so legacy queries (agent, scheduler) still work. New code uses
+    # ``skill_id`` exclusively.
+    capability: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    skill_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True, default="")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
     # status: running | queued | completed | failed | timeout | cancelled | interrupted
     queue_position: Mapped[int | None] = mapped_column(nullable=True)

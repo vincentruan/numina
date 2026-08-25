@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getFinanceCoach } from '@/api/ai'
+import { streamFinanceCoach } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
@@ -10,6 +10,7 @@ import { showToast, showFailToast } from 'vant'
 import { useTaskResume } from '@/composables/useTaskResume'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
+import type { FinanceCoachStreamHandle } from '@/api/ai'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -23,6 +24,8 @@ const visible = ref(false)
 const refreshing = ref(false)
 const expanded = ref<string[]>([])
 const cancelling = ref(false)
+const queued = ref(false)
+let streamHandle: FinanceCoachStreamHandle | null = null
 
 const count = computed(() => suggestions.value.length)
 
@@ -34,6 +37,7 @@ const resumeHandle = useTaskResume('coach', {
   onError: () => {
     loading.value = false
     loaded.value = true
+    queued.value = false
     // Don't toast here — the template shows inline error + retry instead
   },
 })
@@ -48,29 +52,57 @@ async function load(force = false) {
   try {
     refreshing.value = force
     loading.value = true
-    const resp = await getFinanceCoach(force)
-    // Advice baseline gate (spec §7.1): schema-validate before display.
-    const valid = (resp.report.suggestions || []).filter(
-      (s) =>
-        s &&
-        s.id &&
-        ['high', 'medium', 'low'].includes(s.severity) &&
-        s.title &&
-        s.action &&
-        s.target_type &&
-        s.target_id &&
-        s.cta_label,
-    )
-    if (valid.length === 0) {
-      visible.value = false
-      return
-    }
-    suggestions.value = valid.slice(0, 3)
-    visible.value = true
+    queued.value = false
+    // Clear stale taskId from any previous task
     resumeHandle.taskId.value = null
+
+    streamHandle = await streamFinanceCoach({
+      onTaskId: (taskId) => {
+        // Backend delivers task_id as the first SSE metadata event —
+        // immediately set it so the cancel button becomes active.
+        resumeHandle.taskId.value = taskId
+        queued.value = false
+      },
+      onQueued: (info) => {
+        // 202: another AI task is running, this one is queued.
+        resumeHandle.taskId.value = info.taskId
+        queued.value = true
+      },
+      onDone: (results) => {
+        const valid = (results || []).filter(
+          (s) =>
+            s &&
+            s.id &&
+            ['high', 'medium', 'low'].includes(s.severity) &&
+            s.title &&
+            s.action &&
+            s.target_type &&
+            s.target_id &&
+            s.cta_label,
+        )
+        if (valid.length === 0) {
+          visible.value = false
+        } else {
+          suggestions.value = valid.slice(0, 3)
+          visible.value = true
+        }
+        resumeHandle.taskId.value = null
+        queued.value = false
+      },
+      onError: (message) => {
+        // Silent hide on failure (spec §7.2) — only toast auth_expired
+        if (message.includes('auth_expired')) {
+          showFailToast(t('dashboard.financeCoach.error.auth_expired'))
+        }
+        visible.value = false
+        resumeHandle.taskId.value = null
+        queued.value = false
+      },
+    }, force)
   } catch {
     visible.value = false // silent hide on failure (spec §7.2)
     resumeHandle.taskId.value = null
+    queued.value = false
   } finally {
     loading.value = false
     loaded.value = true
@@ -85,9 +117,12 @@ async function onCancel() {
   cancelling.value = true
   try {
     await resumeHandle.cancel()
+    streamHandle?.abort()
+    streamHandle = null
     resumeHandle.taskId.value = null
     loading.value = false
     loaded.value = true
+    queued.value = false
     showToast(t('aiTask.cancelled'))
   } catch {
     showFailToast(t('toast.operationFailed'))
@@ -130,6 +165,16 @@ let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   await resumeHandle.resume()
+})
+
+// Dashboard is KeepAlive-cached — disconnect on deactivate, cleanup on unmount.
+onDeactivated(() => {
+  streamHandle?.abort()
+  resumeHandle.disconnect()
+})
+
+onUnmounted(() => {
+  resumeHandle.cleanup()
 })
 </script>
 

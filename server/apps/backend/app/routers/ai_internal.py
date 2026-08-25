@@ -142,7 +142,7 @@ def internal_get_liabilities(
     )
     return [
         {
-            "id": li.id,
+            "id": str(li.id),
             "category": li.category,
             "remaining_amount": float(li.remaining_amount)
             if li.remaining_amount is not None
@@ -575,7 +575,7 @@ def internal_get_mcp_servers(
                     env_vars = {}
         result.append(
             {
-                "id": s.id,
+                "id": str(s.id),
                 "name": s.name,
                 "url": s.url,
                 "transport": s.transport,

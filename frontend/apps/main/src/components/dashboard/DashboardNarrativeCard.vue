@@ -43,7 +43,7 @@ const renderedNarrative = computed(() => {
 })
 
 // v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
-const resumeHandle = useTaskResume('narrative', {
+const resumeHandle = useTaskResume('dashboard-narrative', {
   onStreamEvent: (event, data) => {
     if (event === 'custom' && typeof data === 'object' && data !== null) {
       const d = data as Record<string, unknown>

@@ -1,11 +1,11 @@
 """Calendar schemas — per-day event aggregation for child activity view."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from apps.backend.app.schemas.base import SnowflakeBase
 
 
-class CalendarChoreEvent(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class CalendarChoreEvent(SnowflakeBase):
     id: int
     chore_name: str
     chore_emoji: str | None
@@ -14,18 +14,14 @@ class CalendarChoreEvent(BaseModel):
     status: str  # approved | pending_approval
 
 
-class CalendarWishEvent(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class CalendarWishEvent(SnowflakeBase):
     id: int
     name: str
     emoji: str | None
     star_coin_cost: int | None
 
 
-class CalendarMilestoneEvent(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class CalendarMilestoneEvent(SnowflakeBase):
     id: int
     milestone_type: str
 

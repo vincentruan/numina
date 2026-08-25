@@ -7,7 +7,7 @@ services:
     container_name: numina-backend
     restart: unless-stopped
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_PORT:-28000}:8000"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./system-config.yaml:/app/system-config.yaml:ro
@@ -42,6 +42,8 @@ services:
       dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
+    ports:
+      - "${AGENT_PORT:-28001}:8001"
     # Allow containers to reach host services (e.g. PostgreSQL on host:5432)
     # via the special DNS name "host.docker.internal".
     extra_hosts:
@@ -83,6 +85,8 @@ services:
       dockerfile: apps/scheduler_worker/Dockerfile
     container_name: numina-scheduler-worker
     restart: unless-stopped
+    ports:
+      - "${WORKER_PORT:-28002}:8002"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./system-config.yaml:/app/system-config.yaml:ro

@@ -136,7 +136,7 @@ def export_all_json(
             {
                 "name": a.name,
                 "asset_type": a.asset_type,
-                "category_id": a.category_id,
+                "category_id": str(a.category_id) if a.category_id is not None else None,
                 "purchase_price": str(a.purchase_price) if a.purchase_price is not None else None,
                 "current_value": str(a.current_value) if a.current_value is not None else None,
                 "currency": a.currency,

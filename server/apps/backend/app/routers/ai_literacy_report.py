@@ -194,7 +194,7 @@ async def trigger_generate_events(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": task.id,
+                    "task_id": str(task.id),
                     "queue_position": task.queue_position,
                 },
             )

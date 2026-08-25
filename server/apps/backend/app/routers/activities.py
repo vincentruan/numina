@@ -25,10 +25,10 @@ def get_recent_activities(
     )
     return [
         {
-            "id": a.id,
+            "id": str(a.id),
             "type": a.type,
             "entity_type": a.entity_type,
-            "entity_id": a.entity_id,
+            "entity_id": str(a.entity_id) if a.entity_id is not None else None,
             "title": a.title,
             "amount": a.amount,
             "created_at": ensure_utc(a.created_at).isoformat() if a.created_at else None,

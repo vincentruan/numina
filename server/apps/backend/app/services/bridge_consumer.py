@@ -99,13 +99,36 @@ async def _pump_agent_sse_to_bridge(
         agent_url: Agent endpoint URL (e.g. ``/internal/gateway/runs/asset-report/{thread_id}``).
         json_body: Request body for the agent trigger.
         bridge: Shared backend StreamBridge instance.
-        run_id: Agent run ID for bridge publishing.
+        run_id: Agent run ID for bridge publishing.  Initially ``""`` —
+            resolved from ``Content-Location`` header via the ``on_run_id``
+            callback before body consumption.  The pump uses a mutable list
+            ``[run_id]`` so the resolved UUID is visible after the callback.
         task_id: AITask ID for logging.
         on_run_id: Optional callback invoked with the run_id extracted from
             the agent's response ``Content-Location`` header.  Callers use
             this to spawn lifecycle consumers before the response body is
             fully consumed, avoiding a second HTTP trigger.
     """
+    # Mutable wrapper so the resolved run_id from the callback is visible
+    # to the publish loop below.  ``run_id`` arrives as ``""`` (placeholder)
+    # and is replaced once the agent returns Content-Location.
+    resolved_run_id = [run_id]
+
+    def _set_run_id(cl_run_id: str) -> None:
+        # Extract the trailing UUID from the Content-Location URL (e.g.
+        # "/internal/gateway/runs/asset-report/{thread}/{run_id}") — MUST match
+        # the run_id the lifecycle consumer subscribes with, otherwise publish
+        # and subscribe target different bridge streams and never meet.
+        resolved_run_id[0] = cl_run_id.rstrip("/").rsplit("/", 1)[-1]
+
+    # Compose the caller's on_run_id callback with our own run_id capture.
+    original_on_run_id = on_run_id
+
+    def _composed_on_run_id(cl: str) -> None:
+        _set_run_id(cl)
+        if original_on_run_id is not None:
+            original_on_run_id(cl)
+
     try:
         async with agent_client.stream(
             "POST",
@@ -114,17 +137,22 @@ async def _pump_agent_sse_to_bridge(
         ) as resp:
             # Early extraction: Content-Location is in response headers,
             # available before the body is consumed.
-            if on_run_id is not None:
+            if _composed_on_run_id is not None:
                 cl = resp.headers.get("Content-Location")
                 if cl:
                     try:
-                        on_run_id(cl)
+                        _composed_on_run_id(cl)
                     except Exception:
                         logger.warning(
                             "[agent-pump] on_run_id callback failed task=%s",
                             task_id,
                             exc_info=True,
                         )
+                else:
+                    logger.warning(
+                        "[agent-pump] Content-Location header missing for task=%s",
+                        task_id,
+                    )
 
             if resp.status_code != 200:
                 body = await resp.aread()
@@ -134,12 +162,14 @@ async def _pump_agent_sse_to_bridge(
                     body[:200],
                     task_id,
                 )
+                # Publish to resolved run_id (may still be "" if Content-Location
+                # was absent — the lifecycle consumer fallback handles that).
                 await bridge.publish(
-                    run_id,
+                    resolved_run_id[0],
                     "error",
                     {"error": "报告生成服务异常", "error_type": "AgentError"},
                 )
-                await bridge.publish_end(run_id)
+                await bridge.publish_end(resolved_run_id[0])
                 return
 
             current_event = ""
@@ -156,7 +186,9 @@ async def _pump_agent_sse_to_bridge(
                         event_type = current_event or "message"
                         # Skip internal agent events not meant for the frontend
                         if event_type not in ("heartbeat",):
-                            await bridge.publish(run_id, event_type, data)
+                            await bridge.publish(
+                                resolved_run_id[0], event_type, data
+                            )
                     current_event = ""
                 elif line.startswith("id:"):
                     pass  # SSE event ID — frontend concern, not buffered
@@ -171,12 +203,12 @@ async def _pump_agent_sse_to_bridge(
             exc_info=True,
         )
         await bridge.publish(
-            run_id,
+            resolved_run_id[0],
             "error",
             {"error": "报告生成服务中断", "error_type": type(exc).__name__},
         )
     finally:
-        await bridge.publish_end(run_id)
+        await bridge.publish_end(resolved_run_id[0])
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +482,10 @@ async def consume_task_stream(
     effective_bridge = bridge or get_shared_bridge()
 
     try:
+        # Emit task_id as the first SSE event so the frontend can immediately
+        # enable cancel / progress-tracking without polling.
+        yield f'event: metadata\ndata: {json.dumps({"task_id": task_id})}\n\n'
+
         error_seen = False
         async for event in bridge_consumer(
             task_id,
