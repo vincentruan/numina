@@ -598,10 +598,19 @@ async function onGenerate(force = false) {
       // persisted before reloading.
       await waitForServerTaskComplete()
       await loadExistingReport()
+    } else if (stream.status.value === 'error') {
+      // Generation failed — clear the stale report so the user sees the
+      // error state instead of the previous report with an old date.
+      currentReport.value = null
+      reportGeneratedAt.value = null
     }
     aiStore.clearBackgroundTask('report')
     reportTaskId.value = null
   } catch {
+    // Network or connection error — clear stale report so the error state
+    // is visible rather than the previous report pretending nothing happened.
+    currentReport.value = null
+    reportGeneratedAt.value = null
     showFailToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   }
 }

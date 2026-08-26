@@ -251,18 +251,31 @@ async def bridge_consumer(
     # Resolve run_id: prefer caller-provided value (avoids DB lookup race),
     # fall back to querying the AITask table.
     if not run_id:
-        db = SessionLocal()
-        try:
-            task = AITaskService.get_task_by_id(task_id, family_id, db)
-            if not task:
-                raise RuntimeError(f"Task {task_id} not found")
-            if not task.run_id:
-                raise RuntimeError(
-                    f"Task {task_id} has no run_id (agent may not have started yet)"
-                )
-            run_id = task.run_id
-        finally:
-            db.close()
+        # Retry a few times — the pump's _on_run_id callback may not have
+        # committed the run_id to the AITask row yet.  Without retries,
+        # consume_task_stream would raise immediately and the frontend
+        # would see an error; with retries, we wait for the pump to catch
+        # up (typically < 1 s for a local agent, a few seconds for remote).
+        _max_attempts = 10
+        _attempt_interval = 1.0  # seconds
+        for _attempt in range(_max_attempts):
+            db = SessionLocal()
+            try:
+                task = AITaskService.get_task_by_id(task_id, family_id, db)
+                if not task:
+                    raise RuntimeError(f"Task {task_id} not found")
+                if task.run_id:
+                    run_id = task.run_id
+                    break
+            finally:
+                db.close()
+            if _attempt < _max_attempts - 1:
+                await asyncio.sleep(_attempt_interval)
+        if not run_id:
+            raise RuntimeError(
+                f"Task {task_id} has no run_id after {_max_attempts}s "
+                f"(agent may not have started yet)"
+            )
 
     # Use shared bridge or create per-call bridge (for tests)
     own_bridge = bridge is None
@@ -327,11 +340,18 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
     if not task:
         return False
     if task.skill_id == "report":
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime, timedelta
 
         from apps.backend.app.models.ai_report import AIReport
 
-        cutoff = datetime.now(UTC) - timedelta(minutes=10)
+        # AIReport.generated_at is a naive DateTime column (UTC stored
+        # without tzinfo).  Using datetime.now(UTC) would produce an
+        # aware datetime — PostgreSQL rejects naive-vs-aware comparisons
+        # with "operator does not exist", causing every report task to
+        # fail verification even when the agent wrote the report.
+        # Use utcnow() to match the naive-UTC convention (same pattern
+        # as AITaskService.get_running_task line 44).
+        cutoff = datetime.utcnow() - timedelta(minutes=10)
         recent_report = (
             db.query(AIReport)
             .filter(

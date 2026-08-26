@@ -167,6 +167,16 @@ async def trigger_generate_events(
     if existing:
         # 已有运行中任务 — 直接接续，不重复创建
         task = existing
+        # Clear stale run_id so that bridge_consumer's DB lookup sees NULL
+        # and retries until the pump's _on_run_id callback sets the fresh
+        # value.  Without this, consume_task_stream (which starts after a
+        # brief wait) may read the old task's run_id from a previous agent
+        # run, subscribe to the bridge with that stale key, and immediately
+        # replay old events → the frontend sees "completed" with the
+        # previous report's data.
+        if task.run_id:
+            task.run_id = None
+            db.commit()
         session_id = str(task.session_id) if task.session_id else str(task.id)
         session = (
             db.query(AIChatSession)
