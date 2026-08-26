@@ -198,6 +198,7 @@ def seed_assets(db, user: User, tags: list[Tag]):
             "expected_lifespan_days": 36500,  # 100 years
             "annual_maintenance_cost": 12000,
             "usage_frequency": "daily",
+            "target_daily_cost": 150,
             "notes": "三室两厅，交通便利",
         },
         {
@@ -212,6 +213,7 @@ def seed_assets(db, user: User, tags: list[Tag]):
             "expected_lifespan_days": 3650,  # 10 years
             "annual_maintenance_cost": 5000,
             "usage_frequency": "daily",
+            "target_daily_cost": 85,
             "notes": "续航里程468km",
         },
         {
@@ -582,6 +584,7 @@ def seed_assets(db, user: User, tags: list[Tag]):
             expected_lifespan_days=asset_data.get("expected_lifespan_days"),
             annual_maintenance_cost=asset_data.get("annual_maintenance_cost", 0),
             usage_frequency=asset_data.get("usage_frequency"),
+            target_daily_cost=asset_data.get("target_daily_cost"),
             notes=asset_data.get("notes"),
         )
 
@@ -608,7 +611,7 @@ def seed_liabilities(db, user: User, assets: list[Asset]):
             "original_amount": 2100000,
             "remaining_amount": 1800000,
             "monthly_payment": 10500,
-            "interest_rate": 0.049,
+            "interest_rate": 4.9,
             "start_date": date(2020, 4, 1),
             "end_date": date(2050, 4, 1),
             "institution": "工商银行",
@@ -621,7 +624,7 @@ def seed_liabilities(db, user: User, assets: list[Asset]):
             "original_amount": 200000,
             "remaining_amount": 80000,
             "monthly_payment": 4167,
-            "interest_rate": 0.03,
+            "interest_rate": 3,
             "start_date": date(2022, 6, 1),
             "end_date": date(2026, 6, 1),
             "institution": "特斯拉金融",
@@ -634,7 +637,7 @@ def seed_liabilities(db, user: User, assets: list[Asset]):
             "original_amount": 15000,
             "remaining_amount": 5000,
             "monthly_payment": 2500,
-            "interest_rate": 0.18,  # 信用卡年化利率较高
+            "interest_rate": 18,  # 信用卡年化利率较高
             "start_date": date(2024, 3, 1),
             "institution": "招商银行",
             "notes": "上月消费分期",
@@ -645,7 +648,7 @@ def seed_liabilities(db, user: User, assets: list[Asset]):
             "original_amount": 50000,
             "remaining_amount": 30000,
             "monthly_payment": 2083,
-            "interest_rate": 0.06,
+            "interest_rate": 6,
             "start_date": date(2023, 10, 1),
             "end_date": date(2025, 10, 1),
             "institution": "建设银行",
@@ -707,6 +710,8 @@ def seed_wishes(db, user: User):
             "description": "任天堂下一代主机",
             "priority": "high",
             "status": "pending",
+            "saved_amount": 800,
+            "monthly_saving": 300,
         },
         {
             "name": "日本东京旅行",
@@ -714,6 +719,8 @@ def seed_wishes(db, user: User):
             "description": "一周东京深度游",
             "priority": "medium",
             "status": "pending",
+            "saved_amount": 5000,
+            "monthly_saving": 2000,
         },
         {
             "name": "索尼PS5",
@@ -763,6 +770,8 @@ def seed_wishes(db, user: User):
             description=wish_data.get("description"),
             priority=wish_data.get("priority", "medium"),
             status=wish_data.get("status", "pending"),
+            saved_amount=wish_data.get("saved_amount", 0),
+            monthly_saving=wish_data.get("monthly_saving", 0),
             converts_to_asset=True,
         )
         db.add(wish)

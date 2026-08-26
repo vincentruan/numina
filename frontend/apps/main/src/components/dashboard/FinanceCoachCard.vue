@@ -18,9 +18,11 @@ const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const suggestions = ref<FinanceSuggestion[]>([])
+const thinking = ref('')
 const loading = ref(true)
 const loaded = ref(false)
 const visible = ref(false)
+const streaming = ref(false)
 const refreshing = ref(false)
 const expanded = ref<string[]>([])
 const cancelling = ref(false)
@@ -28,6 +30,8 @@ const queued = ref(false)
 let streamHandle: FinanceCoachStreamHandle | null = null
 
 const count = computed(() => suggestions.value.length)
+const hasThinking = computed(() => thinking.value.length > 0)
+const isRunning = computed(() => streaming.value || resumeHandle.taskId.value !== null)
 
 // v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
 const resumeHandle = useTaskResume('coach', {
@@ -56,6 +60,14 @@ async function load(force = false) {
     // Clear stale taskId from any previous task
     resumeHandle.taskId.value = null
 
+    // Reset streaming state for fresh generation
+    if (force) {
+      thinking.value = ''
+      suggestions.value = []
+      visible.value = false
+    }
+    streaming.value = true
+
     streamHandle = await streamFinanceCoach({
       onTaskId: (taskId) => {
         // Backend delivers task_id as the first SSE metadata event —
@@ -68,7 +80,10 @@ async function load(force = false) {
         resumeHandle.taskId.value = info.taskId
         queued.value = true
       },
-      onDone: (results) => {
+      onThinkingDelta: (content) => {
+        thinking.value += content
+      },
+      onDone: (results, _thinking) => {
         const valid = (results || []).filter(
           (s) =>
             s &&
@@ -86,6 +101,7 @@ async function load(force = false) {
           suggestions.value = valid.slice(0, 3)
           visible.value = true
         }
+        streaming.value = false
         resumeHandle.taskId.value = null
         queued.value = false
       },
@@ -95,6 +111,7 @@ async function load(force = false) {
           showFailToast(t('dashboard.financeCoach.error.auth_expired'))
         }
         visible.value = false
+        streaming.value = false
         resumeHandle.taskId.value = null
         queued.value = false
       },
@@ -122,6 +139,7 @@ async function onCancel() {
     resumeHandle.taskId.value = null
     loading.value = false
     loaded.value = true
+    streaming.value = false
     queued.value = false
     showToast(t('aiTask.cancelled'))
   } catch {
@@ -186,12 +204,12 @@ onUnmounted(() => {
           <div class="coach-header">
             <span class="coach-title">
               <span class="coach-icon">
-                <van-loading v-if="loading" size="16px" type="spinner" color="#1989fa" />
+                <van-loading v-if="isRunning" size="16px" type="spinner" color="#1989fa" />
                 <IIcon v-else :icon="'lucide:lightbulb'" size="18" class="coach-icon__svg" />
               </span>
               <span class="coach-title__text">{{ t('dashboard.financeCoach.title') }}</span>
             </span>
-            <span v-if="loading" class="coach-summary coach-summary--loading">
+            <span v-if="isRunning" class="coach-summary coach-summary--loading">
               <!-- U21: cancel button visible when AITask is running -->
               <van-button
                 v-if="resumeHandle.taskId"
@@ -217,7 +235,7 @@ onUnmounted(() => {
         </template>
 
         <!-- Loading skeleton inside expanded area -->
-        <template v-if="loading">
+        <template v-if="loading && !streaming">
           <div v-for="i in 3" :key="i" class="fc-skeleton-item">
             <div class="fc-skeleton-bar" />
             <div class="fc-skeleton-body">
@@ -225,6 +243,18 @@ onUnmounted(() => {
             </div>
           </div>
         </template>
+
+        <!-- Streaming thinking (LLM reasoning while generating suggestions) -->
+        <div v-else-if="streaming" class="fc-streaming">
+          <div v-if="hasThinking" class="fc-thinking">
+            <van-collapse>
+              <van-collapse-item :title="t('dashboard.narrative.thinking')" name="thinking">
+                <div class="fc-thinking-text">{{ thinking }}</div>
+              </van-collapse-item>
+            </van-collapse>
+          </div>
+          <van-skeleton v-else title :row="3" animate />
+        </div>
 
         <!-- AI disabled teaser -->
         <div v-else-if="!familyStore.aiEnabled" class="fc-ai-gated">
@@ -358,6 +388,23 @@ onUnmounted(() => {
 }
 .fc-skeleton-body :deep(.van-skeleton) {
   padding: 0;
+}
+
+/* Streaming thinking section */
+.fc-streaming {
+  padding: 0 16px 12px;
+}
+.fc-thinking {
+  margin-bottom: 8px;
+}
+.fc-thinking :deep(.van-collapse-item__content) {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.fc-thinking-text {
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 /* Loaded suggestion items */

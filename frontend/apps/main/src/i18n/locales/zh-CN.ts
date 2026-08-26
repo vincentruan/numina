@@ -250,6 +250,7 @@ export default {
     literacyReady: '已生成',
     literacyGenerating: '生成中',
     literacyNone: '未生成',
+    literacyLoadError: '加载失败，请重试',
   },
   ai: {
     systemAgents: '系统智能体',
@@ -1268,6 +1269,7 @@ export default {
     literacyReady: '已生成',
     literacyGenerating: '生成中',
     literacyNone: '未生成',
+    literacyLoadError: '加载失败，请重试',
     // U2: repayment method
     repaymentMethod: '还款方式',
     selectRepaymentMethod: '选择还款方式',
@@ -2576,6 +2578,7 @@ export default {
     literacyReady: '已生成',
     literacyGenerating: '生成中',
     literacyNone: '未生成',
+    literacyLoadError: '加载失败，请重试',
     dismiss: '忽略',
     expiredDays: '已过期 {days} 天',
     dueToday: '今天到期',

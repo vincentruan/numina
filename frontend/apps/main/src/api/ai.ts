@@ -765,12 +765,16 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
 // can immediately enable cancellation.
 
 export interface FinanceCoachStreamCallbacks {
-  onDone: (suggestions: FinanceSuggestion[]) => void
+  onDone: (suggestions: FinanceSuggestion[], thinking: string) => void
   onError: (message: string) => void
   /** Called when the SSE stream emits the initial task_id metadata event. */
   onTaskId?: (taskId: string) => void
   /** Called when the backend returns 202 (task queued behind another running task). */
   onQueued?: (info: { taskId: string; queuePosition: number }) => void
+  /** Called for each chunk of LLM thinking/output text from messages frames. */
+  onThinkingDelta?: (content: string) => void
+  /** Called when the backend reports insufficient financial data to analyse. */
+  onBlocked?: (reason: string) => void
 }
 
 export interface FinanceCoachStreamHandle {
@@ -846,9 +850,14 @@ async function runFinanceCoachStream(
         })
         return
       }
+      // Insufficient data — family has no financial records to analyse
+      if (json.status === 'insufficient_data') {
+        callbacks.onBlocked?.(String(json.reason ?? 'no_financial_data'))
+        return
+      }
       // Cached result
       const report = json.report as { suggestions?: FinanceSuggestion[] } | undefined
-      callbacks.onDone(report?.suggestions ?? [])
+      callbacks.onDone(report?.suggestions ?? [], '')
     } catch {
       callbacks.onError('finance_coach.error.parse_failed')
     }
@@ -862,17 +871,25 @@ async function runFinanceCoachStream(
   }
 
   let errored = false
+  let thinkingBuffer = ''
 
   try {
     await readSSEStream(res, {
-      onMessage: () => {
-        // Coach doesn't emit messages frames — no-op
+      onMessage: (_event, data) => {
+        if (errored) return
+        if (data) {
+          const msg = data as { type?: string; content?: string }
+          if (msg.content) {
+            thinkingBuffer += msg.content
+            callbacks.onThinkingDelta?.(msg.content)
+          }
+        }
       },
       onCustom: (data) => {
         if (errored) return
         const custom = data as { type?: string; payload?: { suggestions?: FinanceSuggestion[] } }
         if (custom.type === 'finance_coach.result' && custom.payload?.suggestions) {
-          callbacks.onDone(custom.payload.suggestions)
+          callbacks.onDone(custom.payload.suggestions, thinkingBuffer)
         }
       },
       onMetadata: (data) => {
@@ -893,12 +910,23 @@ async function runFinanceCoachStream(
           errored = true
           callbacks.onError('finance_coach.error.generation_failed')
         }
+        // If stream ended without finance_coach.result, report empty with accumulated thinking
+        // so the UI can show what the LLM produced instead of a silent "No suggestions".
       },
     })
-  } catch (err) {
-    if ((err as Error).name !== 'AbortError') {
+  } catch {
+    if (!errored) {
       callbacks.onError('finance_coach.error.connection_interrupted')
     }
+    return
+  }
+
+  // Stream finished without onDone being called (no finance_coach.result event).
+  // This means the LLM output couldn't be parsed as the expected JSON.
+  // Fire onDone with empty suggestions + accumulated thinking so the UI shows
+  // an actionable state rather than silently hiding the failure.
+  if (!errored) {
+    callbacks.onDone([], thinkingBuffer)
   }
 }
 

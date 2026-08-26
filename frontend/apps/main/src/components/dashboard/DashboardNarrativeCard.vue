@@ -33,6 +33,7 @@ const expanded = ref<string[]>([])
 let streamHandle: NarrativeStreamHandle | null = null
 
 const hasContent = computed(() => narrative.value !== null && narrative.value !== '')
+const hasThinking = computed(() => thinking.value.length > 0)
 
 const renderedNarrative = computed(() => {
   if (!narrative.value) return ''
@@ -258,15 +259,17 @@ function formatTime(iso: string | null): string {
           </div>
         </template>
 
+        <!-- Thinking section — visible whenever we have thinking text, regardless of streaming state -->
+        <div v-if="hasThinking" class="narrative-thinking">
+          <van-collapse>
+            <van-collapse-item :title="t('dashboard.narrative.thinking')" name="thinking">
+              <div class="narrative-thinking-text">{{ thinking }}</div>
+            </van-collapse-item>
+          </van-collapse>
+        </div>
+
         <!-- Streaming preview -->
         <div v-if="streaming" class="narrative-streaming">
-          <div v-if="thinking" class="narrative-thinking">
-            <van-collapse>
-              <van-collapse-item :title="t('dashboard.narrative.thinking')" name="thinking">
-                <div class="narrative-thinking-text">{{ thinking }}</div>
-              </van-collapse-item>
-            </van-collapse>
-          </div>
           <div v-if="narrative" class="narrative-preview" v-html="renderedNarrative" />
           <van-skeleton v-else title :row="3" animate />
         </div>

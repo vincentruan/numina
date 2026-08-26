@@ -14,6 +14,11 @@
             <span v-if="loading" class="literacy-summary literacy-summary--loading">
               <van-loading size="12px" type="spinner" />
             </span>
+            <span v-else-if="error" class="literacy-summary literacy-summary--error">
+              <van-button plain type="danger" size="mini" @click.stop="onRetry">
+                {{ t('aiTask.retry') }}
+              </van-button>
+            </span>
             <span v-else class="literacy-summary">
               {{ readyCount }}/{{ childMembers.length }}
             </span>
@@ -27,6 +32,13 @@
             <div class="literacy-skeleton-badge" />
           </div>
         </template>
+
+        <div v-else-if="error" class="literacy-error-state">
+          <p class="literacy-error-text">{{ t('dashboard.literacyLoadError') }}</p>
+          <van-button plain type="primary" size="small" @click="onRetry">
+            {{ t('aiTask.retry') }}
+          </van-button>
+        </div>
 
         <template v-else>
           <div
@@ -60,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
@@ -72,6 +84,7 @@ const familyStore = useFamilyStore()
 
 const statusMap = ref<Record<string, ReportStatus>>({})
 const loading = ref(true)
+const error = ref(false)
 const expanded = ref<string[]>([])
 
 const childMembers = computed(() =>
@@ -82,18 +95,53 @@ const readyCount = computed(() =>
   childMembers.value.filter(c => statusMap.value[String(c.id)]?.status === 'ready').length,
 )
 
+const STATUS_TIMEOUT_MS = 15_000
+
+/** Wrap a promise with a timeout — rejects if not settled in time. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
+}
+
 async function loadStatuses() {
-  if (!familyStore.aiEnabled || !childMembers.value.length) return
-  loading.value = true
-  for (const child of childMembers.value) {
-    try {
-      const { data } = await getReportStatus(String(child.id))
-      statusMap.value[String(child.id)] = data
-    } catch {
-      // best-effort
-    }
+  if (!familyStore.aiEnabled || !childMembers.value.length) {
+    loading.value = false
+    return
   }
-  loading.value = false
+  loading.value = true
+  error.value = false
+  try {
+    const results = await Promise.allSettled(
+      childMembers.value.map(child =>
+        withTimeout(
+          getReportStatus(String(child.id)).then(r => ({ id: String(child.id), data: r.data })),
+          STATUS_TIMEOUT_MS,
+        ),
+      ),
+    )
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        statusMap.value[result.value.id] = result.value.data
+      }
+    }
+    // If ALL requests failed/timed-out, mark as error so the UI shows a retry button
+    if (results.every(r => r.status === 'rejected')) {
+      error.value = true
+    }
+  } catch {
+    error.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+function onRetry() {
+  void loadStatuses()
 }
 
 function statusClass(childId: string | number): string {
@@ -114,6 +162,13 @@ function statusLabel(childId: string | number): string {
 
 onMounted(() => {
   void loadStatuses()
+})
+
+// Dashboard is KeepAlive-cached; re-check statuses when navigating back.
+onActivated(() => {
+  if (!loading.value) {
+    void loadStatuses()
+  }
 })
 
 defineExpose({ loadStatuses })
@@ -170,6 +225,10 @@ defineExpose({ loadStatuses })
   color: var(--van-text-color-2);
 }
 .literacy-summary--loading {
+  display: inline-flex;
+  align-items: center;
+}
+.literacy-summary--error {
   display: inline-flex;
   align-items: center;
 }
@@ -278,5 +337,19 @@ defineExpose({ loadStatuses })
   align-items: center;
   gap: 2px;
   text-decoration: none;
+}
+
+.literacy-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+}
+.literacy-error-text {
+  font-size: 13px;
+  color: var(--van-text-color-2);
+  margin: 0;
+  text-align: center;
 }
 </style>

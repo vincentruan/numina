@@ -129,6 +129,23 @@ async def trigger_finance_coach(
     # Build the PII-minimized snapshot (spec §7.1) — injected as input payload
     snapshot = build_family_finance_snapshot(db, current_user)
 
+    # Insufficient-data gate: skip the LLM call when there's nothing to analyse.
+    # Returns a structured JSON so the frontend can show a meaningful message
+    # instead of a silent "No suggestions".
+    has_debts = len(snapshot.get("high_interest_debts", [])) > 0
+    has_idle = len(snapshot.get("idle_assets", [])) > 0
+    has_top_assets = len(snapshot.get("top_daily_cost_assets", [])) > 0
+    has_wishes = len(snapshot.get("wishes", [])) > 0
+    if not has_debts and not has_idle and not has_top_assets and not has_wishes:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "insufficient_data",
+                "reason": "no_financial_data",
+                "report": {"suggestions": []},
+            },
+        )
+
     # Phase 1: Backend-owned buffer (single streaming POST — no double trigger).
     agent_client = AgentClient(family_id, user_id, timeout=300.0)
     agent_url = f"/internal/gateway/runs/finance-coach/{session_id}"
