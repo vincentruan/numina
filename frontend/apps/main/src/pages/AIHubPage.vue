@@ -542,18 +542,12 @@ const scoreAriaLabel = computed(() => {
   return t('aiHub.scoreAriaLabel', { score })
 })
 
-// Generate short summary (120-200 chars) for display in the summary card
+// Generate short summary for display in the summary card (CSS line-clamp handles visual truncation)
 const renderedSummary = computed(() => {
   if (!currentReport.value?.summary) return ''
-  // Parse markdown to plain text
+  // Parse markdown to plain text — CSS -webkit-line-clamp: 2 handles visual truncation
   const raw = marked.parse(currentReport.value.summary, { async: false }) as string
-  const plainText = DOMPurify.sanitize(raw, { ALLOWED_TAGS: [] }).trim()
-  // Truncate to ~180 chars (middle of 120-200 range) at word boundary
-  const maxLength = 180
-  if (plainText.length <= maxLength) return plainText
-  const truncated = plainText.slice(0, maxLength)
-  const lastSpace = truncated.lastIndexOf(' ')
-  return (lastSpace > maxLength * 0.7 ? truncated.slice(0, lastSpace) : truncated) + '...'
+  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: [] }).trim()
 })
 
 const reportAge = computed(() => {
@@ -1186,7 +1180,7 @@ defineExpose({
   margin: 12px 16px;
   background: var(--card-bg);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--color-card-border);
   box-shadow: var(--shadow-elevated);
   cursor: pointer;
@@ -1207,7 +1201,7 @@ defineExpose({
   text-transform: uppercase;
   color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .report-summary-title svg { color: var(--text-tertiary); }
@@ -1218,7 +1212,7 @@ defineExpose({
   letter-spacing: -0.13px;
   color: var(--text-secondary);
   line-height: 1.5;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
