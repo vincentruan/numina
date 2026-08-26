@@ -33,24 +33,37 @@ def export_assets_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "名称", "类型", "分类", "购入价格", "当前估值", "币种",
-        "购入日期", "状态", "位置/机构", "标签", "备注",
-    ])
+    writer.writerow(
+        [
+            "名称",
+            "类型",
+            "分类",
+            "购入价格",
+            "当前估值",
+            "币种",
+            "购入日期",
+            "状态",
+            "位置/机构",
+            "标签",
+            "备注",
+        ]
+    )
     for a in assets:
-        writer.writerow([
-            a.name,
-            a.asset_type,
-            a.category.name if a.category else "",
-            str(a.purchase_price) if a.purchase_price is not None else "",
-            str(a.current_value) if a.current_value is not None else "",
-            a.currency,
-            a.purchase_date.isoformat() if a.purchase_date else "",
-            a.status,
-            a.location or a.institution or "",
-            ",".join(t.name for t in a.tags) if a.tags else "",
-            a.notes or "",
-        ])
+        writer.writerow(
+            [
+                a.name,
+                a.asset_type,
+                a.category.name if a.category else "",
+                str(a.purchase_price) if a.purchase_price is not None else "",
+                str(a.current_value) if a.current_value is not None else "",
+                a.currency,
+                a.purchase_date.isoformat() if a.purchase_date else "",
+                a.status,
+                a.location or a.institution or "",
+                ",".join(t.name for t in a.tags) if a.tags else "",
+                a.notes or "",
+            ]
+        )
 
     output.seek(0)
     today = date.today().isoformat()
@@ -75,31 +88,46 @@ def export_liabilities_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "名称", "类别", "原始金额", "剩余金额", "月供",
-        "利率", "开始日期", "结束日期", "机构", "状态", "备注",
-    ])
+    writer.writerow(
+        [
+            "名称",
+            "类别",
+            "原始金额",
+            "剩余金额",
+            "月供",
+            "利率",
+            "开始日期",
+            "结束日期",
+            "机构",
+            "状态",
+            "备注",
+        ]
+    )
     for liab in liabilities:
-        writer.writerow([
-            liab.name,
-            liab.category,
-            liab.original_amount,
-            liab.remaining_amount,
-            liab.monthly_payment or "",
-            liab.interest_rate or "",
-            liab.start_date.isoformat() if liab.start_date else "",
-            liab.end_date.isoformat() if liab.end_date else "",
-            liab.institution or "",
-            "还款中" if liab.is_active else "已结清",
-            liab.notes or "",
-        ])
+        writer.writerow(
+            [
+                liab.name,
+                liab.category,
+                liab.original_amount,
+                liab.remaining_amount,
+                liab.monthly_payment or "",
+                liab.interest_rate or "",
+                liab.start_date.isoformat() if liab.start_date else "",
+                liab.end_date.isoformat() if liab.end_date else "",
+                liab.institution or "",
+                "还款中" if liab.is_active else "已结清",
+                liab.notes or "",
+            ]
+        )
 
     output.seek(0)
     today = date.today().isoformat()
     return StreamingResponse(
         iter(["\ufeff" + output.getvalue()]),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="liabilities_{today}.csv"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="liabilities_{today}.csv"'
+        },
     )
 
 
@@ -136,9 +164,13 @@ def export_all_json(
             {
                 "name": a.name,
                 "asset_type": a.asset_type,
-                "category_id": str(a.category_id) if a.category_id is not None else None,
-                "purchase_price": str(a.purchase_price) if a.purchase_price is not None else None,
-                "current_value": str(a.current_value) if a.current_value is not None else None,
+                "category_id": a.category_id,
+                "purchase_price": str(a.purchase_price)
+                if a.purchase_price is not None
+                else None,
+                "current_value": str(a.current_value)
+                if a.current_value is not None
+                else None,
                 "currency": a.currency,
                 "purchase_date": _serialize_date(a.purchase_date),
                 "status": a.status,
@@ -147,7 +179,9 @@ def export_all_json(
                 "interest_rate": a.interest_rate,
                 "maturity_date": _serialize_date(a.maturity_date),
                 "expected_lifespan_days": a.expected_lifespan_days,
-                "annual_maintenance_cost": str(a.annual_maintenance_cost) if a.annual_maintenance_cost is not None else None,
+                "annual_maintenance_cost": str(a.annual_maintenance_cost)
+                if a.annual_maintenance_cost is not None
+                else None,
                 "usage_frequency": a.usage_frequency,
                 "notes": a.notes,
                 "is_archived": a.is_archived,
@@ -159,9 +193,15 @@ def export_all_json(
             {
                 "name": liab.name,
                 "category": liab.category,
-                "original_amount": str(liab.original_amount) if liab.original_amount is not None else None,
-                "remaining_amount": str(liab.remaining_amount) if liab.remaining_amount is not None else None,
-                "monthly_payment": str(liab.monthly_payment) if liab.monthly_payment is not None else None,
+                "original_amount": str(liab.original_amount)
+                if liab.original_amount is not None
+                else None,
+                "remaining_amount": str(liab.remaining_amount)
+                if liab.remaining_amount is not None
+                else None,
+                "monthly_payment": str(liab.monthly_payment)
+                if liab.monthly_payment is not None
+                else None,
                 "interest_rate": liab.interest_rate,
                 "start_date": _serialize_date(liab.start_date),
                 "end_date": _serialize_date(liab.end_date),
@@ -190,5 +230,7 @@ def export_all_json(
     return StreamingResponse(
         iter([content]),
         media_type="application/json; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="numina_backup_{today}.json"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="numina_backup_{today}.json"'
+        },
     )

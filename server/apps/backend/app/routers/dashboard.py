@@ -4,7 +4,7 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
@@ -12,6 +12,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.schemas.dashboard import (
     AllocationResponse,
@@ -175,7 +176,16 @@ def get_home_assets_paginated(
             details=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
     return dashboard_service.get_home_assets_page(
-        db, user, status, page, page_size, category_id, search, sort_by, sort_order, asset_type
+        db,
+        user,
+        status,
+        page,
+        page_size,
+        category_id,
+        search,
+        sort_by,
+        sort_order,
+        asset_type,
     )
 
 
@@ -250,8 +260,12 @@ async def generate_narrative(
     # Dynamic thresholds from family settings, fallback to module defaults
     from apps.backend.app.services.config_service import get_family_setting
 
-    _min_asset_count = get_family_setting(db, int(family_id), "dashboard_min_asset_count")
-    _min_history_months = get_family_setting(db, int(family_id), "dashboard_min_history_months")
+    _min_asset_count = get_family_setting(
+        db, int(family_id), "dashboard_min_asset_count"
+    )
+    _min_history_months = get_family_setting(
+        db, int(family_id), "dashboard_min_history_months"
+    )
 
     # 1. Cache check (R4) — uses request-scoped db
     if not force:
@@ -262,7 +276,8 @@ async def generate_narrative(
             from apps.backend.app.services.dashboard_narrative import (
                 _extract_first_sentence,
             )
-            return JSONResponse(
+
+            return SnowflakeResponse(
                 content={
                     "narrative": narrative or None,
                     "first_sentence": report.get(
@@ -279,25 +294,31 @@ async def generate_narrative(
     #    then releases it before the history check (which opens its own session).
     overview = dashboard_service.get_overview(db, user)
     if overview.asset_count < _min_asset_count:
-        return JSONResponse(content={
-            "narrative": None,
-            "first_sentence": "",
-            "thinking": "",
-            "generated_at": None,
-            "reason": "insufficient_assets",
-            "asset_count": overview.asset_count,
-            "threshold": _min_asset_count,
-        })
+        return SnowflakeResponse(
+            content={
+                "narrative": None,
+                "first_sentence": "",
+                "thinking": "",
+                "generated_at": None,
+                "reason": "insufficient_assets",
+                "asset_count": overview.asset_count,
+                "threshold": _min_asset_count,
+            }
+        )
 
     # History check uses a short-lived session (P0 fix — don't hold request db)
-    if not _check_history_threshold(int(family_id), SessionLocal, min_months=_min_history_months):
-        return JSONResponse(content={
-            "narrative": None,
-            "first_sentence": "",
-            "thinking": "",
-            "generated_at": None,
-            "reason": "insufficient_history",
-        })
+    if not _check_history_threshold(
+        int(family_id), SessionLocal, min_months=_min_history_months
+    ):
+        return SnowflakeResponse(
+            content={
+                "narrative": None,
+                "first_sentence": "",
+                "thinking": "",
+                "generated_at": None,
+                "reason": "insufficient_history",
+            }
+        )
 
     # 3. Build context — uses request-scoped db for insights
     try:
@@ -334,11 +355,11 @@ async def generate_narrative(
                 session_id=session.id,
                 db=db,
             )
-            return JSONResponse(
+            return SnowflakeResponse(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": str(task.id),
+                    "task_id": task.id,
                     "queue_position": task.queue_position,
                 },
             )
@@ -353,7 +374,9 @@ async def generate_narrative(
     task_id = str(task.id)
 
     # Trigger agent via non-streaming POST (bridge consumer pattern)
-    agent_client = AgentClient(family_id=str(family_id), user_id=str(user.id), timeout=120.0)
+    agent_client = AgentClient(
+        family_id=str(family_id), user_id=str(user.id), timeout=120.0
+    )
     agent_url = f"/internal/gateway/runs/dashboard-narrative/{session_id}"
     run_id: str | None = None
 
@@ -366,7 +389,14 @@ async def generate_narrative(
                 "language": user.language,
                 "on_disconnect": "continue",
                 "task_id": task_id,
-                "input": {"messages": [{"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
+                "input": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": json.dumps(context, ensure_ascii=False),
+                        }
+                    ]
+                },
             },
         )
         if resp.status_code != 200:
@@ -377,9 +407,7 @@ async def generate_narrative(
                 task_id,
             )
             AITaskService.fail_task(task_id, "叙事生成服务异常", db)
-            err = json.dumps(
-                {"error": "叙事生成服务异常", "error_type": "AgentError"}
-            )
+            err = json.dumps({"error": "叙事生成服务异常", "error_type": "AgentError"})
             return StreamingResponse(
                 iter([f"event: error\ndata: {err}\n\n".encode()]),
                 media_type="text/event-stream",
@@ -422,7 +450,14 @@ async def generate_narrative(
                     "language": user.language,
                     "on_disconnect": "continue",
                     "task_id": task_id,
-                    "input": {"messages": [{"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
+                    "input": {
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": json.dumps(context, ensure_ascii=False),
+                            }
+                        ]
+                    },
                 },
                 bridge=shared_bridge,
                 run_id=run_id,

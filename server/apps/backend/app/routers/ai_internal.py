@@ -57,9 +57,7 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     if not user:
         # fallback: 取任意活跃成员
         user = (
-            db.query(User)
-            .filter(User.family_id == family_id, User.is_active)
-            .first()
+            db.query(User).filter(User.family_id == family_id, User.is_active).first()
         )
     if not user:
         raise AppError(ErrorCode.FAMILY_NO_ACTIVE_MEMBERS)
@@ -142,7 +140,7 @@ def internal_get_liabilities(
     )
     return [
         {
-            "id": str(li.id),
+            "id": li.id,
             "category": li.category,
             "remaining_amount": float(li.remaining_amount)
             if li.remaining_amount is not None
@@ -201,7 +199,7 @@ def internal_get_ai_config(
 
             web_search_providers.append(
                 {
-                    "provider_id": str(provider.id),
+                    "provider_id": provider.id,
                     "provider_name": provider.provider_name,
                     "provider_class": template.get("provider_class")
                     if template
@@ -290,7 +288,7 @@ def internal_get_ai_config(
 
         web_search_providers.append(
             {
-                "provider_id": str(provider.id),
+                "provider_id": provider.id,
                 "provider_name": provider.provider_name,
                 "provider_class": template.get("provider_class") if template else None,
                 "api_key": api_key,
@@ -504,11 +502,7 @@ def internal_get_enabled_families(
     """
     from apps.backend.app.models.family import Family
 
-    rows = (
-        db.query(Family.id)
-        .filter(Family.ai_enabled.is_(True))
-        .all()
-    )
+    rows = db.query(Family.id).filter(Family.ai_enabled.is_(True)).all()
     return [r.id for r in rows]
 
 
@@ -575,7 +569,7 @@ def internal_get_mcp_servers(
                     env_vars = {}
         result.append(
             {
-                "id": str(s.id),
+                "id": s.id,
                 "name": s.name,
                 "url": s.url,
                 "transport": s.transport,
@@ -963,7 +957,9 @@ def verify_system_token(
     仅支持 JWT system token 格式。
     """
     if not authorization.startswith("Bearer "):
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token format")
+        raise AppError(
+            ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token format"
+        )
 
     token = authorization[7:]
 
@@ -976,9 +972,13 @@ def verify_system_token(
     try:
         payload = pyjwt.decode(token, app_settings.SECRET_KEY, algorithms=[ALGORITHM])
     except pyjwt.ExpiredSignatureError:
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="System token expired") from None
+        raise AppError(
+            ErrorCode.AUTH_INVALID_CREDENTIALS, details="System token expired"
+        ) from None
     except PyJWTError:
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token") from None
+        raise AppError(
+            ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid system token"
+        ) from None
 
     if payload.get("type") != "system":
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, details="Invalid token type")
@@ -1014,9 +1014,7 @@ async def auto_generate_reports(
 
     # 1. 找到 report_auto_generate_enabled=True 的家庭
     auto_families = (
-        db.query(Family.id)
-        .filter(Family.report_auto_generate_enabled)
-        .all()
+        db.query(Family.id).filter(Family.report_auto_generate_enabled).all()
     )
     family_ids = [f.id for f in auto_families]
 
@@ -1109,7 +1107,9 @@ async def auto_generate_reports(
             except Exception as agent_err:
                 logger.warning(
                     "[auto-report] agent call failed family=%s task=%s err=%s",
-                    fid, task.id, agent_err,
+                    fid,
+                    task.id,
+                    agent_err,
                 )
                 # Agent call 失败但 task 已创建，agent 侧可能有其他触发路径
 
@@ -1145,10 +1145,7 @@ def internal_get_literacy_children(
         )
         .all()
     )
-    return [
-        {"child_id": str(c.id), "display_name": c.display_name}
-        for c in children
-    ]
+    return [{"child_id": str(c.id), "display_name": c.display_name} for c in children]
 
 
 @router.post("/literacy-report/generate")
@@ -1217,8 +1214,12 @@ async def internal_generate_literacy_report(
 
     return {
         "status": "ready",
-        "week_start": report.week_start.isoformat() if report.week_start else week_start.isoformat(),
-        "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+        "week_start": report.week_start.isoformat()
+        if report.week_start
+        else week_start.isoformat(),
+        "generated_at": report.generated_at.isoformat()
+        if report.generated_at
+        else None,
     }
 
 

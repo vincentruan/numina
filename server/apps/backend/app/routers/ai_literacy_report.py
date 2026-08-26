@@ -3,13 +3,14 @@
 POST /api/v1/ai/literacy-report/generate         — synchronous (legacy, scheduler)
 POST /api/v1/ai/literacy-report/generate/events  — SSE streaming (U14 bridge consumer)
 """
+
 import asyncio
 import json
 import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled
@@ -18,6 +19,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
@@ -104,7 +106,9 @@ async def trigger_generate(
         "thread_id": report.thread_id,
         "week_start": report.week_start.isoformat(),
         "narrative": report.narrative[:100] if report.narrative else None,
-        "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+        "generated_at": report.generated_at.isoformat()
+        if report.generated_at
+        else None,
     }
 
 
@@ -113,9 +117,7 @@ async def trigger_generate(
 # ---------------------------------------------------------------------------
 
 
-def _validate_child(
-    db: Session, *, child_id_str: str, family_id: int
-) -> int:
+def _validate_child(db: Session, *, child_id_str: str, family_id: int) -> int:
     """Parse and validate child_id belongs to family. Returns int child_id."""
     try:
         cid = int(child_id_str)
@@ -149,17 +151,13 @@ async def trigger_generate_events(
     if blocked_resp is not None:
         return blocked_resp
 
-    cid = _validate_child(
-        db, child_id_str=child_id, family_id=current_user.family_id
-    )
+    cid = _validate_child(db, child_id_str=child_id, family_id=current_user.family_id)
 
     week_start = _sunday_of(date.today())
 
     # Cache hit → return JSON (non-streaming)
     if not force:
-        status = get_report_status(
-            db, family_id=current_user.family_id, child_id=cid
-        )
+        status = get_report_status(db, family_id=current_user.family_id, child_id=cid)
         if status["status"] == "ready":
             return status
 
@@ -190,11 +188,11 @@ async def trigger_generate_events(
                 session_id=session.id,
                 db=db,
             )
-            return JSONResponse(
+            return SnowflakeResponse(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": str(task.id),
+                    "task_id": task.id,
                     "queue_position": task.queue_position,
                 },
             )
@@ -223,7 +221,10 @@ async def trigger_generate_events(
 
     # Lifecycle result callback — persists literacy report output on completion.
     async def _persist_literacy_result(_event_type: str, data: dict) -> None:
-        if isinstance(data, dict) and data.get("type") == "literacy_weekly_report.result":
+        if (
+            isinstance(data, dict)
+            and data.get("type") == "literacy_weekly_report.result"
+        ):
             payload = data.get("payload", {})
             narrative = payload.get("report") or payload.get("narrative")
             if narrative:
@@ -256,13 +257,15 @@ async def trigger_generate_events(
                         existing.thread_id = thread_id
                         existing.report_json = report_json
                     else:
-                        _db.add(LiteracyWeeklyReport(
-                            child_id=cid,
-                            week_start=week_start,
-                            report_json=report_json,
-                            narrative=narrative,
-                            thread_id=thread_id,
-                        ))
+                        _db.add(
+                            LiteracyWeeklyReport(
+                                child_id=cid,
+                                week_start=week_start,
+                                report_json=report_json,
+                                narrative=narrative,
+                                thread_id=thread_id,
+                            )
+                        )
                     _db.commit()
                 finally:
                     _db.close()

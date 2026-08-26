@@ -98,24 +98,24 @@ headers = {"X-Session-Id": str(session.id)}
 cache_key = f"session:{session.id}"  # f-string auto-converts, but be explicit
 ```
 
-### Anti-pattern: JSONResponse bypass
+### Anti-pattern: JSONResponse bypass (resolved)
 
-Returning `JSONResponse(content={...})` bypasses `SnowflakeBase.model_serializer` entirely — Pydantic never runs, so BigInteger IDs are emitted as JSON numbers and JavaScript silently corrupts them. **Always wrap manually**:
+Previously, returning `JSONResponse(content={...})` or raw dicts bypassed `SnowflakeBase.model_serializer`, requiring manual `str()` wrapping. This has been **resolved at the response layer**:
+
+- **`EnvelopeResponse.render()`** (the `default_response_class` for all backend endpoints) now auto-converts all `id`/`*_id` int fields to `str` before JSON encoding. This covers all normal endpoints — raw dict returns, Pydantic models, nested lists — without any manual conversion.
+- **`SnowflakeResponse`** (`app.responses`) provides the same conversion for endpoints that intentionally bypass the envelope (SSE metadata, captcha). Replace `JSONResponse` with `SnowflakeResponse` for these cases.
 
 ```python
-# ❌ Wrong — bypasses SnowflakeBase, JS receives corrupted number
-return JSONResponse(content={"status": "queued", "task_id": task.id})
+from apps.backend.app.responses import SnowflakeResponse
 
-# ✅ Correct — manual str() conversion
-return JSONResponse(content={"status": "queued", "task_id": str(task.id)})
+# ✅ No manual str() needed — EnvelopeResponse handles it
+return {"status": "queued", "task_id": task.id}
+
+# ✅ For SSE/non-envelope endpoints — use SnowflakeResponse
+return SnowflakeResponse(status_code=202, content={"task_id": task.id})
 ```
 
-Same rule for raw dict returns (no `response_model`) — e.g. `activities.py`, `export.py`, `ai_internal.py` service-to-service endpoints.
-
-Detection grep:
-```bash
-grep -rnE '"[a-z_]+_?id":\s*[a-z]+\.id' server/apps/backend/app/routers/
-```
+> **Note:** Manual `str()` in routers is harmless (idempotent — `str(str(x)) == str(x)`) but no longer necessary.
 
 ## Why This Matters
 
