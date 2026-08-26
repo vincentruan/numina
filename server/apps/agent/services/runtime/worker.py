@@ -642,6 +642,7 @@ async def _run_asset_report_pipeline(
         )
 
         await p.run_skill(user_message)
+        _report_run_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Step 3: worker-synthesized report.step2_json emission + persistence.
         # The middleware path (AssetReportStep2Middleware via get_stream_writer)
@@ -650,7 +651,7 @@ async def _run_asset_report_pipeline(
         # the plan-sanctioned fallback — emit exactly one report.step2_json
         # before the end frame (timing contract: strictly precedes end), then
         # persist. Best-effort persistence: a failure must not fail the run.
-        if p.completion_status == "complete":
+        if _report_run_ok:
             ai_text = p.ai_text
             step2_payload = parse_report_json(ai_text)
 
@@ -804,16 +805,16 @@ async def _run_asset_report_pipeline(
                         },
                     )
 
-        # Set report session title (localized by user language).
-        if p.completion_status == "complete":
-            _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
-                user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
+    # Set report session title (localized by user language).
+    if _report_run_ok:
+        _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+            user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
+        )
+        _track_task(
+            asyncio.create_task(
+                _set_session_title(thread_id, family_id, _title)
             )
-            _track_task(
-                asyncio.create_task(
-                    _set_session_title(thread_id, family_id, _title)
-                )
-            )
+        )
 
 
 # Synthetic trigger for asset-report runs (plan L117: backend-initiated runs
@@ -1016,12 +1017,13 @@ async def _run_import_parse_agent(
             )
         )
         await p.run_skill(user_message)
+        _import_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Worker-synthesized import-parse.result emission (mirrors asset-report
         # step-3 worker synthesis — middleware get_stream_writer() path is no-op
         # on numina's sync stream() path). Emit exactly one import-parse.result
         # before the end frame (timing contract: strictly precedes end).
-        if p.completion_status == "complete":
+        if _import_ok:
             parsed = parse_report_json(p.ai_text)
             if parsed is not None:
                 await bridge.publish(
@@ -1034,7 +1036,7 @@ async def _run_import_parse_agent(
                 )
 
     # Set import-parse session title (localized by user language)
-    if p.completion_status == "complete":
+    if _import_ok:
         _title = _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
             user_language, _SESSION_TITLES_BY_LANG.get("import-parse", {}).get("default", "文件导入解析")
         )
@@ -1108,11 +1110,12 @@ async def _run_finance_coach_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
+        _coach_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Worker-synthesized finance_coach.result emission (mirrors import-parse
         # worker synthesis). Emit exactly one finance_coach.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
-        if p.completion_status == "complete":
+        if _coach_ok:
             parsed = parse_report_json(p.ai_text)
             if parsed is not None:
                 # Advice baseline (spec §7.1): the worker emits the raw parsed
@@ -1188,11 +1191,12 @@ async def _run_wish_advice_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
+        _wish_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Worker-synthesized wish_advice.result emission (mirrors finance-coach
         # worker synthesis). Emit exactly one wish_advice.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
-        if p.completion_status == "complete":
+        if _wish_ok:
             parsed = parse_report_json(p.ai_text)
             if parsed is not None:
                 # Advice baseline (spec §7.1): the worker emits the raw parsed
@@ -1265,9 +1269,11 @@ async def _run_dashboard_narrative_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message, enable_reasoning_delta=True)
+        _narrative_ok = True  # run_skill succeeded
 
-        # Emit dashboard_narrative.result custom event (with thinking)
-        if p.completion_status == "complete":
+        # Emit BEFORE __aexit__ publishes the "end" frame (run_pipeline.py:474),
+        # so the lifecycle consumer sees result before the end sentinel.
+        if _narrative_ok:
             narrative_text = p.ai_text.strip()
             if narrative_text:
                 await bridge.publish(
@@ -1280,6 +1286,11 @@ async def _run_dashboard_narrative_agent(
                             "thinking": p.thinking_text,
                         },
                     },
+                )
+                logger.info(
+                    "[dashboard-narrative] result emitted run=%s narrative_len=%d",
+                    p.run_id,
+                    len(narrative_text),
                 )
 
 
@@ -1599,9 +1610,12 @@ async def _run_literacy_weekly_report_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message, enable_reasoning_delta=True)
+        _lit_ok = True
 
-        # Emit literacy_weekly_report.result custom event (with thinking)
-        if p.completion_status == "complete":
+        # Emit literacy_weekly_report.result custom event (with thinking).
+        # p.completion_status is only set to "complete" in __aexit__ (line 453),
+        # so we use _lit_ok set after run_skill succeeds inside the block.
+        if _lit_ok:
             report_text = p.ai_text.strip()
             if report_text:
                 await bridge.publish(

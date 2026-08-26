@@ -184,6 +184,15 @@ async def _pump_agent_sse_to_bridge(
                         except json.JSONDecodeError:
                             data = data_str
                         event_type = current_event or "message"
+                        # Fix: metadata event carries the authoritative run_id
+                        # from the agent. Content-Location header may return the
+                        # first POST's run_id, but when interrupt strategy fires
+                        # a second run is created with a different run_id.
+                        # Use the metadata run_id to keep publish/subscribe aligned.
+                        if event_type == "metadata" and isinstance(data, dict) and data.get("run_id"):
+                            actual_run_id = data["run_id"]
+                            if actual_run_id != resolved_run_id[0]:
+                                resolved_run_id[0] = actual_run_id
                         # Skip internal agent events not meant for the frontend
                         if event_type not in ("heartbeat",):
                             await bridge.publish(

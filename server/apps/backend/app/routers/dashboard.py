@@ -438,6 +438,63 @@ async def generate_narrative(
             task_id,
         )
 
+    # Lifecycle consumer persistence callback (module-local for closure capture).
+    from apps.backend.app.services.finance_coach_cache import upsert_skill_result
+
+    async def _persist_narrative_result(_event_type: str, data: dict) -> None:
+        if isinstance(data, dict) and data.get("type") == "dashboard_narrative.result":
+            payload = data.get("payload")
+            if payload:
+                _db = SessionLocal()
+                try:
+                    upsert_skill_result(_db, family_id, SKILL_ID, payload)
+                    _db.commit()
+                finally:
+                    _db.close()
+
+    # Spawn lifecycle consumer inside the pump's on_run_id callback so it
+    # subscribes with the correct run_id.  The pump reads the agent's metadata
+    # SSE event (which carries the authoritative run_id) before the first
+    # publish — Content-Location may carry the first POST's run_id, while the
+    # agent's interrupt strategy creates a second run with a different run_id.
+    # Subscribing with the wrong run_id means the lifecycle consumer never sees
+    # events and the cache is never written.
+    _lc_spawned = False
+
+    def _on_lc_run_id(actual_run_id: str) -> None:
+        # Content-Location is a URL path like
+        # /internal/gateway/runs/dashboard-narrative/{thread_id}/{run_id}.
+        # Extract the trailing UUID so publish/subscribe target the same stream.
+        bare_run_id = actual_run_id.rstrip("/").rsplit("/", 1)[-1]
+        nonlocal _lc_spawned
+        if _lc_spawned:
+            return
+        _lc_spawned = True
+        _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=bare_run_id,
+            on_result=_persist_narrative_result,
+            bridge=shared_bridge,
+        )
+
+    # Fallback: if pump never resolves Content-Location (e.g. stream failure),
+    # spawn with the original run_id after a short delay.
+    async def _lc_fallback() -> None:
+        nonlocal _lc_spawned
+        await asyncio.sleep(3)
+        if not _lc_spawned:
+            _lc_spawned = True
+            _spawn_lifecycle_consumer(
+                task_id=task_id,
+                family_id=family_id,
+                run_id=run_id,
+                on_result=_persist_narrative_result,
+                bridge=shared_bridge,
+            )
+
+    asyncio.create_task(_lc_fallback())
+
     # Spawn background task: consume agent HTTP SSE → publish to shared bridge.
     if run_id:
         asyncio.create_task(
@@ -462,38 +519,19 @@ async def generate_narrative(
                 bridge=shared_bridge,
                 run_id=run_id,
                 task_id=task_id,
+                on_run_id=_on_lc_run_id,
             )
         )
 
-    # Lifecycle consumer: subscribes to shared bridge, handles complete/fail.
-    from apps.backend.app.services.finance_coach_cache import upsert_skill_result
-
-    async def _persist_narrative_result(_event_type: str, data: dict) -> None:
-        if isinstance(data, dict) and data.get("type") == "dashboard_narrative.result":
-            payload = data.get("payload")
-            if payload:
-                _db = SessionLocal()
-                try:
-                    upsert_skill_result(_db, family_id, SKILL_ID, payload)
-                    _db.commit()
-                finally:
-                    _db.close()
-
-    _spawn_lifecycle_consumer(
-        task_id=task_id,
-        family_id=family_id,
-        run_id=run_id,
-        on_result=_persist_narrative_result,
-        bridge=shared_bridge,
-    )
-
     # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
+    # Same run_id alignment issue — consume_task_stream resolves from DB when
+    # run_id is None, so pass None to let the fallback handle it.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=run_id,
+        run_id=None,  # resolved from AITask.run_id by bridge_consumer fallback
         bridge=shared_bridge,
     )
 
