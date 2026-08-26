@@ -22,7 +22,7 @@
                   <SvgIcon :name="getIconId(wish.category.icon)" style="width:1em;height:1em;vertical-align:-0.15em" />
                 </template>
                 <span v-else-if="wish.category.icon">{{ wish.category.icon }}</span>
-                {{ wish.category.name }}
+                {{ getCategoryName(wish.category) }}
               </template>
               <template v-else>{{ t('wish.uncategorized') }}</template>
             </div>
@@ -87,7 +87,7 @@
           </template>
         </van-cell>
         <van-cell :title="t('wish.priority')" :value="priorityText" />
-        <van-cell :title="t('asset.category')" :value="wish.category?.name || t('wish.uncategorized')" />
+        <van-cell :title="t('asset.category')" :value="(wish.category && getCategoryName(wish.category)) || t('wish.uncategorized')" />
         <van-cell :title="t('wish.createdAt')" :value="formatDate(wish.created_at)" />
         <van-cell :title="t('wish.updatedAt')" :value="formatDate(wish.updated_at)" />
       </van-cell-group>
@@ -217,7 +217,7 @@
               @click="selectCategory(cat.id)"
             >
               <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
-              <span class="cat-name">{{ cat.name }}</span>
+              <span class="cat-name">{{ getCategoryName(cat) }}</span>
             </div>
           </div>
         </div>
@@ -238,6 +238,7 @@ import { parseApiDate } from '@/utils/format'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { getCategories } from '@/api/categories'
+import { getCategoryName } from '@/utils/categoryName'
 import type { Category, Wish } from '@/types'
 import { completeWish, copyWish, realizeWish, setIgnoreDebtWarning as setIgnoreDebtWarningApi } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'

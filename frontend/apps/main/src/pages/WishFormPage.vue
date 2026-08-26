@@ -65,7 +65,7 @@
           @click="showDatePicker = true"
         />
         <van-field
-          :model-value="selectedCategory?.name"
+          :model-value="selectedCategory ? getCategoryName(selectedCategory) : undefined"
           name="category"
           :label="t('wish.form.categoryLabel')"
           :placeholder="t('wish.form.categoryPlaceholder')"
@@ -75,7 +75,7 @@
           <template #input>
             <div v-if="selectedCategory" class="category-display">
               <SvgIcon :name="getIconId(selectedCategory.icon)" class="cat-icon-sm" />
-              <span>{{ selectedCategory.name }}</span>
+              <span>{{ getCategoryName(selectedCategory) }}</span>
             </div>
             <span v-else class="category-placeholder">{{ t('wish.form.categoryPlaceholder') }}</span>
           </template>
@@ -127,7 +127,7 @@
             @click="selectCategory(cat.id)"
           >
             <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
-            <span class="cat-name">{{ cat.name }}</span>
+            <span class="cat-name">{{ getCategoryName(cat) }}</span>
           </div>
         </div>
       </div>
@@ -157,6 +157,7 @@ import type { Category } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getIconId } from '@/utils/icon'
+import { getCategoryName } from '@/utils/categoryName'
 
 const { t } = useI18n()
 

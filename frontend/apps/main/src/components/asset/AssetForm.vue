@@ -93,7 +93,7 @@
               @click="selectCategory(cat.id)"
             >
               <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
-              <span class="cat-name">{{ cat.name }}</span>
+              <span class="cat-name">{{ getCategoryName(cat) }}</span>
             </div>
           </div>
         </div>
@@ -348,6 +348,7 @@ import type { FormInstance } from 'vant'
 import { showLoadingToast, showSuccessToast, showFailToast, showToast } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
+import { getCategoryName } from '@/utils/categoryName'
 import { getTags } from '@/api/tags'
 import { suggestAssetFields } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'

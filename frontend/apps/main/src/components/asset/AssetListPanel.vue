@@ -47,7 +47,7 @@
                   <span class="cat-tab-icon" :style="{ background: cat.color || 'var(--color-primary)' }">
                     <SvgIcon :name="getIconId(cat.icon)" class="cat-tab-svg" />
                   </span>
-                  {{ cat.name }} ({{ cat.count }})
+                  {{ getCategoryName(cat) }} ({{ cat.count }})
                 </span>
               </template>
             </van-tab>
@@ -375,6 +375,7 @@ import { batchArchiveAssets, batchUpdateStatus, batchExportAssets, deleteAsset, 
 import { updateSettings } from '@/api/auth'
 
 import { getIconId } from '@/utils/icon'
+import { getCategoryName } from '@/utils/categoryName'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'

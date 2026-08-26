@@ -22,7 +22,7 @@
                 </svg>
               </div>
               <span v-else class="cat-icon-emoji">{{ cat.icon }}</span>
-              <span>{{ cat.name }}</span>
+              <span>{{ getCategoryName(cat) }}</span>
             </div>
           </template>
           <template #value>
@@ -61,6 +61,7 @@ import { ref, onMounted } from 'vue'
 import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCategoryStore } from '@/stores/category'
+import { getCategoryName } from '@/utils/categoryName'
 import type { Category } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 
