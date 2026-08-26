@@ -10,7 +10,7 @@ applies_when:
   - Any endpoint returning Snowflake (BigInteger) IDs in JSON responses consumed by JavaScript/TypeScript
 tags: [snowflake-id, json-serialization, javascript-precision, pydantic, biginteger, api-boundary]
 related_components: [authentication, frontend_stimulus]
-last_refreshed: 2026-07-31
+last_refreshed: 2026-08-26
 ---
 
 # Snowflake IDs Must Be Serialized as Strings at the JSON Boundary
@@ -96,6 +96,25 @@ DB: BIGINT 9007199254740993
 # httpx headers, log messages, cache keys — always str()
 headers = {"X-Session-Id": str(session.id)}
 cache_key = f"session:{session.id}"  # f-string auto-converts, but be explicit
+```
+
+### Anti-pattern: JSONResponse bypass
+
+Returning `JSONResponse(content={...})` bypasses `SnowflakeBase.model_serializer` entirely — Pydantic never runs, so BigInteger IDs are emitted as JSON numbers and JavaScript silently corrupts them. **Always wrap manually**:
+
+```python
+# ❌ Wrong — bypasses SnowflakeBase, JS receives corrupted number
+return JSONResponse(content={"status": "queued", "task_id": task.id})
+
+# ✅ Correct — manual str() conversion
+return JSONResponse(content={"status": "queued", "task_id": str(task.id)})
+```
+
+Same rule for raw dict returns (no `response_model`) — e.g. `activities.py`, `export.py`, `ai_internal.py` service-to-service endpoints.
+
+Detection grep:
+```bash
+grep -rnE '"[a-z_]+_?id":\s*[a-z]+\.id' server/apps/backend/app/routers/
 ```
 
 ## Why This Matters

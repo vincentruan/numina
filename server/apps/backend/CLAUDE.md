@@ -47,8 +47,9 @@ JSON output automatically converts IDs to strings:
 1. **Don't use plain BaseModel for schemas with IDs** → Use SnowflakeBase
 2. **Don't manually define `id: str`** → Define `id: int`, let serializer convert
 3. **Don't add field_validator for ID coercion** → SnowflakeBase handles it
-4. **Don't call str() in routers** → Return int, schema serializes
+4. **Don't call str() in routers** → Return int, schema serializes *(only when going through `response_model`)*
 5. **Request schemas don't need SnowflakeBase** → Input validation handles string→int
+6. **`JSONResponse(content={...})` bypasses Pydantic** → When returning raw dicts (queued-task 202, SSE metadata, export), manually wrap BigInteger IDs with `str(id)`: `"task_id": str(task.id)`, not `"task_id": task.id`. Detection: `grep -rnE '"[a-z_]+_?id":\s*[a-z]+\.id' routers/`
 
 ### Why
 

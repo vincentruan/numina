@@ -103,7 +103,7 @@ def get_cost_equivalence(
 
     if asset.purchase_price is None or asset.purchase_date is None:
         return {
-            "asset_id": asset.id,
+            "asset_id": str(asset.id),
             "asset_name": asset.name,
             "held_days": None,
             "total_held_cost": None,
@@ -124,7 +124,7 @@ def get_cost_equivalence(
     opportunity_cost = total_held_cost * ((1 + yield_rate) ** years) - total_held_cost
 
     return {
-        "asset_id": asset.id,
+        "asset_id": str(asset.id),
         "asset_name": asset.name,
         "held_days": held_days,
         "total_held_cost": round(total_held_cost, 2),

@@ -201,7 +201,7 @@ def internal_get_ai_config(
 
             web_search_providers.append(
                 {
-                    "provider_id": provider.id,
+                    "provider_id": str(provider.id),
                     "provider_name": provider.provider_name,
                     "provider_class": template.get("provider_class")
                     if template
@@ -290,7 +290,7 @@ def internal_get_ai_config(
 
         web_search_providers.append(
             {
-                "provider_id": provider.id,
+                "provider_id": str(provider.id),
                 "provider_name": provider.provider_name,
                 "provider_class": template.get("provider_class") if template else None,
                 "api_key": api_key,
