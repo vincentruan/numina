@@ -82,6 +82,7 @@ async def _pump_agent_sse_to_bridge(
     run_id: str,
     task_id: str,
     on_run_id: Callable[[str], None] | None = None,
+    on_authoritative_run_id: Callable[[str], None] | None = None,
 ) -> None:
     """Consume agent HTTP SSE response and publish events to the shared bridge.
 
@@ -108,6 +109,13 @@ async def _pump_agent_sse_to_bridge(
             the agent's response ``Content-Location`` header.  Callers use
             this to spawn lifecycle consumers before the response body is
             fully consumed, avoiding a second HTTP trigger.
+        on_authoritative_run_id: Optional callback invoked AFTER the metadata
+            event updates ``resolved_run_id[0]``.  The metadata event carries
+            the authoritative run_id from the agent (may differ from
+            Content-Location when interrupt strategy fires a second run).
+            Callers should spawn lifecycle consumers in this callback to
+            ensure they subscribe to the correct run_id that receives
+            subsequent publishes.
     """
     # Mutable wrapper so the resolved run_id from the callback is visible
     # to the publish loop below.  ``run_id`` arrives as ``""`` (placeholder)
@@ -193,6 +201,17 @@ async def _pump_agent_sse_to_bridge(
                             actual_run_id = data["run_id"]
                             if actual_run_id != resolved_run_id[0]:
                                 resolved_run_id[0] = actual_run_id
+                                # Fire the authoritative run_id callback so callers
+                                # can spawn lifecycle consumers with the correct run_id.
+                                if on_authoritative_run_id is not None:
+                                    try:
+                                        on_authoritative_run_id(actual_run_id)
+                                    except Exception:
+                                        logger.warning(
+                                            "[agent-pump] on_authoritative_run_id callback failed task=%s",
+                                            task_id,
+                                            exc_info=True,
+                                        )
                         # Skip internal agent events not meant for the frontend
                         if event_type not in ("heartbeat",):
                             await bridge.publish(

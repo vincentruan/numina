@@ -452,46 +452,49 @@ async def generate_narrative(
                 finally:
                     _db.close()
 
-    # Spawn lifecycle consumer inside the pump's on_run_id callback so it
-    # subscribes with the correct run_id.  The pump reads the agent's metadata
-    # SSE event (which carries the authoritative run_id) before the first
-    # publish — Content-Location may carry the first POST's run_id, while the
-    # agent's interrupt strategy creates a second run with a different run_id.
-    # Subscribing with the wrong run_id means the lifecycle consumer never sees
-    # events and the cache is never written.
+    # Spawn lifecycle consumer inside the pump's on_authoritative_run_id callback
+    # so it subscribes with the correct run_id.  The pump reads the agent's
+    # metadata SSE event (which carries the authoritative run_id) before the
+    # first publish — Content-Location may carry the first POST's run_id, while
+    # the agent's interrupt strategy creates a second run with a different
+    # run_id.  Subscribing with the wrong run_id means the lifecycle consumer
+    # never sees events and the cache is never written.
     _lc_spawned = False
+    _lc_task: asyncio.Task[None] | None = None
 
-    def _on_lc_run_id(actual_run_id: str) -> None:
-        # Content-Location is a URL path like
-        # /internal/gateway/runs/dashboard-narrative/{thread_id}/{run_id}.
-        # Extract the trailing UUID so publish/subscribe target the same stream.
-        bare_run_id = actual_run_id.rstrip("/").rsplit("/", 1)[-1]
-        nonlocal _lc_spawned
-        if _lc_spawned:
-            return
-        _lc_spawned = True
-        _spawn_lifecycle_consumer(
+    def _on_lc_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. DB persist only."""
+        # Content-Location is a URL path — extract the trailing UUID.
+        # (No DB persist here — dashboard doesn't use extract_and_attach_run_id.)
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id."""
+        nonlocal _lc_spawned, _lc_task
+        if _lc_task is not None and not _lc_task.done():
+            _lc_task.cancel()
+        _lc_task = _spawn_lifecycle_consumer(
             task_id=task_id,
             family_id=family_id,
-            run_id=bare_run_id,
+            run_id=meta_run_id,
             on_result=_persist_narrative_result,
             bridge=shared_bridge,
         )
+        _lc_spawned = True
 
-    # Fallback: if pump never resolves Content-Location (e.g. stream failure),
+    # Fallback: if pump never resolves metadata run_id (e.g. stream failure),
     # spawn with the original run_id after a short delay.
     async def _lc_fallback() -> None:
-        nonlocal _lc_spawned
+        nonlocal _lc_spawned, _lc_task
         await asyncio.sleep(3)
         if not _lc_spawned:
-            _lc_spawned = True
-            _spawn_lifecycle_consumer(
+            _lc_task = _spawn_lifecycle_consumer(
                 task_id=task_id,
                 family_id=family_id,
                 run_id=run_id,
                 on_result=_persist_narrative_result,
                 bridge=shared_bridge,
             )
+            _lc_spawned = True
 
     asyncio.create_task(_lc_fallback())
 
@@ -520,6 +523,7 @@ async def generate_narrative(
                 run_id=run_id,
                 task_id=task_id,
                 on_run_id=_on_lc_run_id,
+                on_authoritative_run_id=_on_authoritative_run_id,
             )
         )
 

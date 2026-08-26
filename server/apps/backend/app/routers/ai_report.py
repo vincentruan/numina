@@ -235,21 +235,47 @@ async def trigger_generate_events(
         "on_disconnect": "continue",
     }
 
-    # Track whether the lifecycle consumer was spawned via the callback.
+    # Track lifecycle consumer spawn state.
+    # ``lifecycle_spawned``: whether the lifecycle consumer has been spawned.
+    # ``lifecycle_task``: the spawned task (for cancellation if run_id changes).
+    # ``cl_bare_run_id``: Content-Location run_id (for fallback if metadata never arrives).
     lifecycle_spawned = asyncio.Event()
+    lifecycle_task: asyncio.Task[None] | None = None
+    cl_bare_run_id: str | None = None
 
-    def _on_run_id(cl_run_id: str) -> None:
-        resolved = AITaskService.extract_and_attach_run_id(
-            task_id, cl_run_id, family_id
+    def _on_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. Persist to DB only."""
+        nonlocal cl_bare_run_id
+        # Content-Location is a URL path like
+        # /internal/gateway/runs/asset-report/{thread_id}/{run_id}.
+        # Extract the trailing UUID.
+        cl_bare_run_id = cl_url.rstrip("/").rsplit("/", 1)[-1]
+        AITaskService.extract_and_attach_run_id(
+            task_id, cl_url, family_id
         )
-        if resolved and not lifecycle_spawned.is_set():
-            lifecycle_spawned.set()
-            _spawn_lifecycle_consumer(
-                task_id=task_id,
-                family_id=family_id,
-                run_id=resolved,
-                bridge=shared_bridge,
-            )
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id.
+
+        The metadata run_id may differ from Content-Location when the agent's
+        interrupt strategy fires a second run. Spawn the lifecycle consumer
+        with this run_id so it subscribes to the correct stream.
+        """
+        nonlocal lifecycle_task
+        # Update DB with the authoritative run_id.
+        AITaskService.extract_and_attach_run_id(
+            task_id, meta_run_id, family_id
+        )
+        # Cancel old lifecycle consumer (if spawned with wrong run_id).
+        if lifecycle_task is not None and not lifecycle_task.done():
+            lifecycle_task.cancel()
+        lifecycle_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=meta_run_id,
+            bridge=shared_bridge,
+        )
+        lifecycle_spawned.set()
 
     # Spawn background pump: one streaming POST → shared bridge.
     # (Keep a reference so the task is not garbage-collected mid-flight.)
@@ -262,26 +288,27 @@ async def trigger_generate_events(
             run_id="",  # resolved from Content-Location inside the pump
             task_id=task_id,
             on_run_id=_on_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
         )
     )
 
-    # Wait for pump to extract Content-Location from agent's response headers.
-    # The pump's ``on_run_id`` callback sets ``lifecycle_spawned`` synchronously.
-    # Give the pump up to 2 seconds to get the headers (should be nearly instant).
-    # If the pump hasn't resolved the run_id after this, fall back to run_id=None.
+    # Wait for pump to resolve run_id (either Content-Location or metadata).
+    # Give the pump up to 3 seconds — metadata may arrive slightly later than
+    # Content-Location. If neither arrives, fall back to run_id=None.
     try:
-        await asyncio.wait_for(lifecycle_spawned.wait(), timeout=2.0)
+        await asyncio.wait_for(lifecycle_spawned.wait(), timeout=3.0)
     except TimeoutError:
         logger.warning(
-            "[asset-report] pump did not resolve run_id within 2s, using fallback task=%s",
+            "[asset-report] pump did not resolve authoritative run_id within 3s, using fallback task=%s",
             task_id,
         )
 
     if not lifecycle_spawned.is_set():
-        _spawn_lifecycle_consumer(
+        # Fallback: spawn with Content-Location run_id (if available) or None.
+        lifecycle_task = _spawn_lifecycle_consumer(
             task_id=task_id,
             family_id=family_id,
-            run_id=None,
+            run_id=cl_bare_run_id,
             bridge=shared_bridge,
         )
 

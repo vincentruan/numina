@@ -279,22 +279,35 @@ async def trigger_generate_events(
         "input": {"messages": [{"role": "user", "content": trigger}]},
     }
 
-    # Track whether the lifecycle consumer was spawned via the callback.
+    # Track lifecycle consumer spawn state.
     lifecycle_spawned = [False]
+    lifecycle_task: asyncio.Task[None] | None = None
+    cl_bare_run_id: str | None = None
 
-    def _on_run_id(cl_run_id: str) -> None:
-        resolved = AITaskService.extract_and_attach_run_id(
-            task_id, cl_run_id, family_id
+    def _on_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. Persist to DB only."""
+        nonlocal cl_bare_run_id
+        cl_bare_run_id = cl_url.rstrip("/").rsplit("/", 1)[-1]
+        AITaskService.extract_and_attach_run_id(
+            task_id, cl_url, family_id
         )
-        if resolved and not lifecycle_spawned[0]:
-            lifecycle_spawned[0] = True
-            _spawn_lifecycle_consumer(
-                task_id=task_id,
-                family_id=family_id,
-                run_id=resolved,
-                on_result=_persist_literacy_result,
-                bridge=shared_bridge,
-            )
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id."""
+        nonlocal lifecycle_task
+        AITaskService.extract_and_attach_run_id(
+            task_id, meta_run_id, family_id
+        )
+        if lifecycle_task is not None and not lifecycle_task.done():
+            lifecycle_task.cancel()
+        lifecycle_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=meta_run_id,
+            on_result=_persist_literacy_result,
+            bridge=shared_bridge,
+        )
+        lifecycle_spawned[0] = True
 
     # Spawn background pump: one streaming POST → shared bridge.
     asyncio.create_task(
@@ -306,18 +319,23 @@ async def trigger_generate_events(
             run_id="",
             task_id=task_id,
             on_run_id=_on_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
         )
     )
 
-    # Fallback: lifecycle consumer without run_id if agent omits Content-Location.
-    if not lifecycle_spawned[0]:
-        _spawn_lifecycle_consumer(
-            task_id=task_id,
-            family_id=family_id,
-            run_id=None,
-            on_result=_persist_literacy_result,
-            bridge=shared_bridge,
-        )
+    # Fallback: lifecycle consumer if metadata never arrives within 3s.
+    async def _lc_fallback() -> None:
+        await asyncio.sleep(3.0)
+        if not lifecycle_spawned[0]:
+            _spawn_lifecycle_consumer(
+                task_id=task_id,
+                family_id=family_id,
+                run_id=cl_bare_run_id,
+                on_result=_persist_literacy_result,
+                bridge=shared_bridge,
+            )
+
+    asyncio.create_task(_lc_fallback())
 
     # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     last_event_id = request.headers.get("Last-Event-ID")
