@@ -15,10 +15,12 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   title: string
   showBack?: boolean
   fixed?: boolean
+  /** Explicit route to navigate back to when browser history is empty (e.g. direct URL access). */
+  backTo?: string
 }>(), {
   showBack: true,
   fixed: true
@@ -32,6 +34,12 @@ const router = useRouter()
 
 function onBack() {
   emit('back')
-  router.back()
+  if (window.history.length > 1) {
+    router.back()
+  } else if (props.backTo) {
+    router.push(props.backTo)
+  } else {
+    router.push('/')
+  }
 }
 </script>
