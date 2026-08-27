@@ -59,32 +59,67 @@ def normalize_indicator_data_items(items: list) -> list[dict]:
     return result
 
 
-def normalize_report_json(data: dict) -> dict:
-    """Normalize report JSON after parsing — ensures data.items use canonical format.
+def normalize_indicator(item: dict, idx: int) -> dict:
+    """Normalize a single indicator to the canonical {key, label, score, narrative, data} shape.
 
-    Iterates ``indicators[].data.items`` and transforms non-standard shapes
-    (``{category_name, percentage}``, ``{name, value}``, etc.) into the canonical
-    ``{key, zh, en, value}`` shape that the frontend expects.
+    The LLM may use ``name`` instead of ``key``, omit ``label``/``score``/
+    ``narrative``, or use ``description`` instead of ``narrative``. This
+    function fills in defaults so the frontend can rely on a single shape.
+    """
+    key = item.get("key") or item.get("name") or f"indicator_{idx}"
+    if isinstance(key, str):
+        key = key.lower().replace(" ", "_").replace("-", "_")
+    label = item.get("label") or item.get("name") or key
+    score = item.get("score")
+    if score is None or not isinstance(score, (int, float)):
+        score = 3  # default to middle score
+    score = max(1, min(5, int(score)))
+    narrative = item.get("narrative") or item.get("description") or ""
+    data = item.get("data") if isinstance(item.get("data"), dict) else {"items": []}
+    return {
+        "key": key,
+        "label": str(label),
+        "score": score,
+        "narrative": str(narrative),
+        "data": data,
+        "suggestions": item.get("suggestions") if isinstance(item.get("suggestions"), list) else [],
+    }
+
+
+def normalize_report_json(data: dict) -> dict:
+    """Normalize report JSON after parsing — ensures indicators and data.items use canonical format.
+
+    Two normalization passes:
+    1. Top-level indicator fields: ``name`` → ``key``, fill missing
+       ``label``/``score``/``narrative`` with defaults.
+    2. ``data.items`` arrays: transform non-standard shapes
+       (``{category_name, percentage}``, ``{name, value}``, etc.) into the
+       canonical ``{key, zh, en, value}`` shape that the frontend expects.
     """
     if not isinstance(data, dict):
         return data
     indicators = data.get("indicators")
     if not isinstance(indicators, list):
         return data
-    for indicator in indicators:
+
+    for idx, indicator in enumerate(indicators):
         if not isinstance(indicator, dict):
             continue
+
+        # Pass 1: normalize top-level indicator fields
+        indicators[idx] = normalize_indicator(indicator, idx)
+
+        # Pass 2: normalize data.items (existing logic)
         data_obj = indicator.get("data")
         if not isinstance(data_obj, dict):
             continue
         items = data_obj.get("items")
         if isinstance(items, list) and items:
-            # Check if items already use canonical format
             first = items[0]
             if isinstance(first, dict) and "zh" in first and "en" in first:
                 continue  # Already canonical, skip
             # Non-standard format → normalize
-            indicator["data"]["items"] = normalize_indicator_data_items(items)
+            indicators[idx]["data"]["items"] = normalize_indicator_data_items(items)
     return data
 
 
@@ -160,6 +195,19 @@ def validate_report_json(data: dict) -> list[str]:
         if not isinstance(indicator, dict):
             errors.append(f"indicator[{idx}] 不是有效对象")
             continue
+        # Validate per-indicator required fields (key/label/score/narrative)
+        # After normalize_report_json, ``name`` → ``key``, missing score → 3,
+        # missing narrative → "". We only hard-fail on structural gaps that
+        # normalization cannot fix (missing key/name and missing score).
+        key = indicator.get("key") or indicator.get("name")
+        if not key:
+            errors.append(f"indicator[{idx}] 缺少 key 或 name 字段")
+        score = indicator.get("score")
+        if score is None or not isinstance(score, (int, float)):
+            errors.append(f"indicator[{idx}] 缺少 score 字段或 score 非数字")
+        elif not (1 <= score <= 5):
+            errors.append(f"indicator[{idx}].score 超出范围 (1-5)")
+
         data_obj = indicator.get("data")
         if not isinstance(data_obj, dict):
             errors.append(f"indicator[{idx}] 缺少 data 对象")

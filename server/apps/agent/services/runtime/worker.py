@@ -394,6 +394,31 @@ async def run_agent(
             config=config,
             stream_modes=stream_modes,
         )
+    except Exception as exc:
+        # P0 fix: propagate init/dispatch errors to the SSE consumer instead of
+        # silently hanging.  ``run_agent`` is invoked via ``asyncio.create_task``
+        # in the SSE gateway — an unhandled exception here is never observed,
+        # leaving the frontend waiting on an empty stream until its own timeout.
+        # Publish an ``error`` frame (LangGraph SSE wire format) so the frontend
+        # ``readSSEStream`` dispatches to ``onError`` and the UI can show a
+        # retry button instead of an indefinite spinner.
+        logger.error(
+            "[run_agent] dispatch failed app=%s run=%s: %s",
+            record.metadata.get("app", "numina") if record.metadata else "numina",
+            record.run_id,
+            exc,
+            exc_info=True,
+        )
+        try:
+            await run_manager.set_status(record.run_id, RunStatus.error)
+            await bridge.publish(
+                record.run_id,
+                "error",
+                {"error": str(exc) or "Agent dispatch failed"},
+            )
+            await bridge.publish(record.run_id, "end", {"status": "error"})
+        except Exception:
+            logger.exception("[run_agent] failed to publish error frame")
     finally:
         # U12: Stop the heartbeat loop and await it (best-effort).
         if heartbeat_stop is not None:
@@ -505,11 +530,14 @@ async def _repair_report_json_via_llm(
             "structure (do NOT include any markdown code blocks, explanations, or "
             "extra content):\n"
             '{"overall_score": <number>, "indicators": ['
-            '{"name": "<string>", "data": {"items": ['
+            '{"key": "<string>", "label": "<string>", "score": <1-5>, '
+            '"narrative": "<string>", "data": {"items": ['
             '{"key": "<string>", "zh": "<string>", "en": "<string>", "value": <number>}'
             "]}}]}\n\n"
-            "Requirements: indicators must be non-empty; each indicator must have "
-            "a non-empty data.items array; value must be a number. Output ONLY the "
+            "Requirements: indicators must be non-empty; each indicator MUST have "
+            '"key", "label", "score" (1-5), and "narrative" fields; each indicator '
+            "must have a non-empty data.items array; value must be a number. "
+            'Use "key" NOT "name" for the indicator identifier. Output ONLY the '
             "JSON itself.\n\n"
             "IMPORTANT: Preserve the EXACT SAME language as the original output "
             "below. This is a structural repair — do NOT translate or change the "
@@ -1123,6 +1151,11 @@ async def _run_finance_coach_agent(
                 # required fields) runs in Plan B's D2/W4 UI before any enable;
                 # a malformed payload is dropped there, not here (the worker is
                 # transport, not policy).
+                logger.info(
+                    "[_run_finance_coach_agent] result emitted run=%s suggestions_count=%d",
+                    p.run_id,
+                    len(parsed.get("suggestions", [])),
+                )
                 await bridge.publish(
                     p.run_id,
                     "custom",
@@ -1130,6 +1163,23 @@ async def _run_finance_coach_agent(
                         "type": "finance_coach.result",
                         "payload": parsed,
                     },
+                )
+            else:
+                # LLM output couldn't be parsed as JSON. Emit an error frame so the
+                # frontend can surface a retry instead of silently showing
+                # "No suggestions". Do NOT emit an empty finance_coach.result —
+                # the backend lifecycle consumer would persist it and overwrite
+                # a valid cached result with an empty one.
+                logger.warning(
+                    "[_run_finance_coach_agent] JSON parse failed run=%s ai_text_len=%d ai_text_preview=%s",
+                    p.run_id,
+                    len(p.ai_text) if p.ai_text else 0,
+                    (p.ai_text[:200] if p.ai_text else "")[:200],
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "财务建议生成失败，请重试"},
                 )
 
 
