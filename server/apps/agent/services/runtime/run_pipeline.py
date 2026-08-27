@@ -717,8 +717,41 @@ class RunPipeline:
                     # extract reasoning_content, publish as reasoning_delta custom
                     # event, forward content-only message (strip reasoning to
                     # avoid duplication).
+                    #
+                    # Supports two formats:
+                    # 1. Claude non-streaming: additional_kwargs.reasoning_content
+                    # 2. Anthropic streaming: content is a list of blocks where
+                    #    {"type": "thinking", "thinking": "..."} carries thinking
+                    #    and {"type": "text", "text": "..."} carries the response.
                     if enable_reasoning_delta:
                         reasoning = additional_kwargs.get("reasoning_content")
+                        content = data.get("content")
+
+                        # Anthropic streaming: content is a list of blocks
+                        if isinstance(content, list):
+                            text_parts: list[str] = []
+                            for block in content:
+                                if isinstance(block, dict):
+                                    if block.get("type") == "thinking" and block.get("thinking"):
+                                        thinking_block = block["thinking"]
+                                        self.thinking_parts.append(thinking_block)
+                                        await self.bridge.publish(
+                                            self.run_id,
+                                            "custom",
+                                            {"type": "reasoning_delta", "content": thinking_block},
+                                        )
+                                    elif block.get("type") == "text" and block.get("text"):
+                                        text_parts.append(block["text"])
+                            content = "".join(text_parts) if text_parts else None
+                        elif not reasoning and isinstance(content, str):
+                            # Fallback: check for <think> tags in plain string content
+                            # (some providers wrap thinking in XML tags)
+                            import re
+                            think_match = re.search(r"<think>\s*(.*?)\s*</think>", content, re.DOTALL | re.IGNORECASE)
+                            if think_match:
+                                reasoning = think_match.group(1)
+                                content = re.sub(r"<think>\s*.*?\s*</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
+
                         if isinstance(reasoning, str) and reasoning:
                             self.thinking_parts.append(reasoning)
                             await self.bridge.publish(
@@ -726,7 +759,6 @@ class RunPipeline:
                                 "custom",
                                 {"type": "reasoning_delta", "content": reasoning},
                             )
-                        content = data.get("content")
                         if content:
                             self.ai_response_parts.append(content)
                             await self.bridge.publish(
