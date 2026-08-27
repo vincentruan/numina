@@ -33,6 +33,7 @@ const refreshing = ref(false)
 const blockReason = ref<NarrativeBlockReason | null>(null)
 const initialLoadFailed = ref(false)
 const isThinkingExpanded = ref(true)
+const cardExpanded = ref<string[]>([])
 const thinkingStart = ref<number | null>(null)
 const thinkingElapsed = ref(0)
 const showScrollButton = ref(false)
@@ -115,6 +116,10 @@ function stopElapsedTimer() {
 
 function toggleThinking() {
   isThinkingExpanded.value = !isThinkingExpanded.value
+}
+
+function onCardToggle(names: string[]) {
+  cardExpanded.value = names
 }
 
 function handleScroll() {
@@ -342,196 +347,208 @@ function formatTime(iso: string | null): string {
 
 <template>
   <van-cell-group inset class="narrative-card" data-test="dashboard-narrative-card">
-    <!-- Header -->
-    <div class="narrative-header">
-      <span class="narrative-title">
-        <span v-if="isRunning" class="narrative-icon narrative-icon--loading">
-          <van-loading size="16px" type="spinner" color="#1989fa" />
-        </span>
-        <span v-else class="narrative-icon"></span>
-        {{ t('dashboard.narrative.title') }}
-      </span>
+    <van-collapse v-model="cardExpanded" @change="onCardToggle">
+      <van-collapse-item name="narrative">
+        <template #title>
+          <div class="narrative-header">
+            <span class="narrative-title">
+              <span v-if="isRunning" class="narrative-icon narrative-icon--loading">
+                <van-loading size="16px" type="spinner" color="#1989fa" />
+              </span>
+              <span v-else class="narrative-icon">
+                <IIcon :icon="'lucide:file-text'" size="18" class="narrative-icon__svg" />
+              </span>
+              {{ t('dashboard.narrative.title') }}
+            </span>
 
-      <!-- Running: cancel button + shimmer status -->
-      <span v-if="isRunning" class="narrative-status narrative-status--running">
-        <van-button
-          v-if="resumeHandle.taskId"
-          plain
-          type="danger"
-          size="mini"
-          :loading="cancelling"
-          :disabled="cancelling"
-          class="narrative-cancel-btn"
-          @click.stop="onCancel"
-        >
-          {{ t('aiTask.cancelBtn') }}
-        </van-button>
-        <span v-else class="narrative-thinking-label">
-          <van-loading size="12px" type="spinner" />
-          {{ t('dashboard.narrative.thinking') }}
-        </span>
-      </span>
+            <!-- Running: cancel button + shimmer status -->
+            <span v-if="isRunning" class="narrative-status narrative-status--running">
+              <van-button
+                v-if="resumeHandle.taskId"
+                plain
+                type="danger"
+                size="mini"
+                :loading="cancelling"
+                :disabled="cancelling"
+                class="narrative-cancel-btn"
+                @click.stop="onCancel"
+              >
+                {{ t('aiTask.cancelBtn') }}
+              </van-button>
+              <span v-else class="narrative-thinking-label">
+                <van-loading size="12px" type="spinner" />
+                {{ t('dashboard.narrative.thinking') }}
+              </span>
+            </span>
 
-      <!-- Done: thinking elapsed time -->
-      <span v-else-if="generatedAt && thinkingElapsed > 0" class="narrative-status narrative-status--done">
-        {{ t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) }}
-      </span>
+            <!-- Done: thinking elapsed time -->
+            <span v-else-if="generatedAt && thinkingElapsed > 0" class="narrative-status narrative-status--done">
+              {{ t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) }}
+            </span>
 
-      <!-- Done: generated time (cache hit, no elapsed tracked) -->
-      <span v-else-if="generatedAt" class="narrative-status narrative-status--done">
-        {{ t('dashboard.narrative.generatedAt', { time: formatTime(generatedAt) }) }}
-      </span>
+            <!-- Done: generated time (cache hit, no elapsed tracked) -->
+            <span v-else-if="generatedAt" class="narrative-status narrative-status--done">
+              {{ t('dashboard.narrative.generatedAt', { time: formatTime(generatedAt) }) }}
+            </span>
 
-      <!-- Empty / blocked -->
-      <span v-else-if="blockReason || (!loading && !hasContent)" class="narrative-status narrative-status--empty">
-        {{ t('dashboard.narrative.empty') }}
-      </span>
+            <!-- Empty / blocked -->
+            <span v-else-if="blockReason || (!loading && !hasContent)" class="narrative-status narrative-status--empty">
+              {{ t('dashboard.narrative.empty') }}
+            </span>
 
-      <!-- Loading -->
-      <span v-else class="narrative-status">
-        <van-loading size="12px" type="spinner" />
-      </span>
-    </div>
-
-    <!-- Streaming: thinking section (expanded by default) + narrative preview -->
-    <div v-if="streaming" class="narrative-streaming">
-      <div class="narrative-thinking-section">
-        <div class="narrative-thinking-header-wrapper">
-          <div class="narrative-thinking-header" @click="toggleThinking">
-            <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
-            <span class="narrative-thinking-title">{{ t('dashboard.narrative.thinking') }}</span>
-            <span class="narrative-thinking-chevron">
+            <!-- Loading -->
+            <span v-else class="narrative-status">
               <van-loading size="12px" type="spinner" />
             </span>
           </div>
-        </div>
-        <div class="narrative-thinking-content-wrapper">
-          <div
-            ref="thinkingContentRef"
-            class="narrative-thinking-content narrative-thinking-content--scrollable"
-            @scroll="handleScroll"
-          >
-            <div v-if="hasThinking" class="narrative-thinking-text shimmer-text">{{ thinking }}</div>
-            <div v-else class="narrative-thinking-text narrative-thinking-placeholder">
-              {{ t('dashboard.narrative.thinkingPlaceholder') }}
+        </template>
+
+        <!-- Streaming: thinking section (expanded by default) + narrative preview -->
+        <div v-if="streaming" class="narrative-streaming">
+          <div class="narrative-thinking-section">
+            <div class="narrative-thinking-header-wrapper">
+              <div class="narrative-thinking-header" @click="toggleThinking">
+                <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
+                <span class="narrative-thinking-title">{{ t('dashboard.narrative.thinking') }}</span>
+                <span class="narrative-thinking-chevron" :class="{ 'narrative-thinking-chevron--collapsed': !isThinkingExpanded }">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </span>
+              </div>
             </div>
-            <div class="narrative-thinking-loading-dot">
-              <span class="loading-dot"></span>
+            <div v-show="isThinkingExpanded" class="narrative-thinking-content-wrapper">
+              <div
+                ref="thinkingContentRef"
+                class="narrative-thinking-content narrative-thinking-content--scrollable"
+                @scroll="handleScroll"
+              >
+                <div v-if="hasThinking" class="narrative-thinking-text shimmer-text">{{ thinking }}</div>
+                <div v-else class="narrative-thinking-text narrative-thinking-placeholder">
+                  {{ t('dashboard.narrative.thinkingPlaceholder') }}
+                </div>
+                <div class="narrative-thinking-loading-dot">
+                  <span class="loading-dot"></span>
+                </div>
+              </div>
+              <button
+                v-if="showScrollButton"
+                class="narrative-scroll-to-bottom"
+                @click="scrollToBottom"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
             </div>
           </div>
-          <button
-            v-if="showScrollButton"
-            class="narrative-scroll-to-bottom"
-            @click="scrollToBottom"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
+          <div v-if="narrative" class="narrative-preview" v-html="renderedNarrative" />
+          <van-skeleton v-else title :row="3" animate />
         </div>
-      </div>
-      <div v-if="narrative" class="narrative-preview" v-html="renderedNarrative" />
-      <van-skeleton v-else title :row="3" animate />
-    </div>
 
-    <!-- Completed: thinking section (collapsible) + narrative content -->
-    <template v-else-if="hasContent">
-      <div v-if="hasThinking" class="narrative-thinking-section narrative-thinking--done">
-        <div class="narrative-thinking-header-wrapper">
-          <div class="narrative-thinking-header" @click="toggleThinking">
-            <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
-            <span class="narrative-thinking-title">
-              {{ t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) }}
-            </span>
-            <span class="narrative-thinking-chevron" :class="{ 'narrative-thinking-chevron--collapsed': !isThinkingExpanded }">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </span>
+        <!-- Completed: thinking section (collapsible) + narrative content -->
+        <template v-else-if="hasContent">
+          <!-- Thinking section - always visible, collapsible -->
+          <div class="narrative-thinking-section narrative-thinking--done">
+            <div class="narrative-thinking-header-wrapper">
+              <div class="narrative-thinking-header" @click="toggleThinking">
+                <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
+                <span class="narrative-thinking-title">
+                  {{ hasThinking ? t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) : t('dashboard.narrative.thinking') }}
+                </span>
+                <span class="narrative-thinking-chevron" :class="{ 'narrative-thinking-chevron--collapsed': !isThinkingExpanded }">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div v-show="isThinkingExpanded" class="narrative-thinking-content-wrapper">
+              <div
+                ref="thinkingContentRef"
+                class="narrative-thinking-content narrative-thinking-content--scrollable"
+                @scroll="handleScroll"
+              >
+                <div v-if="hasThinking" class="narrative-thinking-text">{{ thinking }}</div>
+                <div v-else class="narrative-thinking-text narrative-thinking-placeholder">
+                  {{ t('dashboard.narrative.thinkingPlaceholder') }}
+                </div>
+              </div>
+              <button
+                v-if="showScrollButton"
+                class="narrative-scroll-to-bottom"
+                @click="scrollToBottom"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
           </div>
+          <div class="narrative-content" v-html="renderedNarrative" />
+        </template>
+
+        <!-- Threshold gate -->
+        <div v-else-if="blockReason" class="narrative-blocked">
+          <p class="narrative-blocked-text">
+            {{ blockReason.reason === 'insufficient_assets'
+              ? t('dashboard.narrative.blocked.insufficient_assets', {
+                  count: blockReason.asset_count ?? 0,
+                  threshold: blockReason.threshold ?? 5,
+                })
+              : t('dashboard.narrative.blocked.insufficient_history')
+            }}
+          </p>
         </div>
-        <div v-show="isThinkingExpanded" class="narrative-thinking-content-wrapper">
-          <div
-            ref="thinkingContentRef"
-            class="narrative-thinking-content narrative-thinking-content--scrollable"
-            @scroll="handleScroll"
-          >
-            <div class="narrative-thinking-text">{{ thinking }}</div>
-          </div>
-          <button
-            v-if="showScrollButton"
-            class="narrative-scroll-to-bottom"
-            @click="scrollToBottom"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
+
+        <!-- Loading skeleton — checked before any error/retry state so the
+             skeleton stays visible during the initial POST request even when
+             initialLoadFailed has already been set by onError (batched update). -->
+        <div v-else-if="loading" class="narrative-loading">
+          <van-skeleton title :row="2" animate />
         </div>
-      </div>
-      <div class="narrative-content narrative-content--with-thinking" v-if="hasThinking" v-html="renderedNarrative" />
-      <div class="narrative-content" v-else v-html="renderedNarrative" />
-    </template>
 
-    <!-- Threshold gate -->
-    <div v-else-if="blockReason" class="narrative-blocked">
-      <p class="narrative-blocked-text">
-        {{ blockReason.reason === 'insufficient_assets'
-          ? t('dashboard.narrative.blocked.insufficient_assets', {
-              count: blockReason.asset_count ?? 0,
-              threshold: blockReason.threshold ?? 5,
-            })
-          : t('dashboard.narrative.blocked.insufficient_history')
-        }}
-      </p>
-    </div>
+        <!-- Retry: initial auto-load POST failed (no cached narrative) -->
+        <div v-else-if="initialLoadFailed" class="narrative-retry-row">
+          <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
+          <van-button plain type="primary" size="small" @click="onRetry">
+            {{ t('dashboard.narrative.retry') }}
+          </van-button>
+        </div>
 
-    <!-- Loading skeleton — checked before any error/retry state so the
-         skeleton stays visible during the initial POST request even when
-         initialLoadFailed has already been set by onError (batched update). -->
-    <div v-else-if="loading" class="narrative-loading">
-      <van-skeleton title :row="2" animate />
-    </div>
+        <!-- Retry: resume-polling task creation failed -->
+        <div v-else-if="resumeHandle.triggerFailed" class="narrative-retry-row">
+          <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
+          <van-button plain type="primary" size="small" @click="onRetry">
+            {{ t('dashboard.narrative.retry') }}
+          </van-button>
+        </div>
 
-    <!-- Retry: initial auto-load POST failed (no cached narrative) -->
-    <div v-else-if="initialLoadFailed" class="narrative-retry-row">
-      <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
-      <van-button plain type="primary" size="small" @click="onRetry">
-        {{ t('dashboard.narrative.retry') }}
-      </van-button>
-    </div>
+        <!-- Inline error when task failed -->
+        <div v-else-if="resumeHandle.status.value === 'failed'" class="narrative-retry-row">
+          <p class="narrative-retry-hint narrative-error-text">
+            {{ resumeHandle.task.value?.error_message || t('dashboard.narrative.error.generation_failed') }}
+          </p>
+          <van-button plain type="primary" size="small" @click="onRetry">
+            {{ t('dashboard.narrative.retry') }}
+          </van-button>
+        </div>
 
-    <!-- Retry: resume-polling task creation failed -->
-    <div v-else-if="resumeHandle.triggerFailed" class="narrative-retry-row">
-      <p class="narrative-retry-hint">{{ t('dashboard.narrative.retryHint') }}</p>
-      <van-button plain type="primary" size="small" @click="onRetry">
-        {{ t('dashboard.narrative.retry') }}
-      </van-button>
-    </div>
+        <!-- Empty state -->
+        <div v-else class="narrative-empty">
+          <p class="narrative-empty-text">{{ t('dashboard.narrative.empty') }}</p>
+          <van-button plain type="primary" size="small" @click="onGenerate">
+            {{ t('dashboard.narrative.generate') }}
+          </van-button>
+        </div>
 
-    <!-- Inline error when task failed -->
-    <div v-else-if="resumeHandle.status.value === 'failed'" class="narrative-retry-row">
-      <p class="narrative-retry-hint narrative-error-text">
-        {{ resumeHandle.task.value?.error_message || t('dashboard.narrative.error.generation_failed') }}
-      </p>
-      <van-button plain type="primary" size="small" @click="onRetry">
-        {{ t('dashboard.narrative.retry') }}
-      </van-button>
-    </div>
-
-    <!-- Empty state -->
-    <div v-else class="narrative-empty">
-      <p class="narrative-empty-text">{{ t('dashboard.narrative.empty') }}</p>
-      <van-button plain type="primary" size="small" @click="onGenerate">
-        {{ t('dashboard.narrative.generate') }}
-      </van-button>
-    </div>
-
-    <!-- Footer: disclaimer + refresh button (matches FinanceCoachCard layout) -->
-    <div v-if="hasContent && !streaming" class="narrative-footer">
-      <span class="narrative-disclaimer">{{ t('dashboard.narrative.disclaimer') }}</span>
-      <van-button size="mini" plain icon="replay" :loading="refreshing" @click.stop="onGenerate" />
-    </div>
+        <!-- Footer: disclaimer + refresh button (matches FinanceCoachCard layout) -->
+        <div v-if="hasContent && !streaming" class="narrative-footer">
+          <span class="narrative-disclaimer">{{ t('dashboard.narrative.disclaimer') }}</span>
+          <van-button size="mini" plain icon="replay" :loading="refreshing" @click.stop="onGenerate" />
+        </div>
+      </van-collapse-item>
+    </van-collapse>
   </van-cell-group>
 </template>
 
@@ -540,11 +557,24 @@ function formatTime(iso: string | null): string {
   display: block;
   margin: 8px 0;
 }
+.narrative-card :deep(.van-collapse-item__title) {
+  justify-content: flex-start;
+}
+.narrative-card :deep(.van-cell__title) {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.narrative-card :deep(.van-cell__value) {
+  flex: none;
+  width: 0;
+}
 .narrative-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px 8px;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
 }
 .narrative-title {
   display: inline-flex;
