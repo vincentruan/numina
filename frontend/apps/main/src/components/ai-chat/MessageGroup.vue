@@ -33,12 +33,15 @@ import type {
   AssistantSubagentGroup,
 } from '@/types/ai-chat/message-group'
 import {
-  extractContentFromMessage,
   extractPresentFilesFromGroup,
   getSubagentTaskIds,
   extractLegacyFields,
 } from '@/utils/ai-chat'
-import type { ProcessStep, PlanStep } from '@/types/agent-stream'
+import {
+  extractContentAndReasoning,
+  extractContentFromMessage,
+} from '@/utils/ai-chat/reasoning-filter'
+import type { PlanStep } from '@/types/agent-stream'
 
 const props = defineProps<{
   group: MessageGroup
@@ -79,24 +82,23 @@ const assistantMessage = computed(() =>
 // Without this, <think>...</think> tags from the backend (llm.py) leak into
 // MarkdownContent and render as regular body text — the user sees the raw
 // thinking content mixed into the AI response. extractContentFromMessage
-// calls splitInlineReasoning which strips fully-closed and unclosed
-// <think> / halle_think_start tags, matching DeerFlow's approach where
-// reasoning is rendered in a separate muted collapsible section.
-const assistantCleanContent = computed(() => {
-  if (!assistantMessage.value) return ''
-  return extractContentFromMessage(assistantMessage.value)
+// Assistant group: single-pass extraction of both clean content and reasoning.
+// Previously used two separate computeds (extractContentFromMessage +
+// extractReasoningContentFromMessage) each calling splitInlineReasoning —
+// doubled regex cost per token during streaming. Combined into one computed
+// that calls splitInlineReasoning once and exposes both outputs.
+const assistantContentAndReasoning = computed(() => {
+  if (!assistantMessage.value) return { content: '', reasoning: null as string | null }
+  return extractContentAndReasoning(assistantMessage.value)
 })
 
-// Assistant group: extract legacy fields for processSteps, etc.
+const assistantCleanContent = computed(() => assistantContentAndReasoning.value.content)
+
+// Assistant group: extract legacy fields for planSteps, etc.
 const assistantLegacyFields = computed(() => {
   if (!assistantMessage.value) return null
   return extractLegacyFields(assistantMessage.value)
 })
-
-// Assistant group: extract processSteps for reasoning/tool rendering
-const assistantProcessSteps = computed((): ProcessStep[] | undefined =>
-  assistantLegacyFields.value?.processSteps
-)
 
 // Assistant group: extract planSteps for TodoList rendering
 // Falls back to prevGroupPlanSteps for detecting redundant completion summaries
@@ -109,14 +111,16 @@ const assistantPlanSource = computed((): 'explicit' | 'inferred' | null | undefi
   assistantLegacyFields.value?.planSource
 )
 
-// Assistant group: extract process elapsed time
-const assistantElapsedMs = computed((): number | undefined =>
-  assistantLegacyFields.value?.processElapsedMs
+// Assistant group: DeerFlow reasoning content (from combined extraction above)
+const assistantReasoningContent = computed((): string | null => assistantContentAndReasoning.value.reasoning)
+
+// Assistant group: DeerFlow reasoning timing from additional_kwargs
+const assistantReasoningStartTime = computed((): number | null | undefined =>
+  assistantMessage.value?.additional_kwargs?.reasoningStartTime as number | null | undefined
 )
 
-// Assistant group: extract reasoning start time
-const assistantReasoningStartTime = computed((): number | null | undefined =>
-  assistantLegacyFields.value?.reasoningStartTime
+const assistantReasoningEndTime = computed((): number | null | undefined =>
+  assistantMessage.value?.additional_kwargs?.reasoningEndTime as number | null | undefined
 )
 
 // Processing group: extract tool calls
@@ -237,11 +241,11 @@ const subagentTaskIds = computed(() => {
         :id="assistantMessage.id"
         :content="assistantCleanContent"
         :phase="assistantMessage.phase || 'done'"
-        :process-steps="assistantProcessSteps"
+        :reasoning-content="assistantReasoningContent"
+        :reasoning-start-time="assistantReasoningStartTime"
+        :reasoning-end-time="assistantReasoningEndTime"
         :plan-steps="assistantPlanSteps"
         :plan-source="assistantPlanSource"
-        :process-elapsed-ms="assistantElapsedMs"
-        :reasoning-start-time="assistantReasoningStartTime"
         :display-time="assistantMessage.displayTime"
         :suggestions="assistantMessage.suggestions"
         :feedback="assistantMessage.feedback"
