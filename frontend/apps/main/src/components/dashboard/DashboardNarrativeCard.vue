@@ -446,15 +446,14 @@ function formatTime(iso: string | null): string {
           <van-skeleton v-else title :row="3" animate />
         </div>
 
-        <!-- Completed: thinking section (collapsible) + narrative content -->
+        <!-- Completed: thinking section (collapsible, only if thinking exists) + narrative content -->
         <template v-else-if="hasContent">
-          <!-- Thinking section - always visible, collapsible -->
-          <div class="narrative-thinking-section narrative-thinking--done">
+          <div v-if="hasThinking" class="narrative-thinking-section narrative-thinking--done">
             <div class="narrative-thinking-header-wrapper">
               <div class="narrative-thinking-header" @click="toggleThinking">
                 <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
                 <span class="narrative-thinking-title">
-                  {{ hasThinking ? t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) : t('dashboard.narrative.thinking') }}
+                  {{ t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) }}
                 </span>
                 <span class="narrative-thinking-chevron" :class="{ 'narrative-thinking-chevron--collapsed': !isThinkingExpanded }">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -469,10 +468,7 @@ function formatTime(iso: string | null): string {
                 class="narrative-thinking-content narrative-thinking-content--scrollable"
                 @scroll="handleScroll"
               >
-                <div v-if="hasThinking" class="narrative-thinking-text">{{ thinking }}</div>
-                <div v-else class="narrative-thinking-text narrative-thinking-placeholder">
-                  {{ t('dashboard.narrative.thinkingPlaceholder') }}
-                </div>
+                <div class="narrative-thinking-text">{{ thinking }}</div>
               </div>
               <button
                 v-if="showScrollButton"
