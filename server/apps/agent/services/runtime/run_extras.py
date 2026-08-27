@@ -210,16 +210,25 @@ def _message_content(message: object) -> object:
 
 def _is_user_message_for_title(message: object) -> bool:
     """Return True for real human messages (excluding hidden system reminders)."""
-    # Numina does not currently inject dynamic-context reminder messages, but
-    # keep the door open: if a human message is marked as a hidden reminder it
-    # should not count as a user turn for title generation.
     if _message_type(message) != "human":
         return False
+    # ``dynamic_context_reminder`` (a hidden MemoryMiddleware context reminder)
+    # is NOT a real user turn and must not count toward the first-exchange gate.
+    # The checkpointer stores LangChain ``HumanMessage`` OBJECTS whose
+    # ``additional_kwargs`` carries this flag; the old code only inspected the
+    # dict form, so for objects the reminder was counted as a second user
+    # message → ``len(user_messages)==2`` → ``_should_generate_title`` returned
+    # ``False`` → ``sync_title_from_checkpoint`` returned ``None`` → no session
+    # title was ever generated. Mirror DeerFlow's ``_is_dynamic_context_reminder_message``
+    # by inspecting ``additional_kwargs`` for BOTH object and dict forms.
     if isinstance(message, dict):
         additional_kwargs = message.get("additional_kwargs") or {}
-        if additional_kwargs.get("dynamic_context_reminder"):
-            return False
-    return True
+    else:
+        additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+    return not (
+        isinstance(additional_kwargs, dict)
+        and bool(additional_kwargs.get("dynamic_context_reminder"))
+    )
 
 
 def _should_generate_title(
@@ -525,12 +534,16 @@ async def sync_title_from_checkpoint(
             # On follow-up messages the checkpoint has >1 user messages, so
             # this returns False.  We still fall through to generate a title
             # from the user message if the DB row has a fallback title (i.e.
-            # the first-exchange title generation failed previously).
+            # the first-exchange title generation failed previously) OR the
+            # checkpoint itself carries a fallback title (raw context JSON
+            # from the sync after_model hook).
+            ckpt_title = channel_values.get("title")
             if (
                 not _should_generate_title(
                     channel_values, allow_partial_exchange=allow_partial_exchange,
                 )
                 and not (db_title and _is_fallback_title(db_title))
+                and not (ckpt_title and _is_fallback_title(ckpt_title))
             ):
                 return None
         else:

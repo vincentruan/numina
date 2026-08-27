@@ -17,8 +17,11 @@ so the worker does not re-publish the title to the frontend.
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from langchain_core.messages import AIMessage, HumanMessage
+
 from apps.agent.services.runtime.run_extras import (
     _is_fallback_title,
+    _is_user_message_for_title,
     _should_generate_title,
     sync_title_from_checkpoint,
 )
@@ -397,6 +400,36 @@ def test_should_generate_title_ignores_dynamic_context_reminders():
     assert _should_generate_title({"messages": messages}) is True
 
 
+def test_should_generate_title_ignores_dynamic_context_reminder_objects():
+    """Regression: the checkpointer stores LangChain HumanMessage OBJECTS, not
+    dicts. The old dict-only filter missed their ``dynamic_context_reminder``
+    flag, so a hidden memory reminder was counted as a second user turn →
+    ``len(user_messages)==2`` → the first-exchange gate returned ``False`` →
+    ``sync_title_from_checkpoint`` returned ``None`` → no session title ever
+    generated (ai_chat_sessions.title stayed empty)."""
+    messages = [
+        HumanMessage(
+            content="<memory>User Context...</memory>",
+            additional_kwargs={"dynamic_context_reminder": True},
+        ),
+        HumanMessage(content="请帮我写测试"),
+        AIMessage(content="好的"),
+    ]
+    assert _should_generate_title({"messages": messages}) is True
+
+
+def test_is_user_message_for_title_filters_dynamic_context_reminder_object():
+    """A HumanMessage OBJECT with ``additional_kwargs.dynamic_context_reminder``
+    must not count as a user turn; a real one still does."""
+    reminder = HumanMessage(
+        content="<memory>User Context...</memory>",
+        additional_kwargs={"dynamic_context_reminder": True},
+    )
+    assert _is_user_message_for_title(reminder) is False
+    real = HumanMessage(content="帮我看看家里资产")
+    assert _is_user_message_for_title(real) is True
+
+
 def test_text_fallback_title_empty_returns_new_chat():
     """DeerFlow-style: blank user messages fall back to 'New Chat', not ''."""
     from apps.agent.services.runtime.run_extras import _text_fallback_title
@@ -415,3 +448,45 @@ def test_text_fallback_title_truncation():
     assert title.endswith("...")
     # Default DeerFlow max_chars=60 leaves room for a 50-char body + ellipsis.
     assert title == "x" * 50 + "..."
+
+
+async def test_sync_title_generates_when_checkpoint_has_fallback_title_but_no_messages():
+    """Regression: checkpoint carries a fallback title (raw context JSON) but no
+    messages array. The old gate returned None because _should_generate_title
+    returned False (no messages) AND db_title was None (new session). Now it
+    must detect the fallback checkpoint title and generate a proper one."""
+    # Checkpoint with fallback title but no messages key at all
+    channel_values = {"title": '{"free_text": "家庭现金流情况如何？", "family_id": "123"}'}
+    checkpoint = SimpleNamespace(checkpoint={"channel_values": channel_values})
+
+    with (
+        patch(
+            "apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer"
+        ) as mock_get_ckpt,
+        patch("apps.agent.services.session_store.AiSessionRepository") as MockRepo,
+        patch(
+            "apps.agent.services.runtime.run_extras._generate_title_via_llm",
+            new_callable=AsyncMock,
+            return_value="家庭现金流分析",
+        ) as mock_llm,
+    ):
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=checkpoint)
+
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value=None)  # New session, no DB title
+        repo.update_summary = AsyncMock()
+
+        result = await sync_title_from_checkpoint(
+            "thread-1",
+            "family-1",
+            ai_config={"ai_provider": "openai", "ai_model_id": "gpt-4o-mini"},
+            user_message="家庭现金流情况如何？",
+            ai_response="这是您的现金流分析...",
+        )
+
+    # Must generate LLM title, not return None
+    mock_llm.assert_awaited_once()
+    repo.update_summary.assert_awaited_once()
+    assert repo.update_summary.call_args.kwargs["title"] == "家庭现金流分析"
+    assert result == "家庭现金流分析"
