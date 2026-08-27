@@ -788,15 +788,17 @@ async def patch_thread(
             title=body.title,
             is_pinned=body.is_pinned,
         )
-    return await get_thread(thread_id, x_family_id)
+    return await _get_thread_impl(thread_id, x_family_id, verified)
 
 
-@router.get("/{thread_id}", response_model=ThreadResponse)
-async def get_thread(
+async def _get_thread_impl(
     thread_id: str,
-    x_family_id: str = Header(..., alias="X-Family-Id"),
-    verified: VerifiedFamily = Depends(verify_family_token),
+    x_family_id: str,
+    verified: VerifiedFamily,
 ) -> ThreadResponse:
+    """Core logic for GET /{thread_id} — extracted so patch_thread can call it
+    directly without going through FastAPI's dependency injection for the
+    ``verified`` parameter."""
     repo = AiSessionRepository(x_family_id)
     checkpointer = get_checkpointer()
 
@@ -868,6 +870,15 @@ async def get_thread(
         metadata=meta,
         values=serialize_channel_values_for_api(channel_values),
     )
+
+
+@router.get("/{thread_id}", response_model=ThreadResponse)
+async def get_thread(
+    thread_id: str,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> ThreadResponse:
+    return await _get_thread_impl(thread_id, x_family_id, verified)
 
 
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
