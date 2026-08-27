@@ -1,6 +1,6 @@
 <template>
   <div class="literacy-report-page">
-    <PageHeader :title="t('literacyReport.title')" back-to="/" />
+    <PageHeader :title="t('literacyReport.title')" back-to="/baby" />
 
     <!-- Loading skeleton -->
     <van-skeleton v-if="loading" :rows="6" animated class="page-skeleton" />

@@ -184,16 +184,16 @@ function handleOpenNewWindow() {
               fail-key="toast.copyFailed"
             >
               <Button size="small" plain @click="copy">
-                <IIcon icon="copy" />
+                <IIcon icon="lucide:copy" />
               </Button>
             </CopyButton>
             <!-- 下载 -->
             <Button size="small" plain @click="handleDownload">
-              <IIcon icon="download" />
+              <IIcon icon="lucide:download" />
             </Button>
             <!-- 新窗口 -->
             <Button size="small" plain @click="handleOpenNewWindow">
-              <IIcon icon="external-link" />
+              <IIcon icon="lucide:external-link" />
             </Button>
           </div>
         </template>
@@ -227,7 +227,7 @@ function handleOpenNewWindow() {
 
         <!-- Error -->
         <div v-if="error" class="error-state">
-          <IIcon icon="x-circle" />
+          <IIcon icon="lucide:x-circle" />
           <span>{{ error }}</span>
           <Button size="small" type="primary" @click="loadContent">{{ t('aiArtifact.retry') }}</Button>
         </div>
@@ -270,7 +270,7 @@ function handleOpenNewWindow() {
 
         <!-- 未知文件：下载提示 -->
         <div v-if="isUnknown" class="unknown-preview">
-          <IIcon icon="file" class="unknown-icon" />
+          <IIcon icon="lucide:file" class="unknown-icon" />
           <span class="unknown-text">{{ t('aiArtifact.unknownFileType') }}</span>
           <Button size="small" type="primary" @click="handleDownload">
             {{ t('aiArtifact.downloadFile') }}
@@ -290,6 +290,14 @@ function handleOpenNewWindow() {
   flex-direction: column;
   height: 100vh;
   background: var(--bg-primary);
+}
+
+/* Truncate long NavBar title so right-side action buttons stay visible */
+.artifact-preview-popup :deep(.van-nav-bar__title) {
+  max-width: 50vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav-actions {
