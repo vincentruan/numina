@@ -240,19 +240,25 @@ async function triggerStream(force = true) {
       stopElapsedTimer()
     },
     onError: (message) => {
-      streaming.value = false
+      const hadTaskId = resumeHandle.taskId.value !== null
       queued.value = false
       refreshing.value = false
-      loading.value = false
-      resumeHandle.taskId.value = null
       stopElapsedTimer()
-      // T20: initial auto-load failure → keep skeleton visible (initialLoadFailed);
-      // user-triggered retry failure → show retry button (triggerFailed).
-      if (!force) {
-        initialLoadFailed.value = true
-      } else {
-        resumeHandle.triggerFailed.value = true
+      // T20: SSE stream failed. Two scenarios:
+      // 1. Task was created (hadTaskId) → keep streaming + taskId so
+      //    useTaskResume polling can recover the connection.
+      // 2. POST itself failed (no taskId) → clear state, show skeleton/retry.
+      if (!hadTaskId) {
+        streaming.value = false
+        loading.value = false
+        resumeHandle.taskId.value = null
+        if (!force) {
+          initialLoadFailed.value = true
+        } else {
+          resumeHandle.triggerFailed.value = true
+        }
       }
+      // hadTaskId: streaming stays true, taskId preserved → polling resumes
       if (message.includes('auth_expired')) {
         showFailToast(t('dashboard.narrative.error.auth_expired'))
       }
