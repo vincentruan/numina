@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { streamFinanceCoach } from '@/api/ai'
+import { getFinanceCoach } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
@@ -10,7 +10,6 @@ import { showToast, showFailToast } from 'vant'
 import { useTaskResume } from '@/composables/useTaskResume'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
-import type { FinanceCoachStreamHandle } from '@/api/ai'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -18,20 +17,14 @@ const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const suggestions = ref<FinanceSuggestion[]>([])
-const thinking = ref('')
 const loading = ref(true)
 const loaded = ref(false)
 const visible = ref(false)
-const streaming = ref(false)
 const refreshing = ref(false)
 const expanded = ref<string[]>([])
 const cancelling = ref(false)
-const queued = ref(false)
-let streamHandle: FinanceCoachStreamHandle | null = null
 
 const count = computed(() => suggestions.value.length)
-const hasThinking = computed(() => thinking.value.length > 0)
-const isRunning = computed(() => streaming.value || resumeHandle.taskId.value !== null)
 
 // v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
 const resumeHandle = useTaskResume('coach', {
@@ -41,7 +34,6 @@ const resumeHandle = useTaskResume('coach', {
   onError: () => {
     loading.value = false
     loaded.value = true
-    queued.value = false
     // Don't toast here — the template shows inline error + retry instead
   },
 })
@@ -56,70 +48,40 @@ async function load(force = false) {
   try {
     refreshing.value = force
     loading.value = true
-    queued.value = false
     // Clear stale taskId from any previous task
     resumeHandle.taskId.value = null
 
-    // Reset streaming state for fresh generation
-    if (force) {
-      thinking.value = ''
-      suggestions.value = []
-      visible.value = false
-    }
-    streaming.value = true
+    const resp = await getFinanceCoach(force)
 
-    streamHandle = await streamFinanceCoach({
-      onTaskId: (taskId) => {
-        // Backend delivers task_id as the first SSE metadata event —
-        // immediately set it so the cancel button becomes active.
-        resumeHandle.taskId.value = taskId
-        queued.value = false
-      },
-      onQueued: (info) => {
-        // 202: another AI task is running, this one is queued.
-        resumeHandle.taskId.value = info.taskId
-        queued.value = true
-      },
-      onThinkingDelta: (content) => {
-        thinking.value += content
-      },
-      onDone: (results, _thinking) => {
-        const valid = (results || []).filter(
-          (s) =>
-            s &&
-            s.id &&
-            ['high', 'medium', 'low'].includes(s.severity) &&
-            s.title &&
-            s.action &&
-            s.target_type &&
-            s.target_id &&
-            s.cta_label,
-        )
-        if (valid.length === 0) {
-          visible.value = false
-        } else {
-          suggestions.value = valid.slice(0, 3)
-          visible.value = true
-        }
-        streaming.value = false
-        resumeHandle.taskId.value = null
-        queued.value = false
-      },
-      onError: (message) => {
-        // Silent hide on failure (spec §7.2) — only toast auth_expired
-        if (message.includes('auth_expired')) {
-          showFailToast(t('dashboard.financeCoach.error.auth_expired'))
-        }
-        visible.value = false
-        streaming.value = false
-        resumeHandle.taskId.value = null
-        queued.value = false
-      },
-    }, force)
+    // 202 queued: backend created a task but another is running.
+    // Set taskId so useTaskPolling picks it up; onComplete re-calls load().
+    if (resp.status === 'queued' && resp.task_id) {
+      resumeHandle.taskId.value = resp.task_id
+      return
+    }
+
+    // Advice baseline gate (spec §7.1): schema-validate before display.
+    const valid = (resp.report?.suggestions || []).filter(
+      (s) =>
+        s &&
+        s.id &&
+        ['high', 'medium', 'low'].includes(s.severity) &&
+        s.title &&
+        s.action &&
+        s.target_type &&
+        s.target_id &&
+        s.cta_label,
+    )
+    if (valid.length === 0) {
+      visible.value = false
+      return
+    }
+    suggestions.value = valid.slice(0, 3)
+    visible.value = true
+    resumeHandle.taskId.value = null
   } catch {
     visible.value = false // silent hide on failure (spec §7.2)
     resumeHandle.taskId.value = null
-    queued.value = false
   } finally {
     loading.value = false
     loaded.value = true
@@ -134,13 +96,9 @@ async function onCancel() {
   cancelling.value = true
   try {
     await resumeHandle.cancel()
-    streamHandle?.abort()
-    streamHandle = null
     resumeHandle.taskId.value = null
     loading.value = false
     loaded.value = true
-    streaming.value = false
-    queued.value = false
     showToast(t('aiTask.cancelled'))
   } catch {
     showFailToast(t('toast.operationFailed'))
@@ -166,17 +124,39 @@ async function onToggle(names: string[]) {
   }
 }
 
-onMounted(async () => {
-  if (familyStore.aiEnabled) {
-    const resumed = await resumeHandle.resume()
+// Fix race condition: aiEnabled may still be false when onMounted fires
+// because App.vue's loadCoinConfig() hasn't completed yet. Watch for it
+// to become true and trigger load() when it does. Use a hasStarted flag to
+// avoid double-loading when both onMounted (aiEnabled already true) and this
+// watch fire for the same enablement.
+let hasStarted = false
+function startLoad() {
+  if (hasStarted) return
+  hasStarted = true
+  resumeHandle.resume().then((resumed) => {
     if (!resumed) {
       load(false)
     }
+  })
+}
+
+onMounted(() => {
+  if (familyStore.aiEnabled) {
+    startLoad()
   } else {
     loading.value = false
     loaded.value = true
   }
 })
+
+watch(
+  () => familyStore.aiEnabled,
+  (enabled) => {
+    if (enabled && !hasStarted) {
+      startLoad()
+    }
+  },
+)
 
 // Dashboard is KeepAlive-cached; onActivated re-runs resume logic.
 let hasActivated = false
@@ -187,7 +167,6 @@ onActivated(async () => {
 
 // Dashboard is KeepAlive-cached — disconnect on deactivate, cleanup on unmount.
 onDeactivated(() => {
-  streamHandle?.abort()
   resumeHandle.disconnect()
 })
 
@@ -204,12 +183,12 @@ onUnmounted(() => {
           <div class="coach-header">
             <span class="coach-title">
               <span class="coach-icon">
-                <van-loading v-if="isRunning" size="16px" type="spinner" color="#1989fa" />
+                <van-loading v-if="loading" size="16px" type="spinner" color="#1989fa" />
                 <IIcon v-else :icon="'lucide:lightbulb'" size="18" class="coach-icon__svg" />
               </span>
               <span class="coach-title__text">{{ t('dashboard.financeCoach.title') }}</span>
             </span>
-            <span v-if="isRunning" class="coach-summary coach-summary--loading">
+            <span v-if="loading" class="coach-summary coach-summary--loading">
               <!-- U21: cancel button visible when AITask is running -->
               <van-button
                 v-if="resumeHandle.taskId"
@@ -235,7 +214,7 @@ onUnmounted(() => {
         </template>
 
         <!-- Loading skeleton inside expanded area -->
-        <template v-if="loading && !streaming">
+        <template v-if="loading">
           <div v-for="i in 3" :key="i" class="fc-skeleton-item">
             <div class="fc-skeleton-bar" />
             <div class="fc-skeleton-body">
@@ -243,18 +222,6 @@ onUnmounted(() => {
             </div>
           </div>
         </template>
-
-        <!-- Streaming thinking (LLM reasoning while generating suggestions) -->
-        <div v-else-if="streaming" class="fc-streaming">
-          <div v-if="hasThinking" class="fc-thinking">
-            <van-collapse>
-              <van-collapse-item :title="t('dashboard.narrative.thinking')" name="thinking">
-                <div class="fc-thinking-text">{{ thinking }}</div>
-              </van-collapse-item>
-            </van-collapse>
-          </div>
-          <van-skeleton v-else title :row="3" animate />
-        </div>
 
         <!-- AI disabled teaser -->
         <div v-else-if="!familyStore.aiEnabled" class="fc-ai-gated">
@@ -388,23 +355,6 @@ onUnmounted(() => {
 }
 .fc-skeleton-body :deep(.van-skeleton) {
   padding: 0;
-}
-
-/* Streaming thinking section */
-.fc-streaming {
-  padding: 0 16px 12px;
-}
-.fc-thinking {
-  margin-bottom: 8px;
-}
-.fc-thinking :deep(.van-collapse-item__content) {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.fc-thinking-text {
-  white-space: pre-wrap;
-  max-height: 120px;
-  overflow-y: auto;
 }
 
 /* Loaded suggestion items */

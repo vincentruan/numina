@@ -725,7 +725,12 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
 
   const ct = res.headers.get('content-type') || ''
   if (ct.includes('application/json')) {
-    return (await res.json()) as FinanceCoachResponse
+    const body = await res.json()
+    // Handle 202 queued response: backend has no report yet, task is queued.
+    if (res.status === 202 || body.status === 'queued') {
+      return { status: 'queued' as const, task_id: body.task_id, queue_position: body.queue_position }
+    }
+    return body as FinanceCoachResponse
   }
 
   // Streaming response — consume SSE until the finance_coach.result frame.

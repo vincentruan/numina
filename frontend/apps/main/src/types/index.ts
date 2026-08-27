@@ -566,9 +566,12 @@ export interface FinanceSuggestion {
   cta_label: string
 }
 export interface FinanceCoachResponse {
-  status: 'cached' | 'streaming'
+  status: 'cached' | 'streaming' | 'queued' | 'insufficient_data'
   generated_at?: string
-  report: { suggestions: FinanceSuggestion[] }
+  report?: { suggestions: FinanceSuggestion[] }
+  /** Present when status === 'queued'. */
+  task_id?: string
+  queue_position?: number
 }
 
 export interface ChatMessage {
