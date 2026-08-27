@@ -182,6 +182,26 @@ function onSelectHistoryThread(threadId: string) {
 // /api/threads error, network failure). Cleared once a send succeeds.
 const draftText = ref<string | undefined>(undefined)
 
+/**
+ * Wait for family data before making agent API calls.
+ *
+ * App.vue fires fetchMe()→fetchFamily() asynchronously on mount. When the user
+ * refreshes directly on /ai/chat?thread_id=..., AIChatBox's onMounted fires
+ * before fetchFamily() completes — getClient()/getAgentHeaders() then throw
+ * "Family not loaded" and the page renders blank / toasts an English error.
+ * Await family data here so the API calls have what they need.
+ */
+async function ensureFamilyLoaded(): Promise<void> {
+  if (!familyStore.family) {
+    try {
+      await familyStore.fetchFamily()
+    } catch {
+      // Non-fatal — the caller (loadHistory / handleStartChat) will surface
+      // its own error toast if the family is still missing after this await.
+    }
+  }
+}
+
 // Inherited web search state: when the chat page is entered from the AI hub
 // page, the hub's web search toggle is carried via pendingMessage.webSearch.
 // Pass it to the chat InputBox as an explicit initial value so it inherits the
@@ -349,6 +369,10 @@ onMounted(async () => {
       && store.activeThreadId === prevActiveId
       && !store.pendingMessage
     ) {
+      // Wait for family data before loading thread history. Without this,
+      // getClient() / getAgentHeaders() throw "Family not loaded" on page
+      // refresh because App.vue's fetchMe()→fetchFamily() hasn't completed yet.
+      await ensureFamilyLoaded()
       // U19: AITask preflight — check if a background task is still running
       // before loading history. Terminal states (completed/failed/interrupted)
       // determine whether to reconnect SSE or just show the last state.
@@ -444,6 +468,12 @@ watch(
         skipNextHistoryLoadFor.value = null
         return
       }
+      // Wait for family data before making agent API calls. On page refresh
+      // (Pinia store fresh → activeThreadId null→threadId), this watcher fires
+      // before App.vue's fetchMe()→fetchFamily() completes. Without the guard,
+      // getClient() / getAgentHeaders() throw "Family not loaded" and the page
+      // renders blank with a raw English error toast.
+      await ensureFamilyLoaded()
       // Load messages and thread metadata in parallel - loadHistory only
       // fetches checkpoint messages, ensureThreadInSessions fetches the title.
       await Promise.all([
@@ -462,7 +492,13 @@ watch(
   () => chat.error.value,
   (err) => {
     if (err) {
-      showFailToast(err)
+      // getClient() / getAgentHeaders() throw a hard-coded English message
+      // when family data hasn't loaded yet — translate it so the toast is
+      // localised instead of showing raw English to zh-CN users.
+      const displayMsg = err.includes('Family not loaded')
+        ? t('aiChat.tenantNoFamily')
+        : err
+      showFailToast(displayMsg)
       errorBarMessage.value = t('aiChat.connectionBrokenRetry')
     } else {
       errorBarMessage.value = null
@@ -625,7 +661,8 @@ async function handleRetry() {
     try {
       await chat.retry(store.activeThreadId)
     } catch (err) {
-      showFailToast((err as Error).message || t('aiChat.sendFailed'))
+      const msg = (err as Error).message || ''
+      showFailToast(msg.includes('Family not loaded') ? t('aiChat.tenantNoFamily') : (msg || t('aiChat.sendFailed')))
     }
   }
 }
@@ -726,7 +763,8 @@ async function handleBranch(messageId: string, messageIds: string[]) {
     // Navigate to the new branch thread
     router.push({ name: 'AIChat', query: { thread_id: response.thread_id } })
   } catch (error) {
-    const message = error instanceof Error ? error.message : t('aiChat.branchFailed')
+    const rawMsg = error instanceof Error ? error.message : ''
+    const message = rawMsg.includes('Family not loaded') ? t('aiChat.tenantNoFamily') : (rawMsg || t('aiChat.branchFailed'))
     showFailToast(message)
   } finally {
     branchingMessageId.value = null
