@@ -47,13 +47,61 @@ const props = defineProps<{
 }>()
 
 const expanded = ref(false)
-const showThinking = ref(false)
+// DeerFlow: Reasoning panel defaults open (defaultOpen = true).
+// Auto-closes 1s after streaming ends (only once per reasoning session).
+const showThinking = ref(true)
 
-// Timing state for LiveTimer and auto-collapse
+/**
+ * Extract stored reasoning timing from AI messages' additional_kwargs.
+ *
+ * Returns the LAST message with timing data (matches lastReasoningStep
+ * semantics for multi-step conversations: reasoning → tool → reasoning).
+ *
+ * During history/cache restore, all steps appear in the same reactive tick,
+ * so the live-streaming watches below would set startTime ≈ endTime ≈ Date.now()
+ * → "0s". Reading the timing captured during the live stream avoids this race.
+ */
+function extractStoredTiming(msgs: ChatMessage[]): { startTime: number | null; endTime: number | null } {
+  let result: { startTime: number | null; endTime: number | null } = { startTime: null, endTime: null }
+  for (const msg of msgs) {
+    if (msg.type !== 'ai' || !msg.additional_kwargs) continue
+    const startTime = msg.additional_kwargs.reasoningStartTime
+    if (typeof startTime === 'number') {
+      const endTime = msg.additional_kwargs.reasoningEndTime
+      result = {
+        startTime,
+        endTime: typeof endTime === 'number' ? endTime : null,
+      }
+    }
+  }
+  return result
+}
+
+// Timing state for LiveTimer and auto-collapse.
+// Start with null; a watcher on props.messages syncs stored timing below.
 const reasoningStartTime = ref<number | null>(null)
 const reasoningEndTime = ref<number | null>(null)
+
+// Watch props.messages for stored timing data (written by useThreadChat during
+// live streaming). This handles BOTH history restore (data present at mount)
+// and live-stream finalization (data appears after finalizeStreamSuccess).
+// The guards (!reasoningStartTime.value / !reasoningEndTime.value) ensure the
+// live-streaming watches below can set values first when stored data isn't yet
+// available; once stored values appear they take precedence.
+watch(
+  () => extractStoredTiming(props.messages),
+  (stored) => {
+    if (stored.startTime != null && reasoningStartTime.value !== stored.startTime) {
+      reasoningStartTime.value = stored.startTime
+    }
+    if (stored.endTime != null && reasoningEndTime.value !== stored.endTime) {
+      reasoningEndTime.value = stored.endTime
+    }
+  },
+  { immediate: true },
+)
+
 const manualControl = ref(false)
-const autoCollapsed = ref(false)
 
 function toggleThinking() {
   showThinking.value = !showThinking.value
@@ -179,13 +227,13 @@ const leadingContentSteps = computed(() =>
 )
 
 // DeerFlow pattern: steps above the last tool call (hidden by default)
-// 排除 leadingContent（始终可见）和 reasoning（按 DeerFlow 模式折叠）
+// 排除 leadingContent（始终可见）和 reasoning（由底部 thinking collapsible 渲染，避免重复）
 const aboveLastToolCallSteps = computed(() => {
   if (!lastToolCallStep.value) return []
   const idx = steps.value.indexOf(lastToolCallStep.value)
   return steps.value
     .slice(0, idx)
-    .filter(s => s.type !== 'leadingContent')
+    .filter(s => s.type !== 'leadingContent' && s.type !== 'reasoning')
 })
 
 // DeerFlow pattern: reasoning step after the last tool call
@@ -208,24 +256,36 @@ watch(() => lastReasoningStep.value?.content, (newVal) => {
   }
 })
 
-// Watch for content after reasoning to track end time and auto-collapse
+// Watch for tool calls after reasoning to record end time
+// (DeerFlow: duration is computed when streaming ends, not on tool call)
 watch(() => lastToolCallStep.value, (newVal) => {
-  // When tool calls appear after reasoning starts, mark reasoning as ended
   if (newVal && reasoningStartTime.value && !reasoningEndTime.value) {
     reasoningEndTime.value = Date.now()
-    // Auto-expand briefly to show reasoning exists, then collapse
-    setTimeout(() => {
-      if (!manualControl.value) {
-        showThinking.value = true
-        // Auto-collapse after 2 seconds
-        setTimeout(() => {
-          if (!manualControl.value) {
-            showThinking.value = false
-            autoCollapsed.value = true
-          }
-        }, 2000)
-      }
-    }, 1000)
+  }
+})
+
+// DeerFlow-pattern auto-close: reasoning panel starts open, auto-closes
+// 1 second after streaming ends (only once per reasoning session).
+// `autoCloseTimer` ensures the delay fires only once.
+let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
+watch(() => props.isLoading, (loading) => {
+  if (!loading && lastReasoningStep.value) {
+    // Stream ended and there is reasoning content — schedule auto-close
+    if (autoCloseTimer === null && !manualControl.value) {
+      autoCloseTimer = setTimeout(() => {
+        showThinking.value = false
+        autoCloseTimer = null
+      }, 1000)
+    }
+  } else if (loading) {
+    // Stream restarted — cancel pending auto-close, re-open panel,
+    // and reset manual control so auto-close works for this new session.
+    if (autoCloseTimer !== null) {
+      clearTimeout(autoCloseTimer)
+      autoCloseTimer = null
+    }
+    manualControl.value = false
+    showThinking.value = true
   }
 })
 
@@ -522,7 +582,7 @@ function getFetchDomain(url: string): string {
       :key="step.id"
       class="leading-content"
     >
-      <MarkdownContent :content="step.content || ''" />
+      <MarkdownContent :content="step.content || ''" @sandbox-file-click="(fp: string) => emit('artifactSelect', fp)" />
     </div>
 
     <!-- DeerFlow pattern: "X more steps" button for aboveLastToolCallSteps -->
@@ -569,7 +629,7 @@ function getFetchDomain(url: string): string {
             <div class="step-body-vertical">
               <div class="step-name">{{ t('aiChat.thinkingLabel') }}</div>
               <div v-if="step.content" class="thinking-content-inline">
-                <MarkdownContent :content="step.content || ''" />
+                <MarkdownContent :content="step.content || ''" @sandbox-file-click="(fp: string) => emit('artifactSelect', fp)" />
               </div>
             </div>
           </template>
@@ -764,9 +824,12 @@ function getFetchDomain(url: string): string {
         </svg>
       </button>
 
-      <div v-if="showThinking" class="thinking-content-expanded">
-        <MarkdownContent :content="lastReasoningStep.content || ''" />
-      </div>
+      <!-- DeerFlow: reasoning content with fade+slide animation on toggle -->
+      <Transition name="thinking-content">
+        <div v-if="showThinking" class="thinking-content-expanded">
+          <MarkdownContent :content="lastReasoningStep.content || ''" />
+        </div>
+      </Transition>
     </template>
 
     <!-- 步骤已完成但模型仍在生成（消除 tool→text 间的加载指示器空白期） -->
@@ -849,6 +912,28 @@ function getFetchDomain(url: string): string {
   border-radius: 6px;
   line-height: 1.5;
   margin-top: 4px;
+}
+
+/* DeerFlow-aligned: fade + slide animation for thinking content toggle */
+.thinking-content-enter-active,
+.thinking-content-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.thinking-content-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.thinking-content-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+.thinking-content-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+.thinking-content-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 /* Subdue MarkdownContent inside thinking areas — DeerFlow uses a single
