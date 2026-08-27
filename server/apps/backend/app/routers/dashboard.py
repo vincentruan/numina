@@ -373,68 +373,23 @@ async def generate_narrative(
 
     task_id = str(task.id)
 
-    # Trigger agent via non-streaming POST (bridge consumer pattern)
+    # Trigger agent via single streaming POST (bridge consumer pattern).
+    # NOTE: do NOT add a separate agent_client.post here — it would trigger the
+    # agent TWICE (once here, once in _pump_agent_sse_to_bridge below), creating
+    # two runs with different run_ids.  The interrupt strategy then leaves run 1
+    # without an "end" frame, so the AITask never completes and blocks the queue.
     agent_client = AgentClient(
         family_id=str(family_id), user_id=str(user.id), timeout=120.0
     )
     agent_url = f"/internal/gateway/runs/dashboard-narrative/{session_id}"
     run_id: str | None = None
 
-    try:
-        resp = await agent_client.post(
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": str(user.id),
-                "language": user.language,
-                "on_disconnect": "continue",
-                "task_id": task_id,
-                "input": {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": json.dumps(context, ensure_ascii=False),
-                        }
-                    ]
-                },
-            },
-        )
-        if resp.status_code != 200:
-            logger.warning(
-                "[narrative] agent trigger failed: status=%s body=%s task=%s",
-                resp.status_code,
-                resp.text[:200],
-                task_id,
-            )
-            AITaskService.fail_task(task_id, "叙事生成服务异常", db)
-            err = json.dumps({"error": "叙事生成服务异常", "error_type": "AgentError"})
-            return StreamingResponse(
-                iter([f"event: error\ndata: {err}\n\n".encode()]),
-                media_type="text/event-stream",
-            )
-
-        # Extract agent run_id from Content-Location header and persist to AITask
-        run_id = AITaskService.extract_and_attach_run_id(
-            task_id, resp.headers.get("Content-Location"), family_id
-        )
-    except Exception as exc:
-        logger.warning("[narrative] agent trigger failed task=%s err=%s", task_id, exc)
-        AITaskService.fail_task(task_id, f"叙事生成服务中断: {type(exc).__name__}", db)
-        err = json.dumps(
-            {"error": "叙事生成服务中断", "error_type": type(exc).__name__}
-        )
-        return StreamingResponse(
-            iter([f"event: error\ndata: {err}\n\n".encode()]),
-            media_type="text/event-stream",
-        )
-
     # Phase 1: Backend-owned buffer.
     shared_bridge = get_shared_bridge()
 
     if not run_id:
-        logger.warning(
-            "[narrative] agent returned no run_id task=%s — "
-            "lifecycle consumer will resolve from DB",
+        logger.info(
+            "[narrative] task=%s run_id not yet resolved — pump will set it",
             task_id,
         )
 
@@ -463,9 +418,23 @@ async def generate_narrative(
     _lc_task: asyncio.Task[None] | None = None
 
     def _on_lc_run_id(cl_url: str) -> None:
-        """Called when Content-Location header arrives. DB persist only."""
-        # Content-Location is a URL path — extract the trailing UUID.
-        # (No DB persist here — dashboard doesn't use extract_and_attach_run_id.)
+        """Called when Content-Location header arrives. Persist to AITask so
+        ``consume_task_stream``'s run_id fallback can resolve it."""
+        # Content-Location is a URL path — extract the trailing UUID and persist
+        # to the AITask row. Without this, ``consume_task_stream`` (passing
+        # run_id=None) falls back to AITask.run_id, which stays empty and raises
+        # "Task has no run_id" after 10s of retries — the frontend sees nothing.
+        nonlocal run_id
+        try:
+            run_id = AITaskService.extract_and_attach_run_id(
+                task_id, cl_url, family_id
+            )
+        except Exception:
+            logger.warning(
+                "[narrative] extract_and_attach_run_id failed task=%s",
+                task_id,
+                exc_info=True,
+            )
 
     def _on_authoritative_run_id(meta_run_id: str) -> None:
         """Called when metadata event arrives with the authoritative run_id."""
@@ -499,33 +468,33 @@ async def generate_narrative(
     asyncio.create_task(_lc_fallback())
 
     # Spawn background task: consume agent HTTP SSE → publish to shared bridge.
-    if run_id:
-        asyncio.create_task(
-            _pump_agent_sse_to_bridge(
-                agent_client=agent_client,
-                agent_url=agent_url,
-                json_body={
-                    "family_id": str(family_id),
-                    "user_id": str(user.id),
-                    "language": user.language,
-                    "on_disconnect": "continue",
-                    "task_id": task_id,
-                    "input": {
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": json.dumps(context, ensure_ascii=False),
-                            }
-                        ]
-                    },
+    # This is the SINGLE trigger — no separate agent_client.post above.
+    asyncio.create_task(
+        _pump_agent_sse_to_bridge(
+            agent_client=agent_client,
+            agent_url=agent_url,
+            json_body={
+                "family_id": str(family_id),
+                "user_id": str(user.id),
+                "language": user.language,
+                "on_disconnect": "continue",
+                "task_id": task_id,
+                "input": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": json.dumps(context, ensure_ascii=False),
+                        }
+                    ]
                 },
-                bridge=shared_bridge,
-                run_id=run_id,
-                task_id=task_id,
-                on_run_id=_on_lc_run_id,
-                on_authoritative_run_id=_on_authoritative_run_id,
-            )
+            },
+            bridge=shared_bridge,
+            run_id="",
+            task_id=task_id,
+            on_run_id=_on_lc_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
         )
+    )
 
     # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     # Same run_id alignment issue — consume_task_stream resolves from DB when

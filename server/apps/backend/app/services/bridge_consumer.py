@@ -200,18 +200,17 @@ async def _pump_agent_sse_to_bridge(
                         if event_type == "metadata" and isinstance(data, dict) and data.get("run_id"):
                             actual_run_id = data["run_id"]
                             if actual_run_id != resolved_run_id[0]:
+                                # Update resolved_run_id so subsequent pump
+                                # publishing stays aligned. However, do NOT
+                                # fire on_authoritative_run_id — the worker
+                                # publishes to the Content-Location run_id
+                                # (record.run_id) which never changes. Spawning
+                                # a new lifecycle consumer with the metadata
+                                # run_id would subscribe to a different bridge
+                                # stream, causing finance_coach.result and
+                                # similar custom events to be silently lost
+                                # (task completes but no result is persisted).
                                 resolved_run_id[0] = actual_run_id
-                                # Fire the authoritative run_id callback so callers
-                                # can spawn lifecycle consumers with the correct run_id.
-                                if on_authoritative_run_id is not None:
-                                    try:
-                                        on_authoritative_run_id(actual_run_id)
-                                    except Exception:
-                                        logger.warning(
-                                            "[agent-pump] on_authoritative_run_id callback failed task=%s",
-                                            task_id,
-                                            exc_info=True,
-                                        )
                         # Skip internal agent events not meant for the frontend
                         if event_type not in ("heartbeat",):
                             await bridge.publish(
@@ -367,7 +366,7 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
         return True
     if not task:
         return False
-    if task.skill_id == "report":
+    if task.skill_id in ("report", "coach"):
         from datetime import datetime, timedelta
 
         from apps.backend.app.models.ai_report import AIReport
@@ -384,6 +383,7 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
             db.query(AIReport)
             .filter(
                 AIReport.family_id == int(family_id),
+                AIReport.skill_id == task.skill_id,
                 AIReport.generated_at >= cutoff,
             )
             .first()
