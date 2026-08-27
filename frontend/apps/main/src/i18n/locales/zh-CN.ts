@@ -699,6 +699,7 @@ export default {
     branchCloneSkippedHistorical: '从历史轮分支，部分文件未复制',
     branchCloneNotFound: '源文件未找到，分支已创建',
     branchCloneFailed: '文件复制失败，分支已创建',
+    viewFullReport: '查看完整报告',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',

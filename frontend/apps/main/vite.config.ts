@@ -35,7 +35,7 @@ export default defineConfig({
     },
     proxy: {
       '/api/threads': {
-        target: 'http://localhost:28001',
+        target: 'http://localhost:8001',
         changeOrigin: true,
         // SSE streaming needs long timeout — LLM tool-calling / thinking can
         // exceed the default node HTTP agent timeout and silently drop the
@@ -44,7 +44,7 @@ export default defineConfig({
         proxyTimeout: 10 * 60 * 1000,
       },
       '/api': {
-        target: 'http://localhost:28000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         // Same SSE concern for backend streaming endpoints (/ai/chat/stream,
         // /ai/report/ws, etc.). Non-streaming requests are unaffected.

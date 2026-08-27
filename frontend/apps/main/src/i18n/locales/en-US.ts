@@ -585,7 +585,8 @@ Keep the tone warm, like a chat between family members.`,
     reconnectNotSupported: 'Reconnect not supported, please resend your question',
     sendFailedError: 'Send failed: {error}',
     errorPrefix: '{error}',
-    loadModelsFailed: 'Failed to load models: {error}'
+    loadModelsFailed: 'Failed to load models: {error}',
+    viewFullReport: 'View full report'
   },
   ai: {
     systemAgents: 'System Agents',

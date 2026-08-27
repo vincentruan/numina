@@ -23,6 +23,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DISABLE_CAPTCHA=${DISABLE_CAPTCHA:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_BASE_URL=http://numina-agent:8001
@@ -58,6 +59,7 @@ services:
       - DATA_ROOT=/app/.numina/data
       - SECRET_KEY=${SECRET_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DISABLE_CAPTCHA=${DISABLE_CAPTCHA:-true}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
