@@ -212,11 +212,60 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
     if (message.type === 'ai' || message.role === 'assistant') {
       // 4a: present_files → 独立 group
       if (hasPresentFiles(message)) {
-        groups.push({
-          type: 'assistant:present-files',
-          id: message.id,
-          messages: [message],
-        })
+        // When present_files is bundled with other tool calls (e.g. write_file),
+        // create a filtered copy for the present-files group to avoid duplicating
+        // the write_file step in ChainOfThought. Also strip reasoning to prevent
+        // the "思考" section from appearing in both groups.
+        const nonPresentFilesToolCalls = message.tool_calls?.filter(
+          tc => tc.name !== 'present_files',
+        )
+        const hasOtherToolCalls = (nonPresentFilesToolCalls?.length ?? 0) > 0
+
+        if (hasOtherToolCalls) {
+          // present_files bundled with other tool calls: create a filtered copy
+          // for the present-files group (strip reasoning + present_files from
+          // tool_calls) so ChainOfThought only renders the non-present-files steps.
+          const presentFilesCopy: ChatMessage = {
+            ...stripReasoningFromMessage(message),
+            tool_calls: [
+              ...message.tool_calls!.filter(tc => tc.name === 'present_files'),
+            ],
+          }
+          groups.push({
+            type: 'assistant:present-files',
+            id: message.id,
+            messages: [presentFilesCopy],
+          })
+
+          // Processing group gets the full message so ChainOfThought renders
+          // the write_file step + reasoning. present_files is filtered out to
+          // avoid a redundant step card (the report card renders separately via
+          // the present-files group's ArtifactFileList).
+          const processingCopy: ChatMessage = {
+            ...message,
+            tool_calls: nonPresentFilesToolCalls,
+          }
+          const lastGroup = groups[groups.length - 1]
+          if (lastGroup?.type !== 'assistant:processing') {
+            groups.push({
+              type: 'assistant:processing',
+              id: message.id,
+              messages: [processingCopy],
+            })
+          } else {
+            lastGroup.messages.push(processingCopy)
+          }
+          if (hasReasoning(message) && message.id) {
+            reasoningShownInProcessing.add(message.id)
+          }
+        } else {
+          // present_files only — no other tool calls
+          groups.push({
+            type: 'assistant:present-files',
+            id: message.id,
+            messages: [message],
+          })
+        }
       }
       // 4b: subagent (task tool) → 独立 group
       else if (hasSubagent(message)) {

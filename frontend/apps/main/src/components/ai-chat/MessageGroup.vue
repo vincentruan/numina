@@ -249,6 +249,7 @@ const subagentTaskIds = computed(() => {
         :display-time="assistantMessage.displayTime"
         :suggestions="assistantMessage.suggestions"
         :feedback="assistantMessage.feedback"
+        :artifacts="assistantMessage.artifacts"
         :can-branch="canBranch && !isLoading"
         :is-branching="isBranching"
         :retrying="isLoading"
@@ -256,6 +257,8 @@ const subagentTaskIds = computed(() => {
         @copy="emit('copy', assistantCleanContent)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
+        @artifact-tap="emit('artifactTap', $event)"
+        @sandbox-file-click="(filepath: string) => emit('artifactTap', { id: filepath, title: filepath, kind: 'file', path: filepath })"
         @branch="handleBranch"
       />
       <!-- Per-turn token usage (DeerFlow pattern: rendered at group level, not

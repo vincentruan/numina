@@ -173,6 +173,46 @@ export function extractContentFromMessage(message: {
 }
 
 /**
+ * 从消息同时提取正文和推理内容（单次解析）
+ *
+ * 性能优化：将 extractContentFromMessage + extractReasoningContentFromMessage
+ * 合并为一次 splitInlineReasoning 调用，避免流式阶段每个 token 触发两次正则。
+ *
+ * @param message - 消息对象
+ * @returns 正文和推理内容
+ */
+export function extractContentAndReasoning(message: {
+  type?: string
+  role?: string
+  content?: string | unknown[] | null
+  additional_kwargs?: Record<string, unknown> | null
+}): { content: string; reasoning: string | null } {
+  // 后端安全摘要优先
+  if (message.additional_kwargs?.reasoning_content) {
+    return { content: extractContentFromMessage(message), reasoning: message.additional_kwargs.reasoning_content as string }
+  }
+
+  // Anthropic gateway thinking block
+  if (Array.isArray(message.content)) {
+    let reasoning: string | null = null
+    for (const part of message.content) {
+      if (part && typeof part === 'object' && (part as { type?: string }).type === 'thinking') {
+        reasoning = (part as { thinking?: string }).thinking as string
+        break
+      }
+    }
+    return { content: extractContentFromMessage(message), reasoning }
+  }
+
+  // 字符串 content — 单次 splitInlineReasoning
+  if (typeof message.content === 'string') {
+    return splitInlineReasoning(message.content)
+  }
+
+  return { content: '', reasoning: null }
+}
+
+/**
  * 检查是否有推理内容
  *
  * @param message - 消息对象

@@ -17,7 +17,7 @@ import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 import { useChatSessionStore } from '@/stores/chatSession'
-import type { MessageGroup } from '@/types/ai-chat/message-group'
+import { extractReasoningContentFromMessage } from '@/utils/ai-chat'
 
 export type { ChatMessage }
 
@@ -550,6 +550,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // of truth; useThreadTodos derives hasTodos/todos from this. Cleared on
   // thread switch / history reload; hydrated from values events (stream + load).
   const todos = ref<Array<{ content: string; status: string }>>([])
+  /**
+   * Tracks reasoning start time per AI message (by message id).
+   * Set when reasoning content is first detected in a message during streaming.
+   * Used to compute reasoning_elapsed_ms when reasoning ends (tool call arrives or stream ends).
+   * These values are persisted in message.additional_kwargs so ChainOfThought
+   * can restore them on history load (where reactive watches fire too late).
+   */
+  const reasoningStartTimes = new Map<string, number>()
   // U5 (D1 /goal): server goal streamed from the checkpoint's
   // channel_values["goal"] (U4 writes continuation_count/updated_at here).
   // `undefined` = no values chunk has carried the goal field yet (useActiveGoal
@@ -615,6 +623,61 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // Distinguishes a user-initiated cancel from a stream timeout/error abort.
   // Timeout and stream errors must be retryable; a user cancel must not be.
   let userCancelled = false
+
+  // ── Stream text batching (rAF coalescing) ──
+  // Multiple SSE text chunks often arrive within a single frame (~16ms).
+  // Without batching, each chunk creates a new messages.value array reference
+  // → Vue reactivity cascade (visibleMessages, watchers, computed properties,
+  // MarkdownContent re-parse) fires per token. Coalescing into one update per
+  // animation frame reduces this to ~60 updates/second regardless of token rate.
+  let _textBatchBuffer = ''
+  let _textBatchRafId: number | null = null
+
+  /**
+   * Synchronously flush any buffered text into messages.value.
+   * Called before non-text events (tool_calls, tool results) so they see
+   * the latest accumulated content, and on stream end.
+   */
+  function flushTextBatch(): void {
+    if (_textBatchRafId !== null) {
+      cancelAnimationFrame(_textBatchRafId)
+      _textBatchRafId = null
+    }
+    if (!_textBatchBuffer) return
+    const buf = _textBatchBuffer
+    _textBatchBuffer = ''
+
+    const last = messages.value[messages.value.length - 1]
+    if (!last || last.type !== 'ai') return
+
+    const updated: ChatMessage = { ...last }
+    updated.content = last.content + buf
+    if (updated.phase !== 'done') updated.phase = 'answering'
+    messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
+  }
+
+  /**
+   * Schedule a rAF flush of the text batch buffer.
+   * Multiple calls within the same frame are coalesced — only one
+   * messages.value assignment fires per animation frame.
+   */
+  function scheduleTextBatchFlush(): void {
+    if (_textBatchRafId !== null) return
+    _textBatchRafId = requestAnimationFrame(() => {
+      _textBatchRafId = null
+      if (!_textBatchBuffer) return
+      const buf = _textBatchBuffer
+      _textBatchBuffer = ''
+
+      const last = messages.value[messages.value.length - 1]
+      if (!last || last.type !== 'ai') return
+
+      const updated: ChatMessage = { ...last }
+      updated.content = last.content + buf
+      if (updated.phase !== 'done') updated.phase = 'answering'
+      messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
+    })
+  }
 
   const STREAM_TIMEOUT_MS = 120_000
   const SSE_RETRY_DELAYS = [1000, 2000, 4000] as const
@@ -698,17 +761,33 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       return
     }
     if (chunk.type === 'ai') {
-      console.log('[useThreadChat] AI message chunk received:', {
-        id: chunk.id,
-        contentLength: chunk.content?.length || 0,
-        contentPreview: chunk.content?.slice(0, 50),
-        hasToolCalls: !!chunk.tool_calls,
-      })
       const last = messages.value[messages.value.length - 1]
       const chunkId = chunk.id
+      // Text-only chunks (no tool_calls, no additional_kwargs) are batched
+      // into a rAF coalesced flush — see _textBatchBuffer above.
+      const isTextOnly = !chunk.tool_calls && !chunk.additional_kwargs
 
       // If last message is AI with matching id (or both have no id), append text
       if (last && last.type === 'ai' && (!chunkId || chunkId === last.id || !last.id)) {
+        // ── Fast path: pure text chunk → batch into rAF ──
+        if (isTextOnly && last.id && reasoningStartTimes.has(last.id)) {
+          // Reasoning timing already captured — just buffer text, no reasoning
+          // extraction needed per chunk. The rAF flush appends content and
+          // triggers a single messages.value update per frame.
+          _textBatchBuffer += chunk.content
+          scheduleTextBatchFlush()
+          return
+        }
+        if (isTextOnly && !extractReasoningContentFromMessage({ ...last, content: last.content + chunk.content })) {
+          // No reasoning content in the accumulated text — safe to batch.
+          // The rAF flush will append and trigger one reactive update.
+          _textBatchBuffer += chunk.content
+          scheduleTextBatchFlush()
+          return
+        }
+
+        // ── Non-text or reasoning-bearing chunk → flush + full merge ──
+        flushTextBatch()
         const updated: ChatMessage = { ...last }
         updated.content = last.content + chunk.content
         // Preserve 'done' phase: once an AI message is marked done (by the `end`
@@ -723,12 +802,39 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           const newCalls = toToolCallSummaries(chunk.tool_calls)
           updated.tool_calls = [...(last.tool_calls || []), ...newCalls]
         }
+        // Merge chunk.additional_kwargs BEFORE reasoning timing so timing fields
+        // always take precedence (are not overwritten by chunk data).
         if (chunk.additional_kwargs) {
           updated.additional_kwargs = { ...(last.additional_kwargs || {}), ...chunk.additional_kwargs }
         }
+        // Capture reasoning start time: first time reasoning content appears in this message
+        const appendMsgId = updated.id
+        if (appendMsgId && !reasoningStartTimes.has(appendMsgId)) {
+          const reasoningContent = extractReasoningContentFromMessage(updated)
+          if (reasoningContent) {
+            reasoningStartTimes.set(appendMsgId, Date.now())
+            updated.additional_kwargs = {
+              ...(updated.additional_kwargs || {}),
+              reasoningStartTime: reasoningStartTimes.get(appendMsgId),
+            }
+          }
+        }
+        // Capture reasoning end time: tool calls arrived after reasoning started
+        if (chunk.tool_calls) {
+          const msgId = updated.id
+          if (msgId && reasoningStartTimes.has(msgId)) {
+            updated.additional_kwargs = {
+              ...(updated.additional_kwargs || {}),
+              reasoningEndTime: Date.now(),
+              reasoning_elapsed_ms: Date.now() - reasoningStartTimes.get(msgId)!,
+            }
+          }
+        }
         messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
       } else {
-        // New AI message
+        // New AI message — flush any pending batch first so the new message
+        // is appended AFTER the previous one's final content.
+        flushTextBatch()
         const msg: ChatMessage = {
           id: chunkId || genId('ai'),
           type: 'ai',
@@ -743,10 +849,23 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (chunk.additional_kwargs) {
           msg.additional_kwargs = chunk.additional_kwargs
         }
+        // Capture reasoning start time on new message (rare: thinking + tool calls in same chunk)
+        const newMsgId = msg.id
+        if (newMsgId && !reasoningStartTimes.has(newMsgId)) {
+          const reasoningContent = extractReasoningContentFromMessage(msg)
+          if (reasoningContent) {
+            reasoningStartTimes.set(newMsgId, Date.now())
+            msg.additional_kwargs = {
+              ...(msg.additional_kwargs || {}),
+              reasoningStartTime: reasoningStartTimes.get(newMsgId),
+            }
+          }
+        }
         messages.value = [...messages.value, enrichToolCallMetadata(msg)]
       }
     } else if (chunk.type === 'tool') {
-      // Tool result message
+      // Tool result message — flush pending text first so it appears in order.
+      flushTextBatch()
       const msg: ChatMessage = {
         id: chunk.id || genId('tool'),
         type: 'tool',
@@ -795,6 +914,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Also backfills usage_metadata on existing AI messages.
    */
   function mergeValuesMessages(raw: SerializedMessage[]): void {
+    // Flush pending text batch so dedup sees the latest accumulated content.
+    flushTextBatch()
     if (!raw || raw.length === 0) return
     const mapped = raw.map(serializedToChatMessage)
 
@@ -992,6 +1113,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * - No retry button visible (AssistantMessage only shows retry at phase='error')
    */
   function finalizeAllInProgress(): void {
+    // Flush any pending text batch before marking messages as done.
+    flushTextBatch()
     // Mark all AI messages as done
     const hasAnswering = messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
     if (hasAnswering) {
@@ -1035,19 +1158,63 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * success paths (end event, dropped-connection with content).
    */
   function finalizeStreamSuccess(userMsgId: string): void {
+    // Flush any pending text batch before finalizing.
+    flushTextBatch()
     // Mark ALL AI messages as done (fixes multi-AI-message stuck bug)
+    // Also finalize reasoning end time: if reasoning started but never ended
+    // (no tool call arrived after reasoning), capture elapsed time now so
+    // ChainOfThought's LiveTimer shows a real duration instead of staying
+    // in "思考中..." after the stream has ended.
     const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
     if (lastIdx >= 0) {
       const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
       let changed = false
+      const now = Date.now()
+
+      // Detect report-generating tool calls (write_file with report filename).
+      // When the LLM writes a report file in chat, attach a report artifact
+      // to the last AI message so the UI can show a "View full report" link.
+      // Check both AI message tool_calls and planningSteps (custom tool_call
+      // events) — during streaming the AI message's tool_calls may not be set
+      // if the backend bundles write_file + present_files in one response.
+      const isReportPath = (path: string) =>
+        /\.md$/i.test(path) && /report/i.test(path)
+          && !/^(readme|changelog|license|contributing|guide|tutorial|notes?|todo|draft)\b/i.test(path.split('/').pop() || '')
+      const hasReportToolCall = messages.value.some(m =>
+        m.type === 'ai' && m.tool_calls?.some(tc =>
+          tc.name === 'write_file' && typeof tc.args?.path === 'string'
+            && isReportPath(tc.args.path)
+        )
+      ) || planningSteps.value.some(s =>
+        s.toolName === 'write_file' && typeof s.args?.path === 'string'
+          && isReportPath(s.args.path)
+      )
+
       const next = messages.value.map((msg, i) => {
         if (msg.type !== 'ai' || msg.phase === 'done') return msg
         changed = true
         const isLast = i === lastIdx
+        // Finalize reasoning timing if reasoning started but no end time was recorded
+        const msgId = msg.id
+        let updatedKwargs = msg.additional_kwargs
+        if (msgId && reasoningStartTimes.has(msgId) && !msg.additional_kwargs?.reasoningEndTime) {
+          const startTime = reasoningStartTimes.get(msgId)!
+          updatedKwargs = {
+            ...(msg.additional_kwargs || {}),
+            reasoningEndTime: now,
+            reasoning_elapsed_ms: now - startTime,
+          }
+        }
+        // Attach report artifact to the last AI message when a report file was written
+        const artifacts = isLast && hasReportToolCall
+          ? [...(msg.artifacts || []), { id: 'report-link', title: 'report', kind: 'report' as const }]
+          : msg.artifacts
         return {
           ...msg,
           phase: 'done' as const,
           suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+          additional_kwargs: updatedKwargs,
+          artifacts,
         }
       })
       if (changed) {
