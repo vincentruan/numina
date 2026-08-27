@@ -162,9 +162,9 @@ async def trigger_generate_events(
                     current_user.family_id,
                 )
 
-    # Check if there's already a running task - resume it instead of 409
+    # Check if there's already a running task.
     existing = AITaskService.get_running_task(current_user.family_id, "report", db)
-    if existing:
+    if existing and not force:
         # 已有运行中任务 — 直接接续，不重复创建
         task = existing
         # Clear stale run_id so that bridge_consumer's DB lookup sees NULL
@@ -186,6 +186,13 @@ async def trigger_generate_events(
         if not session:
             raise AppError(ErrorCode.NOT_FOUND)
     else:
+        # force=true: cancel zombie running task so a fresh generation starts.
+        if existing and force:
+            logger.info(
+                "[trigger_generate_events] force=true, cancelling zombie task=%s",
+                existing.id,
+            )
+            AITaskService.cancel_task(current_user.family_id, "report", db)
         # No running task - create new session and task
         session = await ChatSessionService.create_session(
             family_id=current_user.family_id,
@@ -193,7 +200,7 @@ async def trigger_generate_events(
             db=db,
         )
         any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-        if any_running:
+        if any_running and not force:
             task = AITaskService.create_queued_task(
                 family_id=current_user.family_id,
                 skill_id="report",

@@ -770,6 +770,31 @@ async def _run_asset_report_pipeline(
                         "error_type": "ReportValidationError",
                     },
                 )
+                # Best-effort: still persist markdown_file_path so the user
+                # can view the fallback markdown even when structured parse
+                # failed. The sandbox file may be gone by the time the user
+                # clicks "view", so copy it now.
+                markdown_file_path = _copy_asset_report_markdown(
+                    family_id=family_id,
+                    thread_id=thread_id,
+                    run_id=p.run_id,
+                    user_id=user_id,
+                    ai_text=ai_text,
+                    write_file_paths=p.captured_write_file_paths,
+                )
+                if markdown_file_path:
+                    try:
+                        client = BackendClient(family_id=family_id)
+                        await client.persist_report_result(
+                            report_json={"indicators": [], "overall_score": 0},
+                            markdown_file_path=markdown_file_path,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[_run_asset_report_pipeline] fallback persist "
+                            "failed run=%s",
+                            p.run_id,
+                        )
             elif step2_payload is not None:
                 logger.info(
                     "[_run_asset_report_pipeline] Extracted report JSON: "

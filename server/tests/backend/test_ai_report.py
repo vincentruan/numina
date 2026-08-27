@@ -253,11 +253,61 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
         patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
     ):
         mock_stream.return_value = _make_empty_async_gen()
-        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
+        # No force=true — should resume existing task
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     # Should resume (200 + SSE stream) instead of 409
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
+
+
+def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
+    """POST ?force=true cancels a zombie running task and starts a fresh generation."""
+    from datetime import datetime
+
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+    from apps.backend.app.models.ai_task import AITask
+
+    family_id = _enable_ai(db, auth_headers, client)
+
+    session = AIChatSession(family_id=family_id, status="active")
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    task = AITask(
+        family_id=family_id,
+        skill_id="report",
+        status="running",
+        session_id=session.id,
+        started_at=datetime.utcnow(),
+    )
+    db.add(task)
+    db.commit()
+    zombie_task_id = task.id
+
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+    ):
+        mock_stream.return_value = _make_empty_async_gen()
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+    # Zombie task should be cancelled
+    db.refresh(task)
+    assert task.status == "cancelled"
+    # A new task should exist
+    new_task = db.query(AITask).filter(
+        AITask.family_id == family_id,
+        AITask.skill_id == "report",
+        AITask.id != zombie_task_id,
+    ).first()
+    assert new_task is not None
+    assert new_task.status == "running"
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
