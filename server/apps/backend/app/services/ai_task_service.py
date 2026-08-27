@@ -12,6 +12,21 @@ logger = logging.getLogger(__name__)
 TASK_TIMEOUT_MINUTES = 30
 QUEUED_TIMEOUT_MINUTES = 240  # 4 hours — queued tasks waiting longer are stale
 
+# Per-skill timeout overrides — skills with predictable short runtimes get a
+# tighter window so that zombie/stuck tasks are reclaimed faster and don't
+# block the queue for the full 30-minute default.
+SKILL_TIMEOUT_MINUTES: dict[str, int] = {
+    "report": 10,          # asset-report pipeline: ~3-5 min typical
+    "literacy": 10,        # weekly literacy report: similar profile
+    "finance-coach": 5,    # single-shot advice call
+    "wish-advice": 5,      # single-shot advice call
+    "import-parse": 10,    # PDF parse with repair retries
+}
+
+
+def _task_timeout_minutes(skill_id: str) -> int:
+    return SKILL_TIMEOUT_MINUTES.get(skill_id, TASK_TIMEOUT_MINUTES)
+
 
 def extract_run_id_from_content_location(content_location: str | None) -> str | None:
     """Extract the agent RunRecord UUID from a Content-Location header.
@@ -41,7 +56,7 @@ class AITaskService:
         )
         if task is None:
             return None
-        cutoff = datetime.utcnow() - timedelta(minutes=TASK_TIMEOUT_MINUTES)
+        cutoff = datetime.utcnow() - timedelta(minutes=_task_timeout_minutes(skill_id))
         if task.started_at < cutoff:
             try:
                 task.status = "timeout"
@@ -65,7 +80,7 @@ class AITaskService:
         )
         if task is None:
             return None
-        cutoff = datetime.utcnow() - timedelta(minutes=TASK_TIMEOUT_MINUTES)
+        cutoff = datetime.utcnow() - timedelta(minutes=_task_timeout_minutes(task.skill_id))
         if task.started_at < cutoff:
             try:
                 task.status = "timeout"
