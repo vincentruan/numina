@@ -155,6 +155,16 @@ async def trigger_finance_coach(
     async def _persist_coach_result(_event_type: str, data: dict) -> None:
         if isinstance(data, dict) and data.get("type") == "finance_coach.result":
             payload = data.get("payload")
+            # Skip empty payloads — a failed generation must NOT overwrite a
+            # valid cached result with an empty one (would make the card show
+            # "No suggestions" even though valid advice already exists).
+            suggestions = (payload or {}).get("suggestions") or []
+            if not suggestions:
+                logger.warning(
+                    "[finance_coach] skip persisting empty result (keeps existing cache) task=%s",
+                    task_id,
+                )
+                return
             if payload:
                 from apps.backend.app.database import SessionLocal
 
