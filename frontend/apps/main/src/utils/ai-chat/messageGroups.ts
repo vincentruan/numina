@@ -109,6 +109,38 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
   if (messages.length === 0) return []
 
   const groups: MessageGroup[] = []
+  // Track AI message IDs whose reasoning was already shown in a processing
+  // group. When the same message also creates an assistant group (content only),
+  // strip reasoning from the copy to prevent duplicate "思考" boxes — the
+  // processing group's ChainOfThought already renders the reasoning toggle.
+  const reasoningShownInProcessing = new Set<string>()
+
+  /**
+   * Return a shallow copy of `message` with all reasoning sources stripped.
+   *
+   * `extractContentAndReasoning` (MessageGroup.vue) checks three sources in
+   * priority order: additional_kwargs.reasoning_content, content-array thinking
+   * blocks, and string-content think tags. Clearing all three ensures the
+   * assistant group's AssistantMessage won't re-render the reasoning that the
+   * processing group's ChainOfThought already displayed.
+   */
+  function stripReasoningFromMessage(msg: ChatMessage): ChatMessage {
+    const next: ChatMessage = { ...msg }
+    // Strip reasoning from additional_kwargs (priority-1 source for extractContentAndReasoning)
+    if (next.additional_kwargs) {
+      const { reasoning_content, reasoningStartTime, reasoningEndTime, reasoning_elapsed_ms, ...rest } = next.additional_kwargs
+      void reasoning_content; void reasoningStartTime; void reasoningEndTime; void reasoning_elapsed_ms
+      next.additional_kwargs = rest
+    }
+    // Strip think tags from string content (priority-3 source for extractContentAndReasoning)
+    if (typeof next.content === 'string') {
+      next.content = next.content
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .replace(/halle_think_start[\s\S]*?halle_think_end/g, '')
+        .trim()
+    }
+    return next
+  }
 
   /**
    * 返回最后一个可接收 tool message 的 group
@@ -207,6 +239,10 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
         } else {
           lastGroup.messages.push(message)
         }
+        // Track: this AI message's reasoning will be shown by ChainOfThought
+        if (hasReasoning(message) && message.id) {
+          reasoningShownInProcessing.add(message.id)
+        }
       }
 
       // 4d: 有正文内容 -> assistant group（正文气泡）
@@ -254,7 +290,14 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
         groups.push({
           type: 'assistant',
           id: message.id,
-          messages: [message],
+          // If this message's reasoning was already shown in a preceding
+          // processing group (ChainOfThought), strip reasoning from the copy
+          // so AssistantMessage doesn't re-render a duplicate "思考" toggle.
+          messages: [
+            message.id && reasoningShownInProcessing.has(message.id)
+              ? stripReasoningFromMessage(message)
+              : message,
+          ],
         })
       }
     }
