@@ -339,8 +339,17 @@ async def generate_narrative(
             .first()
         )
         if not session:
-            raise AppError(ErrorCode.NOT_FOUND)
-    else:
+            # Stuck task: its session was cleaned up or never created.
+            # Mark the task as failed and fall through to create a new one.
+            logger.warning(
+                "[narrative] stuck task=%s has no session — marking failed",
+                task.id,
+            )
+            task.status = "failed"
+            task.error_message = "会话已丢失，重新生成"
+            db.commit()
+            existing = None
+    if not existing:
         # No running task - create new session and task
         session = await ChatSessionService.create_session(
             family_id=family_id,

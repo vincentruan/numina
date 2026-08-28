@@ -20,6 +20,31 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+_VALID_REPORT = {
+    "overall_score": 88,
+    "indicators": [
+        {
+            "key": "savings_rate",
+            "label": "储蓄率",
+            "score": 4,
+            "narrative": "储蓄率良好",
+            "data": {
+                "items": [
+                    {"key": "monthly_savings", "zh": "月储蓄", "en": "Monthly Savings", "value": 5000}
+                ]
+            },
+            "suggestions": [],
+        }
+    ],
+}
+
+
+def _report_json_text(report: dict | None = None) -> str:
+    """Produce a fenced JSON block from a valid report dict."""
+    import json
+    return "```json\n" + json.dumps(report or _VALID_REPORT, ensure_ascii=False) + "\n```"
+
+
 def _make_stub_adapter() -> Any:
     stub = AsyncMock()
 
@@ -28,10 +53,11 @@ def _make_stub_adapter() -> Any:
         context: Any,
         thread_id: str,
         enable_thinking: bool = False,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         yield (
             "messages",
-            {"type": "ai", "content": '```json\n{"overall_score": 88}\n```', "tool_calls": None, "id": "m1"},
+            {"type": "ai", "content": _report_json_text(), "tool_calls": None, "id": "m1"},
         )
         yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
 
@@ -65,11 +91,11 @@ def client():
             return_value={"ok": True, "written": 1},
         ),
         patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
+            "apps.agent.services.runtime.run_pipeline.create_family_adapter",
             return_value=_make_stub_adapter(),
         ),
         patch(
-            "apps.agent.services.runtime.worker.pii_redactor.redact",
+            "apps.agent.services.runtime.run_pipeline.pii_redactor.redact",
             side_effect=lambda ctx: ctx,
         ),
         patch(
@@ -168,10 +194,10 @@ def test_asset_report_run_streams_step2_json(client):
         if e["event"] == "custom" and isinstance(e["data"], dict) and e["data"].get("type") == "report.step2_json"
     ]
     assert len(step2) == 1, f"expected 1 report.step2_json, got {events}"
-    assert step2[0]["data"]["payload"] == {"overall_score": 88}
+    assert step2[0]["data"]["payload"] == _VALID_REPORT
     # U4 step 7: worker persisted the parsed JSON to ai_reports via backend.
     mock_persist.assert_awaited_once()
-    assert mock_persist.await_args.kwargs["report_json"] == {"overall_score": 88}
+    assert mock_persist.await_args.kwargs["report_json"] == _VALID_REPORT
     end_events = [e for e in events if e["event"] == "end" and e["data"] is not None]
     assert end_events and end_events[0]["data"]["status"] == "complete"
 
@@ -230,6 +256,7 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
         context: Any,
         thread_id: str,
         enable_thinking: bool = False,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         yield (
             "messages",
@@ -237,7 +264,7 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
                 "type": "ai",
                 "content": (
                     f"WRITE_FILE: {declared}\n"
-                    '```json\n{"overall_score": 72}\n```'
+                    + _report_json_text({"overall_score": 72, "indicators": [{"key": "k", "label": "L", "score": 3, "narrative": "n", "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]}}]})
                 ),
                 "tool_calls": None,
                 "id": "m1",
@@ -249,7 +276,7 @@ def test_asset_report_persists_markdown_file_path(client, tmp_path, monkeypatch)
 
     with (
         patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
+            "apps.agent.services.runtime.run_pipeline.create_family_adapter",
             return_value=stub,
         ),
         patch(
@@ -322,12 +349,13 @@ def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch
         context: Any,
         thread_id: str,
         enable_thinking: bool = False,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         yield (
             "messages",
             {
                 "type": "ai",
-                "content": '```json\n{"overall_score": 71}\n```',
+                "content": _report_json_text({"overall_score": 71, "indicators": [{"key": "k", "label": "L", "score": 3, "narrative": "n", "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]}}]}),
                 "tool_calls": [
                     {
                         "name": "write_file",
@@ -346,7 +374,7 @@ def test_asset_report_markdown_from_tool_call_path(client, tmp_path, monkeypatch
 
     with (
         patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
+            "apps.agent.services.runtime.run_pipeline.create_family_adapter",
             return_value=stub,
         ),
         patch(

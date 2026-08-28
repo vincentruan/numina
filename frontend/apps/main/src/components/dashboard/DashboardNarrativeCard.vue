@@ -90,6 +90,7 @@ const resumeHandle = useTaskResume('dashboard-narrative', {
     stopElapsedTimer()
     streaming.value = false
     queued.value = false
+    resumeHandle.taskId.value = null
     // Don't toast here — the template shows inline error + retry instead
   },
 })
@@ -303,23 +304,33 @@ async function onCancel() {
   }
 }
 
-// v3: resume replaced by useTaskResume
+// v3: cache-first initialization.
+// 1. Try cache via POST (returns JSON on hit, SSE/queued on miss).
+// 2. Only if POST fails (e.g. stuck task's session missing → 404),
+//    fall back to resume() to recover via polling.
 onMounted(async () => {
-  const resumed = await resumeHandle.resume()
-  if (!resumed) {
-    await loadCached()
-  } else {
-    loading.value = false
+  await loadCached()
+  // If cache didn't provide content and initial load didn't fail
+  // (e.g. stuck task caused 404), try resume as fallback.
+  if (!hasContent.value && !initialLoadFailed.value && !resumeHandle.taskId.value) {
+    const resumed = await resumeHandle.resume()
+    if (resumed) {
+      loading.value = false
+    }
   }
 })
 
-// Dashboard is KeepAlive-cached; onActivated re-checks for running tasks.
+// Dashboard is KeepAlive-cached; onActivated re-checks for content.
 // If content is already loaded, skip re-fetch to avoid flicker.
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   if (hasContent.value) return
-  await resumeHandle.resume()
+  // Cache-first: try POST before resume
+  await loadCached()
+  if (!hasContent.value && !initialLoadFailed.value && !resumeHandle.taskId.value) {
+    await resumeHandle.resume()
+  }
 })
 
 // Dashboard is KeepAlive-cached — disconnect on deactivate, cleanup on unmount.

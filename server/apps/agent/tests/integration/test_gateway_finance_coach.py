@@ -36,6 +36,7 @@ def _make_stub_adapter() -> Any:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         yield (
             "messages",
@@ -69,7 +70,7 @@ def client():
             return_value=[],
         ),
         patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
+            "apps.agent.services.runtime.run_pipeline.create_family_adapter",
             return_value=_make_stub_adapter(),
         ),
         patch(

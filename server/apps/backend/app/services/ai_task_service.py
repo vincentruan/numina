@@ -18,6 +18,7 @@ QUEUED_TIMEOUT_MINUTES = 240  # 4 hours — queued tasks waiting longer are stal
 SKILL_TIMEOUT_MINUTES: dict[str, int] = {
     "report": 10,          # asset-report pipeline: ~3-5 min typical
     "literacy": 10,        # weekly literacy report: similar profile
+    "dashboard-narrative": 5,  # monthly insight: ~1-2 min typical
     "finance-coach": 5,    # single-shot advice call
     "wish-advice": 5,      # single-shot advice call
     "import-parse": 10,    # PDF parse with repair retries

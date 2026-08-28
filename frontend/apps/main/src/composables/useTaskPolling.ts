@@ -76,6 +76,10 @@ export function useTaskPolling(
   let disposed = false
   // I1 fix: overlap guard — prevent concurrent pollOnce calls when API is slow.
   let pollInFlight = false
+  // Safety timeout: if a task stays in non-terminal status for this long,
+  // assume it's stuck (backend crash, lost worker) and stop polling.
+  const POLLING_TIMEOUT_MS = 60_000 // 60 seconds
+  let pollingStartedAt: number | null = null
 
   function clearTimer(): void {
     if (timer !== null) {
@@ -89,11 +93,13 @@ export function useTaskPolling(
     if (t.status === 'completed') {
       status.value = 'completed'
       clearTimer()
+      pollingStartedAt = null
       onComplete?.(t)
     } else if (t.status === 'failed' || t.status === 'cancelled' || t.status === 'timeout') {
       status.value = 'failed'
       errorMessage.value = t.error_message || fallbackFailed
       clearTimer()
+      pollingStartedAt = null
       onError?.(t)
     }
     // 'running' / 'queued' → keep polling, progress is in task.value
@@ -102,6 +108,16 @@ export function useTaskPolling(
   async function pollOnce(): Promise<void> {
     const id = taskIdRef.value
     if (!id || disposed || pollInFlight) return
+
+    // Safety timeout: if polling has been ongoing for too long, assume stuck.
+    if (pollingStartedAt && Date.now() - pollingStartedAt > POLLING_TIMEOUT_MS) {
+      console.warn('[useTaskPolling] polling timeout — task assumed stuck:', id)
+      status.value = 'failed'
+      errorMessage.value = t ? t('aiTask.error.generic') : '任务超时，请重试'
+      clearTimer()
+      pollingStartedAt = null
+      return
+    }
 
     pollInFlight = true
     try {
@@ -159,12 +175,14 @@ export function useTaskPolling(
         status.value = 'polling'
         errorMessage.value = ''
         task.value = null
+        pollingStartedAt = Date.now()
         // Poll immediately, then start interval
         pollOnce()
         startTimer()
         document.addEventListener('visibilitychange', onVisibilityChange)
       } else {
         status.value = 'idle'
+        pollingStartedAt = null
       }
     },
     { immediate: true },
@@ -212,6 +230,7 @@ export function useTaskPolling(
   function stop(): void {
     disposed = true
     clearTimer()
+    pollingStartedAt = null
     document.removeEventListener('visibilitychange', onVisibilityChange)
     status.value = 'idle'
   }
