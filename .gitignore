@@ -166,6 +166,7 @@ server/apps/backend/data/
 .env
 .env.local
 .env.*.local
+.env.bak.*
 *.pem
 *.key
 
