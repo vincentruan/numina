@@ -1,9 +1,7 @@
-"""Tests for asset_report_middleware — parse_report_json + validate_report_json."""
+"""Tests for asset_report_middleware — parse_report_json + llm_json_repair validators."""
 
-from apps.agent.services.runtime.asset_report_middleware import (
-    parse_report_json,
-    validate_report_json,
-)
+from apps.agent.services.runtime.asset_report_middleware import parse_report_json
+from apps.agent.services.runtime.llm_json_repair import validate_report_json
 
 
 class TestValidateReportJson:

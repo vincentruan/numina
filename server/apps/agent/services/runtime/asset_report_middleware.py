@@ -40,13 +40,28 @@ def normalize_indicator_data_items(items: list) -> list[dict]:
         if not isinstance(item, dict):
             continue
         # Extract label (prefer explicit bilingual, fall back to generic name fields)
-        zh = item.get("zh") or item.get("category_name") or item.get("name") or item.get("label")
-        en = item.get("en") or item.get("category_name") or item.get("name") or item.get("label")
+        zh = (
+            item.get("zh")
+            or item.get("category_name")
+            or item.get("name")
+            or item.get("label")
+        )
+        en = (
+            item.get("en")
+            or item.get("category_name")
+            or item.get("name")
+            or item.get("label")
+        )
         if not zh:
             zh = f"item_{idx}"
         if not en:
             en = zh
-        key = item.get("key") or item.get("category_name") or item.get("name") or f"item_{idx}"
+        key = (
+            item.get("key")
+            or item.get("category_name")
+            or item.get("name")
+            or f"item_{idx}"
+        )
         if isinstance(key, str):
             # Normalize to snake_case key for consistency
             key = key.lower().replace(" ", "_").replace("-", "_")
@@ -82,7 +97,9 @@ def normalize_indicator(item: dict, idx: int) -> dict:
         "score": score,
         "narrative": str(narrative),
         "data": data,
-        "suggestions": item.get("suggestions") if isinstance(item.get("suggestions"), list) else [],
+        "suggestions": item.get("suggestions")
+        if isinstance(item.get("suggestions"), list)
+        else [],
     }
 
 
@@ -168,118 +185,3 @@ def parse_report_json(ai_text: str) -> dict | None:
     if first_valid is not None:
         return normalize_report_json(first_valid)
     return None
-
-
-def validate_report_json(data: dict) -> list[str]:
-    """Validate a normalized report JSON dict against the canonical schema.
-
-    Returns a list of human-readable error strings (empty list = valid).
-    The canonical schema (after ``normalize_report_json``) requires:
-
-    - ``indicators`` is a non-empty list
-    - each indicator has a non-empty ``data.items`` list
-
-    ``overall_score`` is optional (informational) and not strictly required.
-    """
-    if not isinstance(data, dict):
-        return ["报告结果不是有效的 JSON 对象"]
-
-    errors: list[str] = []
-
-    indicators = data.get("indicators")
-    if not isinstance(indicators, list) or len(indicators) == 0:
-        errors.append("缺少 indicators 数组或为空")
-        return errors
-
-    for idx, indicator in enumerate(indicators):
-        if not isinstance(indicator, dict):
-            errors.append(f"indicator[{idx}] 不是有效对象")
-            continue
-        # Validate per-indicator required fields (key/label/score/narrative)
-        # After normalize_report_json, ``name`` → ``key``, missing score → 3,
-        # missing narrative → "". We only hard-fail on structural gaps that
-        # normalization cannot fix (missing key/name and missing score).
-        key = indicator.get("key") or indicator.get("name")
-        if not key:
-            errors.append(f"indicator[{idx}] 缺少 key 或 name 字段")
-        score = indicator.get("score")
-        if score is None or not isinstance(score, (int, float)):
-            errors.append(f"indicator[{idx}] 缺少 score 字段或 score 非数字")
-        elif not (1 <= score <= 5):
-            errors.append(f"indicator[{idx}].score 超出范围 (1-5)")
-
-        data_obj = indicator.get("data")
-        if not isinstance(data_obj, dict):
-            errors.append(f"indicator[{idx}] 缺少 data 对象")
-            continue
-        items = data_obj.get("items")
-        if not isinstance(items, list) or len(items) == 0:
-            errors.append(f"indicator[{idx}].data.items 为空")
-            continue
-
-        # P2-7 fix: validate per-item field structure (key, zh, en, value)
-        for item_idx, item in enumerate(items):
-            if not isinstance(item, dict):
-                errors.append(
-                    f"indicator[{idx}].data.items[{item_idx}] 不是有效对象"
-                )
-                continue
-            for field in ("key", "zh", "en"):
-                if field not in item or not item[field]:
-                    errors.append(
-                        f"indicator[{idx}].data.items[{item_idx}] 缺少 '{field}' 字段"
-                    )
-            value = item.get("value")
-            if value is None or not isinstance(value, (int, float)):
-                errors.append(
-                    f"indicator[{idx}].data.items[{item_idx}].value 必须是数字"
-                )
-
-    return errors
-
-
-# ---------------------------------------------------------------------------
-# Finance-coach schema validation
-# ---------------------------------------------------------------------------
-
-_VALID_SEVERITIES = {"high", "medium", "low"}
-_VALID_TARGET_TYPES = {"liability", "asset", "wish"}
-_COACH_REQUIRED_FIELDS = ("id", "severity", "title", "action", "target_type", "target_id", "cta_label")
-
-
-def validate_coach_json(data: dict | None) -> list[str]:
-    """Validate parsed finance-coach JSON against the frontend FinanceSuggestion schema.
-
-    Returns a list of human-readable error strings (empty list = valid).
-    The frontend (FinanceCoachCard.vue) filters each suggestion requiring:
-    ``id``, ``severity`` ∈ {high, medium, low}, ``title``, ``action``,
-    ``target_type`` ∈ {liability, asset, wish}, ``target_id``, ``cta_label``.
-    """
-    if not isinstance(data, dict):
-        return ["coach JSON 不是有效的对象"]
-
-    suggestions = data.get("suggestions")
-    if not isinstance(suggestions, list):
-        return ["缺少 suggestions 数组"]
-
-    if len(suggestions) == 0:
-        return []  # Empty is valid (no significant issues)
-
-    errors: list[str] = []
-    for idx, s in enumerate(suggestions):
-        if not isinstance(s, dict):
-            errors.append(f"suggestions[{idx}] 不是有效对象")
-            continue
-        for field in _COACH_REQUIRED_FIELDS:
-            val = s.get(field)
-            if not val:  # all coach fields are strings — no numeric carve-out needed
-                errors.append(f"suggestions[{idx}] 缺少必填字段 '{field}'")
-        sev = s.get("severity")
-        if sev is not None and sev not in _VALID_SEVERITIES:
-            errors.append(f"suggestions[{idx}].severity 必须是 high/medium/low，实际: {sev}")
-        tt = s.get("target_type")
-        if tt is not None and tt not in _VALID_TARGET_TYPES:
-            errors.append(f"suggestions[{idx}].target_type 必须是 liability/asset/wish，实际: {tt}")
-
-    return errors
-
