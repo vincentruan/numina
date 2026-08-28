@@ -13,7 +13,6 @@ from apps.agent.services.runtime.llm_json_repair import (
     validate_wish_advice_json,
 )
 
-
 # ---------------------------------------------------------------------------
 # validate_wish_advice_json
 # ---------------------------------------------------------------------------
@@ -191,7 +190,10 @@ class TestRunJsonRepairLoop:
     async def test_valid_input_no_retries(self):
         """Validator returns empty → loop exits immediately."""
         parsed = {"key": "value"}
-        validator = lambda d: []
+
+        def validator(_d):
+            return []
+
         repair_fn = None  # should not be called
         events_published = []
 
@@ -211,26 +213,63 @@ class TestRunJsonRepairLoop:
         assert events_published == []
 
     @pytest.mark.asyncio
-    async def test_none_input_returns_immediately(self):
-        """Parsed is None → return (None, 0) without calling validator."""
-        validator_called = False
+    async def test_none_input_attempts_repair(self):
+        """Parsed is None → repair IS attempted (not skipped).
 
-        def validator(d):
-            nonlocal validator_called
-            validator_called = True
-            return ["err"]
+        When parse_report_json returns None (unparseable output), the repair
+        loop should still attempt LLM repair instead of giving up immediately.
+        This covers agent recursion limit hits and severely malformed output.
+        """
+        repaired = {
+            "indicators": [
+                {
+                    "key": "k",
+                    "score": 3,
+                    "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]},
+                }
+            ]
+        }
+
+        async def repair_fn(text, errors):
+            return repaired
+
+        events_published = []
+
+        async def publish(attempt):
+            events_published.append(attempt)
 
         result, count = await run_json_repair_loop(
             None,
-            "ai text",
-            validator=validator,
-            repair_fn=None,
-            publish_retry_event=lambda a: None,
+            "unparseable ai text",
+            validator=validate_report_json,
+            repair_fn=repair_fn,
+            publish_retry_event=publish,
+            app_name="test",
+        )
+        assert result is not None
+        assert count == 1
+        assert len(events_published) == 1  # one retry event published
+
+    @pytest.mark.asyncio
+    async def test_none_input_repair_fails_returns_none(self):
+        """Parsed is None AND repair fails → return (None, retry_count)."""
+
+        async def repair_fn(text, errors):
+            return None
+
+        async def publish(attempt):
+            pass
+
+        result, count = await run_json_repair_loop(
+            None,
+            "garbage",
+            validator=validate_report_json,
+            repair_fn=repair_fn,
+            publish_retry_event=publish,
             app_name="test",
         )
         assert result is None
-        assert count == 0
-        assert not validator_called
+        assert count == 1  # repair was attempted once
 
     @pytest.mark.asyncio
     async def test_repair_succeeds_on_first_retry(self):

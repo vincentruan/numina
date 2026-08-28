@@ -425,10 +425,12 @@ async def run_json_repair_loop(
     Returns:
         (final_parsed_dict, repair_count) — repair_count is 0 if first try valid.
     """
-    if parsed is None:
-        return None, 0
-
-    validation_errors = validator(parsed)
+    # When parsed is None (total parse failure), still attempt LLM repair.
+    # The repair LLM receives the raw ai_text and can produce valid JSON from
+    # scratch. Previously this returned (None, 0) immediately, bypassing the
+    # entire repair mechanism — the user-expected validate→repair→retry cycle
+    # never activated for unparseable output (e.g. agent recursion limit hit).
+    validation_errors = ["无法解析报告 JSON"] if parsed is None else validator(parsed)
     retry_count = 0
 
     try:
