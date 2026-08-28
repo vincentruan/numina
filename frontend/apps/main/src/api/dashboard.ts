@@ -264,9 +264,35 @@ export async function streamNarrative(
 ): Promise<NarrativeStreamHandle> {
   const controller = new AbortController()
 
-  // fire-and-forget: kick off the stream, return handle immediately
-  void runNarrativeStream(controller, callbacks, force)
+  // Resolve the returned promise when the initial backend response is received
+  // (cache-hit JSON, threshold-blocked JSON, 202-queued, or SSE stream started).
+  // This lets callers await the initial response before deciding next steps
+  // (e.g. whether to call resume() as a fallback).
+  let _initResolve: (() => void) | null = null
+  const initPromise = new Promise<void>((resolve) => { _initResolve = resolve })
+  const resolveInit = () => {
+    if (_initResolve) { const r = _initResolve; _initResolve = null; r() }
+  }
 
+  // Wrap callbacks to resolve initPromise on first response event
+  const wrappedCallbacks: NarrativeStreamCallbacks = {
+    ...callbacks,
+    onTaskId: (taskId) => { callbacks.onTaskId?.(taskId); resolveInit() },
+    onQueued: (info) => { callbacks.onQueued?.(info); resolveInit() },
+    onDone: (result) => { callbacks.onDone(result); resolveInit() },
+    onBlocked: (info) => { callbacks.onBlocked(info); resolveInit() },
+    onError: (message) => {
+      // Only resolve if no taskId yet (POST itself failed, not SSE failure)
+      callbacks.onError(message)
+      resolveInit()
+    },
+  }
+
+  // fire-and-forget: kick off the stream, return handle immediately
+  void runNarrativeStream(controller, wrappedCallbacks, force)
+
+  // Wait for the initial response, then return the handle
+  await initPromise
   return { abort: () => controller.abort() }
 }
 

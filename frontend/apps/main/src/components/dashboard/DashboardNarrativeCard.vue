@@ -79,12 +79,14 @@ const resumeHandle = useTaskResume('dashboard-narrative', {
       }
     }
   },
-  onComplete: async () => {
+  onComplete: () => {
     stopElapsedTimer()
     streaming.value = false
     queued.value = false
-    // Task just finished — fetch the persisted result (may be JSON cache).
-    await loadCached()
+    // Task just finished — content arrives via onStreamEvent (dashboard_narrative.result).
+    // Don't call loadCached() here: the SSE stream already delivered the content,
+    // and calling loadCached() would trigger another POST that races with the
+    // initialization flow.
   },
   onError: () => {
     stopElapsedTimer()
@@ -308,6 +310,11 @@ async function onCancel() {
 // 1. Try cache via POST (returns JSON on hit, SSE/queued on miss).
 // 2. Only if POST fails (e.g. stuck task's session missing → 404),
 //    fall back to resume() to recover via polling.
+//
+// IMPORTANT: Only use onMounted — NOT onActivated — for initialization.
+// Both fire on hard-reload with KeepAlive, causing duplicate loadCached calls
+// and race conditions. KeepAlive preserves component state across navigation,
+// so onActivated re-checks are unnecessary for content that's already loaded.
 onMounted(async () => {
   await loadCached()
   // If cache didn't provide content and initial load didn't fail
@@ -317,19 +324,6 @@ onMounted(async () => {
     if (resumed) {
       loading.value = false
     }
-  }
-})
-
-// Dashboard is KeepAlive-cached; onActivated re-checks for content.
-// If content is already loaded, skip re-fetch to avoid flicker.
-let hasActivated = false
-onActivated(async () => {
-  if (!hasActivated) { hasActivated = true; return }
-  if (hasContent.value) return
-  // Cache-first: try POST before resume
-  await loadCached()
-  if (!hasContent.value && !initialLoadFailed.value && !resumeHandle.taskId.value) {
-    await resumeHandle.resume()
   }
 })
 
