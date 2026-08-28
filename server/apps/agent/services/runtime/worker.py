@@ -631,7 +631,10 @@ async def _run_asset_report_pipeline(
             step2_payload = parse_report_json(ai_text)
 
             # Phase 4B: validate→repair cycle (shared loop in llm_json_repair.py).
-            # Validates parsed JSON, retries via LLM repair on failure (≤3 attempts, 120s).
+            # Validates parsed JSON, retries via LLM repair on failure (≤3 attempts, 240s).
+            # Budget is 240s (not 120s) because when parse_report_json returns None
+            # (unparseable output), the repair LLM must generate a full report JSON
+            # from scratch — this is slower than fixing a minor schema mismatch.
             step2_payload, repair_count = await run_json_repair_loop(
                 step2_payload,
                 ai_text,
@@ -649,6 +652,7 @@ async def _run_asset_report_pipeline(
                     },
                 ),
                 app_name="_run_asset_report_pipeline",
+                budget_seconds=240,
             )
             retry_count = repair_count
             validation_errors = (

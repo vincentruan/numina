@@ -254,7 +254,7 @@ async def _llm_repair_json(
             api_key=provider.get("api_key", ""),
             model_id=provider.get("ai_model_id", ""),
             base_url=provider.get("ai_base_url"),
-            timeout=60.0,
+            timeout=90.0,
         )
         error_summary = "; ".join(validation_errors[:5])
         full_prompt = (
@@ -264,7 +264,7 @@ async def _llm_repair_json(
             "This is a structural repair — do NOT translate text fields.\n\n"
             f"Original output fragment (for reference):\n{ai_text[-4000:]}"
         )
-        repaired_text = await llm.complete(full_prompt, max_tokens=4000)
+        repaired_text = await llm.complete(full_prompt, max_tokens=6000)
         return parse_report_json(repaired_text)
     except (ValueError, KeyError, TypeError) as exc:
         logger.warning(
