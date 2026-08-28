@@ -465,6 +465,28 @@ class DeerFlowAdapter:
                             # _get_runnable_config and included in the configurable
                             # dict for the checkpointer.
                             message = self._build_prompt(skill_name, context)
+                            # Update original_user_content ContextVar to the
+                            # escaped version that matches _build_prompt output.
+                            # _build_prompt neutralizes <user_message> tags in
+                            # free_text (lines 826-827), so the raw free_text
+                            # from the initial set() is no longer a substring
+                            # of the JSON message content. Without this update,
+                            # InputSanitizationMiddleware's rfind lookup fails
+                            # and falls back to full-content sanitization
+                            # (which may escape the server's <current_uploads>
+                            # block — UX degradation).
+                            # Note: we call set() again without resetting the
+                            # old token first. The executor thread has a copied
+                            # context (copy_context), so the old token's reset
+                            # in the async caller's finally block is suppressed
+                            # as a ValueError (different context) — harmless.
+                            if context.free_text:
+                                escaped_text = context.free_text.replace(
+                                    "<user_message>", "&lt;user_message&gt;"
+                                ).replace(
+                                    "</user_message>", "&lt;/user_message&gt;"
+                                )
+                                set_original_user_content(escaped_text)
                             for event in self._client.stream(
                                 message, thread_id=thread_id, **stream_kwargs
                             ):
