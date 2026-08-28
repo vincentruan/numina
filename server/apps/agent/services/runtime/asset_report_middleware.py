@@ -237,3 +237,49 @@ def validate_report_json(data: dict) -> list[str]:
 
     return errors
 
+
+# ---------------------------------------------------------------------------
+# Finance-coach schema validation
+# ---------------------------------------------------------------------------
+
+_VALID_SEVERITIES = {"high", "medium", "low"}
+_VALID_TARGET_TYPES = {"liability", "asset", "wish"}
+_COACH_REQUIRED_FIELDS = ("id", "severity", "title", "action", "target_type", "target_id", "cta_label")
+
+
+def validate_coach_json(data: dict | None) -> list[str]:
+    """Validate parsed finance-coach JSON against the frontend FinanceSuggestion schema.
+
+    Returns a list of human-readable error strings (empty list = valid).
+    The frontend (FinanceCoachCard.vue) filters each suggestion requiring:
+    ``id``, ``severity`` ∈ {high, medium, low}, ``title``, ``action``,
+    ``target_type`` ∈ {liability, asset, wish}, ``target_id``, ``cta_label``.
+    """
+    if not isinstance(data, dict):
+        return ["coach JSON 不是有效的对象"]
+
+    suggestions = data.get("suggestions")
+    if not isinstance(suggestions, list):
+        return ["缺少 suggestions 数组"]
+
+    if len(suggestions) == 0:
+        return []  # Empty is valid (no significant issues)
+
+    errors: list[str] = []
+    for idx, s in enumerate(suggestions):
+        if not isinstance(s, dict):
+            errors.append(f"suggestions[{idx}] 不是有效对象")
+            continue
+        for field in _COACH_REQUIRED_FIELDS:
+            val = s.get(field)
+            if not val:  # all coach fields are strings — no numeric carve-out needed
+                errors.append(f"suggestions[{idx}] 缺少必填字段 '{field}'")
+        sev = s.get("severity")
+        if sev is not None and sev not in _VALID_SEVERITIES:
+            errors.append(f"suggestions[{idx}].severity 必须是 high/medium/low，实际: {sev}")
+        tt = s.get("target_type")
+        if tt is not None and tt not in _VALID_TARGET_TYPES:
+            errors.append(f"suggestions[{idx}].target_type 必须是 liability/asset/wish，实际: {tt}")
+
+    return errors
+

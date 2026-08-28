@@ -25,7 +25,7 @@ from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 from apps.agent.core.backend_client import BackendClient
 from packages.core import get_path_manager
 
-from .asset_report_middleware import parse_report_json, validate_report_json
+from .asset_report_middleware import parse_report_json, validate_coach_json, validate_report_json
 from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
     _prepare_goal_continuation_input,
@@ -1100,6 +1100,74 @@ async def _run_import_parse_agent(
         )
 
 
+async def _repair_coach_json_via_llm(
+    ai_text: str,
+    validation_errors: list[str],
+    provider: dict | None,
+) -> dict | None:
+    """Repair an invalid finance-coach JSON via a lightweight LLM call.
+
+    Mirrors ``_repair_report_json_via_llm`` (asset-report Phase 4B): issues a
+    single follow-up completion asking the LLM to re-emit suggestions that
+    strictly conform to the frontend ``FinanceSuggestion`` schema.
+    """
+    if not provider:
+        return None
+    try:
+        from apps.agent.core.llm import get_llm_client
+
+        llm = get_llm_client(
+            provider=provider.get("ai_provider", ""),
+            api_key=provider.get("api_key", ""),
+            model_id=provider.get("ai_model_id", ""),
+            base_url=provider.get("ai_base_url"),
+            timeout=60.0,
+        )
+        error_summary = "; ".join(validation_errors[:5])
+        repair_prompt = (
+            "The finance coach JSON you previously output failed validation.\n"
+            f"Validation errors: {error_summary}\n\n"
+            "Please re-output a valid JSON that strictly conforms to the following "
+            "structure (do NOT include any markdown code blocks, explanations, or "
+            "extra content):\n"
+            '{"suggestions": [\n'
+            '  {"id": "<string>", "severity": "high|medium|low", '
+            '"title": "<≤20 chars>", "action": "<≤50 chars>", '
+            '"target_type": "liability|asset|wish", '
+            '"target_id": "<entity id string>", "cta_label": "<≤8 chars>"}\n'
+            "]}\n\n"
+            "Requirements:\n"
+            "- suggestions must have at most 3 items\n"
+            "- severity MUST be one of: high, medium, low (NOT numbers)\n"
+            "- target_type MUST be one of: liability, asset, wish\n"
+            "- target_id MUST be the entity's numeric id string from the snapshot\n"
+            "- action: a specific, actionable suggestion referencing real data\n"
+            "- cta_label: short button label (≤8 chars)\n\n"
+            "IMPORTANT: Preserve the EXACT SAME language as the original output. "
+            "This is a structural repair — do NOT translate text fields.\n\n"
+            f"Original output fragment (for reference):\n{ai_text[-4000:]}"
+        )
+        repaired_text = await llm.complete(repair_prompt, max_tokens=4000)
+        # parse_report_json is schema-agnostic: falls back to first valid dict
+        # when no "indicators" key present (normalize_report_json is a no-op
+        # on coach data), so it safely parses coach JSON too.
+        return parse_report_json(repaired_text)
+    except (ValueError, KeyError, TypeError) as exc:
+        logger.warning(
+            "[_repair_coach_json_via_llm] parse failed: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return None
+    except Exception as exc:
+        logger.warning(
+            "[_repair_coach_json_via_llm] repair failed: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return None
+
+
 async def _run_finance_coach_agent(
     *,
     bridge: StreamBridge,
@@ -1168,27 +1236,86 @@ async def _run_finance_coach_agent(
         # Worker-synthesized finance_coach.result emission (mirrors import-parse
         # worker synthesis). Emit exactly one finance_coach.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
+        #
+        # Validate → repair cycle (mirrors asset-report Phase 4B): the LLM may
+        # output a valid JSON with wrong field names (e.g. priority/category/
+        # action_steps instead of severity/target_type/cta_label). Without
+        # validation the frontend silently drops all suggestions.
         if _coach_ok:
             parsed = parse_report_json(p.ai_text)
             if parsed is not None:
-                # Advice baseline (spec §7.1): the worker emits the raw parsed
-                # suggestions. Schema-validation gate (suggested_amount >= 0,
-                # required fields) runs in Plan B's D2/W4 UI before any enable;
-                # a malformed payload is dropped there, not here (the worker is
-                # transport, not policy).
-                logger.info(
-                    "[_run_finance_coach_agent] result emitted run=%s suggestions_count=%d",
-                    p.run_id,
-                    len(parsed.get("suggestions", [])),
-                )
-                await bridge.publish(
-                    p.run_id,
-                    "custom",
-                    {
-                        "type": "finance_coach.result",
-                        "payload": parsed,
-                    },
-                )
+                # Phase 1: schema validation
+                validation_errors = validate_coach_json(parsed)
+
+                # Phase 2: repair via LLM (max 3 retries, 120s budget)
+                retry_count = 0
+                try:
+                    async with asyncio.timeout(120):
+                        while validation_errors and retry_count < 3:
+                            retry_count += 1
+                            if not p.selected_provider:
+                                logger.warning(
+                                    "[_run_finance_coach_agent] no provider for repair — stopping retry run=%s",
+                                    p.run_id,
+                                )
+                                break
+                            logger.warning(
+                                "[_run_finance_coach_agent] coach JSON invalid, retry=%d/%d errors=%s",
+                                retry_count,
+                                3,
+                                validation_errors[:3],
+                            )
+                            await bridge.publish(
+                                p.run_id,
+                                "custom",
+                                {
+                                    "type": "coach.repair_retry",
+                                    "attempt": retry_count,
+                                    "max_attempts": 3,
+                                },
+                            )
+                            repaired = await _repair_coach_json_via_llm(
+                                p.ai_text,
+                                validation_errors,
+                                p.selected_provider,
+                            )
+                            if repaired is not None:
+                                parsed = repaired
+                                validation_errors = validate_coach_json(repaired)
+                except TimeoutError:
+                    logger.error(
+                        "[_run_finance_coach_agent] coach JSON repair timed out after %d attempts run=%s",
+                        retry_count,
+                        p.run_id,
+                    )
+
+                if validation_errors:
+                    logger.error(
+                        "[_run_finance_coach_agent] coach JSON validation failed after %d retries run=%s errors=%s",
+                        retry_count,
+                        p.run_id,
+                        validation_errors[:5],
+                    )
+                    await bridge.publish(
+                        p.run_id,
+                        "error",
+                        {"error": "财务建议格式异常，请重试"},
+                    )
+                else:
+                    logger.info(
+                        "[_run_finance_coach_agent] result emitted run=%s suggestions_count=%d repairs=%d",
+                        p.run_id,
+                        len(parsed.get("suggestions", [])),
+                        retry_count,
+                    )
+                    await bridge.publish(
+                        p.run_id,
+                        "custom",
+                        {
+                            "type": "finance_coach.result",
+                            "payload": parsed,
+                        },
+                    )
             else:
                 # LLM output couldn't be parsed as JSON. Emit an error frame so the
                 # frontend can surface a retry instead of silently showing
