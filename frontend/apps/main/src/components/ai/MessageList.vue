@@ -32,7 +32,9 @@ const { t } = useI18n()
 const scrollRef = ref<HTMLElement | null>(null)
 
 // Group messages for display (dedupe + group into DeerFlow 6-type structure)
-const messageGroups = useMessageGroups(toRef(props, 'messages'))
+// DeerFlow pattern: pass isStreaming as isCurrentTurnLoading so content-only
+// messages stay in processing group during streaming (#4304).
+const messageGroups = useMessageGroups(toRef(props, 'messages'), toRef(props, 'isStreaming'))
 
 /**
  * Index of the last assistant-origin group (assistant / assistant:processing /

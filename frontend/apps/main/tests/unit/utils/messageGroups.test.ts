@@ -133,9 +133,9 @@ describe('getMessageGroups — processing groups (tool_calls/reasoning)', () => 
       }),
     ]
     const groups = getMessageGroups(msgs)
-    // DeerFlow 模式：tool_calls + content 时，content 是工具调用前的过渡说明文本，
-    // 不是最终回答。只创建 assistant:processing group，过渡文本由 ChainOfThought
-    // 的 leadingContent 渲染，避免显示为"下一轮对话"破坏视觉连贯性。
+    // DeerFlow pattern: tool_calls + content → processing only.
+    // Content is transition text, rendered as leadingContent in ChainOfThought.
+    // becomesAssistantBubble requires !hasToolCalls, so no assistant group.
     expect(groups.map(g => g.type)).toEqual(['assistant:processing'])
     expect(groups[0].messages[0].id).toBe('a1')
   })
@@ -248,6 +248,85 @@ describe('getMessageGroups — full flow', () => {
       'human',
       'assistant:processing',
       'assistant',
+    ])
+  })
+
+  it('reasoning+content message during streaming stays in processing group (DeerFlow #4304)', () => {
+    // DeerFlow pattern: during streaming, content-only messages stay in processing
+    // to avoid visual jump when tool calls arrive later.
+    const reasoningText = 'Let me think about this...'
+    const msgs = [
+      human('h1', 'q'),
+      ai('a1', {
+        content: 'partial answer',
+        additional_kwargs: { reasoning_content: reasoningText },
+      }),
+    ]
+    const groups = getMessageGroups(msgs, { isCurrentTurnLoading: true })
+
+    // During streaming: stays in processing (unresolved assistant text)
+    expect(groups.map(g => g.type)).toEqual([
+      'human',
+      'assistant:processing',
+    ])
+    const processingMsg = groups[1].messages[0] as ChatMessage
+    expect(processingMsg.additional_kwargs?.reasoning_content).toBe(reasoningText)
+  })
+
+  it('reasoning+content message after streaming settles into assistant group (DeerFlow #3868)', () => {
+    // DeerFlow #3868: A message with answer content and no tool calls becomes
+    // its own assistant bubble. It must NOT also feed the processing group,
+    // or the ChainOfThought panel paints the reasoning a second time.
+    const reasoningText = 'Let me think about this...'
+    const msgs = [
+      human('h1', 'q'),
+      ai('a1', {
+        content: 'final answer',
+        additional_kwargs: { reasoning_content: reasoningText },
+      }),
+    ]
+    // Not streaming → becomesAssistantBubble = true → assistant group only
+    const groups = getMessageGroups(msgs)
+
+    expect(groups.map(g => g.type)).toEqual([
+      'human',
+      'assistant',
+    ])
+
+    // Assistant group keeps reasoning (rendered by AssistantMessage's <Reasoning>)
+    const assistantMsg = groups[1].messages[0] as ChatMessage
+    expect(assistantMsg.additional_kwargs?.reasoning_content).toBe(reasoningText)
+    expect(assistantMsg.content).toBe('final answer')
+  })
+
+  it('handles AI message with reasoning but no content', () => {
+    // AI message with only reasoning (no actual content) should go to processing only
+    const msgs = [
+      ai('a1', {
+        content: '<think>thinking...</think>',
+        additional_kwargs: { reasoning_content: 'thinking...' },
+      }),
+    ]
+    const groups = getMessageGroups(msgs)
+
+    // After stripping think tags, hasContent returns false → processing only
+    expect(groups.map(g => g.type)).toEqual(['assistant:processing'])
+  })
+
+  it('tool_calls+content message creates only processing group (transition text)', () => {
+    // When AI has both tool_calls and content, content is transition text.
+    // It goes to processing group only (content rendered as leadingContent in ChainOfThought).
+    const msgs = [
+      human('h1', 'q'),
+      ai('a1', {
+        content: '让我为您查询',
+        tool_calls: [{ id: 'tc1', name: 'web_search', args: {} }],
+      }),
+    ]
+    const groups = getMessageGroups(msgs, { isCurrentTurnLoading: true })
+    expect(groups.map(g => g.type)).toEqual([
+      'human',
+      'assistant:processing',
     ])
   })
 })
