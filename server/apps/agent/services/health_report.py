@@ -184,11 +184,13 @@ async def generate_health_report(
         validate_health_report_json,
     )
 
-    # Build a provider dict from the LLMClient for the repair functions
+    # Build a provider dict from the LLMClient for the repair functions.
+    # Must include actual credentials — _llm_repair_json creates a new client.
     _provider = {
         "ai_provider": llm.provider,
-        "api_key": "",  # LLMClient already has credentials baked in
+        "api_key": llm._api_key,
         "ai_model_id": llm.model_id,
+        "ai_base_url": llm._base_url,
     }
 
     async def _health_repair_fn(text: str, errors: list[str]):

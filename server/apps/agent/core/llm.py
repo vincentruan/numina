@@ -132,6 +132,8 @@ class LLMClient:
         self.provider = provider
         self.model_id = model_id
         self.vision_model_id = vision_model_id or model_id
+        self._api_key = api_key
+        self._base_url = base_url
         self._anthropic_client = None
         self._openai_client = None
         if provider == "anthropic":

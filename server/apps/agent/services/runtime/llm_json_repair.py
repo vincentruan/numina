@@ -314,6 +314,10 @@ def validate_health_report_json(data: dict | None) -> list[str]:
         elif not (20 <= overall <= 100):
             errors.append(f"overall_score 超出范围 (20-100)，实际: {overall}")
 
+    summary = data.get("summary")
+    if not summary or not isinstance(summary, str):
+        errors.append("summary 不能为空")
+
     return errors
 
 
