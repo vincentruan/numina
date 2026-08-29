@@ -406,3 +406,64 @@ class TestRunJsonRepairLoop:
         )
         # Should have timed out before exhausting all retries
         assert count < 5
+
+
+# ---------------------------------------------------------------------------
+# extract_json_via_llm
+# ---------------------------------------------------------------------------
+
+
+class TestExtractJsonViaLlm:
+    """Final fallback: standalone LLM JSON extraction."""
+
+    @pytest.mark.asyncio
+    async def test_none_provider_returns_none(self):
+        from apps.agent.services.runtime.llm_json_repair import extract_json_via_llm
+
+        result = await extract_json_via_llm("text", "prompt", None)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_successful_extraction(self):
+        """LLM returns valid JSON → extract_json_via_llm returns parsed dict."""
+        from unittest.mock import AsyncMock, patch
+
+        from apps.agent.services.runtime.llm_json_repair import extract_json_via_llm
+
+        valid_json = '{"indicators": [{"key": "k", "score": 3, "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]}}]}'
+        mock_llm = AsyncMock()
+        mock_llm.complete_json = AsyncMock(return_value=valid_json)
+
+        with patch(
+            "apps.agent.core.llm.get_llm_client",
+            return_value=mock_llm,
+        ):
+            result = await extract_json_via_llm(
+                "some ai text",
+                "repair prompt",
+                {"ai_provider": "openai", "api_key": "k", "ai_model_id": "m"},
+            )
+        assert result is not None
+        assert "indicators" in result
+        mock_llm.complete_json.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_returns_none(self):
+        """LLM call fails → extract_json_via_llm returns None (not raises)."""
+        from unittest.mock import AsyncMock, patch
+
+        from apps.agent.services.runtime.llm_json_repair import extract_json_via_llm
+
+        mock_llm = AsyncMock()
+        mock_llm.complete_json = AsyncMock(side_effect=Exception("API error"))
+
+        with patch(
+            "apps.agent.core.llm.get_llm_client",
+            return_value=mock_llm,
+        ):
+            result = await extract_json_via_llm(
+                "text",
+                "prompt",
+                {"ai_provider": "openai", "api_key": "k", "ai_model_id": "m"},
+            )
+        assert result is None

@@ -160,6 +160,39 @@ class LLMClient:
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
+    async def complete_json(
+        self,
+        prompt: str,
+        max_tokens: int = 4000,
+        system: str | None = None,
+    ) -> str:
+        """Send a completion request with JSON output enforcement.
+
+        For OpenAI-compatible providers: sets ``response_format={"type": "json_object"}``
+        so the API guarantees valid JSON output (no markdown fences, no prose).
+
+        For Anthropic: no native JSON mode — adds a system hint instead.
+        The caller should still use ``parse_report_json`` for tolerant parsing.
+        """
+        if self.provider == "anthropic":
+            # Anthropic has no response_format — use system hint
+            json_system = (
+                "You are a structured data extractor. "
+                "Output ONLY valid JSON. No markdown, no prose, no code fences."
+            )
+            combined_system = (
+                f"{json_system}\n{system}" if system else json_system
+            )
+            return await self._complete_anthropic(
+                prompt, max_tokens, combined_system
+            )
+        elif self.provider in ("openai", "openai_compatible"):
+            return await self._complete_openai(
+                prompt, max_tokens, system, response_format="json_object"
+            )
+        else:
+            raise ValueError(f"不支持的 LLM Provider: {self.provider}")
+
     async def stream_text(
         self, prompt: str, max_tokens: int = 1024, system: str | None = None
     ):
@@ -359,9 +392,18 @@ class LLMClient:
         )
 
     async def _complete_openai(
-        self, prompt: str, max_tokens: int, system: str | None
+        self,
+        prompt: str,
+        max_tokens: int,
+        system: str | None,
+        response_format: str | None = None,
     ) -> str:
         """OpenAI 单次补全请求。
+
+        Args:
+            response_format: If ``"json_object"``, sets OpenAI's response_format
+                to guarantee valid JSON output. Only effective for models that
+                support structured output (GPT-4o, GPT-4o-mini, etc.).
 
         Raises:
             LLMResponseError: 响应为空或无内容
@@ -371,11 +413,14 @@ class LLMClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         assert self._openai_client is not None
-        response = await self._openai_client.chat.completions.create(
-            model=self.model_id,
-            max_tokens=max_tokens,
-            messages=cast(Any, messages),
-        )
+        kwargs: dict[str, Any] = {
+            "model": self.model_id,
+            "max_tokens": max_tokens,
+            "messages": cast(Any, messages),
+        }
+        if response_format == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
+        response = await self._openai_client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         if content:
             return content

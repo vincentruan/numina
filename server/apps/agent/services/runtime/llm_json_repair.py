@@ -231,9 +231,9 @@ async def _llm_repair_json(
 ) -> dict | None:
     """Repair invalid LLM JSON output via a lightweight LLM call.
 
-    Constructs a repair LLM client from the family's provider credentials,
-    appends the original output fragment and language-preservation instruction
-    to the schema-specific ``repair_prompt``, and re-parses the result.
+    Uses ``complete_json()`` which sets ``response_format=json_object`` for
+    OpenAI-compatible providers — the API guarantees valid JSON output.
+    For Anthropic (no native JSON mode), a system hint is added instead.
 
     Args:
         ai_text: The original LLM output text (last 4000 chars used as reference).
@@ -264,7 +264,8 @@ async def _llm_repair_json(
             "This is a structural repair — do NOT translate text fields.\n\n"
             f"Original output fragment (for reference):\n{ai_text[-4000:]}"
         )
-        repaired_text = await llm.complete(full_prompt, max_tokens=6000)
+        # Use complete_json() for response_format enforcement (OpenAI: json_object)
+        repaired_text = await llm.complete_json(full_prompt, max_tokens=6000)
         return parse_report_json(repaired_text)
     except (ValueError, KeyError, TypeError) as exc:
         logger.warning(
@@ -462,3 +463,67 @@ async def run_json_repair_loop(
         )
 
     return parsed, retry_count
+
+
+# ---------------------------------------------------------------------------
+# Final fallback: standalone LLM JSON extraction
+# ---------------------------------------------------------------------------
+
+
+async def extract_json_via_llm(
+    ai_text: str,
+    repair_prompt: str,
+    provider: dict | None,
+    *,
+    timeout: float = 120.0,
+    max_tokens: int = 6000,
+) -> dict | None:
+    """Last-resort JSON extraction via LLM with response_format enforcement.
+
+    Used when the repair loop exhausts all retries without success.
+    Unlike ``_llm_repair_json`` (which sends validation errors + partial text),
+    this function sends the FULL ai_text with a clean extraction prompt and
+    uses ``complete_json()`` (``response_format=json_object`` for OpenAI) to
+    maximize the chance of getting valid JSON.
+
+    This is the "send to model for alternative repair" step in the fallback chain:
+    parse → validate → repair loop → **extract_json_via_llm** → error.
+
+    Args:
+        ai_text: The full LLM output text (may contain mixed prose + JSON).
+        repair_prompt: Schema-specific prompt describing the expected JSON structure.
+        provider: Family's AI provider config dict.
+        timeout: LLM call timeout (default 120s — extraction from scratch is slow).
+        max_tokens: Max output tokens.
+
+    Returns:
+        Parsed and normalized dict on success, None on failure.
+    """
+    if not provider:
+        return None
+    try:
+        from apps.agent.core.llm import get_llm_client
+
+        llm = get_llm_client(
+            provider=provider.get("ai_provider", ""),
+            api_key=provider.get("api_key", ""),
+            model_id=provider.get("ai_model_id", ""),
+            base_url=provider.get("ai_base_url"),
+            timeout=timeout,
+        )
+        full_prompt = (
+            f"{repair_prompt}\n\n"
+            "Extract the structured JSON from the following AI output. "
+            "Output ONLY the JSON object itself — no markdown fences, no "
+            "explanations, no surrounding text.\n\n"
+            f"AI output:\n{ai_text[-6000:]}"
+        )
+        extracted_text = await llm.complete_json(full_prompt, max_tokens=max_tokens)
+        return parse_report_json(extracted_text)
+    except Exception as exc:
+        logger.warning(
+            "[extract_json_via_llm] extraction failed: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return None

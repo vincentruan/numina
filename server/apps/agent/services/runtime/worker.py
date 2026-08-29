@@ -30,9 +30,13 @@ from .goal_continuation import (
     _prepare_goal_continuation_input,
 )
 from .llm_json_repair import (
+    _COACH_REPAIR_PROMPT,
+    _REPORT_REPAIR_PROMPT,
+    _WISH_ADVICE_REPAIR_PROMPT,
     _repair_coach_json_via_llm,
     _repair_report_json_via_llm,
     _repair_wish_advice_json_via_llm,
+    extract_json_via_llm,
     parse_report_json,
     run_json_repair_loop,
     validate_coach_json,
@@ -662,10 +666,49 @@ async def _run_asset_report_pipeline(
             )
 
             if validation_errors:
-                # Still invalid after retries — fail the run (Phase 4B.5).
+                # Phase 4B.5: Final fallback — standalone LLM extraction with
+                # response_format=json_object. This is the "send to model for
+                # alternative repair" step: the repair loop may have failed
+                # because the LLM couldn't fix the JSON in-place, so we ask
+                # a fresh LLM call to extract JSON from scratch.
+                logger.info(
+                    "[_run_asset_report_pipeline] repair loop exhausted, "
+                    "attempting final LLM extraction fallback run=%s",
+                    p.run_id,
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "custom",
+                    {"type": "report.repair_final_fallback", "attempt": 1},
+                )
+                fallback_payload = await extract_json_via_llm(
+                    ai_text,
+                    _REPORT_REPAIR_PROMPT,
+                    p.selected_provider,
+                )
+                if fallback_payload is not None:
+                    fallback_errors = validate_report_json(fallback_payload)
+                    if not fallback_errors:
+                        logger.info(
+                            "[_run_asset_report_pipeline] final LLM extraction "
+                            "succeeded run=%s",
+                            p.run_id,
+                        )
+                        step2_payload = fallback_payload
+                        validation_errors = []
+                    else:
+                        logger.warning(
+                            "[_run_asset_report_pipeline] final LLM extraction "
+                            "also invalid run=%s errors=%s",
+                            p.run_id,
+                            fallback_errors[:3],
+                        )
+
+            if validation_errors:
+                # Still invalid after all fallbacks — fail the run.
                 logger.error(
                     "[_run_asset_report_pipeline] report JSON validation failed "
-                    "after %d retries run=%s errors=%s",
+                    "after %d retries + final fallback run=%s errors=%s",
                     retry_count,
                     p.run_id,
                     validation_errors[:3],
@@ -1114,7 +1157,20 @@ async def _run_finance_coach_agent(
             if parsed is not None:
                 validation_errors = validate_coach_json(parsed)
                 if validation_errors:
-                    logger.error(
+                    # Final fallback: standalone LLM extraction
+                    logger.info(
+                        "[_run_finance_coach_agent] repair loop exhausted, "
+                        "attempting final LLM extraction fallback run=%s",
+                        p.run_id,
+                    )
+                    fallback = await extract_json_via_llm(
+                        p.ai_text, _COACH_REPAIR_PROMPT, p.selected_provider,
+                    )
+                    if fallback is not None and not validate_coach_json(fallback):
+                        parsed = fallback
+                        validation_errors = []
+                    else:
+                        logger.error(
                         "[_run_finance_coach_agent] coach JSON validation failed after %d retries run=%s errors=%s",
                         repair_count,
                         p.run_id,
@@ -1252,7 +1308,20 @@ async def _run_wish_advice_agent(
             if parsed is not None:
                 validation_errors = validate_wish_advice_json(parsed)
                 if validation_errors:
-                    logger.error(
+                    # Final fallback: standalone LLM extraction
+                    logger.info(
+                        "[_run_wish_advice_agent] repair loop exhausted, "
+                        "attempting final LLM extraction fallback run=%s",
+                        p.run_id,
+                    )
+                    fallback = await extract_json_via_llm(
+                        p.ai_text, _WISH_ADVICE_REPAIR_PROMPT, p.selected_provider,
+                    )
+                    if fallback is not None and not validate_wish_advice_json(fallback):
+                        parsed = fallback
+                        validation_errors = []
+                    else:
+                        logger.error(
                         "[_run_wish_advice_agent] wish-advice JSON validation failed after %d retries run=%s errors=%s",
                         repair_count,
                         p.run_id,
