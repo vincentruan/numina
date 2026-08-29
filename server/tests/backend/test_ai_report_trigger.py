@@ -1,10 +1,10 @@
-"""U5: backend asset-report trigger -> agent HTTP trigger + Redis bridge subscription.
+"""U5: backend asset-report trigger -> agent HTTP trigger + bridge subscription.
 
 Verifies ``POST /api/v1/ai/report/generate/events``:
 - Enforces owner + ai_enabled + per-family concurrency (existing gate, unchanged).
 - Calls the agent's ``/internal/gateway/runs/asset-report/{thread_id}`` via
-  ``AgentClient.post`` (X-Agent-Token injected automatically) to trigger the task,
-  then subscribes to the Redis stream via bridge_consumer for SSE delivery.
+  ``AgentClient.stream`` (X-Agent-Token injected automatically) to trigger the task,
+  then subscribes to the shared bridge via bridge_consumer for SSE delivery.
 - Returns ``text/event-stream``.
 
 Ported from the former apps/backend/tests/test_ai_report_trigger.py. These cover
@@ -39,7 +39,7 @@ def _fake_agent_trigger(status_code: int = 200, body: dict | None = None) -> Any
 def _fake_bridge_stream(frames: list[tuple[str, dict]]) -> Any:
     """Build a fake consume_task_stream async generator yielding SSE text."""
 
-    async def _stream(task_id: str, family_id: int, last_event_id: str | None = None, run_id: str | None = None):
+    async def _stream(task_id: str, family_id: int, last_event_id: str | None = None, run_id: str | None = None, **kwargs):
         for event, data in frames:
             yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
         yield "event: end\ndata: null\n\n"
@@ -57,12 +57,13 @@ def client(monkeypatch):
         patch("apps.backend.app.routers.ai_report.AITaskService.get_any_running_task", return_value=None),
         patch("apps.backend.app.routers.ai_report.AITaskService.create_task", return_value=type("T", (), {"id": 1})()),
         patch("apps.backend.app.routers.ai_report.ChatSessionService.create_session", new_callable=AsyncMock, return_value=type("S", (), {"id": "session-1"})()),
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
         # Default: no cached report (cache-miss -> stream). Cache-hit tests override
         # _latest_report locally.
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=None),
     ):
-        mock_agent_cls.return_value.post = AsyncMock(return_value=_fake_agent_trigger())
-        mock_agent_cls.return_value.stream = AsyncMock()  # legacy; not used anymore
+        mock_agent_cls.return_value.stream = AsyncMock()  # stub; pump is mocked
         from apps.backend.app.auth.ai_deps import require_ai_enabled
         from apps.backend.app.auth.deps import require_adult, require_owner
         from apps.backend.app.main import app
@@ -106,23 +107,22 @@ def test_trigger_passes_family_id_as_string_to_agent(client):
     request body - AssetReportRunRequest.family_id is pydantic ``str``, so an
     int Snowflake value 422s at the agent gateway.
     """
-    captured: dict = {}
-
-    async def _capturing_post(endpoint, json=None, **kwargs):
-        captured["json"] = json
-        captured["endpoint"] = endpoint
-        return _fake_agent_trigger()
-
-    with patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls, patch(
+    with patch(
+        "apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge",
+        new_callable=AsyncMock,
+    ) as mock_pump, patch(
         "apps.backend.app.routers.ai_report.consume_task_stream",
         _fake_bridge_stream([("custom", {"type": "report.step2_json", "payload": {"overall_score": 1}})]),
     ):
-        mock_cls.return_value.post = _capturing_post
         response = client.post("/api/v1/ai/report/generate/events?force=true")
     assert response.status_code == 200
-    assert captured["json"]["family_id"] == "family-1"
-    assert captured["json"]["user_id"] == "1"
-    assert isinstance(captured["json"]["family_id"], str)
+    # The pump is called with json_body containing the agent request.
+    assert mock_pump.called
+    call_kwargs = mock_pump.call_args.kwargs
+    body = call_kwargs["json_body"]
+    assert body["family_id"] == "family-1"
+    assert body["user_id"] == "1"
+    assert isinstance(body["family_id"], str)
 
 
 def _fresh_cached_report():

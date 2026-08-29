@@ -183,6 +183,8 @@ def get_children(
             ReportChildItem(
                 child_id=child.id,
                 display_name=child.display_name,
+                avatar_url=child.avatar_url,
+                avatar_color=child.avatar_color,
                 latest_week_start=latest_week,
             )
         )

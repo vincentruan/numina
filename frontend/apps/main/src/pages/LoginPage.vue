@@ -53,7 +53,7 @@
             >
               <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
                 <UserAvatar
-                  :avatar-url="null"
+                  :avatar-url="getAvatarDisplayUrl(user.avatarUrl, user.avatarToken)"
                   :avatar-color="user.avatarColor"
                   :display-name="user.displayName"
                   :size="56"
@@ -311,6 +311,8 @@ interface BoundUser {
   username: string | null
   familyName: string
   avatarColor: string
+  avatarUrl: string | null
+  avatarToken: string | null
   role: string
   secondFactorType: string | null
   hasPasskey: boolean
@@ -329,6 +331,21 @@ const form = ref({
   password: '',
   altcha: undefined as string | undefined,
 })
+
+/**
+ * Compute the display URL for an avatar on the login page (pre-auth).
+ * - Uploaded images (/uploads/...) → use token-based public endpoint
+ * - 3D icons (/icons/...) and emoji → use directly (public static / text)
+ * - null → fallback to first-character avatar
+ */
+function getAvatarDisplayUrl(avatarUrl: string | null, avatarToken: string | null): string | null {
+  if (!avatarUrl) return null
+  if (avatarUrl.startsWith('/uploads/') && avatarToken) {
+    return `/api/v1/auth/avatar/${avatarToken}`
+  }
+  // /icons/3d/... and emoji are directly usable
+  return avatarUrl
+}
 
 onMounted(async () => {
   const { supported } = checkWebAuthnSupport()
@@ -350,6 +367,8 @@ onMounted(async () => {
         username: u.username,
         familyName: u.family_name,
         avatarColor: u.avatar_color,
+        avatarUrl: u.avatar_url ?? null,
+        avatarToken: u.avatar_token ?? null,
         role: u.role,
         secondFactorType: u.second_factor_type,
         hasPasskey: u.has_passkey,

@@ -298,7 +298,8 @@ async function loadExistingReport() {
       reportGeneratedAt.value = res.data.generated_at ?? null
     }
   } catch {
-    showFailToast(t('toast.operationFailed'))
+    // No report yet or non-critical fetch error — template handles
+    // empty state and inline error display. Matches AIHubPage pattern.
   }
 }
 
@@ -510,12 +511,47 @@ function formatDate(iso: string | null): string {
   return parseApiDate(iso).toLocaleString(loc, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+/**
+ * Wait for the server-side report task to reach a terminal state.
+ *
+ * After the SSE stream ends, the lifecycle consumer still needs to verify
+ * the task result and mark it complete. Polling the legacy /ai/tasks/report
+ * endpoint ensures we load the new report only after it has been committed
+ * to the database, preventing a stale-timestamp display.
+ */
+async function waitForServerTaskComplete(): Promise<void> {
+  const MAX_WAIT = 30_000
+  const POLL_INTERVAL = 1_500
+  const startTime = Date.now()
+  // Brief grace period: lifecycle consumer processes the end event
+  // ~simultaneously with the frontend; give it a moment to commit.
+  await new Promise(r => setTimeout(r, 1000))
+  while (Date.now() - startTime < MAX_WAIT) {
+    try {
+      const task = await getAITask('report')
+      if (task.status === 'idle' || task.status === 'completed' ||
+          task.status === 'failed' || task.status === 'cancelled' ||
+          task.status === 'timeout') {
+        return
+      }
+    } catch {
+      // Network error — keep waiting
+    }
+    await new Promise(r => setTimeout(r, POLL_INTERVAL))
+  }
+}
+
 async function onGenerate(force = false) {
   if (!familyStore.aiEnabled) {
     showToast(t('toast.aiNotEnabled'))
     return
   }
   stream.reset()
+  // Fix: stop useTaskPolling from polling the stale task ID.
+  // Without this, the 2s-interval poll fires GET /detail/{old_id} → 404,
+  // and the global axios interceptor shows a "资源不存在" toast before
+  // the polling code can silently handle it.
+  resumeHandle.taskId.value = null
   let registered = false
   async function registerBgTask() {
     if (registered) return
@@ -555,12 +591,26 @@ async function onGenerate(force = false) {
       currentReport.value = stream.report.value as unknown as AIReport
       reportGeneratedAt.value = stream.generatedAt.value
     } else if (stream.status.value === 'completed') {
-      // Fresh generation finished → reload the persisted report (step 7 落库).
+      // Fresh generation SSE finished. The agent writes the report to DB
+      // before the stream ends, but the lifecycle consumer may still be
+      // verifying/committing the task result. Poll the legacy endpoint
+      // until the task reaches a terminal state to ensure the report is
+      // persisted before reloading.
+      await waitForServerTaskComplete()
       await loadExistingReport()
+    } else if (stream.status.value === 'error') {
+      // Generation failed — clear the stale report so the user sees the
+      // error state instead of the previous report with an old date.
+      currentReport.value = null
+      reportGeneratedAt.value = null
     }
     aiStore.clearBackgroundTask('report')
     reportTaskId.value = null
   } catch {
+    // Network or connection error — clear stale report so the error state
+    // is visible rather than the previous report pretending nothing happened.
+    currentReport.value = null
+    reportGeneratedAt.value = null
     showFailToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   }
 }
@@ -653,7 +703,9 @@ onUnmounted(() => {
   // Close the frontend SSE reader but keep the agent pipeline running in the
   // background. The user can leave the page and the task will still complete.
   stream.abort(true)
-  resumeHandle.cleanup()
+  // v3 fix: use disconnect() (not cleanup()) to preserve step-state so that
+  // resume() can restore the timeline when the user navigates back.
+  resumeHandle.disconnect()
   // Clear the retry timer to prevent state updates on unmounted component
   if (retryTimer.value) {
     clearTimeout(retryTimer.value)

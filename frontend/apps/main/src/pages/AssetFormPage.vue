@@ -45,7 +45,12 @@ async function onSubmit(data: AssetRequestPayload) {
     }
     // Dashboard refreshes naturally via staleness guard (2 min TTL)
     // invalidateDashboard() already called by asset store methods
-    router.back()
+    if (!isEdit.value) {
+      // Replace form history entry with the correct finance tab so back doesn't return to form
+      router.replace({ path: '/finance', query: { tab: 'assets' } })
+    } else {
+      router.back()
+    }
   } catch {
     showFailToast(t('toast.operationFailed'))
   } finally {

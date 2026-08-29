@@ -11,6 +11,7 @@ import contextlib
 import logging
 import shutil
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -231,6 +232,25 @@ class ThreadCompactResponse(BaseModel):
     )
 
 
+class RetryPrepareResponse(BaseModel):
+    """Response from retry-prepare endpoint.
+
+    Returns the checkpoint to fork from so a retry can skip the failed user
+    message. The frontend passes ``checkpoint_id`` back to ``/runs/stream``
+    via ``config.configurable.checkpoint_id``, causing the checkpointer to
+    load state from that checkpoint (before the failed message was added)
+    instead of the head (which contains the failed message).
+
+    - ``checkpoint_id``: ID of the checkpoint to fork from
+    - ``checkpoint_ns``: Namespace (always "" for main thread)
+    - ``retry_from_checkpoint``: True when a valid checkpoint was found
+    """
+
+    checkpoint_id: str | None = None
+    checkpoint_ns: str = ""
+    retry_from_checkpoint: bool = False
+
+
 class HistoryEntry(BaseModel):
     checkpoint_id: str
     parent_checkpoint_id: str | None = None
@@ -327,43 +347,28 @@ async def _find_branch_checkpoint(
     """Find the checkpoint containing the target message IDs.
 
     DeerFlow 参考：threads.py:135-145
-    Scans checkpoint history (limit 100) and returns the first tuple whose
-    ``channel_values.messages`` contains a message whose id is in
-    ``target_message_ids``. Returns ``None`` when no match is found.
-
-    The scan is newest-first (``alist`` yields newest-first), so the first
-    checkpoint holding the target messages IS the thread's latest turn that
-    contains them. The returned bool is whether those target messages form
-    the tail visible assistant turn in that checkpoint (i.e. the branch is
-    from the genuinely latest turn, safe to clone workspace files). Resolving
-    both the source checkpoint and the latest-turn decision in ONE scan
-    avoids a second ``alist`` call and its TOCTOU window (a concurrent run
-    checkpointing a newer turn between scans would otherwise downgrade a
-    latest-turn branch to ``skipped_historical_turn``).
+    Uses ``_scan_checkpoints`` with a predicate that checks whether any message
+    in the checkpoint matches the target IDs. The bool return indicates whether
+    those target messages form the tail visible assistant turn (i.e. the branch
+    is from the genuinely latest turn, safe to clone workspace files).
     """
-    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-    try:
-        async for checkpoint_tuple in checkpointer.alist(
-            config, limit=_BRANCH_HISTORY_SCAN_LIMIT
-        ):
-            messages = _checkpoint_messages(checkpoint_tuple)
-            for msg in messages:
-                msg_id = getattr(msg, "id", None) or (
-                    msg.get("id") if isinstance(msg, dict) else None
-                )
-                if msg_id and msg_id in target_message_ids:
-                    is_latest_turn = _matches_branch_target(
-                        messages, target_message_ids
-                    )
-                    return checkpoint_tuple, is_latest_turn
-    except Exception:
-        logger.warning(
-            "Failed to scan checkpoints for thread %s; branch cannot resolve source turn",
-            thread_id,
-            exc_info=True,
+
+    def _predicate(tup: Any) -> bool:
+        messages = _checkpoint_messages(tup)
+        return any(
+            _message_id(msg) in target_message_ids for msg in messages
         )
+
+    checkpoint_tuple = await _scan_checkpoints(
+        checkpointer, thread_id, predicate=_predicate
+    )
+    if checkpoint_tuple is None:
         return None
-    return None
+
+    # Check whether the matched messages are the latest visible assistant turn
+    messages = _checkpoint_messages(checkpoint_tuple)
+    is_latest_turn = _matches_branch_target(messages, target_message_ids)
+    return checkpoint_tuple, is_latest_turn
 
 
 def _checkpoint_id(checkpoint_tuple) -> str | None:
@@ -402,6 +407,47 @@ def _default_branch_display_name(
 # Cap on checkpoint history scan when resolving the latest turn (matches
 # DeerFlow _BRANCH_HISTORY_SCAN_LIMIT).
 _BRANCH_HISTORY_SCAN_LIMIT = 100
+
+
+async def _scan_checkpoints(
+    checkpointer,
+    thread_id: str,
+    *,
+    predicate: Callable[[Any], bool],
+    limit: int = _BRANCH_HISTORY_SCAN_LIMIT,
+    family_id: str | None = None,
+) -> Any | None:
+    """Scan checkpoint history newest-first, returning the first match.
+
+    Shared helper used by both ``_find_branch_checkpoint`` and ``retry_prepare``.
+    The scan yields newest-first (``alist`` default), so the first predicate
+    match is the most recent checkpoint satisfying the condition.
+
+    Args:
+        checkpointer: LangGraph checkpointer instance.
+        thread_id: Thread to scan.
+        predicate: Called with each CheckpointTuple. Return True to accept.
+        limit: Max checkpoints to scan (newest-first).
+        family_id: If set, verify head metadata matches. Individual checkpoints
+            with mismatched family_id are silently skipped (defense-in-depth;
+            head-level ownership is checked by the caller).
+
+    Returns:
+        The first CheckpointTuple matching *predicate*, or None.
+    """
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    try:
+        async for checkpoint_tuple in checkpointer.alist(config, limit=limit):
+            if family_id:
+                meta = getattr(checkpoint_tuple, "metadata", {}) or {}
+                ckpt_family = meta.get("family_id")
+                if ckpt_family and str(ckpt_family) != str(family_id):
+                    continue
+            if predicate(checkpoint_tuple):
+                return checkpoint_tuple
+    except Exception:
+        logger.exception("Failed to scan checkpoints for thread %s", thread_id)
+    return None
 
 
 def _checkpoint_messages(checkpoint_tuple) -> list[Any]:
@@ -742,15 +788,17 @@ async def patch_thread(
             title=body.title,
             is_pinned=body.is_pinned,
         )
-    return await get_thread(thread_id, x_family_id)
+    return await _get_thread_impl(thread_id, x_family_id, verified)
 
 
-@router.get("/{thread_id}", response_model=ThreadResponse)
-async def get_thread(
+async def _get_thread_impl(
     thread_id: str,
-    x_family_id: str = Header(..., alias="X-Family-Id"),
-    verified: VerifiedFamily = Depends(verify_family_token),
+    x_family_id: str,
+    verified: VerifiedFamily,
 ) -> ThreadResponse:
+    """Core logic for GET /{thread_id} — extracted so patch_thread can call it
+    directly without going through FastAPI's dependency injection for the
+    ``verified`` parameter."""
     repo = AiSessionRepository(x_family_id)
     checkpointer = get_checkpointer()
 
@@ -822,6 +870,15 @@ async def get_thread(
         metadata=meta,
         values=serialize_channel_values_for_api(channel_values),
     )
+
+
+@router.get("/{thread_id}", response_model=ThreadResponse)
+async def get_thread(
+    thread_id: str,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> ThreadResponse:
+    return await _get_thread_impl(thread_id, x_family_id, verified)
 
 
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
@@ -1452,3 +1509,96 @@ async def compact_thread_endpoint(
         logger.exception("Failed to compact thread %s", thread_id)
         raise HTTPException(status_code=503, detail="压缩对话历史失败") from None
     return ThreadCompactResponse(**result_to_dict(result))
+
+
+# ---------------------------------------------------------------------------
+# Retry-prepare endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{thread_id}/retry-prepare", response_model=RetryPrepareResponse)
+async def retry_prepare(
+    thread_id: str,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
+) -> RetryPrepareResponse:
+    """Fork the pre-failure checkpoint so a retry reads clean state.
+
+    When the first request fails, the head checkpoint retains the failed user
+    message. On retry, the agent would append a second user message to that
+    head, giving ``len(user_messages) == 2`` and causing the title middleware
+    to skip title generation (requires exactly 1 user message).
+
+    This endpoint finds the checkpoint with one fewer user message than the
+    head (the state before the failed message was added), deep-copies it, and
+    writes the copy back to the same thread with a fresh checkpoint_id.  Because
+    LangGraph's ``alist`` returns the **latest checkpoint_id** as the head
+    (no parent-chain filtering), the fork — with its time-based uuid6 ID —
+    naturally becomes the new head. The agent's next stream reads from the
+    fork (1 user message) instead of the original head (2 user messages).
+
+    Returns ``retry_from_checkpoint: false`` when no fork is needed (head
+    already has ≤ 1 user message) or no suitable checkpoint is found.
+
+    # [Numina Extension] — retry checkpoint fork for title generation
+    """
+    checkpointer = get_checkpointer()
+
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    head_tuple = await checkpointer.aget_tuple(config)
+    if head_tuple is None:
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    # Family ownership check
+    head_meta = getattr(head_tuple, "metadata", {}) or {}
+    head_family_id = head_meta.get("family_id")
+    if not head_family_id or str(head_family_id) != str(verified.family_id):
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
+    head_messages = _checkpoint_messages(head_tuple)
+    head_user_count = sum(
+        1 for m in head_messages if getattr(m, "type", None) == "human"
+        or (isinstance(m, dict) and m.get("type") == "human")
+    )
+
+    if head_user_count <= 1:
+        # No failed message to skip — normal retry path, no fork needed.
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    # Scan history for a checkpoint with (head_user_count - 1) user messages.
+    # Uses shared _scan_checkpoints helper (newest-first, returns first match).
+    target_user_count = head_user_count - 1
+
+    def _is_pre_failure(tup: Any) -> bool:
+        messages = _checkpoint_messages(tup)
+        count = sum(
+            1 for m in messages if getattr(m, "type", None) == "human"
+            or (isinstance(m, dict) and m.get("type") == "human")
+        )
+        return count == target_user_count
+
+    fork_source = await _scan_checkpoints(
+        checkpointer, thread_id, predicate=_is_pre_failure
+    )
+    if fork_source is None:
+        logger.info(
+            "retry-prepare: no pre-failure checkpoint found for thread %s "
+            "(head has %d user messages, none with %d)",
+            thread_id, head_user_count, target_user_count,
+        )
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    # Return the checkpoint_id of the pre-failure checkpoint.
+    # The frontend passes this to /runs/stream via config.configurable.checkpoint_id,
+    # so the checkpointer reads from that checkpoint (before the failed message)
+    # instead of the head. This matches DeerFlow's regenerate/prepare pattern
+    # — no checkpoint is written, the fork is a temporary read point.
+    checkpoint_id = _checkpoint_id(fork_source)
+    if checkpoint_id is None:
+        return RetryPrepareResponse(retry_from_checkpoint=False)
+
+    return RetryPrepareResponse(
+        checkpoint_id=checkpoint_id,
+        checkpoint_ns="",
+        retry_from_checkpoint=True,
+    )

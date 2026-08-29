@@ -2,7 +2,7 @@ import http from './index'
 
 export interface WhatIfAction {
   action_type: 'sell' | 'buy' | 'invest' | 'stop_expense'
-  asset_id?: number
+  asset_id?: string
   amount?: number
   annual_return_rate?: number
   annual_cost?: number
@@ -77,6 +77,6 @@ export function getPurchasingPower(params: {
   return http.get<PurchasingPowerResponse>('/ai/purchasing-power', { params })
 }
 
-export function getAssetPurchasingPower(assetId: number) {
+export function getAssetPurchasingPower(assetId: string) {
   return http.get<PurchasingPowerResponse>(`/assets/${assetId}/purchasing-power`)
 }

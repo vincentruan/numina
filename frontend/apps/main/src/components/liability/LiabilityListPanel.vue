@@ -93,6 +93,7 @@
           @pay="openPayDialog"
           @edit="goEdit"
           @delete="confirmDelete"
+          @reactivate="onReactivate"
         />
       </div>
       <EmptyState v-else :description="activeTab === 'active' ? t('liability.noLiabilityDesc') : t('liability.noSettledLiability')">
@@ -192,7 +193,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -339,8 +340,19 @@ function confirmDelete(item: Liability) {
   deleteSheet.value.show = true
 }
 
+async function onReactivate(item: Liability) {
+  try {
+    await liabilityStore.updateLiability(item.id, { is_active: true })
+    await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
+    showSuccessToast(t('toast.liabilityReactivated'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  }
+}
+
 async function executeDelete() {
   await liabilityStore.deleteLiability(deleteSheet.value.liabilityId)
+  await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
   showSuccessToast(t('toast.deleteSuccess'))
   deleteSheet.value.show = false
 }
@@ -373,6 +385,7 @@ async function submitPayment() {
     return
   }
   await liabilityStore.recordPayment(payTarget.value!.id, amount)
+  await liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
   showSuccessToast(t('toast.paymentSuccess'))
   payDialogVisible.value = false
 }

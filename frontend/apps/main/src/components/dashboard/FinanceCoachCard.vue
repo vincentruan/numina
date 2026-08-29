@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFinanceCoach } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
@@ -48,9 +48,20 @@ async function load(force = false) {
   try {
     refreshing.value = force
     loading.value = true
+    // Clear stale taskId from any previous task
+    resumeHandle.taskId.value = null
+
     const resp = await getFinanceCoach(force)
+
+    // 202 queued: backend created a task but another is running.
+    // Set taskId so useTaskPolling picks it up; onComplete re-calls load().
+    if (resp.status === 'queued' && resp.task_id) {
+      resumeHandle.taskId.value = resp.task_id
+      return
+    }
+
     // Advice baseline gate (spec §7.1): schema-validate before display.
-    const valid = (resp.report.suggestions || []).filter(
+    const valid = (resp.report?.suggestions || []).filter(
       (s) =>
         s &&
         s.id &&
@@ -113,23 +124,54 @@ async function onToggle(names: string[]) {
   }
 }
 
-onMounted(async () => {
-  if (familyStore.aiEnabled) {
-    const resumed = await resumeHandle.resume()
+// Fix race condition: aiEnabled may still be false when onMounted fires
+// because App.vue's loadCoinConfig() hasn't completed yet. Watch for it
+// to become true and trigger load() when it does. Use a hasStarted flag to
+// avoid double-loading when both onMounted (aiEnabled already true) and this
+// watch fire for the same enablement.
+let hasStarted = false
+function startLoad() {
+  if (hasStarted) return
+  hasStarted = true
+  resumeHandle.resume().then((resumed) => {
     if (!resumed) {
       load(false)
     }
+  })
+}
+
+onMounted(() => {
+  if (familyStore.aiEnabled) {
+    startLoad()
   } else {
     loading.value = false
     loaded.value = true
   }
 })
 
+watch(
+  () => familyStore.aiEnabled,
+  (enabled) => {
+    if (enabled && !hasStarted) {
+      startLoad()
+    }
+  },
+)
+
 // Dashboard is KeepAlive-cached; onActivated re-runs resume logic.
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   await resumeHandle.resume()
+})
+
+// Dashboard is KeepAlive-cached — disconnect on deactivate, cleanup on unmount.
+onDeactivated(() => {
+  resumeHandle.disconnect()
+})
+
+onUnmounted(() => {
+  resumeHandle.cleanup()
 })
 </script>
 

@@ -13,6 +13,8 @@ class SimulateRequest(BaseModel):
     annual_rate: Decimal
     monthly_payment: Decimal | None = None
     extra_monthly: Decimal = Decimal("0")
+    repayment_method: str = "equal_payment"
+    total_periods: int | None = None
 
 
 class SimulateResponse(BaseModel):
@@ -25,6 +27,8 @@ class SimulateResponse(BaseModel):
     baseline_months: int | None = None
     savings_vs_baseline: str | None = None
     months_saved: int | None = None
+    # Optional month-by-month schedule (for equal_principal/interest_only/bullet):
+    schedule: list[dict] | None = None
 
     @field_validator(
         "total_interest",

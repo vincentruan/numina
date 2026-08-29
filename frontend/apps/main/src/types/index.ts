@@ -110,6 +110,8 @@ export interface Liability {
   // L7 (KTD-2): populated only on the detail endpoint — {name, current_value(str)}.
   // Absent on list/create/update responses.
   linked_asset?: { name: string; current_value: string | null }
+  // U2: repayment method (equal_payment, equal_principal, interest_only, bullet, minimum_payment)
+  repayment_method?: string
   notes?: string
   is_active: boolean
 }
@@ -150,6 +152,9 @@ export type LiabilityRequestPayload = Omit<Partial<Liability>, 'original_amount'
   // null = explicitly unlink (backend update uses exclude_unset, so null clears the
   // link while omitting the key preserves it). Distinct from undefined.
   linked_asset_id?: string | null
+  // U3: retroactive history generation
+  generate_history?: boolean
+  total_periods?: number | null
 }
 
 // Rental contracts - money fields are str on the wire (money-as-str), matching
@@ -444,6 +449,7 @@ export interface SavingsLog {
 }
 
 // L2 /liabilities/simulate result (Plan B T9 frontend). T4 added the endpoint.
+// U2: extended with schedule for equal_principal/interest_only/bullet methods.
 export interface LiabilitySimResult {
   total_interest: string
   months: number
@@ -453,6 +459,13 @@ export interface LiabilitySimResult {
   baseline_months?: number
   savings_vs_baseline?: string
   months_saved?: number
+  schedule?: Array<{
+    month: number
+    payment: string
+    principal: string
+    interest: string
+    balance: string
+  }> | null
 }
 
 export interface WishRealizeRequest {
@@ -467,6 +480,8 @@ export interface PaymentRecord {
   amount: string
   paid_at: string
   notes?: string
+  // U3: "manual" (user-recorded) or "system" (auto-generated retroactive)
+  source?: string
 }
 
 export interface Currency {
@@ -551,9 +566,12 @@ export interface FinanceSuggestion {
   cta_label: string
 }
 export interface FinanceCoachResponse {
-  status: 'cached' | 'streaming'
+  status: 'cached' | 'streaming' | 'queued' | 'insufficient_data'
   generated_at?: string
-  report: { suggestions: FinanceSuggestion[] }
+  report?: { suggestions: FinanceSuggestion[] }
+  /** Present when status === 'queued'. */
+  task_id?: string
+  queue_position?: number
 }
 
 export interface ChatMessage {

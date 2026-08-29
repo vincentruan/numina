@@ -64,8 +64,21 @@ async def _proxy_to_agent(
                     params=params,
                     headers=forward_headers,
                 ) as resp:
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
+                    # SSE-aware proxy: use aiter_lines() to split on line
+                    # boundaries, then buffer until the SSE terminator (\n\n)
+                    # so each yield is one complete event.  Previously
+                    # aiter_bytes() delivered TCP-chunk-aligned data — multiple
+                    # events coalesced by TCP/Nagle were forwarded as a single
+                    # chunk, compounding provider burstiness at the frontend.
+                    sse_buffer: list[str] = []
+                    async for line in resp.aiter_lines():
+                        if not line.strip() and sse_buffer:
+                            full_event = "\n".join(sse_buffer) + "\n\n"
+                            yield full_event.encode()
+                            sse_buffer = []
+                        elif line.strip():
+                            sse_buffer.append(line)
+
                         if await request.is_disconnected():
                             logger.info(f"LangGraph proxy stream client disconnected path={path}")
                             break
@@ -73,7 +86,15 @@ async def _proxy_to_agent(
                 logger.error(f"LangGraph proxy stream error on {path}: {e}")
                 yield b""
 
-        return StreamingResponse(_simple_stream(), media_type="text/event-stream")
+        return StreamingResponse(
+            _simple_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
     else:
         try:
             async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:

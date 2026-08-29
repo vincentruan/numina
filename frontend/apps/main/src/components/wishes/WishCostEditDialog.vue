@@ -346,11 +346,26 @@ watch(
 
 .btn-confirm {
   background: var(--color-cost);
+  color: #fff;
 }
 
 .btn-next:disabled,
 .btn-confirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/*  Dark mode overrides ─ */
+[data-theme='dark'] .btn-cancel,
+.dark .btn-cancel {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--separator);
+}
+
+[data-theme='dark'] .btn-confirm,
+.dark .btn-confirm {
+  background: var(--color-cost);
+  color: #1a1a1a; /* dark text on amber for dark mode contrast */
 }
 </style>

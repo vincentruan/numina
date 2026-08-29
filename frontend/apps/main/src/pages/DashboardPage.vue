@@ -113,6 +113,9 @@ const { checkFamilyChanges } = useMemberNotify()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
 // mount inside <KeepAlive>; onMounted handles initial load.
 let hasActivated = false
+// Track whether onboarding guide has been shown in this component instance.
+// Prevents re-showing on KeepAlive re-activation (returning from sub-pages).
+let hasShownOnboarding = false
 const refreshing = ref(false)
 const literacyStatusRef = ref<InstanceType<typeof LiteracyStatusCard> | null>(null)
 const guideOverlayRef = ref<InstanceType<typeof StepGuideOverlay> | null>(null)
@@ -186,6 +189,9 @@ watch(
 
 async function maybeShowOnboarding() {
   if (router.currentRoute.value.path !== '/') return
+  // Skip if guide was already shown in this component instance (prevents
+  // re-showing on KeepAlive re-activation when returning from sub-pages).
+  if (hasShownOnboarding) return
   // Always re-fetch — KeepAlive caches `userConfig` across navigation,
   // so after a reset the stale value (version=N) would block the guide.
   let config: UserConfigValues
@@ -198,6 +204,7 @@ async function maybeShowOnboarding() {
   }
   const { shouldShow } = shouldShowGuide(config, GUIDE_VERSION)
   if (!shouldShow) return
+  hasShownOnboarding = true
   await recordGuideAttempt(config)
   recordGuideShown()
   guide.start()

@@ -4,6 +4,7 @@
     8h skill-cache check -> cached JSON 200 (non-stream) OR AITask-tracked
     bridge consumer SSE via agent gateway. Mirrors ai_report.py pattern (U13).
 """
+import asyncio
 import json
 import logging
 
@@ -22,8 +23,10 @@ from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
+    _pump_agent_sse_to_bridge,
     _spawn_lifecycle_consumer,
     consume_task_stream,
+    get_shared_bridge,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import (
@@ -107,7 +110,7 @@ async def trigger_finance_coach(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": task.id,
+                    "task_id": str(task.id),
                     "queue_position": task.queue_position,
                 },
             )
@@ -126,70 +129,42 @@ async def trigger_finance_coach(
     # Build the PII-minimized snapshot (spec §7.1) — injected as input payload
     snapshot = build_family_finance_snapshot(db, current_user)
 
-    # Trigger agent via non-streaming POST (bridge consumer pattern)
-    agent_client = AgentClient(family_id, user_id, timeout=300.0)
-    agent_url = f"/internal/gateway/runs/finance-coach/{session_id}"
-    run_id: str | None = None
-
-    try:
-        resp = await agent_client.post(
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": user_id,
-                "language": current_user.language,
-                "on_disconnect": "continue",
-                "task_id": task_id,
-                "input": {"messages": [{"role": "user", "content": json.dumps(snapshot, ensure_ascii=False)}]},
+    # Insufficient-data gate: skip the LLM call when there's nothing to analyse.
+    # Returns a structured JSON so the frontend can show a meaningful message
+    # instead of a silent "No suggestions".
+    has_debts = len(snapshot.get("high_interest_debts", [])) > 0
+    has_idle = len(snapshot.get("idle_assets", [])) > 0
+    has_top_assets = len(snapshot.get("top_daily_cost_assets", [])) > 0
+    has_wishes = len(snapshot.get("wishes", [])) > 0
+    if not has_debts and not has_idle and not has_top_assets and not has_wishes:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "insufficient_data",
+                "reason": "no_financial_data",
+                "report": {"suggestions": []},
             },
         )
-        if resp.status_code != 200:
-            logger.warning(
-                "[finance-coach] agent trigger failed: status=%s body=%s task=%s",
-                resp.status_code,
-                resp.text[:200],
-                task_id,
-            )
-            from apps.backend.app.database import SessionLocal
 
-            _db = SessionLocal()
-            try:
-                AITaskService.fail_task(task_id, "财务建议服务异常", _db)
-            finally:
-                _db.close()
-            err = json.dumps({"message": "财务建议服务异常", "name": "AgentError"}).encode()
-            return StreamingResponse(
-                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-                media_type="text/event-stream",
-            )
+    # Phase 1: Backend-owned buffer (single streaming POST — no double trigger).
+    agent_client = AgentClient(family_id, user_id, timeout=300.0)
+    agent_url = f"/internal/gateway/runs/finance-coach/{session_id}"
+    shared_bridge = get_shared_bridge()
 
-        # Extract agent run_id from Content-Location header and persist to AITask
-        # so bridge_consumer can subscribe to the correct Redis stream.
-        run_id = AITaskService.extract_and_attach_run_id(
-            task_id, resp.headers.get("Content-Location"), family_id
-        )
-    except Exception as exc:
-        logger.warning(
-            "[finance-coach] agent trigger failed task=%s err=%s", task_id, exc
-        )
-        from apps.backend.app.database import SessionLocal
-
-        _db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, f"财务建议服务中断: {type(exc).__name__}", _db)
-        finally:
-            _db.close()
-        err = json.dumps({"message": "财务建议服务中断", "name": type(exc).__name__}).encode()
-        return StreamingResponse(
-            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-            media_type="text/event-stream",
-        )
-
-    # Subscribe to Redis stream via bridge_consumer (replaces HTTP proxy)
-    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    # Lifecycle result callback — persists coach output to cache on completion.
     async def _persist_coach_result(_event_type: str, data: dict) -> None:
         if isinstance(data, dict) and data.get("type") == "finance_coach.result":
             payload = data.get("payload")
+            # Skip empty payloads — a failed generation must NOT overwrite a
+            # valid cached result with an empty one (would make the card show
+            # "No suggestions" even though valid advice already exists).
+            suggestions = (payload or {}).get("suggestions") or []
+            if not suggestions:
+                logger.warning(
+                    "[finance_coach] skip persisting empty result (keeps existing cache) task=%s",
+                    task_id,
+                )
+                return
             if payload:
                 from apps.backend.app.database import SessionLocal
 
@@ -200,19 +175,84 @@ async def trigger_finance_coach(
                 finally:
                     _db.close()
 
-    _spawn_lifecycle_consumer(
-        task_id=task_id,
-        family_id=family_id,
-        run_id=run_id,
-        on_result=_persist_coach_result,
+    agent_trigger_body = {
+        "family_id": str(family_id),
+        "user_id": user_id,
+        "language": current_user.language,
+        "on_disconnect": "continue",
+        "task_id": task_id,
+        "input": {"messages": [{"role": "user", "content": json.dumps(snapshot, ensure_ascii=False)}]},
+    }
+
+    # Track lifecycle consumer spawn state.
+    # ``lifecycle_spawned``: whether the lifecycle consumer has been spawned.
+    # ``lifecycle_task``: the spawned task (for cancellation if run_id changes).
+    # ``cl_bare_run_id``: Content-Location run_id (for fallback if metadata never arrives).
+    lifecycle_spawned = [False]
+    lifecycle_task: asyncio.Task[None] | None = None
+    cl_bare_run_id: str | None = None
+
+    def _on_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. Persist to DB only."""
+        nonlocal cl_bare_run_id
+        cl_bare_run_id = cl_url.rstrip("/").rsplit("/", 1)[-1]
+        AITaskService.extract_and_attach_run_id(
+            task_id, cl_url, family_id
+        )
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id."""
+        nonlocal lifecycle_task
+        AITaskService.extract_and_attach_run_id(
+            task_id, meta_run_id, family_id
+        )
+        if lifecycle_task is not None and not lifecycle_task.done():
+            lifecycle_task.cancel()
+        lifecycle_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=meta_run_id,
+            on_result=_persist_coach_result,
+            bridge=shared_bridge,
+        )
+        lifecycle_spawned[0] = True
+
+    # Spawn background pump: one streaming POST → shared bridge.
+    asyncio.create_task(
+        _pump_agent_sse_to_bridge(
+            agent_client=agent_client,
+            agent_url=agent_url,
+            json_body=agent_trigger_body,
+            bridge=shared_bridge,
+            run_id="",
+            task_id=task_id,
+            on_run_id=_on_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
+        )
     )
 
+    # Fallback: lifecycle consumer if metadata never arrives within 3s.
+    async def _lc_fallback() -> None:
+        await asyncio.sleep(3.0)
+        if not lifecycle_spawned[0]:
+            _spawn_lifecycle_consumer(
+                task_id=task_id,
+                family_id=family_id,
+                run_id=cl_bare_run_id,
+                on_result=_persist_coach_result,
+                bridge=shared_bridge,
+            )
+
+    asyncio.create_task(_lc_fallback())
+
+    # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=run_id,
+        run_id=None,
+        bridge=shared_bridge,
     )
 
     return StreamingResponse(

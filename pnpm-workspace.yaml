@@ -6,3 +6,5 @@ allowBuilds:
   core-js: false
   esbuild: set this to true or false
   sharp: set this to true or false
+patchedDependencies:
+  vue-router@4.6.4: patches/vue-router@4.6.4.patch

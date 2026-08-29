@@ -13,7 +13,10 @@ import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from apps.agent.services.runtime.run_extras import _create_lightweight_llm
+from apps.agent.services.runtime.run_extras import (
+    _create_lightweight_llm,
+    _extract_text_from_content_blocks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +70,7 @@ async def polish_draft(text: str, ai_config: dict) -> tuple[str, bool]:
             ai_config, temperature=0.5, max_tokens=_MAX_OUTPUT_TOKENS,
         )
         response = await llm.ainvoke([system, human])
-        content = response.content.strip() if isinstance(response.content, str) else str(response.content)
+        content = _extract_text_from_content_blocks(response.content)
     except Exception:
         logger.exception("input polish LLM call failed")
         return original, False

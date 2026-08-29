@@ -383,12 +383,15 @@ TOTAL_LIAB=$(echo "$OV" | jq -r '.data.total_liabilities')
 echo "$TOTAL_LIAB" | awk '{if ($1+0 <= 0) exit 1}' || echo "  (note: demouser has no liabilities — liability cases C2.5/C2.6 may show empty states)"
 
 # --- 5) AI provider check — warn if not configured (Area 3/6 will SKIP-AI) ---
-AI_STATUS=$(curl -s -H "$AUTH" "$API/ai/config/defaults" 2>/dev/null || echo "{}")
-AI_PROVIDER=$(echo "$AI_STATUS" | jq -r '.data.provider // empty' 2>/dev/null || echo "")
-if [ -z "$AI_PROVIDER" ] || [ "$AI_PROVIDER" = "null" ]; then
+# Correct endpoint: GET /ai/config returns per-family AI provider configs.
+# (NOT /ai/config/defaults — that's a form helper that requires model_id query param.)
+AI_CONFIGS=$(curl -s -H "$AUTH" "$API/ai/config" 2>/dev/null || echo '{"data":{"configs":[]}}')
+AI_ACTIVE=$(echo "$AI_CONFIGS" | jq '[.data.configs[]? | select(.is_active == true)] | length' 2>/dev/null || echo "0")
+AI_FIRST_PROVIDER=$(echo "$AI_CONFIGS" | jq -r '.data.configs[0].provider // empty' 2>/dev/null || echo "")
+if [ "$AI_ACTIVE" -lt 1 ] 2>/dev/null || [ -z "$AI_FIRST_PROVIDER" ]; then
   echo "  (WARNING: AI provider not configured — Area 3/6 cases will be SKIP-AI)"
 else
-  echo "  (AI provider: $AI_PROVIDER)"
+  echo "  (AI provider: $AI_FIRST_PROVIDER, active configs: $AI_ACTIVE)"
 fi
 
 # --- 6) Wish savings data check — warn if no wishes with savings (C2.14 will show empty state) ---
@@ -676,8 +679,8 @@ Area 3 (AI capabilities) and Area 6 (AI chat parity) require AI to be enabled.
 Before running these areas, verify:
 
 ```bash
-# Check AI status via API
-curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/ai/status" | jq '.data.enabled'
+# Check AI status via API (correct endpoint: /ai/config for per-family configs)
+curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/ai/config" | jq '[.data.configs[]? | select(.is_active == true)] | length'
 # Or via bsk on the AI hub page
 bsk navigate ${BASE}ai --session "$SID" --wait-until networkidle
 bsk snapshot --session "$SID"

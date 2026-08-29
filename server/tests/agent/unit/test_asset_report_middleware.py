@@ -1,9 +1,7 @@
-"""Tests for asset_report_middleware — parse_report_json + validate_report_json."""
+"""Tests for asset_report_middleware — parse_report_json + llm_json_repair validators."""
 
-from apps.agent.services.runtime.asset_report_middleware import (
-    parse_report_json,
-    validate_report_json,
-)
+from apps.agent.services.runtime.asset_report_middleware import parse_report_json
+from apps.agent.services.runtime.llm_json_repair import validate_report_json
 
 
 class TestValidateReportJson:
@@ -14,7 +12,28 @@ class TestValidateReportJson:
             "overall_score": 85,
             "indicators": [
                 {
+                    "key": "asset_allocation",
+                    "label": "资产配置",
+                    "score": 4,
+                    "narrative": "配置合理",
+                    "data": {
+                        "items": [
+                            {"key": "cash", "zh": "现金", "en": "Cash", "value": 42.5}
+                        ]
+                    },
+                }
+            ],
+        }
+        assert validate_report_json(data) == []
+
+    def test_name_as_key_alias_passes(self):
+        """LLM often emits ``name`` instead of ``key`` — validate accepts it."""
+        data = {
+            "overall_score": 85,
+            "indicators": [
+                {
                     "name": "资产配置",
+                    "score": 4,
                     "data": {
                         "items": [
                             {"key": "cash", "zh": "现金", "en": "Cash", "value": 42.5}

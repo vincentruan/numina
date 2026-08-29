@@ -40,7 +40,11 @@ async function onSubmit(data: LiabilityRequestPayload) {
       await liabilityStore.createLiability(data)
       showSuccessToast(t('toast.addSuccess'))
     }
-    router.back()
+    if (!isEdit.value) {
+      router.replace({ path: '/finance', query: { tab: 'liabilities' } })
+    } else {
+      router.back()
+    }
   } catch {
     showFailToast(t('toast.operationFailed'))
   } finally {

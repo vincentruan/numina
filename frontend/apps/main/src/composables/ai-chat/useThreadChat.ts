@@ -17,6 +17,7 @@ import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 import { useChatSessionStore } from '@/stores/chatSession'
+import { extractReasoningContentFromMessage } from '@/utils/ai-chat'
 
 export type { ChatMessage }
 
@@ -549,6 +550,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // of truth; useThreadTodos derives hasTodos/todos from this. Cleared on
   // thread switch / history reload; hydrated from values events (stream + load).
   const todos = ref<Array<{ content: string; status: string }>>([])
+  /**
+   * Tracks reasoning start time per AI message (by message id).
+   * Set when reasoning content is first detected in a message during streaming.
+   * Used to compute reasoning_elapsed_ms when reasoning ends (tool call arrives or stream ends).
+   * These values are persisted in message.additional_kwargs so ChainOfThought
+   * can restore them on history load (where reactive watches fire too late).
+   */
+  const reasoningStartTimes = new Map<string, number>()
   // U5 (D1 /goal): server goal streamed from the checkpoint's
   // channel_values["goal"] (U4 writes continuation_count/updated_at here).
   // `undefined` = no values chunk has carried the goal field yet (useActiveGoal
@@ -594,6 +603,18 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Mirrors DeerFlow `summarizedRef`.
    */
   const summarizedIds = ref<Set<string>>(new Set())
+  /**
+   * Message IDs removed by retry() truncation. mergeValuesMessages filters
+   * these out so the backend's values event (which reflects the full checkpoint
+   * state, including the failed turn) doesn't re-add old AI messages that the
+   * frontend intentionally discarded. Cleared when the retry stream completes.
+   *
+   * Unlike DeerFlow's supersededRunIds (which hides messages in the same
+   * thread), we fork the checkpoint server-side so the old content never
+   * reaches the frontend. retryTruncatedIds is a safety net for edge cases
+   * where the fork doesn't fully isolate the retry state.
+   */
+  const retryTruncatedIds = ref<Set<string>>(new Set())
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
   let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -602,6 +623,61 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   // Distinguishes a user-initiated cancel from a stream timeout/error abort.
   // Timeout and stream errors must be retryable; a user cancel must not be.
   let userCancelled = false
+
+  // ── Stream text batching (rAF coalescing) ──
+  // Multiple SSE text chunks often arrive within a single frame (~16ms).
+  // Without batching, each chunk creates a new messages.value array reference
+  // → Vue reactivity cascade (visibleMessages, watchers, computed properties,
+  // MarkdownContent re-parse) fires per token. Coalescing into one update per
+  // animation frame reduces this to ~60 updates/second regardless of token rate.
+  let _textBatchBuffer = ''
+  let _textBatchRafId: number | null = null
+
+  /**
+   * Synchronously flush any buffered text into messages.value.
+   * Called before non-text events (tool_calls, tool results) so they see
+   * the latest accumulated content, and on stream end.
+   */
+  function flushTextBatch(): void {
+    if (_textBatchRafId !== null) {
+      cancelAnimationFrame(_textBatchRafId)
+      _textBatchRafId = null
+    }
+    if (!_textBatchBuffer) return
+    const buf = _textBatchBuffer
+    _textBatchBuffer = ''
+
+    const last = messages.value[messages.value.length - 1]
+    if (!last || last.type !== 'ai') return
+
+    const updated: ChatMessage = { ...last }
+    updated.content = last.content + buf
+    if (updated.phase !== 'done') updated.phase = 'answering'
+    messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
+  }
+
+  /**
+   * Schedule a rAF flush of the text batch buffer.
+   * Multiple calls within the same frame are coalesced — only one
+   * messages.value assignment fires per animation frame.
+   */
+  function scheduleTextBatchFlush(): void {
+    if (_textBatchRafId !== null) return
+    _textBatchRafId = requestAnimationFrame(() => {
+      _textBatchRafId = null
+      if (!_textBatchBuffer) return
+      const buf = _textBatchBuffer
+      _textBatchBuffer = ''
+
+      const last = messages.value[messages.value.length - 1]
+      if (!last || last.type !== 'ai') return
+
+      const updated: ChatMessage = { ...last }
+      updated.content = last.content + buf
+      if (updated.phase !== 'done') updated.phase = 'answering'
+      messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
+    })
+  }
 
   const STREAM_TIMEOUT_MS = 120_000
   const SSE_RETRY_DELAYS = [1000, 2000, 4000] as const
@@ -679,18 +755,39 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Tool results: add as separate tool message.
    */
   function mergeMessagesTuple(chunk: MessagesTupleData): void {
+    // Filter out chunks for messages that were truncated by retry(). The
+    // backend may replay these from the checkpoint during the retry stream.
+    if (retryTruncatedIds.value.size > 0 && chunk.id && retryTruncatedIds.value.has(chunk.id)) {
+      return
+    }
     if (chunk.type === 'ai') {
-      console.log('[useThreadChat] AI message chunk received:', {
-        id: chunk.id,
-        contentLength: chunk.content?.length || 0,
-        contentPreview: chunk.content?.slice(0, 50),
-        hasToolCalls: !!chunk.tool_calls,
-      })
       const last = messages.value[messages.value.length - 1]
       const chunkId = chunk.id
+      // Text-only chunks (no tool_calls, no additional_kwargs) are batched
+      // into a rAF coalesced flush — see _textBatchBuffer above.
+      const isTextOnly = !chunk.tool_calls && !chunk.additional_kwargs
 
       // If last message is AI with matching id (or both have no id), append text
       if (last && last.type === 'ai' && (!chunkId || chunkId === last.id || !last.id)) {
+        // ── Fast path: pure text chunk → batch into rAF ──
+        if (isTextOnly && last.id && reasoningStartTimes.has(last.id)) {
+          // Reasoning timing already captured — just buffer text, no reasoning
+          // extraction needed per chunk. The rAF flush appends content and
+          // triggers a single messages.value update per frame.
+          _textBatchBuffer += chunk.content
+          scheduleTextBatchFlush()
+          return
+        }
+        if (isTextOnly && !extractReasoningContentFromMessage({ ...last, content: last.content + chunk.content })) {
+          // No reasoning content in the accumulated text — safe to batch.
+          // The rAF flush will append and trigger one reactive update.
+          _textBatchBuffer += chunk.content
+          scheduleTextBatchFlush()
+          return
+        }
+
+        // ── Non-text or reasoning-bearing chunk → flush + full merge ──
+        flushTextBatch()
         const updated: ChatMessage = { ...last }
         updated.content = last.content + chunk.content
         // Preserve 'done' phase: once an AI message is marked done (by the `end`
@@ -705,12 +802,39 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           const newCalls = toToolCallSummaries(chunk.tool_calls)
           updated.tool_calls = [...(last.tool_calls || []), ...newCalls]
         }
+        // Merge chunk.additional_kwargs BEFORE reasoning timing so timing fields
+        // always take precedence (are not overwritten by chunk data).
         if (chunk.additional_kwargs) {
           updated.additional_kwargs = { ...(last.additional_kwargs || {}), ...chunk.additional_kwargs }
         }
+        // Capture reasoning start time: first time reasoning content appears in this message
+        const appendMsgId = updated.id
+        if (appendMsgId && !reasoningStartTimes.has(appendMsgId)) {
+          const reasoningContent = extractReasoningContentFromMessage(updated)
+          if (reasoningContent) {
+            reasoningStartTimes.set(appendMsgId, Date.now())
+            updated.additional_kwargs = {
+              ...(updated.additional_kwargs || {}),
+              reasoningStartTime: reasoningStartTimes.get(appendMsgId),
+            }
+          }
+        }
+        // Capture reasoning end time: tool calls arrived after reasoning started
+        if (chunk.tool_calls) {
+          const msgId = updated.id
+          if (msgId && reasoningStartTimes.has(msgId)) {
+            updated.additional_kwargs = {
+              ...(updated.additional_kwargs || {}),
+              reasoningEndTime: Date.now(),
+              reasoning_elapsed_ms: Date.now() - reasoningStartTimes.get(msgId)!,
+            }
+          }
+        }
         messages.value = [...messages.value.slice(0, -1), enrichToolCallMetadata(updated)]
       } else {
-        // New AI message
+        // New AI message — flush any pending batch first so the new message
+        // is appended AFTER the previous one's final content.
+        flushTextBatch()
         const msg: ChatMessage = {
           id: chunkId || genId('ai'),
           type: 'ai',
@@ -725,10 +849,23 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (chunk.additional_kwargs) {
           msg.additional_kwargs = chunk.additional_kwargs
         }
+        // Capture reasoning start time on new message (rare: thinking + tool calls in same chunk)
+        const newMsgId = msg.id
+        if (newMsgId && !reasoningStartTimes.has(newMsgId)) {
+          const reasoningContent = extractReasoningContentFromMessage(msg)
+          if (reasoningContent) {
+            reasoningStartTimes.set(newMsgId, Date.now())
+            msg.additional_kwargs = {
+              ...(msg.additional_kwargs || {}),
+              reasoningStartTime: reasoningStartTimes.get(newMsgId),
+            }
+          }
+        }
         messages.value = [...messages.value, enrichToolCallMetadata(msg)]
       }
     } else if (chunk.type === 'tool') {
-      // Tool result message
+      // Tool result message — flush pending text first so it appears in order.
+      flushTextBatch()
       const msg: ChatMessage = {
         id: chunk.id || genId('tool'),
         type: 'tool',
@@ -777,6 +914,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * Also backfills usage_metadata on existing AI messages.
    */
   function mergeValuesMessages(raw: SerializedMessage[]): void {
+    // Flush pending text batch so dedup sees the latest accumulated content.
+    flushTextBatch()
     if (!raw || raw.length === 0) return
     const mapped = raw.map(serializedToChatMessage)
 
@@ -824,8 +963,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // message — the values event is the ONLY source of user messages. Include
     // human messages only when messages.value is empty (initial hydration).
     const isInitialLoad = messages.value.length === 0
+    const truncatedIds = retryTruncatedIds.value
     const newOnes = mapped.filter(m => {
       if (existingIds.has(m.id)) return false
+      // Filter out messages that were truncated by retry(). The backend
+      // checkpoint still contains these (from the failed attempt), and its
+      // values event would otherwise re-add old AI messages.
+      if (truncatedIds.size > 0 && truncatedIds.has(m.id)) return false
       if (m.type === 'human' && !isInitialLoad) return false
       return true
     })
@@ -969,6 +1113,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * - No retry button visible (AssistantMessage only shows retry at phase='error')
    */
   function finalizeAllInProgress(): void {
+    // Flush any pending text batch before marking messages as done.
+    flushTextBatch()
     // Mark all AI messages as done
     const hasAnswering = messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
     if (hasAnswering) {
@@ -1012,19 +1158,63 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
    * success paths (end event, dropped-connection with content).
    */
   function finalizeStreamSuccess(userMsgId: string): void {
+    // Flush any pending text batch before finalizing.
+    flushTextBatch()
     // Mark ALL AI messages as done (fixes multi-AI-message stuck bug)
+    // Also finalize reasoning end time: if reasoning started but never ended
+    // (no tool call arrived after reasoning), capture elapsed time now so
+    // ChainOfThought's LiveTimer shows a real duration instead of staying
+    // in "思考中..." after the stream has ended.
     const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
     if (lastIdx >= 0) {
       const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
       let changed = false
+      const now = Date.now()
+
+      // Detect report-generating tool calls (write_file with report filename).
+      // When the LLM writes a report file in chat, attach a report artifact
+      // to the last AI message so the UI can show a "View full report" link.
+      // Check both AI message tool_calls and planningSteps (custom tool_call
+      // events) — during streaming the AI message's tool_calls may not be set
+      // if the backend bundles write_file + present_files in one response.
+      const isReportPath = (path: string) =>
+        /\.md$/i.test(path) && /report/i.test(path)
+          && !/^(readme|changelog|license|contributing|guide|tutorial|notes?|todo|draft)\b/i.test(path.split('/').pop() || '')
+      const hasReportToolCall = messages.value.some(m =>
+        m.type === 'ai' && m.tool_calls?.some(tc =>
+          tc.name === 'write_file' && typeof tc.args?.path === 'string'
+            && isReportPath(tc.args.path)
+        )
+      ) || planningSteps.value.some(s =>
+        s.toolName === 'write_file' && typeof s.args?.path === 'string'
+          && isReportPath(s.args.path)
+      )
+
       const next = messages.value.map((msg, i) => {
         if (msg.type !== 'ai' || msg.phase === 'done') return msg
         changed = true
         const isLast = i === lastIdx
+        // Finalize reasoning timing if reasoning started but no end time was recorded
+        const msgId = msg.id
+        let updatedKwargs = msg.additional_kwargs
+        if (msgId && reasoningStartTimes.has(msgId) && !msg.additional_kwargs?.reasoningEndTime) {
+          const startTime = reasoningStartTimes.get(msgId)!
+          updatedKwargs = {
+            ...(msg.additional_kwargs || {}),
+            reasoningEndTime: now,
+            reasoning_elapsed_ms: now - startTime,
+          }
+        }
+        // Attach report artifact to the last AI message when a report file was written
+        const artifacts = isLast && hasReportToolCall
+          ? [...(msg.artifacts || []), { id: 'report-link', title: 'report', kind: 'report' as const }]
+          : msg.artifacts
         return {
           ...msg,
           phase: 'done' as const,
           suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+          additional_kwargs: updatedKwargs,
+          artifacts,
         }
       })
       if (changed) {
@@ -1041,25 +1231,50 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   async function sendMessage(
     text: string,
-    mode?: string,
-    threadId?: string,
-    modeConfig?: {
-      thinking_enabled?: boolean
-      is_plan_mode?: boolean
-      subagent_enabled?: boolean
-      reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'
-      websearch_enabled?: boolean
+    sendOptions?: {
+      mode?: string
+      threadId?: string
+      modeConfig?: {
+        thinking_enabled?: boolean
+        is_plan_mode?: boolean
+        subagent_enabled?: boolean
+        reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'
+        websearch_enabled?: boolean
+      }
+      source?: string
+      /**
+       * ``additional_kwargs`` attached to the outgoing HumanMessage. Used by
+       * ``submitClarification`` to carry ``hide_from_ui`` + ``human_input_response``
+       * (DeerFlow pattern: the clarification answer is a new message, not a resume).
+       */
+      additionalKwargs?: Record<string, unknown>
+      /** Uploaded file attachments (images/documents) to include in the message. */
+      files?: Array<{ path: string; filename: string; mime_type?: string }>
+      /**
+       * When true, the SSE title handler skips updating the session title.
+       * Used by retry() so the original LLM-generated (or user-renamed) title
+       * is preserved — the backend would otherwise regenerate a title from the
+       * re-sent user message and overwrite the existing one.
+       */
+      retryPreserveTitle?: boolean
+      /**
+       * Checkpoint ID to fork from for retry. When set, the backend loads
+       * state from this checkpoint (before the failed user message) instead
+       * of the head, skipping the failed message entirely.
+       */
+      checkpointId?: string | null
     },
-    source?: string,
-    /**
-     * ``additional_kwargs`` attached to the outgoing HumanMessage. Used by
-     * ``submitClarification`` to carry ``hide_from_ui`` + ``human_input_response``
-     * (DeerFlow pattern: the clarification answer is a new message, not a resume).
-     */
-    additionalKwargs?: Record<string, unknown>,
-    /** Uploaded file attachments (images/documents) to include in the message. */
-    files?: Array<{ path: string; filename: string; mime_type?: string }>,
   ): Promise<void> {
+    const {
+      threadId,
+      modeConfig,
+      source,
+      additionalKwargs,
+      files,
+      retryPreserveTitle,
+      checkpointId,
+    } = sendOptions || {}
+
     // If a previous stream is still marked as loading (e.g. dropped connection
     // that hasn't fully cleaned up, or user clicked retry mid-stream), cancel
     // it first instead of silently dropping the new message. Previously
@@ -1078,6 +1293,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     userCancelled = false
     abortController = new AbortController()
 
+    try {
     const userMsg = addOptimisticUserMessage(text, additionalKwargs)
 
     // Resolve thread before streaming
@@ -1176,6 +1392,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
           if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
         }
+        // Retry checkpoint forking: when checkpointId is set (from retryPrepare),
+        // pass it to the backend so the checkpointer loads from that checkpoint
+        // (before the failed user message) instead of the head.
+        if (checkpointId) {
+          configurable.checkpoint_id = checkpointId
+        }
         // Prepend language directive so the backend LLM responds in the
         // user's UI language (SKILL.md: output language is controlled by user
         // message, not system prompt). Default to English for any non-zh locale.
@@ -1245,7 +1467,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // yielding, so any non-empty title here is display-safe.
             // Updates the session store in-place so the sidebar reflects the
             // title without HTTP polling.
-            if (data.title && currentThreadId) {
+            if (data.title && currentThreadId && !retryPreserveTitle) {
               // Lazy store access — avoids requiring Pinia at composable
               // creation time (tests create useThreadChat without Pinia).
               const sessionStore = useChatSessionStore()
@@ -1586,6 +1808,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       deleteThread(currentThreadId).catch(() => {})
       currentThreadId = null
     }
+    } finally {
+      // Safety net: ensure isLoading is always reset even if an unexpected
+      // exception escapes the try block (e.g. bugs in message merging logic).
+      // Without this, the retry button stays spinning forever.
+      isLoading.value = false
+    }
   }
 
   function cancelStream() {
@@ -1621,6 +1849,33 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     )
   }
 
+  /**
+   * Abort the local SSE connection WITHOUT sending server-side cancel.
+   *
+   * Used by onUnmounted (page navigation) — the agent run continues in the
+   * background (on_disconnect=continue) so the user can recover via
+   * checkChatTask() + loadHistory() when they return. Contrast with
+   * cancelStream() which sends client.runs.cancel() to the agent.
+   */
+  function abortLocalStream() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+    if (streamTimeoutId !== null) {
+      clearTimeout(streamTimeoutId)
+      streamTimeoutId = null
+    }
+    if (retryDelayId !== null) {
+      clearTimeout(retryDelayId)
+      retryDelayId = null
+    }
+    // Do NOT set userCancelled — the retry loop should treat this as a
+    // transient disconnect, not a deliberate cancel.
+    // Do NOT call client.runs.cancel() — the agent continues running.
+    isLoading.value = false
+  }
+
   async function loadHistory(threadId: string, retries = 1): Promise<void> {
     // Cancel any ongoing stream before loading new history
     cancelStream()
@@ -1630,6 +1885,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // don't linger. Also clears summarizedIds so a fresh run can recapture.
     transientBridge.value = []
     summarizedIds.value = new Set()
+    // Retry safety net: clear truncated IDs on thread switch so they don't
+    // leak into the next conversation's values events.
+    retryTruncatedIds.value = new Set()
 
     isLoading.value = true
     error.value = null
@@ -1757,9 +2015,75 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (isLoading.value) return
     const lastHuman = [...messages.value].reverse().find(m => m.type === 'human')
     if (lastHuman) {
+      // Truncate BEFORE the last human message (not after it).
+      // sendMessage → addOptimisticUserMessage will re-add it with a fresh id,
+      // so keeping the original would produce two identical user bubbles.
+      // Save original messages in case sendMessage fails — we'll restore them.
+      const originalMessages = [...messages.value]
       const lastIdx = messages.value.lastIndexOf(lastHuman)
-      messages.value = messages.value.slice(0, lastIdx + 1)
-      await sendMessage(lastHuman.content, undefined, threadId || currentThreadId || undefined)
+
+      // Record IDs of messages being truncated so mergeValuesMessages can
+      // filter them out. The backend checkpoint still contains these messages
+      // (from the failed attempt), and its values event would otherwise
+      // re-add them to the frontend messages array. This is a safety net —
+      // the server-side checkpoint fork in retryPrepare should prevent the
+      // old content from reaching the frontend in the first place.
+      const truncatedIds = new Set(
+        messages.value.slice(lastIdx).map(m => m.id),
+      )
+      retryTruncatedIds.value = truncatedIds
+
+      try {
+        messages.value = messages.value.slice(0, lastIdx)
+
+        // Retry checkpoint forking: call the backend retry-prepare endpoint
+        // which returns the checkpoint_id of the pre-failure checkpoint.
+        // We pass this to sendMessage via checkpointId so the backend can
+        // fork from that checkpoint (skipping the failed message).
+        // Falls back to a normal retry if the endpoint fails or returns
+        // retry_from_checkpoint: false.
+        const effectiveThreadId = threadId || currentThreadId
+        let checkpointId: string | null = null
+        if (effectiveThreadId) {
+          try {
+            const { retryPrepare } = await import('@/api/ai-chat')
+            const res = await retryPrepare(effectiveThreadId)
+            if (res.retry_from_checkpoint && res.checkpoint_id) {
+              checkpointId = res.checkpoint_id
+            }
+          } catch (err) {
+            // Non-fatal: fall back to a normal retry. The retryTruncatedIds
+            // filter still prevents old content from reappearing in the UI.
+            if (!(err as Error).message?.includes('404')) {
+              console.warn('[useThreadChat] retryPrepare failed, falling back:', err)
+            }
+          }
+        }
+
+        // NOTE: do NOT pass retryPreserveTitle here. The backend's
+        // sync_title_from_checkpoint (run_extras) gates title generation on
+        // _should_generate_title (first exchange only + no proper DB title),
+        // so it already avoids overwriting an existing real title. When the
+        // FIRST request fails before generating a real title (model error,
+        // network drop, etc.), the DB may hold a truncated-text fallback or
+        // nothing at all — the retry must be able to replace it with a proper
+        // LLM-generated title via the values event. Passing
+        // retryPreserveTitle: true blocked that update, leaving the sidebar
+        // stuck on the temporary (user-text) title.
+        await sendMessage(lastHuman.content, {
+          threadId: effectiveThreadId || undefined,
+          checkpointId,
+        })
+      } catch (err) {
+        // Restore original messages on failure so user's message stays visible,
+        // then re-throw so the caller (handleRetry) can show a toast.
+        messages.value = originalMessages
+        throw err
+      } finally {
+        // Clear truncated IDs after the retry stream completes (success or
+        // failure). Subsequent values events should not be filtered.
+        retryTruncatedIds.value = new Set()
+      }
     }
   }
 
@@ -1866,22 +2190,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // thread switch) so rescued turns never leak across chat views.
     transientBridge.value = []
     summarizedIds.value = new Set()
+    // Retry safety net: clear truncated IDs on new chat so they don't leak.
+    retryTruncatedIds.value = new Set()
   }
 
   /**
-   * Submit a clarification answer as a NEW HumanMessage (DeerFlow pattern).
-   *
-   * DeerFlow's ClarificationMiddleware intercepts ``ask_clarification`` and
-   * ends the run (``Command(goto=END)``) with a
-   * ``ToolMessage(artifact={human_input})``. The user's answer is NOT sent via
-   * a resume endpoint - it's a new ``HumanMessage`` carrying
-   * ``additional_kwargs.human_input_response`` (structured) + ``hide_from_ui``
-   * (so it doesn't render as a duplicate chat bubble). The message text follows
-   * DeerFlow's ``buildHumanInputResponseText`` format so the LLM sees a
-   * natural-language answer.
-   *
-   * ``answeredInterruptIds`` (computed from message history) automatically
-   * marks the clarification card as 'answered' once the response message lands.
+   * Handle clarification answer submission
+   * Sends the answer as a new HumanMessage with human_input_response (DeerFlow
+   * ClarificationMiddleware pattern) - NOT a resume endpoint.
    */
   async function submitClarification(
     threadId: string,
@@ -1910,9 +2226,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // sees a readable answer, not just a raw value.
     const text = `For your clarification "${question}", my answer is: ${answer}`
 
-    await sendMessage(text, undefined, threadId, undefined, undefined, {
-      hide_from_ui: true,
-      human_input_response: response,
+    await sendMessage(text, {
+      threadId,
+      additionalKwargs: {
+        hide_from_ui: true,
+        human_input_response: response,
+      },
     })
   }
 
@@ -1920,7 +2239,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     messages, visibleMessages, isLoading, isStreaming, error, tokenUsage,
     planningSteps, suggestions, answeredInterruptIds, runId,
     todos, serverGoal,
-    sendMessage, cancelStream, loadHistory, retry, clearMessages, submitClarification,
+    sendMessage, cancelStream, abortLocalStream, loadHistory, retry, clearMessages, submitClarification,
     submitFeedback, handleCompact, handleGoalCommand,
   }
 }

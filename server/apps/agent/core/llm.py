@@ -7,6 +7,23 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
+def _is_unsupported_response_format_error(exc: Exception) -> bool:
+    """Check if an exception indicates the model doesn't support response_format.
+
+    Some OpenAI-compatible providers/models return 400 when response_format is
+    set but not supported. Detect by status code + error message patterns.
+    """
+    error_str = str(exc).lower()
+    # Check for HTTP 400 status
+    has_400 = "400" in error_str or "bad request" in error_str
+    # Check for response_format-related messages
+    has_rf_hint = any(
+        kw in error_str
+        for kw in ("response_format", "json_object", "structured output", "not supported")
+    )
+    return has_400 and has_rf_hint
+
+
 class LLMResponseError(Exception):
     """LLM 返回无效/空响应时抛出。
 
@@ -132,6 +149,8 @@ class LLMClient:
         self.provider = provider
         self.model_id = model_id
         self.vision_model_id = vision_model_id or model_id
+        self._api_key = api_key
+        self._base_url = base_url
         self._anthropic_client = None
         self._openai_client = None
         if provider == "anthropic":
@@ -157,6 +176,54 @@ class LLMClient:
             return await self._complete_anthropic(prompt, max_tokens, system)
         elif self.provider in ("openai", "openai_compatible"):
             return await self._complete_openai(prompt, max_tokens, system)
+        else:
+            raise ValueError(f"不支持的 LLM Provider: {self.provider}")
+
+    async def complete_json(
+        self,
+        prompt: str,
+        max_tokens: int = 4000,
+        system: str | None = None,
+    ) -> str:
+        """Send a completion request with JSON output enforcement.
+
+        For OpenAI-compatible providers: sets ``response_format={"type": "json_object"}``
+        so the API guarantees valid JSON output (no markdown fences, no prose).
+        Falls back to plain ``complete()`` if the model doesn't support response_format
+        (400 error from the API).
+
+        For Anthropic: no native JSON mode — adds a system hint instead.
+        The caller should still use ``parse_report_json`` for tolerant parsing.
+        """
+        if self.provider == "anthropic":
+            # Anthropic has no response_format — use system hint
+            json_system = (
+                "You are a structured data extractor. "
+                "Output ONLY valid JSON. No markdown, no prose, no code fences."
+            )
+            combined_system = (
+                f"{json_system}\n{system}" if system else json_system
+            )
+            return await self._complete_anthropic(
+                prompt, max_tokens, combined_system
+            )
+        elif self.provider in ("openai", "openai_compatible"):
+            try:
+                return await self._complete_openai(
+                    prompt, max_tokens, system, response_format="json_object"
+                )
+            except Exception as exc:
+                # Some models don't support response_format — fallback to plain
+                # completion. Caller still uses parse_report_json for tolerance.
+                if _is_unsupported_response_format_error(exc):
+                    logger.warning(
+                        "[complete_json] response_format not supported by model %s, "
+                        "falling back to plain complete: %s",
+                        self.model_id,
+                        exc,
+                    )
+                    return await self._complete_openai(prompt, max_tokens, system)
+                raise
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
@@ -359,9 +426,18 @@ class LLMClient:
         )
 
     async def _complete_openai(
-        self, prompt: str, max_tokens: int, system: str | None
+        self,
+        prompt: str,
+        max_tokens: int,
+        system: str | None,
+        response_format: str | None = None,
     ) -> str:
         """OpenAI 单次补全请求。
+
+        Args:
+            response_format: If ``"json_object"``, sets OpenAI's response_format
+                to guarantee valid JSON output. Only effective for models that
+                support structured output (GPT-4o, GPT-4o-mini, etc.).
 
         Raises:
             LLMResponseError: 响应为空或无内容
@@ -371,11 +447,14 @@ class LLMClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         assert self._openai_client is not None
-        response = await self._openai_client.chat.completions.create(
-            model=self.model_id,
-            max_tokens=max_tokens,
-            messages=cast(Any, messages),
-        )
+        kwargs: dict[str, Any] = {
+            "model": self.model_id,
+            "max_tokens": max_tokens,
+            "messages": cast(Any, messages),
+        }
+        if response_format == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
+        response = await self._openai_client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         if content:
             return content

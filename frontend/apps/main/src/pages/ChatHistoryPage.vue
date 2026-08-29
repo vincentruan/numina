@@ -506,7 +506,7 @@ function handleTouchEnd(e: TouchEvent, sessionId: string) {
   position: absolute;
   inset: 0;
   background: var(--van-background, #f7f8fa);
-  z-index: 10;
+  z-index: 1010;
   animation: slide-in-right 0.3s ease-out;
 }
 

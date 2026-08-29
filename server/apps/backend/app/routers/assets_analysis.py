@@ -55,15 +55,19 @@ def calculate_buy_vs_rent(
 ):
     usage_years = body.usage_months / 12.0
     total_maintenance = body.annual_maintenance_cost * usage_years
-    residual_value = body.purchase_price * body.residual_value_rate * max(
-        0.0, 1.0 - usage_years / body.depreciation_years
+    residual_value = (
+        body.purchase_price
+        * body.residual_value_rate
+        * max(0.0, 1.0 - usage_years / body.depreciation_years)
     )
     buy_total = body.purchase_price + total_maintenance - residual_value
     rent_total = body.monthly_rent * body.usage_months
 
     monthly_maintenance = body.annual_maintenance_cost / 12.0
     if body.monthly_rent > monthly_maintenance:
-        breakeven_months: float | None = body.purchase_price / (body.monthly_rent - monthly_maintenance)
+        breakeven_months: float | None = body.purchase_price / (
+            body.monthly_rent - monthly_maintenance
+        )
     else:
         breakeven_months = None
 
@@ -78,7 +82,9 @@ def calculate_buy_vs_rent(
     return BuyVsRentResponse(
         buy_total=round(buy_total, 2),
         rent_total=round(rent_total, 2),
-        breakeven_months=round(breakeven_months, 1) if breakeven_months is not None else None,
+        breakeven_months=round(breakeven_months, 1)
+        if breakeven_months is not None
+        else None,
         recommendation=recommendation,
         buy_advantage_pct=round(diff_pct, 1),
     )
@@ -93,11 +99,15 @@ def get_cost_equivalence(
     user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    asset = db.query(Asset).filter(
-        Asset.id == asset_id,
-        Asset.family_id == user.family_id,
-        Asset.is_archived.is_(False),
-    ).first()
+    asset = (
+        db.query(Asset)
+        .filter(
+            Asset.id == asset_id,
+            Asset.family_id == user.family_id,
+            Asset.is_archived.is_(False),
+        )
+        .first()
+    )
     if not asset:
         raise AppError(ErrorCode.ASSET_NOT_FOUND)
 
@@ -118,7 +128,9 @@ def get_cost_equivalence(
         held_days = 1
 
     annual_maintenance = float(asset.annual_maintenance_cost or 0.0)
-    total_held_cost = float(asset.purchase_price) + annual_maintenance * (held_days / 365.0)
+    total_held_cost = float(asset.purchase_price) + annual_maintenance * (
+        held_days / 365.0
+    )
     daily_cost = total_held_cost / held_days
     time_cost_hours = total_held_cost / hourly_wage
     opportunity_cost = total_held_cost * ((1 + yield_rate) ** years) - total_held_cost

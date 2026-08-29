@@ -52,83 +52,129 @@
       <!-- Actual Content -->
       <template v-else-if="sortedWishes.length">
         <ul class="wish-list" :aria-label="t('wish.aria.listLabel')">
-          <li
+          <van-swipe-cell
             v-for="wish in sortedWishes"
             :key="wish.id"
-            class="wish-item"
-            :class="`priority-${wish.priority}`"
-            tabindex="0"
-            :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? currency.formatConverted(wish.expected_price, wish.currency) : '' })"
-            @click="$router.push(`/wishes/${wish.id}`)"
-            @keydown.enter="$router.push(`/wishes/${wish.id}`)"
+            :ref="setSwipeRef(wish.id)"
+            :left-width="0"
+            :right-width="swipeRightWidth(wish)"
+            :style="swipeCellStyle(wish)"
+            class="wish-swipe"
+            stop-propagation
           >
-            <!-- Priority stripe -->
-            <div class="priority-stripe" aria-hidden="true" />
+            <li
+              class="wish-item"
+              :class="`priority-${wish.priority}`"
+              tabindex="0"
+              :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? currency.formatConverted(wish.expected_price, wish.currency) : '' })"
+              @click="$router.push(`/wishes/${wish.id}`)"
+              @keydown.enter="$router.push(`/wishes/${wish.id}`)"
+            >
+              <!-- Priority stripe -->
+              <div class="priority-stripe" aria-hidden="true" />
 
-            <!-- Icon anchor -->
-            <div class="wish-icon" aria-hidden="true">
-              <template v-if="wish.category">
-                <SvgIcon :name="getIconId(wish.category.icon)" class="icon-svg" />
-              </template>
-              <span v-else class="wish-emoji">✨</span>
-            </div>
+              <!-- Icon anchor -->
+              <div class="wish-icon" aria-hidden="true">
+                <template v-if="wish.category">
+                  <SvgIcon :name="getIconId(wish.category.icon)" class="icon-svg" />
+                </template>
+                <span v-else class="wish-emoji">✨</span>
+              </div>
 
-            <!-- Main content -->
-            <div class="wish-body">
-              <div class="wish-top">
-                <span class="wish-name">{{ wish.name }}</span>
-                <div class="wish-right">
-                  <span v-if="wish.expected_price" class="wish-price">
-                    {{ currency.formatConverted(wish.expected_price, wish.currency) }}
+              <!-- Main content -->
+              <div class="wish-body">
+                <div class="wish-top">
+                  <span class="wish-name">{{ wish.name }}</span>
+                  <div class="wish-right">
+                    <span v-if="wish.expected_price" class="wish-price">
+                      {{ currency.formatConverted(wish.expected_price, wish.currency) }}
+                    </span>
+                    <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
+                    <van-icon name="arrow" size="12" class="card-arrow" />
+                  </div>
+                </div>
+
+                <div class="wish-bottom">
+                  <span class="priority-badge" :class="wish.priority">
+                    {{ t('wish.priorityText.' + wish.priority) }}{{ t('wish.prioritySuffix') }}
                   </span>
-                  <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
-                  <van-icon name="arrow" size="12" class="card-arrow" />
+                  <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
+                  <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
+                </div>
+
+                <!-- Per-wish afford bar -->
+                <div
+                  v-if="wish.expected_price"
+                  class="afford-bar"
+                  :class="affordStateClass(wish)"
+                >
+                  <span v-if="affordFor(wish).state.value.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
+                  <span v-else-if="affordFor(wish).state.value.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
+                  <span v-else-if="affordFor(wish).state.value.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
+                  <span v-if="affordAccelerate(wish)" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
+                </div>
+
+                <!-- U3: savings progress bar (priority-colored, 3px). -->
+                <div
+                  v-if="wish.expected_price && wish.status === 'pending'"
+                  class="wish-progress"
+                  role="progressbar"
+                  :aria-valuenow="wishProgress(wish)"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  :aria-label="t('wish.progressAria', { name: wish.name })"
+                >
+                  <div class="wish-progress-bar" :class="{ 'wish-progress-empty': wishProgress(wish) === 0 && !Number(wish.monthly_saving), 'wish-progress-empty-dot': wishProgress(wish) === 0 && Number(wish.monthly_saving) > 0 }">
+                    <div
+                      class="wish-progress-fill"
+                      :class="[`priority-${wish.priority}`, { 'almost-reached': wishProgress(wish) >= 80 }]"
+                      :style="{ width: `${wishProgress(wish) || (Number(wish.monthly_saving) > 0 ? 2 : 0)}%` }"
+                    />
+                  </div>
+                  <span v-if="wishProgress(wish) >= 80" class="almost-badge">
+                    {{ t('wish.almostReached') }}
+                  </span>
                 </div>
               </div>
+            </li>
 
-              <div class="wish-bottom">
-                <span class="priority-badge" :class="wish.priority">
-                  {{ t('wish.priorityText.' + wish.priority) }}{{ t('wish.prioritySuffix') }}
-                </span>
-                <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
-                <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
-              </div>
-
-              <!-- Per-wish afford bar -->
-              <div
-                v-if="wish.expected_price"
-                class="afford-bar"
-                :class="affordStateClass(wish)"
-              >
-                <span v-if="affordFor(wish).state.value.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
-                <span v-else-if="affordFor(wish).state.value.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
-                <span v-else-if="affordFor(wish).state.value.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
-                <span v-if="affordAccelerate(wish)" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
-              </div>
-
-              <!-- U3: savings progress bar (priority-colored, 3px). -->
-              <div
-                v-if="wish.expected_price && wish.status === 'pending'"
-                class="wish-progress"
-                role="progressbar"
-                :aria-valuenow="wishProgress(wish)"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                :aria-label="t('wish.progressAria', { name: wish.name })"
-              >
-                <div class="wish-progress-bar" :class="{ 'wish-progress-empty': wishProgress(wish) === 0 && !Number(wish.monthly_saving), 'wish-progress-empty-dot': wishProgress(wish) === 0 && Number(wish.monthly_saving) > 0 }">
-                  <div
-                    class="wish-progress-fill"
-                    :class="[`priority-${wish.priority}`, { 'almost-reached': wishProgress(wish) >= 80 }]"
-                    :style="{ width: `${wishProgress(wish) || (Number(wish.monthly_saving) > 0 ? 2 : 0)}%` }"
-                  />
-                </div>
-                <span v-if="wishProgress(wish) >= 80" class="almost-badge">
-                  {{ t('wish.almostReached') }}
-                </span>
-              </div>
-            </div>
-          </li>
+            <!-- Swipe-left action buttons (right side) -->
+            <template v-if="wish.status === 'pending'" #right>
+              <van-button
+                v-if="!wish.converts_to_asset"
+                square
+                type="success"
+                class="swipe-action-btn"
+                :text="t('wish.markComplete')"
+                @click="onSwipeComplete(wish)"
+              />
+              <van-button
+                square
+                type="warning"
+                class="swipe-action-btn"
+                :text="t('wish.cancelWish')"
+                @click="onSwipeCancel(wish)"
+              />
+            </template>
+            <template v-else-if="wish.status === 'cancelled'" #right>
+              <van-button
+                square
+                type="success"
+                class="swipe-action-btn"
+                :text="t('wish.reactivate')"
+                @click="onSwipeReactivate(wish)"
+              />
+            </template>
+            <template v-else-if="wish.status === 'realized'" #right>
+              <van-button
+                square
+                type="primary"
+                class="swipe-action-btn"
+                :text="t('wish.copyWish')"
+                @click="onSwipeCopy(wish)"
+              />
+            </template>
+          </van-swipe-cell>
         </ul>
       </template>
       <!-- Empty states -->
@@ -184,10 +230,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, toRef } from 'vue'
+import { ref, computed, onMounted, toRef, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
 import type { Wish } from '@/types'
+import { completeWish, copyWish } from '@/api/wishes'
 import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useWishStore } from '@/stores/wish'
@@ -211,6 +259,18 @@ const currency = useCurrency()
 const { ensureRate } = useExchangeRate()
 
 const wishes = ref<Wish[]>([])
+
+// Swipe cell refs for closing after actions (乐观锁: prevent stale open state).
+const swipeRefs = new Map<string, ComponentPublicInstance<{ close: (pos?: string) => void }>>()
+function setSwipeRef(id: string) {
+  return (el: unknown) => {
+    if (el) swipeRefs.set(id, el as ComponentPublicInstance<{ close: (pos?: string) => void }>)
+    else swipeRefs.delete(id)
+  }
+}
+function closeSwipe(id: string) {
+  swipeRefs.get(id)?.close('right')
+}
 
 // High-interest-debt ↔ wish linkage. Warn before saving.
 const debtWarning = useDebtWarning(
@@ -291,9 +351,84 @@ function wishProgress(wish: Wish): number {
   return Math.min(100, Math.round((saved / target) * 100))
 }
 
-async function loadWishes() {
+// ── Swipe actions ──
+// Each action button is 80px wide. Return 0 for realized (no swipe).
+function swipeRightWidth(wish: Wish): number {
+  if (wish.status === 'pending') {
+    return wish.converts_to_asset ? 80 : 160
+  }
+  return 80 // cancelled (reactivate) or realized (copy)
+}
+
+// CSS custom property for right container width (flex children need parent width to size correctly)
+function swipeCellStyle(wish: Wish): Record<string, string> {
+  const w = swipeRightWidth(wish)
+  return w > 0 ? { '--swipe-right-width': `${w}px` } : {}
+}
+
+async function onSwipeComplete(wish: Wish) {
+  const saved = Number(wish.saved_amount || 0)
+  const expected = Number(wish.expected_price || 0)
+  const insufficient = expected > 0 && saved < expected
+  const message = insufficient
+    ? t('toast.confirmCompleteInsufficient', {
+      saved: currency.formatConverted(saved, wish.currency),
+      expected: currency.formatConverted(expected, wish.currency),
+    })
+    : t('toast.confirmComplete')
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message })
+    await completeWish(wish.id)
+    await refreshWishes()
+    closeSwipe(wish.id)
+    showSuccessToast(t('toast.wishCompleted'))
+  } catch {
+    // user cancelled dialog
+  }
+}
+
+async function onSwipeCancel(wish: Wish) {
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmCancel') })
+    await wishStore.updateWish(wish.id, { status: 'cancelled' })
+    await refreshWishes()
+    closeSwipe(wish.id)
+    showSuccessToast(t('toast.wishCancelled'))
+  } catch {
+    // user cancelled dialog
+  }
+}
+
+async function onSwipeReactivate(wish: Wish) {
+  try {
+    await wishStore.updateWish(wish.id, { status: 'pending' })
+    await refreshWishes()
+    closeSwipe(wish.id)
+    showSuccessToast(t('toast.wishReactivated'))
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  }
+}
+
+async function onSwipeCopy(wish: Wish) {
+  try {
+    const res = await copyWish(wish.id)
+    closeSwipe(wish.id)
+    showSuccessToast(t('toast.wishCopied'))
+    router.push(`/wishes/${res.data.id}`)
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  }
+}
+
+/** Re-fetch wishes from store and sync local ref (after mutations). */
+async function refreshWishes() {
   await wishStore.fetchWishes()
   wishes.value = wishStore.wishes
+}
+
+async function loadWishes() {
+  await refreshWishes()
   if (!dashboardStore.overview) {
     dashboardStore.fetchOverview().catch(() => {})
   }
@@ -405,6 +540,20 @@ defineExpose({
 .list-content {
   padding: 12px 16px;
 }
+
+.wish-swipe {
+  touch-action: pan-y;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Force swipe action buttons to share width equally via flexbox */
+.wish-swipe :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
+}
+
+@import '@/styles/swipe-actions.css';
 
 .wish-list {
   list-style: none;

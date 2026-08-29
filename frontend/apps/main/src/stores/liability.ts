@@ -52,8 +52,8 @@ export const useLiabilityStore = defineStore('liability', () => {
     useDashboardStore().invalidateDashboard()
   }
 
-  async function recordPayment(id: string, amount: number) {
-    const res = await liabilityApi.recordPayment(id, amount)
+  async function recordPayment(id: string, amount: number, paid_at?: string) {
+    const res = await liabilityApi.recordPayment(id, amount, paid_at)
     const idx = liabilities.value.findIndex(l => l.id === id)
     if (idx !== -1) liabilities.value[idx] = res.data
     if (currentLiability.value?.id === id) currentLiability.value = res.data

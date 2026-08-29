@@ -131,10 +131,5 @@ describe('HumanInputCard', () => {
       const wrapper = mountCard({ status: 'submitting' })
       expect(wrapper.find('.card-submitting').exists()).toBe(true)
     })
-
-    it('shows superseded state', () => {
-      const wrapper = mountCard({ status: 'superseded' })
-      expect(wrapper.find('.card-superseded').exists()).toBe(true)
-    })
   })
 })

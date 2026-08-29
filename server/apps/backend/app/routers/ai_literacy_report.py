@@ -3,12 +3,14 @@
 POST /api/v1/ai/literacy-report/generate         — synchronous (legacy, scheduler)
 POST /api/v1/ai/literacy-report/generate/events  — SSE streaming (U14 bridge consumer)
 """
+
+import asyncio
 import json
 import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled
@@ -17,12 +19,15 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
+    _pump_agent_sse_to_bridge,
     _spawn_lifecycle_consumer,
     consume_task_stream,
+    get_shared_bridge,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.literacy_report import _sunday_of
@@ -101,7 +106,9 @@ async def trigger_generate(
         "thread_id": report.thread_id,
         "week_start": report.week_start.isoformat(),
         "narrative": report.narrative[:100] if report.narrative else None,
-        "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+        "generated_at": report.generated_at.isoformat()
+        if report.generated_at
+        else None,
     }
 
 
@@ -110,9 +117,7 @@ async def trigger_generate(
 # ---------------------------------------------------------------------------
 
 
-def _validate_child(
-    db: Session, *, child_id_str: str, family_id: int
-) -> int:
+def _validate_child(db: Session, *, child_id_str: str, family_id: int) -> int:
     """Parse and validate child_id belongs to family. Returns int child_id."""
     try:
         cid = int(child_id_str)
@@ -146,17 +151,13 @@ async def trigger_generate_events(
     if blocked_resp is not None:
         return blocked_resp
 
-    cid = _validate_child(
-        db, child_id_str=child_id, family_id=current_user.family_id
-    )
+    cid = _validate_child(db, child_id_str=child_id, family_id=current_user.family_id)
 
     week_start = _sunday_of(date.today())
 
     # Cache hit → return JSON (non-streaming)
     if not force:
-        status = get_report_status(
-            db, family_id=current_user.family_id, child_id=cid
-        )
+        status = get_report_status(db, family_id=current_user.family_id, child_id=cid)
         if status["status"] == "ready":
             return status
 
@@ -187,7 +188,7 @@ async def trigger_generate_events(
                 session_id=session.id,
                 db=db,
             )
-            return JSONResponse(
+            return SnowflakeResponse(
                 status_code=202,
                 content={
                     "status": "queued",
@@ -213,67 +214,17 @@ async def trigger_generate_events(
         f" {week_start.isoformat()} 起始周的周报"
     )
 
-    # Trigger agent via non-streaming POST (bridge consumer pattern)
+    # Phase 1: Backend-owned buffer (single streaming POST — no double trigger).
     agent_client = AgentClient(family_id=family_id, user_id=user_id, timeout=120.0)
     agent_url = f"/internal/gateway/runs/literacy-weekly-report/{session_id}"
-    run_id: str | None = None
+    shared_bridge = get_shared_bridge()
 
-    try:
-        resp = await agent_client.post(
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": user_id,
-                "language": current_user.language,
-                "on_disconnect": "continue",
-                "task_id": task_id,
-                "input": {"messages": [{"role": "user", "content": trigger}]},
-            },
-        )
-        if resp.status_code != 200:
-            logger.warning(
-                "[literacy-report] agent trigger failed: status=%s body=%s task=%s",
-                resp.status_code,
-                resp.text[:200],
-                task_id,
-            )
-            from apps.backend.app.database import SessionLocal
-
-            _db = SessionLocal()
-            try:
-                AITaskService.fail_task(task_id, "报告生成服务异常", _db)
-            finally:
-                _db.close()
-            err = json.dumps({"message": "报告生成服务异常", "name": "AgentError"}).encode()
-            return StreamingResponse(
-                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-                media_type="text/event-stream",
-            )
-
-        # Extract agent run_id from Content-Location header and persist to AITask
-        run_id = AITaskService.extract_and_attach_run_id(
-            task_id, resp.headers.get("Content-Location"), family_id
-        )
-    except Exception as exc:
-        logger.warning(
-            "[literacy-report] agent trigger failed task=%s err=%s", task_id, exc
-        )
-        from apps.backend.app.database import SessionLocal
-
-        _db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, f"报告生成服务中断: {type(exc).__name__}", _db)
-        finally:
-            _db.close()
-        err = json.dumps({"message": "报告生成服务中断", "name": type(exc).__name__}).encode()
-        return StreamingResponse(
-            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-            media_type="text/event-stream",
-        )
-
-    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    # Lifecycle result callback — persists literacy report output on completion.
     async def _persist_literacy_result(_event_type: str, data: dict) -> None:
-        if isinstance(data, dict) and data.get("type") == "literacy_weekly_report.result":
+        if (
+            isinstance(data, dict)
+            and data.get("type") == "literacy_weekly_report.result"
+        ):
             payload = data.get("payload", {})
             narrative = payload.get("report") or payload.get("narrative")
             if narrative:
@@ -306,31 +257,94 @@ async def trigger_generate_events(
                         existing.thread_id = thread_id
                         existing.report_json = report_json
                     else:
-                        _db.add(LiteracyWeeklyReport(
-                            child_id=cid,
-                            week_start=week_start,
-                            report_json=report_json,
-                            narrative=narrative,
-                            thread_id=thread_id,
-                        ))
+                        _db.add(
+                            LiteracyWeeklyReport(
+                                child_id=cid,
+                                week_start=week_start,
+                                report_json=report_json,
+                                narrative=narrative,
+                                thread_id=thread_id,
+                            )
+                        )
                     _db.commit()
                 finally:
                     _db.close()
 
-    _spawn_lifecycle_consumer(
-        task_id=task_id,
-        family_id=family_id,
-        run_id=run_id,
-        on_result=_persist_literacy_result,
+    agent_trigger_body = {
+        "family_id": str(family_id),
+        "user_id": user_id,
+        "language": current_user.language,
+        "on_disconnect": "continue",
+        "task_id": task_id,
+        "input": {"messages": [{"role": "user", "content": trigger}]},
+    }
+
+    # Track lifecycle consumer spawn state.
+    lifecycle_spawned = [False]
+    lifecycle_task: asyncio.Task[None] | None = None
+    cl_bare_run_id: str | None = None
+
+    def _on_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. Persist to DB only."""
+        nonlocal cl_bare_run_id
+        cl_bare_run_id = cl_url.rstrip("/").rsplit("/", 1)[-1]
+        AITaskService.extract_and_attach_run_id(
+            task_id, cl_url, family_id
+        )
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id."""
+        nonlocal lifecycle_task
+        AITaskService.extract_and_attach_run_id(
+            task_id, meta_run_id, family_id
+        )
+        if lifecycle_task is not None and not lifecycle_task.done():
+            lifecycle_task.cancel()
+        lifecycle_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=meta_run_id,
+            on_result=_persist_literacy_result,
+            bridge=shared_bridge,
+        )
+        lifecycle_spawned[0] = True
+
+    # Spawn background pump: one streaming POST → shared bridge.
+    asyncio.create_task(
+        _pump_agent_sse_to_bridge(
+            agent_client=agent_client,
+            agent_url=agent_url,
+            json_body=agent_trigger_body,
+            bridge=shared_bridge,
+            run_id="",
+            task_id=task_id,
+            on_run_id=_on_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
+        )
     )
 
-    # SSE forwarder — pure relay, lifecycle handled above
+    # Fallback: lifecycle consumer if metadata never arrives within 3s.
+    async def _lc_fallback() -> None:
+        await asyncio.sleep(3.0)
+        if not lifecycle_spawned[0]:
+            _spawn_lifecycle_consumer(
+                task_id=task_id,
+                family_id=family_id,
+                run_id=cl_bare_run_id,
+                on_result=_persist_literacy_result,
+                bridge=shared_bridge,
+            )
+
+    asyncio.create_task(_lc_fallback())
+
+    # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=run_id,
+        run_id=None,
+        bridge=shared_bridge,
     )
 
     return StreamingResponse(

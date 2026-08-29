@@ -1,24 +1,23 @@
 """FastAPI lifespan bootstrap and teardown for runtime singletons.
 
 Manages the lifecycle of:
-- ``app.state.stream_bridge`` — StreamBridge for event passing (memory or redis)
+- ``app.state.stream_bridge`` — StreamBridge for event passing (memory, DeerFlow native)
 - ``app.state.run_manager`` — ``RunManager`` for run lifecycle tracking
 
 # [Copied from DeerFlow Reference] — StreamBridge + RunManager singleton pattern
 # [Integrated with Numina Multi-Tenant] — shared instances across all families
-# [Cache Abstraction] — Use memory bridge by default, redis when STREAM_BRIDGE_TYPE=redis
+# Agent always uses in-memory bridge; backend owns the cross-process buffer.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 
 from deerflow.runtime import RunManager, StreamBridge
 from fastapi import FastAPI, HTTPException, Request
 
-from packages.db.stream_bridge import make_stream_bridge
-from packages.db.stream_bridge.config import StreamBridgeConfig
+from packages.stream_bridge import make_stream_bridge
+from packages.stream_bridge.config import StreamBridgeConfig
 
 from .gc import drain_inflight_runs, reconcile_orphaned_runs
 
@@ -35,23 +34,22 @@ async def init_runtime(app: FastAPI) -> None:
 
     # [Copied from DeerFlow Reference] — StreamBridge with bounded queue
     # [Integrated with Numina Multi-Tenant] — single shared instance
-    # [Cache Abstraction] — Memory bridge by default, Redis when configured
+    # Agent always uses in-memory bridge (DeerFlow native); backend owns the
+    # cross-process buffer.  No Redis, no cross-process bridge in the agent.
     """
-    # Cache abstraction: use memory bridge by default (single-process dev/test),
-    # Redis when STREAM_BRIDGE_TYPE=redis (multi-process deployment).
-    # This allows local development without requiring Redis, while supporting
-    # Redis or other cache providers in production via configuration.
-    bridge_type = os.getenv("STREAM_BRIDGE_TYPE", "memory")
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
+    # Agent always uses in-memory StreamBridge (DeerFlow native pattern).
+    # The agent is a producer — it publishes events to the bridge, and the
+    # sse_consumer reads from the same in-process bridge. The backend consumes
+    # the agent's HTTP SSE response and manages its own buffer for frontend
+    # delivery and reconnection. This means the agent has ZERO infrastructure
+    # dependencies (no Redis, no cross-process buffer).
     config = StreamBridgeConfig(
-        type=bridge_type,
-        redis_url=redis_url,
+        type="memory",
         queue_maxsize=256,
         stream_ttl_seconds=86400,
     )
     app.state.stream_bridge = make_stream_bridge(config)
-    logger.info(f"Initialized StreamBridge (type={bridge_type})")
+    logger.info("Initialized StreamBridge (type=memory, DeerFlow native)")
 
     # [Copied from DeerFlow Reference] — RunManager, in-memory only for Phase 1
     app.state.run_manager = RunManager(store=None)
@@ -62,7 +60,7 @@ async def init_runtime(app: FastAPI) -> None:
         error="Agent restarted before run reached a durable final state.",
     )
 
-    logger.info(f"[runtime] StreamBridge (Redis: {redis_url}) + RunManager initialized")
+    logger.info("[runtime] StreamBridge (memory) + RunManager initialized")
 
 
 async def shutdown_runtime(app: FastAPI) -> None:

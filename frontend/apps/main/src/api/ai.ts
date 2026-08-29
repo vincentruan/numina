@@ -1,4 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
+import { readSSEStream } from '@/utils/sseReader'
 import type { AIReport, FinanceCoachResponse, FinanceSuggestion } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────
@@ -113,13 +114,22 @@ export const getProviderDefaults = (modelId: string) =>
 export interface ModelTestResult {
   connected: boolean
   message: string | null
+  error_code: string | null
   latency_ms: number | null
+  error_detail: Record<string, unknown> | null
   // Fallback info: which provider/model was actually used
   used_config_id: string | null
   used_provider_name: string | null
   used_model_id: string | null
   used_circuit_state: string | null
   fallback_count: number
+  // Extended test results (thinking / vision / OCR)
+  thinking_success: boolean | null
+  thinking_message: string | null
+  vision_success: boolean | null
+  vision_message: string | null
+  vision_text_success: boolean | null
+  vision_text_message: string | null
 }
 
 export const testProviderConfig = (id: string) =>
@@ -715,7 +725,12 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
 
   const ct = res.headers.get('content-type') || ''
   if (ct.includes('application/json')) {
-    return (await res.json()) as FinanceCoachResponse
+    const body = await res.json()
+    // Handle 202 queued response: backend has no report yet, task is queued.
+    if (res.status === 202 || body.status === 'queued') {
+      return { status: 'queued' as const, task_id: body.task_id, queue_position: body.queue_position }
+    }
+    return body as FinanceCoachResponse
   }
 
   // Streaming response — consume SSE until the finance_coach.result frame.
@@ -745,6 +760,179 @@ export async function getFinanceCoach(force = false): Promise<FinanceCoachRespon
     }
   }
   return { status: 'streaming', report: { suggestions } }
+}
+
+// ── finance_coach streaming (unified SSE pattern) ───────────────────────────
+//
+// Replaces getFinanceCoach for the unified trigger flow. Handles all three
+// backend response modes: cached JSON 200, queued 202, and SSE generation.
+// The SSE stream emits an initial metadata event with task_id so the frontend
+// can immediately enable cancellation.
+
+export interface FinanceCoachStreamCallbacks {
+  onDone: (suggestions: FinanceSuggestion[], thinking: string) => void
+  onError: (message: string) => void
+  /** Called when the SSE stream emits the initial task_id metadata event. */
+  onTaskId?: (taskId: string) => void
+  /** Called when the backend returns 202 (task queued behind another running task). */
+  onQueued?: (info: { taskId: string; queuePosition: number }) => void
+  /** Called for each chunk of LLM thinking/output text from messages frames. */
+  onThinkingDelta?: (content: string) => void
+  /** Called when the backend reports insufficient financial data to analyse. */
+  onBlocked?: (reason: string) => void
+}
+
+export interface FinanceCoachStreamHandle {
+  abort: () => void
+}
+
+export async function streamFinanceCoach(
+  callbacks: FinanceCoachStreamCallbacks,
+  force = false,
+): Promise<FinanceCoachStreamHandle> {
+  const controller = new AbortController()
+
+  void runFinanceCoachStream(controller, callbacks, force)
+
+  return { abort: () => controller.abort() }
+}
+
+async function runFinanceCoachStream(
+  controller: AbortController,
+  callbacks: FinanceCoachStreamCallbacks,
+  force: boolean,
+): Promise<void> {
+  const url = `/api/v1/ai/finance-coach/generate?force=${force}`
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    })
+    if (res.status === 401) {
+      try {
+        await refreshTokenIfNeeded()
+      } catch {
+        callbacks.onError('auth_expired')
+        return
+      }
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        signal: controller.signal,
+      })
+    }
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      callbacks.onError('finance_coach.error.connect_failed')
+    }
+    return
+  }
+
+  if (!res.ok) {
+    callbacks.onError(`finance_coach.error.request_failed:${res.status}`)
+    return
+  }
+
+  const ct = res.headers.get('Content-Type') || ''
+
+  // JSON response: cached result or 202 queued
+  if (ct.includes('application/json')) {
+    try {
+      const json = (await res.json()) as Record<string, unknown>
+      // 202 queued
+      if (res.status === 202 && json.status === 'queued') {
+        callbacks.onQueued?.({
+          taskId: String(json.task_id ?? ''),
+          queuePosition: Number(json.queue_position ?? 0),
+        })
+        return
+      }
+      // Insufficient data — family has no financial records to analyse
+      if (json.status === 'insufficient_data') {
+        callbacks.onBlocked?.(String(json.reason ?? 'no_financial_data'))
+        return
+      }
+      // Cached result
+      const report = json.report as { suggestions?: FinanceSuggestion[] } | undefined
+      callbacks.onDone(report?.suggestions ?? [], '')
+    } catch {
+      callbacks.onError('finance_coach.error.parse_failed')
+    }
+    return
+  }
+
+  // SSE stream
+  if (!res.body) {
+    callbacks.onError('finance_coach.error.stream_unavailable')
+    return
+  }
+
+  let errored = false
+  let thinkingBuffer = ''
+
+  try {
+    await readSSEStream(res, {
+      onMessage: (_event, data) => {
+        if (errored) return
+        if (data) {
+          const msg = data as { type?: string; content?: string }
+          if (msg.content) {
+            thinkingBuffer += msg.content
+            callbacks.onThinkingDelta?.(msg.content)
+          }
+        }
+      },
+      onCustom: (data) => {
+        if (errored) return
+        const custom = data as { type?: string; payload?: { suggestions?: FinanceSuggestion[] } }
+        if (custom.type === 'finance_coach.result' && custom.payload?.suggestions) {
+          callbacks.onDone(custom.payload.suggestions, thinkingBuffer)
+        }
+      },
+      onMetadata: (data) => {
+        const meta = data as { task_id?: string }
+        if (meta?.task_id) {
+          callbacks.onTaskId?.(meta.task_id)
+        }
+      },
+      onError: (data) => {
+        errored = true
+        const errData = data as { error?: string; message?: string }
+        callbacks.onError(errData.error || errData.message || 'finance_coach.error.generation_failed')
+      },
+      onEnd: (data) => {
+        if (errored) return
+        const endData = data as { status?: string } | undefined
+        if (endData?.status === 'error') {
+          errored = true
+          callbacks.onError('finance_coach.error.generation_failed')
+        }
+        // If stream ended without finance_coach.result, report empty with accumulated thinking
+        // so the UI can show what the LLM produced instead of a silent "No suggestions".
+      },
+    })
+  } catch {
+    if (!errored) {
+      callbacks.onError('finance_coach.error.connection_interrupted')
+    }
+    return
+  }
+
+  // Stream finished without onDone being called (no finance_coach.result event).
+  // This means the LLM output couldn't be parsed as the expected JSON.
+  // Fire onDone with empty suggestions + accumulated thinking so the UI shows
+  // an actionable state rather than silently hiding the failure.
+  if (!errored) {
+    callbacks.onDone([], thinkingBuffer)
+  }
 }
 
 // ── /ai/context (A1b greenfield chat prefill, Plan B T6) ─────────────────────

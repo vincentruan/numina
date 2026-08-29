@@ -99,47 +99,84 @@ def _extract_text_from_content_blocks(content: Any) -> str:
 
 
 async def generate_suggestions(ai_response: str, user_message: str, ai_config: dict[str, Any]) -> list[str]:
-    """Generate 3 follow-up question suggestions based on the conversation."""
+    """Generate 3 follow-up question suggestions based on the conversation.
+
+    Includes validate→retry cycle: if the LLM returns malformed JSON or
+    invalid suggestions, retries up to 2 times with error feedback.
+    """
     if not ai_response or len(ai_response.strip()) < 20:
         return []
 
-    try:
-        llm = _create_lightweight_llm(ai_config, temperature=0.7, max_tokens=200)
-        from langchain_core.messages import HumanMessage, SystemMessage
+    from apps.agent.services.runtime.llm_json_repair import validate_suggestions
 
-        # Strip thinking blocks from the AI response so the suggestion LLM
-        # doesn't get confused by internal reasoning content.
-        cleaned_response = _strip_thinking_from_text(ai_response)
-        if len(cleaned_response.strip()) < 20:
-            return []
+    # Strip thinking blocks from the AI response so the suggestion LLM
+    # doesn't get confused by internal reasoning content.
+    cleaned_response = _strip_thinking_from_text(ai_response)
+    if len(cleaned_response.strip()) < 20:
+        return []
 
-        system = SystemMessage(content=(
-            "You are a helpful assistant that suggests 3 concise follow-up questions "
-            "the user might ask next, based on the AI's response. "
-            "Respond with a JSON array of exactly 3 short strings (each under 15 words). "
-            "No explanation, no markdown - only the JSON array."
-        ))
-        human = HumanMessage(content=(
-            f"User asked: {user_message}\n\n"
-            f"AI responded: {cleaned_response[:500]}\n\n"
-            "Suggest 3 follow-up questions as a JSON array."
-        ))
+    max_attempts = 3
+    failure_reasons: list[str] = []
 
-        response = await llm.ainvoke([system, human])
-        # Handle structured output (list of dicts with thinking blocks)
-        raw_content = _extract_text_from_content_blocks(response.content)
-        content = raw_content.strip()
-        # Strip markdown code fences if present
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1] if "\n" in content else content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-        suggestions = json.loads(content)
-        if isinstance(suggestions, list):
-            return [str(s) for s in suggestions[:3]]
-    except Exception as e:
-        logger.warning("[run_extras] Failed to generate suggestions: %s", e)
+    for attempt in range(max_attempts):
+        try:
+            llm = _create_lightweight_llm(ai_config, temperature=0.7, max_tokens=200)
+            from langchain_core.messages import HumanMessage, SystemMessage
+
+            # Build feedback-aware prompt
+            feedback_hint = ""
+            if failure_reasons:
+                feedback_hint = (
+                    f"\n\nPrevious attempt failed: {'; '.join(failure_reasons[:2])}. "
+                    "Please ensure the output is a valid JSON array of 3 short strings."
+                )
+
+            system = SystemMessage(content=(
+                "You are a helpful assistant that suggests 3 concise follow-up questions "
+                "the user might ask next, based on the AI's response. "
+                "Respond with a JSON array of exactly 3 short strings (each under 15 words). "
+                "No explanation, no markdown - only the JSON array."
+                f"{feedback_hint}"
+            ))
+            human = HumanMessage(content=(
+                f"User asked: {user_message}\n\n"
+                f"AI responded: {cleaned_response[:500]}\n\n"
+                "Suggest 3 follow-up questions as a JSON array."
+            ))
+
+            response = await llm.ainvoke([system, human])
+            # Handle structured output (list of dicts with thinking blocks)
+            raw_content = _extract_text_from_content_blocks(response.content)
+            content = raw_content.strip()
+            # Strip markdown code fences if present
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1] if "\n" in content else content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+
+            # Use json_repair for tolerant parsing
+            from json_repair import repair_json
+
+            parsed = repair_json(content, return_objects=True)
+            suggestions = parsed if isinstance(parsed, list) else None
+            if suggestions is None and isinstance(parsed, dict) and "suggestions" in parsed:
+                suggestions = parsed["suggestions"]
+
+            if suggestions is None:
+                failure_reasons.append("无法解析为 JSON 数组")
+                continue
+
+            # Validate
+            errors = validate_suggestions(suggestions)
+            if not errors:
+                return [str(s) for s in suggestions[:3]]
+            failure_reasons.extend(errors[:2])
+        except Exception as e:
+            failure_reasons.append(f"LLM 调用失败: {type(e).__name__}")
+            logger.warning("[run_extras] Failed to generate suggestions (attempt %d): %s", attempt + 1, e)
+
+    logger.warning("[run_extras] Suggestions failed after %d attempts: %s", max_attempts, failure_reasons[:3])
     return []
 
 
@@ -210,16 +247,25 @@ def _message_content(message: object) -> object:
 
 def _is_user_message_for_title(message: object) -> bool:
     """Return True for real human messages (excluding hidden system reminders)."""
-    # Numina does not currently inject dynamic-context reminder messages, but
-    # keep the door open: if a human message is marked as a hidden reminder it
-    # should not count as a user turn for title generation.
     if _message_type(message) != "human":
         return False
+    # ``dynamic_context_reminder`` (a hidden MemoryMiddleware context reminder)
+    # is NOT a real user turn and must not count toward the first-exchange gate.
+    # The checkpointer stores LangChain ``HumanMessage`` OBJECTS whose
+    # ``additional_kwargs`` carries this flag; the old code only inspected the
+    # dict form, so for objects the reminder was counted as a second user
+    # message → ``len(user_messages)==2`` → ``_should_generate_title`` returned
+    # ``False`` → ``sync_title_from_checkpoint`` returned ``None`` → no session
+    # title was ever generated. Mirror DeerFlow's ``_is_dynamic_context_reminder_message``
+    # by inspecting ``additional_kwargs`` for BOTH object and dict forms.
     if isinstance(message, dict):
         additional_kwargs = message.get("additional_kwargs") or {}
-        if additional_kwargs.get("dynamic_context_reminder"):
-            return False
-    return True
+    else:
+        additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+    return not (
+        isinstance(additional_kwargs, dict)
+        and bool(additional_kwargs.get("dynamic_context_reminder"))
+    )
 
 
 def _should_generate_title(
@@ -339,6 +385,7 @@ def _create_lightweight_llm(
     *,
     temperature: float = 0.3,
     max_tokens: int = 60,
+    timeout: int = 30,
 ):
     """Build a lightweight chat model for short LLM calls (titles, suggestions).
 
@@ -361,6 +408,7 @@ def _create_lightweight_llm(
                 "api_key": api_key,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                "timeout": timeout,
             }
             if base_url:
                 kwargs["base_url"] = base_url
@@ -374,6 +422,7 @@ def _create_lightweight_llm(
         "api_key": api_key,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "timeout": timeout,
         # Qwen3 (and similar reasoning models) consume the entire token budget
         # on reasoning tokens, leaving content empty. Disable thinking for this
         # lightweight call - the title doesn't need chain-of-thought.
@@ -525,12 +574,16 @@ async def sync_title_from_checkpoint(
             # On follow-up messages the checkpoint has >1 user messages, so
             # this returns False.  We still fall through to generate a title
             # from the user message if the DB row has a fallback title (i.e.
-            # the first-exchange title generation failed previously).
+            # the first-exchange title generation failed previously) OR the
+            # checkpoint itself carries a fallback title (raw context JSON
+            # from the sync after_model hook).
+            ckpt_title = channel_values.get("title")
             if (
                 not _should_generate_title(
                     channel_values, allow_partial_exchange=allow_partial_exchange,
                 )
                 and not (db_title and _is_fallback_title(db_title))
+                and not (ckpt_title and _is_fallback_title(ckpt_title))
             ):
                 return None
         else:

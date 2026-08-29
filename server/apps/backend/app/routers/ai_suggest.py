@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 class AssetSuggestRequest(BaseModel):
     name: str
-    category: str
+    category: str = ""
     asset_type: str = "physical"
 
-    @field_validator("name", "category")
+    @field_validator("name")
     @classmethod
     def not_empty(cls, v: str) -> str:
         v = v.strip()
@@ -30,6 +30,11 @@ class AssetSuggestRequest(BaseModel):
         if len(v) > 100:
             raise ValueError("不能超过100字")
         return v
+
+    @field_validator("category")
+    @classmethod
+    def clamp_category(cls, v: str) -> str:
+        return v.strip()[:100]
 
 
 @router.post("/asset")

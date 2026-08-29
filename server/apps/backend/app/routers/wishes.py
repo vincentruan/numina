@@ -60,6 +60,26 @@ def delete_wish(
     return {"detail": "已删除"}
 
 
+@router.post("/{wish_id}/copy", response_model=WishResponse, status_code=201)
+def copy_wish(
+    wish_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Duplicate a wish as a new pending wish."""
+    return wish_service.copy_wish(db, user, wish_id)
+
+
+@router.post("/{wish_id}/complete", response_model=WishResponse)
+def complete_wish(
+    wish_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Mark a non-asset wish as realized (no asset creation)."""
+    return wish_service.complete_wish(db, user, wish_id)
+
+
 @router.post("/{wish_id}/realize", response_model=AssetResponse, status_code=201)
 def realize_wish(
     wish_id: int,

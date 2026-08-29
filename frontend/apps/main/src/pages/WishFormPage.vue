@@ -65,6 +65,7 @@
           @click="showDatePicker = true"
         />
         <van-field
+          :model-value="selectedCategory ? getCategoryName(selectedCategory) : undefined"
           name="category"
           :label="t('wish.form.categoryLabel')"
           :placeholder="t('wish.form.categoryPlaceholder')"
@@ -74,7 +75,7 @@
           <template #input>
             <div v-if="selectedCategory" class="category-display">
               <SvgIcon :name="getIconId(selectedCategory.icon)" class="cat-icon-sm" />
-              <span>{{ selectedCategory.name }}</span>
+              <span>{{ getCategoryName(selectedCategory) }}</span>
             </div>
             <span v-else class="category-placeholder">{{ t('wish.form.categoryPlaceholder') }}</span>
           </template>
@@ -99,13 +100,37 @@
       </div>
     </van-form>
 
-    <!-- Category Picker -->
+    <!-- Category Picker — bottom sheet with physical/financial tabs -->
     <van-popup v-model:show="showCategoryPicker" round position="bottom">
-      <van-picker
-        :columns="categoryColumns"
-        @confirm="onCategoryConfirm"
-        @cancel="showCategoryPicker = false"
-      />
+      <div class="category-popup">
+        <!-- Tab switcher: 实物 / 金融资产 -->
+        <div class="category-tabs">
+          <div
+            class="category-tab"
+            :class="{ active: categoryTab === 'physical' }"
+            @click="categoryTab = 'physical'"
+          >{{ t('wish.form.tabPhysical') }}</div>
+          <div
+            class="category-tab"
+            :class="{ active: categoryTab === 'financial' }"
+            @click="categoryTab = 'financial'"
+          >{{ t('wish.form.tabFinancial') }}</div>
+        </div>
+        <!-- Category grid -->
+        <div v-if="filteredCategories.length === 0" class="category-empty">{{ t('wish.form.categoryEmpty') }}</div>
+        <div v-else class="category-grid-popup">
+          <div
+            v-for="cat in filteredCategories"
+            :key="cat.id"
+            class="category-item"
+            :class="{ selected: form.category_id === cat.id }"
+            @click="selectCategory(cat.id)"
+          >
+            <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
+            <span class="cat-name">{{ getCategoryName(cat) }}</span>
+          </div>
+        </div>
+      </div>
     </van-popup>
 
     <!-- W1 (Plan B T9): target_date picker -->
@@ -132,6 +157,7 @@ import type { Category } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getIconId } from '@/utils/icon'
+import { getCategoryName } from '@/utils/categoryName'
 
 const { t } = useI18n()
 
@@ -162,17 +188,18 @@ const showCategoryPicker = ref(false)
 const showDatePicker = ref(false)
 const datePickerValue = ref<string[]>([])
 const categories = ref<Category[]>([])
+const categoryTab = ref<'physical' | 'financial'>('physical')
 
-const categoryColumns = computed(() => {
-  return categories.value.map(c => ({ text: c.name, value: c.id }))
-})
+const filteredCategories = computed(() =>
+  categories.value.filter(c => c.asset_type === categoryTab.value)
+)
 
 const selectedCategory = computed(() =>
   categories.value.find(c => c.id === form.value.category_id) ?? null
 )
 
-function onCategoryConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  form.value.category_id = selectedOptions[0].value
+function selectCategory(id: string) {
+  form.value.category_id = id
   showCategoryPicker.value = false
 }
 
@@ -192,7 +219,11 @@ async function onSubmit() {
       await createWish(payload)
       showSuccessToast(t('toast.wishAdded'))
     }
-    router.back()
+    if (!isEdit.value) {
+      router.replace({ path: '/finance', query: { tab: 'wishes' } })
+    } else {
+      router.back()
+    }
   } finally {
     submitting.value = false
   }
@@ -231,6 +262,11 @@ onMounted(async () => {
       form.value.target_date = w.target_date
       datePickerValue.value = w.target_date.split('-')
     }
+    // Auto-set category tab based on the current category's asset_type
+    if (w.category_id) {
+      const cat = categories.value.find(c => c.id === w.category_id)
+      if (cat) categoryTab.value = cat.asset_type
+    }
   }
 })
 
@@ -257,6 +293,84 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   color: var(--van-field-placeholder-text-color);
   font-size: 14px;
 }
+
+/* Category popup — bottom sheet with tabs */
+.category-popup {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.category-tabs {
+  display: flex;
+  margin: 12px 16px 0;
+  background: var(--van-background-2);
+  border-radius: 10px;
+  padding: 3px;
+}
+.category-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--van-text-color-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.category-tab.active {
+  background: var(--van-primary-color);
+  color: #fff;
+  font-weight: 600;
+}
+[data-theme='dark'] .category-tab.active {
+  background: var(--color-lavender, #bdbbff);
+  color: #010120;
+}
+.category-empty {
+  text-align: center;
+  padding: 24px 0;
+  font-size: 14px;
+  color: var(--van-text-color-3);
+}
+.category-grid-popup {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+.category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--van-background-2);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.category-item:active {
+  transform: scale(0.95);
+}
+.category-item.selected {
+  border-color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 12%, transparent);
+}
+.cat-icon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+.cat-name {
+  font-size: 12px;
+  color: var(--van-text-color-2);
+  margin-top: 4px;
+  text-align: center;
+  line-height: 1.2;
+}
+.category-item.selected .cat-name {
+  color: var(--van-primary-color);
+}
+
 .converts-label {
   font-size: 14px;
   color: var(--van-field-label-color);

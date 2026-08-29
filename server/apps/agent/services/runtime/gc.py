@@ -128,7 +128,10 @@ async def reconcile_orphaned_runs(
     - Query AITask WHERE status IN ('running','post_processing') AND lease_expires_at < now
     - For each stale task: conditional UPDATE with lease guard (prevents split-brain race)
     - Newer-run protection: skip orphan mark if newer completed task exists
-    - Publish __end__ marker to Redis Stream for late SSE subscribers
+
+    Stream lifecycle is managed by the backend-owned buffer — the agent no longer
+    publishes end markers or cleans up bridges.  The backend's lifecycle consumer
+    detects stream completion via the shared bridge and updates AITask status.
 
     When ``RunManager`` has no persistent store (``store=None``), this is a
     no-op.  Wired here so the integration point is live when a ``RunStore``
@@ -234,25 +237,16 @@ async def reconcile_orphaned_runs(
                     "stop_reason": "orphan_recovered",
                 })
 
-                # U8: Publish __end__ marker to Redis Stream for late SSE subscribers
-                if task.run_id:
-                    try:
-                        import os as _os
-
-                        from packages.db.stream_bridge import make_stream_bridge
-                        from packages.db.stream_bridge.config import StreamBridgeConfig
-
-                        # Create bridge and publish end marker
-                        config = StreamBridgeConfig(
-                            type="redis",
-                            redis_url=_os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-                        )
-                        bridge = make_stream_bridge(config)
-                        await bridge.publish_end(task.run_id)
-                        await bridge.close()
-                        logger.info(f"[reconcile_orphaned_runs] Published end marker for run {task.run_id}")
-                    except Exception as e:
-                        logger.error(f"[reconcile_orphaned_runs] Failed to publish end marker: {e}")
+                # U8: The backend-owned buffer manages stream lifecycle.
+                # The agent no longer publishes end markers — the backend's
+                # lifecycle consumer detects stream completion via the shared
+                # bridge and updates AITask status accordingly.
+                logger.info(
+                    "[reconcile_orphaned_runs] orphan recovered run=%s task=%s "
+                    "(backend lifecycle consumer handles completion)",
+                    task.run_id,
+                    str(task.id),
+                )
 
         finally:
             db.close()

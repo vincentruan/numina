@@ -42,6 +42,7 @@ def _make_stub_adapter() -> Any:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         yield (
             "messages",
@@ -75,7 +76,7 @@ def client():
             return_value=mock_ai_config,
         ),
         patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
+            "apps.agent.services.runtime.run_pipeline.create_family_adapter",
             return_value=_make_stub_adapter(),
         ),
         patch(
@@ -255,8 +256,8 @@ async def test_run_agent_dispatches_asset_report_to_pipeline():
     """
     from apps.agent.services.runtime.worker import run_agent
 
-    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
-        yield ("messages", {"type": "ai", "content": '```json\n{"overall_score": 72}\n```', "tool_calls": None, "id": "m1"})
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False, **kwargs):
+        yield ("messages", {"type": "ai", "content": '```json\n{"overall_score": 72, "indicators": [{"key": "k", "label": "L", "score": 3, "narrative": "n", "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]}}]}\n```', "tool_calls": None, "id": "m1"})
         yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
 
     stub_adapter = AsyncMock()
@@ -270,8 +271,8 @@ async def test_run_agent_dispatches_asset_report_to_pipeline():
         patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
         patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
         patch("apps.agent.services.runtime.worker.BackendClient.persist_report_result", new_callable=AsyncMock, return_value=None),
-        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
-        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+        patch("apps.agent.services.runtime.run_pipeline.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.run_pipeline.pii_redactor.redact", side_effect=lambda ctx: ctx),
     ):
         record = await _make_record("asset-report")
         bridge = _FakeBridge()
@@ -296,7 +297,7 @@ async def test_run_agent_dispatches_asset_report_to_pipeline():
     # — plan fallback condition; worker synthesis is the sanctioned fallback).
     step2 = [d for ev, d in bridge.published if ev == "custom" and isinstance(d, dict) and d.get("type") == "report.step2_json"]
     assert len(step2) == 1, f"expected 1 report.step2_json, got {step2}: {bridge.published}"
-    assert step2[0]["payload"] == {"overall_score": 72}
+    assert step2[0]["payload"] == {"overall_score": 72, "indicators": [{"key": "k", "label": "L", "score": 3, "narrative": "n", "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]}, "suggestions": []}]}
 
     # end frame status = complete
     end_events = [d for ev, d in bridge.published if ev == "end" and d is not None]
@@ -307,7 +308,7 @@ async def test_run_agent_asset_report_no_json_skips_step2_event():
     """If the AI output has no parseable JSON, no report.step2_json is emitted (F8)."""
     from apps.agent.services.runtime.worker import run_agent
 
-    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False, **kwargs):
         yield ("messages", {"type": "ai", "content": "no json here", "tool_calls": None, "id": "m1"})
         yield ("end", {})
 
@@ -318,8 +319,8 @@ async def test_run_agent_asset_report_no_json_skips_step2_event():
     with (
         patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
         patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
-        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
-        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+        patch("apps.agent.services.runtime.run_pipeline.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.run_pipeline.pii_redactor.redact", side_effect=lambda ctx: ctx),
     ):
         record = await _make_record("asset-report")
         bridge = _FakeBridge()
@@ -348,8 +349,8 @@ async def test_run_agent_asset_report_persist_failure_downgrades_status():
     """
     from apps.agent.services.runtime.worker import run_agent
 
-    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False):
-        yield ("messages", {"type": "ai", "content": '```json\n{"overall_score": 72}\n```', "tool_calls": None, "id": "m1"})
+    async def _stub_stream(skill_name, context, thread_id, enable_thinking=False, **kwargs):
+        yield ("messages", {"type": "ai", "content": '```json\n{"overall_score": 72, "indicators": [{"key": "k", "label": "L", "score": 3, "narrative": "n", "data": {"items": [{"key": "i", "zh": "z", "en": "e", "value": 1}]}}]}\n```', "tool_calls": None, "id": "m1"})
         yield ("end", {"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}})
 
     stub_adapter = AsyncMock()
@@ -360,8 +361,8 @@ async def test_run_agent_asset_report_persist_failure_downgrades_status():
         patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
         patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
         patch("apps.agent.services.runtime.worker.BackendClient.persist_report_result", new_callable=AsyncMock, side_effect=RuntimeError("backend down")),
-        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
-        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+        patch("apps.agent.services.runtime.run_pipeline.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.run_pipeline.pii_redactor.redact", side_effect=lambda ctx: ctx),
     ):
         record = await _make_record("asset-report")
         bridge = _FakeBridge()
@@ -418,8 +419,8 @@ async def test_run_agent_dispatches_import_parse_to_pipeline():
     with (
         patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
         patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
-        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
-        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+        patch("apps.agent.services.runtime.run_pipeline.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.run_pipeline.pii_redactor.redact", side_effect=lambda ctx: ctx),
     ):
         record = await _make_record("import-parse")
         bridge = _FakeBridge()
@@ -472,8 +473,8 @@ async def test_run_agent_sets_family_sandbox_context_before_dispatch():
         patch("apps.agent.services.runtime.worker.set_family_sandbox_context") as mock_set,
         patch("apps.agent.services.runtime.worker.BackendClient.get_family_ai_config", new_callable=AsyncMock, return_value=mock_ai_config),
         patch("apps.agent.services.runtime.worker.BackendClient.get_enabled_mcp_servers", new_callable=AsyncMock, return_value=[]),
-        patch("apps.agent.services.runtime.worker.create_family_adapter", return_value=stub_adapter),
-        patch("apps.agent.services.runtime.worker.pii_redactor.redact", side_effect=lambda ctx: ctx),
+        patch("apps.agent.services.runtime.run_pipeline.create_family_adapter", return_value=stub_adapter),
+        patch("apps.agent.services.runtime.run_pipeline.pii_redactor.redact", side_effect=lambda ctx: ctx),
     ):
         await worker.run_agent(
             bridge=bridge,  # type: ignore[arg-type]

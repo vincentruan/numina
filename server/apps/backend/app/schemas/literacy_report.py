@@ -25,6 +25,8 @@ class ReportChildItem(SnowflakeBase):
 
     child_id: int
     display_name: str
+    avatar_url: str | None = None
+    avatar_color: str = "#4F46E5"
     latest_week_start: date | None = None
 
 

@@ -7,12 +7,13 @@ description: |
 
 trigger_phrases: []
 
-# allowed-tools includes both web search tools AND MCP family data tools so the
-# agent can answer family-data questions (e.g. "how much assets does my family have?")
-# even when the user has enabled web search. Without the MCP tools here,
-# filter_tools_by_skill_allowed_tools (sync_tool_patch.py) would filter them out,
-# and the agent would report "MCP tools unavailable" — inconsistent with the chat
-# skill (web search off).
+# allowed-tools includes web search tools, MCP family data tools, AND native
+# sandbox file tools (write_file / read_file / str_replace / present_files).
+# Without the file tools, filter_tools_by_skill_allowed_tools (sync_tool_patch.py)
+# strips them when chat-search is the active skill — the LLM then gets
+# "write_file is not a valid tool" even though the base config registers it.
+# read_file also lives in ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES so it survives
+# either way, but declaring it explicitly keeps the skill self-documenting.
 allowed-tools:
   - web_search
   - web_fetch
@@ -21,6 +22,10 @@ allowed-tools:
   - get_liabilities
   - get_members
   - get_recent_alerts
+  - write_file
+  - read_file
+  - str_replace
+  - present_files
 
 thinking: true
 ---

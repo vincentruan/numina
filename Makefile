@@ -439,19 +439,21 @@ setup: setup-data setup-env setup-db
 # ══════════════════════════════════════════════════════════
 # 本地开发 (热重载服务，阻塞终端)
 # ══════════════════════════════════════════════════════════
-dev-backend:
+
+# 依赖检查：复用 install，uv sync / pnpm install 幂等，已同步时秒级完成
+dev-backend: install
 	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000
 
-dev-agent:
+dev-agent: install
 	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001
 
-dev-worker:
+dev-worker: install
 	@cd $(SERVER_DIR) && $(UV) run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002
 
-dev-frontend:
+dev-frontend: install
 	@cd $(MAIN_APP) && $(PNPM) dev --host 0.0.0.0
 
-dev-child:
+dev-child: install
 	@cd $(CHILD_APP) && $(PNPM) dev --host 0.0.0.0
 
 dev-all:

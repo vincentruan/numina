@@ -1,6 +1,9 @@
 # Database Migration Reference
 
-Run this **before** starting new containers. The production image contains alembic + all migration files; a throwaway backend container applies the DDL.
+> **Scope:** This document covers the **Numina application database** (`DATABASE_URL`) managed by alembic.
+> The **DeerFlow checkpoint database** (`DEERFLOW_DB_URL`) is self-managing — DeerFlow's `init_engine()` creates and updates its own schema on agent startup. No manual migration is needed for DeerFlow.
+
+Run Numina migration **before** starting new containers. The production image contains alembic + all migration files; a throwaway backend container applies the DDL.
 
 ## Why proactive migration
 

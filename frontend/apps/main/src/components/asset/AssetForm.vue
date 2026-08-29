@@ -93,7 +93,7 @@
               @click="selectCategory(cat.id)"
             >
               <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
-              <span class="cat-name">{{ cat.name }}</span>
+              <span class="cat-name">{{ getCategoryName(cat) }}</span>
             </div>
           </div>
         </div>
@@ -153,6 +153,8 @@
         <van-date-picker
           v-model="datePickerValue"
           :title="t('assetForm.datePickerTitle')"
+          :min-date="DATE_PICKER_MIN_DATE"
+          :max-date="DATE_PICKER_MAX_DATE"
           @confirm="onDateConfirm"
           @cancel="showDatePicker = false"
         />
@@ -234,13 +236,24 @@
           is-link
           readonly
           :label="t('assetForm.maturityDateLabel')"
-          :placeholder="t('assetForm.maturityDatePlaceholder')"
-          @click="showMaturityPicker = true"
-        />
+          :placeholder="isMaturityInfinite ? t('assetForm.infinitePeriod') : t('assetForm.maturityDatePlaceholder')"
+          @click="!isMaturityInfinite && (showMaturityPicker = true)"
+        >
+          <template #right-icon>
+            <van-button
+              size="mini"
+              plain
+              :type="isMaturityInfinite ? 'primary' : 'default'"
+              @click.stop="isMaturityInfinite = !isMaturityInfinite; if (isMaturityInfinite) form.maturity_date = ''"
+            >{{ t('assetForm.infinitePeriod') }}</van-button>
+          </template>
+        </van-field>
         <van-popup v-model:show="showMaturityPicker" position="bottom" round>
           <van-date-picker
             v-model="maturityPickerValue"
             :title="t('assetForm.maturityPickerTitle')"
+            :min-date="DATE_PICKER_MIN_DATE"
+            :max-date="DATE_PICKER_MAX_DATE"
             @confirm="onMaturityConfirm"
             @cancel="showMaturityPicker = false"
           />
@@ -261,13 +274,24 @@
           is-link
           readonly
           :label="t('assetForm.warrantyExpiryLabel')"
-          :placeholder="t('assetForm.warrantyExpiryPlaceholder')"
-          @click="showWarrantyPicker = true"
-        />
+          :placeholder="isWarrantyInfinite ? t('assetForm.infinitePeriod') : t('assetForm.warrantyExpiryPlaceholder')"
+          @click="!isWarrantyInfinite && (showWarrantyPicker = true)"
+        >
+          <template #right-icon>
+            <van-button
+              size="mini"
+              plain
+              :type="isWarrantyInfinite ? 'primary' : 'default'"
+              @click.stop="isWarrantyInfinite = !isWarrantyInfinite; if (isWarrantyInfinite) form.warranty_expiry_date = ''"
+            >{{ t('assetForm.infinitePeriod') }}</van-button>
+          </template>
+        </van-field>
         <van-popup v-model:show="showWarrantyPicker" position="bottom" round>
           <van-date-picker
             v-model="warrantyPickerValue"
             :title="t('assetForm.warrantyPickerTitle')"
+            :min-date="DATE_PICKER_MIN_DATE"
+            :max-date="DATE_PICKER_MAX_DATE"
             @confirm="onWarrantyConfirm"
             @cancel="showWarrantyPicker = false"
           />
@@ -324,6 +348,7 @@ import type { FormInstance } from 'vant'
 import { showLoadingToast, showSuccessToast, showFailToast, showToast } from 'vant'
 import type { Asset, AssetRequestPayload, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
+import { getCategoryName } from '@/utils/categoryName'
 import { getTags } from '@/api/tags'
 import { suggestAssetFields } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
@@ -332,6 +357,7 @@ import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
 import LogoCropper from './LogoCropper.vue'
+import { DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL } from '@/constants/dates'
 import IconPicker from './IconPicker.vue'
 import { useWatermark } from '@/composables/useWatermark'
 import { getIconId } from '@/utils/icon'
@@ -581,12 +607,24 @@ watch(() => props.initialData, (data) => {
     if (data.location !== undefined) form.value.location = String(data.location ?? '')
     if (data.annual_maintenance_cost !== undefined) form.value.annual_maintenance_cost = String(data.annual_maintenance_cost ?? '')
     if (data.usage_frequency !== undefined) form.value.usage_frequency = data.usage_frequency ?? ''
-    if (data.warranty_expiry_date !== undefined) form.value.warranty_expiry_date = String(data.warranty_expiry_date ?? '')
+    if (data.warranty_expiry_date !== undefined) {
+      form.value.warranty_expiry_date = String(data.warranty_expiry_date ?? '')
+      if (data.warranty_expiry_date === INFINITE_DATE_SENTINEL || data.warranty_expiry_date === null) {
+        isWarrantyInfinite.value = true
+        form.value.warranty_expiry_date = ''
+      }
+    }
 
     // Copy financial fields
     if (data.institution !== undefined) form.value.institution = String(data.institution ?? '')
     if (data.interest_rate !== undefined) form.value.interest_rate = String(data.interest_rate ?? '')
-    if (data.maturity_date !== undefined) form.value.maturity_date = String(data.maturity_date ?? '')
+    if (data.maturity_date !== undefined) {
+      form.value.maturity_date = String(data.maturity_date ?? '')
+      if (data.maturity_date === INFINITE_DATE_SENTINEL || data.maturity_date === null) {
+        isMaturityInfinite.value = true
+        form.value.maturity_date = ''
+      }
+    }
 
     // P0: reverse-convert lifespan days → years
     const lifespanDays = data.expected_lifespan_days
@@ -630,6 +668,13 @@ const showDatePicker = ref(false)
 const showStatusPicker = ref(false)
 const showMaturityPicker = ref(false)
 const showWarrantyPicker = ref(false)
+
+// Date picker range: shared constants (1950 to current+50y)
+// DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL imported from constants/dates
+
+// "无限期" toggles for maturity_date and warranty_expiry_date
+const isMaturityInfinite = ref(false)
+const isWarrantyInfinite = ref(false)
 
 const now = new Date()
 const datePickerValue = ref([
@@ -806,11 +851,11 @@ function onSubmit() {
     data.expected_lifespan_days = form.value.expected_lifespan_days ?? undefined
     data.annual_maintenance_cost = form.value.annual_maintenance_cost ? Number(form.value.annual_maintenance_cost) : undefined
     data.usage_frequency = form.value.usage_frequency || undefined
-    data.warranty_expiry_date = form.value.warranty_expiry_date || undefined
+    data.warranty_expiry_date = isWarrantyInfinite.value ? undefined : (form.value.warranty_expiry_date || undefined)
   } else {
     data.institution = form.value.institution || undefined
     data.interest_rate = form.value.interest_rate ? Number(form.value.interest_rate) : undefined
-    data.maturity_date = form.value.maturity_date || undefined
+    data.maturity_date = isMaturityInfinite.value ? undefined : (form.value.maturity_date || undefined)
   }
 
   emit('submit', data)

@@ -90,8 +90,29 @@
         <van-date-picker
           v-model="startPickerValue"
           :title="t('liability.selectStartDate')"
+          :min-date="DATE_PICKER_MIN_DATE"
+          :max-date="DATE_PICKER_MAX_DATE"
           @confirm="onStartConfirm"
           @cancel="showStartPicker = false"
+        />
+      </van-popup>
+
+      <!-- U2: repayment method picker -->
+      <van-field
+        v-model="repaymentMethodDisplay"
+        is-link
+        readonly
+        :label="t('liability.repaymentMethod')"
+        :placeholder="t('liability.selectRepaymentMethod')"
+        @click="showMethodPicker = true"
+      />
+      <van-popup v-model:show="showMethodPicker" position="bottom" round>
+        <van-picker
+          v-model="methodPickerValue"
+          :columns="repaymentMethodColumns"
+          :title="t('liability.selectRepaymentMethod')"
+          @confirm="onMethodConfirm"
+          @cancel="showMethodPicker = false"
         />
       </van-popup>
 
@@ -100,17 +121,50 @@
         is-link
         readonly
         :label="t('liability.endDate')"
-        :placeholder="t('liability.endDateOptional')"
-        @click="showEndPicker = true"
-      />
+        :placeholder="isEndInfinite ? t('liability.infinitePeriod') : t('liability.endDateOptional')"
+        @click="!isEndInfinite && (showEndPicker = true)"
+      >
+        <template #right-icon>
+          <van-button
+            size="mini"
+            plain
+            :type="isEndInfinite ? 'primary' : 'default'"
+            @click.stop="isEndInfinite = !isEndInfinite; if (isEndInfinite) form.end_date = ''"
+          >{{ t('liability.infinitePeriod') }}</van-button>
+        </template>
+      </van-field>
       <van-popup v-model:show="showEndPicker" position="bottom" round>
         <van-date-picker
           v-model="endPickerValue"
           :title="t('liability.selectEndDate')"
+          :min-date="DATE_PICKER_MIN_DATE"
+          :max-date="DATE_PICKER_MAX_DATE"
           @confirm="onEndConfirm"
           @cancel="showEndPicker = false"
         />
       </van-popup>
+
+      <!-- U5: total_periods input (required for equal_principal, interest_only, bullet) -->
+      <van-field
+        v-if="needsTotalPeriods"
+        v-model="form.total_periods"
+        type="number" inputmode="numeric"
+        :label="t('liability.totalPeriods')"
+        :placeholder="derivedPeriods ? String(derivedPeriods) : t('liability.totalPeriodsPlaceholder')"
+        :readonly="!!derivedPeriods"
+        :rules="[{ required: !derivedPeriods, message: t('liability.totalPeriodsRequired') }]"
+      >
+        <template v-if="derivedPeriods" #right-icon>
+          <span class="field-hint">{{ t('liability.totalPeriodsDerived') }}</span>
+        </template>
+      </van-field>
+
+      <!-- U3: retroactive history toggle (only when start_date is in the past) -->
+      <van-cell v-if="canGenerateHistory" :title="t('liability.generateHistory')" :center="true">
+        <template #right-icon>
+          <van-switch v-model="generateHistory" size="20px" />
+        </template>
+      </van-cell>
 
       <van-field v-model="form.institution" :label="t('liability.institution')" :placeholder="t('liability.institutionPlaceholder')" />
 
@@ -179,6 +233,8 @@ interface FormState {
   interest_rate: string
   start_date: string
   end_date: string
+  repayment_method: string
+  total_periods: string
   institution: string
   linked_asset_id: string | null
   notes: string
@@ -194,6 +250,8 @@ const form = ref<FormState>({
   interest_rate: '',
   start_date: '',
   end_date: '',
+  repayment_method: 'equal_payment',
+  total_periods: '',
   institution: '',
   linked_asset_id: null,
   notes: ''
@@ -221,16 +279,31 @@ watch(() => props.initialData, (data) => {
     if (data.monthly_payment !== undefined) form.value.monthly_payment = String(data.monthly_payment ?? '')
     if (data.interest_rate !== undefined) form.value.interest_rate = String(data.interest_rate ?? '')
     if (data.start_date !== undefined) form.value.start_date = String(data.start_date ?? '')
-    if (data.end_date !== undefined) form.value.end_date = String(data.end_date ?? '')
+    if (data.end_date !== undefined) {
+      form.value.end_date = String(data.end_date ?? '')
+      // Sentinel 2100-01-01 or empty → treat as infinite
+      if (data.end_date === INFINITE_DATE_SENTINEL || data.end_date === null) {
+        isEndInfinite.value = true
+        form.value.end_date = ''
+      }
+    }
     if (data.institution !== undefined) form.value.institution = String(data.institution ?? '')
     if (data.linked_asset_id !== undefined) form.value.linked_asset_id = data.linked_asset_id ? String(data.linked_asset_id) : null
     if (data.notes !== undefined) form.value.notes = String(data.notes ?? '')
+    if (data.repayment_method !== undefined) form.value.repayment_method = String(data.repayment_method ?? 'equal_payment')
   }
 }, { immediate: true })
 
 const showCategoryPicker = ref(false)
 const showStartPicker = ref(false)
 const showEndPicker = ref(false)
+const showMethodPicker = ref(false)
+
+// Date picker range: ~126 years (1950 to current+50y)
+import { DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL } from '@/constants/dates'
+
+// "无限期" toggle for end_date
+const isEndInfinite = ref(false)
 
 const now = new Date()
 const startPickerValue = ref([
@@ -257,6 +330,49 @@ function selectCategory(value: string) {
   form.value.category = value as 'mortgage' | 'car_loan' | 'credit_card' | 'personal_loan' | 'other'
   showCategoryPicker.value = false
 }
+
+// U2: repayment method picker
+const repaymentMethodColumns = computed(() => [
+  { text: t('liability.methodEqualPayment'), value: 'equal_payment' },
+  { text: t('liability.methodEqualPrincipal'), value: 'equal_principal' },
+  { text: t('liability.methodInterestOnly'), value: 'interest_only' },
+  { text: t('liability.methodBullet'), value: 'bullet' },
+  { text: t('liability.methodMinimumPayment'), value: 'minimum_payment' },
+])
+
+const repaymentMethodDisplay = computed(() => {
+  const item = repaymentMethodColumns.value.find(c => c.value === form.value.repayment_method)
+  return item?.text ?? ''
+})
+
+const methodPickerValue = ref<string[]>([form.value.repayment_method])
+
+function onMethodConfirm({ selectedValues }: { selectedValues: string[] }) {
+  form.value.repayment_method = selectedValues[0] ?? 'equal_payment'
+  showMethodPicker.value = false
+}
+
+// Methods that require total_periods for amortization calculation
+const METHODS_REQUIRING_PERIODS = ['equal_principal', 'interest_only', 'bullet']
+const needsTotalPeriods = computed(() => METHODS_REQUIRING_PERIODS.includes(form.value.repayment_method))
+
+// Auto-derive total_periods from start_date + end_date when both are set
+const derivedPeriods = computed(() => {
+  if (!form.value.start_date || !form.value.end_date || form.value.end_date === '2100-01-01') return null
+  const start = new Date(form.value.start_date)
+  const end = new Date(form.value.end_date)
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return null
+  const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+  return months > 0 ? months : null
+})
+
+// Show generate_history toggle when start_date is in the past
+const canGenerateHistory = computed(() => {
+  if (!form.value.start_date) return false
+  const start = new Date(form.value.start_date)
+  return isNaN(start.getTime()) ? false : start < new Date()
+})
+const generateHistory = ref(false)
 
 // L7 (KTD-3): collateral asset picker. Fetches family assets once on mount;
 // a leading "无" option (value '') unsets the link. Value is the asset id.
@@ -312,6 +428,8 @@ function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
 }
 
 function onSubmit() {
+  // Determine total_periods: derived from dates takes priority, then manual input
+  const periods = derivedPeriods.value ?? (form.value.total_periods ? Number(form.value.total_periods) : null)
   const data: LiabilityRequestPayload = {
     name: form.value.name,
     category: form.value.category,
@@ -321,7 +439,10 @@ function onSubmit() {
     monthly_payment: Number(form.value.monthly_payment),
     interest_rate: Number(form.value.interest_rate),
     start_date: form.value.start_date || undefined,
-    end_date: form.value.end_date || undefined,
+    end_date: isEndInfinite.value ? undefined : (form.value.end_date || undefined),
+    repayment_method: form.value.repayment_method,
+    total_periods: periods,
+    generate_history: canGenerateHistory.value && generateHistory.value ? true : undefined,
     institution: form.value.institution || undefined,
     linked_asset_id: form.value.linked_asset_id ?? null,
     notes: form.value.notes || undefined
@@ -334,6 +455,10 @@ function onSubmit() {
 .field-prefix {
   color: var(--text-primary);
   margin-right: 4px;
+}
+.field-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .form-actions {
   padding: 16px;

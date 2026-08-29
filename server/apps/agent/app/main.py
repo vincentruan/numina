@@ -123,11 +123,36 @@ async def lifespan(app: FastAPI):
             # .app_sqlalchemy_url rewrite which we bypass by calling init_engine
             # directly with the raw env var.
             import re as _re
+            from urllib.parse import (  # noqa: I001
+                parse_qs,
+                urlencode,
+                urlparse,
+                urlunparse,
+            )
 
             if db_url.startswith("postgresql"):
                 db_url = _re.sub(
                     r"^postgresql(\+\w+)?://", "postgresql+asyncpg://", db_url
                 )
+                # asyncpg does not recognise psycopg2-style ``sslmode`` query
+                # param — convert it to the ``ssl`` param asyncpg understands.
+                parsed = urlparse(db_url)
+                qs = parse_qs(parsed.query)
+                if "sslmode" in qs:
+                    sslmode = qs.pop("sslmode")[0]
+                    # asyncpg ssl values: "prefer", "require", "verify-ca",
+                    # "verify-full".  Map common psycopg2 sslmode values.
+                    _ssl_map = {
+                        "disable": "prefer",
+                        "allow": "prefer",
+                        "prefer": "prefer",
+                        "require": "require",
+                        "verify-ca": "verify-ca",
+                        "verify-full": "verify-full",
+                    }
+                    qs["ssl"] = [_ssl_map.get(sslmode, "require")]
+                    rebuilt = parsed._replace(query=urlencode(qs, doseq=True))
+                    db_url = urlunparse(rebuilt)
             await init_engine(
                 backend="postgres" if db_url.startswith("postgres") else "sqlite",
                 url=db_url,

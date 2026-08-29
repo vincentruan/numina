@@ -14,12 +14,12 @@
  * - Actions: copy, regenerate, feedback (thumbs up/down)
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import type { ProcessStep, PlanStep } from '@/types/agent-stream'
+import type { PlanStep } from '@/types/agent-stream'
 import type { CitationSource } from '@/utils/ai-chat/citations'
 import CopyButton from '@/components/ai-chat/CopyButton.vue'
-import ReasoningSection from './ReasoningSection.vue'
-import ToolCallList from './ToolCallList.vue'
+import LiveTimer from '@/components/ai-chat/LiveTimer.vue'
 import TodoListPanel from './TodoListPanel.vue'
 import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 import CitationSourcesPanel from '@/components/ai-chat/CitationSourcesPanel.vue'
@@ -29,11 +29,14 @@ interface Props {
   id: string
   content: string
   phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error' | 'interrupted'
-  processSteps?: ProcessStep[]
+  /** DeerFlow: reasoning content extracted from message (think tags / reasoning_content) */
+  reasoningContent?: string | null
+  /** DeerFlow: reasoning start timestamp (from additional_kwargs) */
+  reasoningStartTime?: number | null
+  /** DeerFlow: reasoning end timestamp (from additional_kwargs) */
+  reasoningEndTime?: number | null
   planSteps?: PlanStep[]
   planSource?: 'explicit' | 'inferred' | null
-  processElapsedMs?: number
-  reasoningStartTime?: number | null
   renderedContent?: string
   suggestions?: string[]
   feedback?: 1 | -1 | 0
@@ -41,21 +44,23 @@ interface Props {
   artifacts?: Array<{ id: string; title: string; kind: string; url?: string; path?: string }>
   canBranch?: boolean
   isBranching?: boolean
+  retrying?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   phase: 'done',
-  processSteps: undefined,
+  reasoningContent: null,
+  reasoningStartTime: null,
+  reasoningEndTime: null,
   planSteps: undefined,
   planSource: undefined,
-  processElapsedMs: undefined,
-  reasoningStartTime: undefined,
   renderedContent: undefined,
   suggestions: undefined,
   feedback: undefined,
   artifacts: undefined,
   canBranch: false,
   isBranching: false,
+  retrying: false,
 })
 
 const emit = defineEmits<{
@@ -64,10 +69,25 @@ const emit = defineEmits<{
   feedback: [value: 1 | -1]
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  sandboxFileClick: [filepath: string]
   branch: []
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
+
+function onReportArtifactTap() {
+  router.push('/ai/report')
+}
+
+function onSandboxFileClick(filepath: string) {
+  emit('sandboxFileClick', filepath)
+}
+
+// Filter report-kind artifacts from the artifacts prop
+const reportArtifacts = computed(() =>
+  (props.artifacts ?? []).filter(a => a.kind === 'report')
+)
 
 // DeerFlow 模式：当 planSteps 存在且内容只是冗余的完成总结时，抑制内容渲染。
 // Numina agent 在 write_todos 完成后会生成一条额外的 AI 总结消息
@@ -81,35 +101,30 @@ const isRedundantCompletionSummary = computed(() => {
     content.includes('标记为完成') || content.includes('全部完成')
 })
 
-// Extract reasoning steps from processSteps
-const reasoningSteps = computed(() =>
-  props.processSteps?.filter((s) => s.type === 'reasoning') ?? []
+// ── DeerFlow Reasoning pattern ──
+// Collapsible reasoning section with LiveTimer + MarkdownContent.
+// Default open; auto-close 1s after streaming ends (only once).
+const isReasoningExpanded = ref(true)
+let reasoningAutoCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+// Auto-close reasoning after streaming ends (DeerFlow AUTO_CLOSE_DELAY=1000)
+watch(
+  () => props.phase,
+  (newPhase) => {
+    if ((newPhase === 'done' || newPhase === 'answering') && props.reasoningContent) {
+      if (reasoningAutoCloseTimer === null) {
+        reasoningAutoCloseTimer = setTimeout(() => {
+          isReasoningExpanded.value = false
+          reasoningAutoCloseTimer = null
+        }, 1000)
+      }
+    }
+  },
 )
 
-// Extract tool call steps from processSteps
-const toolCallSteps = computed(() =>
-  props.processSteps?.filter((s) => s.type === 'tool_call') ?? []
-)
-
-// Extract subagent steps from processSteps (for future use)
-const _subagentSteps = computed(() =>
-  props.processSteps?.filter((s) => s.type === 'subagent') ?? []
-)
-
-// Determine if process visualization should show (for future use)
-const _hasProcessContent = computed(() =>
-  (props.processSteps?.length ?? 0) > 0 ||
-  props.phase === 'error' ||
-  props.phase === 'connecting'
-)
-
-// Determine process status
-const processStatus = computed((): 'running' | 'done' | 'error' | 'interrupted' => {
-  if (props.phase === 'interrupted') return 'interrupted'
-  if (props.phase === 'error') return 'error'
-  if (props.phase === 'done') return 'done'
-  return 'running'
-})
+function toggleReasoning() {
+  isReasoningExpanded.value = !isReasoningExpanded.value
+}
 
 // Connecting timer display
 const connectingSeconds = ref(0)
@@ -246,28 +261,47 @@ watch(
       <span class="connecting-time">{{ connectingSeconds }}s</span>
     </div>
 
-    <!-- Reasoning section: collapsible thinking content -->
-    <ReasoningSection
-      v-if="reasoningSteps.length > 0 || phase === 'thinking'"
-      :steps="reasoningSteps"
-      :phase="phase"
-      :elapsed-ms="processElapsedMs"
-      :start-time="reasoningStartTime"
-      :is-streaming="phase === 'thinking'"
-    />
+    <!-- DeerFlow Reasoning pattern: collapsible thinking section with LiveTimer -->
+    <div
+      v-if="reasoningContent"
+      class="reasoning-section"
+    >
+      <button class="reasoning-trigger" @click="toggleReasoning">
+        <div class="reasoning-trigger-inner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="reasoning-icon">
+            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
+          </svg>
+          <LiveTimer
+            v-if="reasoningStartTime"
+            :start-time="reasoningStartTime"
+            :end-time="reasoningEndTime ?? undefined"
+          />
+          <span v-else class="reasoning-label">{{ t('aiChat.thinkingLabel') }}</span>
+        </div>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          :class="['reasoning-chevron', { rotated: !isReasoningExpanded }]"
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <Transition name="reasoning-fade">
+        <div v-if="isReasoningExpanded" class="reasoning-content">
+          <MarkdownContent :content="reasoningContent" @sandbox-file-click="onSandboxFileClick" />
+        </div>
+      </Transition>
+    </div>
 
     <!-- TodoList: plan progress visualization -->
     <TodoListPanel
       v-if="planSteps && planSteps.length > 0"
       :steps="planSteps"
       :source="planSource"
-    />
-
-    <!-- Tool calls: flat list (ChainOfThought pattern) -->
-    <ToolCallList
-      v-if="toolCallSteps.length > 0"
-      :steps="toolCallSteps"
-      :status="processStatus"
     />
 
     <!-- Main content area (suppressed when planSteps exist and content is a redundant completion summary) -->
@@ -277,7 +311,7 @@ watch(
       :class="{ 'content--appearing': phase === 'answering' && !renderedContent }"
     >
       <!-- Markdown rendered via MarkdownContent (markdown-it + shiki) -->
-      <MarkdownContent :content="content" :is-loading="false" @citations="onCitations" />
+      <MarkdownContent :content="content" :is-loading="false" @citations="onCitations" @sandbox-file-click="onSandboxFileClick" />
 
       <!-- Citation sources panel (DeerFlow pattern) -->
       <CitationSourcesPanel
@@ -287,6 +321,23 @@ watch(
 
       <!-- Streaming indicator (block-level bouncing dots, U6) -->
       <StreamingIndicator :visible="phase === 'answering'" />
+    </div>
+
+    <!-- Report artifact: "View full report" navigation button -->
+    <div v-if="reportArtifacts.length > 0 && phase === 'done'" class="report-artifact-row">
+      <button class="report-artifact-btn" @click="onReportArtifactTap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        <span>{{ t('aiChat.viewFullReport') }}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
     </div>
 
     <!-- Error state -->
@@ -322,8 +373,8 @@ watch(
             </svg>
           </button>
         </CopyButton>
-        <button class="action-btn" :aria-label="t('aiChat.regenerateAria')" @click="emit('retry')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <button class="action-btn" :aria-label="t('aiChat.regenerateAria')" :disabled="retrying" @click="emit('retry')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" :class="{ 'action-btn--spinning': retrying }">
             <polyline points="1 4 1 10 7 10"/>
             <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
           </svg>
@@ -409,6 +460,97 @@ watch(
 .assistant-message {
   width: 100%;
   max-width: 100%;
+}
+
+/* ── DeerFlow Reasoning section ── */
+.reasoning-section {
+  margin-bottom: 8px;
+}
+
+.reasoning-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.reasoning-trigger-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reasoning-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--van-primary-color);
+  flex-shrink: 0;
+}
+
+.reasoning-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.reasoning-chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.reasoning-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.reasoning-content {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: rgba(129, 140, 248, 0.06);
+  border-radius: 6px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* Subdue MarkdownContent inside reasoning — cascade override */
+.reasoning-content :deep(.markdown-content),
+.reasoning-content :deep(.markdown-content *) {
+  color: var(--text-secondary);
+}
+
+.reasoning-content :deep(a) {
+  color: var(--van-primary-color);
+  opacity: 0.7;
+}
+
+/* Fade + slide transition (DeerFlow slide-in-from-top-2 / fade-in) */
+.reasoning-fade-enter-active,
+.reasoning-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.reasoning-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.reasoning-fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reasoning-fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reasoning-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 /* Connecting state */
@@ -672,6 +814,15 @@ watch(
     height: 20px;
   }
 
+.action-btn--spinning {
+    animation: spin-refresh 0.8s linear infinite;
+  }
+
+@keyframes spin-refresh {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
   /* Feedback active state: subtle tint */
   .action-btn--active {
     opacity: 1;
@@ -818,5 +969,45 @@ watch(
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Report artifact: "View full report" navigation button */
+.report-artifact-row {
+  margin-top: 12px;
+}
+
+.report-artifact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--van-primary-color);
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.report-artifact-btn:hover {
+  background: rgba(129, 140, 248, 0.14);
+  border-color: rgba(129, 140, 248, 0.5);
+}
+
+.report-artifact-btn:active {
+  background: rgba(129, 140, 248, 0.18);
+}
+
+:global([data-theme='dark']) .report-artifact-btn {
+  background: rgba(160, 165, 255, 0.08);
+  border-color: rgba(160, 165, 255, 0.25);
+  color: #a0a5ff;
+}
+
+:global([data-theme='dark']) .report-artifact-btn:hover {
+  background: rgba(160, 165, 255, 0.14);
+  border-color: rgba(160, 165, 255, 0.4);
 }
 </style>

@@ -17,15 +17,24 @@ import type { MessageGroup, ChatMessage } from '@/types/ai-chat/message-group'
  * 将扁平消息列表转换为 DeerFlow 6-type 分组结构
  * 自动去重 + 分组
  *
+ * DeerFlow pattern: 传入 isCurrentTurnLoading 使流式期间 content-only 消息
+ * 留在 processing group，避免 tool call 到达时视觉跳变（#4304）。
+ *
  * @param messages - 消息列表 ref
+ * @param isCurrentTurnLoading - 当前轮次是否正在流式接收（通常映射 isStreaming）
  * @returns 分组后的消息列表 computed ref
  */
-export function useMessageGroups(messages: Ref<ChatMessage[]>): ComputedRef<MessageGroup[]> {
+export function useMessageGroups(
+  messages: Ref<ChatMessage[]>,
+  isCurrentTurnLoading?: Ref<boolean>,
+): ComputedRef<MessageGroup[]> {
   return computed(() => {
     // 先去重
     const deduped = deduplicateMessages(messages.value)
-    // 再分组
-    return getMessageGroups(deduped)
+    // 再分组（传入流式状态以启用 DeerFlow isUnresolvedAssistantText）
+    return getMessageGroups(deduped, {
+      isCurrentTurnLoading: isCurrentTurnLoading?.value ?? false,
+    })
   })
 }
 

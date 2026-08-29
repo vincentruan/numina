@@ -70,7 +70,7 @@ export interface LoginStep1Response {
   access_token?: string
   refresh_token?: string
   // user info for UI display
-  user_id?: number
+  user_id?: string
   display_name?: string
   avatar_color?: string
   avatar_url?: string | null

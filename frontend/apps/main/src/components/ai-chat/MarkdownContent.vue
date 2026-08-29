@@ -38,6 +38,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   citations: [sources: CitationSource[]]
+  /** Sandbox file path link clicked — parent should open ArtifactPreviewPopup */
+  sandboxFileClick: [filepath: string]
 }>()
 
 const { t } = useI18n()
@@ -365,6 +367,8 @@ onMounted(() => {
   rerender()
   // Event delegation for citation badges
   rootRef.value?.addEventListener('click', handleCitationClick)
+  // Event delegation for sandbox file path links (artifact preview)
+  rootRef.value?.addEventListener('click', handleSandboxFileClick)
   // Event delegation for citation hover (desktop)
   rootRef.value?.addEventListener('mouseenter', handleCitationMouseEnter, true)
   rootRef.value?.addEventListener('mouseleave', handleCitationMouseLeave, true)
@@ -433,6 +437,34 @@ function handleCitationMouseLeave(e: Event) {
   }
 }
 
+/**
+ * Intercept sandbox file path links (/mnt/user-data/, /mnt/skills/) in rendered
+ * markdown. Instead of letting the browser navigate to the raw path (which
+ * results in a 404 on the Vite dev server or a broken URL in production),
+ * emit a sandboxFileClick event so the parent can open ArtifactPreviewPopup.
+ */
+const SANDBOX_PATH_PREFIXES = ['/mnt/user-data/', '/mnt/skills/'] as const
+
+function handleSandboxFileClick(e: Event) {
+  const target = e.target as HTMLElement
+  const anchor = target.closest('a') as HTMLAnchorElement | null
+  if (!anchor) return
+  const href = anchor.getAttribute('href')
+  if (!href) return
+  // Check if href is a sandbox file path (relative or absolute)
+  const isSandboxPath = SANDBOX_PATH_PREFIXES.some(prefix =>
+    href.startsWith(prefix) || href.startsWith(window.location.origin + prefix)
+  )
+  if (!isSandboxPath) return
+  e.preventDefault()
+  e.stopPropagation()
+  // Extract just the path portion (strip origin if present)
+  const filepath = href.startsWith(window.location.origin)
+    ? href.slice(window.location.origin.length)
+    : href
+  emit('sandboxFileClick', filepath)
+}
+
 onErrorCaptured((error) => {
   console.warn('Vue error captured in MarkdownContent:', error)
   return false // prevent propagation
@@ -455,6 +487,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', detectMobile)
   rootRef.value?.removeEventListener('mouseup', handleMouseUp)
   rootRef.value?.removeEventListener('click', handleCitationClick)
+  rootRef.value?.removeEventListener('click', handleSandboxFileClick)
   rootRef.value?.removeEventListener('mouseenter', handleCitationMouseEnter, true)
   rootRef.value?.removeEventListener('mouseleave', handleCitationMouseLeave, true)
   highlighter.value = null

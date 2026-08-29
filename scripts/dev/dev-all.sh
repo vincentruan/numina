@@ -26,6 +26,11 @@ PORTS=(8000 8001 8002 5173 5174)
 
 # ── helpers ──────────────────────────────────────────────────────────
 
+check_deps() {
+    echo "检查并同步依赖..."
+    make -s install
+}
+
 check_ports() {
     local occupied=0
     for port in "${PORTS[@]}"; do
@@ -159,19 +164,14 @@ launch_tmux() {
     tmux select-pane -t "$p_backend"
 
     # ── Attach / keep-alive ─────────────────────────────────────────
-    trap '
-        if [ -n "${TMUX:-}" ] && [ -n "${window_flag:-}" ]; then
-            tmux kill-window -t "'"$tw"'" 2>/dev/null || true
-        else
-            tmux kill-session -t "'"$SESSION"'" 2>/dev/null || true
-        fi
-    ' INT TERM
-
+    # When already inside tmux, the window was just created — return immediately.
+    # Don't block (the old `sleep 3600 & wait` pattern kept `make dev-all`
+    # hanging; cleanup-on-signal was unreliable because the trap missed SIGHUP/EXIT).
+    # When NOT inside tmux, attach to the standalone session (blocks until detach).
     if [ -n "${TMUX:-}" ]; then
         tmux select-window -t "$tw"
         echo "[numina-dev] 在 tmux window 中运行。"
         echo "  停止: make stop-dev-all"
-        sleep 3600 & wait $!
     else
         exec tmux attach-session -t "$SESSION"
     fi
@@ -285,6 +285,7 @@ launch_background() {
 # ── main ─────────────────────────────────────────────────────────────
 
 main() {
+    check_deps
     check_ports || exit 1
 
     if command -v tmux >/dev/null 2>&1; then

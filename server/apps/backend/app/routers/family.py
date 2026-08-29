@@ -235,6 +235,12 @@ def update_member_info(
     # Use model_fields_set to distinguish "not provided" from "explicitly cleared"
     if "avatar_url" in body.model_fields_set:
         member.avatar_url = body.avatar_url
+        # Regenerate avatar token for uploaded images, clear for others
+        if body.avatar_url and body.avatar_url.startswith("/uploads/"):
+            from apps.backend.app.services.auth import generate_avatar_token
+            member.avatar_token = generate_avatar_token()
+        else:
+            member.avatar_token = None
     if body.birthday is not None:
         member.birthday = body.birthday
     if body.birthday_is_lunar is not None:

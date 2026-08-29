@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from packages.db.stream_bridge import (
+from packages.stream_bridge import (
     MemoryStreamBridge,
     NuminaRedisStreamBridge,
     StreamBridge,
@@ -78,9 +78,9 @@ class TestMakeStreamBridge:
 class TestNuminaRedisStreamBridge:
     """Test Numina-specific Redis bridge wrapper."""
 
-    def test_inherits_from_deerflow(self):
-        """NuminaRedisStreamBridge should inherit from DeerFlow's RedisStreamBridge."""
-        from deerflow.runtime.stream_bridge.redis import RedisStreamBridge
+    def test_inherits_from_shared_redis_bridge(self):
+        """NuminaRedisStreamBridge should inherit from the shared package's RedisStreamBridge."""
+        from packages.stream_bridge.redis import RedisStreamBridge
 
         assert issubclass(NuminaRedisStreamBridge, RedisStreamBridge)
 

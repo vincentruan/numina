@@ -9,7 +9,7 @@
  * - Assistant messages: left-aligned, full width (w-full), collapsible sections
  * - Proper role-based styling without nested complexity
  */
-import type { ProcessStep, PlanStep } from '@/types/agent-stream'
+import type { PlanStep } from '@/types/agent-stream'
 import UserBubble from './UserBubble.vue'
 import AssistantMessage from './AssistantMessage.vue'
 
@@ -19,11 +19,11 @@ interface Props {
   content: string
   phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error' | 'interrupted'
   // Assistant-specific props
-  processSteps?: ProcessStep[]
+  reasoningContent?: string | null
   planSteps?: PlanStep[]
   planSource?: 'explicit' | 'inferred' | null
-  processElapsedMs?: number
   reasoningStartTime?: number | null
+  reasoningEndTime?: number | null
   renderedContent?: string
   suggestions?: string[]
   feedback?: 1 | -1 | 0
@@ -45,6 +45,7 @@ const emit = defineEmits<{
   feedback: [messageId: string, value: 1 | -1]
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  sandboxFileClick: [filepath: string]
   // Edit events
   sendEdit: []
   cancelEdit: []
@@ -77,11 +78,11 @@ const emit = defineEmits<{
       :id="id"
       :content="content"
       :phase="phase"
-      :process-steps="processSteps"
+      :reasoning-content="reasoningContent"
+      :reasoning-start-time="reasoningStartTime"
+      :reasoning-end-time="reasoningEndTime"
       :plan-steps="planSteps"
       :plan-source="planSource"
-      :process-elapsed-ms="processElapsedMs"
-      :reasoning-start-time="reasoningStartTime"
       :rendered-content="renderedContent"
       :suggestions="suggestions"
       :feedback="feedback"
@@ -92,6 +93,7 @@ const emit = defineEmits<{
       @feedback="(v) => emit('feedback', id, v)"
       @suggestion-click="emit('suggestionClick', $event)"
       @artifact-tap="emit('artifactTap', $event)"
+      @sandbox-file-click="emit('sandboxFileClick', $event)"
     />
   </div>
 </template>

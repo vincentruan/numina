@@ -38,8 +38,9 @@ JSON output automatically converts IDs to strings:
 ### Key Points
 
 - Schemas define IDs as `int` (internal representation matches SQLAlchemy)
-- SnowflakeBase.model_serializer converts to `str` during JSON serialization
-- No manual `str()` calls in routers — return int values directly
+- **`EnvelopeResponse.render()`** auto-converts all `id`/`*_id` int fields to `str` at the JSON boundary — this is the primary defense and covers all normal endpoints (raw dict returns, Pydantic models, nested lists)
+- `SnowflakeBase.model_serializer` provides defense-in-depth for endpoints with `response_model`
+- No manual `str()` calls needed in routers — return int values directly
 - Request schemas (Create/Update) don't need SnowflakeBase — input comes as string
 
 ### Common Pitfalls
@@ -47,8 +48,9 @@ JSON output automatically converts IDs to strings:
 1. **Don't use plain BaseModel for schemas with IDs** → Use SnowflakeBase
 2. **Don't manually define `id: str`** → Define `id: int`, let serializer convert
 3. **Don't add field_validator for ID coercion** → SnowflakeBase handles it
-4. **Don't call str() in routers** → Return int, schema serializes
+4. **Don't call str() in routers** → Return int, `EnvelopeResponse` handles conversion
 5. **Request schemas don't need SnowflakeBase** → Input validation handles string→int
+6. **SSE endpoints bypass `EnvelopeResponse`** → Use `SnowflakeResponse` (from `app.responses`) instead of raw `JSONResponse` for endpoints that return BigInteger IDs outside the envelope (e.g. queued-task 202 responses). `SnowflakeResponse` has the same `_convert_snowflake_ids` logic but no envelope wrapping.
 
 ### Why
 

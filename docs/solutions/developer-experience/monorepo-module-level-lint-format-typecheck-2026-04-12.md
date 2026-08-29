@@ -2,7 +2,7 @@
 title: "Monorepo module-level lint/format/typecheck setup (Vue 3 + TS + FastAPI)"
 date: 2026-04-12
 last_updated: 2026-05-14
-category: docs/solutions/developer-experience
+category: developer-experience
 module: frontend, server
 problem_type: developer_experience
 component: tooling

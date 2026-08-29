@@ -1,6 +1,6 @@
 <template>
   <div class="literacy-report-page">
-    <PageHeader :title="t('literacyReport.title')" />
+    <PageHeader :title="t('literacyReport.title')" back-to="/baby" />
 
     <!-- Loading skeleton -->
     <van-skeleton v-if="loading" :rows="6" animated class="page-skeleton" />
@@ -58,7 +58,7 @@
             v-if="resumeHandle.taskId"
             plain
             type="danger"
-            size="mini"
+            size="small"
             :loading="literacyCancelling"
             :disabled="literacyCancelling"
             class="streaming-cancel-btn"
@@ -152,7 +152,10 @@ const resumeHandle = useTaskResume('literacy', {
     }
   },
   onError: () => {
-    // Don't toast here — the template shows inline error + retry instead
+    // Task failed — still try to load whatever persisted report exists
+    if (selectedChildId.value) {
+      loadReport()
+    }
   },
 })
 const literacyCancelling = ref(false)
@@ -206,6 +209,7 @@ async function loadReport() {
     if (!currentWeekStart.value && history.value.length > 0) {
       const firstWithReport = history.value.find(w => w.has_report)
       currentWeekStart.value = firstWithReport?.week_start ?? history.value[0].week_start
+      skipNextWatch = true
       if (firstWithReport && !reportRes) {
         const retry = await getReport(selectedChildId.value, currentWeekStart.value).catch(() => null)
         report.value = retry
@@ -323,7 +327,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  resumeHandle.cleanup()
+  // v3 fix: use disconnect() (not cleanup()) to preserve step-state so that
+  // resume() can restore the timeline when the user navigates back.
+  resumeHandle.disconnect()
 })
 </script>
 

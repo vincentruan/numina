@@ -41,8 +41,8 @@ VALID_SKILL_IDS = {
     "time_machine",
     # v2 features (U10)
     "coach",
-    "literacy",
-    "narrative",
+    "literacy-weekly-report",
+    "dashboard-narrative",
     "chat",
 }
 
@@ -137,8 +137,8 @@ def get_task_status(
     if task is not None:
         return {
             "status": task.status,
-            "task_id": task.id,
-            "session_id": task.session_id,
+            "task_id": str(task.id),
+            "session_id": str(task.session_id) if task.session_id else None,
             "started_at": task.started_at.isoformat() + "+00:00",
             "queue_position": None,
         }
@@ -148,8 +148,8 @@ def get_task_status(
     if queued is not None:
         return {
             "status": "queued",
-            "task_id": queued.id,
-            "session_id": queued.session_id,
+            "task_id": str(queued.id),
+            "session_id": str(queued.session_id) if queued.session_id else None,
             "started_at": queued.started_at.isoformat() + "+00:00",
             "queue_position": queued.queue_position,
         }
@@ -171,7 +171,7 @@ def get_task_session(
     if task is None:
         return {"session_id": None}
 
-    return {"session_id": task.session_id, "task_id": task.id}
+    return {"session_id": str(task.session_id) if task.session_id else None, "task_id": str(task.id)}
 
 
 @router.post("/{skill_id}/cancel")
@@ -231,7 +231,7 @@ async def cancel_task_by_id(
 
     # Idempotent: if already terminal, return current status
     if task.status in ("completed", "failed", "cancelled", "timeout"):
-        return {"ok": True, "status": task.status, "task_id": task.id}
+        return {"ok": True, "status": task.status, "task_id": str(task.id)}
 
     # Notify Agent if task has run_id (fire-and-forget)
     if task.run_id:
@@ -267,7 +267,7 @@ async def cancel_task_by_id(
     task.completed_at = datetime.now()
     db.commit()
 
-    return {"ok": True, "status": "cancelled", "task_id": task.id}
+    return {"ok": True, "status": "cancelled", "task_id": str(task.id)}
 
 
 # ---------------------------------------------------------------------------

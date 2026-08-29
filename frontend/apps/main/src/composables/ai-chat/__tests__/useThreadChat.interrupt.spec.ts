@@ -63,7 +63,7 @@ describe('useThreadChat - clarification artifact extraction', () => {
     const { useThreadChat } = await import('../useThreadChat')
     const chat = useThreadChat()
 
-    await chat.sendMessage('hello', undefined, 'thread-1')
+    await chat.sendMessage('hello', { threadId: 'thread-1' })
     return chat
   }
 

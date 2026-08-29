@@ -182,6 +182,26 @@ function onSelectHistoryThread(threadId: string) {
 // /api/threads error, network failure). Cleared once a send succeeds.
 const draftText = ref<string | undefined>(undefined)
 
+/**
+ * Wait for family data before making agent API calls.
+ *
+ * App.vue fires fetchMe()→fetchFamily() asynchronously on mount. When the user
+ * refreshes directly on /ai/chat?thread_id=..., AIChatBox's onMounted fires
+ * before fetchFamily() completes — getClient()/getAgentHeaders() then throw
+ * "Family not loaded" and the page renders blank / toasts an English error.
+ * Await family data here so the API calls have what they need.
+ */
+async function ensureFamilyLoaded(): Promise<void> {
+  if (!familyStore.family) {
+    try {
+      await familyStore.fetchFamily()
+    } catch {
+      // Non-fatal — the caller (loadHistory / handleStartChat) will surface
+      // its own error toast if the family is still missing after this await.
+    }
+  }
+}
+
 // Inherited web search state: when the chat page is entered from the AI hub
 // page, the hub's web search toggle is carried via pendingMessage.webSearch.
 // Pass it to the chat InputBox as an explicit initial value so it inherits the
@@ -270,7 +290,7 @@ async function onChatTaskRetry() {
   chatTaskStatus.value = 'idle'
   chatTaskError.value = null
   try {
-    await chat.sendMessage(lastUser.content, undefined, threadId)
+    await chat.sendMessage(lastUser.content, { threadId })
   } finally {
     chatTaskRetrying.value = false
   }
@@ -349,6 +369,10 @@ onMounted(async () => {
       && store.activeThreadId === prevActiveId
       && !store.pendingMessage
     ) {
+      // Wait for family data before loading thread history. Without this,
+      // getClient() / getAgentHeaders() throw "Family not loaded" on page
+      // refresh because App.vue's fetchMe()→fetchFamily() hasn't completed yet.
+      await ensureFamilyLoaded()
       // U19: AITask preflight — check if a background task is still running
       // before loading history. Terminal states (completed/failed/interrupted)
       // determine whether to reconnect SSE or just show the last state.
@@ -416,10 +440,12 @@ onMounted(async () => {
 
 // Cleanup on unmount
 onUnmounted(() => {
-  // #8: cancel any in-flight stream + retry loop so the for-await and retry
-  // timers don't keep mutating refs / firing network requests for up to 120s
-  // after navigation away from the chat page.
-  chat.cancelStream()
+  // #8: Abort the local SSE connection so the proxy loop exits cleanly.
+  // Use abortLocalStream (not cancelStream) — the agent run continues in the
+  // background (on_disconnect=continue) so the user can recover via
+  // checkChatTask() + loadHistory() when they return. cancelStream would send
+  // client.runs.cancel() to the agent, killing the background run.
+  chat.abortLocalStream()
   // U19: stop AITask polling timer on unmount.
   stopChatTaskPolling()
 })
@@ -442,6 +468,12 @@ watch(
         skipNextHistoryLoadFor.value = null
         return
       }
+      // Wait for family data before making agent API calls. On page refresh
+      // (Pinia store fresh → activeThreadId null→threadId), this watcher fires
+      // before App.vue's fetchMe()→fetchFamily() completes. Without the guard,
+      // getClient() / getAgentHeaders() throw "Family not loaded" and the page
+      // renders blank with a raw English error toast.
+      await ensureFamilyLoaded()
       // Load messages and thread metadata in parallel - loadHistory only
       // fetches checkpoint messages, ensureThreadInSessions fetches the title.
       await Promise.all([
@@ -460,7 +492,13 @@ watch(
   () => chat.error.value,
   (err) => {
     if (err) {
-      showFailToast(err)
+      // getClient() / getAgentHeaders() throw a hard-coded English message
+      // when family data hasn't loaded yet — translate it so the toast is
+      // localised instead of showing raw English to zh-CN users.
+      const displayMsg = err.includes('Family not loaded')
+        ? t('aiChat.tenantNoFamily')
+        : err
+      showFailToast(displayMsg)
       errorBarMessage.value = t('aiChat.connectionBrokenRetry')
     } else {
       errorBarMessage.value = null
@@ -521,13 +559,18 @@ async function handleStartChat(payload: SubmitPayload, source?: string) {
     }
     // Hide skeleton once thread is created - streaming will show actual content
     initialLoading.value = false
-    await chat.sendMessage(payload.text, payload.mode, thread.thread_id, {
-      thinking_enabled: payload.thinking_enabled,
-      is_plan_mode: payload.is_plan_mode,
-      subagent_enabled: payload.subagent_enabled,
-      reasoning_effort: payload.reasoning_effort,
-      websearch_enabled: payload.websearch_enabled,
-    }, source)
+    await chat.sendMessage(payload.text, {
+      mode: payload.mode,
+      threadId: thread.thread_id,
+      modeConfig: {
+        thinking_enabled: payload.thinking_enabled,
+        is_plan_mode: payload.is_plan_mode,
+        subagent_enabled: payload.subagent_enabled,
+        reasoning_effort: payload.reasoning_effort,
+        websearch_enabled: payload.websearch_enabled,
+      },
+      source,
+    })
     // Send started successfully — clear the one-shot pending message (so a
     // re-mount does not re-send) and any recovered draft so it doesn't linger
     // in the (now-hidden) welcome InputBox on a later new-chat.
@@ -567,12 +610,16 @@ async function handleSendMessage(payload: SubmitPayload) {
       (goal) => setLocalGoal(goal ?? null),
     )
     if (saved && goalCommand.kind === 'set') {
-      await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
-        thinking_enabled: payload.thinking_enabled,
-        is_plan_mode: payload.is_plan_mode,
-        subagent_enabled: payload.subagent_enabled,
-        reasoning_effort: payload.reasoning_effort,
-        websearch_enabled: payload.websearch_enabled,
+      await chat.sendMessage(payload.text, {
+        mode: payload.mode,
+        threadId: store.activeThreadId,
+        modeConfig: {
+          thinking_enabled: payload.thinking_enabled,
+          is_plan_mode: payload.is_plan_mode,
+          subagent_enabled: payload.subagent_enabled,
+          reasoning_effort: payload.reasoning_effort,
+          websearch_enabled: payload.websearch_enabled,
+        },
       })
     }
     return
@@ -585,13 +632,18 @@ async function handleSendMessage(payload: SubmitPayload) {
     await chat.handleCompact(store.activeThreadId)
     return
   }
-  await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
-    thinking_enabled: payload.thinking_enabled,
-    is_plan_mode: payload.is_plan_mode,
-    subagent_enabled: payload.subagent_enabled,
-    reasoning_effort: payload.reasoning_effort,
-    websearch_enabled: payload.websearch_enabled,
-  }, undefined, undefined, payload.files)
+  await chat.sendMessage(payload.text, {
+    mode: payload.mode,
+    threadId: store.activeThreadId,
+    modeConfig: {
+      thinking_enabled: payload.thinking_enabled,
+      is_plan_mode: payload.is_plan_mode,
+      subagent_enabled: payload.subagent_enabled,
+      reasoning_effort: payload.reasoning_effort,
+      websearch_enabled: payload.websearch_enabled,
+    },
+    files: payload.files,
+  })
   // Clear attachments after successful send
   chatAttachments.value = []
 }
@@ -606,7 +658,12 @@ function handleStop() {
 
 async function handleRetry() {
   if (store.activeThreadId) {
-    await chat.retry(store.activeThreadId)
+    try {
+      await chat.retry(store.activeThreadId)
+    } catch (err) {
+      const msg = (err as Error).message || ''
+      showFailToast(msg.includes('Family not loaded') ? t('aiChat.tenantNoFamily') : (msg || t('aiChat.sendFailed')))
+    }
   }
 }
 
@@ -637,7 +694,7 @@ async function handleSuggestionClick(text: string) {
       ]
     }
   }
-  await chat.sendMessage(text, undefined, store.activeThreadId)
+  await chat.sendMessage(text, { threadId: store.activeThreadId })
 }
 
 const VALID_ARTIFACT_KINDS = ['data', 'link', 'image', 'file', 'other', 'report'] as const
@@ -706,7 +763,8 @@ async function handleBranch(messageId: string, messageIds: string[]) {
     // Navigate to the new branch thread
     router.push({ name: 'AIChat', query: { thread_id: response.thread_id } })
   } catch (error) {
-    const message = error instanceof Error ? error.message : t('aiChat.branchFailed')
+    const rawMsg = error instanceof Error ? error.message : ''
+    const message = rawMsg.includes('Family not loaded') ? t('aiChat.tenantNoFamily') : (rawMsg || t('aiChat.branchFailed'))
     showFailToast(message)
   } finally {
     branchingMessageId.value = null
@@ -795,14 +853,14 @@ async function handleClarificationSubmit(payload: { threadId: string; interruptI
       <div v-if="chatTaskStatus === 'running'" class="chat-task-banner chat-task-banner--running">
         <van-loading size="14" type="spinner" color="var(--van-primary-color)" />
         <span class="chat-task-banner__text">{{ t('aiChat.chatTaskRunning') }}</span>
-        <van-button plain type="danger" size="mini" @click="onChatTaskCancel">
+        <van-button plain type="danger" size="small" @click="onChatTaskCancel">
           {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
       <div v-else-if="chatTaskStatus === 'failed' || chatTaskStatus === 'interrupted'" class="chat-task-banner chat-task-banner--error">
         <van-icon name="warning-o" size="16" />
         <span class="chat-task-banner__text">{{ chatTaskError || t('aiChat.chatTaskFailed') }}</span>
-        <van-button plain type="primary" size="mini" @click="onChatTaskRetry">
+        <van-button plain type="primary" size="small" @click="onChatTaskRetry">
           {{ t('aiTask.retry') }}
         </van-button>
       </div>

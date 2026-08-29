@@ -31,7 +31,9 @@ def get_recent_activities(
             "entity_id": a.entity_id,
             "title": a.title,
             "amount": a.amount,
-            "created_at": ensure_utc(a.created_at).isoformat() if a.created_at else None,
+            "created_at": ensure_utc(a.created_at).isoformat()
+            if a.created_at
+            else None,
         }
         for a in activities
     ]

@@ -55,7 +55,11 @@
         <van-cell :title="t('liability.detailFieldOriginalAmount')">
           <template #value><MoneyDisplay :amount="Number(liability.original_amount)" :source-currency="liability.currency" /></template>
         </van-cell>
-        <van-cell v-if="liability.monthly_payment" :title="t('liability.detailFieldMonthlyPayment')">
+        <!-- U2: repayment method -->
+      <van-cell v-if="liability.repayment_method" :title="t('liability.repaymentMethod')">
+        <template #value>{{ repaymentMethodText }}</template>
+      </van-cell>
+      <van-cell v-if="liability.monthly_payment" :title="t('liability.detailFieldMonthlyPayment')">
           <template #value><MoneyDisplay :amount="Number(liability.monthly_payment)" :source-currency="liability.currency" /></template>
         </van-cell>
         <van-cell v-if="liability.interest_rate" :title="t('liability.detailFieldAnnualRate')" :value="`${liability.interest_rate}%`" />
@@ -92,6 +96,26 @@
       <!-- Notes -->
       <van-cell-group v-if="liability.notes" inset :title="t('liability.detailSectionNotes')">
         <van-cell :title="liability.notes" />
+      </van-cell-group>
+
+      <!-- U3: payment history list -->
+      <van-cell-group inset :title="t('liability.paymentHistory')">
+        <van-cell
+          v-for="p in payments"
+          :key="p.id"
+          :title="currency.formatConverted(Number(p.amount), liability.currency)"
+          :label="formatPaidAt(p.paid_at)"
+        >
+          <template #value>
+            <van-tag v-if="p.source === 'system'" type="primary" plain size="medium">
+              {{ t('liability.paymentSourceSystem') }}
+            </van-tag>
+            <van-tag v-else type="default" plain size="medium">
+              {{ t('liability.paymentSourceManual') }}
+            </van-tag>
+          </template>
+        </van-cell>
+        <van-empty v-if="payments.length === 0" :description="t('liability.noPaymentRecords')" />
       </van-cell-group>
 
       <!-- Actions -->
@@ -131,6 +155,24 @@
         >
           <template #button>{{ t('liability.detailPaymentUnit') }}</template>
         </van-field>
+        <!-- U4: payment date picker (defaults to today, allows past dates) -->
+        <van-field
+          v-model="paymentDateDisplay"
+          is-link
+          readonly
+          :label="t('liability.paymentDate')"
+          @click="showPaymentDatePicker = true"
+        />
+        <van-popup v-model:show="showPaymentDatePicker" position="bottom" round>
+          <van-date-picker
+            v-model="paymentDatePickerValue"
+            :title="t('liability.paymentDate')"
+            :min-date="PAYMENT_DATE_MIN"
+            :max-date="PAYMENT_DATE_MAX"
+            @confirm="onPaymentDateConfirm"
+            @cancel="showPaymentDatePicker = false"
+          />
+        </van-popup>
         <!-- L4: quick-fill buttons (25%/50%/100%). Fill-only — user must still click confirm. -->
         <div class="pay-quick-btns">
           <button
@@ -146,11 +188,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
+import { getPayments } from '@/api/liabilities'
+import type { PaymentRecord } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
@@ -171,6 +215,37 @@ const showPayment = ref(false)
 const paymentAmount = ref('')
 const { increment, decrement } = usePageLoading()
 
+// U3: payment history
+const payments = ref<PaymentRecord[]>([])
+
+// U4: payment date picker (defaults to today)
+const showPaymentDatePicker = ref(false)
+const paymentDate = ref(todayStr())
+const PAYMENT_DATE_MIN = new Date(1950, 0, 1)
+const PAYMENT_DATE_MAX = new Date()
+
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const paymentDatePickerValue = ref(todayStr().split('-'))
+
+const paymentDateDisplay = computed(() => paymentDate.value)
+
+function onPaymentDateConfirm({ selectedValues }: { selectedValues: string[] }) {
+  paymentDate.value = selectedValues.join('-')
+  showPaymentDatePicker.value = false
+}
+
+// Reset payment date to today each time dialog opens
+watch(showPayment, (open) => {
+  if (open) {
+    paymentDate.value = todayStr()
+    paymentDatePickerValue.value = todayStr().split('-')
+  }
+})
+
 const liability = computed(() => liabilityStore.currentLiability)
 
 const categoryMap: Record<string, { text: string; icon: string }> = {
@@ -184,6 +259,18 @@ const categoryMap: Record<string, { text: string; icon: string }> = {
 
 const categoryText = computed(() => categoryMap[liability.value?.category || '']?.text || '')
 const categoryIcon = computed(() => categoryMap[liability.value?.category || '']?.icon || 'icon-other-liability')
+
+// U2: repayment method display text
+const repaymentMethodText = computed(() => {
+  const map: Record<string, string> = {
+    equal_payment: t('liability.methodEqualPayment'),
+    equal_principal: t('liability.methodEqualPrincipal'),
+    interest_only: t('liability.methodInterestOnly'),
+    bullet: t('liability.methodBullet'),
+    minimum_payment: t('liability.methodMinimumPayment'),
+  }
+  return map[liability.value?.repayment_method || ''] || liability.value?.repayment_method || ''
+})
 
 const paidAmount = computed(() => {
   if (!liability.value) return 0
@@ -230,9 +317,11 @@ async function onPaymentConfirm(action: string) {
       return false
     }
     try {
-      await liabilityStore.recordPayment(liability.value!.id, amount)
+      await liabilityStore.recordPayment(liability.value!.id, amount, paymentDate.value)
       showSuccessToast(t('toast.paymentSuccess'))
       paymentAmount.value = ''
+      // Refresh payment history after recording
+      await fetchPayments()
       return true
     } catch {
       return false
@@ -263,6 +352,24 @@ async function onDelete() {
   }
 }
 
+// U3: fetch payment history
+async function fetchPayments() {
+  if (!liability.value) return
+  try {
+    const res = await getPayments(liability.value.id)
+    payments.value = res.data
+  } catch {
+    payments.value = []
+  }
+}
+
+// U4: format paid_at for display
+function formatPaidAt(paid_at: string) {
+  if (!paid_at) return ''
+  // paid_at is ISO date string; show YYYY-MM-DD
+  return paid_at.slice(0, 10)
+}
+
 onMounted(async () => {
   increment()
   try {
@@ -273,6 +380,8 @@ onMounted(async () => {
     if (liability.value?.currency && liability.value.currency !== 'CNY') {
       void ensureRate(liability.value.currency)
     }
+    // U3: load payment history
+    await fetchPayments()
   } finally {
     decrement()
   }

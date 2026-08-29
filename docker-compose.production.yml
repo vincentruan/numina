@@ -33,13 +33,18 @@ services:
       - DB_MAX_OVERFLOW=2
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ENVIRONMENT=production
       - CORS_ORIGINS=${CORS_ORIGINS:-["https://numina.xiaoshutiao.space","https://xiaoshutiao.space"]}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - AGENT_BASE_URL=http://numina-agent:8001
       - BACKEND_BASE_URL=http://numina-backend:8000
       - NUMINA_PROJECT_ROOT=/app
       - SKIP_INITIAL_EXCHANGE_RATE_FETCH=${SKIP_INITIAL_EXCHANGE_RATE_FETCH:-}
+      - STREAM_BRIDGE_TYPE=redis
+      - REDIS_URL=redis://numina-redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -165,7 +170,7 @@ services:
       frontend-child:
         condition: service_started
 
-  # Redis service for StreamBridge event buffering (多实例部署时启用: --profile redis)
+  # Redis service for StreamBridge cross-process event delivery (agent ↔ backend)
   redis:
     image: redis:7-alpine
     container_name: numina-redis
@@ -173,8 +178,6 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    profiles:
-      - redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

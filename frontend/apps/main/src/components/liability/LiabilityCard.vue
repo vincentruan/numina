@@ -1,5 +1,5 @@
 <template>
-  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell">
+  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell" :right-width="160" :style="liabilitySwipeStyle">
     <div
       class="liability-card"
       :class="{ 'is-selected': selected, 'select-mode': selectMode }"
@@ -65,22 +65,30 @@
       </div>
     </div>
 
-    <!-- Swipe right slot: actions -->
+    <!-- Swipe right slot: actions (≤2 quick actions per state) -->
     <template #right>
-      <div class="swipe-actions">
-        <button v-if="liability.is_active" class="swipe-btn swipe-btn--pay" @click.stop="$emit('pay', liability)">
-          <van-icon name="gold-coin-o" size="20" />
-          <span>{{ t('liabilityCard.pay') }}</span>
-        </button>
-        <button class="swipe-btn swipe-btn--edit" @click.stop="$emit('edit', liability)">
-          <van-icon name="edit" size="20" />
-          <span>{{ t('liabilityCard.edit') }}</span>
-        </button>
-        <button class="swipe-btn swipe-btn--delete" @click.stop="$emit('delete', liability)">
-          <van-icon name="delete-o" size="20" />
-          <span>{{ t('liabilityCard.delete') }}</span>
-        </button>
-      </div>
+      <van-button
+        v-if="liability.is_active"
+        square
+        type="success"
+        class="swipe-action-btn"
+        :text="t('liabilityCard.pay')"
+        @click.stop="$emit('pay', liability)"
+      />
+      <van-button
+        v-if="!liability.is_active"
+        square
+        class="swipe-action-btn swipe-action-btn--reactivate"
+        :text="t('liabilityCard.reactivate')"
+        @click.stop="$emit('reactivate', liability)"
+      />
+      <van-button
+        square
+        type="danger"
+        class="swipe-action-btn"
+        :text="t('liabilityCard.delete')"
+        @click.stop="$emit('delete', liability)"
+      />
     </template>
   </van-swipe-cell>
 </template>
@@ -102,8 +110,14 @@ const emit = defineEmits<{
   pay: [liability: Liability]
   edit: [liability: Liability]
   delete: [liability: Liability]
+  reactivate: [liability: Liability]
   longpress: [liability: Liability]
 }>()
+
+// CSS custom property for right container width
+const liabilitySwipeStyle = computed<Record<string, string>>(() => ({
+  '--swipe-right-width': '160px',
+}))
 
 const { t } = useI18n()
 const currency = useCurrency()
@@ -175,7 +189,17 @@ function handleClick() {
 
 .liability-swipe-cell {
   margin-bottom: 12px;
+  touch-action: pan-y;
 }
+
+/* Force swipe action buttons to share width equally via flexbox */
+.liability-swipe-cell :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
+}
+
+/* Swipe action buttons */
+@import '@/styles/swipe-actions.css';
 
 .liability-card {
   background: var(--card-bg);
@@ -218,38 +242,10 @@ function handleClick() {
   z-index: 1;
 }
 
-/* Swipe action buttons */
-.swipe-actions {
-  display: flex;
-  height: 100%;
-}
-
-.swipe-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 64px;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
-  padding: 0;
-}
-
-.swipe-btn--pay {
-  background: #059669;
-}
-
-.swipe-btn--edit {
-  background: #0891b2;
-}
-
-.swipe-btn--delete {
-  background: #dc2626;
-  border-radius: 0 16px 16px 0;
+.swipe-action-btn--reactivate {
+  --van-button-default-background: #0891b2;
+  --van-button-default-color: #fff;
+  --van-button-default-border-color: #0891b2;
 }
 
 /* Card internals (unchanged) */

@@ -1,7 +1,11 @@
-"""L1/L2 single-source amortization — 6 cases (Plan B T4, spec §6.4)."""
+"""L1/L2 single-source amortization — 13 cases (Plan B T4 + U2 5-method)."""
 from decimal import Decimal
 
-from packages.domain.liability_calculator import AmortizationResult, calc_amortization
+from packages.domain.liability_calculator import (
+    VALID_METHODS,
+    AmortizationResult,
+    calc_amortization,
+)
 
 
 def test_equal_payment_amortization_normal():
@@ -86,3 +90,96 @@ def test_result_shape():
     assert hasattr(r, "monthly_payment")
     assert hasattr(r, "warning")
     assert hasattr(r, "schedule")
+
+
+# ── U2: New repayment methods ──────────────────────────────────────────
+
+
+def test_equal_principal_schedule_and_decreasing_payment():
+    """等额本金: fixed monthly principal, decreasing interest, schedule generated."""
+    r = calc_amortization(
+        remaining=Decimal("120000"), annual_rate=Decimal("12"),
+        monthly_payment=None, repayment_method="equal_principal",
+        total_periods=12,
+    )
+    assert r is not None
+    assert r.schedule is not None
+    assert len(r.schedule) == 12
+    # Each month: principal should be ~10000 (120000/12)
+    for row in r.schedule:
+        assert row["principal"] == Decimal("10000.00")
+    # Interest should decrease each month (balance shrinks)
+    for i in range(1, len(r.schedule)):
+        assert r.schedule[i]["interest"] < r.schedule[i - 1]["interest"]
+    # Payment should decrease (fixed principal + decreasing interest)
+    for i in range(1, len(r.schedule)):
+        assert r.schedule[i]["payment"] < r.schedule[i - 1]["payment"]
+    # Final balance should be ~0
+    assert r.schedule[-1]["balance"] == Decimal("0")
+    assert r.total_interest > 0
+
+
+def test_interest_only_schedule():
+    """先息后本: interest each period, full principal at end, schedule generated."""
+    r = calc_amortization(
+        remaining=Decimal("100000"), annual_rate=Decimal("12"),
+        monthly_payment=None, repayment_method="interest_only",
+        total_periods=6,
+    )
+    assert r is not None
+    assert r.schedule is not None
+    assert len(r.schedule) == 6
+    # Monthly interest = 100000 * 1% = 1000
+    monthly_interest = Decimal("1000.00")
+    for i in range(5):  # first 5 months: interest-only
+        assert r.schedule[i]["payment"] == monthly_interest
+        assert r.schedule[i]["principal"] == Decimal("0")
+        assert r.schedule[i]["interest"] == monthly_interest
+        assert r.schedule[i]["balance"] == Decimal("100000.00")
+    # Final month: interest + full principal
+    assert r.schedule[5]["payment"] == monthly_interest + Decimal("100000.00")
+    assert r.schedule[5]["principal"] == Decimal("100000.00")
+    assert r.schedule[5]["balance"] == Decimal("0")
+    # Total interest = 6 * 1000 = 6000
+    assert r.total_interest == Decimal("6000.00")
+    assert r.monthly_payment == monthly_interest
+
+
+def test_bullet_single_payment():
+    """一次性还本: single payment at maturity, simple interest."""
+    r = calc_amortization(
+        remaining=Decimal("50000"), annual_rate=Decimal("12"),
+        monthly_payment=None, repayment_method="bullet",
+        total_periods=12,
+    )
+    assert r is not None
+    assert r.schedule is not None
+    assert len(r.schedule) == 1  # single payment
+    # Simple interest: 50000 * 1% * 12 = 6000
+    assert r.total_interest == Decimal("6000.00")
+    assert r.schedule[0]["payment"] == Decimal("56000.00")
+    assert r.schedule[0]["principal"] == Decimal("50000.00")
+    assert r.schedule[0]["interest"] == Decimal("6000.00")
+    assert r.schedule[0]["balance"] == Decimal("0")
+    assert r.monthly_payment is None  # no periodic payment
+
+
+def test_schedule_methods_require_total_periods():
+    """equal_principal/interest_only/bullet return None without total_periods."""
+    for method in ["equal_principal", "interest_only", "bullet"]:
+        r = calc_amortization(
+            remaining=Decimal("10000"), annual_rate=Decimal("12"),
+            monthly_payment=None, repayment_method=method,
+        )
+        assert r is None, f"{method} should return None without total_periods"
+
+
+def test_valid_methods_constant():
+    """VALID_METHODS contains exactly 5 methods."""
+    assert VALID_METHODS == {
+        "equal_payment",
+        "equal_principal",
+        "interest_only",
+        "bullet",
+        "minimum_payment",
+    }

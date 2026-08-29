@@ -234,6 +234,12 @@ class RunPipeline:
         # web-search capability and custom skills — accepting it here avoids
         # a redundant round-trip).
         preloaded_ai_config: dict[str, Any] | None = None,
+        # Optional: checkpoint ID to fork from (retry checkpoint forking).
+        # When set, the adapter passes it to DeerFlowClient.stream so the
+        # checkpointer loads state from that checkpoint instead of the head.
+        # This skips the failed user message that the head retains after a
+        # failed first turn.  Pass None (default) for normal head-based runs.
+        checkpoint_id: str | None = None,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -253,6 +259,7 @@ class RunPipeline:
         self._available_skills = available_skills
         self._middlewares = middlewares
         self._preloaded_ai_config = preloaded_ai_config
+        self.checkpoint_id = checkpoint_id
 
         # Populated by __aenter__
         self._providers: list[dict[str, Any]] = []
@@ -466,7 +473,10 @@ class RunPipeline:
             end_payload["usage"] = self.cumulative_usage
         await self.bridge.publish(self.run_id, "end", end_payload)
         await self.bridge.publish_end(self.run_id)
-        _track_task(asyncio.create_task(self.bridge.cleanup(self.run_id, delay=60)))
+        # Buffer lifecycle is the backend's responsibility (Phase 1 refactor).
+        # The agent no longer calls bridge.cleanup() — the backend-owned buffer
+        # manages TTL based on AITask lifecycle, not a fixed 60s delay.
+        # Previously: _track_task(asyncio.create_task(self.bridge.cleanup(self.run_id, delay=60)))
         _track_task(
             asyncio.create_task(
                 schedule_run_cleanup(self.run_manager, self.run_id, delay=300)
@@ -634,6 +644,7 @@ class RunPipeline:
             context=redacted,
             thread_id=self.thread_id,
             enable_thinking=enable_thinking,
+            checkpoint_id=self.checkpoint_id,
         ):
             if self.record.abort_event.is_set():
                 break
@@ -664,13 +675,83 @@ class RunPipeline:
             if sse_type == "messages" and isinstance(data, dict):
                 msg_type = data.get("type")
                 if msg_type == "ai":
+                    # DeerFlow error-fallback detection (P0 fix):
+                    # When LLMErrorHandlingMiddleware exhausts retries, it returns
+                    # a graceful AIMessage with ``deerflow_error_fallback=True``
+                    # instead of raising.  Numina's provider-fallback loop in
+                    # ``run_skill`` only triggers on exceptions, so we must
+                    # detect this signal and raise to activate multi-provider
+                    # failover.
+                    additional_kwargs = data.get("additional_kwargs") or {}
+                    if additional_kwargs.get("deerflow_error_fallback"):
+                        error_reason = additional_kwargs.get(
+                            "error_reason", "unknown"
+                        )
+                        error_detail = additional_kwargs.get(
+                            "error_detail", ""
+                        )
+                        logger.warning(
+                            "[%s] run=%s DeerFlow error fallback detected: "
+                            "reason=%s detail=%s",
+                            self.app_name,
+                            self.run_id,
+                            error_reason,
+                            error_detail[:200],
+                        )
+                        if not self.ai_response_parts:
+                            # No content produced yet — raise to trigger
+                            # provider fallback in ``run_skill``.
+                            raise RuntimeError(
+                                f"DeerFlow provider fallback ({error_reason}): "
+                                f"{error_detail}"
+                            )
+                        # Content already streamed — cannot retry.
+                        # Mark as error so the lifecycle consumer fails the task.
+                        self.set_error(
+                            error_detail or f"AI provider failed: {error_reason}",
+                            error_type="DeerFlowFallback",
+                        )
+                        break
+
                     # Reasoning-delta path (dashboard-narrative, literacy-report):
                     # extract reasoning_content, publish as reasoning_delta custom
                     # event, forward content-only message (strip reasoning to
                     # avoid duplication).
+                    #
+                    # Supports two formats:
+                    # 1. Claude non-streaming: additional_kwargs.reasoning_content
+                    # 2. Anthropic streaming: content is a list of blocks where
+                    #    {"type": "thinking", "thinking": "..."} carries thinking
+                    #    and {"type": "text", "text": "..."} carries the response.
                     if enable_reasoning_delta:
-                        additional_kwargs = data.get("additional_kwargs") or {}
                         reasoning = additional_kwargs.get("reasoning_content")
+                        content = data.get("content")
+
+                        # Anthropic streaming: content is a list of blocks
+                        if isinstance(content, list):
+                            text_parts: list[str] = []
+                            for block in content:
+                                if isinstance(block, dict):
+                                    if block.get("type") == "thinking" and block.get("thinking"):
+                                        thinking_block = block["thinking"]
+                                        self.thinking_parts.append(thinking_block)
+                                        await self.bridge.publish(
+                                            self.run_id,
+                                            "custom",
+                                            {"type": "reasoning_delta", "content": thinking_block},
+                                        )
+                                    elif block.get("type") == "text" and block.get("text"):
+                                        text_parts.append(block["text"])
+                            content = "".join(text_parts) if text_parts else None
+                        elif not reasoning and isinstance(content, str):
+                            # Fallback: check for <think> tags in plain string content
+                            # (some providers wrap thinking in XML tags)
+                            import re
+                            think_match = re.search(r"<think>\s*(.*?)\s*</think>", content, re.DOTALL | re.IGNORECASE)
+                            if think_match:
+                                reasoning = think_match.group(1)
+                                content = re.sub(r"<think>\s*.*?\s*</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
+
                         if isinstance(reasoning, str) and reasoning:
                             self.thinking_parts.append(reasoning)
                             await self.bridge.publish(
@@ -678,7 +759,6 @@ class RunPipeline:
                                 "custom",
                                 {"type": "reasoning_delta", "content": reasoning},
                             )
-                        content = data.get("content")
                         if content:
                             self.ai_response_parts.append(content)
                             await self.bridge.publish(
@@ -844,16 +924,26 @@ async def _resolve_numina_mcp_servers(
 
     try:
         mcp_servers = await client.get_enabled_mcp_servers()
+        from packages.security.service_auth.agent_jwt import create_agent_token
+
+        expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
         for srv in mcp_servers:
-            if srv.get("name") == "Numina Backend MCP":
-                expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
-                actual_url = (srv.get("url") or "").rstrip("/")
+            actual_url = (srv.get("url") or "").rstrip("/")
+            # Inject auth headers into ANY server pointing at the backend's
+            # internal MCP SSE endpoint — not just the one named
+            # "Numina Backend MCP".  Legacy records (e.g. "numina-family-data",
+            # type=general) point at the same URL and previously missed headers,
+            # causing a 401 on the MCP SSE handshake.
+            is_backend_mcp = (
+                srv.get("name") == "Numina Backend MCP"
+                or "/internal/mcp/" in (srv.get("url") or "")
+                or actual_url == f"{expected_prefix}/api/v1/internal/mcp/{family_id}/sse"
+            )
+            if is_backend_mcp:
                 if not actual_url.startswith(expected_prefix):
                     srv["url"] = (
                         expected_prefix + "/api/v1/internal/mcp/" + family_id + "/sse"
                     )
-                from packages.security.service_auth.agent_jwt import create_agent_token
-
                 mcp_headers: dict[str, str] = {
                     "X-Agent-Token": create_agent_token(family_id),
                     "X-Family-Id": family_id,
@@ -861,7 +951,6 @@ async def _resolve_numina_mcp_servers(
                 if user_id:
                     mcp_headers["X-Caller-User-Id"] = user_id
                 srv["headers"] = mcp_headers
-                break
         return mcp_servers
     except Exception as exc:
         logger.warning(

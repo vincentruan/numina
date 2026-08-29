@@ -2,25 +2,28 @@
 
 import logging
 
+from apps.agent.services.deerflow_adapter.numina_deerflow_client import (
+    NuminaDeerFlowClient,
+)
+
 logger = logging.getLogger(__name__)
 
 _client = None
 
 
 def get_deerflow_client(config_path: str):
-    """Return the singleton DeerFlowClient, creating it if needed."""
+    """Return the singleton NuminaDeerFlowClient, creating it if needed."""
     global _client
     if _client is not None:
         return _client
 
     try:
-        from deerflow.client import DeerFlowClient
-        _client = DeerFlowClient(config_path=config_path)
-        logger.info(f"DeerFlowClient initialized with config: {config_path}")
+        _client = NuminaDeerFlowClient(config_path=config_path)
+        logger.info(f"NuminaDeerFlowClient initialized with config: {config_path}")
         return _client
     except Exception as e:
         raise RuntimeError(
-            f"Failed to initialize DeerFlowClient from config '{config_path}': {e}"
+            f"Failed to initialize NuminaDeerFlowClient from config '{config_path}': {e}"
         ) from e
 
 

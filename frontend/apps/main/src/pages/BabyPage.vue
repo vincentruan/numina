@@ -1211,6 +1211,14 @@ onActivated(async () => {
 </script>
 
 <style scoped>
+/* ─ Button semantic color tokens ── */
+.baby-page {
+  --btn-success-bg: linear-gradient(135deg, #4CAF50, #2E7D32);
+  --btn-danger-bg: linear-gradient(135deg, #ff5252, #d32f2f);
+  --btn-primary-bg: linear-gradient(135deg, #42A5F5, #1E88E5);
+  --btn-warning-bg: linear-gradient(135deg, #f9ca24, #f0932b);
+}
+
 .baby-page {
   min-height: 100vh;
   padding-bottom: 20px;
@@ -1272,6 +1280,15 @@ onActivated(async () => {
   color: inherit;
 }
 
+/* ─ Button token overrides for dark mode ─ */
+[data-theme='dark'] .baby-page,
+.dark .baby-page {
+  --btn-success-bg: linear-gradient(135deg, #2f9e44, #1a7a4a);
+  --btn-danger-bg: linear-gradient(135deg, #f04040, #c62828);
+  --btn-primary-bg: linear-gradient(135deg, #64b5f6, #1565c0);
+  --btn-warning-bg: linear-gradient(135deg, #ffa726, #ef6c00);
+}
+
 .summary-card {
   margin-top: 12px;
 }
@@ -1285,10 +1302,10 @@ onActivated(async () => {
 
 .grant-btn {
   flex-shrink: 0;
-  font-size: 11px;
-  padding: 0 8px;
-  height: 24px;
-  border-radius: 12px;
+  font-size: 13px;
+  padding: 0 12px;
+  min-height: 32px;
+  border-radius: 16px;
 }
 
 .sheet-title {
@@ -1492,7 +1509,7 @@ onActivated(async () => {
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #4CAF50, #2E7D32);
+  background: var(--btn-success-bg);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -1509,7 +1526,7 @@ onActivated(async () => {
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #ff5252, #d32f2f);
+  background: var(--btn-danger-bg);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -1526,7 +1543,7 @@ onActivated(async () => {
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #f9ca24, #f0932b);
+  background: var(--btn-warning-bg);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -1678,12 +1695,12 @@ onActivated(async () => {
 
 .wish-card .action-btn--success {
   color: #fff;
-  background: linear-gradient(135deg, #4CAF50, #2E7D32);
+  background: var(--btn-success-bg);
 }
 
 .wish-card .action-btn--danger {
   color: #fff;
-  background: linear-gradient(135deg, #ff5252, #d32f2f);
+  background: var(--btn-danger-bg);
 }
 
 .wish-card .action-btn--muted {
@@ -1693,7 +1710,7 @@ onActivated(async () => {
 
 .wish-card .action-btn--primary {
   color: #fff;
-  background: linear-gradient(135deg, #42A5F5, #1E88E5);
+  background: var(--btn-primary-bg);
 }
 
 /* Chore card action buttons — pill style, matching wish cards */
@@ -1734,27 +1751,38 @@ onActivated(async () => {
 
 .chore-card .action-btn--primary {
   color: #fff;
-  background: linear-gradient(135deg, #42A5F5, #1E88E5);
+  background: var(--btn-primary-bg);
 }
 
 .chore-card .action-btn--warning {
   color: #fff;
-  background: linear-gradient(135deg, #ffb74d, #f57c00);
+  background: var(--btn-warning-bg);
 }
 
 .chore-card .action-btn--danger {
   color: #fff;
-  background: linear-gradient(135deg, #ff5252, #d32f2f);
+  background: var(--btn-danger-bg);
 }
 
 .chore-card .action-btn--success {
   color: #fff;
-  background: linear-gradient(135deg, #4CAF50, #2E7D32);
+  background: var(--btn-success-bg);
 }
 
 .chore-card .action-btn--muted {
   color: var(--text-secondary);
   background: var(--bg-secondary);
+}
+
+/*  Dark mode: action-btn active state visible on dark backgrounds ─ */
+[data-theme='dark'] .wish-card .action-btn:active,
+.dark .wish-card .action-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .chore-card .action-btn:active,
+.dark .chore-card .action-btn:active {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* FAB */

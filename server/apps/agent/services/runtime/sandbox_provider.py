@@ -178,12 +178,34 @@ class NuminaLocalSandboxProvider(LocalSandboxProvider):
     at a Numina-owned type (integration tests and config generators reference
     ``apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider``).
 
-    Multi-tenant isolation is handled entirely by the ContextVar setup in
-    ``set_family_sandbox_context`` — specifically, ``set_current_user`` makes
-    DeerFlow's ``get_effective_user_id()`` return the family_id, which the
-    parent class's ``_effective_acquire_user_id`` → ``_build_thread_path_mappings``
-    → ``acquire`` chain picks up automatically. No method overrides are needed.
+    Multi-tenant isolation relies on two mechanisms:
+
+    1. ``set_family_sandbox_context`` sets DeerFlow's ``_current_user`` so
+       ``get_effective_user_id()`` returns the family_id — the parent class's
+       ``_effective_acquire_user_id`` → ``_build_thread_path_mappings`` →
+       ``acquire`` chain picks this up when no explicit ``user_id`` is supplied.
+
+    2. The ``acquire`` override below is the **defense-in-depth** layer. The
+       DeerFlow harness calls ``provider.acquire(thread_id,
+       user_id=resolve_runtime_user_id(runtime))`` where
+       ``resolve_runtime_user_id`` returns ``"default"`` (Numina has no
+       DeerFlow server_info / langgraph_auth).  Without this override the
+       explicit ``user_id="default"`` would take precedence over the family
+       ContextVar, collapsing the cache key to ``("default", thread_id)`` and
+       causing cross-tenant path resolution (P2 #13 regression; e2e found
+       2026-07-19: view_image "file not found" because a stale cached sandbox
+       mapped uploads/ to a different family's path).
     """
+
+    def acquire(
+        self, thread_id: str | None = None, *, user_id: str | None = None
+    ) -> str:
+        family_id = get_family_sandbox_context()
+        # Family context is the tenant truth — override any harness-supplied
+        # user_id (Numina uses family_id as DeerFlow's effective user). When no
+        # family context is set (legacy/script paths), defer to caller/default.
+        effective_user_id = family_id if family_id is not None else user_id
+        return str(super().acquire(thread_id, user_id=effective_user_id))
 
 
 # ---------------------------------------------------------------------------

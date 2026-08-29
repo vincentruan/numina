@@ -105,7 +105,7 @@ def get_active_configs_with_recovery(
     insufficient success rate the provider re-opens and is filtered out.
 
     Used by ``get_tenant_models``, ``_get_active_providers`` (ai_internal),
-    ``_build_test_candidates``, and ``ai_result_parser``.
+    and ``ai_result_parser``.
     """
     configs = (
         db.query(AIProviderConfig)
@@ -501,116 +501,103 @@ def _parse_caps(raw: str | None) -> list[str]:
         return []
 
 
-def _build_test_candidates(
-    db: Session, family_id: int, target_config_id: int
-) -> list[dict]:
-    """Build ordered fallback candidates across all active providers.
+def _build_target_only_candidates(target_cfg: AIProviderConfig, api_key: str) -> list[dict]:
+    """Build test candidates from the target config ONLY, ignoring circuit state.
 
-    Priority:
-    1. Target config (the one user toggled), slots 1→2→3
-    2. Other active configs ordered by display_order, slots 1→2→3
+    The model test is meant to verify whether a specific provider/model works.
+    Circuit breaker state must not prevent testing — the user explicitly chose
+    this provider to test.
 
-    Each candidate = {config, model_id, vision_model_id, slot, display_label}
+    Priority: slots 1→2→3, then vision fallback.
     """
-    all_cfgs = get_active_configs_with_recovery(db, family_id)
-
-    if not all_cfgs:
-        return []
-
-    # Partition: target first, rest sorted by display_order
-    target_cfg = None
-    other_cfgs = []
-    for cfg in all_cfgs:
-        if cfg.id == target_config_id:
-            target_cfg = cfg
-        else:
-            other_cfgs.append(cfg)
-
-    ordered: list[AIProviderConfig] = []
-    if target_cfg:
-        ordered.append(target_cfg)
-    ordered.extend(other_cfgs)
+    cfg_name = target_cfg.provider_name or target_cfg.name or "Unknown"
+    caps_1 = _parse_caps(target_cfg.model_1_capabilities)
+    caps_2 = _parse_caps(target_cfg.model_2_capabilities)
 
     candidates: list[dict] = []
     seen: set[tuple[int, str]] = set()
 
-    for cfg in ordered:
-        api_key = decrypt_api_key(cfg.api_key_encrypted) if cfg.api_key_encrypted else None
-        if not api_key:
-            continue
-        api_key = api_key.strip()
-        if not api_key:
-            continue
+    # Slot 1: primary model
+    if target_cfg.model_id:
+        key = (target_cfg.id, target_cfg.model_id)
+        if key not in seen:
+            seen.add(key)
+            candidates.append({
+                "config": target_cfg,
+                "model_id": target_cfg.model_id,
+                "vision_model_id": target_cfg.vision_model_id or target_cfg.model_id,
+                "slot": 1,
+                "api_key": api_key,
+                "display_label": f"{cfg_name} ({target_cfg.model_id})",
+                "has_vision_cap": "vision_understanding" in caps_1,
+            })
 
-        cfg_name = cfg.provider_name or cfg.name or "Unknown"
-        caps_1 = _parse_caps(cfg.model_1_capabilities)
-        caps_2 = _parse_caps(cfg.model_2_capabilities)
+    # Slot 2: alternate model (only if different from slot 1)
+    if target_cfg.model_2_id and target_cfg.model_2_id != target_cfg.model_id:
+        key = (target_cfg.id, target_cfg.model_2_id)
+        if key not in seen:
+            seen.add(key)
+            candidates.append({
+                "config": target_cfg,
+                "model_id": target_cfg.model_2_id,
+                "vision_model_id": target_cfg.vision_model_id or target_cfg.model_2_id,
+                "slot": 2,
+                "api_key": api_key,
+                "display_label": f"{cfg_name} ({target_cfg.model_2_id})",
+                "has_vision_cap": "vision_understanding" in caps_2,
+            })
 
-        # Slot 1: primary model
-        if cfg.model_id:
-            key = (cfg.id, cfg.model_id)
-            if key not in seen:
-                seen.add(key)
-                candidates.append({
-                    "config": cfg,
-                    "model_id": cfg.model_id,
-                    "vision_model_id": cfg.vision_model_id or cfg.model_id,
-                    "slot": 1,
-                    "api_key": api_key,
-                    "display_label": f"{cfg_name} ({cfg.model_id})",
-                    "has_vision_cap": "vision_understanding" in caps_1,
-                })
+    # Slot 3: third model (only if different from slot 1 & 2)
+    if target_cfg.model_3_id and target_cfg.model_3_id not in (
+        target_cfg.model_id,
+        target_cfg.model_2_id,
+    ):
+        key = (target_cfg.id, target_cfg.model_3_id)
+        if key not in seen:
+            seen.add(key)
+            candidates.append({
+                "config": target_cfg,
+                "model_id": target_cfg.model_3_id,
+                "vision_model_id": target_cfg.vision_model_id or target_cfg.model_3_id,
+                "slot": 3,
+                "api_key": api_key,
+                "display_label": f"{cfg_name} ({target_cfg.model_3_id})",
+                "has_vision_cap": "vision_understanding" in _parse_caps(target_cfg.model_3_capabilities),
+            })
 
-        # Slot 2: alternate model (only if different from slot 1)
-        if cfg.model_2_id and cfg.model_2_id != cfg.model_id:
-            key = (cfg.id, cfg.model_2_id)
-            if key not in seen:
-                seen.add(key)
-                candidates.append({
-                    "config": cfg,
-                    "model_id": cfg.model_2_id,
-                    "vision_model_id": cfg.vision_model_id or cfg.model_2_id,
-                    "slot": 2,
-                    "api_key": api_key,
-                    "display_label": f"{cfg_name} ({cfg.model_2_id})",
-                    "has_vision_cap": "vision_understanding" in caps_2,
-                })
-
-        # Slot 3: third model (only if different from slot 1 & 2)
-        if cfg.model_3_id and cfg.model_3_id not in (cfg.model_id, cfg.model_2_id):
-            key = (cfg.id, cfg.model_3_id)
-            if key not in seen:
-                seen.add(key)
-                candidates.append({
-                    "config": cfg,
-                    "model_id": cfg.model_3_id,
-                    "vision_model_id": cfg.vision_model_id or cfg.model_3_id,
-                    "slot": 3,
-                    "api_key": api_key,
-                    "display_label": f"{cfg_name} ({cfg.model_3_id})",
-                    "has_vision_cap": "vision_understanding" in _parse_caps(cfg.model_3_capabilities),
-                })
-
-        # Vision fallback: vision_model_id if different from slot 1 model
-        if (
-            cfg.vision_model_id
-            and cfg.vision_model_id != cfg.model_id
-            and cfg.vision_model_id != cfg.model_2_id
-        ):
-            key = (cfg.id, cfg.vision_model_id)
-            if key not in seen:
-                seen.add(key)
-                candidates.append({
-                    "config": cfg,
-                    "model_id": cfg.vision_model_id,
-                    "vision_model_id": cfg.vision_model_id,
-                    "slot": "vision",
-                    "api_key": api_key,
-                    "display_label": f"{cfg_name} vision ({cfg.vision_model_id})",
-                    "has_vision_cap": True,
-                })
+    # Vision fallback: vision_model_id if different from slot 1 model
+    if (
+        target_cfg.vision_model_id
+        and target_cfg.vision_model_id != target_cfg.model_id
+        and target_cfg.vision_model_id != target_cfg.model_2_id
+    ):
+        key = (target_cfg.id, target_cfg.vision_model_id)
+        if key not in seen:
+            seen.add(key)
+            candidates.append({
+                "config": target_cfg,
+                "model_id": target_cfg.vision_model_id,
+                "vision_model_id": target_cfg.vision_model_id,
+                "slot": "vision",
+                "api_key": api_key,
+                "display_label": f"{cfg_name} vision ({target_cfg.vision_model_id})",
+                "has_vision_cap": True,
+            })
 
     return candidates
+
+
+def _reset_circuit_state(cfg: AIProviderConfig) -> None:
+    """Reset circuit breaker state on a config (in-place, caller commits)."""
+    cfg.circuit_state = "closed"
+    cfg.circuit_reason = None
+    cfg.failure_count = 0
+    cfg.circuit_open = False
+    cfg.circuit_open_until = None
+    cfg.last_failure_type = None
+    cfg.half_open_success_count = 0
+    cfg.half_open_failure_count = 0
+    cfg.half_open_window_start = None
 
 
 def _call_agent_model_test(
@@ -642,8 +629,9 @@ async def test_ai_config(
 ) -> AIConfigTestResult:
     """测试 AI 配置的连通性和模型能力（仅 owner）。
 
-    支持跨 provider fallback：当首选模型因限流 (429) / 超时 / 5xx 等瞬时错误失败时，
-    自动尝试同 provider 的其他模型槽位或其他 provider 的模型。
+    直接测试用户指定的供应商配置，不受熔断状态影响。
+    当同一供应商有多个模型槽位时，支持槽位间 fallback（瞬时错误时尝试下一个槽位）。
+    测试成功后自动重置熔断状态（视为已恢复）。
     """
     # Validate target config exists and belongs to this family
     target_cfg = (
@@ -658,25 +646,33 @@ async def test_ai_config(
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
     if not target_cfg.api_key_encrypted:
-        return AIConfigTestResult(connected=False, message="未配置 API Key")
+        return AIConfigTestResult(
+            connected=False, message="", error_code="noApiKey"
+        )
 
     target_api_key = decrypt_api_key(target_cfg.api_key_encrypted)
     if not target_api_key:
         return AIConfigTestResult(
-            connected=False, message="API Key 解密失败，请重新配置"
+            connected=False, message="", error_code="decryptFailed"
         )
 
     target_api_key = target_api_key.strip()
     if not target_cfg.model_id:
-        return AIConfigTestResult(connected=False, message="未配置主模型 ID")
+        return AIConfigTestResult(
+            connected=False, message="", error_code="noModelId"
+        )
 
     agent_client = AgentClient(current_user.family_id, current_user.id, timeout=300.0)
 
-    # Build fallback candidates across all active providers
-    candidates = _build_test_candidates(db, current_user.family_id, config_id)
+    # Build candidates from target config ONLY — bypass circuit state.
+    # The test is meant to verify whether this specific provider/model works;
+    # circuit breaker state must not prevent testing.
+    candidates = _build_target_only_candidates(target_cfg, target_api_key)
 
     if not candidates:
-        return AIConfigTestResult(connected=False, message="无可用 AI 供应商")
+        return AIConfigTestResult(
+            connected=False, message="", error_code="noCandidates"
+        )
 
     test_types = ["connection", "thinking", "vision", "vision_ocr"]
     last_result: dict | None = None
@@ -707,10 +703,17 @@ async def test_ai_config(
 
         # Check if connection succeeded
         if data.get("connected", False):
-            # Connection OK — store results against the successful config
+            # Connection OK — store results and reset circuit breaker.
+            # A successful manual test proves the provider has recovered.
             used_cfg = candidate["config"]
             _upsert_test_results(db, used_cfg.id, data)
+            circuit_was_open = used_cfg.circuit_state != "closed"
+            if circuit_was_open:
+                _reset_circuit_state(used_cfg)
             db.commit()
+
+            if circuit_was_open:
+                _invalidate_agent_cache(current_user.family_id)
 
             result = AIConfigTestResult(
                 connected=data.get("connected", False),
@@ -762,6 +765,7 @@ async def test_ai_config(
             connected=False,
             message=msg,
             latency_ms=data.get("latency_ms"),
+            error_detail=data.get("error_detail"),
             thinking_success=data.get("thinking_success"),
             thinking_message=data.get("thinking_message"),
             thinking_latency_ms=data.get("thinking_latency_ms"),

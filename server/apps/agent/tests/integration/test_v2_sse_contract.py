@@ -39,6 +39,7 @@ def _make_stub_adapter():
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         # 1. metadata is emitted by worker.py itself (not the adapter), so
         #    the adapter starts with messages events.
@@ -107,7 +108,7 @@ def client():
             return_value=mock_ai_config,
         ),
         patch(
-            "apps.agent.services.runtime.worker.create_family_adapter",
+            "apps.agent.services.runtime.run_pipeline.create_family_adapter",
             return_value=_make_stub_adapter(),
         ),
         patch(

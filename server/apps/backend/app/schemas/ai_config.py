@@ -126,7 +126,9 @@ class AICircuitResetResponse(BaseModel):
 class AIConfigTestResult(BaseModel):
     connected: bool  # 连接测试成功与否
     message: str  # 连接测试消息
+    error_code: str | None = None  # 预检错误码（前端 i18n 映射用）
     latency_ms: int | None = None  # 连接测试延迟
+    error_detail: dict | None = None  # 原始错误详情（JSON 结构）
     # 思考能力测试结果（独立）
     thinking_success: bool | None = None
     thinking_message: str | None = None

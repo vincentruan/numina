@@ -4,7 +4,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult, require_owner
@@ -12,6 +12,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.user import User
+from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.services.ai_crypto import decrypt_api_key, encrypt_api_key
 from packages.core.roles import UserRole
 
@@ -41,9 +42,7 @@ class MCPServerUpdate(BaseModel):
     mcp_type: str | None = None
 
 
-class MCPServerResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class MCPServerResponse(SnowflakeBase):
     id: int
     name: str
     url: str

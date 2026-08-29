@@ -1,82 +1,90 @@
 <template>
-  <div class="join-page">
-    <div class="join-header">
-      <h1 class="app-title">{{ t('auth.joinFamilyTitle') }}</h1>
-      <p class="app-subtitle">{{ t('auth.joinFamilySubtitle') }}</p>
-    </div>
+  <div class="auth-page" role="main" aria-label="加入家庭">
+    <!-- Background particle canvas (full field, dim) -->
+    <canvas ref="bgCanvasRef" class="deer-canvas deer-canvas--bg" aria-hidden="true"></canvas>
+    <!-- Deer-masked particle canvas (bright particles clipped to deer silhouette) -->
+    <canvas ref="deerCanvasRef" class="deer-canvas deer-canvas--deer" aria-hidden="true"></canvas>
 
-    <van-form class="join-form" @submit="onSubmit">
-      <van-cell-group inset>
-        <van-field
-          v-model="form.invite_code"
-          :label="t('auth.inviteCodeLabel')"
-          :placeholder="t('auth.inviteCodePlaceholder')"
-          :formatter="formatInviteCode"
-          format-trigger="onChange"
-          :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
-        />
-        <van-field
-          v-model="form.username"
-          :label="t('auth.usernameLabel')"
-          :placeholder="t('auth.usernamePlaceholder')"
-          :formatter="formatUsername"
-          format-trigger="onChange"
-          :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
-        />
-        <van-field
-          v-model="form.display_name"
-          :label="t('auth.displayNameLabel')"
-          :placeholder="t('auth.displayNamePlaceholder')"
-          :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
-        />
-        <div class="password-field-wrapper">
-          <van-field
-            v-model="form.password"
-            :type="showPassword ? 'text' : 'password'"
-            :label="t('auth.passwordLabel')"
-            :placeholder="t('auth.passwordPlaceholder')"
-            :rules="[
-              { required: true, message: t('auth.form.passwordRequired') },
-              { validator: (v: string) => v.length >= 6, message: t('auth.form.passwordMin6') }
-            ]"
-          >
-            <template #right-icon>
-              <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
-            </template>
-          </van-field>
-        </div>
-        <div class="password-field-wrapper">
-          <van-field
-            v-model="confirmPassword"
-            :type="showConfirmPassword ? 'text' : 'password'"
-            :label="t('auth.confirmPasswordLabel')"
-            :placeholder="t('auth.confirmPasswordPlaceholder')"
-            :rules="[
-              { required: true, message: t('auth.form.confirmPasswordRequired') },
-              { validator: (v: string) => v === form.password, message: t('auth.form.passwordMismatch') }
-            ]"
-          >
-            <template #right-icon>
-              <van-icon :name="showConfirmPassword ? 'eye-o' : 'closed-eye'" @click="showConfirmPassword = !showConfirmPassword" />
-            </template>
-          </van-field>
-        </div>
-      </van-cell-group>
-
-      <!-- ALTCHA captcha widget -->
-      <AltchaWidget ref="altchaRef" v-model="form.altcha" endpoint="join-family" />
-
-      <div class="form-actions">
-        <van-button round block type="primary" native-type="submit" :loading="loading">
-          {{ t('auth.joinFamilyButton') }}
-        </van-button>
+    <div class="auth-content">
+      <div class="auth-header">
+        <NuminaLogo class="auth-logo" :width="220" />
+        <h1 class="auth-title">{{ t('auth.joinFamilyTitle') }}</h1>
+        <p class="auth-subtitle">{{ t('auth.joinFamilySubtitle') }}</p>
       </div>
-    </van-form>
 
-    <div class="join-links">
-      <router-link to="/login">{{ t('auth.hasAccountLogin') }}</router-link>
-      <span class="divider">|</span>
-      <router-link to="/register">{{ t('auth.createNewFamily') }}</router-link>
+      <van-form class="auth-form" @submit="onSubmit">
+        <van-cell-group inset>
+          <van-field
+            v-model="form.invite_code"
+            :label="t('auth.inviteCodeLabel')"
+            :placeholder="t('auth.inviteCodePlaceholder')"
+            :formatter="formatInviteCode"
+            format-trigger="onChange"
+            :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
+          />
+          <van-field
+            v-model="form.username"
+            :label="t('auth.usernameLabel')"
+            :placeholder="t('auth.usernamePlaceholder')"
+            :formatter="formatUsername"
+            format-trigger="onChange"
+            :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
+          />
+          <van-field
+            v-model="form.display_name"
+            :label="t('auth.displayNameLabel')"
+            :placeholder="t('auth.displayNamePlaceholder')"
+            :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
+          />
+          <div class="password-field-wrapper">
+            <van-field
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              :label="t('auth.passwordLabel')"
+              :placeholder="t('auth.passwordPlaceholder')"
+              :rules="[
+                { required: true, message: t('auth.form.passwordRequired') },
+                { validator: (v: string) => v.length >= 6, message: t('auth.form.passwordMin6') }
+              ]"
+            >
+              <template #right-icon>
+                <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
+              </template>
+            </van-field>
+          </div>
+          <div class="password-field-wrapper">
+            <van-field
+              v-model="confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              :label="t('auth.confirmPasswordLabel')"
+              :placeholder="t('auth.confirmPasswordPlaceholder')"
+              :rules="[
+                { required: true, message: t('auth.form.confirmPasswordRequired') },
+                { validator: (v: string) => v === form.password, message: t('auth.form.passwordMismatch') }
+              ]"
+            >
+              <template #right-icon>
+                <van-icon :name="showConfirmPassword ? 'eye-o' : 'closed-eye'" @click="showConfirmPassword = !showConfirmPassword" />
+              </template>
+            </van-field>
+          </div>
+        </van-cell-group>
+
+        <!-- ALTCHA captcha widget -->
+        <AltchaWidget ref="altchaRef" v-model="form.altcha" endpoint="join-family" />
+
+        <div class="form-actions">
+          <van-button round block type="primary" native-type="submit" :loading="loading">
+            {{ t('auth.joinFamilyButton') }}
+          </van-button>
+        </div>
+      </van-form>
+
+      <div class="auth-links">
+        <router-link to="/login">{{ t('auth.hasAccountLogin') }}</router-link>
+        <span class="divider">|</span>
+        <router-link to="/register">{{ t('auth.createNewFamily') }}</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -87,7 +95,9 @@ import { useRouter, useRoute } from 'vue-router'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useDeerField } from '@/composables/useDeerField'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
+import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
 const { t } = useI18n()
 
@@ -99,6 +109,10 @@ const confirmPassword = ref('')
 const altchaRef = ref()
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
+
+const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
+const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
+useDeerField(bgCanvasRef, deerCanvasRef)
 
 const form = ref({
   invite_code: '',
@@ -154,52 +168,5 @@ async function onSubmit() {
 </script>
 
 <style scoped>
-.join-page {
-  min-height: 100vh;
-  background: linear-gradient(160deg, #010120 0%, #000010 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 10vh;
-}
-.join-header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-.app-title {
-  font-size: 28px;
-  font-weight: 500;
-  color: #fff;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-.app-subtitle {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 8px;
-}
-.join-form {
-  width: 100%;
-  max-width: 400px;
-}
-.form-actions {
-  padding: 24px 16px 0;
-}
-.join-links {
-  margin-top: 20px;
-  text-align: center;
-}
-.join-links a {
-  color: rgba(255, 255, 255, 0.9);
-  text-decoration: none;
-  font-size: 14px;
-}
-.divider {
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0 12px;
-}
-.password-field-wrapper :deep(.van-field__right-icon) {
-  cursor: pointer;
-  color: var(--van-field-right-icon-color);
-}
+@import '@/styles/auth-page.css';
 </style>

@@ -7,9 +7,7 @@
 4. 返回固定结构的报告 JSON
 """
 
-import json
 import logging
-import re
 from datetime import datetime
 from typing import Any, cast
 
@@ -19,6 +17,10 @@ from apps.agent.core.llm import LLMClient
 from apps.agent.schemas.context import RedactedContext
 
 logger = logging.getLogger(__name__)
+
+
+async def _async_noop() -> None:
+    """No-op async function for health-report's publish_retry_event (no SSE)."""
 
 REPORT_PROMPT_TEMPLATE = """你是一位专业的家庭财务顾问。以下是一个家庭的资产状况数据（已脱敏），请根据数据生成一份结构化的家庭资产体检报告。
 
@@ -159,19 +161,70 @@ async def generate_health_report(
     prompt = REPORT_PROMPT_TEMPLATE.format(data_summary=data_summary)
 
     try:
-        raw = await llm.complete(prompt, max_tokens=2000)
-        # Strip markdown code fences if present, then fall back to brace extraction
-        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
-        if fence_match:
-            json_str = fence_match.group(1)
-        else:
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
-            json_str = raw[start:end]
-        report_data = json.loads(json_str)
+        # Use complete_json() for response_format enforcement (OpenAI: json_object)
+        raw = await llm.complete_json(prompt, max_tokens=3000)
+        # parse_report_json handles fenced + bare JSON with json_repair tolerance
+        from apps.agent.services.runtime.asset_report_middleware import (
+            parse_report_json,
+        )
+
+        report_data = parse_report_json(raw)
+        if report_data is None:
+            raise ValueError("LLM 响应无法解析为 JSON")
     except Exception as e:
         logger.error(f"[health_report] LLM 解析失败 family={family_id}: {e}")
         raise ValueError(f"LLM 响应解析失败: {e}") from e
+
+    # Validate→repair cycle (shared infrastructure)
+    from apps.agent.services.runtime.llm_json_repair import (
+        _HEALTH_REPORT_REPAIR_PROMPT,
+        _repair_health_report_via_llm,
+        extract_json_via_llm,
+        run_json_repair_loop,
+        validate_health_report_json,
+    )
+
+    # Build a provider dict from the LLMClient for the repair functions.
+    # Must include actual credentials — _llm_repair_json creates a new client.
+    _provider = {
+        "ai_provider": llm.provider,
+        "api_key": llm._api_key,
+        "ai_model_id": llm.model_id,
+        "ai_base_url": llm._base_url,
+    }
+
+    async def _health_repair_fn(text: str, errors: list[str]):
+        return await _repair_health_report_via_llm(text, errors, _provider)
+
+    report_data, repair_count = await run_json_repair_loop(
+        report_data,
+        raw,
+        validator=validate_health_report_json,
+        repair_fn=_health_repair_fn,
+        publish_retry_event=lambda _attempt: _async_noop(),
+        app_name="health_report",
+        max_retries=2,
+        budget_seconds=120,
+    )
+
+    # Final fallback: standalone LLM extraction
+    if report_data is not None and validate_health_report_json(report_data):
+        fallback = await extract_json_via_llm(
+            raw, _HEALTH_REPORT_REPAIR_PROMPT, _provider,
+        )
+        if fallback is not None and not validate_health_report_json(fallback):
+            report_data = fallback
+
+    if report_data is None or validate_health_report_json(report_data):
+        errors = validate_health_report_json(report_data) if report_data else ["无法解析报告 JSON"]
+        logger.error(
+            "[health_report] validation failed after %d retries + fallback "
+            "family=%s errors=%s",
+            repair_count,
+            family_id,
+            errors[:3],
+        )
+        raise ValueError(f"体检报告校验失败: {'; '.join(errors[:3])}")
 
     # Clamp overall_score to valid range regardless of LLM compliance with the prompt formula.
     if "overall_score" in report_data:

@@ -125,7 +125,13 @@ export const FILE_ICON_MAP: Record<string, string> = {
  */
 export function getFileName(filepath: string): string {
   const parts = filepath.split('/')
-  return parts[parts.length - 1] || filepath
+  const raw = parts[parts.length - 1] || filepath
+  // Decode URI-encoded characters (e.g. Chinese filenames from href)
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
 }
 
 /**

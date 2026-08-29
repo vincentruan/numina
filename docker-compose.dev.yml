@@ -5,25 +5,33 @@ services:
       dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-28000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
+      - backend-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
       - SECRET_KEY=${SECRET_KEY:-}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DISABLE_CAPTCHA=${DISABLE_CAPTCHA:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_BASE_URL=http://numina-agent:8001
       - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/.numina/data/workspace}
       - NUMINA_PROJECT_ROOT=/app
-    command: uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend
+    command: >
+      sh -c "uv sync --extra backend &&
+             uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
@@ -37,23 +45,30 @@ services:
       dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
+    ports:
+      - "${AGENT_PORT:-28001}:8001"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
+      - agent-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
+      - SECRET_KEY=${SECRET_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DISABLE_CAPTCHA=${DISABLE_CAPTCHA:-true}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - NUMINA_PROJECT_ROOT=/app
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
       - DEERFLOW_DB_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina_deerflow
-    command: uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent
+    command: >
+      sh -c "uv sync --extra agent &&
+             uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent"
     depends_on:
       backend:
         condition: service_healthy
@@ -70,22 +85,29 @@ services:
       dockerfile: apps/scheduler_worker/Dockerfile
     container_name: numina-scheduler-worker
     restart: unless-stopped
+    ports:
+      - "${WORKER_PORT:-28002}:8002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
+      - worker-venv:/app/.venv  # preserve build-time deps (host mount hides /app/.venv)
       - ./system-config.yaml:/app/system-config.yaml:ro
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
-      - DATABASE_URL=sqlite:////app/.numina/data/db/numina.db
+      - DATABASE_URL=postgresql://numina:numinapass@host.docker.internal:5432/numina
       - SECRET_KEY=${SECRET_KEY:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
       - NUMINA_PROJECT_ROOT=/app
-    command: uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker
+    command: >
+      sh -c "uv sync --extra backend &&
+             uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker"
     depends_on:
       backend:
         condition: service_healthy
@@ -122,7 +144,7 @@ services:
              npm install --ignore-scripts &&
              cp /tmp/package.json.orig package.json &&
              trap - EXIT &&
-             npx vite --host 0.0.0.0 --port 5173"
+             npx vite --host 0.0.0.0 --port 25173"
 
   frontend-child:
     build: !reset null
@@ -150,7 +172,7 @@ services:
              npm install --ignore-scripts &&
              cp /tmp/package.json.orig package.json &&
              trap - EXIT &&
-             npx vite --host 0.0.0.0 --port 5174"
+             npx vite --host 0.0.0.0 --port 25174"
 
   nginx:
     image: nginx:alpine
@@ -188,3 +210,6 @@ volumes:
   frontend_child_node_modules:
   frontend_auth_node_modules:
   redis_data:
+  backend-venv:
+  agent-venv:
+  worker-venv:

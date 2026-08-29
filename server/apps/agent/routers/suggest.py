@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class AssetSuggestRequest(BaseModel):
     name: str
-    category: str
+    category: str = ""
     asset_type: str = "physical"
 
 

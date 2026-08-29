@@ -440,3 +440,44 @@ export async function branchThreadFromTurn(
   }
   return res.json() as Promise<ThreadBranchResponse>
 }
+
+// ── Retry checkpoint forking ──────────────────────────────────────────────────
+
+export interface RetryPrepareResponse {
+  checkpoint_id: string | null
+  checkpoint_ns: string
+  retry_from_checkpoint: boolean
+}
+
+/**
+ * Find the checkpoint to fork from for a retry.
+ *
+ * When the first request fails, the backend checkpoint retains the failed user
+ * message. This endpoint scans checkpoint history to find the checkpoint with
+ * one fewer user message — i.e., the state before the failed message was added.
+ *
+ * Returns ``retry_from_checkpoint: false`` when no suitable checkpoint is found
+ * (e.g., first message with no prior history). The frontend falls back to a
+ * normal retry in that case.
+ */
+export async function retryPrepare(threadId: string): Promise<RetryPrepareResponse> {
+  const res = await fetch(
+    `${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/retry-prepare`,
+    {
+      method: 'POST',
+      headers: getAgentHeaders(),
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) {
+    let detail = `Failed to prepare retry (${res.status})`
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+    } catch {
+      // ignore parse failure, use fallback detail
+    }
+    throw new Error(detail)
+  }
+  return res.json() as Promise<RetryPrepareResponse>
+}

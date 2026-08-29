@@ -895,10 +895,37 @@ onActivated(async () => {
   background: rgba(0, 0, 0, 0.04);
 }
 
+[data-theme='dark'] .action-btn:active,
+.dark .action-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .action-btn--edit {
   color: #4F46E5;
 }
 
+[data-theme='dark'] .action-btn--edit,
+.dark .action-btn--edit {
+  color: #9b8dff;
+}
+
+.action-btn--danger {
+  color: #ee0a24;
+}
+
+[data-theme='dark'] .action-btn--danger,
+.dark .action-btn--danger {
+  color: #ff7b7b;
+}
+
+.action-btn--warn {
+  color: #ff976a;
+}
+
+[data-theme='dark'] .action-btn--warn,
+.dark .action-btn--warn {
+  color: #ffb88c;
+}
 
 .member-cards {
   display: flex;
@@ -925,14 +952,6 @@ onActivated(async () => {
   color: #333;
   margin: 0 0 12px;
   text-align: center;
-}
-
-.action-btn--danger {
-  color: #ee0a24;
-}
-
-.action-btn--warn {
-  color: #ff976a;
 }
 
 .sheet-label {

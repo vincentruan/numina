@@ -1,7 +1,7 @@
 ---
 title: Snowflake IDs Must Be Serialized as Strings at the JSON Boundary
 date: 2026-04-27
-category: docs/solutions/best-practices
+category: best-practices
 module: backend
 problem_type: best_practice
 component: database
@@ -10,7 +10,7 @@ applies_when:
   - Any endpoint returning Snowflake (BigInteger) IDs in JSON responses consumed by JavaScript/TypeScript
 tags: [snowflake-id, json-serialization, javascript-precision, pydantic, biginteger, api-boundary]
 related_components: [authentication, frontend_stimulus]
-last_refreshed: 2026-07-31
+last_refreshed: 2026-08-26
 ---
 
 # Snowflake IDs Must Be Serialized as Strings at the JSON Boundary
@@ -97,6 +97,25 @@ DB: BIGINT 9007199254740993
 headers = {"X-Session-Id": str(session.id)}
 cache_key = f"session:{session.id}"  # f-string auto-converts, but be explicit
 ```
+
+### Anti-pattern: JSONResponse bypass (resolved)
+
+Previously, returning `JSONResponse(content={...})` or raw dicts bypassed `SnowflakeBase.model_serializer`, requiring manual `str()` wrapping. This has been **resolved at the response layer**:
+
+- **`EnvelopeResponse.render()`** (the `default_response_class` for all backend endpoints) now auto-converts all `id`/`*_id` int fields to `str` before JSON encoding. This covers all normal endpoints — raw dict returns, Pydantic models, nested lists — without any manual conversion.
+- **`SnowflakeResponse`** (`app.responses`) provides the same conversion for endpoints that intentionally bypass the envelope (SSE metadata, captcha). Replace `JSONResponse` with `SnowflakeResponse` for these cases.
+
+```python
+from apps.backend.app.responses import SnowflakeResponse
+
+# ✅ No manual str() needed — EnvelopeResponse handles it
+return {"status": "queued", "task_id": task.id}
+
+# ✅ For SSE/non-envelope endpoints — use SnowflakeResponse
+return SnowflakeResponse(status_code=202, content={"task_id": task.id})
+```
+
+> **Note:** Manual `str()` in routers is harmless (idempotent — `str(str(x)) == str(x)`) but no longer necessary.
 
 ## Why This Matters
 

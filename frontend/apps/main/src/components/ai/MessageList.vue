@@ -32,7 +32,9 @@ const { t } = useI18n()
 const scrollRef = ref<HTMLElement | null>(null)
 
 // Group messages for display (dedupe + group into DeerFlow 6-type structure)
-const messageGroups = useMessageGroups(toRef(props, 'messages'))
+// DeerFlow pattern: pass isStreaming as isCurrentTurnLoading so content-only
+// messages stay in processing group during streaming (#4304).
+const messageGroups = useMessageGroups(toRef(props, 'messages'), toRef(props, 'isStreaming'))
 
 /**
  * Index of the last assistant-origin group (assistant / assistant:processing /
@@ -44,7 +46,7 @@ const messageGroups = useMessageGroups(toRef(props, 'messages'))
  * and pending tool calls couldn't show a running spinner.
  */
 const lastAssistantGroupIndex = computed(() => {
-  const groups = messageGroups.value
+  const groups = visibleMessageGroups.value
   for (let i = groups.length - 1; i >= 0; i--) {
     if (groups[i].type === 'assistant' || groups[i].type.startsWith('assistant:')) return i
   }
@@ -65,6 +67,14 @@ const showThinkingIndicator = computed(() => {
   if (groups.length === 0) return false
   return groups[groups.length - 1].type === 'human'
 })
+
+/**
+ * Visible groups — direct alias for messageGroups.
+ * Previously this applied retry version pagination (superseded groups), but
+ * we now fork the checkpoint server-side in retryPrepare so the old content
+ * never reaches the frontend. This alias is kept for template compatibility.
+ */
+const visibleMessageGroups = computed(() => messageGroups.value)
 
 /**
  * Get planSteps from the previous group (for detecting redundant completion summaries).
@@ -220,23 +230,24 @@ onUnmounted(() => {
       <p>{{ t('aiChat.startConversation') }}</p>
     </div>
     <div v-else class="message-list-content">
-      <MessageGroup
-        v-for="(group, index) in messageGroups"
-        :key="group.id ?? index"
-        :group="group"
-        :thread-id="threadId"
-        :is-loading="isStreaming && index === lastAssistantGroupIndex"
-        :is-last-assistant="index === lastAssistantGroupIndex"
-        :can-branch="canBranch"
-        :branching-message-id="branchingMessageId"
-        :answered-interrupt-ids="answeredInterruptIds"
-        :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
-        @suggestion-click="(text: string) => emit('suggestionClick', text)"
-        @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
-        @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
-        @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
-        @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
-      />
+      <template v-for="(group, index) in visibleMessageGroups" :key="group.id ?? index">
+        <MessageGroup
+          :group="group"
+          :thread-id="threadId"
+          :is-loading="isStreaming && index === lastAssistantGroupIndex"
+          :is-last-assistant="index === lastAssistantGroupIndex"
+          :can-branch="canBranch"
+          :branching-message-id="branchingMessageId"
+          :answered-interrupt-ids="answeredInterruptIds"
+          :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
+          @suggestion-click="(text: string) => emit('suggestionClick', text)"
+          @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
+          @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
+          @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
+          @feedback="(messageId: string, value: 1 | -1) => emit('feedback', messageId, value)"
+          @retry="emit('retry')"
+        />
+      </template>
       <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
       <div v-if="showThinkingIndicator" class="thinking-placeholder">
         <StreamingIndicator :visible="true" />

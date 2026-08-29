@@ -2,26 +2,19 @@
  * useTaskResume — v3 unified task resume composable.
  *
  * When user returns to a page, detects running tasks and attempts SSE
- * reconnection (subscribeTaskStream). Falls back to useTaskPolling on
- * gap/error/completion.
+ * reconnection (subscribeTaskStream). Polling is ONLY activated as a
+ * fallback when SSE fails/gaps — not during normal streaming.
  *
- * Replaces the inline `resumeIfRunning()` pattern in individual components.
+ * Architecture:
+ *   taskId       → SSE connection + UI display (set immediately)
+ *   pollingTaskId → useTaskPolling trigger (set ONLY on SSE failure)
  *
- * Usage:
- *   const { resume, cleanup, status, taskId } = useTaskResume('narrative', {
- *     onStreamEvent: (event, data) => { ... },
- *     onComplete: (task) => { ... },
- *     onError: (task) => { ... },
- *   })
- *
- *   onActivated(async () => {
- *     const resumed = await resume()
- *     if (!resumed) await loadCached()
- *   })
+ * This ensures no redundant polling when SSE is delivering events correctly.
  */
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import {
   getAITasks,
+  cancelTaskById,
   subscribeTaskStream,
   type AITask,
   type TaskStreamHandle,
@@ -66,9 +59,11 @@ export interface UseTaskResumeReturn {
    * the caller must fire a fresh trigger.
    */
   retryTrigger: () => Promise<boolean>
-  /** Cancel the current task (delegates to useTaskPolling.cancel). */
+  /** Cancel the current task (SSE abort + backend cancel). */
   cancel: () => Promise<void>
-  /** Clean up SSE connection and polling. */
+  /** Lightweight disconnect: abort SSE + stop polling, preserve state for resume. */
+  disconnect: () => void
+  /** Clean up SSE connection and polling (full teardown, resets state). */
   cleanup: () => void
   /** Re-check task status (legacy compat). */
   check: () => Promise<void>
@@ -78,7 +73,10 @@ export function useTaskResume(
   capability: string,
   options: UseTaskResumeOptions = {},
 ): UseTaskResumeReturn {
+  /** Task ID for SSE connection + UI display (cancel button, isRunning). */
   const taskId = ref<string | null>(null)
+  /** Separate ref for useTaskPolling — only set when SSE fails. */
+  const pollingTaskId = ref<string | null>(null)
   const status = ref<TaskResumeStatus>('idle')
   const task = ref<AITask | null>(null)
   const triggerFailed = ref(false)
@@ -87,8 +85,9 @@ export function useTaskResume(
   let streamHandle: TaskStreamHandle | null = null
   let disposed = false
 
-  // Polling fallback — watches taskId ref
-  const polling = useTaskPolling(taskId, {
+  // Polling fallback — watches pollingTaskId (NOT taskId).
+  // Only activates when activatePollingFallback() is called.
+  const polling = useTaskPolling(pollingTaskId, {
     onComplete: (t) => {
       status.value = 'completed'
       task.value = t
@@ -100,6 +99,23 @@ export function useTaskResume(
       options.onError?.(t)
     },
   })
+
+  // Detect polling timeout (useTaskPolling sets status='failed' without
+  // calling onComplete/onError when the safety timer fires). Propagate to
+  // the consumer so the UI shows an error instead of streaming forever.
+  watch(polling.status, (newStatus) => {
+    if (newStatus === 'failed' && status.value !== 'completed' && status.value !== 'failed') {
+      status.value = 'failed'
+      options.onError?.(polling.task.value!)
+    }
+  })
+
+  /** Switch from SSE to polling. Only called when SSE fails/gaps. */
+  function activatePollingFallback(): void {
+    if (taskId.value && !pollingTaskId.value) {
+      pollingTaskId.value = taskId.value
+    }
+  }
 
   function startSSE(tid: string): void {
     // P1-1 fix: abort previous SSE before starting a new one
@@ -113,21 +129,22 @@ export function useTaskResume(
           options.onStreamEvent?.(event, data)
         },
         onGap: () => {
-          // Buffer overflow — fallback to polling
+          // Buffer overflow — SSE can't continue, fall back to polling
           status.value = 'polling'
-          // taskId is already set → useTaskPolling takes over
+          activatePollingFallback()
         },
         onEnd: () => {
           // Stream ended — task likely completed.
-          // useTaskPolling will detect the terminal state on next poll.
-          // If polling isn't active yet, trigger a check.
+          // If we haven't already received a terminal event, check via polling.
           if (status.value !== 'completed' && status.value !== 'failed') {
+            activatePollingFallback()
             polling.pollNow()
           }
         },
         onError: (_msg) => {
-          // SSE failed — fallback to polling
+          // SSE failed — fall back to polling
           status.value = 'polling'
+          activatePollingFallback()
         },
       },
     )
@@ -159,7 +176,7 @@ export function useTaskResume(
         return false
       }
 
-      // Found a running task — try SSE reconnection
+      // Found a running task — try SSE reconnection (no polling yet)
       taskId.value = latestTask.id
       task.value = latestTask
       startSSE(latestTask.id)
@@ -216,7 +233,7 @@ export function useTaskResume(
         latestTask?.id &&
         ['running', 'queued', 'post_processing'].includes(latestTask.status)
       ) {
-        // Reuse the late-appearing running task
+        // Reuse the late-appearing running task (SSE only, no polling)
         triggerFailed.value = false
         taskId.value = latestTask.id
         task.value = latestTask
@@ -235,11 +252,43 @@ export function useTaskResume(
     return false
   }
 
-  function cleanup(): void {
-    disposed = true
+  /**
+   * Cancel the current task. Works in both SSE-only and polling-fallback modes:
+   * - Aborts SSE connection
+   * - Sends backend cancel request (if taskId exists)
+   * - Stops polling (if active)
+   */
+  async function cancel(): Promise<void> {
+    const id = taskId.value
+    if (!id) return
     streamHandle?.abort()
     streamHandle = null
     polling.stop()
+    try {
+      await cancelTaskById(id)
+    } catch (err) {
+      console.warn('[useTaskResume] cancel error:', err)
+    }
+  }
+
+  /**
+   * Lightweight disconnect: abort SSE + stop polling, but preserve
+   * taskId/status/step-state so that resume() can restore the UI when
+   * the user navigates back. Use in onDeactivated (not cleanup).
+   */
+  function disconnect(): void {
+    streamHandle?.abort()
+    streamHandle = null
+    polling.stop()
+    // Reset pollingTaskId so polling doesn't auto-restart on re-activate
+    pollingTaskId.value = null
+  }
+
+  /** Full teardown — aborts connections AND resets state. Use only when
+   *  the composable will not be resumed (e.g. component destroyed permanently). */
+  function cleanup(): void {
+    disconnect()
+    disposed = true
     taskId.value = null
     status.value = 'idle'
   }
@@ -258,7 +307,8 @@ export function useTaskResume(
     resume,
     waitForTask,
     retryTrigger,
-    cancel: polling.cancel,
+    cancel,
+    disconnect,
     cleanup,
     check,
   }

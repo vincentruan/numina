@@ -763,3 +763,62 @@ def set_child_password(
     db.commit()
     revoke_all_user_tokens(child.id)
     return {"message": "儿童密码设置成功"}
+
+
+# ---------------------------------------------------------------------------
+# Public avatar endpoint (pre-auth, for login page)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/avatar/{token}")
+async def get_avatar_by_token(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Serve a user's uploaded avatar by opaque token — no auth required.
+
+    Used by the login page carousel to display user avatars before authentication.
+    The token is unguessable (43-char URL-safe, ~256 bit entropy) and only grants
+    access to the single associated avatar image.
+    """
+    import mimetypes
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+
+    from apps.backend.app.config import settings
+    from apps.backend.app.models.cached_file import CachedFile
+
+    # Look up user by avatar token
+    user = db.query(User).filter(User.avatar_token == token, User.is_active.is_(True)).first()
+    if user is None or not user.avatar_url:
+        raise AppError(ErrorCode.FILE_NOT_FOUND)
+
+    # Resolve the on-disk path from the avatar_url
+    # avatar_url is like /uploads/{family_id}/{user_id}/{date}/{filename}
+    relative = user.avatar_url.lstrip("/")
+    local_path = str(Path(settings.UPLOAD_DIR) / relative)
+
+    # Look up CachedFile for MIME type
+    cached_file = (
+        db.query(CachedFile)
+        .filter(
+            CachedFile.local_path == local_path,
+            CachedFile.family_id == user.family_id,
+            CachedFile.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+    if cached_file is None or not Path(local_path).is_file():
+        raise AppError(ErrorCode.FILE_NOT_FOUND)
+
+    media_type = cached_file.mime_type or mimetypes.guess_type(local_path)[0] or "application/octet-stream"
+
+    return FileResponse(
+        path=local_path,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "public, max-age=2592000, immutable",
+        },
+    )

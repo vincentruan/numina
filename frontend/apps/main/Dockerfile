@@ -39,8 +39,21 @@ RUN mkdir -p public/icons/3d && \
 RUN --mount=type=cache,target=/tmp/icon-thumbs \
     THUMB_OUTPUT_DIR=/tmp/icon-thumbs npx tsx scripts/generate-icon-thumbnails.ts && \
     cp -r /tmp/icon-thumbs public/icons/3d-thumbs
-# Copy full app source (3d-thumbs excluded via .dockerignore to preserve cache)
+# Copy full app source (3d-thumbs excluded via .dockerignore to preserve cache).
+# Note: public/icons/3d/ is gitignored (files are large originals); we re-sync
+# from @numina/assets in the next step to ensure the icons are always present
+# regardless of host state (fresh git clone, CI, etc.).
 COPY frontend/apps/main/ .
+# Ensure original 3D icon PNGs are in public/icons/3d/ for Vite → dist/.
+# The host's public/icons/3d/ may be empty (gitignored), so always copy from
+# the @numina/assets package which is the canonical source of these files.
+RUN for cat in animals art-culture buildings clothing-accessories electronics \
+               entertainment furniture healthcare instruments kitchenware \
+               office-stationery plants science-tech sports tools vehicles \
+               characters historical-figures religion-mythology flags numbers-symbols; do \
+      mkdir -p public/icons/3d/$cat && \
+      cp /app/frontend/packages/assets/src/icons/3d-things/$cat/*.png public/icons/3d/$cat/ 2>/dev/null || true; \
+    done
 # Cache mount for vite cache speeds up incremental builds
 RUN --mount=type=cache,target=/app/frontend/apps/main/node_modules/.vite \
     npx vite build

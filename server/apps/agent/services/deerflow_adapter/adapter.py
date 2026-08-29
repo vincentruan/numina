@@ -416,6 +416,7 @@ class DeerFlowAdapter:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        checkpoint_id: str | None = None,
     ) -> AsyncGenerator[Any, None]:
         """Yield raw LangGraph StreamEvents from DeerFlowClient.stream()."""
         # Set the original user content ContextVar so DeerFlow's
@@ -446,6 +447,12 @@ class DeerFlowAdapter:
             if plan_mode is not None:
                 stream_kwargs["plan_mode"] = plan_mode
 
+            # Retry checkpoint forking: when checkpoint_id is set, pass it through
+            # stream_kwargs. NuminaDeerFlowClient._get_runnable_config() extracts it
+            # from overrides and includes it in the configurable dict for the checkpointer.
+            if checkpoint_id is not None:
+                stream_kwargs["checkpoint_id"] = checkpoint_id
+
             async with _get_semaphore():
                 loop = asyncio.get_running_loop()
                 queue: asyncio.Queue[Any] = asyncio.Queue()
@@ -453,7 +460,33 @@ class DeerFlowAdapter:
                 def _produce() -> None:
                     try:
                         with self._family_config_context():
+                            # NuminaDeerFlowClient natively supports checkpoint_id
+                            # in stream_kwargs, which is passed through to
+                            # _get_runnable_config and included in the configurable
+                            # dict for the checkpointer.
                             message = self._build_prompt(skill_name, context)
+                            # Update original_user_content ContextVar to the
+                            # escaped version that matches _build_prompt output.
+                            # _build_prompt neutralizes <user_message> tags in
+                            # free_text (lines 826-827), so the raw free_text
+                            # from the initial set() is no longer a substring
+                            # of the JSON message content. Without this update,
+                            # InputSanitizationMiddleware's rfind lookup fails
+                            # and falls back to full-content sanitization
+                            # (which may escape the server's <current_uploads>
+                            # block — UX degradation).
+                            # Note: we call set() again without resetting the
+                            # old token first. The executor thread has a copied
+                            # context (copy_context), so the old token's reset
+                            # in the async caller's finally block is suppressed
+                            # as a ValueError (different context) — harmless.
+                            if context.free_text:
+                                escaped_text = context.free_text.replace(
+                                    "<user_message>", "&lt;user_message&gt;"
+                                ).replace(
+                                    "</user_message>", "&lt;/user_message&gt;"
+                                )
+                                set_original_user_content(escaped_text)
                             for event in self._client.stream(
                                 message, thread_id=thread_id, **stream_kwargs
                             ):
@@ -501,6 +534,7 @@ class DeerFlowAdapter:
         enable_thinking: bool = False,
         subagent_enabled: bool | None = None,
         plan_mode: bool | None = None,
+        checkpoint_id: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         """Yield (sse_event_type, data) tuples from DeerFlowClient.stream().
 
@@ -524,6 +558,7 @@ class DeerFlowAdapter:
             enable_thinking,
             subagent_enabled=subagent_enabled,
             plan_mode=plan_mode,
+            checkpoint_id=checkpoint_id,
         ):
             if isinstance(event, BaseException):
                 yield ("error", {"error": str(event)})
@@ -537,27 +572,36 @@ class DeerFlowAdapter:
             if event_type == "messages-tuple" and isinstance(event_data, dict):
                 yield ("messages", event_data)
             elif event_type == "values" and isinstance(event_data, dict):
-                # Clean fallback title (DeerFlow sync after_model produces the
-                # raw JSON context wrapper as title because _build_prompt wraps
-                # user text as JSON; TitleMiddleware truncates that). Replace
-                # with the original user text so the frontend sees a clean
-                # title via the values SSE event — matches DeerFlow's native
-                # title-via-values delivery mechanism.
+                # DeerFlow's sync ``after_model`` writes a fallback title (the
+                # raw JSON context wrapper) to the checkpoint. Numina generates
+                # a proper LLM title post-stream and publishes it via
+                # ``bridge.publish`` in worker.py — the adapter must NOT forward
+                # the stale checkpoint title to the frontend.
+                #
+                # On follow-up turns the checkpoint still carries the stale
+                # fallback from the first run (Numina writes the LLM title to
+                # the DB, not to the checkpoint). The old code replaced the
+                # fallback with ``context.free_text`` (the CURRENT turn's user
+                # message), which overwrote the first-turn LLM title with the
+                # follow-up text — the "追问修改标题" bug.
+                #
+                # Fix: drop the fallback title from the values event entirely.
+                # DeerFlow parity — title is generated only on the first
+                # exchange. The frontend already has a temp title from
+                # ``handleStartChat`` during streaming, and the LLM title
+                # arrives via ``bridge.publish`` after the stream on the first
+                # turn. On follow-up, no title event means the existing session
+                # title is preserved.
                 raw_title = event_data.get("title")
                 if raw_title and isinstance(raw_title, str):
                     from apps.agent.services.runtime.run_extras import (
                         _is_fallback_title,
-                        _text_fallback_title,
-                        strip_language_prefix,
                     )
 
                     if _is_fallback_title(raw_title):
-                        # Strip language prefix so the fallback title shows
-                        # the user's actual message, not the internal directive.
-                        clean_text = strip_language_prefix(context.free_text or "")
-                        clean = _text_fallback_title(clean_text)
-                        if clean:
-                            event_data = {**event_data, "title": clean}
+                        event_data = {
+                            k: v for k, v in event_data.items() if k != "title"
+                        }
                 yield ("values", event_data)
             elif event_type == "end":
                 yield ("end", event_data)

@@ -12,6 +12,7 @@
 import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
+import { readSSEStream } from '@/utils/sseReader'
 
 export type LiteracyStreamStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'error'
 
@@ -114,78 +115,43 @@ export function useLiteracyStream(): UseLiteracyStreamReturn {
     // SSE stream
     status.value = 'streaming'
 
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let currentEvent = ''
-
     try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('event:')) {
-            currentEvent = line.slice(6).trim()
-            continue
-          }
-          if (!line.startsWith('data:')) continue
-          const dataStr = line.slice(5).trim()
-          if (!dataStr || dataStr === '[DONE]' || dataStr === 'null') {
-            if (currentEvent === 'end') {
-              status.value = 'completed'
-              if (!completedAt.value) completedAt.value = new Date().toISOString()
+      await readSSEStream(res, {
+        onMessage: (event, data) => {
+          if (event === 'messages' && data) {
+            const msg = data as { type?: string; content?: string }
+            if (msg.type === 'ai' && msg.content) {
+              narrative.value += msg.content
             }
-            currentEvent = ''
-            continue
           }
-
-          try {
-            const parsed = JSON.parse(dataStr)
-            const event = currentEvent || parsed.event || 'message'
-            const data = parsed.data ?? parsed
-            currentEvent = ''
-
-            if (event === 'messages' && data) {
-              const msg = data as { type?: string; content?: string }
-              if (msg.type === 'ai' && msg.content) {
-                narrative.value += msg.content
-              }
-            } else if (event === 'custom' && data) {
-              const custom = data as { type?: string; content?: string; payload?: Record<string, unknown> }
-              if (custom.type === 'reasoning_delta' && custom.content) {
-                thinking.value += custom.content
-              } else if (custom.type === 'literacy_weekly_report.result' && custom.payload) {
-                // Final result — use the authoritative text from the payload
-                const payload = custom.payload
-                if (payload.report) narrative.value = String(payload.report)
-                if (payload.thinking) thinking.value = String(payload.thinking)
-              }
-            } else if (event === 'error' && data) {
-              status.value = 'error'
-              errorMessage.value = (data as { message?: string }).message || t('literacyReport.generateFailed')
-            } else if (event === 'end') {
-              const endData = data as { status?: string }
-              if (endData?.status === 'complete' || endData?.status === 'completed') {
-                status.value = 'completed'
-              } else if (endData?.status === 'error') {
-                status.value = 'error'
-                errorMessage.value = errorMessage.value || t('literacyReport.generateFailed')
-              } else {
-                status.value = 'completed'
-              }
-              if (!completedAt.value) completedAt.value = new Date().toISOString()
-            }
-          } catch {
-            // Non-JSON data line; skip
+        },
+        onCustom: (data) => {
+          const custom = data as { type?: string; content?: string; payload?: Record<string, unknown> }
+          if (custom.type === 'reasoning_delta' && custom.content) {
+            thinking.value += custom.content
+          } else if (custom.type === 'literacy_weekly_report.result' && custom.payload) {
+            // Final result — use the authoritative text from the payload
+            const payload = custom.payload
+            if (payload.report) narrative.value = String(payload.report)
+            if (payload.thinking) thinking.value = String(payload.thinking)
           }
-          currentEvent = ''
-        }
-      }
+        },
+        onError: (data) => {
+          status.value = 'error'
+          const errData = data as { error?: string; message?: string }
+          errorMessage.value = errData.error || errData.message || t('literacyReport.generateFailed')
+        },
+        onEnd: (data) => {
+          const endData = data as { status?: string } | undefined
+          if (endData?.status === 'error') {
+            status.value = 'error'
+            errorMessage.value = errorMessage.value || t('literacyReport.generateFailed')
+          } else {
+            status.value = 'completed'
+          }
+          if (!completedAt.value) completedAt.value = new Date().toISOString()
+        },
+      })
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         status.value = 'idle'

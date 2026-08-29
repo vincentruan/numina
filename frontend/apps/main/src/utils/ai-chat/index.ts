@@ -28,6 +28,7 @@ export {
   splitInlineReasoning,
   extractReasoningContentFromMessage,
   extractContentFromMessage,
+  extractContentAndReasoning,
   hasReasoning,
   hasContent,
 } from './reasoning-filter'

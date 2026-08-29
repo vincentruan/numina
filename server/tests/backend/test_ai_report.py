@@ -155,7 +155,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None):
+    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None, **kwargs):
         # Simulate the bridge consumer completing the task on end event
         from apps.backend.app.services.ai_task_service import AITaskService
         from apps.backend.app.database import SessionLocal
@@ -172,8 +172,9 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
         patch("apps.backend.app.routers.ai_report.consume_task_stream", _fake_stream),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
     ):
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -207,8 +208,9 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
         patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
     ):
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
@@ -247,39 +249,154 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
         patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
     ):
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=200, text="{}"))
         mock_stream.return_value = _make_empty_async_gen()
-        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
+        # No force=true — should resume existing task
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     # Should resume (200 + SSE stream) instead of 409
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
 
 
+def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
+    """POST ?force=true cancels a zombie running task and starts a fresh generation."""
+    from datetime import datetime
+
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+    from apps.backend.app.models.ai_task import AITask
+
+    family_id = _enable_ai(db, auth_headers, client)
+
+    session = AIChatSession(family_id=family_id, status="active")
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    task = AITask(
+        family_id=family_id,
+        skill_id="report",
+        status="running",
+        session_id=session.id,
+        started_at=datetime.utcnow(),
+    )
+    db.add(task)
+    db.commit()
+    zombie_task_id = task.id
+
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+    ):
+        mock_stream.return_value = _make_empty_async_gen()
+        resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+    # Zombie task should be cancelled
+    db.refresh(task)
+    assert task.status == "cancelled"
+    # A new task should exist
+    new_task = db.query(AITask).filter(
+        AITask.family_id == family_id,
+        AITask.skill_id == "report",
+        AITask.id != zombie_task_id,
+    ).first()
+    assert new_task is not None
+    assert new_task.status == "running"
+
+
+def test_generate_report_timeout_cancels_stale_task(client, auth_headers, db):
+    """A running report task older than the per-skill timeout (10 min) is
+    auto-marked timeout, allowing a fresh generation to proceed."""
+    from datetime import datetime, timedelta
+
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+    from apps.backend.app.models.ai_task import AITask
+
+    family_id = _enable_ai(db, auth_headers, client)
+
+    session = AIChatSession(family_id=family_id, status="active")
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    # Create a "running" task that started 15 minutes ago (past the 10-min
+    # report timeout but within the 30-min default).
+    task = AITask(
+        family_id=family_id,
+        skill_id="report",
+        status="running",
+        session_id=session.id,
+        started_at=datetime.utcnow() - timedelta(minutes=15),
+    )
+    db.add(task)
+    db.commit()
+
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+    ):
+        mock_stream.return_value = _make_empty_async_gen()
+        # No force=true — the stale task should be auto-timeout'd
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+    # Stale task should be marked timeout
+    db.refresh(task)
+    assert task.status == "timeout"
+
+
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     """If agent trigger fails (non-200), the route emits an SSE error frame (200)
-    and transitions the AITask to ``failed``.
+    and the lifecycle consumer transitions the AITask to ``failed``.
     """
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls:
-        mock_cls.return_value.post = AsyncMock(return_value=MagicMock(status_code=500, text="agent error"))
+    # Build a mock AgentClient.stream() that returns status 500 (agent failure).
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+
+    async def _mock_aread():
+        return b"agent error"
+
+    mock_resp.aread = _mock_aread
+    mock_resp.headers = {}
+
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(return_value=mock_cm)
+
+    with (
+        patch("apps.backend.app.routers.ai_report.AgentClient", return_value=mock_client),
+        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_fwd,
+        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer") as mock_lc,
+    ):
+        mock_fwd.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Response is still 200 SSE (route emits an error frame)
+    # Response is still 200 SSE (route returns stream; error delivered via events)
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    # CRITICAL: Consume response to let generator complete
+    # Consume response to let generator complete
     _ = resp.content
 
-    db.expire_all()
-    task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
-    assert task is not None
-    assert task.status == "failed"
+    # The lifecycle consumer should have been spawned (fallback with run_id=None
+    # since the agent didn't return Content-Location).
+    assert mock_lc.called, "lifecycle consumer should be spawned"
 
 
 def _make_empty_async_gen():

@@ -18,7 +18,7 @@ export interface BlindBoxGiftCreate {
   description?: string | null
   emoji?: string | null
   value_score: number
-  source_wish_id?: number | null
+  source_wish_id?: string | null
 }
 
 export interface BlindBoxGiftUpdate {
@@ -45,7 +45,7 @@ export interface BlindBoxDraw {
 }
 
 export interface DrawRequest {
-  chore_instance_ids: number[]
+  chore_instance_ids: string[]
 }
 
 export interface BlindBoxConfig {

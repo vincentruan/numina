@@ -602,6 +602,12 @@ def change_password(
     )
 
 
+def generate_avatar_token() -> str:
+    """Generate an opaque, unguessable token for public avatar access."""
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
 def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
     if req.display_name is not None:
         user.display_name = req.display_name
@@ -610,6 +616,11 @@ def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
     # Use model_fields_set to distinguish "not provided" from "explicitly cleared"
     if "avatar_url" in req.model_fields_set:
         user.avatar_url = req.avatar_url
+        # Regenerate avatar token: new token for uploaded images, None for non-uploaded
+        if req.avatar_url and req.avatar_url.startswith("/uploads/"):
+            user.avatar_token = generate_avatar_token()
+        else:
+            user.avatar_token = None
     db.commit()
     db.refresh(user)
     return user

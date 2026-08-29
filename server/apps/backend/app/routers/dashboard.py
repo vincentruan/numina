@@ -1,9 +1,10 @@
+import asyncio
 import json
 import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
@@ -11,6 +12,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.schemas.dashboard import (
     AllocationResponse,
@@ -31,8 +33,10 @@ from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
+    _pump_agent_sse_to_bridge,
     _spawn_lifecycle_consumer,
     consume_task_stream,
+    get_shared_bridge,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
@@ -172,7 +176,16 @@ def get_home_assets_paginated(
             details=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
     return dashboard_service.get_home_assets_page(
-        db, user, status, page, page_size, category_id, search, sort_by, sort_order, asset_type
+        db,
+        user,
+        status,
+        page,
+        page_size,
+        category_id,
+        search,
+        sort_by,
+        sort_order,
+        asset_type,
     )
 
 
@@ -247,8 +260,12 @@ async def generate_narrative(
     # Dynamic thresholds from family settings, fallback to module defaults
     from apps.backend.app.services.config_service import get_family_setting
 
-    _min_asset_count = get_family_setting(db, int(family_id), "dashboard_min_asset_count")
-    _min_history_months = get_family_setting(db, int(family_id), "dashboard_min_history_months")
+    _min_asset_count = get_family_setting(
+        db, int(family_id), "dashboard_min_asset_count"
+    )
+    _min_history_months = get_family_setting(
+        db, int(family_id), "dashboard_min_history_months"
+    )
 
     # 1. Cache check (R4) — uses request-scoped db
     if not force:
@@ -259,7 +276,8 @@ async def generate_narrative(
             from apps.backend.app.services.dashboard_narrative import (
                 _extract_first_sentence,
             )
-            return JSONResponse(
+
+            return SnowflakeResponse(
                 content={
                     "narrative": narrative or None,
                     "first_sentence": report.get(
@@ -276,25 +294,31 @@ async def generate_narrative(
     #    then releases it before the history check (which opens its own session).
     overview = dashboard_service.get_overview(db, user)
     if overview.asset_count < _min_asset_count:
-        return JSONResponse(content={
-            "narrative": None,
-            "first_sentence": "",
-            "thinking": "",
-            "generated_at": None,
-            "reason": "insufficient_assets",
-            "asset_count": overview.asset_count,
-            "threshold": _min_asset_count,
-        })
+        return SnowflakeResponse(
+            content={
+                "narrative": None,
+                "first_sentence": "",
+                "thinking": "",
+                "generated_at": None,
+                "reason": "insufficient_assets",
+                "asset_count": overview.asset_count,
+                "threshold": _min_asset_count,
+            }
+        )
 
     # History check uses a short-lived session (P0 fix — don't hold request db)
-    if not _check_history_threshold(int(family_id), SessionLocal, min_months=_min_history_months):
-        return JSONResponse(content={
-            "narrative": None,
-            "first_sentence": "",
-            "thinking": "",
-            "generated_at": None,
-            "reason": "insufficient_history",
-        })
+    if not _check_history_threshold(
+        int(family_id), SessionLocal, min_months=_min_history_months
+    ):
+        return SnowflakeResponse(
+            content={
+                "narrative": None,
+                "first_sentence": "",
+                "thinking": "",
+                "generated_at": None,
+                "reason": "insufficient_history",
+            }
+        )
 
     # 3. Build context — uses request-scoped db for insights
     try:
@@ -315,8 +339,17 @@ async def generate_narrative(
             .first()
         )
         if not session:
-            raise AppError(ErrorCode.NOT_FOUND)
-    else:
+            # Stuck task: its session was cleaned up or never created.
+            # Mark the task as failed and fall through to create a new one.
+            logger.warning(
+                "[narrative] stuck task=%s has no session — marking failed",
+                task.id,
+            )
+            task.status = "failed"
+            task.error_message = "会话已丢失，重新生成"
+            db.commit()
+            existing = None
+    if not existing:
         # No running task - create new session and task
         session = await ChatSessionService.create_session(
             family_id=family_id,
@@ -331,7 +364,7 @@ async def generate_narrative(
                 session_id=session.id,
                 db=db,
             )
-            return JSONResponse(
+            return SnowflakeResponse(
                 status_code=202,
                 content={
                     "status": "queued",
@@ -349,59 +382,27 @@ async def generate_narrative(
 
     task_id = str(task.id)
 
-    # Trigger agent via non-streaming POST (bridge consumer pattern)
-    agent_client = AgentClient(family_id=str(family_id), user_id=str(user.id), timeout=120.0)
+    # Trigger agent via single streaming POST (bridge consumer pattern).
+    # NOTE: do NOT add a separate agent_client.post here — it would trigger the
+    # agent TWICE (once here, once in _pump_agent_sse_to_bridge below), creating
+    # two runs with different run_ids.  The interrupt strategy then leaves run 1
+    # without an "end" frame, so the AITask never completes and blocks the queue.
+    agent_client = AgentClient(
+        family_id=str(family_id), user_id=str(user.id), timeout=120.0
+    )
     agent_url = f"/internal/gateway/runs/dashboard-narrative/{session_id}"
     run_id: str | None = None
 
-    try:
-        resp = await agent_client.post(
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": str(user.id),
-                "language": user.language,
-                "on_disconnect": "continue",
-                "task_id": task_id,
-                "input": {"messages": [{"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
-            },
-        )
-        if resp.status_code != 200:
-            logger.warning(
-                "[narrative] agent trigger failed: status=%s body=%s task=%s",
-                resp.status_code,
-                resp.text[:200],
-                task_id,
-            )
-            _db = SessionLocal()
-            try:
-                AITaskService.fail_task(task_id, "叙事生成服务异常", _db)
-            finally:
-                _db.close()
-            err = json.dumps({"message": "叙事生成服务异常", "name": "AgentError"}).encode()
-            return StreamingResponse(
-                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-                media_type="text/event-stream",
-            )
+    # Phase 1: Backend-owned buffer.
+    shared_bridge = get_shared_bridge()
 
-        # Extract agent run_id from Content-Location header and persist to AITask
-        run_id = AITaskService.extract_and_attach_run_id(
-            task_id, resp.headers.get("Content-Location"), family_id
-        )
-    except Exception as exc:
-        logger.warning("[narrative] agent trigger failed task=%s err=%s", task_id, exc)
-        _db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, f"叙事生成服务中断: {type(exc).__name__}", _db)
-        finally:
-            _db.close()
-        err = json.dumps({"message": "叙事生成服务中断", "name": type(exc).__name__}).encode()
-        return StreamingResponse(
-            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-            media_type="text/event-stream",
+    if not run_id:
+        logger.info(
+            "[narrative] task=%s run_id not yet resolved — pump will set it",
+            task_id,
         )
 
-    # T0: Spawn independent lifecycle consumer (survives SSE disconnect)
+    # Lifecycle consumer persistence callback (module-local for closure capture).
     from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     async def _persist_narrative_result(_event_type: str, data: dict) -> None:
@@ -415,20 +416,105 @@ async def generate_narrative(
                 finally:
                     _db.close()
 
-    _spawn_lifecycle_consumer(
-        task_id=task_id,
-        family_id=family_id,
-        run_id=run_id,
-        on_result=_persist_narrative_result,
+    # Spawn lifecycle consumer inside the pump's on_authoritative_run_id callback
+    # so it subscribes with the correct run_id.  The pump reads the agent's
+    # metadata SSE event (which carries the authoritative run_id) before the
+    # first publish — Content-Location may carry the first POST's run_id, while
+    # the agent's interrupt strategy creates a second run with a different
+    # run_id.  Subscribing with the wrong run_id means the lifecycle consumer
+    # never sees events and the cache is never written.
+    _lc_spawned = False
+    _lc_task: asyncio.Task[None] | None = None
+
+    def _on_lc_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. Persist to AITask so
+        ``consume_task_stream``'s run_id fallback can resolve it."""
+        # Content-Location is a URL path — extract the trailing UUID and persist
+        # to the AITask row. Without this, ``consume_task_stream`` (passing
+        # run_id=None) falls back to AITask.run_id, which stays empty and raises
+        # "Task has no run_id" after 10s of retries — the frontend sees nothing.
+        nonlocal run_id
+        try:
+            run_id = AITaskService.extract_and_attach_run_id(
+                task_id, cl_url, family_id
+            )
+        except Exception:
+            logger.warning(
+                "[narrative] extract_and_attach_run_id failed task=%s",
+                task_id,
+                exc_info=True,
+            )
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id."""
+        nonlocal _lc_spawned, _lc_task
+        if _lc_task is not None and not _lc_task.done():
+            _lc_task.cancel()
+        _lc_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=meta_run_id,
+            on_result=_persist_narrative_result,
+            bridge=shared_bridge,
+        )
+        _lc_spawned = True
+
+    # Fallback: if pump never resolves metadata run_id (e.g. stream failure),
+    # spawn with the original run_id after a short delay.
+    async def _lc_fallback() -> None:
+        nonlocal _lc_spawned, _lc_task
+        await asyncio.sleep(3)
+        if not _lc_spawned:
+            _lc_task = _spawn_lifecycle_consumer(
+                task_id=task_id,
+                family_id=family_id,
+                run_id=run_id,
+                on_result=_persist_narrative_result,
+                bridge=shared_bridge,
+            )
+            _lc_spawned = True
+
+    asyncio.create_task(_lc_fallback())
+
+    # Spawn background task: consume agent HTTP SSE → publish to shared bridge.
+    # This is the SINGLE trigger — no separate agent_client.post above.
+    asyncio.create_task(
+        _pump_agent_sse_to_bridge(
+            agent_client=agent_client,
+            agent_url=agent_url,
+            json_body={
+                "family_id": str(family_id),
+                "user_id": str(user.id),
+                "language": user.language,
+                "on_disconnect": "continue",
+                "task_id": task_id,
+                "input": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": json.dumps(context, ensure_ascii=False),
+                        }
+                    ]
+                },
+            },
+            bridge=shared_bridge,
+            run_id="",
+            task_id=task_id,
+            on_run_id=_on_lc_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
+        )
     )
 
-
+    # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
+    # Same run_id alignment issue — consume_task_stream resolves from DB when
+    # run_id is None, so pass None to let the fallback handle it.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=run_id,
+        run_id=None,  # resolved from AITask.run_id by bridge_consumer fallback
+        bridge=shared_bridge,
     )
 
     return StreamingResponse(

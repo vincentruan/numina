@@ -47,7 +47,7 @@
                   <span class="cat-tab-icon" :style="{ background: cat.color || 'var(--color-primary)' }">
                     <SvgIcon :name="getIconId(cat.icon)" class="cat-tab-svg" />
                   </span>
-                  {{ cat.name }} ({{ cat.count }})
+                  {{ getCategoryName(cat) }} ({{ cat.count }})
                 </span>
               </template>
             </van-tab>
@@ -115,12 +115,47 @@
                 />
                 <Transition name="collapse">
                   <div v-if="!collapsedGroups.has(group.key)" class="group-items">
-                    <AssetListItem
+                    <van-swipe-cell
                       v-for="asset in group.items"
                       :key="asset.id"
-                      :asset="asset"
-                      @click="$router.push(`/assets/${asset.id}`)"
-                    />
+                      :ref="setAssetSwipeRef(asset.id)"
+                      :left-width="0"
+                      :right-width="assetSwipeWidth(asset)"
+                      :style="assetSwipeStyle(asset)"
+                      class="asset-swipe"
+                      stop-propagation
+                      :disabled="!assetHasSwipe(asset)"
+                    >
+                      <AssetListItem
+                        :asset="asset"
+                        @click="$router.push(`/assets/${asset.id}`)"
+                      />
+                      <template v-if="assetHasSwipe(asset)" #right>
+                        <van-button
+                          v-if="asset.status === 'in_use'"
+                          square
+                          type="warning"
+                          class="swipe-action-btn"
+                          :text="t('asset.markIdle')"
+                          @click="onSwipeMarkIdle(asset)"
+                        />
+                        <van-button
+                          v-if="asset.status === 'idle'"
+                          square
+                          type="primary"
+                          class="swipe-action-btn"
+                          :text="t('asset.reactivate')"
+                          @click="onSwipeReactivate(asset)"
+                        />
+                        <van-button
+                          square
+                          type="danger"
+                          class="swipe-action-btn"
+                          :text="t('asset.deleteAsset')"
+                          @click="onSwipeDeleteAsset(asset)"
+                        />
+                      </template>
+                    </van-swipe-cell>
                   </div>
                 </Transition>
               </template>
@@ -327,7 +362,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showToast, showFailToast, showConfirmDialog, showSuccessToast } from 'vant'
+import type { ComponentPublicInstance } from 'vue'
 import BottomSheetConfirm from '@/components/BottomSheetConfirm.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -335,10 +371,11 @@ import { usePageLoading } from '@/composables/usePageLoading'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useExchangeRate } from '@/composables/useExchangeRate'
-import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
+import { batchArchiveAssets, batchUpdateStatus, batchExportAssets, deleteAsset, retireAsset, reactivateAsset } from '@/api/assets'
 import { updateSettings } from '@/api/auth'
 
 import { getIconId } from '@/utils/icon'
+import { getCategoryName } from '@/utils/categoryName'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
@@ -700,6 +737,74 @@ async function onMoreActionSelect(action: { value: string }) {
   }
 }
 
+// ── Swipe actions (list view) ──
+const assetSwipeRefs = new Map<string, ComponentPublicInstance<{ close: (pos?: string) => void }>>()
+function setAssetSwipeRef(id: string) {
+  return (el: unknown) => {
+    if (el) assetSwipeRefs.set(id, el as ComponentPublicInstance<{ close: (pos?: string) => void }>)
+    else assetSwipeRefs.delete(id)
+  }
+}
+function closeAssetSwipe(id: string) {
+  assetSwipeRefs.get(id)?.close('right')
+}
+
+// Only in_use and idle assets have swipe actions; sold/retired are terminal.
+function assetHasSwipe(asset: Asset): boolean {
+  return asset.status === 'in_use' || asset.status === 'idle'
+}
+function assetSwipeWidth(asset: Asset): number {
+  if (!assetHasSwipe(asset)) return 0
+  return 160 // 2 buttons × 80px
+}
+
+// CSS custom property for right container width (flex children need parent width to size correctly)
+function assetSwipeStyle(asset: Asset): Record<string, string> {
+  const w = assetSwipeWidth(asset)
+  return w > 0 ? { '--swipe-right-width': `${w}px` } : {}
+}
+
+async function onSwipeMarkIdle(asset: Asset) {
+  try {
+    await showConfirmDialog({
+      title: t('common.confirm'),
+      message: t('toast.confirmMarkIdle', { name: asset.name }),
+    })
+    await retireAsset(asset.id)
+    closeAssetSwipe(asset.id)
+    showSuccessToast(t('toast.assetMarkedIdle'))
+    await dashboardStore.fetchAll()
+  } catch {
+    // user cancelled dialog
+  }
+}
+
+async function onSwipeReactivate(asset: Asset) {
+  try {
+    await reactivateAsset(asset.id)
+    closeAssetSwipe(asset.id)
+    showSuccessToast(t('toast.assetReactivated'))
+    await dashboardStore.fetchAll()
+  } catch {
+    showFailToast(t('toast.operationFailed'))
+  }
+}
+
+async function onSwipeDeleteAsset(asset: Asset) {
+  try {
+    await showConfirmDialog({
+      title: t('common.confirm'),
+      message: t('toast.confirmDelete', { name: asset.name }),
+    })
+    await deleteAsset(asset.id)
+    closeAssetSwipe(asset.id)
+    showSuccessToast(t('toast.deleteSuccess'))
+    await dashboardStore.fetchAll()
+  } catch {
+    // user cancelled dialog
+  }
+}
+
 async function onLoadMore() {
   if (dashboardStore.assetListFinished || dashboardStore.assetListLoading) return
   loadingMore.value = true
@@ -794,6 +899,20 @@ defineExpose({
 .asset-list-panel {
   background: var(--card-bg);
 }
+
+.asset-swipe {
+  touch-action: pan-y;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Force swipe action buttons to share width equally via flexbox */
+.asset-swipe :deep(.van-swipe-cell__right) {
+  display: flex;
+  width: var(--swipe-right-width, auto);
+}
+
+@import '@/styles/swipe-actions.css';
 
 /* Toolbar Icons */
 :deep(.toolbar-slot) {

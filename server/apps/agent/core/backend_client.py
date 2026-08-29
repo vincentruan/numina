@@ -391,7 +391,7 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
     Returns:
         错误类型字符串：
         - permanent_auth: 401, 403 (认证错误，需手动恢复)
-        - permanent_account: 410 或账号删除/配额耗尽相关消息
+        - permanent_account: 402, 410 或账号删除/配额耗尽/余额不足相关消息
         - transient_rate_limit: 429 (速率限制)
         - transient_server: 500, 502, 503, 504 (服务器错误)
         - transient_timeout: timeout 异常 (error_code = 0 或特殊标识)
@@ -399,6 +399,12 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
     """
     if error_code in (401, 403):
         return "permanent_auth"
+    if error_code == 402:
+        # Payment Required — provider account has no credit / quota exhausted.
+        # Treat as permanent_account so the circuit opens immediately and
+        # cascade retry moves to the next provider without waiting for the
+        # transient failure threshold.
+        return "permanent_account"
     if error_code == 410:
         return "permanent_account"
     if error_message and any(
@@ -422,10 +428,18 @@ def classify_error_type(error_code: int, error_message: str | None = None) -> st
                 "billing limit",
                 "billing exceeded",
                 "insufficient balance",
+                "insufficient funds",
                 "usage is restricted",
                 "usage limit",
                 "usage cap",
                 "capacity exceeded",
+                "no credits",
+                "credit balance",
+                "payment required",
+                "subscription expired",
+                "subscription has expired",
+                "subscription inactive",
+                "plan limit reached",
             ]
         ):
             return "permanent_account"

@@ -124,7 +124,7 @@
         v-if="reportTaskId"
         plain
         type="danger"
-        size="mini"
+        size="small"
         :loading="reportCancelling"
         :disabled="reportCancelling"
         class="report-cancel-btn"
@@ -356,7 +356,7 @@ import InputBox from '@/components/ai-chat/InputBox.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import AiGatedCard from '@/components/ai/AiGatedCard.vue'
-import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
+import { getXiaomingDefaultPrompt, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
@@ -542,18 +542,12 @@ const scoreAriaLabel = computed(() => {
   return t('aiHub.scoreAriaLabel', { score })
 })
 
-// Generate short summary (120-200 chars) for display in the summary card
+// Generate short summary for display in the summary card (CSS line-clamp handles visual truncation)
 const renderedSummary = computed(() => {
   if (!currentReport.value?.summary) return ''
-  // Parse markdown to plain text
+  // Parse markdown to plain text — CSS -webkit-line-clamp: 2 handles visual truncation
   const raw = marked.parse(currentReport.value.summary, { async: false }) as string
-  const plainText = DOMPurify.sanitize(raw, { ALLOWED_TAGS: [] }).trim()
-  // Truncate to ~180 chars (middle of 120-200 range) at word boundary
-  const maxLength = 180
-  if (plainText.length <= maxLength) return plainText
-  const truncated = plainText.slice(0, maxLength)
-  const lastSpace = truncated.lastIndexOf(' ')
-  return (lastSpace > maxLength * 0.7 ? truncated.slice(0, lastSpace) : truncated) + '...'
+  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: [] }).trim()
 })
 
 const reportAge = computed(() => {
@@ -806,7 +800,7 @@ function handleNuminaConsult() {
           name: 'AIChat',
           query: {
             agentId,
-            q: XIAOMING_DEFAULT_PROMPT,
+            q: getXiaomingDefaultPrompt(t),
             newSession: '1',
             source: 'system_default',
             // webSearch 状态继承自 AI Hub 页面的当前选择
@@ -881,9 +875,11 @@ onActivated(async () => {
 // navigating away DEACTIVATES it rather than unmounting — no unmount hook fires.
 // Abort the frontend SSE reader but keep the backend pipeline running so the
 // user can navigate back and pick up progress via polling.
+// v3 fix: use disconnect() (not cleanup()) in onDeactivated to preserve
+// step-state so that resume() restores the timeline on re-entry.
 onDeactivated(() => {
   stream.abort(true)
-  resumeHandle.cleanup()
+  resumeHandle.disconnect()
 })
 onUnmounted(() => {
   stream.abort(true)
@@ -1184,7 +1180,7 @@ defineExpose({
   margin: 12px 16px;
   background: var(--card-bg);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--color-card-border);
   box-shadow: var(--shadow-elevated);
   cursor: pointer;
@@ -1205,7 +1201,7 @@ defineExpose({
   text-transform: uppercase;
   color: var(--text-tertiary);
   font-family: 'Georgia', monospace;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .report-summary-title svg { color: var(--text-tertiary); }
@@ -1216,7 +1212,7 @@ defineExpose({
   letter-spacing: -0.13px;
   color: var(--text-secondary);
   line-height: 1.5;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;

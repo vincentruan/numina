@@ -25,10 +25,26 @@ from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 from apps.agent.core.backend_client import BackendClient
 from packages.core import get_path_manager
 
-from .asset_report_middleware import parse_report_json, validate_report_json
 from .goal_continuation import (
     _get_shared_checkpointer_for_goal,
     _prepare_goal_continuation_input,
+)
+from .llm_json_repair import (
+    _COACH_REPAIR_PROMPT,
+    _IMPORT_PARSE_REPAIR_PROMPT,
+    _REPORT_REPAIR_PROMPT,
+    _WISH_ADVICE_REPAIR_PROMPT,
+    _repair_coach_json_via_llm,
+    _repair_import_parse_json_via_llm,
+    _repair_report_json_via_llm,
+    _repair_wish_advice_json_via_llm,
+    extract_json_via_llm,
+    parse_report_json,
+    run_json_repair_loop,
+    validate_coach_json,
+    validate_import_parse_json,
+    validate_report_json,
+    validate_wish_advice_json,
 )
 from .run_extras import (
     generate_suggestions,
@@ -58,7 +74,10 @@ _REPORT_FILENAME_RE = re.compile(r"^report_[a-zA-Z0-9_-]+\.md$")
 
 
 async def _heartbeat_loop(
-    task_id: int, family_id: str, interval: float = 40.0, stop_event: asyncio.Event | None = None
+    task_id: int,
+    family_id: str,
+    interval: float = 40.0,
+    stop_event: asyncio.Event | None = None,
 ) -> None:
     """Background heartbeat loop for dead-worker detection (U12).
 
@@ -83,7 +102,9 @@ async def _heartbeat_loop(
         except Exception as e:
             logger.warning(
                 "[heartbeat] failed task=%s family=%s err=%s",
-                task_id, family_id, e,
+                task_id,
+                family_id,
+                e,
             )
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval)
@@ -394,6 +415,31 @@ async def run_agent(
             config=config,
             stream_modes=stream_modes,
         )
+    except Exception as exc:
+        # P0 fix: propagate init/dispatch errors to the SSE consumer instead of
+        # silently hanging.  ``run_agent`` is invoked via ``asyncio.create_task``
+        # in the SSE gateway — an unhandled exception here is never observed,
+        # leaving the frontend waiting on an empty stream until its own timeout.
+        # Publish an ``error`` frame (LangGraph SSE wire format) so the frontend
+        # ``readSSEStream`` dispatches to ``onError`` and the UI can show a
+        # retry button instead of an indefinite spinner.
+        logger.error(
+            "[run_agent] dispatch failed app=%s run=%s: %s",
+            record.metadata.get("app", "numina") if record.metadata else "numina",
+            record.run_id,
+            exc,
+            exc_info=True,
+        )
+        try:
+            await run_manager.set_status(record.run_id, RunStatus.error)
+            await bridge.publish(
+                record.run_id,
+                "error",
+                {"error": str(exc) or "Agent dispatch failed"},
+            )
+            await bridge.publish(record.run_id, "end", {"status": "error"})
+        except Exception:
+            logger.exception("[run_agent] failed to publish error frame")
     finally:
         # U12: Stop the heartbeat loop and await it (best-effort).
         if heartbeat_stop is not None:
@@ -433,7 +479,10 @@ async def _set_session_title(thread_id: str, family_id: str, title_prefix: str) 
 
 
 def _persist_session_status(
-    *, thread_id: str, family_id: str, status: str,
+    *,
+    thread_id: str,
+    family_id: str,
+    status: str,
 ) -> None:
     """Best-effort write of terminal session status to ai_chat_sessions.
 
@@ -458,71 +507,15 @@ def _persist_session_status(
         # Fire-and-forget: we don't await so a slow backend doesn't block
         # the SSE end frame.  Errors are caught inside update_summary.
         import asyncio
+
         asyncio.ensure_future(repo_update)
     except Exception as e:
         logger.warning(
             "[_persist_session_status] Failed for thread %s status=%s: %s",
-            thread_id, status, e,
+            thread_id,
+            status,
+            e,
         )
-
-
-async def _repair_report_json_via_llm(
-    ai_text: str,
-    validation_errors: list[str],
-    provider: dict | None,
-) -> dict | None:
-    """Phase 4B (T13b): repair an invalid report JSON via a lightweight LLM call.
-
-    Uses the family's selected provider (``ai_provider``/``ai_model_id``/
-    ``api_key``/``ai_base_url`` keys) to issue a single follow-up completion
-    asking the LLM to re-emit a corrected indicators JSON. Returns the parsed
-    dict (via ``parse_report_json``) on success, or ``None`` if the provider is
-    unavailable or the repair still fails.
-    """
-    if not provider:
-        return None
-    try:
-        from apps.agent.core.llm import get_llm_client
-
-        llm = get_llm_client(
-            provider=provider.get("ai_provider", ""),
-            api_key=provider.get("api_key", ""),
-            model_id=provider.get("ai_model_id", ""),
-            base_url=provider.get("ai_base_url"),
-            timeout=60.0,
-        )
-        error_summary = "; ".join(validation_errors[:5])
-        repair_prompt = (
-            "你之前输出的家庭资产报告 JSON 未通过校验。\n"
-            f"校验错误：{error_summary}\n\n"
-            "请重新输出一个严格符合以下结构的 JSON（不要包含任何 markdown 代码块、"
-            "解释文字或额外内容）：\n"
-            '{"overall_score": <number>, "indicators": ['
-            '{"name": "<string>", "data": {"items": ['
-            '{"key": "<string>", "zh": "<string>", "en": "<string>", "value": <number>}'
-            "]}}]}\n\n"
-            "要求：indicators 非空；每个 indicator 必须有 data.items 非空数组；"
-            "value 必须是数字。只输出 JSON 本身。\n\n"
-            f"原始输出片段（供参考）：\n{ai_text[-4000:]}"
-        )
-        repaired_text = await llm.complete(repair_prompt, max_tokens=4000)
-        return parse_report_json(repaired_text)
-    except (ValueError, KeyError, TypeError) as exc:
-        # Parse/structural errors — retryable (LLM returned garbage)
-        logger.warning(
-            "[_repair_report_json_via_llm] parse failed: %s: %s",
-            type(exc).__name__,
-            exc,
-        )
-        return None
-    except Exception as exc:
-        # Network/auth/timeout errors — log and fail fast (P2-8 fix: differentiate)
-        logger.warning(
-            "[_repair_report_json_via_llm] repair failed: %s: %s",
-            type(exc).__name__,
-            exc,
-        )
-        return None
 
 
 async def _run_asset_report_pipeline(
@@ -621,15 +614,17 @@ async def _run_asset_report_pipeline(
         # try/except) and idempotent — calling it again on completion overwrites
         # with a fresh timestamp for accurate generation time.
         _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
-            user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+                "default", "家庭资产分析报告"
+            ),
         )
         _track_task(
-            asyncio.create_task(
-                _set_session_title(thread_id, family_id, _title)
-            )
+            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
         )
 
         await p.run_skill(user_message)
+        _report_run_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Step 3: worker-synthesized report.step2_json emission + persistence.
         # The middleware path (AssetReportStep2Middleware via get_stream_writer)
@@ -638,79 +633,85 @@ async def _run_asset_report_pipeline(
         # the plan-sanctioned fallback — emit exactly one report.step2_json
         # before the end frame (timing contract: strictly precedes end), then
         # persist. Best-effort persistence: a failure must not fail the run.
-        if p.completion_status == "complete":
+        if _report_run_ok:
             ai_text = p.ai_text
             step2_payload = parse_report_json(ai_text)
 
-            # Phase 4B (T12b): validate the parsed report JSON against the
-            # canonical schema. Invalid JSON (missing indicators, empty items)
-            # is repaired before being shipped to the frontend.
+            # Phase 4B: validate→repair cycle (shared loop in llm_json_repair.py).
+            # Validates parsed JSON, retries via LLM repair on failure (≤3 attempts, 240s).
+            # Budget is 240s (not 120s) because when parse_report_json returns None
+            # (unparseable output), the repair LLM must generate a full report JSON
+            # from scratch — this is slower than fixing a minor schema mismatch.
+            step2_payload, repair_count = await run_json_repair_loop(
+                step2_payload,
+                ai_text,
+                validator=validate_report_json,
+                repair_fn=lambda t, e: _repair_report_json_via_llm(
+                    t, e, p.selected_provider
+                ),
+                publish_retry_event=lambda attempt: bridge.publish(
+                    p.run_id,
+                    "custom",
+                    {
+                        "type": "report.repair_retry",
+                        "attempt": attempt,
+                        "max_attempts": 3,
+                    },
+                ),
+                app_name="_run_asset_report_pipeline",
+                budget_seconds=240,
+            )
+            retry_count = repair_count
             validation_errors = (
                 validate_report_json(step2_payload)
                 if step2_payload is not None
                 else ["无法解析报告 JSON"]
             )
 
-            # Phase 4B (T13b): conversation retry — on validation failure, ask
-            # the LLM (lightweight single-call) to re-emit a corrected JSON.
-            # Max 3 attempts; after that, fail the run so the frontend surfaces
-            # an error instead of a silently-broken report.
-            #
-            # P1-3 fix: total budget timeout (120s) prevents 3×60s worst-case
-            # from stalling the pipeline indefinitely. Emit a bridge event per
-            # retry attempt so the SSE connection stays alive and the frontend
-            # can show repair progress.
-            # P1-4 fix: break early when no provider is available — retrying
-            # with provider=None is guaranteed to fail.
-            retry_count = 0
-            try:
-                async with asyncio.timeout(120):
-                    while validation_errors and retry_count < 3:
-                        retry_count += 1
-                        if not p.selected_provider:
-                            logger.warning(
-                                "[_run_asset_report_pipeline] no provider available "
-                                "for repair — stopping retry run=%s",
-                                p.run_id,
-                            )
-                            break
-                        logger.warning(
-                            "[_run_asset_report_pipeline] report JSON invalid, "
-                            "retry=%d/%d errors=%s",
-                            retry_count,
-                            3,
-                            validation_errors[:3],
-                        )
-                        await bridge.publish(
-                            p.run_id,
-                            "custom",
-                            {
-                                "type": "report.repair_retry",
-                                "attempt": retry_count,
-                                "max_attempts": 3,
-                            },
-                        )
-                        repaired = await _repair_report_json_via_llm(
-                            ai_text,
-                            validation_errors,
-                            p.selected_provider,
-                        )
-                        if repaired is not None:
-                            step2_payload = repaired
-                            validation_errors = validate_report_json(repaired)
-            except TimeoutError:
-                logger.error(
-                    "[_run_asset_report_pipeline] report JSON repair timed out "
-                    "after %d attempts run=%s",
-                    retry_count,
+            if validation_errors:
+                # Phase 4B.5: Final fallback — standalone LLM extraction with
+                # response_format=json_object. This is the "send to model for
+                # alternative repair" step: the repair loop may have failed
+                # because the LLM couldn't fix the JSON in-place, so we ask
+                # a fresh LLM call to extract JSON from scratch.
+                logger.info(
+                    "[_run_asset_report_pipeline] repair loop exhausted, "
+                    "attempting final LLM extraction fallback run=%s",
                     p.run_id,
                 )
+                await bridge.publish(
+                    p.run_id,
+                    "custom",
+                    {"type": "report.repair_final_fallback", "attempt": 1},
+                )
+                fallback_payload = await extract_json_via_llm(
+                    ai_text,
+                    _REPORT_REPAIR_PROMPT,
+                    p.selected_provider,
+                )
+                if fallback_payload is not None:
+                    fallback_errors = validate_report_json(fallback_payload)
+                    if not fallback_errors:
+                        logger.info(
+                            "[_run_asset_report_pipeline] final LLM extraction "
+                            "succeeded run=%s",
+                            p.run_id,
+                        )
+                        step2_payload = fallback_payload
+                        validation_errors = []
+                    else:
+                        logger.warning(
+                            "[_run_asset_report_pipeline] final LLM extraction "
+                            "also invalid run=%s errors=%s",
+                            p.run_id,
+                            fallback_errors[:3],
+                        )
 
             if validation_errors:
-                # Still invalid after retries — fail the run (Phase 4B.5).
+                # Still invalid after all fallbacks — fail the run.
                 logger.error(
                     "[_run_asset_report_pipeline] report JSON validation failed "
-                    "after %d retries run=%s errors=%s",
+                    "after %d retries + final fallback run=%s errors=%s",
                     retry_count,
                     p.run_id,
                     validation_errors[:3],
@@ -719,6 +720,41 @@ async def _run_asset_report_pipeline(
                     "报告结构化输出校验失败",
                     error_type="ReportValidationError",
                 )
+                # Publish error event to bridge so frontend SSE receives it
+                # before the end frame (lifecycle consumer will fail the task).
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {
+                        "error": "报告结构化输出校验失败，请重试",
+                        "error_type": "ReportValidationError",
+                    },
+                )
+                # Best-effort: still persist markdown_file_path so the user
+                # can view the fallback markdown even when structured parse
+                # failed. The sandbox file may be gone by the time the user
+                # clicks "view", so copy it now.
+                markdown_file_path = _copy_asset_report_markdown(
+                    family_id=family_id,
+                    thread_id=thread_id,
+                    run_id=p.run_id,
+                    user_id=user_id,
+                    ai_text=ai_text,
+                    write_file_paths=p.captured_write_file_paths,
+                )
+                if markdown_file_path:
+                    try:
+                        client = BackendClient(family_id=family_id)
+                        await client.persist_report_result(
+                            report_json={"indicators": [], "overall_score": 0},
+                            markdown_file_path=markdown_file_path,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[_run_asset_report_pipeline] fallback persist "
+                            "failed run=%s",
+                            p.run_id,
+                        )
             elif step2_payload is not None:
                 logger.info(
                     "[_run_asset_report_pipeline] Extracted report JSON: "
@@ -771,17 +807,28 @@ async def _run_asset_report_pipeline(
                         "结构化结果保存失败，可参考上方文本",
                         error_type=type(persist_exc).__name__,
                     )
+                    # Publish error event to bridge so frontend SSE receives it
+                    # before the end frame (lifecycle consumer will fail the task).
+                    await bridge.publish(
+                        p.run_id,
+                        "error",
+                        {
+                            "error": "报告保存失败，请重试",
+                            "error_type": type(persist_exc).__name__,
+                        },
+                    )
 
-        # Set report session title (localized by user language).
-        if p.completion_status == "complete":
-            _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
-                user_language, _SESSION_TITLES_BY_LANG.get("asset-report", {}).get("default", "家庭资产分析报告")
-            )
-            _track_task(
-                asyncio.create_task(
-                    _set_session_title(thread_id, family_id, _title)
-                )
-            )
+    # Set report session title (localized by user language).
+    if _report_run_ok:
+        _title = _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("asset-report", {}).get(
+                "default", "家庭资产分析报告"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
+        )
 
 
 # Synthetic trigger for asset-report runs (plan L117: backend-initiated runs
@@ -960,11 +1007,10 @@ async def _run_import_parse_agent(
     ) as p:
         # App-specific delta: trigger construction + result extraction
         user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = (
-            _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_TRIGGERS_BY_LANG.get("import-parse", {}).get(
-                user_language, _SYNTHETIC_IMPORT_PARSE_TRIGGER
-            )
+        user_message = _extract_backend_user_message(
+            graph_input
+        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("import-parse", {}).get(
+            user_language, _SYNTHETIC_IMPORT_PARSE_TRIGGER
         )
         # Prepend language instruction for user-facing output
         if user_language:
@@ -976,22 +1022,66 @@ async def _run_import_parse_agent(
         # a proper label even if the user navigates away or the run errors.
         # _set_session_title is best-effort and idempotent.
         _ip_title = _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
-            user_language, _SESSION_TITLES_BY_LANG.get("import-parse", {}).get("default", "文件导入解析")
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
+                "default", "文件导入解析"
+            ),
         )
         _track_task(
-            asyncio.create_task(
-                _set_session_title(thread_id, family_id, _ip_title)
-            )
+            asyncio.create_task(_set_session_title(thread_id, family_id, _ip_title))
         )
         await p.run_skill(user_message)
+        _import_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Worker-synthesized import-parse.result emission (mirrors asset-report
         # step-3 worker synthesis — middleware get_stream_writer() path is no-op
         # on numina's sync stream() path). Emit exactly one import-parse.result
         # before the end frame (timing contract: strictly precedes end).
-        if p.completion_status == "complete":
+        if _import_ok:
             parsed = parse_report_json(p.ai_text)
-            if parsed is not None:
+
+            # Validate→repair cycle (shared loop)
+            parsed, repair_count = await run_json_repair_loop(
+                parsed,
+                p.ai_text,
+                validator=validate_import_parse_json,
+                repair_fn=lambda t, e: _repair_import_parse_json_via_llm(
+                    t, e, p.selected_provider
+                ),
+                publish_retry_event=lambda attempt: bridge.publish(
+                    p.run_id,
+                    "custom",
+                    {
+                        "type": "import-parse.repair_retry",
+                        "attempt": attempt,
+                        "max_attempts": 3,
+                    },
+                ),
+                app_name="_run_import_parse_agent",
+            )
+
+            # Final fallback: standalone LLM extraction
+            if parsed is not None and validate_import_parse_json(parsed):
+                fallback = await extract_json_via_llm(
+                    p.ai_text, _IMPORT_PARSE_REPAIR_PROMPT, p.selected_provider,
+                )
+                if fallback is not None and not validate_import_parse_json(fallback):
+                    parsed = fallback
+
+            if parsed is not None and not validate_import_parse_json(parsed):
+                logger.error(
+                    "[_run_import_parse_agent] import-parse JSON validation failed "
+                    "after %d retries + fallback run=%s errors=%s",
+                    repair_count,
+                    p.run_id,
+                    validate_import_parse_json(parsed)[:3],
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "文档解析结果格式异常，请重试"},
+                )
+            elif parsed is not None:
                 await bridge.publish(
                     p.run_id,
                     "custom",
@@ -1000,16 +1090,28 @@ async def _run_import_parse_agent(
                         "payload": parsed,
                     },
                 )
+            else:
+                logger.warning(
+                    "[_run_import_parse_agent] JSON parse failed run=%s ai_text_len=%d",
+                    p.run_id,
+                    len(p.ai_text) if p.ai_text else 0,
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "文档解析失败，请重试"},
+                )
 
     # Set import-parse session title (localized by user language)
-    if p.completion_status == "complete":
+    if _import_ok:
         _title = _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
-            user_language, _SESSION_TITLES_BY_LANG.get("import-parse", {}).get("default", "文件导入解析")
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("import-parse", {}).get(
+                "default", "文件导入解析"
+            ),
         )
         _track_task(
-            asyncio.create_task(
-                _set_session_title(thread_id, family_id, _title)
-            )
+            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
         )
 
 
@@ -1063,11 +1165,10 @@ async def _run_finance_coach_agent(
     ) as p:
         # App-specific delta: trigger construction + result extraction
         user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = (
-            _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_TRIGGERS_BY_LANG.get("finance-coach", {}).get(
-                user_language, _SYNTHETIC_FINANCE_COACH_TRIGGER
-            )
+        user_message = _extract_backend_user_message(
+            graph_input
+        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("finance-coach", {}).get(
+            user_language, _SYNTHETIC_FINANCE_COACH_TRIGGER
         )
         # Prepend language instruction for user-facing output
         if user_language:
@@ -1076,25 +1177,97 @@ async def _run_finance_coach_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
+        _coach_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Worker-synthesized finance_coach.result emission (mirrors import-parse
         # worker synthesis). Emit exactly one finance_coach.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
-        if p.completion_status == "complete":
+        #
+        # Validate → repair cycle (shared loop in llm_json_repair.py): the LLM may
+        # output a valid JSON with wrong field names (e.g. priority/category/
+        # action_steps instead of severity/target_type/cta_label). Without
+        # validation the frontend silently drops all suggestions.
+        if _coach_ok:
             parsed = parse_report_json(p.ai_text)
-            if parsed is not None:
-                # Advice baseline (spec §7.1): the worker emits the raw parsed
-                # suggestions. Schema-validation gate (suggested_amount >= 0,
-                # required fields) runs in Plan B's D2/W4 UI before any enable;
-                # a malformed payload is dropped there, not here (the worker is
-                # transport, not policy).
-                await bridge.publish(
+
+            # Validate→repair via shared loop
+            parsed, repair_count = await run_json_repair_loop(
+                parsed,
+                p.ai_text,
+                validator=validate_coach_json,
+                repair_fn=lambda t, e: _repair_coach_json_via_llm(
+                    t, e, p.selected_provider
+                ),
+                publish_retry_event=lambda attempt: bridge.publish(
                     p.run_id,
                     "custom",
                     {
-                        "type": "finance_coach.result",
-                        "payload": parsed,
+                        "type": "coach.repair_retry",
+                        "attempt": attempt,
+                        "max_attempts": 3,
                     },
+                ),
+                app_name="_run_finance_coach_agent",
+            )
+
+            if parsed is not None:
+                validation_errors = validate_coach_json(parsed)
+                if validation_errors:
+                    # Final fallback: standalone LLM extraction
+                    logger.info(
+                        "[_run_finance_coach_agent] repair loop exhausted, "
+                        "attempting final LLM extraction fallback run=%s",
+                        p.run_id,
+                    )
+                    fallback = await extract_json_via_llm(
+                        p.ai_text, _COACH_REPAIR_PROMPT, p.selected_provider,
+                    )
+                    if fallback is not None and not validate_coach_json(fallback):
+                        parsed = fallback
+                        validation_errors = []
+                    else:
+                        logger.error(
+                        "[_run_finance_coach_agent] coach JSON validation failed after %d retries run=%s errors=%s",
+                        repair_count,
+                        p.run_id,
+                        validation_errors[:5],
+                    )
+                    await bridge.publish(
+                        p.run_id,
+                        "error",
+                        {"error": "财务建议格式异常，请重试"},
+                    )
+                else:
+                    logger.info(
+                        "[_run_finance_coach_agent] result emitted run=%s suggestions_count=%d repairs=%d",
+                        p.run_id,
+                        len(parsed.get("suggestions", [])),
+                        repair_count,
+                    )
+                    await bridge.publish(
+                        p.run_id,
+                        "custom",
+                        {
+                            "type": "finance_coach.result",
+                            "payload": parsed,
+                        },
+                    )
+            else:
+                # LLM output couldn't be parsed as JSON. Emit an error frame so the
+                # frontend can surface a retry instead of silently showing
+                # "No suggestions". Do NOT emit an empty finance_coach.result —
+                # the backend lifecycle consumer would persist it and overwrite
+                # a valid cached result with an empty one.
+                logger.warning(
+                    "[_run_finance_coach_agent] JSON parse failed run=%s ai_text_len=%d ai_text_preview=%s",
+                    p.run_id,
+                    len(p.ai_text) if p.ai_text else 0,
+                    (p.ai_text[:200] if p.ai_text else "")[:200],
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "财务建议生成失败，请重试"},
                 )
 
 
@@ -1143,11 +1316,10 @@ async def _run_wish_advice_agent(
     ) as p:
         # App-specific delta: trigger construction + result extraction
         user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = (
-            _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_TRIGGERS_BY_LANG.get("wish-advice", {}).get(
-                user_language, _SYNTHETIC_WISH_ADVICE_TRIGGER
-            )
+        user_message = _extract_backend_user_message(
+            graph_input
+        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("wish-advice", {}).get(
+            user_language, _SYNTHETIC_WISH_ADVICE_TRIGGER
         )
         # Prepend language instruction for user-facing output
         if user_language:
@@ -1156,25 +1328,92 @@ async def _run_wish_advice_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message)
+        _wish_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
         # Worker-synthesized wish_advice.result emission (mirrors finance-coach
         # worker synthesis). Emit exactly one wish_advice.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
-        if p.completion_status == "complete":
+        #
+        # Validate → repair cycle (shared loop in llm_json_repair.py): validates
+        # the wish-advice schema before emitting. On failure, retries via LLM
+        # repair. On persistent failure, emits an error frame instead of silently
+        # dropping the malformed payload.
+        if _wish_ok:
             parsed = parse_report_json(p.ai_text)
-            if parsed is not None:
-                # Advice baseline (spec §7.1): the worker emits the raw parsed
-                # advice. Schema-validation gate (suggested_amount >= 0, required
-                # fields) runs in Plan B's W4 UI (WishAdviceCard.validateAdvice)
-                # + backend validate_advice before any enable; a malformed payload
-                # is dropped there, not here (the worker is transport, not policy).
-                await bridge.publish(
+
+            # Validate→repair via shared loop
+            parsed, repair_count = await run_json_repair_loop(
+                parsed,
+                p.ai_text,
+                validator=validate_wish_advice_json,
+                repair_fn=lambda t, e: _repair_wish_advice_json_via_llm(
+                    t, e, p.selected_provider
+                ),
+                publish_retry_event=lambda attempt: bridge.publish(
                     p.run_id,
                     "custom",
                     {
-                        "type": "wish_advice.result",
-                        "payload": parsed,
+                        "type": "wish.repair_retry",
+                        "attempt": attempt,
+                        "max_attempts": 3,
                     },
+                ),
+                app_name="_run_wish_advice_agent",
+            )
+
+            if parsed is not None:
+                validation_errors = validate_wish_advice_json(parsed)
+                if validation_errors:
+                    # Final fallback: standalone LLM extraction
+                    logger.info(
+                        "[_run_wish_advice_agent] repair loop exhausted, "
+                        "attempting final LLM extraction fallback run=%s",
+                        p.run_id,
+                    )
+                    fallback = await extract_json_via_llm(
+                        p.ai_text, _WISH_ADVICE_REPAIR_PROMPT, p.selected_provider,
+                    )
+                    if fallback is not None and not validate_wish_advice_json(fallback):
+                        parsed = fallback
+                        validation_errors = []
+                    else:
+                        logger.error(
+                        "[_run_wish_advice_agent] wish-advice JSON validation failed after %d retries run=%s errors=%s",
+                        repair_count,
+                        p.run_id,
+                        validation_errors[:5],
+                    )
+                    await bridge.publish(
+                        p.run_id,
+                        "error",
+                        {"error": "心愿储蓄建议格式异常，请重试"},
+                    )
+                else:
+                    logger.info(
+                        "[_run_wish_advice_agent] result emitted run=%s redistribution_count=%d repairs=%d",
+                        p.run_id,
+                        len(parsed.get("redistribution", [])),
+                        repair_count,
+                    )
+                    await bridge.publish(
+                        p.run_id,
+                        "custom",
+                        {
+                            "type": "wish_advice.result",
+                            "payload": parsed,
+                        },
+                    )
+            else:
+                # LLM output couldn't be parsed as JSON.
+                logger.warning(
+                    "[_run_wish_advice_agent] JSON parse failed run=%s ai_text_len=%d",
+                    p.run_id,
+                    len(p.ai_text) if p.ai_text else 0,
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "心愿储蓄建议生成失败，请重试"},
                 )
 
 
@@ -1220,11 +1459,10 @@ async def _run_dashboard_narrative_agent(
         mcp_servers=[],  # allowed-tools: [] — pure inference
     ) as p:
         user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = (
-            _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_TRIGGERS_BY_LANG.get("dashboard-narrative", {}).get(
-                user_language, _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER
-            )
+        user_message = _extract_backend_user_message(
+            graph_input
+        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("dashboard-narrative", {}).get(
+            user_language, _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER
         )
         # Prepend language instruction for user-facing output
         if user_language:
@@ -1233,9 +1471,11 @@ async def _run_dashboard_narrative_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message, enable_reasoning_delta=True)
+        _narrative_ok = True  # run_skill succeeded
 
-        # Emit dashboard_narrative.result custom event (with thinking)
-        if p.completion_status == "complete":
+        # Emit BEFORE __aexit__ publishes the "end" frame (run_pipeline.py:474),
+        # so the lifecycle consumer sees result before the end sentinel.
+        if _narrative_ok:
             narrative_text = p.ai_text.strip()
             if narrative_text:
                 await bridge.publish(
@@ -1248,6 +1488,11 @@ async def _run_dashboard_narrative_agent(
                             "thinking": p.thinking_text,
                         },
                     },
+                )
+                logger.info(
+                    "[dashboard-narrative] result emitted run=%s narrative_len=%d",
+                    p.run_id,
+                    len(narrative_text),
                 )
 
 
@@ -1301,6 +1546,13 @@ async def _run_numina_agent(
     call_plan_mode = bool(configurable.get("is_plan_mode", False))
     call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
     call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
+    # Retry checkpoint forking: when the frontend passes checkpoint_id
+    # (from retryPrepare), fork from that checkpoint instead of the head.
+    call_checkpoint_id = (
+        configurable.get("checkpoint_id")
+        if isinstance(configurable.get("checkpoint_id"), str)
+        else None
+    )
 
     # Web-search behavioral guidance lives in the skill files:
     # chat-search/SKILL.md ("联网搜索使用原则") and chat/SKILL.md ("不要尝试联网搜索").
@@ -1363,6 +1615,7 @@ async def _run_numina_agent(
         skip_active_skill=is_slash_message,
         middlewares=None,
         preloaded_ai_config=ai_config,
+        checkpoint_id=call_checkpoint_id,
     ) as p:
         # For slash-activated skills (U2), set the skill context manually
         # after the pipeline's __aenter__ (which skipped set_active_skill).
@@ -1480,7 +1733,22 @@ async def _run_numina_agent(
         _persist_session_status(
             thread_id=thread_id,
             family_id=family_id,
-            status=record.status.value if hasattr(record.status, "value") else str(record.status),
+            status=record.status.value
+            if hasattr(record.status, "value")
+            else str(record.status),
+        )
+
+        # 6. Emit chat.completed custom event for backend lifecycle tracking.
+        # When the frontend SSE proxy breaks (user navigates away), the backend
+        # spawns a _spawn_lifecycle_consumer that subscribes to the bridge
+        # independently. This custom event signals successful completion so the
+        # lifecycle consumer can call the on_result callback (if any). The
+        # END_SENTINEL (published by RunPipeline.__aexit__) signals the stream
+        # end, which triggers complete_task() in the lifecycle consumer.
+        await bridge.publish(
+            p.run_id,
+            "custom",
+            {"type": "chat.completed", "thread_id": thread_id},
         )
 
 
@@ -1537,11 +1805,10 @@ async def _run_literacy_weekly_report_agent(
         timeout_seconds=120,
     ) as p:
         user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = (
-            _extract_backend_user_message(graph_input)
-            or _SYNTHETIC_TRIGGERS_BY_LANG.get("literacy-weekly-report", {}).get(
-                user_language, _SYNTHETIC_LITERACY_REPORT_TRIGGER
-            )
+        user_message = _extract_backend_user_message(
+            graph_input
+        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("literacy-weekly-report", {}).get(
+            user_language, _SYNTHETIC_LITERACY_REPORT_TRIGGER
         )
         # Prepend language instruction for user-facing output
         if user_language:
@@ -1550,9 +1817,12 @@ async def _run_literacy_weekly_report_agent(
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
         await p.run_skill(user_message, enable_reasoning_delta=True)
+        _lit_ok = True
 
-        # Emit literacy_weekly_report.result custom event (with thinking)
-        if p.completion_status == "complete":
+        # Emit literacy_weekly_report.result custom event (with thinking).
+        # p.completion_status is only set to "complete" in __aexit__ (line 453),
+        # so we use _lit_ok set after run_skill succeeds inside the block.
+        if _lit_ok:
             report_text = p.ai_text.strip()
             if report_text:
                 await bridge.publish(
@@ -1569,7 +1839,10 @@ async def _run_literacy_weekly_report_agent(
 
             # Set literacy weekly report session title (localized by user language).
             _lit_title = _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get(
-                user_language, _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get("default", "启蒙周报")
+                user_language,
+                _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get(
+                    "default", "启蒙周报"
+                ),
             )
             _track_task(
                 asyncio.create_task(

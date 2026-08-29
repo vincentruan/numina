@@ -7,9 +7,7 @@
 
 import asyncio
 import contextlib
-import json
 import logging
-from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
@@ -32,7 +30,12 @@ from apps.backend.app.services.ai_result_parser import (
     _validate_json,
 )
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.bridge_consumer import consume_task_stream
+from apps.backend.app.services.bridge_consumer import (
+    _pump_agent_sse_to_bridge,
+    _spawn_lifecycle_consumer,
+    consume_task_stream,
+    get_shared_bridge,
+)
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.finance_coach_cache import SKILL_TTL
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
@@ -88,139 +91,6 @@ def get_report(
         "report": report.report_json,
         "generated_at": ensure_utc(report.generated_at).isoformat(),
     }
-
-
-async def _stream_asset_report_sse(
-    *,
-    family_id: int,
-    user_id: str,
-    thread_id: str,
-    task_id: str,
-    language: str | None = None,
-) -> AsyncGenerator[bytes, None]:
-    """Proxy the agent's asset-report SSE stream to the frontend (U4 step 5).
-
-    Calls the agent's internal ``/internal/gateway/runs/asset-report/{thread_id}``
-    endpoint via ``AgentClient`` (which injects ``X-Agent-Token`` for service-
-    to-service auth) and forwards the raw SSE bytes. The agent worker
-    (``_run_asset_report_pipeline``) emits the 3-step execution frames +
-    ``report.step2_json`` custom event; this helper is a pure passthrough.
-
-    On agent error/non-200, yields a single SSE error frame so the frontend
-    receives a graceful close rather than a truncated stream.
-    """
-    agent_client = AgentClient(family_id, user_id, timeout=300.0)
-    agent_url = f"/internal/gateway/runs/asset-report/{thread_id}"
-    try:
-        async with agent_client.stream(
-            "POST",
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": str(user_id),
-                "language": language,
-                # Background generation: keep the agent pipeline running even if
-                # the user navigates away and the SSE connection drops. The
-                # AITask record remains the source of truth for completion.
-                "on_disconnect": "continue",
-            },
-        ) as resp:
-            if resp.status_code != 200:
-                body = await resp.aread()
-                logger.warning(
-                    "[asset-report] agent stream non-200: status=%s body=%s task=%s",
-                    resp.status_code,
-                    body[:200],
-                    task_id,
-                )
-                err = json.dumps(
-                    {"message": "报告生成服务异常", "name": "AgentError"}
-                ).encode()
-                yield f"event: error\ndata: {err.decode()}\n\n".encode()
-                return
-            async for line in resp.aiter_lines():
-                # Forward each raw line; aiter_lines strips the trailing newline,
-                # so re-add it. Blank lines separate SSE events.
-                yield (line + "\n").encode()
-    except Exception as exc:
-        logger.warning(
-            "[asset-report] agent stream failed task=%s err=%s", task_id, exc
-        )
-        err = json.dumps(
-            {"message": "报告生成服务中断", "name": type(exc).__name__}
-        ).encode()
-        yield f"event: error\ndata: {err.decode()}\n\n".encode()
-
-
-async def _watch_report_task_completion(
-    *, task_id: str, family_id: int
-) -> None:
-    """Background watcher for report task completion after client disconnect.
-
-    When the SSE client disconnects while the agent pipeline is still running
-    (``on_disconnect=continue``), the ``_task_tracking_stream`` finally block
-    can no longer see the pipeline's end frame. This watcher polls the
-    ``ai_reports`` table for up to 5 minutes, looking for a row matching this
-    family. When the pipeline persists its report, the watcher completes the
-    AITask so the frontend can discover it on revisit.
-
-    If the report never appears (pipeline failed without persisting), the task
-    is marked failed after the timeout.
-    """
-    POLL_INTERVAL = 15  # seconds between checks
-    MAX_WAIT = 300  # 5 minutes max
-
-    try:
-        for _ in range(MAX_WAIT // POLL_INTERVAL):
-            await asyncio.sleep(POLL_INTERVAL)
-
-            from apps.backend.app.database import SessionLocal
-            from apps.backend.app.models.ai_report import AIReport
-
-            db = SessionLocal()
-            try:
-                # Check if the report was persisted by the pipeline
-                report_exists = (
-                    db.query(AIReport)
-                    .filter(AIReport.family_id == int(family_id))
-                    .first()
-                    is not None
-                )
-                if report_exists:
-                    AITaskService.complete_task(task_id, db)
-                    logger.info(
-                        "[report-watcher] task %s completed (report found)", task_id
-                    )
-                    return
-
-                # Check if the task is still running
-                task = AITaskService.get_task_by_id(task_id, family_id, db)
-                if task and task.status == "completed":
-                    return  # Already completed by another path
-                if task and task.status not in ("running", "post_processing", "queued"):
-                    return  # Terminal state reached by another path
-            finally:
-                db.close()
-
-        # Timeout — pipeline didn't produce a report within the window
-        from apps.backend.app.database import SessionLocal
-
-        db = SessionLocal()
-        try:
-            AITaskService.fail_task(
-                task_id, "report generation timed out after client disconnect", db
-            )
-            logger.warning(
-                "[report-watcher] task %s timed out (no report after %ds)",
-                task_id,
-                MAX_WAIT,
-            )
-        finally:
-            db.close()
-    except Exception as exc:
-        logger.warning(
-            "[report-watcher] watcher failed task=%s err=%s", task_id, exc
-        )
 
 
 @router.post("/generate/events")
@@ -292,11 +162,21 @@ async def trigger_generate_events(
                     current_user.family_id,
                 )
 
-    # Check if there's already a running task - resume it instead of 409
+    # Check if there's already a running task.
     existing = AITaskService.get_running_task(current_user.family_id, "report", db)
-    if existing:
+    if existing and not force:
         # 已有运行中任务 — 直接接续，不重复创建
         task = existing
+        # Clear stale run_id so that bridge_consumer's DB lookup sees NULL
+        # and retries until the pump's _on_run_id callback sets the fresh
+        # value.  Without this, consume_task_stream (which starts after a
+        # brief wait) may read the old task's run_id from a previous agent
+        # run, subscribe to the bridge with that stale key, and immediately
+        # replay old events → the frontend sees "completed" with the
+        # previous report's data.
+        if task.run_id:
+            task.run_id = None
+            db.commit()
         session_id = str(task.session_id) if task.session_id else str(task.id)
         session = (
             db.query(AIChatSession)
@@ -306,6 +186,13 @@ async def trigger_generate_events(
         if not session:
             raise AppError(ErrorCode.NOT_FOUND)
     else:
+        # force=true: cancel zombie running task so a fresh generation starts.
+        if existing and force:
+            logger.info(
+                "[trigger_generate_events] force=true, cancelling zombie task=%s",
+                existing.id,
+            )
+            AITaskService.cancel_task(current_user.family_id, "report", db)
         # No running task - create new session and task
         session = await ChatSessionService.create_session(
             family_id=current_user.family_id,
@@ -313,7 +200,7 @@ async def trigger_generate_events(
             db=db,
         )
         any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-        if any_running:
+        if any_running and not force:
             task = AITaskService.create_queued_task(
                 family_id=current_user.family_id,
                 skill_id="report",
@@ -324,7 +211,7 @@ async def trigger_generate_events(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": task.id,
+                    "task_id": str(task.id),
                     "queue_position": task.queue_position,
                 },
             )
@@ -340,86 +227,106 @@ async def trigger_generate_events(
     family_id = current_user.family_id
     user_id = str(current_user.id)
 
-    # U5: Trigger agent via HTTP, then subscribe to Redis stream via bridge_consumer
-    # The agent writes events to Redis stream; backend consumes via bridge_consumer
-    # This enables cross-process reconnection and removes direct HTTP proxy dependency
+    # Phase 1: Backend-owned buffer (single streaming POST — no double trigger).
+    # The agent is triggered once via streaming POST; _pump_agent_sse_to_bridge
+    # consumes its SSE response and publishes to the shared bridge.
+    # The on_run_id callback spawns the lifecycle consumer as soon as the
+    # agent's Content-Location header is available (before body is consumed).
     agent_client = AgentClient(family_id, user_id, timeout=300.0)
     agent_url = f"/internal/gateway/runs/asset-report/{session_id}"
-    run_id: str | None = None
+    shared_bridge = get_shared_bridge()
+    agent_trigger_body = {
+        "family_id": str(family_id),
+        "user_id": str(user_id),
+        "language": current_user.language,
+        "on_disconnect": "continue",
+    }
 
-    # P0 Fix: Use non-streaming POST to trigger the agent task
-    # We're not reading the response body (just triggering), so use post() not stream()
-    # This prevents the connection from closing immediately and triggering disconnect_watcher
+    # Track lifecycle consumer spawn state.
+    # ``lifecycle_spawned``: whether the lifecycle consumer has been spawned.
+    # ``lifecycle_task``: the spawned task (for cancellation if run_id changes).
+    # ``cl_bare_run_id``: Content-Location run_id (for fallback if metadata never arrives).
+    lifecycle_spawned = asyncio.Event()
+    lifecycle_task: asyncio.Task[None] | None = None
+    cl_bare_run_id: str | None = None
+
+    def _on_run_id(cl_url: str) -> None:
+        """Called when Content-Location header arrives. Persist to DB only."""
+        nonlocal cl_bare_run_id
+        # Content-Location is a URL path like
+        # /internal/gateway/runs/asset-report/{thread_id}/{run_id}.
+        # Extract the trailing UUID.
+        cl_bare_run_id = cl_url.rstrip("/").rsplit("/", 1)[-1]
+        AITaskService.extract_and_attach_run_id(
+            task_id, cl_url, family_id
+        )
+
+    def _on_authoritative_run_id(meta_run_id: str) -> None:
+        """Called when metadata event arrives with the authoritative run_id.
+
+        The metadata run_id may differ from Content-Location when the agent's
+        interrupt strategy fires a second run. Spawn the lifecycle consumer
+        with this run_id so it subscribes to the correct stream.
+        """
+        nonlocal lifecycle_task
+        # Update DB with the authoritative run_id.
+        AITaskService.extract_and_attach_run_id(
+            task_id, meta_run_id, family_id
+        )
+        # Cancel old lifecycle consumer (if spawned with wrong run_id).
+        if lifecycle_task is not None and not lifecycle_task.done():
+            lifecycle_task.cancel()
+        lifecycle_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=meta_run_id,
+            bridge=shared_bridge,
+        )
+        lifecycle_spawned.set()
+
+    # Spawn background pump: one streaming POST → shared bridge.
+    # (Keep a reference so the task is not garbage-collected mid-flight.)
+    _pump_task = asyncio.create_task(
+        _pump_agent_sse_to_bridge(
+            agent_client=agent_client,
+            agent_url=agent_url,
+            json_body=agent_trigger_body,
+            bridge=shared_bridge,
+            run_id="",  # resolved from Content-Location inside the pump
+            task_id=task_id,
+            on_run_id=_on_run_id,
+            on_authoritative_run_id=_on_authoritative_run_id,
+        )
+    )
+
+    # Wait for pump to resolve run_id (either Content-Location or metadata).
+    # Give the pump up to 3 seconds — metadata may arrive slightly later than
+    # Content-Location. If neither arrives, fall back to run_id=None.
     try:
-        resp = await agent_client.post(
-            agent_url,
-            json={
-                "family_id": str(family_id),
-                "user_id": str(user_id),
-                "language": current_user.language,
-                "on_disconnect": "continue",
-            },
-        )
-        if resp.status_code != 200:
-            logger.warning(
-                "[asset-report] agent trigger failed: status=%s body=%s task=%s",
-                resp.status_code,
-                resp.text[:200],
-                task_id,
-            )
-            # Mark task failed so frontend does not poll forever on a dead task
-            from apps.backend.app.database import SessionLocal
-
-            _db = SessionLocal()
-            try:
-                AITaskService.fail_task(task_id, "报告生成服务异常", _db)
-            finally:
-                _db.close()
-            err = json.dumps(
-                {"message": "报告生成服务异常", "name": "AgentError"}
-            ).encode()
-            return StreamingResponse(
-                iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-                media_type="text/event-stream",
-            )
-
-        # Extract agent run_id from Content-Location header and persist to AITask
-        run_id = AITaskService.extract_and_attach_run_id(
-            task_id, resp.headers.get("Content-Location"), family_id
-        )
-    except Exception as exc:
+        await asyncio.wait_for(lifecycle_spawned.wait(), timeout=3.0)
+    except TimeoutError:
         logger.warning(
-            "[asset-report] agent trigger failed task=%s err=%s", task_id, exc
-        )
-        # Mark task failed so frontend does not poll forever on a dead task
-        from apps.backend.app.database import SessionLocal
-
-        _db = SessionLocal()
-        try:
-            AITaskService.fail_task(task_id, f"报告生成服务中断: {type(exc).__name__}", _db)
-        finally:
-            _db.close()
-        err = json.dumps(
-            {"message": "报告生成服务中断", "name": type(exc).__name__}
-        ).encode()
-        return StreamingResponse(
-            iter([f"event: error\ndata: {err.decode()}\n\n".encode()]),
-            media_type="text/event-stream",
+            "[asset-report] pump did not resolve authoritative run_id within 3s, using fallback task=%s",
+            task_id,
         )
 
-    # U5: Subscribe to Redis stream via bridge_consumer (replaces HTTP proxy)
-    # bridge_consumer handles:
-    # - Last-Event-ID reconnection
-    # - StreamGap detection and recovery
-    # - Heartbeat sentinels
-    # - Task status updates (complete/fail on end/error)
-    # U6: Extract Last-Event-ID from request headers for reconnection
+    if not lifecycle_spawned.is_set():
+        # Fallback: spawn with Content-Location run_id (if available) or None.
+        lifecycle_task = _spawn_lifecycle_consumer(
+            task_id=task_id,
+            family_id=family_id,
+            run_id=cl_bare_run_id,
+            bridge=shared_bridge,
+        )
+
+    # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=run_id,
+        run_id=None,  # resolved from AITask table by bridge_consumer
+        bridge=shared_bridge,
     )
 
     return StreamingResponse(

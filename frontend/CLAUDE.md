@@ -50,6 +50,7 @@ components/ (reusable UI, no direct api calls)
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`
 - **Vant auto-import** — 不手动 import Vant 组件，仅 import functional API (`showToast`, `showDialog`)
 - **i18n required** — every user-facing string must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings in `.vue` or `.ts` — not even in template ternaries.
+- **雪花 ID 字段必须 `string`** — 后端 `SnowflakeBase` 在 JSON 层把 `id` / `*_id` 序列化为字符串。前端 TypeScript 类型必须对齐：凡字段名为 `id` 或 `*_id` 结尾，类型一律 `string`，禁止 `number`。新增 API 类型时对照此规则检查。
 - **Toast 使用 Vant 内置图标** — 根据场景选择正确的 toast 函数：
   - ✅ 成功操作 → `showSuccessToast(message)` (自带成功图标)
   - ❌ 失败/错误 → `showFailToast(message)` (自带失败图标)

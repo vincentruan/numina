@@ -1,4 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
+import { readSSEStream } from '@/utils/sseReader'
 import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse } from '@/types'
 
 export interface ExpiringSoonItem {
@@ -234,9 +235,13 @@ export interface NarrativeBlockReason {
 export interface NarrativeStreamCallbacks {
   onReasoningDelta: (content: string) => void
   onNarrativeDelta: (content: string) => void
-  onDone: (result: { narrative: string; thinking: string }) => void
+  onDone: (result: { narrative: string; thinking: string; generatedAt?: string }) => void
   onBlocked: (info: NarrativeBlockReason) => void
   onError: (message: string) => void
+  /** Called when the SSE stream emits the initial task_id metadata event. */
+  onTaskId?: (taskId: string) => void
+  /** Called when the backend returns 202 (task queued behind another running task). */
+  onQueued?: (info: { taskId: string; queuePosition: number }) => void
 }
 
 export interface NarrativeStreamHandle {
@@ -255,20 +260,48 @@ export interface NarrativeStreamHandle {
  */
 export async function streamNarrative(
   callbacks: NarrativeStreamCallbacks,
+  force = false,
 ): Promise<NarrativeStreamHandle> {
   const controller = new AbortController()
 
-  // fire-and-forget: kick off the stream, return handle immediately
-  void runNarrativeStream(controller, callbacks)
+  // Resolve the returned promise when the initial backend response is received
+  // (cache-hit JSON, threshold-blocked JSON, 202-queued, or SSE stream started).
+  // This lets callers await the initial response before deciding next steps
+  // (e.g. whether to call resume() as a fallback).
+  let _initResolve: (() => void) | null = null
+  const initPromise = new Promise<void>((resolve) => { _initResolve = resolve })
+  const resolveInit = () => {
+    if (_initResolve) { const r = _initResolve; _initResolve = null; r() }
+  }
 
+  // Wrap callbacks to resolve initPromise on first response event
+  const wrappedCallbacks: NarrativeStreamCallbacks = {
+    ...callbacks,
+    onTaskId: (taskId) => { callbacks.onTaskId?.(taskId); resolveInit() },
+    onQueued: (info) => { callbacks.onQueued?.(info); resolveInit() },
+    onDone: (result) => { callbacks.onDone(result); resolveInit() },
+    onBlocked: (info) => { callbacks.onBlocked(info); resolveInit() },
+    onError: (message) => {
+      // Only resolve if no taskId yet (POST itself failed, not SSE failure)
+      callbacks.onError(message)
+      resolveInit()
+    },
+  }
+
+  // fire-and-forget: kick off the stream, return handle immediately
+  void runNarrativeStream(controller, wrappedCallbacks, force)
+
+  // Wait for the initial response, then return the handle
+  await initPromise
   return { abort: () => controller.abort() }
 }
 
 async function runNarrativeStream(
   controller: AbortController,
   callbacks: NarrativeStreamCallbacks,
+  force: boolean,
 ): Promise<void> {
-  const url = '/api/v1/dashboard/narrative'
+  const url = `/api/v1/dashboard/narrative${force ? '?force=true' : ''}`
   const headers: Record<string, string> = {
     Accept: 'text/event-stream',
   }
@@ -309,11 +342,20 @@ async function runNarrativeStream(
     return
   }
 
-  // JSON response: cache hit or threshold miss
+  // JSON response: cache hit, threshold miss, or 202 queued
   const contentType = res.headers.get('Content-Type') || ''
   if (contentType.includes('application/json')) {
     try {
-      const data = (await res.json()) as NarrativeResponse
+      const json = (await res.json()) as Record<string, unknown>
+      // 202 queued — another AI task is running, this one is queued
+      if (res.status === 202 && json.status === 'queued') {
+        callbacks.onQueued?.({
+          taskId: String(json.task_id ?? ''),
+          queuePosition: Number(json.queue_position ?? 0),
+        })
+        return
+      }
+      const data = json as unknown as NarrativeResponse
       if (data.reason) {
         callbacks.onBlocked({
           reason: data.reason,
@@ -324,6 +366,7 @@ async function runNarrativeStream(
         callbacks.onDone({
           narrative: data.narrative || '',
           thinking: data.thinking || '',
+          generatedAt: data.generated_at || undefined,
         })
       }
     } catch {
@@ -338,72 +381,64 @@ async function runNarrativeStream(
     return
   }
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let currentEvent = ''
   let narrativeBuffer = ''
   let thinkingBuffer = ''
+  let errored = false
 
   try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('event:')) {
-          currentEvent = line.slice(6).trim()
-          continue
-        }
-        if (!line.startsWith('data:')) continue
-        const dataStr = line.slice(5).trim()
-        if (!dataStr || dataStr === '[DONE]') {
-          currentEvent = ''
-          continue
-        }
-
-        try {
-          const parsed = JSON.parse(dataStr)
-          const event = currentEvent || 'message'
-          currentEvent = ''
-
-          if (event === 'custom' && parsed.type === 'reasoning_delta') {
-            const content = parsed.content || ''
-            thinkingBuffer += content
-            callbacks.onReasoningDelta(content)
-          } else if (event === 'messages' && parsed.type === 'ai') {
-            const content = parsed.content || ''
-            narrativeBuffer += content
-            callbacks.onNarrativeDelta(content)
-          } else if (event === 'custom' && parsed.type === 'dashboard_narrative.result') {
-            const payload = parsed.payload || {}
-            callbacks.onDone({
-              narrative: payload.narrative || narrativeBuffer,
-              thinking: payload.thinking || thinkingBuffer,
-            })
-          } else if (event === 'error') {
-            callbacks.onError(parsed.message || 'dashboard.narrative.error.generation_failed')
-            return
-          } else if (event === 'end') {
-            // stream ended without explicit result — use buffers
-            callbacks.onDone({
-              narrative: narrativeBuffer,
-              thinking: thinkingBuffer,
-            })
+    await readSSEStream(res, {
+      onMessage: (event, data) => {
+        if (errored) return
+        if (event === 'messages' && data) {
+          const msg = data as { type?: string; content?: string }
+          if (msg.type === 'ai' && msg.content) {
+            narrativeBuffer += msg.content
+            callbacks.onNarrativeDelta(msg.content)
           }
-        } catch {
-          // non-JSON data line; skip
         }
-        currentEvent = ''
-      }
-    }
-
-    // Stream ended naturally (no explicit end frame)
-    if (narrativeBuffer || thinkingBuffer) {
+      },
+      onCustom: (data) => {
+        if (errored) return
+        const custom = data as { type?: string; content?: string }
+        if (custom.type === 'reasoning_delta' && custom.content) {
+          thinkingBuffer += custom.content
+          callbacks.onReasoningDelta(custom.content)
+        } else if (custom.type === 'dashboard_narrative.result') {
+          const payload = (data as { payload?: Record<string, unknown> }).payload || {}
+          callbacks.onDone({
+            narrative: String(payload.narrative || narrativeBuffer),
+            thinking: String(payload.thinking || thinkingBuffer),
+          })
+        }
+      },
+      onMetadata: (data) => {
+        const meta = data as { task_id?: string }
+        if (meta?.task_id) {
+          callbacks.onTaskId?.(meta.task_id)
+        }
+      },
+      onError: (data) => {
+        errored = true
+        const errData = data as { error?: string; message?: string }
+        callbacks.onError(errData.error || errData.message || 'dashboard.narrative.error.generation_failed')
+      },
+      onEnd: (data) => {
+        if (errored) return
+        const endData = data as { status?: string } | undefined
+        if (endData?.status === 'error') {
+          errored = true
+          callbacks.onError('dashboard.narrative.error.generation_failed')
+        } else if (endData?.status !== 'complete' && endData?.status !== 'completed') {
+          // end frame with non-terminal status — use accumulated buffers.
+          callbacks.onDone({
+            narrative: narrativeBuffer,
+            thinking: thinkingBuffer,
+          })
+        }
+      },
+    })
+    // Stream ended naturally — deliver accumulated content if not yet done.
+    if (!errored && (narrativeBuffer || thinkingBuffer)) {
       callbacks.onDone({
         narrative: narrativeBuffer,
         thinking: thinkingBuffer,
