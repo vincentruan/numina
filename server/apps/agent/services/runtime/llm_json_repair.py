@@ -371,9 +371,31 @@ async def _llm_repair_json(
         )
         return None
     except Exception as exc:
-        logger.warning(
-            "[_llm_repair_json] repair failed: %s: %s", type(exc).__name__, exc
+        # Differentiate permanent errors (auth, billing) from transient ones.
+        # Permanent errors should not be retried — log at ERROR for visibility.
+        error_str = str(exc).lower()
+        is_permanent = any(
+            kw in error_str
+            for kw in (
+                "401", "403", "authentication", "unauthorized",
+                "invalid_api_key", "permission", "insufficient_quota",
+                "billing", "402",
+            )
         )
+        if is_permanent:
+            logger.error(
+                "[_llm_repair_json] permanent provider error (%s): %s — "
+                "check API key/billing for provider=%s",
+                type(exc).__name__,
+                exc,
+                provider.get("ai_provider", "?"),
+            )
+        else:
+            logger.warning(
+                "[_llm_repair_json] repair failed: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
         return None
 
 
@@ -524,72 +546,6 @@ async def _repair_import_parse_json_via_llm(
 
 
 # ---------------------------------------------------------------------------
-# Suggestions repair
-# ---------------------------------------------------------------------------
-
-_SUGGESTIONS_REPAIR_PROMPT = (
-    "The suggestions JSON you previously output failed validation.\n"
-    "Please re-output a valid JSON array of exactly 3 short strings "
-    "(do NOT include any markdown code blocks, explanations, or "
-    "extra content):\n"
-    '["<suggestion 1, under 15 words>", '
-    '"<suggestion 2, under 15 words>", '
-    '"<suggestion 3, under 15 words>"]\n\n'
-    "Requirements:\n"
-    "- Must be a JSON array with exactly 3 items\n"
-    "- Each item must be a non-empty string under 80 characters\n"
-    "- Output ONLY the JSON array itself."
-)
-
-
-async def _repair_suggestions_via_llm(
-    ai_text: str,
-    validation_errors: list[str],
-    provider: dict | None,
-) -> dict | list | None:
-    """Repair invalid suggestions JSON via LLM.
-
-    Returns a list (not dict) since suggestions is a JSON array.
-    The caller should handle the list return type.
-    """
-    if not provider:
-        return None
-    try:
-        from apps.agent.core.llm import get_llm_client
-
-        llm = get_llm_client(
-            provider=provider.get("ai_provider", ""),
-            api_key=provider.get("api_key", ""),
-            model_id=provider.get("ai_model_id", ""),
-            base_url=provider.get("ai_base_url"),
-            timeout=30.0,
-        )
-        error_summary = "; ".join(validation_errors[:3])
-        full_prompt = (
-            f"{_SUGGESTIONS_REPAIR_PROMPT}\n"
-            f"Validation errors: {error_summary}\n\n"
-            f"Original output fragment:\n{ai_text[-2000:]}"
-        )
-        repaired_text = await llm.complete_json(full_prompt, max_tokens=500)
-        # parse_report_json handles arrays too via json_repair
-        import json_repair as jr
-
-        result = jr.repair_json(repaired_text, return_objects=True)
-        if isinstance(result, list):
-            return result
-        if isinstance(result, dict) and "suggestions" in result:
-            return result["suggestions"]
-        return None
-    except Exception as exc:
-        logger.warning(
-            "[_repair_suggestions_via_llm] failed: %s: %s",
-            type(exc).__name__,
-            exc,
-        )
-        return None
-
-
-# ---------------------------------------------------------------------------
 # Health-report repair
 # ---------------------------------------------------------------------------
 
@@ -712,7 +668,7 @@ async def extract_json_via_llm(
     repair_prompt: str,
     provider: dict | None,
     *,
-    timeout: float = 120.0,
+    timeout: float = 90.0,
     max_tokens: int = 6000,
 ) -> dict | None:
     """Last-resort JSON extraction via LLM with response_format enforcement.
@@ -730,7 +686,7 @@ async def extract_json_via_llm(
         ai_text: The full LLM output text (may contain mixed prose + JSON).
         repair_prompt: Schema-specific prompt describing the expected JSON structure.
         provider: Family's AI provider config dict.
-        timeout: LLM call timeout (default 120s — extraction from scratch is slow).
+        timeout: LLM call timeout (default 90s).
         max_tokens: Max output tokens.
 
     Returns:

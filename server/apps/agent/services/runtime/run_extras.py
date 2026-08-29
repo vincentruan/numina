@@ -385,6 +385,7 @@ def _create_lightweight_llm(
     *,
     temperature: float = 0.3,
     max_tokens: int = 60,
+    timeout: int = 30,
 ):
     """Build a lightweight chat model for short LLM calls (titles, suggestions).
 
@@ -407,6 +408,7 @@ def _create_lightweight_llm(
                 "api_key": api_key,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                "timeout": timeout,
             }
             if base_url:
                 kwargs["base_url"] = base_url
@@ -420,6 +422,7 @@ def _create_lightweight_llm(
         "api_key": api_key,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "timeout": timeout,
         # Qwen3 (and similar reasoning models) consume the entire token budget
         # on reasoning tokens, leaving content empty. Disable thinking for this
         # lightweight call - the title doesn't need chain-of-thought.

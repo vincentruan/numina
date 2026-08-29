@@ -7,6 +7,23 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
+def _is_unsupported_response_format_error(exc: Exception) -> bool:
+    """Check if an exception indicates the model doesn't support response_format.
+
+    Some OpenAI-compatible providers/models return 400 when response_format is
+    set but not supported. Detect by status code + error message patterns.
+    """
+    error_str = str(exc).lower()
+    # Check for HTTP 400 status
+    has_400 = "400" in error_str or "bad request" in error_str
+    # Check for response_format-related messages
+    has_rf_hint = any(
+        kw in error_str
+        for kw in ("response_format", "json_object", "structured output", "not supported")
+    )
+    return has_400 and has_rf_hint
+
+
 class LLMResponseError(Exception):
     """LLM 返回无效/空响应时抛出。
 
@@ -172,6 +189,8 @@ class LLMClient:
 
         For OpenAI-compatible providers: sets ``response_format={"type": "json_object"}``
         so the API guarantees valid JSON output (no markdown fences, no prose).
+        Falls back to plain ``complete()`` if the model doesn't support response_format
+        (400 error from the API).
 
         For Anthropic: no native JSON mode — adds a system hint instead.
         The caller should still use ``parse_report_json`` for tolerant parsing.
@@ -189,9 +208,22 @@ class LLMClient:
                 prompt, max_tokens, combined_system
             )
         elif self.provider in ("openai", "openai_compatible"):
-            return await self._complete_openai(
-                prompt, max_tokens, system, response_format="json_object"
-            )
+            try:
+                return await self._complete_openai(
+                    prompt, max_tokens, system, response_format="json_object"
+                )
+            except Exception as exc:
+                # Some models don't support response_format — fallback to plain
+                # completion. Caller still uses parse_report_json for tolerance.
+                if _is_unsupported_response_format_error(exc):
+                    logger.warning(
+                        "[complete_json] response_format not supported by model %s, "
+                        "falling back to plain complete: %s",
+                        self.model_id,
+                        exc,
+                    )
+                    return await self._complete_openai(prompt, max_tokens, system)
+                raise
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
