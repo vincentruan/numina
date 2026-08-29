@@ -9,7 +9,10 @@ import pytest
 from apps.agent.services.runtime.llm_json_repair import (
     run_json_repair_loop,
     validate_coach_json,
+    validate_health_report_json,
+    validate_import_parse_json,
     validate_report_json,
+    validate_suggestions,
     validate_wish_advice_json,
 )
 
@@ -467,3 +470,111 @@ class TestExtractJsonViaLlm:
                 {"ai_provider": "openai", "api_key": "k", "ai_model_id": "m"},
             )
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# New validators: import-parse, suggestions, health-report
+# ---------------------------------------------------------------------------
+
+
+class TestValidateImportParseJson:
+    """import-parse schema validation."""
+
+    def test_valid_data(self):
+        data = {
+            "source": "test doc",
+            "report_date": "2026-01-01",
+            "items": [{"name": "Stock A", "current_value": 10000}],
+        }
+        assert validate_import_parse_json(data) == []
+
+    def test_missing_source(self):
+        data = {"items": [{"name": "A"}]}
+        errors = validate_import_parse_json(data)
+        assert any("source" in e for e in errors)
+
+    def test_empty_items(self):
+        data = {"source": "doc", "items": []}
+        errors = validate_import_parse_json(data)
+        assert any("items" in e and "空" in e for e in errors)
+
+    def test_item_missing_name(self):
+        data = {"source": "doc", "items": [{"current_value": 100}]}
+        errors = validate_import_parse_json(data)
+        assert any("name" in e for e in errors)
+
+    def test_non_dict_input(self):
+        assert validate_import_parse_json(None) != []
+        assert validate_import_parse_json("str") != []
+
+
+class TestValidateSuggestions:
+    """suggestions schema validation."""
+
+    def test_valid_array(self):
+        assert validate_suggestions(["q1", "q2", "q3"]) == []
+
+    def test_wrapped_in_dict(self):
+        assert validate_suggestions({"suggestions": ["a", "b"]}) == []
+
+    def test_empty_array(self):
+        errors = validate_suggestions([])
+        assert len(errors) > 0
+
+    def test_non_string_item(self):
+        errors = validate_suggestions(["ok", 123, "ok"])
+        assert any("非空字符串" in e for e in errors)
+
+    def test_too_long_string(self):
+        errors = validate_suggestions(["ok", "x" * 81, "ok"])
+        assert any("过长" in e for e in errors)
+
+    def test_not_a_list(self):
+        assert validate_suggestions("not a list") != []
+        assert validate_suggestions(None) != []
+
+
+class TestValidateHealthReportJson:
+    """health-report schema validation."""
+
+    def _valid_data(self) -> dict:
+        section = {"score": 4, "narrative": "Analysis text", "suggestions": ["tip"]}
+        return {
+            "net_worth_health": section,
+            "allocation_analysis": section,
+            "liability_pressure": section,
+            "asset_efficiency": section,
+            "overall_score": 80,
+            "summary": "Summary text",
+        }
+
+    def test_valid_data(self):
+        assert validate_health_report_json(self._valid_data()) == []
+
+    def test_missing_section(self):
+        data = self._valid_data()
+        del data["net_worth_health"]
+        errors = validate_health_report_json(data)
+        assert any("net_worth_health" in e for e in errors)
+
+    def test_score_out_of_range(self):
+        data = self._valid_data()
+        data["net_worth_health"]["score"] = 10
+        errors = validate_health_report_json(data)
+        assert any("1-5" in e for e in errors)
+
+    def test_empty_narrative(self):
+        data = self._valid_data()
+        data["allocation_analysis"]["narrative"] = ""
+        errors = validate_health_report_json(data)
+        assert any("narrative" in e for e in errors)
+
+    def test_overall_score_out_of_range(self):
+        data = self._valid_data()
+        data["overall_score"] = 5
+        errors = validate_health_report_json(data)
+        assert any("overall_score" in e for e in errors)
+
+    def test_non_dict_input(self):
+        assert validate_health_report_json(None) != []
+        assert validate_health_report_json([]) != []

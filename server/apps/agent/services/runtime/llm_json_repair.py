@@ -46,7 +46,11 @@ __all__ = [
     "validate_report_json",
     "validate_coach_json",
     "validate_wish_advice_json",
+    "validate_import_parse_json",
+    "validate_suggestions",
+    "validate_health_report_json",
     "run_json_repair_loop",
+    "extract_json_via_llm",
 ]
 
 
@@ -218,9 +222,99 @@ def validate_wish_advice_json(data: dict | None) -> list[str]:
     return errors
 
 
-# ---------------------------------------------------------------------------
-# Generic LLM repair helper
-# ---------------------------------------------------------------------------
+def validate_import_parse_json(data: dict | None) -> list[str]:
+    """Validate import-parse JSON against the expected schema.
+
+    Schema: ``{source: string, report_date: string|null, items: [{name, ...}]}``
+    Each item must have at least a ``name`` field.
+    """
+    if not isinstance(data, dict):
+        return ["import-parse JSON 不是有效的对象"]
+
+    errors: list[str] = []
+
+    if "source" not in data:
+        errors.append("缺少必填字段 'source'")
+
+    items = data.get("items")
+    if items is not None and not isinstance(items, list):
+        errors.append("'items' 必须是数组")
+    elif isinstance(items, list):
+        if len(items) == 0:
+            errors.append("'items' 不能为空")
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                errors.append(f"items[{idx}] 不是有效对象")
+                continue
+            if not item.get("name"):
+                errors.append(f"items[{idx}] 缺少必填字段 'name'")
+            cv = item.get("current_value")
+            if cv is not None and not isinstance(cv, (int, float)):
+                errors.append(f"items[{idx}].current_value 必须是数字")
+
+    return errors
+
+
+def validate_suggestions(data: list | dict | None) -> list[str]:
+    """Validate follow-up suggestions JSON.
+
+    Expected: a JSON array of 1-3 non-empty strings, each under 80 chars.
+    """
+    if isinstance(data, dict):
+        # LLM may wrap in {"suggestions": [...]}
+        data = data.get("suggestions")
+    if not isinstance(data, list):
+        return ["suggestions 不是数组"]
+    if len(data) == 0:
+        return ["suggestions 不能为空"]
+    errors: list[str] = []
+    for idx, s in enumerate(data[:3]):
+        if not isinstance(s, str) or not s.strip():
+            errors.append(f"suggestions[{idx}] 必须是非空字符串")
+        elif len(s) > 80:
+            errors.append(f"suggestions[{idx}] 过长 ({len(s)} > 80)")
+    return errors
+
+
+def validate_health_report_json(data: dict | None) -> list[str]:
+    """Validate health-report JSON against the 4-section schema.
+
+    Schema: ``{net_worth_health, allocation_analysis, liability_pressure,
+    asset_efficiency, overall_score, summary}``
+    Each section requires ``score`` (1-5) and ``narrative`` (non-empty string).
+    """
+    if not isinstance(data, dict):
+        return ["体检报告 JSON 不是有效的对象"]
+
+    errors: list[str] = []
+    sections = (
+        "net_worth_health",
+        "allocation_analysis",
+        "liability_pressure",
+        "asset_efficiency",
+    )
+    for section in sections:
+        obj = data.get(section)
+        if not isinstance(obj, dict):
+            errors.append(f"缺少 '{section}' 对象")
+            continue
+        score = obj.get("score")
+        if score is None or not isinstance(score, (int, float)):
+            errors.append(f"{section}.score 必须是数字")
+        elif not (1 <= score <= 5):
+            errors.append(f"{section}.score 超出范围 (1-5)")
+        narrative = obj.get("narrative")
+        if not narrative or not isinstance(narrative, str):
+            errors.append(f"{section}.narrative 不能为空")
+
+    overall = data.get("overall_score")
+    if overall is not None:
+        if not isinstance(overall, (int, float)):
+            errors.append("overall_score 必须是数字")
+        elif not (20 <= overall <= 100):
+            errors.append(f"overall_score 超出范围 (20-100)，实际: {overall}")
+
+    return errors
 
 
 async def _llm_repair_json(
@@ -387,6 +481,145 @@ async def _repair_wish_advice_json_via_llm(
     """
     return await _llm_repair_json(
         ai_text, validation_errors, _WISH_ADVICE_REPAIR_PROMPT, provider
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import-parse repair
+# ---------------------------------------------------------------------------
+
+_IMPORT_PARSE_REPAIR_PROMPT = (
+    "The import-parse JSON you previously output failed validation.\n"
+    "Please re-output a valid JSON that strictly conforms to the following "
+    "structure (do NOT include any markdown code blocks, explanations, or "
+    "extra content):\n"
+    '{"source": "<string: document source name>",\n'
+    ' "report_date": "<YYYY-MM-DD or null>",\n'
+    ' "items": [\n'
+    '   {"name": "<item name>", "asset_type": "<string>", '
+    '"category_hint": "<string>", "current_value": <number>, '
+    '"currency": "<3-letter code>", "quantity": <number or null>}\n'
+    "]}\n\n"
+    "Requirements:\n"
+    "- items must be non-empty\n"
+    "- each item MUST have a 'name' field\n"
+    "- current_value must be a number\n"
+    "- Output ONLY the JSON itself."
+)
+
+
+async def _repair_import_parse_json_via_llm(
+    ai_text: str,
+    validation_errors: list[str],
+    provider: dict | None,
+) -> dict | None:
+    """Repair an invalid import-parse JSON via LLM."""
+    return await _llm_repair_json(
+        ai_text, validation_errors, _IMPORT_PARSE_REPAIR_PROMPT, provider
+    )
+
+
+# ---------------------------------------------------------------------------
+# Suggestions repair
+# ---------------------------------------------------------------------------
+
+_SUGGESTIONS_REPAIR_PROMPT = (
+    "The suggestions JSON you previously output failed validation.\n"
+    "Please re-output a valid JSON array of exactly 3 short strings "
+    "(do NOT include any markdown code blocks, explanations, or "
+    "extra content):\n"
+    '["<suggestion 1, under 15 words>", '
+    '"<suggestion 2, under 15 words>", '
+    '"<suggestion 3, under 15 words>"]\n\n'
+    "Requirements:\n"
+    "- Must be a JSON array with exactly 3 items\n"
+    "- Each item must be a non-empty string under 80 characters\n"
+    "- Output ONLY the JSON array itself."
+)
+
+
+async def _repair_suggestions_via_llm(
+    ai_text: str,
+    validation_errors: list[str],
+    provider: dict | None,
+) -> dict | list | None:
+    """Repair invalid suggestions JSON via LLM.
+
+    Returns a list (not dict) since suggestions is a JSON array.
+    The caller should handle the list return type.
+    """
+    if not provider:
+        return None
+    try:
+        from apps.agent.core.llm import get_llm_client
+
+        llm = get_llm_client(
+            provider=provider.get("ai_provider", ""),
+            api_key=provider.get("api_key", ""),
+            model_id=provider.get("ai_model_id", ""),
+            base_url=provider.get("ai_base_url"),
+            timeout=30.0,
+        )
+        error_summary = "; ".join(validation_errors[:3])
+        full_prompt = (
+            f"{_SUGGESTIONS_REPAIR_PROMPT}\n"
+            f"Validation errors: {error_summary}\n\n"
+            f"Original output fragment:\n{ai_text[-2000:]}"
+        )
+        repaired_text = await llm.complete_json(full_prompt, max_tokens=500)
+        # parse_report_json handles arrays too via json_repair
+        import json_repair as jr
+
+        result = jr.repair_json(repaired_text, return_objects=True)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "suggestions" in result:
+            return result["suggestions"]
+        return None
+    except Exception as exc:
+        logger.warning(
+            "[_repair_suggestions_via_llm] failed: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Health-report repair
+# ---------------------------------------------------------------------------
+
+_HEALTH_REPORT_REPAIR_PROMPT = (
+    "The health report JSON you previously output failed validation.\n"
+    "Please re-output a valid JSON that strictly conforms to the following "
+    "structure (do NOT include any markdown code blocks, explanations, or "
+    "extra content):\n"
+    '{"net_worth_health": {"score": <1-5>, "narrative": "<string>", '
+    '"suggestions": ["<string>"]},\n'
+    ' "allocation_analysis": {"score": <1-5>, "narrative": "<string>", '
+    '"suggestions": ["<string>"]},\n'
+    ' "liability_pressure": {"score": <1-5>, "narrative": "<string>", '
+    '"suggestions": ["<string>"]},\n'
+    ' "asset_efficiency": {"score": <1-5>, "narrative": "<string>", '
+    '"suggestions": ["<string>"]},\n'
+    ' "overall_score": <20-100>,\n'
+    ' "summary": "<string>"}\n\n'
+    "Requirements:\n"
+    "- Each section MUST have 'score' (integer 1-5) and 'narrative' (non-empty)\n"
+    "- overall_score must be between 20 and 100\n"
+    "- narrative fields must NOT contain markdown tables\n"
+    "- Output ONLY the JSON itself."
+)
+
+
+async def _repair_health_report_via_llm(
+    ai_text: str,
+    validation_errors: list[str],
+    provider: dict | None,
+) -> dict | None:
+    """Repair an invalid health-report JSON via LLM."""
+    return await _llm_repair_json(
+        ai_text, validation_errors, _HEALTH_REPORT_REPAIR_PROMPT, provider
     )
 
 

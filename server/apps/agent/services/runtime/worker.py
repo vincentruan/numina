@@ -31,15 +31,18 @@ from .goal_continuation import (
 )
 from .llm_json_repair import (
     _COACH_REPAIR_PROMPT,
+    _IMPORT_PARSE_REPAIR_PROMPT,
     _REPORT_REPAIR_PROMPT,
     _WISH_ADVICE_REPAIR_PROMPT,
     _repair_coach_json_via_llm,
+    _repair_import_parse_json_via_llm,
     _repair_report_json_via_llm,
     _repair_wish_advice_json_via_llm,
     extract_json_via_llm,
     parse_report_json,
     run_json_repair_loop,
     validate_coach_json,
+    validate_import_parse_json,
     validate_report_json,
     validate_wish_advice_json,
 )
@@ -1036,7 +1039,49 @@ async def _run_import_parse_agent(
         # before the end frame (timing contract: strictly precedes end).
         if _import_ok:
             parsed = parse_report_json(p.ai_text)
-            if parsed is not None:
+
+            # Validate→repair cycle (shared loop)
+            parsed, repair_count = await run_json_repair_loop(
+                parsed,
+                p.ai_text,
+                validator=validate_import_parse_json,
+                repair_fn=lambda t, e: _repair_import_parse_json_via_llm(
+                    t, e, p.selected_provider
+                ),
+                publish_retry_event=lambda attempt: bridge.publish(
+                    p.run_id,
+                    "custom",
+                    {
+                        "type": "import-parse.repair_retry",
+                        "attempt": attempt,
+                        "max_attempts": 3,
+                    },
+                ),
+                app_name="_run_import_parse_agent",
+            )
+
+            # Final fallback: standalone LLM extraction
+            if parsed is not None and validate_import_parse_json(parsed):
+                fallback = await extract_json_via_llm(
+                    p.ai_text, _IMPORT_PARSE_REPAIR_PROMPT, p.selected_provider,
+                )
+                if fallback is not None and not validate_import_parse_json(fallback):
+                    parsed = fallback
+
+            if parsed is not None and not validate_import_parse_json(parsed):
+                logger.error(
+                    "[_run_import_parse_agent] import-parse JSON validation failed "
+                    "after %d retries + fallback run=%s errors=%s",
+                    repair_count,
+                    p.run_id,
+                    validate_import_parse_json(parsed)[:3],
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "文档解析结果格式异常，请重试"},
+                )
+            elif parsed is not None:
                 await bridge.publish(
                     p.run_id,
                     "custom",
@@ -1044,6 +1089,17 @@ async def _run_import_parse_agent(
                         "type": "import-parse.result",
                         "payload": parsed,
                     },
+                )
+            else:
+                logger.warning(
+                    "[_run_import_parse_agent] JSON parse failed run=%s ai_text_len=%d",
+                    p.run_id,
+                    len(p.ai_text) if p.ai_text else 0,
+                )
+                await bridge.publish(
+                    p.run_id,
+                    "error",
+                    {"error": "文档解析失败，请重试"},
                 )
 
     # Set import-parse session title (localized by user language)
