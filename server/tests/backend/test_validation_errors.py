@@ -39,9 +39,11 @@ def short_endpoint(body: ShortModel):
 # Register the same handlers as the main app
 from fastapi.exceptions import RequestValidationError  # noqa: E402
 
+from typing import Any, cast
+
 from apps.backend.app.error_handlers import validation_error_handler  # noqa: E402
 
-app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(RequestValidationError, cast(Any, validation_error_handler))
 
 
 @pytest.fixture(scope="module")

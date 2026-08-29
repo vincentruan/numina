@@ -10,7 +10,7 @@ from apps.backend.app.models.draft_import import DraftImport
 def _unwrap(resp_json: dict) -> dict | list:
     """Unwrap the API envelope: {"code": "OK", "data": ...} → data."""
     if "data" in resp_json:
-        return resp_json["data"]
+        return resp_json["data"]  # type: ignore[no-any-return]
     return resp_json
 
 

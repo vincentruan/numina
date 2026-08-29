@@ -256,7 +256,7 @@ def child_login_two_phase(client, username: str, password: str, pin_sequence: li
         "payload": {"pin_sequence": pin_sequence},
     })
     assert step2.status_code == 200, f"step2 failed: {step2.text}"
-    return step2.json()["data"]["access_token"]
+    return str(step2.json()["data"]["access_token"])
 
 
 # Fixtures for AI result writer tests

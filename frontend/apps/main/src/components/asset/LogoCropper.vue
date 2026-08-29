@@ -67,11 +67,21 @@ let cropper: Cropper | null = null
 const imageSrc = computed(() => {
   if (!props.source) return ''
   if (typeof props.source === 'string') return props.source
-  // File object — create object URL
-  if (objectUrl.value) return objectUrl.value
-  objectUrl.value = URL.createObjectURL(props.source)
-  return objectUrl.value
+  // File object — use cached object URL if already created
+  return objectUrl.value || ''
 })
+
+// Side effect: create object URL when source is a File (kept out of computed
+// to satisfy vue/no-side-effects-in-computed-properties).
+watch(
+  () => props.source,
+  (src) => {
+    if (src && typeof src !== 'string') {
+      objectUrl.value = URL.createObjectURL(src)
+    }
+  },
+  { immediate: true },
+)
 
 // CORS handling for remote images
 const crossOrigin = computed(() => {

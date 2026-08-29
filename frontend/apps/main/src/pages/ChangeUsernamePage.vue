@@ -83,7 +83,7 @@ const nextAvailableAt = computed(() => {
 const canSubmit = computed(() => {
   if (limitReached.value) return false
   const v = newUsername.value.trim().toLowerCase()
-  return v.length >= 3 && v.length <= 50 && /^[a-z0-9_.\-]+$/.test(v)
+  return v.length >= 3 && v.length <= 50 && /^[a-z0-9_.-]+$/.test(v)
 })
 
 async function onChangeUsername() {

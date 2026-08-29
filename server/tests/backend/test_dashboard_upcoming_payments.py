@@ -34,13 +34,13 @@ def _create_liability(client, headers: dict, **kwargs) -> dict:
     }
     resp = client.post("/api/v1/liabilities", headers=headers, json=payload)
     assert resp.status_code == 201, resp.text
-    return resp.json()["data"]
+    return dict(resp.json()["data"])  # type: ignore[no-any-return]
 
 
 def _upcoming(client, headers: dict, days: int = 7) -> dict:
     resp = client.get(f"/api/v1/dashboard/upcoming-payments?days={days}", headers=headers)
     assert resp.status_code == 200, resp.text
-    return resp.json()["data"]
+    return dict(resp.json()["data"])  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------

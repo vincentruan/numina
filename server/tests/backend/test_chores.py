@@ -670,7 +670,7 @@ def test_approve_education_reward_uses_streak_multiplied_amount(
             f"/api/v1/family/chore-approvals/{iid}/approve", headers=auth_headers
         )
         assert appr.status_code == 200, appr.text
-        return iid
+        return str(iid)
 
     # Approve 6 consecutive prior days (2026-04-09 .. 2026-04-14).
     base = datetime(2026, 4, 9)

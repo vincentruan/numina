@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    if "rental_contracts" in {t["name"] for t in inspector.get_tables()}:
+    if "rental_contracts" in inspector.get_table_names():
         return  # already exists (idempotent for fresh DB)
 
     op.create_table(

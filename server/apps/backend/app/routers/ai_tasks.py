@@ -401,7 +401,7 @@ async def stream_task_events(
         _active_sse_connections[family_id] = _active_sse_connections.get(family_id, 0) + 1
         try:
             async for chunk in consume_task_stream(
-                task_id=task.id,
+                task_id=str(task.id),
                 family_id=family_id,
                 last_event_id=last_event_id,
                 run_id=task.run_id,

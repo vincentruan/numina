@@ -64,7 +64,7 @@ class TestSetupLogging:
 
         root_logger = logging.getLogger()
         for handler in root_logger.handlers:
-            if hasattr(handler, "formatter"):
+            if hasattr(handler, "formatter") and handler.formatter is not None:
                 assert handler.formatter._fmt == custom_format
 
     def test_setup_logging_size_rotation(self, tmp_path: Path):

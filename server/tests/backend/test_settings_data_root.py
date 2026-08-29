@@ -67,9 +67,15 @@ class TestDerivedPaths:
         assert expected == s.LOG_DIR
 
     def test_database_url_derived_from_data_root(self):
+        """DATABASE_URL is no longer auto-derived from DATA_ROOT (PostgreSQL-first).
+
+        When DATABASE_URL is not explicitly set, it stays at the default SQLite
+        value; the _validate_db_backend guard catches it if used in production.
+        Only tilde expansion is applied to SQLite URLs.
+        """
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
-        root = _resolve("/tmp/test-numina")
-        assert f"sqlite:///{root}/db/numina.db" == s.DATABASE_URL
+        # DATABASE_URL remains at the default — no longer derived from DATA_ROOT
+        assert s.DATABASE_URL == "sqlite:///./data/numina.db"
 
     def test_all_derived_paths_under_data_root(self):
         s = _make_settings(DATA_ROOT="/tmp/test-numina")
@@ -78,7 +84,7 @@ class TestDerivedPaths:
         assert s.WORKSPACE_ROOT.startswith(root)
         assert s.CHAT_DIR.startswith(root)
         assert s.LOG_DIR.startswith(root)
-        assert root in s.DATABASE_URL
+        # DATABASE_URL is no longer derived from DATA_ROOT (PostgreSQL-first)
 
 
 class TestExplicitOverrides:

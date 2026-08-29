@@ -308,6 +308,7 @@ async def bridge_consumer(
     own_bridge = bridge is None
     if own_bridge:
         bridge = get_shared_bridge()
+    assert bridge is not None, "stream bridge is not initialised"
 
     try:
         async for entry in bridge.subscribe(

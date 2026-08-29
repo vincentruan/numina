@@ -7,6 +7,7 @@ import { flushPromises } from '@vue/test-utils'
 import AIChatBox from '../../src/components/ai/AIChatBox.vue'
 import { useAgentStore } from '../../src/stores/agent'
 import { useChatSessionStore } from '../../src/stores/chatSession'
+import { useFamilyStore } from '../../src/stores/family'
 
 // Mock composables
 vi.mock('@/composables/ai-chat/useThreadChat', () => ({
@@ -114,6 +115,10 @@ describe('AIChatBox', () => {
     setActivePinia(createPinia())
     agentStore = useAgentStore()
     chatSessionStore = useChatSessionStore()
+    // Pre-populate family store so ensureFamilyLoaded() in onMounted
+    // does not trigger a real HTTP call (unmocked axios → ECONNREFUSED).
+    const familyStore = useFamilyStore()
+    familyStore.family = { id: 1, name: 'Test', invite_code: 'ABCDEF' } as any
     mockPush.mockClear()
     vi.clearAllMocks()
   })

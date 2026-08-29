@@ -22,6 +22,7 @@ import i18n from '@/i18n'
 // When a request's error code is in this list, the global interceptor skips the toast
 // so the caller can handle it locally (e.g. empty state instead of error).
 declare module 'axios' {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   interface AxiosRequestConfig<D = any> {
     _silentErrorCodes?: string[]
   }

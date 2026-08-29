@@ -457,7 +457,7 @@ class LLMClient:
         response = await self._openai_client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         if content:
-            return content
+            return cast(str, content)
 
         # DeepSeek / Qwen3 等 reasoning 模型在 max_tokens 较小时可能只输出
         # reasoning_content 而 content 为空。把 reasoning_content 视为有效响应，

@@ -33,7 +33,7 @@ def _create_liability(client, headers: dict, **kwargs) -> dict:
     }
     resp = client.post("/api/v1/liabilities", headers=headers, json=payload)
     assert resp.status_code == 201, resp.text
-    return resp.json()["data"]
+    return dict(resp.json()["data"])  # type: ignore[no-any-return]
 
 
 def _create_wish(client, headers: dict, **kwargs) -> dict:
@@ -45,7 +45,7 @@ def _create_wish(client, headers: dict, **kwargs) -> dict:
     }
     resp = client.post("/api/v1/wishes", headers=headers, json=payload)
     assert resp.status_code == 201, resp.text
-    return resp.json()["data"]
+    return dict(resp.json()["data"])  # type: ignore[no-any-return]
 
 
 @pytest.fixture

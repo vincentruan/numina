@@ -42,7 +42,7 @@ def _make_family_config(storage_path: str):
 def _memory_storage_path(cfg_memory) -> str:
     """Read the deermem storage_path from a MemoryConfig across harness revs."""
     backend = getattr(cfg_memory, "backend_config", None) or {}
-    return backend.get("storage_path")
+    return str(backend.get("storage_path"))
 
 
 def _make_updater_and_queue(storage_path: str):

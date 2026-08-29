@@ -142,6 +142,7 @@ TABLE_ORDER = [
 def get_all_revision_ids() -> list[str]:
     """Parse all alembic revision IDs from migration files."""
     import importlib
+    import importlib.util
     import pathlib
 
     versions_dir = pathlib.Path(__file__).parent.parent / "apps" / "backend" / "alembic" / "versions"
@@ -152,6 +153,8 @@ def get_all_revision_ids() -> list[str]:
         mod_name = f"apps.backend.alembic.versions.{f.stem}"
         try:
             spec = importlib.util.spec_from_file_location(mod_name, f)
+            if spec is None or spec.loader is None:
+                continue
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             if hasattr(mod, "revision"):

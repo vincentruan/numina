@@ -161,7 +161,7 @@ class TestCheckpointerInjection:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=mock_checkpointer),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=_fake_client),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=_fake_client),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             get_family_adapter("family_cp_test", ai_config, base_config_dir)
@@ -377,7 +377,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             client_a = get_family_adapter("family_x", cfg_a, base_config_dir)
@@ -401,7 +401,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             client_old = get_family_adapter("family_y", cfg_old, base_config_dir)
@@ -543,7 +543,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             get_family_adapter("family_z", dict(ai_config, config_id="cfg-z1"), base_config_dir)
@@ -570,7 +570,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             get_family_adapter("family_w", dict(ai_config, config_id="cfg-w1"), base_config_dir)
@@ -594,7 +594,7 @@ class TestCacheFixes:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             get_family_adapter("fam-env-test", ai_config, base_config_dir)
@@ -616,7 +616,7 @@ class TestCacheFixes:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=RuntimeError("init failed")),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.NuminaDeerFlowClient", side_effect=RuntimeError("init failed")),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
             pytest.raises(RuntimeError, match="Failed to initialize"),
         ):

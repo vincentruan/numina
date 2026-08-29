@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { showFailToast } from 'vant'
 import i18n from '@/i18n'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationItem } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationItem, HomeAssetsPageResponse } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
@@ -203,7 +203,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
             sortBy: assetSortBy.value || undefined,
             sortOrder: assetSortOrder.value,
             assetType: activeAssetType.value || undefined,
-          }).catch(() => ({ data: { items: [], total: 0, total_pages: 0, has_next: false } } as any))
+          }).catch(() => ({ data: { items: [], total: 0, total_pages: 0, has_next: false, page: 1, page_size: pageSize, has_prev: false } } as { data: HomeAssetsPageResponse }))
         )
       )
       // Store each status in cache and merge all items

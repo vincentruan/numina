@@ -262,7 +262,7 @@ def _get_family_id(client) -> str:
     })
     assert resp.status_code == 200
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {resp.json()['data']['access_token']}"})
-    return me.json()["data"]["family_id"]
+    return str(me.json()["data"]["family_id"])
 
 
 VALID_PIN = ["🐱", "🐶", "🐸", "🦊"]

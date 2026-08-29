@@ -234,7 +234,7 @@ class TestPersistReportResult:
 
 
 class TestGenerateLiteracyReport:
-    def test_idempotent_returns_existing(self, db, report_child, current_week_start):
+    async def test_idempotent_returns_existing(self, db, report_child, current_week_start):
         existing = LiteracyWeeklyReport(
             child_id=report_child.id,
             week_start=current_week_start,
@@ -245,39 +245,31 @@ class TestGenerateLiteracyReport:
         db.add(existing)
         db.commit()
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(
-            generate_literacy_report(
-                db,
-                family_id=report_child.family_id,
-                child_id=report_child.id,
-                week_start=current_week_start,
-                user_id=report_child.id,
-            )
+        result = await generate_literacy_report(
+            db,
+            family_id=report_child.family_id,
+            child_id=report_child.id,
+            week_start=current_week_start,
+            user_id=report_child.id,
         )
         assert result is not None
         assert result.narrative == "already exists"
         assert result.thread_id == "existing-thread"
 
-    def test_calls_agent_and_persists(self, db, report_child, current_week_start):
+    async def test_calls_agent_and_persists(self, db, report_child, current_week_start):
         sse_bytes = _build_sse_bytes("AI generated narrative for the week.")
-
-        import asyncio
 
         with patch(
             "apps.backend.app.services.literacy_report_service._stream_report_sse",
             new_callable=AsyncMock,
             return_value=sse_bytes,
         ):
-            result = asyncio.get_event_loop().run_until_complete(
-                generate_literacy_report(
-                    db,
-                    family_id=report_child.family_id,
-                    child_id=report_child.id,
-                    week_start=current_week_start,
-                    user_id=report_child.id,
-                )
+            result = await generate_literacy_report(
+                db,
+                family_id=report_child.family_id,
+                child_id=report_child.id,
+                week_start=current_week_start,
+                user_id=report_child.id,
             )
 
         assert result is not None
@@ -285,27 +277,23 @@ class TestGenerateLiteracyReport:
         assert result.thread_id is not None
         assert result.thread_id.startswith("literacy-report-")
 
-    def test_returns_none_on_agent_failure(self, db, report_child, current_week_start):
-        import asyncio
-
+    async def test_returns_none_on_agent_failure(self, db, report_child, current_week_start):
         with patch(
             "apps.backend.app.services.literacy_report_service._stream_report_sse",
             new_callable=AsyncMock,
             side_effect=RuntimeError("agent down"),
         ):
-            result = asyncio.get_event_loop().run_until_complete(
-                generate_literacy_report(
-                    db,
-                    family_id=report_child.family_id,
-                    child_id=report_child.id,
-                    week_start=current_week_start,
-                    user_id=report_child.id,
-                )
+            result = await generate_literacy_report(
+                db,
+                family_id=report_child.family_id,
+                child_id=report_child.id,
+                week_start=current_week_start,
+                user_id=report_child.id,
             )
 
         assert result is None
 
-    def test_force_true_regenerates(self, db, report_child, current_week_start):
+    async def test_force_true_regenerates(self, db, report_child, current_week_start):
         """force=True deletes the existing row and generates a new report."""
         existing = LiteracyWeeklyReport(
             child_id=report_child.id,
@@ -319,22 +307,18 @@ class TestGenerateLiteracyReport:
 
         sse_bytes = _build_sse_bytes("fresh narrative")
 
-        import asyncio
-
         with patch(
             "apps.backend.app.services.literacy_report_service._stream_report_sse",
             new_callable=AsyncMock,
             return_value=sse_bytes,
         ):
-            result = asyncio.get_event_loop().run_until_complete(
-                generate_literacy_report(
-                    db,
-                    family_id=report_child.family_id,
-                    child_id=report_child.id,
-                    week_start=current_week_start,
-                    user_id=report_child.id,
-                    force=True,
-                )
+            result = await generate_literacy_report(
+                db,
+                family_id=report_child.family_id,
+                child_id=report_child.id,
+                week_start=current_week_start,
+                user_id=report_child.id,
+                force=True,
             )
 
         assert result is not None
