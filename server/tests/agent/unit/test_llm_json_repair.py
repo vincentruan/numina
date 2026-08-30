@@ -7,6 +7,8 @@ import asyncio
 import pytest
 
 from apps.agent.services.runtime.llm_json_repair import (
+    extract_coach_snapshot_ids,
+    filter_coach_suggestions_by_ids,
     run_json_repair_loop,
     validate_coach_json,
     validate_health_report_json,
@@ -179,6 +181,97 @@ class TestMovedValidators:
         }
         errors = validate_coach_json(data)
         assert any("severity" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# extract_coach_snapshot_ids / filter_coach_suggestions_by_ids
+# ---------------------------------------------------------------------------
+
+
+class TestCoachSnapshotIdFiltering:
+    """Anti-hallucination: drop suggestions with fabricated target_id."""
+
+    SNAPSHOT = {
+        "currency": "CNY",
+        "net_worth": 500000.0,
+        "total_liabilities": 100000.0,
+        "high_interest_debts": [{"id": "111", "category": "credit_card", "rate": 18.0, "monthly_interest": 1500.0}],
+        "idle_assets": [{"id": "222", "category": "cash", "daily_cost": 50.0}],
+        "top_daily_cost_assets": [{"id": "333", "category": "vehicle", "daily_cost": 120.0}],
+        "wishes": [{"id": "444", "price": 30000.0, "saved": 5000.0, "monthly_saving": 2000.0}],
+    }
+
+    def _make_suggestion(self, target_id: str, target_type: str = "liability") -> dict:
+        return {
+            "id": "s1",
+            "severity": "high",
+            "title": "Test",
+            "action": "Test action",
+            "target_type": target_type,
+            "target_id": target_id,
+            "cta_label": "查看",
+        }
+
+    def test_extract_ids_from_snapshot_json(self):
+        import json
+        ids = extract_coach_snapshot_ids(json.dumps(self.SNAPSHOT))
+        assert ids == {"111", "222", "333", "444"}
+
+    def test_extract_ids_empty_on_garbage(self):
+        assert extract_coach_snapshot_ids("not json") == set()
+        assert extract_coach_snapshot_ids("") == set()
+        assert extract_coach_snapshot_ids(None) == set()  # type: ignore[arg-type]
+
+    def test_extract_ids_empty_on_non_dict_json(self):
+        assert extract_coach_snapshot_ids("[1,2,3]") == set()
+
+    def test_filter_drops_hallucinated_ids(self):
+        valid_ids = {"111", "222", "333", "444"}
+        data = {
+            "suggestions": [
+                self._make_suggestion("111"),   # real
+                self._make_suggestion("999"),   # hallucinated
+                self._make_suggestion("222", "asset"),  # real
+            ]
+        }
+        filtered, removed = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert removed == 1
+        assert len(filtered["suggestions"]) == 2
+        assert [s["target_id"] for s in filtered["suggestions"]] == ["111", "222"]
+
+    def test_filter_noop_when_valid_ids_empty(self):
+        """Empty valid_ids means we can't filter — pass through unchanged."""
+        data = {"suggestions": [self._make_suggestion("999")]}
+        result, removed = filter_coach_suggestions_by_ids(data, set())
+        assert removed == 0
+        assert result is data  # same object, no copy
+
+    def test_filter_all_valid_noop(self):
+        valid_ids = {"111"}
+        data = {"suggestions": [self._make_suggestion("111")]}
+        result, removed = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert removed == 0
+        assert result is data
+
+    def test_filter_empty_suggestions(self):
+        valid_ids = {"111"}
+        data = {"suggestions": []}
+        result, removed = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert removed == 0
+
+    def test_filter_does_not_mutate_original(self):
+        valid_ids = {"111"}
+        original_suggestions = [
+            self._make_suggestion("111"),
+            self._make_suggestion("999"),
+        ]
+        data = {"suggestions": original_suggestions}
+        filtered, removed = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert removed == 1
+        # Original list unchanged
+        assert len(data["suggestions"]) == 2
+        # New dict has filtered list
+        assert len(filtered["suggestions"]) == 1
 
 
 # ---------------------------------------------------------------------------

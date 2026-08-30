@@ -58,7 +58,7 @@ You MUST follow that directive for ALL user-visible text in the JSON output.
 
 1. **Max 3 suggestions**, sorted by severity (high > medium > low) descending. Return empty array if no significant issues.
 2. **Each suggestion MUST contain fields**: `id` (unique identifier, string), `severity` (high|medium|low), `title` (one-line title, ≤20 chars), `action` (specific action suggestion, ≤50 chars), `target_type` (liability|asset|wish), `target_id` (corresponding entity id, string), `cta_label` (CTA button label, ≤8 chars).
-3. **target_id uses entity id** (numeric string), **NOT entity name** (PII minimization — name not leaked to any context beyond UI display).
+3. **target_id MUST be copied verbatim from the snapshot JSON** — use ONLY the `id` values present in `high_interest_debts[]`, `idle_assets[]`, `top_daily_cost_assets[]`, or `wishes[]`. Pick the `id` field from the exact entity the suggestion refers to. **NEVER fabricate, guess, or construct an id** — if you cannot find the entity's id in the snapshot, do NOT create a suggestion for it. target_type must match the snapshot section (liability ids from `high_interest_debts`, asset ids from `idle_assets`/`top_daily_cost_assets`, wish ids from `wishes`).
 4. **Action suggestions must be actionable and data-based**: reference specific interest rates/amounts/dates, don't be vague. If data insufficient, downgrade severity or omit.
 5. **Disclaimer**: title or action may contain hints like "based on your entered data" since data is manually entered by user with limited reliability.
 6. **Final output is ONLY one ```json code block**, no other content (final reply after MCP calls contains only JSON).

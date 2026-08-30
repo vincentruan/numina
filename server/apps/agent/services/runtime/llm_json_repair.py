@@ -33,6 +33,7 @@ Generic loop:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable
 
@@ -49,6 +50,8 @@ __all__ = [
     "validate_import_parse_json",
     "validate_suggestions",
     "validate_health_report_json",
+    "extract_coach_snapshot_ids",
+    "filter_coach_suggestions_by_ids",
     "run_json_repair_loop",
     "extract_json_via_llm",
 ]
@@ -177,6 +180,78 @@ def validate_coach_json(data: dict | None) -> list[str]:
             )
 
     return errors
+
+
+# ---------------------------------------------------------------------------
+# Coach snapshot-ID filtering (anti-hallucination)
+# ---------------------------------------------------------------------------
+
+_COACH_SNAPSHOT_ENTITY_KEYS = (
+    "high_interest_debts",
+    "idle_assets",
+    "top_daily_cost_assets",
+    "wishes",
+)
+
+
+def extract_coach_snapshot_ids(snapshot_json: str) -> set[str]:
+    """Extract all entity IDs from a finance-coach snapshot JSON string.
+
+    The snapshot is the PII-minimized dict built by
+    ``build_family_finance_snapshot()``.  Each entity section
+    (``high_interest_debts``, ``idle_assets``, ``top_daily_cost_assets``,
+    ``wishes``) contains objects with an ``id`` field.  This function returns
+    the union of all those IDs.
+
+    Returns an empty set on any parse error — callers should treat that as
+    "no filtering possible" (pass-through), not "filter everything".
+    """
+    if not snapshot_json or not snapshot_json.strip():
+        return set()
+    try:
+        data = json.loads(snapshot_json)
+    except (json.JSONDecodeError, TypeError):
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    ids: set[str] = set()
+    for key in _COACH_SNAPSHOT_ENTITY_KEYS:
+        section = data.get(key)
+        if not isinstance(section, list):
+            continue
+        for item in section:
+            if isinstance(item, dict):
+                eid = item.get("id")
+                if eid is not None:
+                    ids.add(str(eid))
+    return ids
+
+
+def filter_coach_suggestions_by_ids(
+    data: dict, valid_ids: set[str]
+) -> tuple[dict, int]:
+    """Remove suggestions whose ``target_id`` is not in *valid_ids*.
+
+    Returns ``(filtered_data, removed_count)``.  When *valid_ids* is empty the
+    data is returned unchanged (no filtering — snapshot may not have been
+    extractable).  The original dict is not mutated; a shallow copy of the
+    top-level dict is returned.
+    """
+    if not valid_ids:
+        return data, 0
+    suggestions = data.get("suggestions")
+    if not isinstance(suggestions, list) or not suggestions:
+        return data, 0
+    kept: list[dict] = []
+    removed = 0
+    for s in suggestions:
+        if isinstance(s, dict) and str(s.get("target_id", "")) in valid_ids:
+            kept.append(s)
+        else:
+            removed += 1
+    if removed == 0:
+        return data, 0
+    return {**data, "suggestions": kept}, removed
 
 
 def validate_wish_advice_json(data: dict | None) -> list[str]:
@@ -450,7 +525,10 @@ _COACH_REPAIR_PROMPT = (
     "- suggestions must have at most 3 items\n"
     "- severity MUST be one of: high, medium, low (NOT numbers)\n"
     "- target_type MUST be one of: liability, asset, wish\n"
-    "- target_id MUST be the entity's numeric id string from the snapshot\n"
+    "- target_id MUST be copied VERBATIM from the snapshot's id field "
+    "(high_interest_debts[].id, idle_assets[].id, top_daily_cost_assets[].id, "
+    "or wishes[].id). NEVER fabricate or guess an id.\n"
+    "- target_type must match the snapshot section the entity came from\n"
     "- action: a specific, actionable suggestion referencing real data\n"
     "- cta_label: short button label (≤8 chars)"
 )

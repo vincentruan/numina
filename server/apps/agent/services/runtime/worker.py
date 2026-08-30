@@ -38,7 +38,9 @@ from .llm_json_repair import (
     _repair_import_parse_json_via_llm,
     _repair_report_json_via_llm,
     _repair_wish_advice_json_via_llm,
+    extract_coach_snapshot_ids,
     extract_json_via_llm,
+    filter_coach_suggestions_by_ids,
     parse_report_json,
     run_json_repair_loop,
     validate_coach_json,
@@ -1179,6 +1181,13 @@ async def _run_finance_coach_agent(
         await p.run_skill(user_message)
         _coach_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
+        # Extract valid entity IDs from the snapshot for anti-hallucination
+        # filtering. The user_message contains the snapshot JSON (possibly
+        # prefixed with a [LANGUAGE REQUIREMENT] directive). extract_coach_snapshot_ids
+        # tolerates the non-JSON prefix via json.loads fallback.
+        _raw_snapshot = _extract_backend_user_message(graph_input) or ""
+        _valid_coach_ids = extract_coach_snapshot_ids(_raw_snapshot)
+
         # Worker-synthesized finance_coach.result emission (mirrors import-parse
         # worker synthesis). Emit exactly one finance_coach.result before the end
         # frame. parse_report_json extracts the ```json block the LLM produced.
@@ -1238,6 +1247,19 @@ async def _run_finance_coach_agent(
                         {"error": "财务建议格式异常，请重试"},
                     )
                 else:
+                    # Anti-hallucination: drop suggestions referencing entity IDs
+                    # not present in the snapshot (LLM fabricated IDs → 404 on click).
+                    if _valid_coach_ids:
+                        parsed, _filtered = filter_coach_suggestions_by_ids(
+                            parsed, _valid_coach_ids
+                        )
+                        if _filtered:
+                            logger.warning(
+                                "[_run_finance_coach_agent] dropped %d suggestions "
+                                "with hallucinated target_id run=%s",
+                                _filtered,
+                                p.run_id,
+                            )
                     logger.info(
                         "[_run_finance_coach_agent] result emitted run=%s suggestions_count=%d repairs=%d",
                         p.run_id,
