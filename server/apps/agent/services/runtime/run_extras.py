@@ -358,12 +358,16 @@ def _parse_title_content(content: Any) -> str:
         parts: list[str] = []
         for block in content:
             if isinstance(block, dict):
+                block_type = block.get("type", "")
+                if block_type == "thinking":
+                    continue  # skip thinking blocks entirely (mirrors
+                              # _extract_text_from_content_blocks, line 92)
                 # Standard content block: {"type": "text", "text": "..."}
                 text_val = block.get("text")
                 if isinstance(text_val, str) and text_val.strip():
                     parts.append(text_val.strip())
-                # Legacy/thinking block: {"type": "thinking", "thinking": "..."}
-                # or {"type": "text", "content": "..."}
+                # Fallback for blocks that use "content" key instead of "text"
+                # (some provider quirks). Thinking blocks already skipped above.
                 elif not text_val:
                     content_val = block.get("content")
                     if isinstance(content_val, str) and content_val.strip():
@@ -570,22 +574,27 @@ async def sync_title_from_checkpoint(
                 logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
                 return title
 
-            # 4. DeerFlow gate: only generate a title on the first exchange.
-            # On follow-up messages the checkpoint has >1 user messages, so
-            # this returns False.  We still fall through to generate a title
-            # from the user message if the DB row has a fallback title (i.e.
-            # the first-exchange title generation failed previously) OR the
-            # checkpoint itself carries a fallback title (raw context JSON
-            # from the sync after_model hook).
+            # 4. Decide whether a title is needed.
+            #
+            # The ``_should_generate_title`` gate enforces "first exchange only"
+            # by checking message counts — but when the checkpoint messages are
+            # not yet flushed (empty list), the gate would incorrectly block.
+            # In that case, skip the gate and fall through to generation.
+            #
+            # Additionally, ``allow_partial_exchange`` lets interrupted first
+            # turns (user message only, no assistant response yet) produce a
+            # fallback title so the sidebar is never blank.
             ckpt_title = channel_values.get("title")
-            if (
-                not _should_generate_title(
+            ckpt_messages = channel_values.get("messages") or []
+            gate_applicable = len(ckpt_messages) >= 1
+            if gate_applicable:
+                gate_allows = _should_generate_title(
                     channel_values, allow_partial_exchange=allow_partial_exchange,
                 )
-                and not (db_title and _is_fallback_title(db_title))
-                and not (ckpt_title and _is_fallback_title(ckpt_title))
-            ):
-                return None
+                db_has_fallback = db_title and _is_fallback_title(db_title)
+                ckpt_has_fallback = ckpt_title and _is_fallback_title(ckpt_title)
+                if not gate_allows and not db_has_fallback and not ckpt_has_fallback:
+                    return None
         else:
             # Checkpoint read failed — log at info level (not warning, since this
             # can happen transiently during DB compaction or right after a fresh
@@ -597,12 +606,18 @@ async def sync_title_from_checkpoint(
             )
 
         # 5. Generate a real title via the family's AI provider.
+        #    Reached whenever the DB/checkpoint lacks a proper title — either
+        #    the first exchange hasn't completed yet (checkpoint empty) or a
+        #    prior attempt produced a fallback that needs replacing.
         generated_title: str | None = None
         if ai_config and user_message:
             generated_title = await _generate_title_via_llm(user_message, ai_response, ai_config, target_language)
 
         # 6. Final fallback: truncated user message (DeerFlow _fallback_title pattern).
-        #    This ALWAYS produces a non-empty title so the sidebar is never blank.
+        #    Reaching here means we need a title — either the LLM just ran (and
+        #    may have failed) or the checkpoint was absent entirely.  Even
+        #    ``_text_fallback_title("")`` returns "New Chat", so the row is never
+        #    left title-less.
         if not generated_title:
             generated_title = _text_fallback_title(user_message)
 
