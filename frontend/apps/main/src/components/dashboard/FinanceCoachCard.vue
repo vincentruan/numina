@@ -61,9 +61,9 @@ async function load(force = false) {
     }
 
     // Advice baseline gate (spec §7.1): schema-validate before display.
-    // target_id / target_type are optional — when absent the backend has
-    // sanitised a hallucinated ID; the suggestion text is still shown but
-    // the CTA button is hidden (no 404 navigation).
+    // target_id is optional — when absent the backend has sanitised a
+    // hallucinated ID; the suggestion text is still shown and the CTA
+    // navigates to the list tab for target_type (assets/liabilities/wishes).
     const valid = (resp.report?.suggestions || []).filter(
       (s) =>
         s &&
@@ -71,6 +71,7 @@ async function load(force = false) {
         ['high', 'medium', 'low'].includes(s.severity) &&
         s.title &&
         s.action &&
+        s.target_type &&
         s.cta_label,
     )
     if (valid.length === 0) {
@@ -113,10 +114,24 @@ async function onRetry() {
 }
 
 function onCta(s: FinanceSuggestion) {
-  // CTA navigates to the target entity (A1b-style passive entry).
-  if (s.target_type === 'liability') router.push(`/liabilities/${s.target_id}`)
-  else if (s.target_type === 'asset') router.push(`/assets/${s.target_id}`)
-  else if (s.target_type === 'wish') router.push(`/wishes/${s.target_id}`)
+  // When target_id is present → navigate to the entity detail page.
+  // When target_id was sanitised (hallucinated by LLM) → fall back to the
+  // list tab for target_type so the user can locate the entity manually.
+  const typeToListTab: Record<string, string> = {
+    liability: 'liabilities',
+    asset: 'assets',
+    wish: 'wishes',
+  }
+  if (s.target_type === 'liability' && s.target_id) {
+    router.push(`/liabilities/${s.target_id}`)
+  } else if (s.target_type === 'asset' && s.target_id) {
+    router.push(`/assets/${s.target_id}`)
+  } else if (s.target_type === 'wish' && s.target_id) {
+    router.push(`/wishes/${s.target_id}`)
+  } else {
+    const tab = typeToListTab[s.target_type]
+    if (tab) router.push({ path: '/finance', query: { tab } })
+  }
 }
 
 async function onToggle(names: string[]) {
@@ -245,7 +260,7 @@ onUnmounted(() => {
               <div class="fc-s-title">{{ s.title }}</div>
               <div class="fc-s-action">{{ s.action }}</div>
             </div>
-            <van-button v-if="s.target_id && s.target_type" size="small" type="primary" @click="onCta(s)">{{ s.cta_label }}</van-button>
+            <van-button size="small" type="primary" @click="onCta(s)">{{ s.cta_label }}</van-button>
           </div>
           <div class="fc-footer">
             <span class="fc-disclaimer">{{ t('dashboard.financeCoach.disclaimer') }}</span>

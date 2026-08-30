@@ -226,12 +226,12 @@ class TestCoachSnapshotIdFiltering:
         assert extract_coach_snapshot_ids("[1,2,3]") == set()
 
     def test_filter_sanitises_hallucinated_ids(self):
-        """Hallucinated IDs are cleared (target_id/target_type → ""), not dropped."""
+        """Hallucinated target_id is cleared; target_type is preserved for list-tab fallback."""
         valid_ids = {"111", "222", "333", "444"}
         data = {
             "suggestions": [
                 self._make_suggestion("111"),   # real — kept as-is
-                self._make_suggestion("999"),   # hallucinated — sanitised
+                self._make_suggestion("999"),   # hallucinated — target_id cleared
                 self._make_suggestion("222", "asset"),  # real — kept as-is
             ]
         }
@@ -239,10 +239,10 @@ class TestCoachSnapshotIdFiltering:
         assert count == 1
         # All 3 suggestions are kept (not dropped).
         assert len(result["suggestions"]) == 3
-        # Hallucinated one has cleared navigation fields.
+        # Hallucinated one has target_id cleared but target_type preserved.
         sanited = result["suggestions"][1]
         assert sanited["target_id"] == ""
-        assert sanited["target_type"] == ""
+        assert sanited["target_type"] == "liability"  # kept for list-tab nav
         assert sanited["title"] == "Test"   # text preserved
         # Valid ones unchanged.
         assert result["suggestions"][0]["target_id"] == "111"
@@ -280,9 +280,10 @@ class TestCoachSnapshotIdFiltering:
         # Original list unchanged (still 2 items, original target_id intact).
         assert len(data["suggestions"]) == 2
         assert data["suggestions"][1]["target_id"] == "999"
-        # New dict has sanitised list (same length, bad ID cleared).
+        # New dict has sanitised list (same length, bad target_id cleared, target_type kept).
         assert len(result["suggestions"]) == 2
         assert result["suggestions"][1]["target_id"] == ""
+        assert result["suggestions"][1]["target_type"] == "liability"
 
 
 # ---------------------------------------------------------------------------

@@ -234,8 +234,8 @@ def filter_coach_suggestions_by_ids(
 
     Instead of *dropping* suggestions with hallucinated IDs (which makes the
     card show "暂无建议" when the LLM gets every ID wrong), we **clear** the
-    untrusted ``target_id`` / ``target_type`` fields so the suggestion text
-    is still displayed but the CTA button becomes inert (no 404 navigation).
+    untrusted ``target_id`` while keeping ``target_type`` so the frontend can
+    still navigate to the correct list tab (assets / liabilities / wishes).
 
     Returns ``(sanitized_data, sanitized_count)``.  When *valid_ids* is empty
     the data is returned unchanged (no sanitization — snapshot may not have
@@ -254,8 +254,9 @@ def filter_coach_suggestions_by_ids(
             continue
         tid = str(s.get("target_id", ""))
         if tid and tid not in valid_ids:
-            # Hallucinated ID — keep the suggestion text but remove navigation.
-            sanitized.append({**s, "target_id": "", "target_type": ""})
+            # Hallucinated ID — keep target_type (frontend navigates to list
+            # tab) but clear target_id (no false entity-link → 404).
+            sanitized.append({**s, "target_id": ""})
             changed += 1
         else:
             sanitized.append(s)
