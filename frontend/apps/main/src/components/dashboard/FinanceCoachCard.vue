@@ -61,6 +61,9 @@ async function load(force = false) {
     }
 
     // Advice baseline gate (spec §7.1): schema-validate before display.
+    // target_id / target_type are optional — when absent the backend has
+    // sanitised a hallucinated ID; the suggestion text is still shown but
+    // the CTA button is hidden (no 404 navigation).
     const valid = (resp.report?.suggestions || []).filter(
       (s) =>
         s &&
@@ -68,8 +71,6 @@ async function load(force = false) {
         ['high', 'medium', 'low'].includes(s.severity) &&
         s.title &&
         s.action &&
-        s.target_type &&
-        s.target_id &&
         s.cta_label,
     )
     if (valid.length === 0) {
@@ -244,7 +245,7 @@ onUnmounted(() => {
               <div class="fc-s-title">{{ s.title }}</div>
               <div class="fc-s-action">{{ s.action }}</div>
             </div>
-            <van-button size="small" type="primary" @click="onCta(s)">{{ s.cta_label }}</van-button>
+            <van-button v-if="s.target_id && s.target_type" size="small" type="primary" @click="onCta(s)">{{ s.cta_label }}</van-button>
           </div>
           <div class="fc-footer">
             <span class="fc-disclaimer">{{ t('dashboard.financeCoach.disclaimer') }}</span>

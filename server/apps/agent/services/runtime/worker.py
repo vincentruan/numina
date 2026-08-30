@@ -1247,15 +1247,17 @@ async def _run_finance_coach_agent(
                         {"error": "财务建议格式异常，请重试"},
                     )
                 else:
-                    # Anti-hallucination: drop suggestions referencing entity IDs
-                    # not present in the snapshot (LLM fabricated IDs → 404 on click).
+                    # Anti-hallucination: sanitise suggestions referencing entity
+                    # IDs not present in the snapshot (LLM fabricated IDs → 404
+                    # on click).  target_id/target_type are cleared so the text
+                    # is still shown but the CTA button is inert.
                     if _valid_coach_ids:
                         parsed, _filtered = filter_coach_suggestions_by_ids(
                             parsed, _valid_coach_ids
                         )
                         if _filtered:
                             logger.warning(
-                                "[_run_finance_coach_agent] dropped %d suggestions "
+                                "[_run_finance_coach_agent] sanitised %d suggestions "
                                 "with hallucinated target_id run=%s",
                                 _filtered,
                                 p.run_id,

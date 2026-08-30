@@ -189,7 +189,7 @@ class TestMovedValidators:
 
 
 class TestCoachSnapshotIdFiltering:
-    """Anti-hallucination: drop suggestions with fabricated target_id."""
+    """Anti-hallucination: sanitise suggestions with fabricated target_id."""
 
     SNAPSHOT = {
         "currency": "CNY",
@@ -225,39 +225,48 @@ class TestCoachSnapshotIdFiltering:
     def test_extract_ids_empty_on_non_dict_json(self):
         assert extract_coach_snapshot_ids("[1,2,3]") == set()
 
-    def test_filter_drops_hallucinated_ids(self):
+    def test_filter_sanitises_hallucinated_ids(self):
+        """Hallucinated IDs are cleared (target_id/target_type → ""), not dropped."""
         valid_ids = {"111", "222", "333", "444"}
         data = {
             "suggestions": [
-                self._make_suggestion("111"),   # real
-                self._make_suggestion("999"),   # hallucinated
-                self._make_suggestion("222", "asset"),  # real
+                self._make_suggestion("111"),   # real — kept as-is
+                self._make_suggestion("999"),   # hallucinated — sanitised
+                self._make_suggestion("222", "asset"),  # real — kept as-is
             ]
         }
-        filtered, removed = filter_coach_suggestions_by_ids(data, valid_ids)
-        assert removed == 1
-        assert len(filtered["suggestions"]) == 2
-        assert [s["target_id"] for s in filtered["suggestions"]] == ["111", "222"]
+        result, count = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert count == 1
+        # All 3 suggestions are kept (not dropped).
+        assert len(result["suggestions"]) == 3
+        # Hallucinated one has cleared navigation fields.
+        sanited = result["suggestions"][1]
+        assert sanited["target_id"] == ""
+        assert sanited["target_type"] == ""
+        assert sanited["title"] == "Test"   # text preserved
+        # Valid ones unchanged.
+        assert result["suggestions"][0]["target_id"] == "111"
+        assert result["suggestions"][2]["target_id"] == "222"
 
     def test_filter_noop_when_valid_ids_empty(self):
         """Empty valid_ids means we can't filter — pass through unchanged."""
         data = {"suggestions": [self._make_suggestion("999")]}
-        result, removed = filter_coach_suggestions_by_ids(data, set())
-        assert removed == 0
+        result, count = filter_coach_suggestions_by_ids(data, set())
+        assert count == 0
         assert result is data  # same object, no copy
 
     def test_filter_all_valid_noop(self):
         valid_ids = {"111"}
         data = {"suggestions": [self._make_suggestion("111")]}
-        result, removed = filter_coach_suggestions_by_ids(data, valid_ids)
-        assert removed == 0
+        result, count = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert count == 0
         assert result is data
 
     def test_filter_empty_suggestions(self):
         valid_ids = {"111"}
         data = {"suggestions": []}
-        result, removed = filter_coach_suggestions_by_ids(data, valid_ids)
-        assert removed == 0
+        result, count = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert count == 0
 
     def test_filter_does_not_mutate_original(self):
         valid_ids = {"111"}
@@ -266,12 +275,14 @@ class TestCoachSnapshotIdFiltering:
             self._make_suggestion("999"),
         ]
         data = {"suggestions": original_suggestions}
-        filtered, removed = filter_coach_suggestions_by_ids(data, valid_ids)
-        assert removed == 1
-        # Original list unchanged
+        result, count = filter_coach_suggestions_by_ids(data, valid_ids)
+        assert count == 1
+        # Original list unchanged (still 2 items, original target_id intact).
         assert len(data["suggestions"]) == 2
-        # New dict has filtered list
-        assert len(filtered["suggestions"]) == 1
+        assert data["suggestions"][1]["target_id"] == "999"
+        # New dict has sanitised list (same length, bad ID cleared).
+        assert len(result["suggestions"]) == 2
+        assert result["suggestions"][1]["target_id"] == ""
 
 
 # ---------------------------------------------------------------------------

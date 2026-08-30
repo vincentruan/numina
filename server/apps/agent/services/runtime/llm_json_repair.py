@@ -230,28 +230,38 @@ def extract_coach_snapshot_ids(snapshot_json: str) -> set[str]:
 def filter_coach_suggestions_by_ids(
     data: dict, valid_ids: set[str]
 ) -> tuple[dict, int]:
-    """Remove suggestions whose ``target_id`` is not in *valid_ids*.
+    """Sanitize suggestions whose ``target_id`` is not in *valid_ids*.
 
-    Returns ``(filtered_data, removed_count)``.  When *valid_ids* is empty the
-    data is returned unchanged (no filtering — snapshot may not have been
-    extractable).  The original dict is not mutated; a shallow copy of the
-    top-level dict is returned.
+    Instead of *dropping* suggestions with hallucinated IDs (which makes the
+    card show "暂无建议" when the LLM gets every ID wrong), we **clear** the
+    untrusted ``target_id`` / ``target_type`` fields so the suggestion text
+    is still displayed but the CTA button becomes inert (no 404 navigation).
+
+    Returns ``(sanitized_data, sanitized_count)``.  When *valid_ids* is empty
+    the data is returned unchanged (no sanitization — snapshot may not have
+    been extractable).  The original dict is not mutated.
     """
     if not valid_ids:
         return data, 0
     suggestions = data.get("suggestions")
     if not isinstance(suggestions, list) or not suggestions:
         return data, 0
-    kept: list[dict] = []
-    removed = 0
+    sanitized: list[dict] = []
+    changed = 0
     for s in suggestions:
-        if isinstance(s, dict) and str(s.get("target_id", "")) in valid_ids:
-            kept.append(s)
+        if not isinstance(s, dict):
+            sanitized.append(s)
+            continue
+        tid = str(s.get("target_id", ""))
+        if tid and tid not in valid_ids:
+            # Hallucinated ID — keep the suggestion text but remove navigation.
+            sanitized.append({**s, "target_id": "", "target_type": ""})
+            changed += 1
         else:
-            removed += 1
-    if removed == 0:
+            sanitized.append(s)
+    if changed == 0:
         return data, 0
-    return {**data, "suggestions": kept}, removed
+    return {**data, "suggestions": sanitized}, changed
 
 
 def validate_wish_advice_json(data: dict | None) -> list[str]:
