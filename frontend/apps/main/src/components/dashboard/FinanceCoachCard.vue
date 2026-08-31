@@ -27,14 +27,13 @@ const cancelling = ref(false)
 const count = computed(() => suggestions.value.length)
 
 // v3: useTaskResume replaces inline resumeIfRunning + useTaskPolling
+// No onError handler — when resume() finds a failed/timeout task, load(false)
+// always runs next and checks the cache endpoint. The backend returns cached
+// data (200) if a valid result exists within TTL, or triggers regeneration
+// otherwise. This prevents abnormal tasks from blocking the cache display.
 const resumeHandle = useTaskResume('coach', {
   onComplete: async () => {
     await load(false)
-  },
-  onError: () => {
-    loading.value = false
-    loaded.value = true
-    // Don't toast here — the template shows inline error + retry instead
   },
 })
 
@@ -149,6 +148,10 @@ let hasStarted = false
 function startLoad() {
   if (hasStarted) return
   hasStarted = true
+  // Always call load(false) when resume doesn't find an active task.
+  // The backend cache endpoint (getFinanceCoach) returns the latest successful
+  // result if within TTL, or triggers regeneration otherwise. This ensures
+  // failed/timeout/orphaned tasks never block cache display.
   resumeHandle.resume().then((resumed) => {
     if (!resumed) {
       load(false)
@@ -178,7 +181,10 @@ watch(
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
-  await resumeHandle.resume()
+  const resumed = await resumeHandle.resume()
+  if (!resumed) {
+    await load(false)
+  }
 })
 
 // Dashboard is KeepAlive-cached — disconnect on deactivate, cleanup on unmount.

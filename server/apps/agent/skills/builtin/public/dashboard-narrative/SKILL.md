@@ -15,7 +15,6 @@ trigger_phrases:
 # create new aggregation pipeline).
 allowed-tools: []
 
-thinking: true
 max_tokens: 1024
 ---
 

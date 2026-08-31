@@ -517,8 +517,63 @@ async def generate_narrative(
         bridge=shared_bridge,
     )
 
+    # --- Cache persistence from the SSE stream (robust alternative to the
+    # lifecycle consumer's run_id-dependent path).
+    # The lifecycle consumer subscribes to a bridge channel determined by
+    # run_id alignment (Content-Location vs metadata). When the alignment is
+    # wrong, the lifecycle consumer never sees the dashboard_narrative.result
+    # event and the cache is never written. This wrapper captures the result
+    # from the same channel the SSE forwarder uses (AITask.run_id) — the
+    # channel that IS delivering events to the frontend — so persistence
+    # works regardless of lifecycle consumer alignment.
+    _narrative_payload: dict | None = None
+
+    async def _persist_from_stream() -> None:
+        if not _narrative_payload:
+            return
+        try:
+            _db = SessionLocal()
+            try:
+                upsert_skill_result(_db, family_id, SKILL_ID, _narrative_payload)
+                _db.commit()
+                logger.info(
+                    "[narrative] cache persisted from stream wrapper task=%s",
+                    task_id,
+                )
+            finally:
+                _db.close()
+        except Exception:
+            logger.warning(
+                "[narrative] stream persist failed task=%s",
+                task_id,
+                exc_info=True,
+            )
+
+    async def _stream_with_persist():
+        nonlocal _narrative_payload
+        try:
+            async for chunk in stream_gen:
+                # Intercept custom events carrying the final result
+                if isinstance(chunk, str) and "dashboard_narrative.result" in chunk:
+                    for line in chunk.split("\n"):
+                        if line.startswith("data:"):
+                            try:
+                                data = json.loads(line[5:].strip())
+                                if (
+                                    isinstance(data, dict)
+                                    and data.get("type") == "dashboard_narrative.result"
+                                ):
+                                    _narrative_payload = data.get("payload")
+                            except json.JSONDecodeError:
+                                pass
+                    yield chunk
+                else:
+                    yield chunk
+        finally:
+            await _persist_from_stream()
+
     return StreamingResponse(
-        tracked_sse_stream(task_id, stream_gen),
+        tracked_sse_stream(task_id, _stream_with_persist()),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no"},
     )

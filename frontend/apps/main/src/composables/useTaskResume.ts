@@ -117,6 +117,29 @@ export function useTaskResume(
     }
   }
 
+  /**
+   * Check whether a "running" task is stale (exceeded its skill timeout).
+   *
+   * The backend's orphan detector marks stuck tasks as 'timeout' periodically,
+   * but until it runs, a dead task can linger in 'running' status. The frontend
+   * mirrors the backend's SKILL_TIMEOUT_MINUTES to avoid connecting SSE to a
+   * dead task and waiting 60s for the polling timeout.
+   */
+  function isTaskStale(startedAt: string | null | undefined): boolean {
+    if (!startedAt) return false
+    // Per-skill timeouts matching backend SKILL_TIMEOUT_MINUTES (ai_task_service.py)
+    const SKILL_TIMEOUT_MS: Record<string, number> = {
+      report: 10 * 60_000,
+      literacy: 10 * 60_000,
+      'dashboard-narrative': 5 * 60_000,
+      coach: 5 * 60_000,
+      'wish-advice': 5 * 60_000,
+      'import-parse': 10 * 60_000,
+    }
+    const timeout = SKILL_TIMEOUT_MS[capability] ?? 30 * 60_000
+    return Date.now() - new Date(startedAt).getTime() > timeout
+  }
+
   function startSSE(tid: string): void {
     // P1-1 fix: abort previous SSE before starting a new one
     streamHandle?.abort()
@@ -153,21 +176,33 @@ export function useTaskResume(
   async function resume(): Promise<boolean> {
     loading.value = true
     try {
-      const tasks = await getAITasks(capability)
+      const tasks = await getAITasks(capability, undefined, 1)
       const latestTask = tasks[0]
 
+      if (!latestTask?.id) {
+        return false
+      }
+
+      // Staleness guard: a "running" task that exceeded its skill timeout is
+      // assumed dead (backend orphan detector hasn't reclaimed it yet). Skip
+      // it so the caller falls through to cache check instead of waiting for
+      // a 60s polling timeout.
       if (
-        !latestTask?.id ||
-        !['running', 'queued', 'post_processing'].includes(latestTask.status)
+        ['running', 'queued', 'post_processing'].includes(latestTask.status) &&
+        isTaskStale(latestTask.started_at)
       ) {
-        // No running task
-        if (latestTask?.status === 'completed') {
+        return false
+      }
+
+      if (!['running', 'queued', 'post_processing'].includes(latestTask.status)) {
+        // No active task
+        if (latestTask.status === 'completed') {
           status.value = 'completed'
           task.value = latestTask
           options.onComplete?.(latestTask)
         } else if (
-          latestTask?.status === 'failed' ||
-          latestTask?.status === 'timeout'
+          latestTask.status === 'failed' ||
+          latestTask.status === 'timeout'
         ) {
           status.value = 'failed'
           task.value = latestTask
@@ -202,7 +237,7 @@ export function useTaskResume(
       await new Promise((r) => setTimeout(r, delay))
       if (disposed) return null
       try {
-        const tasks = await getAITasks(capability)
+        const tasks = await getAITasks(capability, undefined, 1)
         const latestTask = tasks[0]
         if (
           latestTask?.id &&
@@ -227,7 +262,7 @@ export function useTaskResume(
    */
   async function retryTrigger(): Promise<boolean> {
     try {
-      const tasks = await getAITasks(capability)
+      const tasks = await getAITasks(capability, undefined, 1)
       const latestTask = tasks[0]
       if (
         latestTask?.id &&

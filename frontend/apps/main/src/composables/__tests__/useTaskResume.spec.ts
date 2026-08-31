@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ref } from 'vue'
 import { useTaskResume } from '../useTaskResume'
 import type { AITask } from '@/api/ai-tasks'
 
@@ -25,7 +24,7 @@ function makeTask(overrides: Partial<AITask> = {}): AITask {
     family_id: '1',
     skill_id: 'narrative',
     status: 'running',
-    started_at: '2026-08-16T00:00:00+00:00',
+    started_at: new Date().toISOString(), // default to "now" — fresh task, not stale
     ...overrides,
   }
 }

@@ -40,11 +40,13 @@ export interface AITask {
  */
 export async function getAITasks(
   skillId?: string,
-  status?: string
+  status?: string,
+  limit?: number,
 ): Promise<AITask[]> {
   const params: Record<string, string> = {}
   if (skillId) params.skill_id = skillId
   if (status) params.status = status
+  if (limit != null) params.limit = String(limit)
 
   const response = await api.get('/ai/tasks', { params })
   return response.data
