@@ -1,0 +1,54 @@
+# ============================================================================
+# Local Production Standby PostgreSQL — 本地生产备库
+# ============================================================================
+# 用途: 对接 Supabase 生产库的逻辑复制 (CDC)，作为本地生产主库的候选
+#
+# 用法:
+#   docker compose -f docker-compose.production-pg.yml up -d
+#
+# 连接 (from host):
+#   psql -h localhost -p 5432 -U numina -d numina_prod
+#   psql -h localhost -p 5432 -U numina -d numina_prod_deerflow
+#
+# 连接 (from other containers):
+#   postgresql://numina:numinapass@postgres-prod:5432/numina_prod
+#   postgresql://numina:numinapass@postgres-prod:5432/numina_prod_deerflow
+#
+# ⚠️ wal_level=logical 已开启，用于接收 Supabase 的逻辑复制
+# ⚠️ 仅操作 numina_prod / numina_prod_deerflow，绝不触碰 dev/test 数据库
+# ============================================================================
+
+services:
+  postgres-prod:
+    image: postgres:17-alpine
+    container_name: numina-postgres-prod
+    restart: unless-stopped
+    ports:
+      - "${PROD_PG_PORT:-5432}:5432"
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=${PROD_PG_USER:-numina}
+      - POSTGRES_PASSWORD=${PROD_PG_PASSWORD:-numinapass}
+    volumes:
+      - ${PROD_PG_DATA_DIR:-/home/geek/data/numina-prod-db/data}:/var/lib/postgresql/data
+      - ./scripts/init-prod-databases.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=10"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROD_PG_USER:-numina}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+

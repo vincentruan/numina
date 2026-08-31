@@ -44,22 +44,32 @@ set -a && source .claude/deploy.env && set +a
 
 **Docker permissions** — prepend `sudo` if the deploy user is not in the `docker` group.
 
-### Dual Supabase Database Architecture
+### Database Architecture — Local Docker PostgreSQL + Supabase Backup
 
-Production uses **two separate Supabase PostgreSQL databases** on the same Supabase project:
+Production uses a **local Docker PostgreSQL** container (`numina-postgres-prod`) as the primary database, with **Supabase configured as a logical replication standby** for backup.
+
+| Component | Container | Compose file | Purpose |
+|-----------|-----------|-------------|---------|
+| **Primary DB** | `numina-postgres-prod` | `docker-compose.production-pg.yml` | Application data, `wal_level=logical` for Supabase CDC |
+| **Standby** | (remote Supabase) | — | Backup via logical replication (CDC) |
+
+**Two databases** on the same PostgreSQL instance:
 
 | Database | Env var | Used by | Purpose |
 |----------|---------|---------|---------|
-| `numina` | `DATABASE_URL` | backend, agent, scheduler_worker | Application data (users, assets, families, alembic-managed) |
-| `numina_deerflow` | `DEERFLOW_DB_URL` | agent only | DeerFlow checkpoint data (checkpoints, blobs, writes) |
+| `numina_prod` | `DATABASE_URL` | backend, agent, scheduler_worker | Application data (users, assets, families, alembic-managed) |
+| `numina_prod_deerflow` | `DEERFLOW_DB_URL` | agent only | DeerFlow checkpoint data (checkpoints, blobs, writes) |
 
 **Why separate:** Both use `alembic_version` table. Sharing one DB causes DeerFlow's `bootstrap.py` to read Numina's alembic revision and fail with `Can't locate revision identified by '...'`.
 
 **Key facts:**
-- Same Supabase project → same user/password, different database names
-- `DEERFLOW_DB_URL` must use **direct connection port 5432** (not pooler port 6543) — pooler transaction mode doesn't support the prepared statements DeerFlow needs
+- `numina-postgres-prod` runs as a **separate container** from the app compose stack — it is NOT defined in `docker-compose.production.yml`
+- App services connect via `172.17.0.1:5432` (Docker host bridge IP) — set in `.env` as `DATABASE_URL` / `DEERFLOW_DB_URL`
+- `wal_level=logical` + replication slots configured for Supabase CDC backup
+- Data stored at `/home/geek/data/numina-prod-db/data` (bind mount)
+- `DEERFLOW_DB_URL` must use **direct connection port 5432** — pooler transaction mode doesn't support the prepared statements DeerFlow needs
 - DeerFlow self-initializes its schema on agent startup via `init_engine()` — **no manual migration step needed** for the DeerFlow DB
-- If the `numina_deerflow` database doesn't exist yet, create it via direct connection (port 5432): `CREATE DATABASE numina_deerflow;`
+- If the `numina_prod_deerflow` database doesn't exist yet, create it via: `CREATE DATABASE numina_prod_deerflow;`
 
 ## Server Directory Layout
 
@@ -68,14 +78,20 @@ The production server's deploy directory needs only these files (not a full git 
 ```
 ~/data/numina/
 ├── .env                              # Secrets + *_IMAGE vars + DATABASE_URL + DEERFLOW_DB_URL (manual, not in git)
-├── docker-compose.production.yml     # Compose config (synced from repo)
+├── docker-compose.production.yml     # App services only (synced from repo)
+├── docker-compose.production-pg.yml     # Production PostgreSQL (synced from repo)
 ├── nginx.production.conf             # Nginx config (synced from repo)
 ├── system-config.yaml                # AI model metadata (synced from repo)
+├── scripts/
+│   └── init-prod-databases.sql       # DB init script (synced from repo)
 └── .numina/data/
     ├── uploads/                      # User uploads (persistent)
     └── secrets/
         ├── origin.crt                # SSL cert
         └── origin.key                # SSL key
+
+~/data/numina-prod-db/
+└── data/                             # PostgreSQL data (bind mount, persistent)
 ```
 
 ---
@@ -83,6 +99,32 @@ The production server's deploy directory needs only these files (not a full git 
 ## Mode A: GHCR Deploy (Default)
 
 No git on the server. CI builds images on push to `main`; server just pulls them.
+
+### Step 0: Ensure Production PostgreSQL is Running
+
+The production database (`numina-postgres-prod`) runs as a **separate container** from the app stack. It must be healthy before deploying app services.
+
+```bash
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+  if sudo docker ps --format "{{.Names}}" | grep -q "numina-postgres-prod"; then
+    echo "✓ numina-postgres-prod is running"
+  else
+    echo "=== Starting production postgres ===" &&
+    cd $DEPLOY_REMOTE_DIR &&
+    sudo docker compose -f docker-compose.production-pg.yml up -d &&
+    for i in $(seq 1 30); do
+      if sudo docker compose -f docker-compose.production-pg.yml ps 2>/dev/null | grep -q "healthy"; then
+        echo "✓ numina-postgres-prod healthy"; break
+      fi
+      [ "$i" = "30" ] && echo "✗ Postgres startup timeout" && exit 1
+      sleep 10
+    done
+  fi
+'
+```
+
+> **First-time setup:** If `numina-postgres-prod` has never been started, ensure `docker-compose.production-pg.yml` and `scripts/init-prod-databases.sql` are synced to the server first (Step 1b). The init script creates `numina_prod` and `numina_prod_deerflow` databases on first boot.
 
 ### Step 1: Verify CI Completed
 
@@ -108,12 +150,18 @@ Push config changes from local repo to server (skip if no config file changes si
 set -a && source .claude/deploy.env && set +a
 rsync -avz --progress -e "ssh -p ${DEPLOY_SSH_PORT:-22}" \
   docker-compose.production.yml \
+  docker-compose.production-pg.yml \
   nginx.production.conf \
   system-config.yaml \
-  ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_DIR}/
+  ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_DIR}/ && \
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
+  "mkdir -p ${DEPLOY_REMOTE_DIR}/scripts" && \
+rsync -avz --progress -e "ssh -p ${DEPLOY_SSH_PORT:-22}" \
+  scripts/init-prod-databases.sql \
+  ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_DIR}/scripts/
 ```
 
-**What to sync:** Only config files that compose/nginx/system need. Never sync `.env` (secrets) or source code.
+**What to sync:** App compose + production-pg compose + nginx/system config + DB init script. Never sync `.env` (secrets) or source code.
 
 **When to skip:** If the only changes are Python/Vue code (no config file changes), skip this step and go directly to Step 3.
 
@@ -200,17 +248,20 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 set -a && source .claude/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   echo "=== CONTAINERS ===" &&
-  sudo docker compose -f docker-compose.production.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" &&
+  sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina &&
   echo "" &&
   echo "=== HTTPS HEALTH ===" &&
   curl -sk https://localhost/api/health && echo "" &&
+  echo "" &&
+  echo "=== CAPTCHA ===" &&
+  curl -sk https://localhost/api/v1/captcha/config && echo "" &&
   echo "" &&
   echo "=== FRONTEND ===" &&
   curl -sk -o /dev/null -w "HTTP %{http_code}" https://localhost/ && echo ""
 '
 ```
 
-**Success:** 6 services running, backend `(healthy)`, agent `(healthy)`, `/api/health` returns `{"status":"ok"}`.
+**Success:** 8 containers running (7 in `docker-compose.production.yml` + `numina-postgres-prod`), backend `(healthy)`, `/api/health` returns `{"status":"ok"}`, `captcha_enabled: true`.
 
 ---
 
@@ -351,12 +402,12 @@ SCHEDULER_WORKER_IMAGE=numina/scheduler-worker:latest
 FRONTEND_MAIN_IMAGE=numina/frontend-main:latest
 FRONTEND_CHILD_IMAGE=numina/frontend-child:latest
 
-# Dual Supabase databases:
-DATABASE_URL=postgresql://numina:<password>@<supabase-host>:5432/numina
-DEERFLOW_DB_URL=postgresql://numina:<password>@<supabase-host>:5432/numina_deerflow
+# Local Docker PostgreSQL (numina-postgres-prod via host bridge):
+DATABASE_URL=postgresql://numina:numinapass@172.17.0.1:5432/numina_prod
+DEERFLOW_DB_URL=postgresql://numina:numinapass@172.17.0.1:5432/numina_prod_deerflow
 ```
 
-> **⚠️ `DEERFLOW_DB_URL` must use direct connection port (5432), NOT the Supabase pooler port (6543).** Pooler transaction mode doesn't support the prepared statements DeerFlow needs.
+> **⚠️ `DEERFLOW_DB_URL` must use direct connection port (5432), NOT the pooler port (6543).** Pooler transaction mode doesn't support the prepared statements DeerFlow needs.
 
 **Switching back to Mode A:** restore the `ghcr.io/...` image values (or remove the `*_IMAGE` lines to use defaults). Database URLs stay the same regardless of deploy mode.
 
@@ -560,6 +611,9 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Frontend unchanged after Mode C deploy | Docker cache served stale layers. Rebuild with `--no-cache` + `DOCKER_DEFAULT_PLATFORM=linux/amd64`. Verify by grepping feature strings in container JS bundles |
 | Container restarts / `exec format error` | Architecture mismatch: arm64 image on amd64 server. Rebuild with `export DOCKER_DEFAULT_PLATFORM=linux/amd64`. Verify: `docker inspect --format '{{.Architecture}}' numina/<svc>:latest` |
 | `alembic current` fails with "No 'script_location' key" | Wrong working directory. Must run from `/app` with `-c apps/backend/alembic.ini`, not from `/app/apps/backend` |
-| Agent unhealthy / DeerFlow init failed | Check `DEERFLOW_DB_URL` in `.env` — must point to `numina_deerflow` database on port 5432 (not pooler 6543). Check agent logs: `sudo docker compose -f docker-compose.production.yml logs --tail 50 agent` |
-| `Can't locate revision identified by '...'` | DeerFlow reading Numina's `alembic_version` — `DEERFLOW_DB_URL` and `DATABASE_URL` point to the same database. Fix: ensure `DEERFLOW_DB_URL` targets the separate `numina_deerflow` database |
+| Agent unhealthy / DeerFlow init failed | Check `DEERFLOW_DB_URL` in `.env` — must point to `numina_prod_deerflow` database on port 5432 (not pooler 6543). Check agent logs: `sudo docker compose -f docker-compose.production.yml logs --tail 50 agent` |
+| `Can't locate revision identified by '...'` | DeerFlow reading Numina's `alembic_version` — `DEERFLOW_DB_URL` and `DATABASE_URL` point to the same database. Fix: ensure `DEERFLOW_DB_URL` targets the separate `numina_prod_deerflow` database |
 | DeerFlow checkpoint data lost after deploy | Check `DEERFLOW_DB_URL` hasn't reverted to SQLite default — verify `.env` has the PostgreSQL URL. SQLite path: `.numina/data/db/deerflow-checkpoints.db` |
+| `numina-postgres-prod` not running | Start with: `cd $DEPLOY_REMOTE_DIR && sudo docker compose -f docker-compose.production-pg.yml up -d`. Data is in bind mount `/home/geek/data/numina-prod-db/data` — survives container restart. Check logs: `sudo docker compose -f docker-compose.production-pg.yml logs --tail 30` |
+| Backend can't reach postgres | `DATABASE_URL` in `.env` must use `172.17.0.1:5432` (Docker host bridge). Verify: `sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c "SELECT 1"`. If using compose defaults (no `.env` override), host is `postgres` which requires a postgres service in the compose stack — **not** the production-pg architecture |
+| `docker-compose.production-pg.yml` uses named volume but server uses bind mount | The local `docker-compose.production-pg.yml` uses `${PROD_PG_DATA_DIR:-/home/geek/data/numina-prod-db/data}` bind mount. If the server has a different data path, set `PROD_PG_DATA_DIR` on the server or override in a `.env` for the production-pg compose |

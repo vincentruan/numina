@@ -736,9 +736,15 @@ deploy-remote:
 	echo "══ 同步配置文件 ══" && \
 	rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
 		docker-compose.production.yml \
+		docker-compose.production-pg.yml \
 		nginx.production.conf \
 		system-config.yaml \
 		$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/ && \
+	ssh -p $${DEPLOY_SSH_PORT:-22} $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST} \
+		"mkdir -p $${DEPLOY_REMOTE_DIR}/scripts" && \
+	rsync -avz --progress -e "ssh -p $${DEPLOY_SSH_PORT:-22}" \
+		scripts/init-prod-databases.sql \
+		$${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}/scripts/ && \
 	echo "" && \
 	if [ -f "$(DIST_DIR)/images.tar.gz" ]; then \
 		echo "══ 传输镜像包 ($(shell ls -lh $(DIST_DIR)/images.tar.gz 2>/dev/null | awk '{print $$5}')) ══" && \

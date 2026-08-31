@@ -1,0 +1,43 @@
+# ============================================================================
+# Dev/Test PostgreSQL — 开发与测试专用，绝对不接入 Supabase 同步链路
+# ============================================================================
+# 用法:
+#   docker compose -f docker-compose.dev-test.yml up -d
+#
+# 连接 (from host):
+#   psql -h localhost -p 5433 -U numina -d numina_dev
+#   psql -h localhost -p 5433 -U numina -d numina_test
+#
+# 连接 (from other containers on same network):
+#   postgresql://numina:numinapass@postgres-dev:5432/numina_dev
+#   postgresql://numina:numinapass@postgres-dev:5432/numina_test
+#
+# ⚠️ 此容器 wal_level = replica (PostgreSQL 默认)，未开启 logical replication
+# ⚠️ 此容器严禁用于 Supabase 生产数据同步或 CDC
+# ============================================================================
+
+services:
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: numina-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "${DEV_PG_PORT:-5433}:5432"
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=${DEV_PG_USER:-numina}
+      - POSTGRES_PASSWORD=${DEV_PG_PASSWORD:-numinapass}
+    volumes:
+      - pgdev_data:/var/lib/postgresql/data
+      - ./scripts/init-dev-databases.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DEV_PG_USER:-numina}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # 显式不设 wal_level=logical，保持默认 replica
+    # 确保此容器不可能被误用于逻辑复制/CDC 同步
+
+volumes:
+  pgdev_data:
+    name: numina-pgdev-data
