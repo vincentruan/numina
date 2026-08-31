@@ -54,6 +54,9 @@
 
       <!-- Step 2: JSON 输出 -->
       <van-step :status="toVanStepStatus(step2Status)">
+        <template #active-icon>
+          <van-loading size="14px" type="spinner" color="var(--van-primary-color)" />
+        </template>
         <template #title>
           <div class="step-title-row" role="button" tabindex="0" :aria-expanded="expandedStep === 2" @click="toggleStep(2)" @keydown.enter="toggleStep(2)">
             <span>{{ t('aiReport.step2') }}</span>
@@ -75,6 +78,9 @@
 
       <!-- Step 3: 落库 (no expand) -->
       <van-step :status="toVanStepStatus(step3Status)">
+        <template #active-icon>
+          <van-loading size="14px" type="spinner" color="var(--van-primary-color)" />
+        </template>
         <template #title>
           <span>{{ t('aiReport.step3') }}</span>
         </template>
