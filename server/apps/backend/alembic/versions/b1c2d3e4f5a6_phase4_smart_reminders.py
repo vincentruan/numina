@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("channel_type", sa.String(length=20), nullable=False),
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column("config", sa.Text(), nullable=False),
-        sa.Column("is_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(), server_default=sa.text("(CURRENT_TIMESTAMP)"), nullable=False),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.text("(CURRENT_TIMESTAMP)"), nullable=False),
         sa.ForeignKeyConstraint(["family_id"], ["families.id"]),

@@ -18,8 +18,18 @@ depends_on: str | Sequence[str] | None = None
 
 
 def _column_exists(conn, table: str, column: str) -> bool:
-    result = conn.execute(sa.text(f"PRAGMA table_info({table})"))
-    return any(row[1] == column for row in result)
+    if conn.dialect.name == "postgresql":
+        result = conn.execute(
+            sa.text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = :table AND column_name = :column"
+            ),
+            {"table": table, "column": column},
+        )
+    else:
+        result = conn.execute(sa.text(f"PRAGMA table_info({table})"))
+        return any(row[1] == column for row in result)
+    return result.first() is not None
 
 
 def upgrade() -> None:
@@ -36,7 +46,7 @@ def upgrade() -> None:
             sa.Column('emoji', sa.String(length=10), nullable=True),
             sa.Column('value_score', sa.Integer(), nullable=False),
             sa.Column('source_wish_id', sa.BigInteger(), nullable=True),
-            sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('1')),
+            sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('true')),
             sa.Column('created_by', sa.BigInteger(), nullable=False),
             sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
             sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
@@ -55,8 +65,8 @@ def upgrade() -> None:
             sa.Column('child_user_id', sa.BigInteger(), nullable=False),
             sa.Column('coins_spent', sa.Integer(), nullable=False),
             sa.Column('gift_id', sa.BigInteger(), nullable=False),
-            sa.Column('is_surprise', sa.Boolean(), nullable=False, server_default=sa.text('0')),
-            sa.Column('is_bonus', sa.Boolean(), nullable=False, server_default=sa.text('0')),
+            sa.Column('is_surprise', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+            sa.Column('is_bonus', sa.Boolean(), nullable=False, server_default=sa.text('false')),
             sa.Column('source_wish_id', sa.BigInteger(), nullable=True),
             sa.Column('status', sa.String(length=30), nullable=False, server_default=sa.text("'pending_fulfillment'")),
             sa.Column('draw_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
@@ -75,7 +85,7 @@ def upgrade() -> None:
             'blind_box_config',
             sa.Column('id', sa.BigInteger(), nullable=False),
             sa.Column('family_id', sa.BigInteger(), nullable=False),
-            sa.Column('enabled', sa.Boolean(), nullable=False, server_default=sa.text('1')),
+            sa.Column('enabled', sa.Boolean(), nullable=False, server_default=sa.text('true')),
             sa.Column('base_draw_prob', sa.Float(), nullable=False, server_default=sa.text('0.30')),
             sa.Column('special_day_prob', sa.Float(), nullable=False, server_default=sa.text('0.80')),
             sa.Column('weight_scale', sa.Float(), nullable=False, server_default=sa.text('2.0')),
@@ -117,7 +127,7 @@ def upgrade() -> None:
 
     if not _column_exists(bind, 'users', 'birthday_is_lunar'):
         with op.batch_alter_table('users') as batch_op:
-            batch_op.add_column(sa.Column('birthday_is_lunar', sa.Boolean(), nullable=False, server_default=sa.text('0')))
+            batch_op.add_column(sa.Column('birthday_is_lunar', sa.Boolean(), nullable=False, server_default=sa.text('false')))
 
     # ── chore_instances: consumed_at ──────────────────────────────────────────
     if bind.dialect.has_table(bind, 'chore_instances') and not _column_exists(bind, 'chore_instances', 'consumed_at'):

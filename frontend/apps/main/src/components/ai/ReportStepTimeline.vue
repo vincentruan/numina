@@ -21,6 +21,9 @@
     <van-steps :active="activeStep" :status="vanStepsStatus" direction="vertical" active-color="var(--van-primary-color)">
       <!-- Step 1: markdown 落盘 -->
       <van-step :status="toVanStepStatus(step1Status)">
+        <template #active-icon>
+          <van-loading size="14px" type="spinner" color="var(--van-primary-color)" />
+        </template>
         <template #title>
           <div class="step-title-row" role="button" tabindex="0" :aria-expanded="expandedStep === 1" @click="toggleStep(1)" @keydown.enter="toggleStep(1)">
             <span>{{ t('aiReport.step1') }}</span>
