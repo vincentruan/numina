@@ -42,6 +42,24 @@ DEPLOY_REMOTE_DIR=<absolute-path>   # 必须用绝对路径，不能用 ~
 set -a && source .claude/deploy.env && set +a
 ```
 
+**SSH quoting** — `$DEPLOY_REMOTE_DIR` 是**本地变量**，不在远程服务器上。SSH 命令必须用**双引号**包裹，让本地 shell 先展开变量：
+
+```bash
+# ✅ Correct — double quotes: local shell expands ${DEPLOY_REMOTE_DIR}
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  sudo docker compose -f docker-compose.production.yml ps
+"
+
+# ❌ Wrong — single quotes: $DEPLOY_REMOTE_DIR sent literally, remote has no such variable
+ssh ... '
+  cd $DEPLOY_REMOTE_DIR &&
+  ...
+'
+```
+
+> **例外：** `docker compose run ... bash -c '...'` 内部的单引号是正确的 — 那是在远程容器内执行，路径已硬编码（如 `/app`）。
+
 **Docker permissions** — prepend `sudo` if the deploy user is not in the `docker` group.
 
 ### Database Architecture — Local Docker PostgreSQL + Supabase Backup
@@ -70,6 +88,23 @@ Production uses a **local Docker PostgreSQL** container (`numina-postgres-prod`)
 - `DEERFLOW_DB_URL` must use **direct connection port 5432** — pooler transaction mode doesn't support the prepared statements DeerFlow needs
 - DeerFlow self-initializes its schema on agent startup via `init_engine()` — **no manual migration step needed** for the DeerFlow DB
 - If the `numina_prod_deerflow` database doesn't exist yet, create it via: `CREATE DATABASE numina_prod_deerflow;`
+
+## Production Config vs Local
+
+生产服务器的 `.env` 与本地开发有显著差异。**不要将本地 `.env` 同步到服务器** — 服务器 `.env` 是手动维护的。
+
+| 配置项 | 本地开发 | 生产服务器 |
+|--------|----------|------------|
+| `CAPTCHA_ENABLED` | `false` (默认/可省略) | **`true` (必须启用)** |
+| `DATABASE_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod` |
+| `DEERFLOW_DB_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod_deerflow` |
+| SSL/TLS | 无 | Origin CA cert (`origin.crt` + `origin.key`) |
+| `*_IMAGE` | 无 (compose 默认) | `numina/<service>:latest` (Mode C) 或 `ghcr.io/...` (Mode A) |
+| CORS 域名 | `localhost` | 实际域名 |
+
+**验证码 (CAPTCHA)：** 生产模式**必须启用** `CAPTCHA_ENABLED=true`。这是安全防护（防注册/登录暴力破解）。本地开发默认关闭以方便测试。Health check 时应验证 `curl -sk https://localhost/api/v1/captcha/config` 返回 `captcha_enabled: true`。
+
+> **⚠️ 如果 Health check 显示 `captcha_enabled: false`**，检查服务器 `.env` 是否包含 `CAPTCHA_ENABLED=true`。缺失此配置不会导致服务启动失败，但会降低安全性。
 
 ## Server Directory Layout
 
@@ -106,22 +141,22 @@ The production database (`numina-postgres-prod`) runs as a **separate container*
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  if sudo docker ps --format "{{.Names}}" | grep -q "numina-postgres-prod"; then
-    echo "✓ numina-postgres-prod is running"
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  if sudo docker ps --format '{{.Names}}' | grep -q 'numina-postgres-prod'; then
+    echo '✓ numina-postgres-prod is running'
   else
-    echo "=== Starting production postgres ===" &&
-    cd $DEPLOY_REMOTE_DIR &&
+    echo '=== Starting production postgres ===' &&
+    cd ${DEPLOY_REMOTE_DIR} &&
     sudo docker compose -f docker-compose.production-pg.yml up -d &&
-    for i in $(seq 1 30); do
-      if sudo docker compose -f docker-compose.production-pg.yml ps 2>/dev/null | grep -q "healthy"; then
-        echo "✓ numina-postgres-prod healthy"; break
+    for i in \$(seq 1 30); do
+      if sudo docker compose -f docker-compose.production-pg.yml ps 2>/dev/null | grep -q 'healthy'; then
+        echo '✓ numina-postgres-prod healthy'; break
       fi
-      [ "$i" = "30" ] && echo "✗ Postgres startup timeout" && exit 1
+      [ \"\$i\" = \"30\" ] && echo '✗ Postgres startup timeout' && exit 1
       sleep 10
     done
   fi
-'
+"
 ```
 
 > **First-time setup:** If `numina-postgres-prod` has never been started, ensure `docker-compose.production-pg.yml` and `scripts/init-prod-databases.sql` are synced to the server first (Step 1b). The init script creates `numina_prod` and `numina_prod_deerflow` databases on first boot.
@@ -186,23 +221,23 @@ Pull new images first — migration must run with the new image that contains up
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  cd $DEPLOY_REMOTE_DIR &&
-  echo "=== Pull GHCR images ===" &&
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  echo '=== Pull GHCR images ===' &&
   sudo docker compose -f docker-compose.production.yml pull backend agent scheduler_worker frontend-main frontend-child
-'
+"
 ```
 
 Then check migration state using the newly pulled image:
 
 ```bash
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  cd $DEPLOY_REMOTE_DIR &&
-  echo "=== Check migration state ===" &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  echo '=== Check migration state ===' &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
     cd /app && uv run alembic -c apps/backend/alembic.ini current && echo \"---\" && uv run alembic -c apps/backend/alembic.ini heads
-  "
-'
+  '
+"
 ```
 
 ### Step 5: Database Migration
@@ -213,12 +248,12 @@ If current ≠ head → run upgrade:
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  cd $DEPLOY_REMOTE_DIR &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
     cd /app && uv run alembic -c apps/backend/alembic.ini upgrade head 2>&1
-  "
-'
+  '
+"
 ```
 
 If it fails with DuplicateColumn/DuplicateTable → follow [db-migration.md](db-migration.md) §Handle Failures. **Never blindly `stamp head`** — it skips ALL pending migrations.
@@ -227,19 +262,19 @@ If it fails with DuplicateColumn/DuplicateTable → follow [db-migration.md](db-
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  cd $DEPLOY_REMOTE_DIR &&
-  echo "=== Recreate services ===" &&
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  echo '=== Recreate services ===' &&
   sudo docker compose -f docker-compose.production.yml up -d &&
-  echo "=== Wait for backend healthy ===" &&
-  for i in $(seq 1 30); do
-    if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy"; then
-      echo "✓ Backend healthy"; break
+  echo '=== Wait for backend healthy ===' &&
+  for i in \$(seq 1 30); do
+    if sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q 'healthy'; then
+      echo '✓ Backend healthy'; break
     fi
     sleep 2
   done &&
-  sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q "healthy" || { echo "✗ Backend startup timeout"; exit 1; }
-'
+  sudo docker compose -f docker-compose.production.yml ps backend 2>/dev/null | grep -q 'healthy' || { echo '✗ Backend startup timeout'; exit 1; }
+"
 ```
 
 ### Step 7: Health Check
@@ -285,15 +320,15 @@ Same check as Mode A Step 4 — run migration on the server before rebuilding:
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ~/data/numina &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
     cd /app && uv run alembic -c apps/backend/alembic.ini current && echo \"---\" && uv run alembic -c apps/backend/alembic.ini heads
-  " &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+  ' &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
     cd /app && uv run alembic -c apps/backend/alembic.ini upgrade head 2>&1
-  "
-'
+  '
+"
 ```
 
 If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures.
@@ -432,26 +467,26 @@ Always run after `deploy-remote`. The new image is already loaded:
 
 ```bash
 set -a && source .claude/deploy.env && set +a
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  cd $DEPLOY_REMOTE_DIR &&
-  echo "=== Check migration state ===" &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  echo '=== Check migration state ===' &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
     cd /app && uv run alembic -c apps/backend/alembic.ini current && echo \"---\" && uv run alembic -c apps/backend/alembic.ini heads
-  "
-'
+  '
+"
 ```
 
 If current ≠ head → run upgrade:
 
 ```bash
-ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
-  cd $DEPLOY_REMOTE_DIR &&
-  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  cd ${DEPLOY_REMOTE_DIR} &&
+  sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
     cd /app && uv run alembic -c apps/backend/alembic.ini upgrade head 2>&1
-  " &&
-  echo "=== Restart backend ===" &&
+  ' &&
+  echo '=== Restart backend ===' &&
   sudo docker compose -f docker-compose.production.yml restart backend
-'
+"
 ```
 
 If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures.
@@ -515,11 +550,17 @@ export DOCKER_DEFAULT_PLATFORM=linux/amd64
 
 #### 3. `make build-local` re-tag fallback may fail
 
-The Makefile re-tags compose-generated images (e.g. `numina_backend`) as `numina/backend:latest`. If the compose project name differs from the directory name, the fallback `numina_backend` image won't exist. The build succeeded — images are at `ghcr.io/vincentruan/numina/<service>:latest`. Just re-tag manually:
+The Makefile re-tags compose-generated images as `numina/<service>:latest`. The compose project name produces images with **hyphens** (e.g. `numina-backend`, `numina-agent`, `numina-scheduler_worker`), but the Makefile looks for **underscores** after the project prefix (e.g. `numina_backend`) — so `scheduler_worker` succeeds but `backend`/`agent`/`frontend-main`/`frontend-child` fail.
+
+**Detection:** `make build-local` prints `✗ 标记失败: numina_backend` even though all 5 images built successfully.
+
+**Fix:** Re-tag manually from the actual compose-generated names:
 ```bash
-for svc in backend agent scheduler-worker frontend-main frontend-child; do
-  docker tag ghcr.io/vincentruan/numina/$svc:latest numina/$svc:latest
-done
+docker tag numina-backend:latest numina/backend:latest
+docker tag numina-agent:latest numina/agent:latest
+docker tag numina-scheduler_worker:latest numina/scheduler-worker:latest
+docker tag numina-frontend-main:latest numina/frontend-main:latest
+docker tag numina-frontend-child:latest numina/frontend-child:latest
 ```
 
 #### 4. Alembic path inside backend container
@@ -614,6 +655,8 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Agent unhealthy / DeerFlow init failed | Check `DEERFLOW_DB_URL` in `.env` — must point to `numina_prod_deerflow` database on port 5432 (not pooler 6543). Check agent logs: `sudo docker compose -f docker-compose.production.yml logs --tail 50 agent` |
 | `Can't locate revision identified by '...'` | DeerFlow reading Numina's `alembic_version` — `DEERFLOW_DB_URL` and `DATABASE_URL` point to the same database. Fix: ensure `DEERFLOW_DB_URL` targets the separate `numina_prod_deerflow` database |
 | DeerFlow checkpoint data lost after deploy | Check `DEERFLOW_DB_URL` hasn't reverted to SQLite default — verify `.env` has the PostgreSQL URL. SQLite path: `.numina/data/db/deerflow-checkpoints.db` |
-| `numina-postgres-prod` not running | Start with: `cd $DEPLOY_REMOTE_DIR && sudo docker compose -f docker-compose.production-pg.yml up -d`. Data is in bind mount `/home/geek/data/numina-prod-db/data` — survives container restart. Check logs: `sudo docker compose -f docker-compose.production-pg.yml logs --tail 30` |
+| `numina-postgres-prod` not running | Start with: `ssh ... "cd ${DEPLOY_REMOTE_DIR} && sudo docker compose -f docker-compose.production-pg.yml up -d"`. Data is in bind mount `/home/geek/data/numina-prod-db/data` — survives container restart. Check logs: `sudo docker compose -f docker-compose.production-pg.yml logs --tail 30` |
 | Backend can't reach postgres | `DATABASE_URL` in `.env` must use `172.17.0.1:5432` (Docker host bridge). Verify: `sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c "SELECT 1"`. If using compose defaults (no `.env` override), host is `postgres` which requires a postgres service in the compose stack — **not** the production-pg architecture |
 | `docker-compose.production-pg.yml` uses named volume but server uses bind mount | The local `docker-compose.production-pg.yml` uses `${PROD_PG_DATA_DIR:-/home/geek/data/numina-prod-db/data}` bind mount. If the server has a different data path, set `PROD_PG_DATA_DIR` on the server or override in a `.env` for the production-pg compose |
+| `captcha_enabled: false` in health check | Server `.env` missing `CAPTCHA_ENABLED=true`. Add it and `sudo docker compose -f docker-compose.production.yml restart backend`. 生产环境**必须启用**验证码 — 本地开发默认关闭 |
+| SSH: `cd: $DEPLOY_REMOTE_DIR: No such file or directory` | 单引号内 `$DEPLOY_REMOTE_DIR` 不会在远程展开（它是本地变量）。SSH 命令必须用双引号包裹，让本地 shell 先展开变量。见上方 "SSH quoting" 说明 |
