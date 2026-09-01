@@ -96,14 +96,16 @@ class TestThinkingClassOverrides:
         })
         assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning"
 
-    def test_anthropic_thinking_uses_standard_class(self):
+    def test_anthropic_thinking_uses_patched_class(self):
+        """Anthropic thinking routes to PatchedChatAnthropic which captures
+        thinking blocks from streaming events into additional_kwargs."""
         entry = build_model_entry({
             "ai_provider": "anthropic",
             "ai_model_id": "claude-sonnet-4-6",
             "api_key": "sk-ant",
             "model_1_capabilities": ["text_generation", "deep_thinking"],
         })
-        assert entry["use"] == "langchain_anthropic:ChatAnthropic"
+        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_anthropic:PatchedChatAnthropic"
         assert entry["supports_thinking"] is True
 
 

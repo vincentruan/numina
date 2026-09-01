@@ -45,6 +45,10 @@ _THINKING_CLASS_OVERRIDES: dict[str, str] = {
     # streaming deltas and replays thought_signature on historical messages.
     # Works for any LLM API that returns non-standard reasoning fields.
     "reasoning": "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning",
+    # Anthropic thinking patch: captures thinking blocks from streaming events
+    # and copies to additional_kwargs["reasoning_content"] — bypasses DeerFlow's
+    # _extract_text which silently drops thinking blocks from content lists.
+    "anthropic": "apps.agent.services.deerflow_adapter.patched_anthropic:PatchedChatAnthropic",
 }
 
 
@@ -128,6 +132,11 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
     if thinking_supported:
         if "deepseek" in model_id.lower():
             use_class = _THINKING_CLASS_OVERRIDES["deepseek"]
+        elif provider == "anthropic":
+            # Anthropic: patched to capture thinking blocks from streaming
+            # events into additional_kwargs["reasoning_content"] — bypasses
+            # DeerFlow's _extract_text which silently drops thinking blocks.
+            use_class = _THINKING_CLASS_OVERRIDES["anthropic"]
         elif provider == "openai" and not base_url:
             # Native OpenAI: stock ChatOpenAI; reasoning effort via
             # supports_reasoning_effort + Responses API.
