@@ -41,7 +41,10 @@ _PROVIDER_CLASS_MAP: dict[str, str] = {
 
 _THINKING_CLASS_OVERRIDES: dict[str, str] = {
     "deepseek": "deerflow.models.patched_deepseek:PatchedChatDeepSeek",
-    "openai_compatible": "deerflow.models.patched_openai:PatchedChatOpenAI",
+    # Generic reasoning patch: captures reasoning_content / reasoning from
+    # streaming deltas and replays thought_signature on historical messages.
+    # Works for any LLM API that returns non-standard reasoning fields.
+    "reasoning": "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning",
 }
 
 
@@ -130,7 +133,10 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
             # supports_reasoning_effort + Responses API.
             use_class = "langchain_openai:ChatOpenAI"
         elif provider in ("openai", "openai_compatible"):
-            use_class = _THINKING_CLASS_OVERRIDES["openai_compatible"]
+            # Any LLM API with thinking that returns non-standard reasoning
+            # fields.  Vendor-agnostic — captures reasoning_content / reasoning
+            # from deltas and replays thought_signature for multi-turn.
+            use_class = _THINKING_CLASS_OVERRIDES["reasoning"]
 
     entry: dict[str, Any] = {
         "name": "main",

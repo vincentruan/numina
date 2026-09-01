@@ -74,9 +74,9 @@ class TestThinkingClassOverrides:
         assert "PatchedChatOpenAI" not in entry["use"]
         assert "ReasoningChatOpenAI" not in entry["use"]
 
-    def test_openai_with_base_url_uses_patched_openai(self):
-        """OpenAI-compatible gateway (custom base_url) needs the patched class
-        to capture reasoning_content from vendor-specific streaming deltas."""
+    def test_openai_with_base_url_uses_reasoning_chat(self):
+        """OpenAI-compatible gateway with thinking routes to the generic
+        reasoning patch (captures reasoning_content from vendor deltas)."""
         entry = build_model_entry({
             "ai_provider": "openai",
             "ai_model_id": "qwen3-32b",
@@ -84,16 +84,17 @@ class TestThinkingClassOverrides:
             "ai_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "model_1_capabilities": ["text_generation", "deep_thinking"],
         })
-        assert entry["use"] == "deerflow.models.patched_openai:PatchedChatOpenAI"
+        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning"
 
-    def test_openai_compatible_thinking_uses_patched_openai(self):
+    def test_openai_compatible_thinking_uses_reasoning_chat(self):
+        """Any model with thinking routes to the generic reasoning patch."""
         entry = build_model_entry({
             "ai_provider": "openai_compatible",
             "ai_model_id": "qwen3-235b",
             "api_key": "sk-qw",
             "model_1_capabilities": ["text_generation", "deep_thinking"],
         })
-        assert entry["use"] == "deerflow.models.patched_openai:PatchedChatOpenAI"
+        assert entry["use"] == "apps.agent.services.deerflow_adapter.patched_reasoning_chat:PatchedChatReasoning"
 
     def test_anthropic_thinking_uses_standard_class(self):
         entry = build_model_entry({
