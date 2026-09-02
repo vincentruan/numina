@@ -208,3 +208,99 @@ def test_text_fallback_title_values():
     t = _text_fallback_title(long)
     assert len(t) <= 60
     assert t.endswith("...")
+
+
+@pytest.mark.asyncio
+async def test_followup_generates_title_when_db_has_no_title():
+    """Regression: follow-up messages must generate a title when DB has NONE.
+
+    Previously the gate checked ``db_has_fallback`` (title is a fallback value)
+    but NOT ``db_title is None`` (title was never set).  Sessions that never
+    got a title — due to the prior bug, a crashed first turn, etc. — would
+    stay title-less forever because the gate saw 2+ user messages and no
+    fallback, then returned None.
+
+    Fix: add ``db_title_missing`` escape so any follow-up turn generates a
+    title when the DB row has never had one.
+    """
+    # Simulate a session with 2 complete exchanges (follow-up message)
+    messages = [
+        HumanMessage(content="第一问"),
+        AIMessage(content="第一答"),
+        HumanMessage(content="第二问 — 这就是本轮的用户消息"),
+        AIMessage(content="第二答"),
+    ]
+    # Checkpoint has NO title (never set)
+    channel_values = {"messages": messages}
+    checkpoint = SimpleNamespace(checkpoint={"channel_values": channel_values})
+
+    with (
+        patch(
+            "apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer"
+        ) as mock_get_ckpt,
+        patch("apps.agent.services.session_store.AiSessionRepository") as MockRepo,
+        patch(
+            "apps.agent.services.runtime.run_extras._generate_title_via_llm",
+            new_callable=AsyncMock,
+            return_value="第二问的标题",
+        ) as mock_llm,
+    ):
+        mock_get_ckpt.return_value.aget_tuple = AsyncMock(return_value=checkpoint)
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value={"title": None})  # DB has NO title
+        repo.update_summary = AsyncMock()
+
+        result = await sync_title_from_checkpoint(
+            "thread-uuid-456",
+            "family-123",
+            ai_config={"ai_provider": "openai", "ai_model_id": "gpt-4o-mini"},
+            user_message="第二问 — 这就是本轮的用户消息",
+            ai_response="第二答",
+        )
+
+    # Must generate title despite being a follow-up (2+ user messages)
+    mock_llm.assert_awaited_once()
+    repo.update_summary.assert_awaited_once()
+    assert repo.update_summary.call_args.kwargs["title"] == "第二问的标题"
+    assert result == "第二问的标题"
+
+
+@pytest.mark.asyncio
+async def test_followup_preserves_existing_title():
+    """Follow-up must NOT overwrite a session that already has a proper title."""
+    messages = [
+        HumanMessage(content="第一问"),
+        AIMessage(content="第一答"),
+        HumanMessage(content="第二问"),
+        AIMessage(content="第二答"),
+    ]
+    channel_values = {"messages": messages}
+    checkpoint = SimpleNamespace(checkpoint={"channel_values": channel_values})
+
+    with (
+        patch(
+            "apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer"
+        ) as mock_get_ckpt,
+        patch("apps.agent.services.session_store.AiSessionRepository") as MockRepo,
+        patch(
+            "apps.agent.services.runtime.run_extras._generate_title_via_llm",
+            new_callable=AsyncMock,
+        ) as mock_llm,
+    ):
+        mock_get_ckpt.return_value.aget_tuple = AsyncMock(return_value=checkpoint)
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value={"title": "已有标题"})  # proper title
+        repo.update_summary = AsyncMock()
+
+        result = await sync_title_from_checkpoint(
+            "thread-uuid-789",
+            "family-123",
+            ai_config={"ai_provider": "openai"},
+            user_message="第二问",
+            ai_response="第二答",
+        )
+
+    # Must NOT generate/overwrite — step 1 returns None for proper existing title
+    mock_llm.assert_not_awaited()
+    repo.update_summary.assert_not_awaited()
+    assert result is None

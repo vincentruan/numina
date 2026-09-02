@@ -581,18 +581,28 @@ async def sync_title_from_checkpoint(
                 return title
             # Gate: only generate a title on the first exchange. If the
             # checkpoint has real messages AND the gate says no, respect it —
-            # unless the DB/checkpoint carries a fallback that needs replacing.
+            # unless the DB has no title at all, carries a fallback, or the
+            # checkpoint carries a fallback.  The ``db_title_missing`` escape
+            # is critical: sessions that never got a title (prior bug, crashed
+            # first turn, etc.) must get one on the NEXT turn too, not just
+            # the first.
             ckpt_messages = channel_values.get("messages") or []
             if len(ckpt_messages) >= 1:
                 gate_allows = _should_generate_title(
                     channel_values, allow_partial_exchange=allow_partial_exchange,
                 )
+                db_title_missing = db_title is None
                 db_has_fallback = db_title and _is_fallback_title(db_title)
                 ckpt_has_fallback = ckpt_title and _is_fallback_title(ckpt_title)
-                if not gate_allows and not db_has_fallback and not ckpt_has_fallback:
+                if (
+                    not gate_allows
+                    and not db_title_missing
+                    and not db_has_fallback
+                    and not ckpt_has_fallback
+                ):
                     logger.info(
-                        "[run_extras][title] gate SKIP: thread=%s gate=%s db_fb=%s ckpt_fb=%s",
-                        thread_id, gate_allows, db_has_fallback, ckpt_has_fallback,
+                        "[run_extras][title] gate SKIP: thread=%s gate=%s db_missing=%s db_fb=%s ckpt_fb=%s",
+                        thread_id, gate_allows, db_title_missing, db_has_fallback, ckpt_has_fallback,
                     )
                     return None
 
