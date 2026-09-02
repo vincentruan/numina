@@ -42,7 +42,6 @@
                 :show="activePopover === stat.type"
                 :placement="stat.type === 'alerts' ? 'bottom-end' : 'bottom'"
                 :offset="[0, 8]"
-                :teleport="null"
                 trigger="manual"
               >
                 <div class="stat-popover-content">
