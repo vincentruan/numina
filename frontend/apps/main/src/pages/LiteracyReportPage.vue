@@ -188,8 +188,9 @@ async function init() {
       const match = queryChildId && children.value.find(c => c.child_id === queryChildId)
       selectedChildId.value = match ? match.child_id : children.value[0].child_id
     }
-  } catch {
+  } catch (err) {
     loadError.value = true
+    console.error('[LiteracyReport] init failed:', err)
     showFailToast(t('literacyReport.loadFailed'))
   } finally {
     loading.value = false
@@ -319,10 +320,13 @@ async function onLiteracyCancel() {
 onMounted(async () => {
   await init()
   if (children.value.length > 0) {
-    const resumed = await resumeHandle.resume()
-    if (!resumed) {
-      loadReport()
-    }
+    // Always load the cached report first for immediate display.
+    // resume() checks for running literacy tasks — if found, SSE will
+    // update the report via onComplete when the stream finishes.
+    await loadReport()
+    await resumeHandle.resume()
+    // If a running task was found, SSE will deliver updates via onStreamEvent.
+    // No need to poll; the stream will trigger loadReport() on completion.
   }
 })
 

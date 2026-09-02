@@ -25,6 +25,15 @@ import { refreshTokenIfNeeded } from '@/api'
 import { getAITask } from '@/api/ai'
 import { readSSEStream } from '@/utils/sseReader'
 
+/**
+ * sessionStorage key for persisting step-progress state across page navigation.
+ * When the user leaves /ai/report while a report is generating, the current
+ * step state is saved here so that re-entering the page immediately restores
+ * the timeline — even if SSE replay from the bridge buffer is unavailable
+ * (e.g. backend container restarted, buffer overflowed).
+ */
+const SESSION_STORAGE_KEY = 'numina:report-stream-state'
+
 export type ReportStreamStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'error'
 export type StepStatus = 'waiting' | 'process' | 'finish' | 'error'
 
@@ -62,6 +71,10 @@ export interface UseReportStreamReturn {
   abort: (keepRunning?: boolean) => void
   connect: (force?: boolean) => Promise<boolean>
   reset: () => void
+  /** Mark stream as active (reconnect to a running task). Sets status to
+   *  'streaming' so the timeline is visible immediately while SSE replays
+   *  buffered events. */
+  markReconnecting: () => void
   pollTaskUntilComplete: () => Promise<void>
   startPolling: () => Promise<void>
   /**
@@ -94,6 +107,86 @@ export function useReportStream(): UseReportStreamReturn {
 
   let abortController: AbortController | null = null
   let cookieRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+  // -- Session persistence for step-progress across page navigation ---------
+
+  interface SavedStreamState {
+    status: ReportStreamStatus
+    progressMessage: string
+    step1Status: StepStatus
+    step2Status: StepStatus
+    step3Status: StepStatus
+    step1Thinking: string
+    toolCalls: ToolCallInfo[]
+    toolResults: ToolResultInfo[]
+    step2Json: Record<string, unknown> | null
+    runId: string | null
+  }
+
+  function saveStateToStorage(): void {
+    try {
+      const state: SavedStreamState = {
+        status: status.value,
+        progressMessage: progressMessage.value,
+        step1Status: step1Status.value,
+        step2Status: step2Status.value,
+        step3Status: step3Status.value,
+        step1Thinking: step1Thinking.value,
+        toolCalls: toolCalls.value,
+        toolResults: toolResults.value,
+        step2Json: step2Json.value,
+        runId: runId.value,
+      }
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state))
+    } catch {
+      // sessionStorage may be unavailable (private browsing, quota exceeded)
+    }
+  }
+
+  function clearSavedState(): void {
+    try {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    } catch {
+      // best-effort
+    }
+  }
+
+  /**
+   * Set a terminal status (completed/error/idle) and clear persisted state.
+   * Centralizes the clearSavedState() call so new terminal states don't
+   * require remembering to add it manually (Shotgun Surgery prevention).
+   */
+  function setTerminalStatus(newStatus: ReportStreamStatus): void {
+    status.value = newStatus
+    clearSavedState()
+  }
+
+  function restoreStateFromStorage(): void {
+    try {
+      const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as SavedStreamState
+      // Only restore when the previous run was actively generating — a
+      // completed/error state should not re-appear on re-entry.
+      if (saved.status !== 'connecting' && saved.status !== 'streaming') return
+      status.value = saved.status
+      progressMessage.value = saved.progressMessage || ''
+      step1Status.value = saved.step1Status || 'waiting'
+      step2Status.value = saved.step2Status || 'waiting'
+      step3Status.value = saved.step3Status || 'waiting'
+      step1Thinking.value = saved.step1Thinking || ''
+      if (Array.isArray(saved.toolCalls)) toolCalls.value = saved.toolCalls
+      if (Array.isArray(saved.toolResults)) toolResults.value = saved.toolResults
+      step2Json.value = saved.step2Json ?? null
+      runId.value = saved.runId ?? null
+    } catch {
+      // Corrupted data — ignore
+    }
+  }
+
+  // Restore step state from a previous session immediately so the timeline
+  // is visible on mount, before resume() has a chance to reconnect SSE.
+  restoreStateFromStorage()
 
   function startCookieRefresh(): void {
     if (cookieRefreshTimer) clearInterval(cookieRefreshTimer)
@@ -129,6 +222,8 @@ export function useReportStream(): UseReportStreamReturn {
     step2Json.value = null
     // U6: Reset reconnection state
     runId.value = null
+    // Clear persisted step state — a fresh generation is starting
+    clearSavedState()
   }
 
   function abort(keepRunning = false): void {
@@ -136,6 +231,23 @@ export function useReportStream(): UseReportStreamReturn {
     stopCookieRefresh()
     if (!keepRunning && (status.value === 'streaming' || status.value === 'connecting')) {
       status.value = 'idle'
+    }
+    // Persist step state when the task continues running in the background
+    // so re-entering the page can restore the timeline immediately.
+    if (keepRunning && (status.value === 'streaming' || status.value === 'connecting')) {
+      saveStateToStorage()
+    }
+  }
+
+  /** Mark stream as active when reconnecting to a running task (page re-entry).
+   *  Sets status to 'streaming' so the timeline is immediately visible while
+   *  SSE replays buffered events from the bridge. Without this, the timeline
+   *  stays hidden until the first SSE event arrives — which may be delayed by
+   *  the async fetch or never arrive if SSE falls back to polling. */
+  function markReconnecting(): void {
+    if (status.value === 'idle') {
+      status.value = 'streaming'
+      progressMessage.value = t('aiHub.reportGenerating')
     }
   }
 
@@ -256,7 +368,8 @@ export function useReportStream(): UseReportStreamReturn {
     }
     if (data?.status === 'complete') {
       if (step3Status.value !== 'error') step3Status.value = 'finish'
-      status.value = 'completed'
+      // Task completed — clear persisted state so next generation starts fresh
+      setTerminalStatus('completed')
       // The SSE end frame does not carry generated_at (end_payload only has
       // status + usage). Set it now so the caller sees a fresh timestamp
       // instead of null — without this the "暂无报告" empty state shows.
@@ -264,12 +377,12 @@ export function useReportStream(): UseReportStreamReturn {
         generatedAt.value = new Date().toISOString()
       }
     } else if (data?.status === 'error') {
-      status.value = 'error'
       errorMessage.value = errorMessage.value || t('toast.aiGenerateFailed')
+      setTerminalStatus('error')
     } else if (status.value !== 'error') {
       // Only transition to 'completed' if not already in error state.
       // An error event may have been received before this end frame.
-      status.value = 'completed'
+      setTerminalStatus('completed')
       if (!generatedAt.value) {
         generatedAt.value = new Date().toISOString()
       }
@@ -460,8 +573,8 @@ export function useReportStream(): UseReportStreamReturn {
         handleEnd(d as Parameters<typeof handleEnd>[0])
         break
       case 'error':
-        status.value = 'error'
         errorMessage.value = (d.error as string) || (d.message as string) || t('toast.aiGenerateFailed')
+        setTerminalStatus('error')
         break
     }
   }
@@ -485,6 +598,7 @@ export function useReportStream(): UseReportStreamReturn {
     abort,
     connect,
     reset,
+    markReconnecting,
     pollTaskUntilComplete,
     startPolling,
     ingestEvent,
