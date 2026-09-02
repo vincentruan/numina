@@ -50,12 +50,12 @@
                     <span class="stat-popover-value" :class="{ warn: stat.warn }">{{ stat.value }}</span>
                     <span class="stat-popover-label">{{ stat.label }}</span>
                   </div>
-                  <p class="stat-popover-desc">{{ stat.tip }}</p>
-                  <button class="stat-popover-action" type="button" @click="goToReport">
+                  <p class="stat-popover-desc">{{ stat.content || stat.tip }}</p>
+                  <button class="stat-popover-action" type="button" @click="goToReport(stat.scrollTarget)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                     </svg>
-                    {{ t('aiHub.viewFullReport') }}
+                    {{ t('aiHub.viewReport') }}
                   </button>
                 </div>
                 <template #reference>
@@ -82,7 +82,7 @@
           </template>
           <template v-else-if="reportGeneratedAt">
             <span>{{ reportAge }}</span>
-            <button class="refresh-btn" :aria-label="t('aiHub.refreshReport')" @click="() => refreshReport()">
+            <button class="refresh-btn" :aria-label="t('aiHub.refreshReport')" @click="onRefreshClick">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -343,7 +343,7 @@ import { useAIStore } from '@/stores/ai'
 import { useFamilyStore } from '@/stores/family'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
-import { showToast, showFailToast } from 'vant'
+import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useReportStream } from '@/composables/useReportStream'
 import { useTaskResume } from '@/composables/useTaskResume'
@@ -594,12 +594,95 @@ const dataCompletenessDisplay = computed(() => {
   return score != null ? `${score.toFixed(0)}%` : '-'
 })
 
-const statItems = computed<Array<{ type: HubStatType; value: string; label: string; tip: string; warn: boolean }>>(() => [
+// --- Helper: truncate text for popover display ---
+// Approx 60 CJK chars or 120 ASCII chars fit in the popover (~300px wide)
+function truncateForPopover(text: string, maxLen = 70): string {
+  if (!text) return ''
+  const stripped = text.replace(/\*\*/g, '').replace(/[*_`#]/g, '').trim()
+  if (stripped.length <= maxLen) return stripped
+  return stripped.slice(0, maxLen) + '…'
+}
+
+// Collect suggestion previews from all indicators
+function getSuggestionsContent(): string {
+  const r = currentReport.value
+  if (!r?.indicators?.length) return ''
+  const items: string[] = []
+  for (const ind of r.indicators) {
+    if (ind.suggestions?.length) {
+      items.push(...ind.suggestions)
+    }
+  }
+  if (!items.length) return ''
+  return items.slice(0, 3).map(s => `· ${s}`).join('\n')
+}
+
+// Collect alert indicator names (score <= 2)
+function getAlertsContent(): string {
+  const r = currentReport.value
+  if (!r?.indicators?.length) return ''
+  const low = r.indicators.filter(ind => typeof ind.score === 'number' && ind.score <= 2)
+  if (!low.length) return ''
+  return low.map(ind => `· ${getIndicatorLabel(ind.key)}（${ind.score}/5）`).join('\n')
+}
+
+// Completeness context — score + what's missing
+function getCompletenessContent(): string {
+  const r = currentReport.value
+  if (!r) return ''
+  const score = r.data_completeness_score ?? 0
+  const hint = score < 50
+    ? '数据严重不足，建议补充资产/负债信息以获得更精准的分析。'
+    : score < 80
+      ? '部分数据缺失，建议完善资产和负债明细。'
+      : score < 100
+        ? '数据较为完整，少量信息待补充。'
+        : '数据完整，报告结果可信度高。'
+  return `完整度 ${score}%。${hint}`
+}
+
+// Look up indicator label (same logic as AIReportPage)
+function getIndicatorLabel(key: string): string {
+  const i18nKey = `aiReport.indicatorLabel_${key}`
+  const translated = t(i18nKey)
+  return translated !== i18nKey ? translated : key
+}
+
+// Scroll target for each stat type (hash passed to /ai/report)
+function getStatScrollTarget(type: HubStatType): string {
+  const r = currentReport.value
+  if (!r?.indicators?.length) return ''
+  if (type === 'suggestions') {
+    // First indicator that has suggestions
+    const ind = r.indicators.find(i => i.suggestions?.length)
+    return ind ? `indicator-${ind.key}` : ''
+  }
+  if (type === 'alerts') {
+    // First low-scoring indicator
+    const ind = r.indicators.find(i => typeof i.score === 'number' && i.score <= 2)
+    return ind ? `indicator-${ind.key}` : ''
+  }
+  return '' // completeness — no specific section
+}
+
+type HubStatItem = {
+  type: HubStatType
+  value: string
+  label: string
+  tip: string
+  warn: boolean
+  content: string
+  scrollTarget: string
+}
+
+const statItems = computed<HubStatItem[]>(() => [
   {
     type: 'suggestions',
     value: String(suggestionCount.value),
     label: t('aiHub.suggestionsCount'),
     tip: t('aiHub.suggestionCountTip'),
+    content: truncateForPopover(getSuggestionsContent()),
+    scrollTarget: getStatScrollTarget('suggestions'),
     warn: false,
   },
   {
@@ -607,6 +690,8 @@ const statItems = computed<Array<{ type: HubStatType; value: string; label: stri
     value: String(alertCount.value),
     label: t('aiHub.alertsCount'),
     tip: t('aiHub.alertCountTip'),
+    content: truncateForPopover(getAlertsContent()),
+    scrollTarget: getStatScrollTarget('alerts'),
     warn: true,
   },
   {
@@ -614,13 +699,16 @@ const statItems = computed<Array<{ type: HubStatType; value: string; label: stri
     value: dataCompletenessDisplay.value,
     label: t('aiHub.dataCompleteness'),
     tip: t('aiHub.dataCompletenessTip'),
+    content: getCompletenessContent(),
+    scrollTarget: getStatScrollTarget('completeness'),
     warn: false,
   },
 ])
 
-function goToReport() {
+function goToReport(scrollTarget?: string) {
   activePopover.value = null
-  router.push('/ai/report')
+  const path = scrollTarget ? `/ai/report#${scrollTarget}` : '/ai/report'
+  router.push(path)
 }
 
 async function loadReport() {
@@ -698,76 +786,18 @@ async function cancelReport() {
   }
 }
 
-async function refreshReport(silent?: boolean) {
-  if (reportLoading.value) return // avoid duplicate with scheduler
-
-  // 1-hour cooldown: prevent unnecessary regenerations if report is fresh
-  if (reportGeneratedAt.value && !silent) {
-    const ageMs = Date.now() - parseApiDate(reportGeneratedAt.value).getTime()
-    const oneHourMs = 60 * 60 * 1000
-    if (ageMs < oneHourMs) {
-      showFailToast(t('toast.reportTooFrequent'))
-      return
-    }
-  }
-
-  if (!silent) reportLoading.value = true
-  stream.reset()
-  let registered = false
-  async function registerBgTask() {
-    if (registered) return
-    try {
-      const task = await getAITask('report')
-      if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-        reportTaskId.value = task.task_id
-        aiStore.registerBackgroundTask({
-          capability: 'report',
-          taskId: task.task_id,
-          sessionId: task.session_id || '',
-          startedAt: task.started_at || new Date().toISOString(),
-          status: task.status,
-        })
-        registered = true
-      }
-    } catch {
-      // best-effort; task polling on return will catch up
-    }
-  }
+async function onRefreshClick() {
   try {
-    // force=true bypasses the 8h cache (plan step 6) — the refresh button
-    // means the user wants a fresh report, not the cached one.
-    const connectPromise = stream.connect(true)
-    await registerBgTask()
-    if (!registered) {
-      setTimeout(registerBgTask, 500)
-    }
-    const started = await connectPromise
-    if (!started) {
-      if (!silent) {
-        showToast({ message: t('aiReport.alreadyGenerating'), icon: 'warning-o' })
-      }
-      return
-    }
-    // Stream completed — reload from API to get the persisted report
-    // (stream.report is only populated on cache hit, not fresh generation)
-    await loadReport()
-    aiStore.clearBackgroundTask('report')
-  } catch (err) {
-    if (!silent) {
-      // Check if it's a timeout or connection error
-      const isTimeout = err instanceof Error && err.message.includes('timeout')
-      const isConnectionError = err instanceof Error &&
-        (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))
-      if (isTimeout) {
-        showFailToast(t('toast.reportTimeout'))
-      } else if (isConnectionError) {
-        showFailToast(t('toast.refreshFailed'))
-      } else {
-        showFailToast(stream.errorMessage.value || t('toast.refreshFailed'))
-      }
-    }
-  } finally {
-    if (!silent) reportLoading.value = false
+    await showConfirmDialog({
+      title: t('aiHub.confirmRegenTitle'),
+      message: t('aiHub.confirmRegenMessage'),
+      confirmButtonText: t('aiHub.confirmRegenConfirm'),
+      cancelButtonText: t('aiHub.confirmRegenCancel'),
+    })
+    // Confirmed — navigate to report page with regen flag
+    router.push({ path: '/ai/report', query: { regen: '1' } })
+  } catch {
+    // User cancelled — do nothing
   }
 }
 
@@ -1086,13 +1116,18 @@ defineExpose({
 
 .stat-popover-content {
   padding: 12px 14px;
-  max-width: min(220px, calc(100vw - 32px));
+  max-width: min(320px, calc(100vw - 32px));
   width: max-content;
   box-sizing: border-box;
 }
 
 .stat-popover-desc {
   word-break: break-word;
+  white-space: pre-line;
+  line-height: 1.5;
+  max-height: 120px;
+  overflow-y: auto;
+  margin: 0;
 }
 
 .stat-popover-header {

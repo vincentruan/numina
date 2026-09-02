@@ -147,7 +147,7 @@
       <!-- New format: Indicators array (dynamic rendering) -->
       <template v-if="hasIndicatorsFormat">
         <div class="indicators-section">
-          <div v-for="indicator in renderedIndicators" :key="indicator.key" class="indicator-card">
+          <div v-for="indicator in renderedIndicators" :id="`indicator-${indicator.key}`" :key="indicator.key" class="indicator-card">
             <!-- Header with icon + label + score -->
             <div class="indicator-header">
               <van-icon :name="indicator.icon" class="indicator-icon" />
@@ -220,7 +220,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -247,6 +248,8 @@ const { formatIn } = useCurrency()
 const aiStore = useAIStore()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
@@ -678,6 +681,7 @@ onMounted(async () => {
   // v3: useTaskResume handles running task detection + SSE reconnection
   const resumed = await resumeHandle.resume()
   if (resumed && resumeHandle.task.value) {
+    stream.markReconnecting()
     aiStore.registerBackgroundTask({
       capability: 'report',
       taskId: resumeHandle.taskId.value!,
@@ -696,6 +700,27 @@ onMounted(async () => {
         // best-effort; page already shows empty state
       }
     }, 3000)
+  }
+
+  // Handle ?regen=1 — auto-trigger regeneration (from AI Hub refresh button)
+  if (route.query.regen === '1' && familyStore.aiEnabled) {
+    // Clear the query param so a page refresh doesn't re-trigger
+    router.replace({ path: '/ai/report' })
+    // Wait for DOM to settle, then trigger regeneration
+    await nextTick()
+    onGenerate(true)
+  }
+
+  // Handle hash scroll to indicator section (from AI Hub popover link)
+  const hash = route.hash
+  if (hash && hash.startsWith('#indicator-')) {
+    await nextTick()
+    // Wait for report content to render
+    await nextTick()
+    const el = document.getElementById(hash.slice(1))
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   }
 })
 
@@ -1054,6 +1079,7 @@ onUnmounted(() => {
   margin-bottom: 12px;
   border-radius: 16px;
   padding: 16px;
+  scroll-margin-top: 16px;
 }
 .indicator-header {
   display: flex;
