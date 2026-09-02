@@ -166,6 +166,20 @@ watch(
   },
 )
 
+// Derive thinkingElapsed from generatedAt when content loads without a live timer.
+// Covers: (1) cache hit — onDone fires immediately, timer never ran;
+// (2) task resume completed — onComplete fires, generatedAt set but timer reset to 0.
+// Only fires when there's no active stream and elapsed hasn't been tracked yet.
+watch(
+  [() => hasContent.value, () => generatedAt.value],
+  ([content, ts]) => {
+    if (content && ts && !streaming.value && thinkingElapsed.value === 0) {
+      thinkingElapsed.value = Math.max(0, Date.now() - new Date(ts).getTime())
+    }
+  },
+  { immediate: true },
+)
+
 // Watch expansion state to check scroll button visibility
 watch(
   () => isThinkingExpanded.value,
