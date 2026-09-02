@@ -312,9 +312,13 @@ export function useReportStream(): UseReportStreamReturn {
     }
     if (data.tool_calls && data.tool_calls.length > 0) {
       for (const tc of data.tool_calls) {
+        const id = tc.id || ''
+        // Deduplicate: sessionStorage restore + SSE replay can deliver the
+        // same tool_call twice. Skip if we already have this ID.
+        if (id && toolCalls.value.some((c) => c.id === id)) continue
         const name = tc.name || ''
         toolCalls.value.push({
-          id: tc.id || '',
+          id,
           name,
           args: tc.args || {},
         })
@@ -332,8 +336,12 @@ export function useReportStream(): UseReportStreamReturn {
     name?: string
     content?: unknown
   }): void {
+    const toolCallId = String(data.tool_call_id || '')
+    // Deduplicate: same tool_call_id may arrive from sessionStorage restore
+    // + SSE replay. Skip if we already recorded this result.
+    if (toolCallId && toolResults.value.some((r) => r.tool_call_id === toolCallId)) return
     const result: ToolResultInfo = {
-      tool_call_id: String(data.tool_call_id || ''),
+      tool_call_id: toolCallId,
       tool_name: data.name || '',
       content: data.content,
     }
