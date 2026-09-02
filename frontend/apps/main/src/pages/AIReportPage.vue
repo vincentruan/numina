@@ -237,6 +237,7 @@ import { useReportStream } from '@/composables/useReportStream'
 import { useTaskResume } from '@/composables/useTaskResume'
 import { generateReportImage, generateReportPdf, downloadImage, downloadBlob, reportImageFilename, reportPdfFilename } from '@/utils/reportImage'
 import { sanitizeMarkdown } from '@/utils/sanitize'
+import { getIndicatorLabel } from '@/utils/report'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportStepTimeline from '@/components/ai/ReportStepTimeline.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -371,20 +372,12 @@ const hasIndicatorsFormat = computed(() => {
   return currentReport.value.indicators != null && currentReport.value.indicators.length > 0
 })
 
-// Get localized indicator label (overrides LLM-generated label)
-function getIndicatorLabel(key: string): string {
-  const i18nKey = `aiReport.indicatorLabel_${key}`
-  const translated = t(i18nKey)
-  // If translation exists (not the key itself), use it; otherwise fall back to LLM label
-  return translated !== i18nKey ? translated : key
-}
-
 // Render indicators with markdown narrative
 const renderedIndicators = computed(() => {
   if (!currentReport.value?.indicators) return []
   return currentReport.value.indicators.map((indicator: AIReportIndicator) => ({
     ...indicator,
-    label: getIndicatorLabel(indicator.key),
+    label: getIndicatorLabel(indicator.key, t),
     icon: getIndicatorIcon(indicator.key),
     scoreClass: getScoreClass(indicator.score),
     narrativeHtml: sanitizeMarkdown(marked.parse(indicator.narrative, { async: false }) as string),
@@ -708,7 +701,10 @@ onMounted(async () => {
     router.replace({ path: '/ai/report' })
     // Wait for DOM to settle, then trigger regeneration
     await nextTick()
-    onGenerate(true)
+    onGenerate(true).catch(() => {
+      // onGenerate already shows toast internally; this is a safety net
+      // for errors thrown before entering its try block (e.g. stream.reset).
+    })
   }
 
   // Handle hash scroll to indicator section (from AI Hub popover link)

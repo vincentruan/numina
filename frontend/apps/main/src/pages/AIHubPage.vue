@@ -357,6 +357,7 @@ import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import AiGatedCard from '@/components/ai/AiGatedCard.vue'
 import { getXiaomingDefaultPrompt, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
+import { getIndicatorLabel } from '@/utils/report'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
@@ -623,7 +624,7 @@ function getAlertsContent(): string {
   if (!r?.indicators?.length) return ''
   const low = r.indicators.filter(ind => typeof ind.score === 'number' && ind.score <= 2)
   if (!low.length) return ''
-  return low.map(ind => `· ${getIndicatorLabel(ind.key)}（${ind.score}/5）`).join('\n')
+  return low.map(ind => `· ${getIndicatorLabel(ind.key, t)}（${ind.score}/5）`).join('\n')
 }
 
 // Completeness context — score + what's missing
@@ -639,13 +640,6 @@ function getCompletenessContent(): string {
         ? '数据较为完整，少量信息待补充。'
         : '数据完整，报告结果可信度高。'
   return `完整度 ${score}%。${hint}`
-}
-
-// Look up indicator label (same logic as AIReportPage)
-function getIndicatorLabel(key: string): string {
-  const i18nKey = `aiReport.indicatorLabel_${key}`
-  const translated = t(i18nKey)
-  return translated !== i18nKey ? translated : key
 }
 
 // Scroll target for each stat type (hash passed to /ai/report)
