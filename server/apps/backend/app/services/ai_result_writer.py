@@ -7,6 +7,7 @@ Each skill has its own writer function with replace strategy:
 
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -42,6 +43,11 @@ def write_report_results(
             db.commit()
             return 0
 
+        # Defensive: set generated_at explicitly in UTC. The model's
+        # default=func.now() depends on the DB session timezone (SET
+        # timezone='UTC' via engine hook). If the hook doesn't apply
+        # (e.g. PG server timezone leaks through), the stored value is
+        # local time, which ensure_utc() misinterprets → 8h display error.
         report = AIReport(
             id=next_id(),
             family_id=family_id,
@@ -50,6 +56,7 @@ def write_report_results(
             data_completeness_score=results.get("data_completeness_score"),
             status="completed",
             markdown_file_path=markdown_file_path,
+            generated_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(report)
         db.commit()
