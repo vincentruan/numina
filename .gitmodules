@@ -1,0 +1,3 @@
+[submodule ".claude/skills/agent-dev/references/deerflow"]
+	path = .claude/skills/agent-dev/references/deerflow
+	url = git@github.com:bytedance/deer-flow.git
