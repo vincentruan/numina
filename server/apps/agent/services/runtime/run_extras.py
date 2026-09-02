@@ -526,22 +526,19 @@ async def sync_title_from_checkpoint(
     ``channel_values["title"]``. When the agent runs via the async path
     (``astream``) that title is an LLM-generated summary; but Numina's adapter
     uses the sync ``stream()`` path, so the sync ``after_model`` hook runs and
-    only writes a local fallback (the raw ``[SKILL:chat]`` prompt wrapper). This
-    function bridges that gap while mirroring DeerFlow's interaction semantics:
+    only writes a local fallback (the raw prompt wrapper JSON). This function
+    bridges that gap.
 
-    1. Title is generated **once**, after the first user/assistant exchange.
-    2. If the session already has a proper title (DB or checkpoint), keep it.
-    3. If the first exchange produced a fallback/prompt-wrapper title, replace it
-       with an LLM-generated summary or a clean local fallback.
-    4. For interrupted first turns, ``allow_partial_exchange=True`` mirrors
-       DeerFlow's ``_ensure_interrupted_title`` and permits a title from a lone
-       user message so the thread still gets a sidebar label.
+    **Design (v2 — simplified):** For new sessions the worker already carries
+    ``user_message`` and ``ai_response`` directly, so we generate the title
+    from those without depending on the checkpointer. The checkpoint is only
+    consulted as a fallback source for the user message (e.g. when the worker
+    didn't receive one) and to detect an existing proper title that should be
+    preserved. This eliminates the class of bugs where a checkpointer read
+    failure or unexpected checkpoint state silently prevents title generation.
 
     Returns the newly persisted title string so the worker can publish it to the
-    frontend, or ``None`` when no new title was written. Callers should only emit
-    a ``values`` title event when the return value is non-None; this keeps the
-    sidebar stable across follow-up messages and matches DeerFlow's
-    ``TitleMiddleware._should_generate_title`` gating.
+    frontend, or ``None`` when no new title was written.
     """
     try:
         from apps.agent.services.session_store import AiSessionRepository
@@ -551,18 +548,27 @@ async def sync_title_from_checkpoint(
         # 1. Skip if the DB row already has a proper title (user rename or prior gen).
         session = await repo.get_session(thread_id)
         db_title = session.get("title") if session else None
+        logger.info(
+            "[run_extras][title] step1: thread=%s session_exists=%s db_title=%r is_fallback=%s",
+            thread_id,
+            session is not None,
+            db_title,
+            _is_fallback_title(db_title) if db_title else None,
+        )
         if db_title and not _is_fallback_title(db_title):
+            logger.info("[run_extras][title] step1 SKIP: DB already has proper title")
             return None
 
-        # 2. Read the latest checkpoint and its channel_values.
-        #    DeerFlow robustness pattern: if the checkpoint read fails (DB locked,
-        #    corruption, etc.), still produce a title from the user message so the
-        #    sidebar never shows a blank or placeholder title.
+        # 2. Attempt to read the checkpoint — used ONLY to detect an existing
+        #    proper title that should be preserved (not to gate generation).
+        #    Checkpoint failures are non-fatal: we still generate a title from
+        #    the user message.
         _, channel_values = await _read_checkpoint(thread_id)
+        ckpt_title = None
         if channel_values:
-            # 3. If the checkpoint already carries a proper title (e.g. async
-            # middleware path or a prior successful run), persist it and return.
             ckpt_title = channel_values.get("title")
+            # If the checkpoint already carries a proper (non-fallback) title
+            # from the async middleware path, persist it and return.
             if ckpt_title and not _is_fallback_title(ckpt_title):
                 title = str(ckpt_title).strip()
                 await repo.update_summary(
@@ -573,53 +579,42 @@ async def sync_title_from_checkpoint(
                 )
                 logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
                 return title
-
-            # 4. Decide whether a title is needed.
-            #
-            # The ``_should_generate_title`` gate enforces "first exchange only"
-            # by checking message counts — but when the checkpoint messages are
-            # not yet flushed (empty list), the gate would incorrectly block.
-            # In that case, skip the gate and fall through to generation.
-            #
-            # Additionally, ``allow_partial_exchange`` lets interrupted first
-            # turns (user message only, no assistant response yet) produce a
-            # fallback title so the sidebar is never blank.
-            ckpt_title = channel_values.get("title")
+            # Gate: only generate a title on the first exchange. If the
+            # checkpoint has real messages AND the gate says no, respect it —
+            # unless the DB/checkpoint carries a fallback that needs replacing.
             ckpt_messages = channel_values.get("messages") or []
-            gate_applicable = len(ckpt_messages) >= 1
-            if gate_applicable:
+            if len(ckpt_messages) >= 1:
                 gate_allows = _should_generate_title(
                     channel_values, allow_partial_exchange=allow_partial_exchange,
                 )
                 db_has_fallback = db_title and _is_fallback_title(db_title)
                 ckpt_has_fallback = ckpt_title and _is_fallback_title(ckpt_title)
                 if not gate_allows and not db_has_fallback and not ckpt_has_fallback:
+                    logger.info(
+                        "[run_extras][title] gate SKIP: thread=%s gate=%s db_fb=%s ckpt_fb=%s",
+                        thread_id, gate_allows, db_has_fallback, ckpt_has_fallback,
+                    )
                     return None
-        else:
-            # Checkpoint read failed — log at info level (not warning, since this
-            # can happen transiently during DB compaction or right after a fresh
-            # session where the first checkpoint hasn't flushed yet).
-            logger.info(
-                "[run_extras] Checkpoint read returned no channel_values for "
-                "thread %s; falling back to user-message title",
-                thread_id,
-            )
 
-        # 5. Generate a real title via the family's AI provider.
-        #    Reached whenever the DB/checkpoint lacks a proper title — either
-        #    the first exchange hasn't completed yet (checkpoint empty) or a
-        #    prior attempt produced a fallback that needs replacing.
+        # 3. Generate title via LLM from the worker's user_message + ai_response.
+        #    This is the PRIMARY path for new sessions — does NOT depend on the
+        #    checkpointer returning useful data.
         generated_title: str | None = None
         if ai_config and user_message:
-            generated_title = await _generate_title_via_llm(user_message, ai_response, ai_config, target_language)
+            logger.info(
+                "[run_extras][title] step3 LLM: thread=%s user_msg=%r ai_resp_len=%d lang=%s",
+                thread_id, user_message[:60], len(ai_response), target_language,
+            )
+            generated_title = await _generate_title_via_llm(
+                user_message, ai_response, ai_config, target_language,
+            )
+            logger.info("[run_extras][title] step3 LLM result: %r", generated_title)
 
-        # 6. Final fallback: truncated user message (DeerFlow _fallback_title pattern).
-        #    Reaching here means we need a title — either the LLM just ran (and
-        #    may have failed) or the checkpoint was absent entirely.  Even
-        #    ``_text_fallback_title("")`` returns "New Chat", so the row is never
-        #    left title-less.
+        # 4. Final fallback: truncated user message. Even ``_text_fallback_title("")``
+        #    returns "New Chat" so the sidebar is never blank.
         if not generated_title:
             generated_title = _text_fallback_title(user_message)
+            logger.info("[run_extras][title] step4 fallback: %r", generated_title)
 
         if generated_title and generated_title.strip():
             title = generated_title.strip()
@@ -631,6 +626,7 @@ async def sync_title_from_checkpoint(
             )
             logger.info("[run_extras] Generated title '%s' for thread %s", title, thread_id)
             return title
+        logger.info("[run_extras][title] FINAL: generated_title empty, returning None")
         return None
     except Exception as e:
         logger.warning("[run_extras] Failed to sync title for thread %s: %s", thread_id, e)

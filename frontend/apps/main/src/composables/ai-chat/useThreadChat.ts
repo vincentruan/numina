@@ -1467,6 +1467,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // yielding, so any non-empty title here is display-safe.
             // Updates the session store in-place so the sidebar reflects the
             // title without HTTP polling.
+            if (data.title) {
+              console.info('[useThreadChat] values.title received:', data.title, 'threadId:', currentThreadId, 'retryPreserve:', retryPreserveTitle)
+            }
             if (data.title && currentThreadId && !retryPreserveTitle) {
               // Lazy store access — avoids requiring Pinia at composable
               // creation time (tests create useThreadChat without Pinia).

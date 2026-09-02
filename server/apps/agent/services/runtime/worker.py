@@ -1713,7 +1713,16 @@ async def _run_numina_agent(
         # ``_ensure_interrupted_title`` pattern).  Interrupted first turns pass
         # ``allow_partial_exchange=True`` so a lone user message still yields a
         # fallback title, matching DeerFlow's behaviour.
-        if p.selected_provider is not None and title_user_message:
+        _title_gate_ok = p.selected_provider is not None and bool(title_user_message)
+        logger.info(
+            "[_run_numina_agent] title gate: provider=%s user_msg_len=%d ai_text_len=%d status=%s → generate=%s",
+            p.selected_provider is not None,
+            len(title_user_message),
+            len(p.ai_text),
+            record.status,
+            _title_gate_ok,
+        )
+        if _title_gate_ok:
             was_interrupted = record.status == RunStatus.interrupted
             # Detect target language from the original (unstripped) user message.
             # If it starts with the English prefix, generate an English title;
@@ -1728,6 +1737,13 @@ async def _run_numina_agent(
                         "English" if _prefix == "[LANGUAGE REQUIREMENT]" else "Chinese"
                     )
                     break
+            logger.info(
+                "[_run_numina_agent] scheduling title sync: thread=%s lang=%s interrupted=%s user_msg=%r",
+                thread_id,
+                title_target_language,
+                was_interrupted,
+                title_user_message[:80],
+            )
             task = asyncio.create_task(
                 sync_title_from_checkpoint(
                     thread_id,
@@ -1742,10 +1758,26 @@ async def _run_numina_agent(
             _track_task(task)
             try:
                 generated_title = await task
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "[_run_numina_agent] title sync task raised: thread=%s err=%s",
+                    thread_id,
+                    type(exc).__name__,
+                )
                 generated_title = None
+            logger.info(
+                "[_run_numina_agent] title sync result: thread=%s title=%r",
+                thread_id,
+                generated_title,
+            )
             if generated_title:
                 await bridge.publish(p.run_id, "values", {"title": generated_title})
+        else:
+            logger.info(
+                "[_run_numina_agent] title generation SKIPPED: provider=%s user_message=%r",
+                p.selected_provider is not None,
+                title_user_message[:60] if title_user_message else "",
+            )
 
         # 5. Post-stream: persist terminal session status to DB.
         #    DeerFlow pattern (worker.py finally block): guarantee the session
