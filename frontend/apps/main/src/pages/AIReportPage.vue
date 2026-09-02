@@ -345,6 +345,18 @@ const resumeHandle = useTaskResume('report', {
   },
   onComplete: async () => {
     aiStore.clearBackgroundTask('report')
+    // Stream status was restored from sessionStorage as 'streaming' when
+    // the user re-entered the page. If resume() found the task already
+    // completed, the stream will never receive an end event to transition
+    // to 'completed' — manually set it and clear persisted state so the
+    // timeline doesn't stay stuck on stale step-progress.
+    if (stream.status.value !== 'completed' && stream.status.value !== 'error') {
+      stream.status.value = 'completed'
+      // Clear sessionStorage so next generation starts with a clean slate.
+      // We can't call stream.reset() here because it would wipe the loaded
+      // report and step state that the template is currently rendering.
+      try { sessionStorage.removeItem('numina:report-stream-state') } catch { /* noop */ }
+    }
     await loadExistingReport()
   },
   onError: () => {
@@ -537,6 +549,33 @@ async function waitForServerTaskComplete(): Promise<void> {
   }
 }
 
+/**
+ * Register the running report task so the cancel button and background-task
+ * tracking survive page navigation. Idempotent for the same task_id — safe
+ * to call from both onGenerate and onMounted resume paths.
+ */
+let registeredTaskId: string | null = null
+async function registerRunningTask(): Promise<void> {
+  // Already tracking this task — skip the redundant API round-trip.
+  if (registeredTaskId && reportTaskId.value === registeredTaskId) return
+  try {
+    const task = await getAITask('report')
+    if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
+      reportTaskId.value = task.task_id
+      registeredTaskId = task.task_id
+      aiStore.registerBackgroundTask({
+        capability: 'report',
+        taskId: task.task_id,
+        sessionId: task.session_id || '',
+        startedAt: task.started_at || new Date().toISOString(),
+        status: task.status,
+      })
+    }
+  } catch {
+    // best-effort; polling on return will catch up
+  }
+}
+
 async function onGenerate(force = false) {
   if (!familyStore.aiEnabled) {
     showToast(t('toast.aiNotEnabled'))
@@ -548,34 +587,17 @@ async function onGenerate(force = false) {
   // and the global axios interceptor shows a "资源不存在" toast before
   // the polling code can silently handle it.
   resumeHandle.taskId.value = null
-  let registered = false
-  async function registerBgTask() {
-    if (registered) return
-    try {
-      const task = await getAITask('report')
-      if (task.task_id && ['running', 'queued', 'post_processing'].includes(task.status)) {
-        reportTaskId.value = task.task_id
-        aiStore.registerBackgroundTask({
-          capability: 'report',
-          taskId: task.task_id,
-          sessionId: task.session_id || '',
-          startedAt: task.started_at || new Date().toISOString(),
-          status: task.status,
-        })
-        registered = true
-      }
-    } catch {
-      // best-effort; task polling on return will catch up
-    }
-  }
+  // Reset the registration guard so a fresh task can be tracked.
+  registeredTaskId = null
 
   try {
     const connectPromise = stream.connect(force)
     // Register the background task as soon as possible so navigation away
     // does not lose track of the running run.
-    await registerBgTask()
-    if (!registered) {
-      setTimeout(registerBgTask, 500)
+    await registerRunningTask()
+    if (!reportTaskId.value) {
+      // Task may not exist yet (backend race) — retry after a short delay.
+      setTimeout(registerRunningTask, 500)
     }
     const started = await connectPromise
     if (!started) {
@@ -672,8 +694,13 @@ onMounted(async () => {
   await loadExistingReport()
 
   // v3: useTaskResume handles running task detection + SSE reconnection
-  const resumed = await resumeHandle.resume()
+  let resumed = await resumeHandle.resume()
   if (resumed && resumeHandle.task.value) {
+    // Set reportTaskId so the cancel button appears (U21).
+    // resume() already fetched the task via getAITasks — no need for a
+    // redundant API call; just mirror the ID and register the background task.
+    reportTaskId.value = resumeHandle.taskId.value
+    registeredTaskId = resumeHandle.taskId.value
     stream.markReconnecting()
     aiStore.registerBackgroundTask({
       capability: 'report',
@@ -682,6 +709,31 @@ onMounted(async () => {
       startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
       status: resumeHandle.task.value.status,
     })
+  }
+
+  // Fallback: resume() may have failed (API error, task not yet visible) but
+  // the stream was restored from sessionStorage as 'streaming'. Use
+  // retryTrigger() which finds the running task AND starts SSE reconnection
+  // so steps advance and the cancel button appears.
+  if (!resumed && isGenerating.value) {
+    const reconnected = await resumeHandle.retryTrigger()
+    if (reconnected && resumeHandle.taskId.value && resumeHandle.task.value) {
+      reportTaskId.value = resumeHandle.taskId.value
+      registeredTaskId = resumeHandle.taskId.value
+      stream.markReconnecting()
+      aiStore.registerBackgroundTask({
+        capability: 'report',
+        taskId: resumeHandle.taskId.value,
+        sessionId: resumeHandle.task.value.session_id || '',
+        startedAt: resumeHandle.task.value.started_at || new Date().toISOString(),
+        status: resumeHandle.task.value.status,
+      })
+    } else {
+      // No running task found — generation likely completed or failed while
+      // the user was away. Clear stale stream state so the UI doesn't show
+      // a frozen "generating" timeline.
+      stream.reset()
+    }
   }
 
   // Retry check for previously failed tasks (agent pipeline may still be running)

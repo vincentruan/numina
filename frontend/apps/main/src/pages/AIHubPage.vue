@@ -43,7 +43,7 @@
                 :placement="stat.type === 'alerts' ? 'bottom-end' : 'bottom'"
                 :offset="[0, 8]"
                 :teleport="null"
-                @update:show="(v) => (activePopover = v ? stat.type : null)"
+                trigger="manual"
               >
                 <div class="stat-popover-content">
                   <div class="stat-popover-header">
@@ -59,7 +59,7 @@
                   </button>
                 </div>
                 <template #reference>
-                  <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')">
+                  <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')" @click.stop="activePopover = activePopover === stat.type ? null : stat.type">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <circle cx="12" cy="12" r="10"/>
                       <line x1="12" y1="7" x2="12" y2="13"/>
@@ -604,27 +604,39 @@ function truncateForPopover(text: string, maxLen = 70): string {
   return stripped.slice(0, maxLen) + '…'
 }
 
-// Collect suggestion previews from all indicators
+// Collect suggestion previews — show the narrative of the indicator
+// with the most suggestions, so the popover explains WHAT the suggestions
+// are about rather than listing generic one-liners.
 function getSuggestionsContent(): string {
   const r = currentReport.value
   if (!r?.indicators?.length) return ''
-  const items: string[] = []
+  // Find indicator with the most suggestions
+  let best: (typeof r.indicators)[number] | null = null
+  let bestCount = 0
   for (const ind of r.indicators) {
-    if (ind.suggestions?.length) {
-      items.push(...ind.suggestions)
+    const count = ind.suggestions?.length ?? 0
+    if (count > bestCount) {
+      bestCount = count
+      best = ind
     }
   }
-  if (!items.length) return ''
-  return items.slice(0, 3).map(s => `· ${s}`).join('\n')
+  if (!best?.narrative) return ''
+  return truncateForPopover(best.narrative, 100)
 }
 
-// Collect alert indicator names (score <= 2)
+// Collect alert content — show the narrative of the lowest-scoring
+// indicator so the popover explains WHY it's flagged, not just the score.
 function getAlertsContent(): string {
   const r = currentReport.value
   if (!r?.indicators?.length) return ''
   const low = r.indicators.filter(ind => typeof ind.score === 'number' && ind.score <= 2)
   if (!low.length) return ''
-  return low.map(ind => `· ${getIndicatorLabel(ind.key, t)}（${ind.score}/5）`).join('\n')
+  // Pick the lowest-scoring indicator (most urgent)
+  const worst = low.reduce((min, ind) => (ind.score ?? 99) < (min.score ?? 99) ? ind : min)
+  // Prefix with label + score for context, then append narrative
+  const prefix = `${getIndicatorLabel(worst.key, t)}（${worst.score}/5）`
+  const body = worst.narrative ? '\n' + truncateForPopover(worst.narrative, 100) : ''
+  return prefix + body
 }
 
 // Completeness context — score + what's missing
@@ -1118,9 +1130,9 @@ defineExpose({
 .stat-popover-desc {
   word-break: break-word;
   white-space: pre-line;
-  line-height: 1.5;
-  max-height: 120px;
-  overflow-y: auto;
+  line-height: 1.6;
+  /* No max-height — content is already truncated to ~100 chars by
+     truncateForPopover, so it fits naturally without scrolling. */
   margin: 0;
 }
 
@@ -1149,7 +1161,7 @@ defineExpose({
 .stat-popover-desc {
   margin: 0 0 10px;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text-secondary);
 }
 
