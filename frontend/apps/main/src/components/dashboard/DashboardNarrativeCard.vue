@@ -265,8 +265,21 @@ async function triggerStream(force = true) {
         } else {
           resumeHandle.triggerFailed.value = true
         }
+      } else {
+        // hadTaskId=true but SSE failed — activate polling fallback so
+        // useTaskResume can recover via getAITasks polling instead of
+        // waiting indefinitely for a dead SSE connection.
+        resumeHandle.disconnect()
+        resumeHandle.retryTrigger().then((reused) => {
+          if (!reused) {
+            // No reusable task found — clear state and show retry UI
+            streaming.value = false
+            loading.value = false
+            resumeHandle.taskId.value = null
+            resumeHandle.triggerFailed.value = true
+          }
+        })
       }
-      // hadTaskId: streaming stays true, taskId preserved → polling resumes
       if (message.includes('auth_expired')) {
         showFailToast(t('dashboard.narrative.error.auth_expired'))
       }

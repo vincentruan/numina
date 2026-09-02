@@ -35,6 +35,12 @@ const resumeHandle = useTaskResume('coach', {
   onComplete: async () => {
     await load(false)
   },
+  onError: async () => {
+    // SSE failed or task errored — fall back to cache check.
+    // This handles the case where resume() found a queued/running task but
+    // the SSE connection failed (e.g. task completed but AITask not updated).
+    await load(false)
+  },
 })
 
 async function load(force = false) {
