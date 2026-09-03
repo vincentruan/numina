@@ -352,6 +352,12 @@ const resumeHandle = useTaskResume('report', {
     // timeline doesn't stay stuck on stale step-progress.
     if (stream.status.value !== 'completed' && stream.status.value !== 'error') {
       stream.status.value = 'completed'
+      // SSE end frame never arrived (network close, etc.) so handleEnd()
+      // never ran. The backend confirmed success, so all steps finished:
+      // mark them explicitly so the timeline reflects reality.
+      stream.step1Status.value = 'finish'
+      stream.step2Status.value = 'finish'
+      stream.step3Status.value = 'finish'
       // Clear sessionStorage so next generation starts with a clean slate.
       // We can't call stream.reset() here because it would wipe the loaded
       // report and step state that the template is currently rendering.

@@ -409,7 +409,12 @@ export function useReportStream(): UseReportStreamReturn {
       try {
         const taskStatus = await getAITask('report')
         if (taskStatus.status === 'completed' || taskStatus.status === 'idle') {
-          // Task completed — caller will reload report from API
+          // Task completed — caller will reload report from API.
+          // Polling bypasses the SSE stream, so handleEnd() never ran.
+          // Mark all steps finished since the backend confirmed success.
+          step1Status.value = 'finish'
+          step2Status.value = 'finish'
+          step3Status.value = 'finish'
           status.value = 'completed'
           if (!generatedAt.value) {
             generatedAt.value = new Date().toISOString()
