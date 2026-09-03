@@ -29,8 +29,8 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
-      - DB_POOL_SIZE=8
-      - DB_MAX_OVERFLOW=2
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-15}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
       - ENVIRONMENT=production
@@ -81,6 +81,8 @@ services:
       - NUMINA_PROJECT_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
       - DEERFLOW_DB_URL=${DEERFLOW_DB_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod_deerflow}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
     depends_on:
       backend:
         condition: service_healthy
@@ -107,8 +109,8 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
-      - DB_POOL_SIZE=2
-      - DB_MAX_OVERFLOW=1
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-2}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - ENVIRONMENT=production

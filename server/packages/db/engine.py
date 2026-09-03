@@ -56,8 +56,8 @@ class _PostgreSQLBackend(_DatabaseBackend):
 
     def get_pool_config(self) -> dict:
         # Pool size configurable per service via DB_POOL_SIZE / DB_MAX_OVERFLOW.
-        # Budget: backend (10) + agent-checkpointer (3) + scheduler-worker (3) = 16.
-        # Supabase pooler transaction mode allows ~20 concurrent connections.
+        # Production compose defaults: backend (15+5), agent (10+5), scheduler-worker (5+2).
+        # Self-hosted PG max_connections=200, total budget ~42 connections.
         return {
             "pool_size": int(os.environ.get("DB_POOL_SIZE", "3")),
             "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "2")),
