@@ -570,9 +570,12 @@ function formatTime(iso: string | null): string {
           </van-button>
         </div>
 
-        <!-- Footer: disclaimer + refresh button (matches FinanceCoachCard layout) -->
+        <!-- Footer: disclaimer + generation time + refresh button (matches FinanceCoachCard layout) -->
         <div v-if="hasContent && !streaming" class="narrative-footer">
-          <span class="narrative-disclaimer">{{ t('dashboard.narrative.disclaimer') }}</span>
+          <span class="narrative-disclaimer">
+            {{ t('dashboard.narrative.disclaimer') }}
+            <template v-if="generatedAt"> · {{ formatTime(generatedAt) }}</template>
+          </span>
           <van-button size="mini" plain icon="replay" :loading="refreshing" @click.stop="onGenerate" />
         </div>
       </van-collapse-item>

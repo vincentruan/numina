@@ -8,7 +8,7 @@ import type { FinanceSuggestion } from '@/types'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { useTaskResume } from '@/composables/useTaskResume'
-import { getTaskById, type AITask } from '@/api/ai-tasks'
+import { getTaskById, getAITasks, type AITask } from '@/api/ai-tasks'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
@@ -24,6 +24,7 @@ const visible = ref(false)
 const refreshing = ref(false)
 const expanded = ref<string[]>([])
 const cancelling = ref(false)
+const generatedAt = ref<string | null>(null)
 
 const count = computed(() => suggestions.value.length)
 
@@ -34,13 +35,19 @@ const count = computed(() => suggestions.value.length)
 // otherwise. This prevents abnormal tasks from blocking the cache display.
 const resumeHandle = useTaskResume('coach', {
   onComplete: async () => {
-    await load(false)
+    // Skip redundant API call when suggestions are already loaded
+    // (KeepAlive re-activation with completed task). On initial mount,
+    // loaded=false so load(false) still runs to fetch the data.
+    if (!loaded.value || suggestions.value.length === 0) {
+      await load(false)
+    }
   },
   onError: async () => {
     // SSE failed or task errored — fall back to cache check.
-    // This handles the case where resume() found a queued/running task but
-    // the SSE connection failed (e.g. task completed but AITask not updated).
-    await load(false)
+    // Only reload if we don't have data yet (avoid overwriting existing cache).
+    if (!loaded.value || suggestions.value.length === 0) {
+      await load(false)
+    }
   },
 })
 
@@ -97,6 +104,7 @@ async function load(force = false) {
     }
     suggestions.value = valid.slice(0, 3)
     visible.value = true
+    generatedAt.value = resp.generated_at || null
     resumeHandle.taskId.value = null
   } catch {
     visible.value = false // silent hide on failure (spec §7.2)
@@ -143,6 +151,16 @@ async function pollTask(taskId: string, timeoutMs: number): Promise<AITask | nul
   return null
 }
 
+function formatTime(iso: string | null): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return iso
+  }
+}
+
 async function onRetry() {
   await load(true)
 }
@@ -183,15 +201,11 @@ let hasStarted = false
 function startLoad() {
   if (hasStarted) return
   hasStarted = true
-  // Always call load(false) when resume doesn't find an active task.
-  // The backend cache endpoint (getFinanceCoach) returns the latest successful
-  // result if within TTL, or triggers regeneration otherwise. This ensures
-  // failed/timeout/orphaned tasks never block cache display.
-  resumeHandle.resume().then((resumed) => {
-    if (!resumed) {
-      load(false)
-    }
-  })
+  // Initial load: check cache directly. Skip resume() — if a completed task
+  // exists, resume() would call onComplete → load(false), which is the same
+  // as calling load(false) directly but with an extra round-trip.
+  // Running tasks are detected by load() via the 202-queued response.
+  load(false)
 }
 
 onMounted(() => {
@@ -212,13 +226,19 @@ watch(
   },
 )
 
-// Dashboard is KeepAlive-cached; onActivated re-runs resume logic.
+// Dashboard is KeepAlive-cached; onActivated only reconnects SSE for running
+// tasks. Does NOT reload from cache when data is already present — this avoids
+// unnecessary API calls on every tab switch when cache is still valid.
 let hasActivated = false
 onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
-  const resumed = await resumeHandle.resume()
-  if (!resumed) {
-    await load(false)
+  // If data is already displayed, only resume a running task (SSE reconnect).
+  // Skip reload when no task is active — cache is already in the component.
+  const tasks = await getAITasks('coach', undefined, 1)
+  const latest = tasks[0]
+  if (latest?.id && ['running', 'queued', 'post_processing'].includes(latest.status)) {
+    resumeHandle.taskId.value = latest.id
+    resumeHandle.status.value = 'connecting'
   }
 })
 
@@ -304,7 +324,10 @@ onUnmounted(() => {
             <van-button size="small" type="primary" @click="onCta(s)">{{ s.cta_label }}</van-button>
           </div>
           <div class="fc-footer">
-            <span class="fc-disclaimer">{{ t('dashboard.financeCoach.disclaimer') }}</span>
+            <span class="fc-disclaimer">
+              {{ t('dashboard.financeCoach.disclaimer') }}
+              <template v-if="generatedAt"> · {{ formatTime(generatedAt) }}</template>
+            </span>
             <van-button size="mini" plain icon="replay" :loading="refreshing" @click.stop="load(true)" />
           </div>
         </template>
