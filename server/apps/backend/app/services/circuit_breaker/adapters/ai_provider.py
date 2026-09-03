@@ -27,6 +27,13 @@ class AIProviderAdapter(CircuitBreakerAdapter):
     on_transition() on every state change.
     """
 
+    # Fallback recovery cooldown when both recovery_schedule and
+    # circuit_open_until are NULL (e.g. permanent_account opens the circuit
+    # with no recovery trigger).  Prevents providers from being stuck in
+    # "open" forever — after this many seconds since last_failure_at the
+    # circuit transitions to half_open for a single recovery probe.
+    DEFAULT_RECOVERY_COOLDOWN_SECONDS = 24 * 3600  # 24 hours
+
     def __init__(self, config_id: int, family_id: int) -> None:
         self._config_id = config_id
         self._family_id = family_id
@@ -131,6 +138,12 @@ class AIProviderAdapter(CircuitBreakerAdapter):
         or legacy circuit_open_until expiration as triggers. State mutation
         is delegated to FSM.transition_to_half_open; legacy field sync via
         on_transition().
+
+        When both triggers are absent (e.g. ``permanent_account`` sets
+        ``circuit_open_until=None`` and ``recovery_schedule`` is never
+        configured), falls back to a time-based cooldown of
+        ``DEFAULT_RECOVERY_COOLDOWN_SECONDS`` (24 h) since ``last_failure_at``
+        so providers don't stay stuck in "open" forever.
         """
         if self._config is None:
             self.load_entity(db)
@@ -154,7 +167,20 @@ class AIProviderAdapter(CircuitBreakerAdapter):
             and self._config.circuit_open_until <= now
         )
 
-        if not schedule_match and not legacy_expired:
+        # Fallback: when both primary triggers are absent (e.g. permanent_account
+        # with no recovery_schedule), use a generous time-based cooldown since
+        # last_failure_at so the provider eventually gets a recovery probe.
+        fallback_cooldown_expired = (
+            not schedule_match
+            and not legacy_expired
+            and not self._config.recovery_schedule
+            and self._config.circuit_open_until is None
+            and self._config.last_failure_at is not None
+            and now - self._config.last_failure_at.replace(tzinfo=None)
+            >= timedelta(seconds=self.DEFAULT_RECOVERY_COOLDOWN_SECONDS)
+        )
+
+        if not schedule_match and not legacy_expired and not fallback_cooldown_expired:
             return False
 
         # Delegate state mutation to FSM

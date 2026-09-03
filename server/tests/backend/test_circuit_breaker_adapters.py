@@ -219,6 +219,47 @@ class TestAIProviderAdapter:
         assert result is True
         assert ai_provider.circuit_state == "half_open"
 
+    def test_fallback_recovery_when_both_triggers_null(
+        self, db: Session, ai_provider: AIProviderConfig
+    ) -> None:
+        """Fallback recovery should trigger after DEFAULT_RECOVERY_COOLDOWN when
+        recovery_schedule and circuit_open_until are both NULL."""
+        ai_provider.circuit_state = "open"
+        ai_provider.circuit_reason = "permanent_account"
+        ai_provider.circuit_open_until = None  # Manual recovery (from on_transition)
+        ai_provider.recovery_schedule = None  # Never configured
+        ai_provider.last_failure_at = datetime.now(UTC).replace(
+            tzinfo=None
+        ) - timedelta(hours=25)  # Past the 24h fallback cooldown
+        db.commit()
+
+        adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
+        result = adapter.attempt_recovery(db)
+
+        db.refresh(ai_provider)
+        assert result is True
+        assert ai_provider.circuit_state == "half_open"
+
+    def test_fallback_recovery_not_triggered_before_cooldown(
+        self, db: Session, ai_provider: AIProviderConfig
+    ) -> None:
+        """Fallback recovery should NOT trigger before cooldown elapses."""
+        ai_provider.circuit_state = "open"
+        ai_provider.circuit_reason = "permanent_account"
+        ai_provider.circuit_open_until = None
+        ai_provider.recovery_schedule = None
+        ai_provider.last_failure_at = datetime.now(UTC).replace(
+            tzinfo=None
+        ) - timedelta(hours=1)  # Only 1h, well under 24h cooldown
+        db.commit()
+
+        adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
+        result = adapter.attempt_recovery(db)
+
+        db.refresh(ai_provider)
+        assert result is False
+        assert ai_provider.circuit_state == "open"
+
 
 class TestExtractionAdapter:
     """Tests for ExtractionAdapter with DB."""
