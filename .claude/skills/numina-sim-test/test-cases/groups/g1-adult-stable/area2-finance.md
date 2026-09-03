@@ -2,6 +2,30 @@
 
 Shared conventions in [`_common.md`](../../_common.md).
 
+## Success Criteria (成功标准)
+
+### Pass Threshold
+- **Overall pass rate**: ≥ 95% (24/25 cases must pass)
+- **Critical cases** (MUST pass): C2.1, C2.2, C2.5, C2.8
+- **Optional cases** (can SKIP with reason): C2.14-C2.17 (require specific data)
+
+### Performance Benchmarks
+| Case | Metric | Target | Max |
+|------|--------|--------|-----|
+| C2.1 Dashboard | Page load | < 2s | < 5s |
+| C2.2 Wish list | Page load | < 2s | < 5s |
+| C2.5 Liability list | Page load | < 2s | < 5s |
+| C2.8 Asset list | Page load | < 2s | < 5s |
+| All cases | Console errors | 0 | 0 |
+
+### Data Quality Checks
+- **No NaN/undefined** in any money field
+- **No scientific notation** (e.g., 5.9e7) in amounts
+- **Arithmetic verified**: net worth = assets − liabilities (not just presence)
+- **Currency formatting**: single symbol (¥ or current currency), no double symbols (¥¥)
+
+---
+
 Auth: establish the adult session as `demouser` / `DemoPass123` first. The
 default `bsk fill` form-login (SKILL.md Phase 2) can trigger a password-manager
 extension that hijacks the Agent Window tab. **Prefer the cookie+localStorage
@@ -17,6 +41,8 @@ W1/W2/W4/W5, L1/L2, D2, A1a/A1b). All features verified landed in
 
 ### C2.1 Dashboard (DashboardPage) — totals, net worth, trend
 
+**Performance target:** Page load < 2s | **Critical case:** MUST pass
+
 ```
 bsk navigate ${BASE} --session <id> --wait-until networkidle
 bsk snapshot --session <id>
@@ -29,6 +55,19 @@ Assertions:
 - [ ] Money values display as formatted strings (post Float→Numeric migration, backend returns str; frontend may Number()-coerce for display — check no `NaN`/`undefined`)
 - [ ] Allocation breakdown `{items, total}` renders (not a flat list)
 - [ ] `[console]` zero errors
+
+**Automated assertion (recommended):**
+```bash
+# Verify arithmetic and formatting
+bsk evaluate --session <id> --expr "(async () => {
+  const text = document.body.innerText;
+  const hasNaN = text.includes('NaN') || text.includes('undefined');
+  const hasScientific = /[0-9]+\.[0-9]+e[+-]?[0-9]+/i.test(text);
+  const hasDoubleSymbol = /¥¥|\$\$|€€/.test(text);
+  return JSON.stringify({hasNaN, hasScientific, hasDoubleSymbol});
+})()"
+# Expected: {"hasNaN":false,"hasScientific":false,"hasDoubleSymbol":false}
+```
 
 ### C2.2 Wish list (WishListPage) — savings progress + advice + debt hint
 

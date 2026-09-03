@@ -2,6 +2,34 @@
 
 Shared conventions in [`_common.md`](../../_common.md).
 
+## Success Criteria (成功标准)
+
+### Pass Threshold
+- **Overall pass rate**: 100% (all 9 regression cases MUST pass — zero tolerance for historical bug recurrence)
+- **Critical cases** (MUST pass): R1 (¥¥), R2 (bigint), R4 (NProgress), R6 (auth expiry)
+- **Execution order**: R6 MUST run LAST (session-destroying test)
+
+### Performance Benchmarks
+| Case | Metric | Target | Max |
+|------|--------|--------|-----|
+| R1-R5, R7-R9 | Per-case time | < 30s | < 60s |
+| R6 (auth expiry) | Session cleanup | < 5s | < 10s |
+| Total runtime | All 9 cases | < 10min | < 15min |
+| All cases | Console errors | 0 | 0 |
+
+### Regression Quality Checks
+- **R1**: No `¥¥` double symbol on ANY page (Dashboard, assets, liabilities, wishes)
+- **R2**: No scientific notation (e.g., `5.9e7`) in money fields
+- **R3**: No raw i18n keys (e.g., `dashboard.net_worth`) in en-US mode
+- **R4**: NProgress completes after rapid navigation (no stuck spinner)
+- **R5**: KeepAlive pages load once (no double onMounted/onActivated)
+- **R6**: Auth expiry redirects to login correctly (session cleared)
+- **R7**: AI chat shows response (not blank/error-stuck)
+- **R8**: Child coin display has no ¥ symbol (coin-based, not currency)
+- **R9**: CSP allows required eval in docker mode (no console violations)
+
+---
+
 Auth: adult session as `demouser` (owner). 本 Area 为只读验证，不修改任何数据。
 每个用例对应一个已修复的历史缺陷，防止回归。来源见项目 memory 文件。
 
@@ -11,6 +39,8 @@ Auth: adult session as `demouser` (owner). 本 Area 为只读验证，不修改�
 ---
 
 ## R1 — 双货币符号回归 (¥¥ double-currency)
+
+**Critical case:** MUST pass | **Performance target:** All pages < 2s
 
 **历史缺陷:** `useCurrency().format()` 已前缀 `¥`，但模板/i18n 又加了字面 `¥`，
 导致显示 "¥¥0.00"、"¥¥3,000"。修复: i18n 去掉字面 `¥`，模板去掉冗余 `¥`。
@@ -33,6 +63,18 @@ Assertions:
 - [ ] Wish list 金额无 `¥¥` 前缀
 - [ ] `[console]` zero errors
 - [ ] **grep 回归 (可选):** `grep -rn '¥.*format(' frontend/apps/main/src/` 应返回 0 命中
+
+**Automated assertion (recommended):**
+```bash
+# Verify no double currency symbols across all pages
+bsk evaluate --session <id> --expr "(async () => {
+  const text = document.body.innerText;
+  const hasDoubleSymbol = /¥¥|\$\$|€€|££/.test(text);
+  const pages = ['Dashboard', 'Assets', 'Liabilities', 'Wishes'];
+  return JSON.stringify({hasDoubleSymbol, pages, safe: !hasDoubleSymbol});
+})()"
+# Expected: {"hasDoubleSymbol":false,"pages":[...],"safe":true}
+```
 
 ---
 
