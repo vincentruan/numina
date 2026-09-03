@@ -8,6 +8,7 @@ from .blindbox import BlindBoxFactory
 from .children import ChoreFactory, CoinFactory
 from .liabilities import LiabilityFactory
 from .users import FamilyFactory, UserFactory
+from .rentals import RentalContractFactory
 from .wishes import ChildWishFactory, WishFactory
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "ChoreFactory",
     "CoinFactory",
     "BlindBoxFactory",
+    "RentalContractFactory",
 ]

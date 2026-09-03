@@ -1,4 +1,4 @@
-"""场景: demouser — 完整仿真数据（19实物+11金融+7负债+9心愿+2儿童+盲盒）。"""
+"""场景: demouser — 完整仿真数据（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒）。"""
 
 from datetime import date, timedelta
 
@@ -8,6 +8,7 @@ from factories.assets import AssetFactory
 from factories.blindbox import BlindBoxFactory
 from factories.children import ChoreFactory, CoinFactory
 from factories.liabilities import LiabilityFactory
+from factories.rentals import RentalContractFactory
 from factories.users import FamilyFactory, UserFactory
 from factories.wishes import ChildWishFactory, WishFactory
 
@@ -124,6 +125,23 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
             institution=inst, linked_asset_id=linked,
         )
 
+    # ── 3 租约 ────────────────────────────────────────────────────────────────
+    # (role, monthly_rent, deposit, start_date, end_date, linked_asset_id, counterparty, notes, is_active)
+    rentals = [
+        ("landlord", 8500, 17000, date(2023, 6, 1), date(2026, 5, 31), home_asset.id, "张先生", "浦东住宅次卧出租", True),
+        ("tenant", 15000, 45000, date(2024, 1, 1), None, None, "万达商管", "办公室承租，不定期租约", True),
+        ("landlord", 1500, 3000, date(2022, 1, 1), date(2023, 12, 31), None, "李女士", "车位出租，已结束", False),
+    ]
+
+    for role, mr, dep, sd, ed, linked, cp, notes, active in rentals:
+        RentalContractFactory.get_or_create(
+            db, user_id=user.id, family_id=fam.id,
+            role=role, monthly_rent=mr, deposit=dep,
+            start_date=sd, end_date=ed,
+            linked_asset_id=linked, counterparty=cp,
+            notes=notes, is_active=active,
+        )
+
     # ── 9 心愿 ────────────────────────────────────────────────────────────────
     wishes = [
         ("特斯拉 Model Y", 280000, "high", "pending", True),
@@ -224,4 +242,4 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
             name=name, emoji=emoji, value_score=score, description=desc,
         )
 
-    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+9心愿+2儿童+盲盒）")
+    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒）")

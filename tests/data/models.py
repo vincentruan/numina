@@ -224,6 +224,36 @@ class Wish(Base):
     realized_asset = relationship("Asset")
 
 
+class RentalContract(Base):
+    """租约合同 — 镜像 backend rental_contracts 表。
+
+    role='landlord': linked_asset_id 指向出租的房产资产
+    role='tenant': linked_asset_id 为 null（承租不关联自有资产）
+    end_date 为 null 表示不定期租约
+    is_active=False 表示合同已结束（软删除）
+    """
+
+    __tablename__ = "rental_contracts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(10), nullable=False)  # landlord/tenant
+    monthly_rent: Mapped[float] = mapped_column(Float, nullable=False)
+    deposit: Mapped[float] = mapped_column(Float, default=0)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    linked_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
+    counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), default="CNY")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    linked_asset = relationship("Asset", foreign_keys=[linked_asset_id])
+
+
 # ── Children / chores / coins ─────────────────────────────────────────────────
 
 class ChildWish(Base):

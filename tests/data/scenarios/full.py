@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from factories.assets import AssetFactory
 from factories.children import ChoreFactory, CoinFactory
 from factories.liabilities import LiabilityFactory
+from factories.rentals import RentalContractFactory
 from factories.users import FamilyFactory, UserFactory
 from factories.wishes import ChildWishFactory, WishFactory
 
@@ -89,6 +90,15 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
         monthly_payment=8000, interest_rate=18.0,
         start_date=date(2024, 1, 1),
         institution="招商银行",
+    )
+
+    # ── 租约 ──────────────────────────────────────────────────────────────────
+    RentalContractFactory.get_or_create(
+        db,
+        user_id=user.id, family_id=fam.id,
+        role="tenant", monthly_rent=6000, deposit=12000,
+        start_date=date(2023, 3, 1), end_date=None,
+        counterparty="链家地产", notes="公寓承租，不定期租约",
     )
 
     # ── 心愿 ──────────────────────────────────────────────────────────────────
