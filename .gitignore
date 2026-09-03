@@ -229,3 +229,6 @@ reports/page-agent-e2e/*.md
 scripts/page-agent-e2e/.env
 
 .deployment/
+
+# Sim test runtime workspace (iteration artifacts)
+.claude/skills/numina-sim-test-workspace/
