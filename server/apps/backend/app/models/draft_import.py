@@ -31,8 +31,8 @@ class DraftImport(Base):
     # JSON-serialized list of committed Asset/Liability IDs (strings for snowflake safety).
     committed_record_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending / committed / rolled_back
-    rolled_back_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    rolled_back_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         Index("ix_draft_imports_family_created", "family_id", "created_at"),

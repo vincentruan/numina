@@ -40,5 +40,5 @@ class BlindBoxConfig(Base):
     surprise_prob_parent_bday: Mapped[float] = mapped_column(Float, default=0.60, nullable=False)
     surprise_prob_sibling_bday: Mapped[float] = mapped_column(Float, default=0.50, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -14,5 +14,5 @@ class NotificationChannelConfig(Base):
     channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     key: Mapped[str] = mapped_column(String(100), nullable=False)
     value_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

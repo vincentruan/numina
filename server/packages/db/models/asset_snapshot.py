@@ -30,6 +30,6 @@ class AssetSnapshot(Base):
     total_liabilities: Mapped[float] = mapped_column(Float, default=0)
     net_worth: Mapped[float] = mapped_column(Float, default=0)
     breakdown: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     family = relationship("Family", back_populates="snapshots")

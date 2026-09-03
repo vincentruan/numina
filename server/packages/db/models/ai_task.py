@@ -30,8 +30,8 @@ class AITask(Base):
     # status: running | queued | completed | failed | timeout | cancelled | interrupted
     queue_position: Mapped[int | None] = mapped_column(nullable=True)
     session_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("ai_chat_sessions.id"), nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=func.now())
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # New fields for StreamBridge task tracking (U3)
@@ -42,7 +42,7 @@ class AITask(Base):
         String(128), nullable=True, comment="hostname:uuid of processing worker"
     )
     lease_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True, comment="Heartbeat deadline for dead-worker detection (naive UTC, per project convention)"
+        DateTime(timezone=True), nullable=True, comment="Heartbeat deadline for dead-worker detection (UTC)"
     )
     progress: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, comment="Optional JSON blob (step, percentage, message)"
