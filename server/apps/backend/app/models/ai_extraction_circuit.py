@@ -17,12 +17,12 @@ class AIExtractionCircuit(Base):
     skill_id: Mapped[str] = mapped_column(String(32), nullable=False)
     state: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
     # state: ok | rate_limited | circuit_open
-    opened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    opened_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    manually_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    opened_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    manually_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reset_by_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     last_evaluated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (

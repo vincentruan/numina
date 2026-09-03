@@ -16,7 +16,7 @@ class NotificationConfig(Base):
     )
     large_purchase_threshold_fixed: Mapped[float | None] = mapped_column(Float, nullable=True)
     large_purchase_threshold_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

@@ -55,10 +55,18 @@ RESERVED_NAMES = [
     "wish-advice",
     "dashboard-narrative",
     "literacy-weekly-report",
+    # DeerFlow public skills introduced as builtin
+    "deep-research",
+    "chart-visualization",
+    "data-analysis",
+    "bootstrap",
+    "finance-digest",
+    "financial-deep-analysis",
+    "surprise-me",
 ]
 
 # Internal-only skills excluded from user-facing catalog and creation.
-INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer"}
+INTERNAL_ONLY_SKILLS = {"skill-creator", "skill-installer", "skill-reviewer"}
 
 
 SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")

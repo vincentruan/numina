@@ -14,5 +14,5 @@ class AssetValuation(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     asset_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=False)
     value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
-    valued_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    valued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

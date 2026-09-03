@@ -1,0 +1,39 @@
+# Smoke test case - Core functionality validation
+id: smoke-test
+title: "Smoke test - Core functionality (10 critical cases)"
+description: |
+  Validates the 10 most critical test cases across core functionality areas.
+  Expected runtime: 18-25 minutes. This is the minimum viable test suite.
+
+input:
+  prompt: |
+    Run smoke test for Numina app in docker mode. Test accounts are already seeded.
+
+expect:
+  must_contain:
+    - "C2.1"
+    - "C3.1"
+    - "R1"
+  # Report format is flexible - agent may use different section names
+  # Focus on verifying the cases were executed
+
+judge:
+  type: rule_based
+  success:
+    - output_contains:
+        all:
+          - "C2.1"
+          - "C2.2"
+          - "C2.5"
+          - "C2.8"
+          - "C3.1"
+          - "C3.2"
+          - "C4.0"
+          - "R1"
+          - "R2"
+          - "C9.4"
+    - output_contains:
+        all:
+          - "测试环境"
+          - "成功摘要"
+          - "失败详情"

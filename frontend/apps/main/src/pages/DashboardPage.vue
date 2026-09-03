@@ -28,11 +28,12 @@
         <!-- Literacy weekly report status (per-child) -->
         <LiteracyStatusCard ref="literacyStatusRef" />
 
-        <!-- Smart Reminders (includes expiring soon + upcoming payments + idle + AI reminders) -->
+        <!-- Smart Reminders (includes expiring soon + upcoming payments + rental reminders + idle + AI reminders) -->
         <SmartRemindersCard
           :idle-assets="dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle')"
           :expiring-assets="dashboardStore.expiringSoonAssets"
           :upcoming-payments="upcomingPayments"
+          :upcoming-rentals="upcomingRentals"
           @select-status="onStatusSelect"
         />
 
@@ -78,8 +79,8 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { useFamilyStore } from '@/stores/family'
-import { getUpcomingPayments } from '@/api/dashboard'
-import type { UpcomingPaymentItem } from '@/api/dashboard'
+import { getUpcomingPayments, getUpcomingRentals } from '@/api/dashboard'
+import type { UpcomingPaymentItem, UpcomingRentalItem } from '@/api/dashboard'
 
 defineOptions({ name: 'Dashboard' })
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -122,6 +123,9 @@ const guideOverlayRef = ref<InstanceType<typeof StepGuideOverlay> | null>(null)
 
 // Upcoming payments
 const upcomingPayments = ref<UpcomingPaymentItem[]>([])
+
+// Upcoming rental reminders (lease renewal / rent collection)
+const upcomingRentals = ref<UpcomingRentalItem[]>([])
 
 // Step-guide onboarding
 const overview = computed(() => dashboardStore.overview)
@@ -262,6 +266,13 @@ onMounted(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
+      getUpcomingRentals()
+        .then((res) => {
+          upcomingRentals.value = res.data.items
+        })
+        .catch(() => {
+          // Non-critical: silently ignore if endpoint not available
+        }),
       familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
     // Passive check: notify if family state changed since last snapshot.
@@ -286,6 +297,13 @@ onActivated(async () => {
       getUpcomingPayments()
         .then((res) => {
           upcomingPayments.value = res.data.items
+        })
+        .catch(() => {
+          // Non-critical: silently ignore if endpoint not available
+        }),
+      getUpcomingRentals()
+        .then((res) => {
+          upcomingRentals.value = res.data.items
         })
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available

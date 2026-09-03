@@ -10,7 +10,13 @@ def test_reserved_names_contains_chat_and_time_machine():
     ``import-parse``; Plan A T1 added ``finance-coach``. The current reserved
     set is the post-U7 + Plan A state — ``time_machine`` is intentionally gone.
     """
-    assert RESERVED_NAMES == ["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "dashboard-narrative", "literacy-weekly-report"]
+    assert RESERVED_NAMES == [
+        "chat", "asset-report", "import-parse", "finance-coach",
+        "wish-advice", "dashboard-narrative", "literacy-weekly-report",
+        # DeerFlow public skills introduced as builtin
+        "deep-research", "chart-visualization", "data-analysis",
+        "bootstrap", "finance-digest", "financial-deep-analysis", "surprise-me",
+    ]
 
 
 def test_fixed_capabilities_constant_removed():

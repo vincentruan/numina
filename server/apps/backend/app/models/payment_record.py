@@ -17,7 +17,7 @@ class PaymentRecord(Base):
     # Was Float pre-review-followup (silent precision loss on payment history);
     # migrated to Numeric to mirror WishSavingsLog + the liability money fields.
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
-    paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Source: "manual" (user-recorded) or "system" (auto-generated during retroactive creation).
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual", server_default="manual")

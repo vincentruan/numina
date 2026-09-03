@@ -24,4 +24,4 @@ class WishSavingsLog(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)  # +deposit / -withdrawal
     log_date: Mapped[date] = mapped_column(Date, nullable=False)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

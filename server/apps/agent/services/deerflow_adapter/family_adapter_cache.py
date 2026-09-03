@@ -323,7 +323,16 @@ async def async_init_checkpointer(db_path: str | None = None) -> None:
                 # share the same pooler — total must stay under ~15 connections.
                 _checkpointer_pool = AsyncConnectionPool(
                     conninfo=pg_conninfo,
-                    kwargs={"autocommit": True, "prepare_threshold": None},
+                    # options=-c timezone=UTC: force every connection to
+                    # interpret/return timestamps in UTC. Mirrors the sync ORM
+                    # engine hook in ``packages/db/engine.py`` and the DeerFlow
+                    # async engine hook in ``app/main.py``. psycopg forwards
+                    # libpq ``options`` to the server at connect time.
+                    kwargs={
+                        "autocommit": True,
+                        "prepare_threshold": None,
+                        "options": "-c timezone=UTC",
+                    },
                     min_size=1,
                     max_size=3,
                     open=False,  # defer to await .open() — avoids psycopg_pool

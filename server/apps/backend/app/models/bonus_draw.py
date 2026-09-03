@@ -23,6 +23,6 @@ class BonusDraw(Base):
     source_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("child_wishes.id"), nullable=True)
     source_challenge_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("challenge_grants.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="available")
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_draw_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("blind_box_draws.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

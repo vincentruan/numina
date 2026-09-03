@@ -157,6 +157,29 @@ async def lifespan(app: FastAPI):
                 backend="postgres" if db_url.startswith("postgres") else "sqlite",
                 url=db_url,
             )
+            # Postgres-only: force every connection to use UTC so that PG-side
+            # ``now()`` / ``CURRENT_TIMESTAMP`` return UTC values. Mirrors the
+            # sync ORM engine hook in ``packages/db/engine.py``. Without this,
+            # DeerFlow checkpointer timestamps may be stored/interpreted in
+            # the PG server's local timezone.
+            #
+            # AsyncAdapt_asyncpg_connection exposes a cursor() that internally
+            # uses ``await_()`` (greenlet bridge), so a sync listener + cursor
+            # call works identically to the sync engine path.
+            if db_url.startswith("postgres"):
+                from deerflow.persistence.engine import get_engine as _df_get_engine
+                from sqlalchemy import event as _sa_event
+
+                _df_engine = _df_get_engine()
+                if _df_engine is not None:
+
+                    @_sa_event.listens_for(_df_engine.sync_engine, "connect")
+                    def _set_df_pg_timezone(dbapi_conn, _connection_record):
+                        cursor = dbapi_conn.cursor()
+                        try:
+                            cursor.execute("SET timezone = 'UTC'")
+                        finally:
+                            cursor.close()
         else:
             # Default: local SQLite using settings.DEERFLOW_DB_PATH
             db_path = settings.DEERFLOW_DB_PATH

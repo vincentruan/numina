@@ -14,13 +14,14 @@ import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watc
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { marked } from 'marked'
+import { parseApiDate } from '@/utils/format'
 import { sanitizeMarkdown } from '@/utils/sanitize'
 import { streamNarrative } from '@/api/dashboard'
 import { useTaskResume } from '@/composables/useTaskResume'
 import IIcon from '@/components/IIcon.vue'
 import type { NarrativeBlockReason, NarrativeStreamHandle } from '@/api/dashboard'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const narrative = ref<string | null>(null)
 const thinking = ref('')
@@ -170,11 +171,17 @@ watch(
 // Covers: (1) cache hit — onDone fires immediately, timer never ran;
 // (2) task resume completed — onComplete fires, generatedAt set but timer reset to 0.
 // Only fires when there's no active stream and elapsed hasn't been tracked yet.
+// Guard: only use generatedAt when it's recent (< 10 min) — older timestamps mean
+// this is a cached result from a prior session, not a just-finished thinking run,
+// so computing "now - generatedAt" would produce absurd elapsed values (hours).
 watch(
   [() => hasContent.value, () => generatedAt.value],
   ([content, ts]) => {
     if (content && ts && !streaming.value && thinkingElapsed.value === 0) {
-      thinkingElapsed.value = Math.max(0, Date.now() - new Date(ts).getTime())
+      const elapsed = Date.now() - new Date(ts).getTime()
+      if (elapsed < 10 * 60 * 1000) {
+        thinkingElapsed.value = Math.max(0, elapsed)
+      }
     }
   },
   { immediate: true },
@@ -369,8 +376,8 @@ onUnmounted(() => {
 function formatTime(iso: string | null): string {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const d = parseApiDate(iso)
+    return d.toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   } catch {
     return iso
   }

@@ -31,7 +31,7 @@ import { useI18n } from 'vue-i18n'
 import type { BlindBoxDraw } from '@/types/blindBox'
 import { parseApiDate } from '@/utils/format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const props = defineProps<{ gift: BlindBoxDraw }>()
 
 const statusText = computed(() =>
@@ -39,7 +39,7 @@ const statusText = computed(() =>
 )
 
 function formatDate(dateStr: string) {
-  return parseApiDate(dateStr).toLocaleDateString('zh-CN', {
+  return parseApiDate(dateStr).toLocaleDateString(locale.value, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

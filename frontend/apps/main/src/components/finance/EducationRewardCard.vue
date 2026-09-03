@@ -110,7 +110,7 @@ function formatTime(iso: string | null): string {
   const d = parseApiDate(iso)
   if (Number.isNaN(d.getTime())) return iso
   // Locale-aware date+time; follows user language without hard-coding a format.
-  return d.toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+  return d.toLocaleString(locale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

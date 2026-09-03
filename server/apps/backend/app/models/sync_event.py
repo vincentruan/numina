@@ -15,7 +15,7 @@ class SyncEvent(Base):
     backend_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("storage_backends.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)  # upload_started|upload_succeeded|upload_failed|deleted|default_changed
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
-    occurred_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         Index("ix_sync_events_file_id", "file_id"),

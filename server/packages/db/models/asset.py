@@ -57,8 +57,8 @@ class Asset(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     from_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("wishes.id", ondelete="SET NULL", use_alter=True, name="fk_assets_from_wish_id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="assets")
     category = relationship("Category", back_populates="assets")

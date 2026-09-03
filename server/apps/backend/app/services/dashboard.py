@@ -42,6 +42,8 @@ from apps.backend.app.schemas.dashboard import (
     TypeDistributionResponse,
     UpcomingPaymentItem,
     UpcomingPaymentsResponse,
+    UpcomingRentalItem,
+    UpcomingRentalsResponse,
 )
 from apps.backend.app.services.asset import (
     compute_annualized_return,
@@ -1347,3 +1349,64 @@ def get_upcoming_payments(
 
     total_amount = sum(item.amount for item in items if item.amount is not None)
     return UpcomingPaymentsResponse(items=items, total_amount=total_amount)
+
+
+def get_upcoming_rentals(
+    db: Session, user: User, days: int = 30
+) -> UpcomingRentalsResponse:
+    """Return active rental contracts with upcoming renewal (tenant) or rent
+    collection (landlord) dates within *days* days from today."""
+    today = date.today()
+    cutoff = today + timedelta(days=days)
+
+    contracts = (
+        db.query(RentalContract)
+        .filter(
+            RentalContract.family_id == user.family_id,
+            RentalContract.is_active.is_(True),
+        )
+        .all()
+    )
+
+    items: list[UpcomingRentalItem] = []
+    for c in contracts:
+        converted_rent = ExchangeRateService.convert(
+            float(c.monthly_rent), c.currency or "CNY", "CNY", db
+        )
+
+        if c.role == "tenant" and c.end_date is not None:
+            # Tenant renewal reminder: end_date within window
+            if c.end_date > cutoff or c.end_date < today:
+                continue
+            label = c.counterparty or "租约"
+            items.append(
+                UpcomingRentalItem(
+                    contract_id=c.id,
+                    name=f"续租 · {label}",
+                    amount=converted_rent,
+                    due_date=c.end_date.isoformat(),
+                    role="tenant",
+                    counterparty=c.counterparty,
+                )
+            )
+        elif c.role == "landlord":
+            # Landlord rent collection: monthly based on start_date day
+            if c.start_date is None:
+                continue
+            next_due = _next_payment_date(c.start_date.day, today)
+            if next_due > cutoff:
+                continue
+            label = c.counterparty or "租约"
+            items.append(
+                UpcomingRentalItem(
+                    contract_id=c.id,
+                    name=f"收租 · {label}",
+                    amount=converted_rent,
+                    due_date=next_due.isoformat(),
+                    role="landlord",
+                    counterparty=c.counterparty,
+                )
+            )
+
+    total_amount = sum(item.amount for item in items if item.amount is not None)
+    return UpcomingRentalsResponse(items=items, total_amount=total_amount)

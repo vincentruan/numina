@@ -1,0 +1,36 @@
+# Area 7 - Regression Sweep case
+id: area7-regression
+title: "Area 7 - Regression sweep (9 historical bugs)"
+description: |
+  Validates that 9 historically fixed bugs have not regressed. Covers currency
+  formatting, bigint precision, i18n fallback, NProgress, and more.
+  Expected runtime: 10-15 minutes.
+
+input:
+  prompt: |
+    Run regression test for Numina app in docker mode. Execute Area 7 regression cases R1-R9.
+
+expect:
+  must_contain:
+    - "R1"
+    - "R2"
+    - "R3"
+    - "R4"
+    - "R6"
+  # Don't check must_not_contain - agent mentions "¥¥" when reporting "no ¥¥ found"
+  # Actual regression validation happens in the skill's automated assertions
+
+judge:
+  type: rule_based
+  success:
+    - output_contains:
+        all:
+          - "R1"
+          - "R2"
+          - "R3"
+          - "R4"
+          - "R5"
+          - "R6"
+          - "R7"
+          - "R8"
+          - "R9"

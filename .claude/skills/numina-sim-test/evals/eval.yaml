@@ -1,0 +1,41 @@
+# Evaluation config for numina-sim-test skill
+# Evaluates the skill's ability to execute UI simulation tests and generate reports
+schema_version: v1alpha1
+
+# Environment: none (skill drives external browser via bsk CLI, no sandbox needed)
+environment:
+  type: none
+
+# Skills under test
+skills:
+  - source: local_path
+    path: .
+
+# Engine configuration
+engine:
+  name: claude_code
+  # Optional model override - omit to use engine default
+  # model:
+  #   provider: anthropic
+  #   name: claude-sonnet-4-6
+
+# Test cases - representative samples from different areas
+cases:
+  files:
+    - evals/cases/smoke-test.yaml
+    - evals/cases/area2-finance-core.yaml
+    - evals/cases/area11-security-core.yaml
+    - evals/cases/area7-regression.yaml
+
+  # Default constraints inherited by every case
+  defaults:
+    timeout_seconds: 3600  # 1 hour per case (actual runtime: 10-35 min)
+    max_turns: 100         # Allow enough turns for complex UI testing
+
+# Report configuration
+report:
+  formats: [json]
+
+# Evaluation criteria (for documentation - actual grading in case files)
+# Pass threshold: 80% overall
+# Weights: correctness 50%, completeness 25%, report_quality 15%, efficiency 10%

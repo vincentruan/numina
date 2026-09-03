@@ -15,4 +15,4 @@ class ChildWishCostHistory(Base):
     old_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     new_cost: Mapped[int] = mapped_column(Integer, nullable=False)
     changed_by_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

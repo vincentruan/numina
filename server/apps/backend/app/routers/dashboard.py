@@ -28,6 +28,7 @@ from apps.backend.app.schemas.dashboard import (
     TopAssetItem,
     TrendResponse,
     UpcomingPaymentsResponse,
+    UpcomingRentalsResponse,
 )
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
@@ -587,3 +588,13 @@ def get_upcoming_payments(
 ):
     """获取即将到期的负债还款列表（默认7天内）"""
     return dashboard_service.get_upcoming_payments(db, user, days)
+
+
+@router.get("/upcoming-rentals", response_model=UpcomingRentalsResponse)
+def get_upcoming_rentals(
+    days: int = Query(30, ge=0, le=365),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """获取即将到期的租约提醒（续租/收租，默认30天内）"""
+    return dashboard_service.get_upcoming_rentals(db, user, days)

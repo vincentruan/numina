@@ -61,6 +61,9 @@
             </span>
           </div>
           <div class="literacy-footer">
+            <span v-if="latestGeneratedAt" class="literacy-generated-at">
+              {{ latestGeneratedAt }}
+            </span>
             <router-link to="/baby/literacy-report" class="literacy-view-all">
               {{ t('dashboard.literacyViewAll') }}<van-icon name="arrow" size="12" />
             </router-link>
@@ -76,10 +79,11 @@ import { ref, computed, onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
+import { parseApiDate } from '@/utils/format'
 import IIcon from '@/components/IIcon.vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
 
 const statusMap = ref<Record<string, ReportStatus>>({})
@@ -94,6 +98,22 @@ const childMembers = computed(() =>
 const readyCount = computed(() =>
   childMembers.value.filter(c => statusMap.value[String(c.id)]?.status === 'ready').length,
 )
+
+const latestGeneratedAt = computed(() => {
+  let latest: string | null = null
+  for (const s of Object.values(statusMap.value)) {
+    if (s.generated_at && (!latest || s.generated_at > latest)) {
+      latest = s.generated_at
+    }
+  }
+  if (!latest) return null
+  try {
+    const d = parseApiDate(latest)
+    return d.toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return null
+  }
+})
 
 const STATUS_TIMEOUT_MS = 15_000
 
@@ -325,10 +345,15 @@ defineExpose({ loadStatuses })
 
 .literacy-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   padding-top: 8px;
   margin-top: 4px;
   border-top: 1px solid var(--separator, #eee);
+}
+.literacy-generated-at {
+  font-size: 12px;
+  color: var(--text-secondary, #999);
 }
 .literacy-view-all {
   font-size: 13px;

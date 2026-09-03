@@ -1,0 +1,33 @@
+# Area 2 - Financial Management Core case
+id: area2-finance-core
+title: "Area 2 - Financial management (8 core cases)"
+description: |
+  Validates core financial management functionality including dashboard totals,
+  wish savings, liability strategy, and asset management.
+  Expected runtime: 20-25 minutes.
+
+input:
+  prompt: |
+    Run finance test for Numina app in docker mode. Focus on Area 2 financial management cases C2.1-C2.8.
+
+expect:
+  must_contain:
+    - "C2.1"
+    - "C2.2"
+    - "C2.5"
+    - "C2.8"
+  # Don't check must_not_contain here - agent mentions "no NaN" in reports
+  # Actual NaN validation happens in the skill's automated assertions
+
+judge:
+  type: rule_based
+  success:
+    - output_contains:
+        all:
+          - "C2.1"
+          - "C2.2"
+          - "C2.5"
+          - "C2.8"
+          - "net worth"
+          - "savings progress"
+          - "strategy card"

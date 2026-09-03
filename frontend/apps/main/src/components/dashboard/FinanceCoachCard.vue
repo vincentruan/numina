@@ -7,12 +7,13 @@ import { useAuthStore } from '@/stores/auth'
 import type { FinanceSuggestion } from '@/types'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
+import { parseApiDate } from '@/utils/format'
 import { useTaskResume } from '@/composables/useTaskResume'
 import { getTaskById, getAITasks, type AITask } from '@/api/ai-tasks'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
@@ -154,8 +155,8 @@ async function pollTask(taskId: string, timeoutMs: number): Promise<AITask | nul
 function formatTime(iso: string | null): string {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const d = parseApiDate(iso)
+    return d.toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   } catch {
     return iso
   }

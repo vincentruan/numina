@@ -36,7 +36,7 @@ class CoinTransaction(Base):
     # Bonus coins from streak multiplier (actual_amount - base_reward).
     # 0 for non-bonus chore transactions, NULL for non-chore transactions (wish_spend, parent_grant).
     streak_bonus: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         # Idempotency: prevent duplicate writes for the same chore/wish
