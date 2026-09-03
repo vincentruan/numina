@@ -44,8 +44,8 @@ export function formatCurrency(amount: number | string, currency = 'CNY'): strin
   }
 }
 
-export function formatNumber(num: number): string {
-  return num.toLocaleString('zh-CN')
+export function formatNumber(num: number, locale = 'zh-CN'): string {
+  return num.toLocaleString(locale)
 }
 
 export function formatPercent(value: number): string {
@@ -90,14 +90,14 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(parts[0], parts[1] - 1, parts[2])
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string, locale?: string): string {
   const date = parseApiDate(dateStr)
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  return date.toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
-export function formatDateTime(dateStr: string): string {
+export function formatDateTime(dateStr: string, locale?: string): string {
   const date = parseApiDate(dateStr)
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(locale, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

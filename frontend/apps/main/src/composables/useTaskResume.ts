@@ -20,6 +20,7 @@ import {
   type TaskStreamHandle,
 } from '@/api/ai-tasks'
 import { useTaskPolling } from '@/composables/useTaskPolling'
+import { parseApiDate } from '@/utils/format'
 
 export type TaskResumeStatus =
   | 'idle'
@@ -137,7 +138,7 @@ export function useTaskResume(
       'import-parse': 10 * 60_000,
     }
     const timeout = SKILL_TIMEOUT_MS[capability] ?? 30 * 60_000
-    return Date.now() - new Date(startedAt).getTime() > timeout
+    return Date.now() - parseApiDate(startedAt).getTime() > timeout
   }
 
   function startSSE(tid: string): void {

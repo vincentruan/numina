@@ -52,9 +52,10 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as manifestoApi from '@/api/manifesto'
+import { parseApiDate } from '@/utils/format'
 import type { ManifestoVersionHistoryItem } from '@/types/manifesto'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -101,10 +102,15 @@ function getDetail(id: string): string {
 }
 
 function formatDateTime(iso: string): string {
-  const d = new Date(iso)
+  const d = parseApiDate(iso)
   if (isNaN(d.getTime())) return iso
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return d.toLocaleString(locale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 watch(() => props.visible, async (val) => {

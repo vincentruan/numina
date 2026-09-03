@@ -59,7 +59,7 @@
             :left-width="0"
             :right-width="swipeRightWidth(wish)"
             :style="swipeCellStyle(wish)"
-            class="wish-swipe"
+            class="wish-swipe swipe-action-btn-parent"
             stop-propagation
           >
             <li
@@ -468,6 +468,8 @@ defineExpose({
 </script>
 
 <style scoped>
+@import '@/styles/swipe-actions.css';
+
 /* ── Debt-warning bar ── */
 .debt-warning-bar {
   display: flex;
@@ -551,9 +553,9 @@ defineExpose({
 .wish-swipe :deep(.van-swipe-cell__right) {
   display: flex;
   width: var(--swipe-right-width, auto);
+  height: 100%;
+  align-items: stretch;
 }
-
-@import '@/styles/swipe-actions.css';
 
 .wish-list {
   list-style: none;

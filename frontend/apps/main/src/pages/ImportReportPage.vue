@@ -179,11 +179,12 @@ import type { UploaderFileListItem } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
 import PreviewItem from '@/components/import/PreviewItem.vue'
 import { parseFile, confirmImport, getImportHistory, rollbackImport } from '@/api/importReport'
+import { parseApiDate } from '@/utils/format'
 import type { ImportPreview, ImportPreviewItem, ConfirmResponse, HistoryItem } from '@/api/importReport'
 
 defineOptions({ name: 'ImportReportPage' })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const step = ref<'upload' | 'parsing' | 'preview' | 'results'>('upload')
@@ -202,9 +203,9 @@ const selectedHistory = ref<HistoryItem | null>(null)
 
 function formatDate(iso: string): string {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseApiDate(iso)
   if (isNaN(d.getTime())) return iso
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return d.toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 function statusTagType(status: string): 'default' | 'primary' | 'success' | 'warning' | 'danger' {

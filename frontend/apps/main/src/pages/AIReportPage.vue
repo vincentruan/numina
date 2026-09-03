@@ -521,8 +521,7 @@ function hasIndicatorData(indicator: AIReportIndicator): boolean {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
-  const loc = locale.value === 'en-US' ? 'en-US' : 'zh-CN'
-  return parseApiDate(iso).toLocaleString(loc, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return parseApiDate(iso).toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 /**

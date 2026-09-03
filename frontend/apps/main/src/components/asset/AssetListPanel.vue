@@ -122,7 +122,7 @@
                       :left-width="0"
                       :right-width="assetSwipeWidth(asset)"
                       :style="assetSwipeStyle(asset)"
-                      class="asset-swipe"
+                      class="asset-swipe swipe-action-btn-parent"
                       stop-propagation
                       :disabled="!assetHasSwipe(asset)"
                     >
@@ -896,6 +896,8 @@ defineExpose({
 </script>
 
 <style scoped>
+@import '@/styles/swipe-actions.css';
+
 .asset-list-panel {
   background: var(--card-bg);
 }
@@ -910,9 +912,9 @@ defineExpose({
 .asset-swipe :deep(.van-swipe-cell__right) {
   display: flex;
   width: var(--swipe-right-width, auto);
+  height: 100%;
+  align-items: stretch;
 }
-
-@import '@/styles/swipe-actions.css';
 
 /* Toolbar Icons */
 :deep(.toolbar-slot) {

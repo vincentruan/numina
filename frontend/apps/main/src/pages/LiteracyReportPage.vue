@@ -124,6 +124,7 @@ import {
   getReport,
   getReportHistory,
 } from '@/api/literacy'
+import { parseApiDate } from '@/utils/format'
 import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api/literacy'
 import { useLiteracyStream } from '@/composables/useLiteracyStream'
 import { useTaskResume } from '@/composables/useTaskResume'
@@ -258,7 +259,7 @@ function goNext() {
 
 function formatWeekStart(weekStart: string): string {
   try {
-    const d = new Date(weekStart)
+    const d = parseApiDate(weekStart)
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
   } catch {
     return weekStart

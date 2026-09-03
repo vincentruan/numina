@@ -1,5 +1,5 @@
 <template>
-  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell" :right-width="160" :style="liabilitySwipeStyle">
+  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell swipe-action-btn-parent" :right-width="160" :style="liabilitySwipeStyle">
     <div
       class="liability-card"
       :class="{ 'is-selected': selected, 'select-mode': selectMode }"
@@ -186,6 +186,7 @@ function handleClick() {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Crimson+Pro:wght@600&display=swap');
+@import '@/styles/swipe-actions.css';
 
 .liability-swipe-cell {
   margin-bottom: 12px;
@@ -196,10 +197,11 @@ function handleClick() {
 .liability-swipe-cell :deep(.van-swipe-cell__right) {
   display: flex;
   width: var(--swipe-right-width, auto);
+  height: 100%;
+  align-items: stretch;
 }
 
 /* Swipe action buttons */
-@import '@/styles/swipe-actions.css';
 
 .liability-card {
   background: var(--card-bg);

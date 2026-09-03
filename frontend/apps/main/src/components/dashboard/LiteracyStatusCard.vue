@@ -79,6 +79,7 @@ import { ref, computed, onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { getReportStatus, type ReportStatus } from '@/api/literacyReport'
+import { parseApiDate } from '@/utils/format'
 import IIcon from '@/components/IIcon.vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 
@@ -107,7 +108,7 @@ const latestGeneratedAt = computed(() => {
   }
   if (!latest) return null
   try {
-    const d = new Date(latest)
+    const d = parseApiDate(latest)
     return d.toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   } catch {
     return null

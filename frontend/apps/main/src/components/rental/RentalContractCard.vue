@@ -1,7 +1,7 @@
 <template>
   <van-swipe-cell
     :disabled="!contract.is_active"
-    class="rental-swipe"
+    class="rental-swipe swipe-action-btn-parent"
     :left-width="0"
     :right-width="contract.is_active ? 160 : 0"
     :style="rentalSwipeStyle"
@@ -83,6 +83,8 @@ const rentalSwipeStyle = computed<Record<string, string>>(() => ({
 </script>
 
 <style scoped>
+@import '@/styles/swipe-actions.css';
+
 .rental-swipe {
   touch-action: pan-y;
   border-radius: 12px;
@@ -93,9 +95,9 @@ const rentalSwipeStyle = computed<Record<string, string>>(() => ({
 .rental-swipe :deep(.van-swipe-cell__right) {
   display: flex;
   width: var(--swipe-right-width, auto);
+  height: 100%;
+  align-items: stretch;
 }
-
-@import '@/styles/swipe-actions.css';
 
 .rental-card {
   background: var(--card-bg);

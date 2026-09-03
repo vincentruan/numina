@@ -18,6 +18,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { parseApiDate } from '@/utils/format'
 
 const props = defineProps<{
   signedAt: string | null
@@ -27,7 +28,7 @@ const { t } = useI18n()
 
 const daysSinceSigned = computed<number>(() => {
   if (!props.signedAt) return 0
-  const signedDate = new Date(props.signedAt)
+  const signedDate = parseApiDate(props.signedAt)
   if (Number.isNaN(signedDate.getTime())) return 0
   const now = new Date()
   const diffMs = now.getTime() - signedDate.getTime()

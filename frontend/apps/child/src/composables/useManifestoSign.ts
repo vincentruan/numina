@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { getChildManifesto, signChildManifesto } from '@/api/manifesto'
+import { parseApiDate } from '@/utils/format'
 import type { ChildManifestoData } from '@/api/manifesto'
 
 export type AgeGroup = 'simple' | 'handwriting'
@@ -20,7 +21,7 @@ export function useManifestoSign(options?: { birthday?: string | null }) {
   const ageGroup = computed<AgeGroup>(() => {
     const birthday = options?.birthday
     if (!birthday) return 'handwriting'
-    const birthDate = new Date(birthday)
+    const birthDate = parseApiDate(birthday)
     if (Number.isNaN(birthDate.getTime())) return 'handwriting'
     const today = new Date()
     let age = today.getFullYear() - birthDate.getFullYear()
