@@ -937,6 +937,21 @@ _SESSION_TITLES_BY_LANG = {
         "zh-CN": "启蒙周报",
         "default": "启蒙周报",
     },
+    "finance-coach": {
+        "en-US": "Family Finance Coach",
+        "zh-CN": "家庭财务教练",
+        "default": "家庭财务教练",
+    },
+    "wish-advice": {
+        "en-US": "Wish Savings Advice",
+        "zh-CN": "心愿储蓄建议",
+        "default": "心愿储蓄建议",
+    },
+    "dashboard-narrative": {
+        "en-US": "Monthly Financial Insight",
+        "zh-CN": "本月财务洞察",
+        "default": "本月财务洞察",
+    },
 }
 
 
@@ -1178,6 +1193,21 @@ async def _run_finance_coach_agent(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
+
+        # Set session title immediately so the sidebar shows a proper label
+        # (e.g. "家庭财务教练 20260903 1930") even if the run is interrupted.
+        # _set_session_title is best-effort and idempotent — the late call
+        # below overwrites with a fresh timestamp on success.
+        _coach_title = _SESSION_TITLES_BY_LANG.get("finance-coach", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("finance-coach", {}).get(
+                "default", "家庭财务教练"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _coach_title))
+        )
+
         await p.run_skill(user_message)
         _coach_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
@@ -1294,6 +1324,18 @@ async def _run_finance_coach_agent(
                     {"error": "财务建议生成失败，请重试"},
                 )
 
+    # Set finance-coach session title (localized by user language).
+    if _coach_ok:
+        _title = _SESSION_TITLES_BY_LANG.get("finance-coach", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("finance-coach", {}).get(
+                "default", "家庭财务教练"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
+        )
+
 
 async def _run_wish_advice_agent(
     *,
@@ -1351,6 +1393,19 @@ async def _run_wish_advice_agent(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
+
+        # Set session title immediately so the sidebar shows a proper label
+        # even if the run is interrupted. Idempotent — late call overwrites.
+        _wish_title = _SESSION_TITLES_BY_LANG.get("wish-advice", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("wish-advice", {}).get(
+                "default", "心愿储蓄建议"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _wish_title))
+        )
+
         await p.run_skill(user_message)
         _wish_ok = True  # run_skill succeeded; completion_status set in __aexit__
 
@@ -1440,6 +1495,18 @@ async def _run_wish_advice_agent(
                     {"error": "心愿储蓄建议生成失败，请重试"},
                 )
 
+    # Set wish-advice session title (localized by user language).
+    if _wish_ok:
+        _title = _SESSION_TITLES_BY_LANG.get("wish-advice", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("wish-advice", {}).get(
+                "default", "心愿储蓄建议"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
+        )
+
 
 # Synthetic trigger for dashboard-narrative runs (mirrors _SYNTHETIC_FINANCE_COACH_TRIGGER).
 _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER = "/dashboard-narrative 生成本月财务叙事"
@@ -1494,6 +1561,19 @@ async def _run_dashboard_narrative_agent(
                 user_language, _LANGUAGE_INSTRUCTIONS["default"]
             )
             user_message = f"{lang_instruction}\n\n{user_message}"
+
+        # Set session title immediately so the sidebar shows a proper label
+        # even if the run is interrupted. Idempotent — late call overwrites.
+        _narrative_title = _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
+                "default", "本月财务洞察"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _narrative_title))
+        )
+
         await p.run_skill(user_message, enable_reasoning_delta=True)
         _narrative_ok = True  # run_skill succeeded
 
@@ -1518,6 +1598,18 @@ async def _run_dashboard_narrative_agent(
                     p.run_id,
                     len(narrative_text),
                 )
+
+    # Set dashboard-narrative session title (localized by user language).
+    if _narrative_ok:
+        _title = _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
+            user_language,
+            _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
+                "default", "本月财务洞察"
+            ),
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
+        )
 
 
 async def _run_numina_agent(
