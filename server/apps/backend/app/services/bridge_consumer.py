@@ -380,11 +380,16 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
         # Use utcnow() to match the naive-UTC convention (same pattern
         # as AITaskService.get_running_task line 44).
         cutoff = datetime.utcnow() - timedelta(minutes=10)
+
+        # AITask uses short skill_id ("coach") but AIReport uses the
+        # full name ("finance_coach"). Map before querying.
+        report_skill_id = "finance_coach" if task.skill_id == "coach" else task.skill_id
+
         recent_report = (
             db.query(AIReport)
             .filter(
                 AIReport.family_id == int(family_id),
-                AIReport.skill_id == task.skill_id,
+                AIReport.skill_id == report_skill_id,
                 AIReport.generated_at >= cutoff,
             )
             .first()

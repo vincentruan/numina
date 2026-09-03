@@ -8,6 +8,7 @@ import type { FinanceSuggestion } from '@/types'
 import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import { useTaskResume } from '@/composables/useTaskResume'
+import { getTaskById, type AITask } from '@/api/ai-tasks'
 import IIcon from '@/components/IIcon.vue'
 import AiGatedInline from '@/components/ai/AiGatedInline.vue'
 
@@ -59,9 +60,20 @@ async function load(force = false) {
     const resp = await getFinanceCoach(force)
 
     // 202 queued: backend created a task but another is running.
-    // Set taskId so useTaskPolling picks it up; onComplete re-calls load().
+    // Set taskId so the cancel button shows, then poll until the task
+    // reaches a terminal state. Once done, reload from cache.
     if (resp.status === 'queued' && resp.task_id) {
       resumeHandle.taskId.value = resp.task_id
+      const task = await pollTask(resp.task_id, 30_000)
+      if (task?.status === 'completed') {
+        // Task completed (and Bug-1 fix ensures verification passes) —
+        // reload from cache to display the fresh suggestions.
+        await load(false)
+      } else if (task?.status === 'failed' || task?.status === 'timeout') {
+        // Surface the error so the retry button is visible with a message.
+        resumeHandle.status.value = 'failed'
+        resumeHandle.task.value = task
+      }
       return
     }
 
@@ -112,6 +124,23 @@ async function onCancel() {
   } finally {
     cancelling.value = false
   }
+}
+
+/** Poll a task until it reaches a terminal state or timeout expires. */
+async function pollTask(taskId: string, timeoutMs: number): Promise<AITask | null> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 3000))
+    try {
+      const task = await getTaskById(taskId)
+      if (['completed', 'failed', 'timeout', 'cancelled', 'interrupted'].includes(task.status)) {
+        return task
+      }
+    } catch {
+      // network blip — keep polling
+    }
+  }
+  return null
 }
 
 async function onRetry() {
