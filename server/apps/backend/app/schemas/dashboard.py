@@ -306,3 +306,18 @@ class UpcomingPaymentItem(SnowflakeBase):
 class UpcomingPaymentsResponse(BaseModel):
     items: list[UpcomingPaymentItem]
     total_amount: float
+
+
+class UpcomingRentalItem(SnowflakeBase):
+    """Single rental contract with an upcoming renewal or rent collection date."""
+    contract_id: int
+    name: str
+    amount: float | None
+    due_date: str  # ISO date string
+    role: str  # "landlord" | "tenant"
+    counterparty: str | None
+
+
+class UpcomingRentalsResponse(BaseModel):
+    items: list[UpcomingRentalItem]
+    total_amount: float

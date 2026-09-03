@@ -16,6 +16,7 @@
             <span v-if="totalCount > 0" class="reminder-summary">
               <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
               <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
+              <template v-if="upcomingRentals.length > 0"> · {{ t('reminders.upcomingRentals') }} {{ upcomingRentals.length }}</template>
               <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
               <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
               <template v-if="store.summary.large_purchase > 0"> · {{ t('reminders.types.large_purchase') }} {{ store.summary.large_purchase }}</template>
@@ -74,9 +75,33 @@
               </div>
             </template>
 
+            <!-- 租约到期 -->
+            <template v-if="upcomingRentals.length > 0">
+              <div class="reminder-section-label">{{ t('reminders.upcomingRentals') }}</div>
+              <div
+                v-for="item in upcomingRentals"
+                :key="`rental-${item.contract_id}`"
+                class="expiring-row payment-row"
+                :class="getPaymentUrgencyClass(item.due_date)"
+                @click="goToRentalContract(item.contract_id)"
+              >
+                <van-icon :name="item.role === 'tenant' ? 'clock-o' : 'gold-coin-o'" class="expiring-icon" />
+                <div class="expiring-content">
+                  <div class="expiring-name">{{ item.name }}</div>
+                  <div class="expiring-meta">{{ item.due_date }} · {{ item.role === 'tenant' ? t('reminders.leaseRenewal') : t('reminders.rentCollection') }}</div>
+                </div>
+                <div class="expiring-right">
+                  <div class="payment-amount">{{ currency.format(item.amount ?? 0) }}</div>
+                  <div class="expiring-remaining" :class="getPaymentUrgencyClass(item.due_date)">
+                    {{ formatPaymentDays(item.due_date) }}
+                  </div>
+                </div>
+              </div>
+            </template>
+
             <!-- 无任何到期时的空状态 -->
             <van-empty
-              v-if="expiringAssets.length === 0 && upcomingPayments.length === 0"
+              v-if="expiringAssets.length === 0 && upcomingPayments.length === 0 && upcomingRentals.length === 0"
               :description="t('reminders.expiringSoonEmpty')"
               image-size="60"
               class="section-empty"
@@ -138,7 +163,7 @@ import { useRouter } from 'vue-router'
 import IIcon from '@/components/IIcon.vue'
 import { useRemindersStore } from '@/stores/reminders'
 import type { LowUsageItem } from '@/types'
-import type { ExpiringSoonItem, UpcomingPaymentItem } from '@/api/dashboard'
+import type { ExpiringSoonItem, UpcomingPaymentItem, UpcomingRentalItem } from '@/api/dashboard'
 import { useCurrency } from '@/composables/useCurrency'
 import { parseLocalDate } from '@/utils/format'
 
@@ -146,6 +171,7 @@ const props = defineProps<{
   idleAssets?: LowUsageItem[]
   expiringAssets?: ExpiringSoonItem[]
   upcomingPayments?: UpcomingPaymentItem[]
+  upcomingRentals?: UpcomingRentalItem[]
 }>()
 
 defineEmits<{
@@ -162,10 +188,11 @@ const loaded = ref(false)
 const idleAssets = computed(() => props.idleAssets ?? [])
 const expiringAssets = computed(() => props.expiringAssets ?? [])
 const upcomingPayments = computed(() => props.upcomingPayments ?? [])
+const upcomingRentals = computed(() => props.upcomingRentals ?? [])
 
 // 排序规则：有数据的在前；都有/都无时，智能提醒在前
 // 注意：闲置资产固定跟在即将到期后面，不参与排序决策
-const hasExpiringSoon = computed(() => expiringAssets.value.length > 0 || upcomingPayments.value.length > 0)
+const hasExpiringSoon = computed(() => expiringAssets.value.length > 0 || upcomingPayments.value.length > 0 || upcomingRentals.value.length > 0)
 const hasSmartReminders = computed(() => store.reminders.length > 0)
 
 const sectionOrder = computed(() => {
@@ -178,7 +205,7 @@ const sectionOrder = computed(() => {
 })
 
 const totalCount = computed(
-  () => expiringAssets.value.length + idleAssets.value.length + upcomingPayments.value.length + store.summary.total
+  () => expiringAssets.value.length + idleAssets.value.length + upcomingPayments.value.length + upcomingRentals.value.length + store.summary.total
 )
 
 onMounted(() => {
@@ -224,6 +251,11 @@ function goToAsset(id: string) {
 
 function goToLiability(id: string) {
   router.push(`/liabilities/${id}`)
+}
+
+function goToRentalContract(id: string) {
+  router.push({ path: '/finance', query: { tab: 'rentals' } })
+  // TODO: open detail/edit for specific contract once rental detail page exists
 }
 
 function daysUntilDue(dueDateStr: string): number {

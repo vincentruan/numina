@@ -476,3 +476,21 @@ export interface UpcomingPaymentsResponse {
 export function getUpcomingPayments() {
   return http.get<UpcomingPaymentsResponse>('/dashboard/upcoming-payments')
 }
+
+export interface UpcomingRentalItem {
+  contract_id: string
+  name: string
+  amount: number | null
+  due_date: string
+  role: 'landlord' | 'tenant'
+  counterparty: string | null
+}
+
+export interface UpcomingRentalsResponse {
+  items: UpcomingRentalItem[]
+  total_amount: number
+}
+
+export function getUpcomingRentals() {
+  return http.get<UpcomingRentalsResponse>('/dashboard/upcoming-rentals')
+}
