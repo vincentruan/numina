@@ -62,14 +62,15 @@
 
     <!-- Family Activity -->
     <ReportSection :title="t('literacyReport.familyActivity')" icon="friends-o">
-      <div class="activity-callout">
-        {{ report.report_json.family_activity }}
+      <div v-if="report.report_json.family_activity" class="activity-callout">
+        <MarkdownContent :content="String(report.report_json.family_activity)" />
       </div>
+      <div v-else class="empty-hint">--</div>
     </ReportSection>
 
     <!-- Narrative -->
     <div v-if="report.narrative" class="narrative-block">
-      <p class="narrative-text">{{ report.narrative }}</p>
+      <MarkdownContent :content="report.narrative" />
     </div>
   </div>
 </template>
@@ -78,6 +79,7 @@
 import { useI18n } from 'vue-i18n'
 import type { WeeklyReportResponse } from '@/api/literacy'
 import ReportSection from './ReportSection.vue'
+import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 
 const { t } = useI18n()
 
@@ -151,15 +153,6 @@ defineProps<{
   line-height: 1.5;
 }
 
-.activity-callout {
-  background: rgba(var(--van-primary-color-rgb, 57, 122, 255), 0.08);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
-  color: var(--text-primary);
-  line-height: 1.6;
-}
-
 .narrative-block {
   margin: 12px 16px;
   padding: 12px;
@@ -167,11 +160,11 @@ defineProps<{
   border-radius: 8px;
 }
 
-.narrative-text {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-  line-height: 1.7;
+.activity-callout {
+  background: rgba(var(--van-primary-color-rgb, 57, 122, 255), 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.6;
 }
 
 .empty-hint {

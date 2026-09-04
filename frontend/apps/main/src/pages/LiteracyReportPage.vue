@@ -68,7 +68,7 @@
           </van-button>
         </div>
         <div v-if="stream.narrative.value" class="streaming-text">
-          {{ stream.narrative.value }}
+          <MarkdownContent :content="stream.narrative.value" />
         </div>
       </div>
 
@@ -117,6 +117,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast, showFailToast } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 import ChildSelector from '@/components/literacy/ChildSelector.vue'
 import WeeklyReportCard from '@/components/literacy/WeeklyReportCard.vue'
 import {
@@ -124,7 +125,7 @@ import {
   getReport,
   getReportHistory,
 } from '@/api/literacy'
-import { parseApiDate } from '@/utils/format'
+import { parseLocalDate } from '@/utils/format'
 import type { ReportChild, WeeklyReportResponse, ReportHistoryWeek } from '@/api/literacy'
 import { useLiteracyStream } from '@/composables/useLiteracyStream'
 import { useTaskResume } from '@/composables/useTaskResume'
@@ -259,7 +260,8 @@ function goNext() {
 
 function formatWeekStart(weekStart: string): string {
   try {
-    const d = parseApiDate(weekStart)
+    const d = parseLocalDate(weekStart)
+    if (isNaN(d.getTime())) return weekStart
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
   } catch {
     return weekStart
