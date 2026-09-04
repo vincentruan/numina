@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy.orm import Session
@@ -24,12 +24,12 @@ class ExchangeRateService:
         instead of silently treating missing rates as 1:1.
         """
         if target_currency == "CNY":
-            return (1.0, datetime.now())
+            return (1.0, datetime.now(UTC))
 
         entry = cls._cache.get(target_currency)
         if entry is not None:
             rate, fetched_at, cached_at = entry
-            if datetime.now() - cached_at < _CACHE_TTL:
+            if datetime.now(UTC) - cached_at < _CACHE_TTL:
                 return (rate, fetched_at)
 
         row = (
@@ -42,7 +42,7 @@ class ExchangeRateService:
             logger.warning(f"汇率数据不存在: {target_currency}")
             return (None, None)
 
-        cls._cache[target_currency] = (row.rate, row.fetched_at, datetime.now())
+        cls._cache[target_currency] = (row.rate, row.fetched_at, datetime.now(UTC))
         return (row.rate, row.fetched_at)
 
     @classmethod
@@ -60,7 +60,7 @@ class ExchangeRateService:
             logger.exception(f"汇率获取失败: {e}")
             return False
 
-        fetched_at = datetime.now()
+        fetched_at = datetime.now(UTC)
         rates: dict[str, float] = data.get("rates", {})
 
         for code, rate in rates.items():

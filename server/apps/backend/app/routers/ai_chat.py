@@ -12,7 +12,7 @@ import logging
 import re
 import urllib.parse
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -429,7 +429,7 @@ def get_system_default_session(
     db: Session = Depends(get_db),
 ) -> SessionDefaultWrapper:
     """查找当前用户最近的系统默认会话（source=system_default），用于缓存复用。"""
-    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
     session = (
         db.query(AIChatSession)
         .filter(

@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import BigInteger, Date, DateTime, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -19,4 +19,4 @@ class AssetLifecycleEvent(Base):
     sell_fee: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     sell_channel: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())

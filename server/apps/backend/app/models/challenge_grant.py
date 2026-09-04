@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -38,12 +38,12 @@ class ChallengeGrant(Base):
     target_value: Mapped[int] = mapped_column(Integer, nullable=False)
     chore_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("chore_templates.id"), nullable=True)
     current_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     message: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     child_user = relationship("User", foreign_keys=[child_user_id])
     chore_template = relationship("ChoreTemplate", foreign_keys=[chore_template_id])

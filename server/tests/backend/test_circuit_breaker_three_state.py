@@ -188,7 +188,7 @@ class TestCircuitReset:
             circuit_reason="permanent_auth",
             half_open_success_count=2,
             half_open_failure_count=1,
-            half_open_window_start=datetime.now(UTC).replace(tzinfo=None),
+            half_open_window_start=datetime.now(UTC),
             failure_count=10,
         )
 
@@ -265,7 +265,7 @@ class TestHalfOpenResultEndpoint:
             db,
             family_id=1,
             circuit_state="half_open",
-            half_open_window_start=datetime.now(UTC).replace(tzinfo=None),
+            half_open_window_start=datetime.now(UTC),
         )
 
         resp = client.post(
@@ -285,7 +285,7 @@ class TestHalfOpenResultEndpoint:
             db,
             family_id=1,
             circuit_state="half_open",
-            half_open_window_start=datetime.now(UTC).replace(tzinfo=None),
+            half_open_window_start=datetime.now(UTC),
         )
 
         resp = client.post(

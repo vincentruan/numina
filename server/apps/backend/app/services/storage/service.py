@@ -2,7 +2,7 @@
 import contextlib
 import hashlib
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -75,7 +75,7 @@ class StorageService:
 
         # New file — persist to disk
         filename = f"{uuid4().hex}{ext}"
-        date_dir = datetime.now().strftime("%Y%m%d")
+        date_dir = datetime.now(UTC).strftime("%Y%m%d")
         remote_path = await backend.save(content, filename, date_dir, family_id=str(user.family_id), user_id=str(user.id))
         local_path = str(Path(settings.UPLOAD_DIR) / "uploads" / remote_path)
 

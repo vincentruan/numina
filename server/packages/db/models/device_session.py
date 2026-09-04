@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class DeviceSession(Base):
@@ -21,9 +21,9 @@ class DeviceSession(Base):
     )
     device_name: Mapped[str] = mapped_column(String(200), nullable=False)
     refresh_jti: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     browser_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     device_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

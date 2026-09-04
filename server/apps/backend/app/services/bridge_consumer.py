@@ -368,18 +368,14 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
     if not task:
         return False
     if task.skill_id in ("report", "coach"):
-        from datetime import datetime, timedelta
+        from datetime import UTC, datetime, timedelta
 
         from apps.backend.app.models.ai_report import AIReport
 
-        # AIReport.generated_at is a naive DateTime column (UTC stored
-        # without tzinfo).  Using datetime.now(UTC) would produce an
-        # aware datetime — PostgreSQL rejects naive-vs-aware comparisons
-        # with "operator does not exist", causing every report task to
-        # fail verification even when the agent wrote the report.
-        # Use utcnow() to match the naive-UTC convention (same pattern
-        # as AITaskService.get_running_task line 44).
-        cutoff = datetime.utcnow() - timedelta(minutes=10)
+        # AIReport.generated_at is a tz-aware DateTime column (UTC stored
+        # with tzinfo).  Use datetime.now(UTC) to produce a matching
+        # aware datetime for comparison.
+        cutoff = datetime.now(UTC) - timedelta(minutes=10)
 
         # AITask uses short skill_id ("coach") but AIReport uses the
         # full name ("finance_coach"). Map before querying.

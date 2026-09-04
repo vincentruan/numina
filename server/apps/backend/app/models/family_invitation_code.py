@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -30,12 +30,12 @@ class FamilyInvitationCode(Base):
         String(20), unique=True, nullable=False, index=True
     )
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     used_by_family_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("families.id"), nullable=True
     )
     used_by_username: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UTCDateTime(), server_default=func.now(), nullable=False
     )

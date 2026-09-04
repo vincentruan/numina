@@ -2,11 +2,11 @@ import random
 import string
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String, func, text
+from sqlalchemy import BigInteger, Boolean, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 def generate_invite_code() -> str:
@@ -27,9 +27,9 @@ class Family(Base):
     ai_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCDateTime(), server_default=func.now(), onupdate=func.now()
     )
 
     members = relationship("User", back_populates="family")

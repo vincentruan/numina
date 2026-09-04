@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -264,7 +264,7 @@ async def cancel_task_by_id(
 
     # Mark as cancelled
     task.status = "cancelled"
-    task.completed_at = datetime.now()
+    task.completed_at = datetime.now(UTC)
     db.commit()
 
     return {"ok": True, "status": "cancelled", "task_id": str(task.id)}

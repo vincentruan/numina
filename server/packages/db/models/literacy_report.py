@@ -2,7 +2,6 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
-    DateTime,
     ForeignKey,
     String,
     Text,
@@ -12,7 +11,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class LiteracyWeeklyReport(Base):
@@ -30,7 +29,7 @@ class LiteracyWeeklyReport(Base):
     week_start: Mapped[date] = mapped_column(nullable=False, index=True)
     report_json: Mapped[str] = mapped_column(Text, nullable=False, comment="Structured report data")
     narrative: Mapped[str] = mapped_column(Text, nullable=False, comment="AI-generated narrative text")
-    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), nullable=False)
     thread_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True,
         comment="DeerFlow thread ID for the dedicated chat session",

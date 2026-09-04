@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -18,4 +18,4 @@ class Activity(Base):
     entity_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     amount: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())

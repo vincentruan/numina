@@ -89,7 +89,7 @@ def test_half_open_recovery_flow(db, family_providers):
     assert tavily.circuit_state == "open"
 
     # Manually set last_failure_at to 61 seconds ago (bypass the 60s wait)
-    tavily.last_failure_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=61)
+    tavily.last_failure_at = datetime.now(UTC) - timedelta(seconds=61)
     db.commit()
 
     # Trigger recovery check

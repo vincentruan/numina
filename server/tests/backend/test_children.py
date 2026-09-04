@@ -106,12 +106,12 @@ def test_owner_unlocks_child(client, db):
     child_id = _create_child(client, headers).json()["data"]["id"]
 
     # Manually lock the child in DB
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.models.user import User
     child = db.query(User).filter(User.id == child_id).first()
     child.pin_fail_count = 5
-    child.pin_locked_until = datetime.utcnow() + timedelta(minutes=15)
+    child.pin_locked_until = datetime.now(UTC) + timedelta(minutes=15)
     db.commit()
 
     resp = client.post(f"/api/v1/family/children/{child_id}/unlock", headers=headers)

@@ -3,7 +3,6 @@ from datetime import date, datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
-    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -14,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class LiteracyScenarioTemplate(Base):
@@ -32,7 +31,7 @@ class LiteracyScenarioTemplate(Base):
         Text, nullable=False, comment="JSON array of 2-4 choices with feedback"
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
 
 class LiteracyScenario(Base):
@@ -54,4 +53,4 @@ class LiteracyScenario(Base):
     content_json: Mapped[str] = mapped_column(Text, nullable=False, comment="Personalized scenario content")
     choice_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     feedback_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

@@ -43,11 +43,8 @@ def write_report_results(
             db.commit()
             return 0
 
-        # Defensive: set generated_at explicitly in UTC. The model's
-        # default=func.now() depends on the DB session timezone (SET
-        # timezone='UTC' via engine hook). If the hook doesn't apply
-        # (e.g. PG server timezone leaks through), the stored value is
-        # local time, which ensure_utc() misinterprets → 8h display error.
+        # Set generated_at explicitly in UTC to ensure the timestamp is
+        # timezone-aware regardless of the DB session timezone.
         report = AIReport(
             id=next_id(),
             family_id=family_id,

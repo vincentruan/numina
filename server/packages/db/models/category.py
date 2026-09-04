@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class Category(Base):
@@ -18,8 +18,8 @@ class Category(Base):
     asset_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'physical' or 'financial'
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     family = relationship("Family", back_populates="categories")
     assets = relationship("Asset", back_populates="category")

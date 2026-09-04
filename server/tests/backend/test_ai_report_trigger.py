@@ -128,7 +128,7 @@ def test_trigger_passes_family_id_as_string_to_agent(client):
 def _fresh_cached_report():
     """An AIReport-like object generated < 1h ago (cache hit), with a valid
     report_json matching the report schema (overall_score + 3 indicators)."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     return type(
         "R",
@@ -142,7 +142,7 @@ def _fresh_cached_report():
                     {"key": "c", "label": "C", "score": 4, "narrative": "ok"},
                 ],
             },
-            "generated_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=5),
+            "generated_at": datetime.now(UTC) - timedelta(minutes=5),
         },
     )()
 
@@ -179,14 +179,14 @@ def test_trigger_force_bypasses_cache(client):
 
 def test_trigger_stale_cache_misses(client):
     """Cache older than 1h -> regenerated via trigger + stream (not served stale)."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     stale = type(
         "R",
         (),
         {
             "report_json": {"overall_score": 80},
-            "generated_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=2),
+            "generated_at": datetime.now(UTC) - timedelta(hours=2),
         },
     )()
     with (
@@ -208,7 +208,7 @@ def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
         (),
         {
             "report_json": {"invalid": "structure"},
-            "generated_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=5),
+            "generated_at": datetime.now(UTC) - timedelta(minutes=5),
         },
     )()
     with (
@@ -223,4 +223,4 @@ def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
     assert "text/event-stream" in response.headers.get("content-type", "")
 
 
-from datetime import datetime, timedelta  # noqa: E402  (used by cache fixtures)
+from datetime import UTC, datetime, timedelta  # noqa: E402  (used by cache fixtures)

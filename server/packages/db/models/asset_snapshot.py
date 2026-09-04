@@ -3,7 +3,6 @@ from datetime import date, datetime
 from sqlalchemy import (
     BigInteger,
     Date,
-    DateTime,
     Float,
     ForeignKey,
     Text,
@@ -13,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class AssetSnapshot(Base):
@@ -30,6 +29,6 @@ class AssetSnapshot(Base):
     total_liabilities: Mapped[float] = mapped_column(Float, default=0)
     net_worth: Mapped[float] = mapped_column(Float, default=0)
     breakdown: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     family = relationship("Family", back_populates="snapshots")

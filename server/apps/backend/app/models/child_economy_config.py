@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -38,5 +38,5 @@ class ChildEconomyConfig(Base):
     literacy_badge_coin_amount: Mapped[int] = mapped_column(
         Integer, default=50, server_default="50", nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())

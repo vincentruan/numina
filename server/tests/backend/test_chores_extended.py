@@ -1,6 +1,6 @@
 """Additional tests for streak, auto-approve, idempotency, pool isolation, weekly, and grant cross-family."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -155,7 +155,7 @@ def test_auto_approve_triggers_on_list(client, child_user, daily_template, auth_
     # Backdate submitted_at to exceed auto_approve_hours (default 24h)
     from apps.backend.app.models.chore import ChoreInstance
     record = db.query(ChoreInstance).filter_by(id=inst["id"]).first()
-    record.submitted_at = datetime.utcnow() - timedelta(hours=25)
+    record.submitted_at = datetime.now(UTC) - timedelta(hours=25)
     db.commit()
 
     # Parent lists approvals — should trigger auto-approve

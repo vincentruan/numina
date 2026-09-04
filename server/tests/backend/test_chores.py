@@ -470,7 +470,7 @@ def test_pool_chore_approve_credits_submitter(client, db, auth_headers, child_us
 
 def test_auto_approve_timeout(client, db, auth_headers, child_user, daily_template):
     """Instances past auto_approve_hours are auto-approved when list_pending_approvals is called."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.models.chore import ChoreInstance
     from apps.backend.app.models.coin_transaction import CoinTransaction
@@ -482,7 +482,7 @@ def test_auto_approve_timeout(client, db, auth_headers, child_user, daily_templa
 
     # Backdate submitted_at beyond auto_approve_hours (default 24h)
     row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
-    row.submitted_at = datetime.utcnow() - timedelta(hours=25)
+    row.submitted_at = datetime.now(UTC) - timedelta(hours=25)
     db.commit()
 
     # Calling list_pending_approvals triggers auto-approve for timed-out instances
@@ -638,7 +638,7 @@ def test_approve_education_reward_uses_streak_multiplied_amount(
     10-coin chore → actual_amount 15, with rate 2 → 30.0 yuan. Proves the rate
     applies to the bonus-inclusive amount.
     """
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.models.activity import Activity
     from apps.backend.app.models.chore import ChoreInstance
@@ -693,7 +693,7 @@ def test_approve_education_reward_uses_streak_multiplied_amount(
 
 def test_auto_approve_skips_education_reward(client, db, auth_headers, child_user, daily_template):
     """_auto_approve (timeout path) must NOT write an education_reward Activity."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.models.activity import Activity
     from apps.backend.app.models.chore import ChoreInstance
@@ -709,7 +709,7 @@ def test_auto_approve_skips_education_reward(client, db, auth_headers, child_use
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
 
     row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
-    row.submitted_at = datetime.utcnow() - timedelta(hours=25)
+    row.submitted_at = datetime.now(UTC) - timedelta(hours=25)
     db.commit()
 
     # Trigger auto-approve via list_pending_approvals.

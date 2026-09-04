@@ -10,7 +10,7 @@ Provides centralized logging configuration with support for:
 import gzip
 import logging
 import shutil
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 
@@ -115,12 +115,12 @@ def cleanup_old_logs(log_dir: Path, retention_days: int) -> int:
     if not log_dir.exists():
         return 0
 
-    cutoff_date = datetime.now() - timedelta(days=retention_days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
     deleted_count = 0
 
     for log_file in log_dir.glob("**/*"):
         if log_file.is_file() and (log_file.suffix in (".log", ".gz") or ".log." in log_file.name):
-            file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
+            file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime, tz=UTC)
 
             if file_mtime < cutoff_date:
                 try:
@@ -137,12 +137,12 @@ def archive_old_logs(log_dir: Path, compress_after_days: int = 7) -> int:
     if not log_dir.exists():
         return 0
 
-    cutoff_date = datetime.now() - timedelta(days=compress_after_days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=compress_after_days)
     compressed_count = 0
 
     for log_file in log_dir.glob("**/*.log.[0-9]*"):
         if log_file.is_file() and not log_file.with_suffix(log_file.suffix + ".gz").exists():
-            file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
+            file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime, tz=UTC)
 
             if file_mtime < cutoff_date:
                 try:

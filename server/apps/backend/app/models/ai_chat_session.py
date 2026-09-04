@@ -15,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -54,7 +54,7 @@ class AIChatSession(Base):
     # context and cross-family access is enforced at the application layer
     # (get_thread family gating). Null for non-branch sessions.
     parent_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now()
+        UTCDateTime(), nullable=False, default=func.now(), onupdate=func.now()
     )

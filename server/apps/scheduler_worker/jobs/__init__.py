@@ -7,7 +7,7 @@ No module-level app.* imports — lazy imports inside job bodies only.
 
 import asyncio
 import random
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from packages.core.logging import get_logger
@@ -127,7 +127,7 @@ async def file_sync_job() -> None:
                     loc.sync_status = "synced"
                     loc.remote_path = remote_path
                     loc.remote_url = backend.get_url(remote_path)
-                    loc.synced_at = datetime.now()
+                    loc.synced_at = datetime.now(UTC)
                     db.commit()
                 except TimeoutError:
                     loc.retry_count += 1

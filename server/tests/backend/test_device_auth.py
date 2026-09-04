@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -17,7 +17,7 @@ def test_device_session_model_exists(db):
 def test_device_ping_with_etag(client, db):
     """GET /api/v1/auth/device-ping with If-None-Match header returns device_id if valid."""
     # Create a valid device session directly (create_device_session doesn't accept device_id)
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.utils.snowflake import next_id
 
@@ -31,9 +31,9 @@ def test_device_ping_with_etag(client, db):
         device_id=device_id,
         refresh_jti="test-jti-ping-1",
         device_name="Test Device",
-        created_at=datetime.utcnow(),
-        last_seen_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(days=30),
+        created_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
         is_revoked=False,
     )
     db.add(session)
@@ -61,7 +61,7 @@ def test_device_ping_without_etag(client):
 
 def test_device_ping_with_weak_etag(client, db):
     """GET /api/v1/auth/device-ping with weak ETag (W/) is handled correctly."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.utils.snowflake import next_id
 
@@ -75,9 +75,9 @@ def test_device_ping_with_weak_etag(client, db):
         device_id=device_id,
         refresh_jti="test-jti-ping-2",
         device_name="Test Device",
-        created_at=datetime.utcnow(),
-        last_seen_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(days=30),
+        created_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
         is_revoked=False,
     )
     db.add(session)
@@ -142,7 +142,7 @@ def test_create_device_session(db):
     assert session.refresh_jti == "test-jti-1"
     assert session.device_name == "iPhone · Safari"
     assert not session.is_revoked
-    assert session.expires_at > datetime.utcnow() + timedelta(days=29)
+    assert session.expires_at > datetime.now(UTC) + timedelta(days=29)
 
 
 def test_list_device_sessions(db):

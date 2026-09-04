@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, func
+from sqlalchemy import BigInteger, Float, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class NotificationConfig(Base):
@@ -16,7 +16,7 @@ class NotificationConfig(Base):
     )
     large_purchase_threshold_fixed: Mapped[float | None] = mapped_column(Float, nullable=True)
     large_purchase_threshold_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCDateTime(), server_default=func.now(), onupdate=func.now()
     )

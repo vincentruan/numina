@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -25,8 +25,8 @@ class FamilyWebSearchProvider(Base):
     last_failure_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     half_open_success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     half_open_failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    half_open_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    half_open_window_start: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_failure_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())

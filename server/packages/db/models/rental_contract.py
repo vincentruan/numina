@@ -5,7 +5,6 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Date,
-    DateTime,
     ForeignKey,
     Numeric,
     String,
@@ -16,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class RentalContract(Base):
@@ -49,7 +48,7 @@ class RentalContract(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="CNY", server_default="CNY")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     linked_asset = relationship("Asset", foreign_keys=[linked_asset_id])

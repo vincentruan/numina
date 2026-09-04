@@ -18,7 +18,7 @@ See design.md for detailed trade-off analysis.
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 from fastapi import Request
@@ -404,7 +404,7 @@ def register(
 
     # Mark invitation code as used after successful registration
     invitation_code.is_used = True
-    invitation_code.used_at = datetime.utcnow()
+    invitation_code.used_at = datetime.now(UTC)
     invitation_code.used_by_family_id = family_id
     invitation_code.used_by_username = req.username
     db.commit()
@@ -645,7 +645,7 @@ def change_username(db: Session, user: User, new_username: str) -> User:
     # Update
     old_username = user.username
     user.username = new_username
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # Convert recent datetimes back to ISO strings for storage, then append current
     history_to_store = [ts.isoformat() for ts in recent]
     history_to_store.append(now.isoformat())
@@ -741,7 +741,7 @@ def child_pin_login(
     # Check lockout (after dummy bcrypt to avoid timing leak on locked state)
     if (
         child.pin_locked_until is not None
-        and child.pin_locked_until > datetime.utcnow()
+        and child.pin_locked_until > datetime.now(UTC)
     ):
         bcrypt.checkpw(b"dummy", _get_dummy_hash().encode("utf-8"))
         raise AppError(
@@ -794,7 +794,7 @@ def _record_child_pin_failure(db: Session, child: User) -> None:
     db.commit()
 
     if count >= _CHILD_PIN_MAX_ATTEMPTS:
-        child.pin_locked_until = datetime.utcnow() + timedelta(
+        child.pin_locked_until = datetime.now(UTC) + timedelta(
             minutes=_CHILD_PIN_LOCKOUT_MINUTES
         )
         db.commit()

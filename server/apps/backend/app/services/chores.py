@@ -1,7 +1,7 @@
 """Service layer for chore templates and instances."""
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import cast
 
 from fastapi import HTTPException, status
@@ -289,7 +289,7 @@ def mark_complete(db: Session, child_user: User, instance_id: str) -> ChoreInsta
             status.HTTP_422_UNPROCESSABLE_CONTENT, "该家务实例当前不可标记完成"
         )
     instance.status = "pending_approval"
-    instance.submitted_at = datetime.utcnow()
+    instance.submitted_at = datetime.now(UTC)
     instance.submitted_by_user_id = child_user.id
     db.commit()
     db.refresh(instance)
@@ -318,7 +318,7 @@ async def approve_instance_async(
             "UPDATE chore_instances SET status='approved', approved_at=:now "
             "WHERE id=:id AND status='pending_approval'"
         ),
-        {"now": datetime.utcnow().isoformat(), "id": instance_id},
+        {"now": datetime.now(UTC).isoformat(), "id": instance_id},
     )
     if rows.rowcount != 1:  # type: ignore[attr-defined]
         db.rollback()
@@ -556,7 +556,7 @@ def claim_instance(db: Session, child_user: User, instance_id: str) -> ChoreInst
         raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
 
     instance.child_user_id = child_user.id
-    instance.claimed_at = datetime.utcnow()
+    instance.claimed_at = datetime.now(UTC)
     try:
         db.commit()
     except IntegrityError:
@@ -664,7 +664,7 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
         .all()
     )
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     result = []
     for instance in pending:
         if (
@@ -712,7 +712,7 @@ def _auto_approve(db: Session, instance: ChoreInstance, family: Family) -> None:
             "UPDATE chore_instances SET status='approved', approved_at=:now "
             "WHERE id=:id AND status='pending_approval'"
         ),
-        {"now": datetime.utcnow().isoformat(), "id": instance.id},
+        {"now": datetime.now(UTC).isoformat(), "id": instance.id},
     )
     if rows.rowcount != 1:  # type: ignore[attr-defined]
         return  # already processed

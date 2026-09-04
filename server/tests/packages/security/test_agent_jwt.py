@@ -5,7 +5,7 @@ create_agent_token 是纯 JWT 编码, 无需数据库; 用 settings.SECRET_KEY �
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -58,10 +58,10 @@ def test_create_agent_token_expiry_matches_ttl():
 
 def test_create_agent_token_iat_is_recent():
     """iat 应接近当前时间 (容差 10s)."""
-    before = datetime.utcnow() - timedelta(seconds=10)
+    before = datetime.now(UTC) - timedelta(seconds=10)
     payload = _decode(create_agent_token(family_id="fam-time"))
-    after = datetime.utcnow() + timedelta(seconds=10)
-    iat = datetime.utcfromtimestamp(payload["iat"])
+    after = datetime.now(UTC) + timedelta(seconds=10)
+    iat = datetime.fromtimestamp(payload["iat"], tz=UTC)
     assert before <= iat <= after
 
 
@@ -90,8 +90,8 @@ def test_create_agent_token_tampered_payload_rejected():
                 "sub": "agent",
                 "fid": "fam-ATTACKER",
                 "agt": "backend",
-                "iat": datetime.utcnow(),
-                "exp": datetime.utcnow() + timedelta(seconds=300),
+                "iat": datetime.now(UTC),
+                "exp": datetime.now(UTC) + timedelta(seconds=300),
                 "type": "agent",
             },
             "attacker-key",
@@ -106,7 +106,7 @@ def test_create_agent_token_tampered_payload_rejected():
 def test_create_agent_token_expired_token_rejected():
     """过期 token 解码应抛 ExpiredSignatureError."""
     # 手动构造一个已过期的 token
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     expired = jwt.encode(
         {
             "sub": "agent",

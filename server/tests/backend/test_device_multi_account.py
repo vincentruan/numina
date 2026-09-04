@@ -5,7 +5,7 @@ Covers:
 - POST /api/v1/auth/device/select — selects a user, handles 2FA or issues tokens
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from apps.backend.app.models.device_session import DeviceSession
@@ -65,7 +65,7 @@ def _make_session(
     expires_at: datetime | None = None,
 ) -> DeviceSession:
     if expires_at is None:
-        expires_at = datetime.utcnow() + timedelta(days=30)
+        expires_at = datetime.now(UTC) + timedelta(days=30)
 
     session = DeviceSession(
         user_id=user.id,
@@ -73,7 +73,7 @@ def _make_session(
         device_id=device_id,
         device_name="Test Device · Chrome",
         refresh_jti=str(uuid4()),
-        last_seen_at=datetime.utcnow(),
+        last_seen_at=datetime.now(UTC),
         expires_at=expires_at,
         is_revoked=is_revoked,
     )
@@ -141,7 +141,7 @@ def test_check_device_excludes_expired_sessions(client, db):
     device_id = str(uuid4())
 
     user = _make_user(db, family.id)
-    _make_session(db, user, device_id, expires_at=datetime.utcnow() - timedelta(days=1))
+    _make_session(db, user, device_id, expires_at=datetime.now(UTC) - timedelta(days=1))
 
     resp = client.post("/api/v1/auth/device/check", json={"device_id": device_id})
     assert resp.status_code == 200
@@ -280,7 +280,7 @@ def test_select_device_refreshes_session_expiry(client, db):
     device_id = str(uuid4())
 
     user = _make_user(db, family.id, role="member")
-    original_expires = datetime.utcnow() + timedelta(days=5)
+    original_expires = datetime.now(UTC) + timedelta(days=5)
     session = _make_session(db, user, device_id, expires_at=original_expires)
 
     resp = client.post(
@@ -300,7 +300,7 @@ def test_select_device_expired_session_returns_404(client, db):
     device_id = str(uuid4())
 
     user = _make_user(db, family.id, role="member")
-    _make_session(db, user, device_id, expires_at=datetime.utcnow() - timedelta(days=1))
+    _make_session(db, user, device_id, expires_at=datetime.now(UTC) - timedelta(days=1))
 
     resp = client.post(
         "/api/v1/auth/device/select",

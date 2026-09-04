@@ -93,9 +93,7 @@ class TestWebSearchAdapter:
         """Success threshold in half_open should close circuit."""
         web_search_provider.circuit_state = "half_open"
         web_search_provider.half_open_success_count = 2
-        web_search_provider.half_open_window_start = datetime.now(UTC).replace(
-            tzinfo=None
-        )
+        web_search_provider.half_open_window_start = datetime.now(UTC)
         db.commit()
 
         adapter = WebSearchAdapter(web_search_provider.id)
@@ -111,9 +109,7 @@ class TestWebSearchAdapter:
         """Circuit should recover after cooldown."""
         web_search_provider.circuit_state = "open"
         web_search_provider.circuit_reason = "transient_rate_limit"
-        web_search_provider.last_failure_at = datetime.now(UTC).replace(
-            tzinfo=None
-        ) - timedelta(seconds=120)
+        web_search_provider.last_failure_at = datetime.now(UTC) - timedelta(seconds=120)
         db.commit()
 
         adapter = WebSearchAdapter(web_search_provider.id)
@@ -181,9 +177,7 @@ class TestAIProviderAdapter:
         ai_provider.circuit_state = "half_open"
         ai_provider.half_open_success_count = 8
         ai_provider.half_open_failure_count = 2
-        ai_provider.half_open_window_start = datetime.now(UTC).replace(
-            tzinfo=None
-        ) - timedelta(seconds=360)
+        ai_provider.half_open_window_start = datetime.now(UTC) - timedelta(seconds=360)
         db.commit()
 
         adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
@@ -201,15 +195,13 @@ class TestAIProviderAdapter:
     ) -> None:
         """Schedule-based recovery should transition open -> half_open."""
         # Set minute to match pattern
-        scheduled_minute = datetime.now(UTC).replace(tzinfo=None).minute
+        scheduled_minute = datetime.now(UTC).minute
         schedule_suffix = f":{scheduled_minute:02d}"
 
         ai_provider.circuit_state = "open"
         ai_provider.circuit_reason = "transient_rate_limit"
         ai_provider.recovery_schedule = schedule_suffix
-        ai_provider.last_failure_at = datetime.now(UTC).replace(
-            tzinfo=None
-        ) - timedelta(minutes=35)
+        ai_provider.last_failure_at = datetime.now(UTC) - timedelta(minutes=35)
         db.commit()
 
         adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
@@ -228,9 +220,7 @@ class TestAIProviderAdapter:
         ai_provider.circuit_reason = "permanent_account"
         ai_provider.circuit_open_until = None  # Manual recovery (from on_transition)
         ai_provider.recovery_schedule = None  # Never configured
-        ai_provider.last_failure_at = datetime.now(UTC).replace(
-            tzinfo=None
-        ) - timedelta(hours=25)  # Past the 24h fallback cooldown
+        ai_provider.last_failure_at = datetime.now(UTC) - timedelta(hours=25)  # Past the 24h fallback cooldown
         db.commit()
 
         adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
@@ -248,9 +238,7 @@ class TestAIProviderAdapter:
         ai_provider.circuit_reason = "permanent_account"
         ai_provider.circuit_open_until = None
         ai_provider.recovery_schedule = None
-        ai_provider.last_failure_at = datetime.now(UTC).replace(
-            tzinfo=None
-        ) - timedelta(hours=1)  # Only 1h, well under 24h cooldown
+        ai_provider.last_failure_at = datetime.now(UTC) - timedelta(hours=1)  # Only 1h, well under 24h cooldown
         db.commit()
 
         adapter = AIProviderAdapter(ai_provider.id, ai_provider.family_id)
@@ -271,8 +259,8 @@ class TestExtractionAdapter:
             family_id=1,
             skill_id="test-skill",
             state="rate_limited",
-            opened_at=datetime.now(UTC).replace(tzinfo=None),
-            opened_until=datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=20),
+            opened_at=datetime.now(UTC),
+            opened_until=datetime.now(UTC) + timedelta(minutes=20),
         )
         db.add(circuit)
         db.commit()
@@ -290,8 +278,8 @@ class TestExtractionAdapter:
             family_id=1,
             skill_id="test-skill",
             state="rate_limited",
-            opened_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=40),
-            opened_until=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=10),
+            opened_at=datetime.now(UTC) - timedelta(minutes=40),
+            opened_until=datetime.now(UTC) - timedelta(minutes=10),
         )
         db.add(circuit)
         db.commit()
@@ -311,7 +299,7 @@ class TestExtractionAdapter:
             family_id=1,
             skill_id="test-skill",
             state="circuit_open",
-            opened_at=datetime.now(UTC).replace(tzinfo=None),
+            opened_at=datetime.now(UTC),
         )
         db.add(circuit)
         db.commit()

@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -43,14 +43,14 @@ class AIProviderConfig(Base):
     # last_failure_type: transient_rate_limit | transient_server | transient_timeout | transient_network | permanent_auth | permanent_account
     half_open_success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     half_open_failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    half_open_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    half_open_window_start: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     # Legacy fields retained for migration compatibility
     circuit_open: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    circuit_open_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    circuit_open_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_failure_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
 
 class AIProviderTestResult(Base):
@@ -62,4 +62,4 @@ class AIProviderTestResult(Base):
     success: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    tested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    tested_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())

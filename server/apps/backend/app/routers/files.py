@@ -1,5 +1,5 @@
 """File management endpoints — delete and URL retrieval."""
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -97,7 +97,7 @@ async def delete_file(
             loc.last_error = str(e)
 
     # Soft-delete the cached_file record
-    cached_file.deleted_at = datetime.now()
+    cached_file.deleted_at = datetime.now(UTC)
     db.commit()
 
 

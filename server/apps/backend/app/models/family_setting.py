@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, DateTime, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -16,7 +16,7 @@ class FamilySetting(Base):
     key: Mapped[str] = mapped_column(String(100), nullable=False)
     value: Mapped[str | None] = mapped_column(String(500), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     __table_args__ = (

@@ -1,7 +1,7 @@
 """Device session service — trust, list, revoke, rotate."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -22,7 +22,7 @@ def create_device_session(
     browser_fingerprint: str | None = None,
 ) -> DeviceSession:
     """Create a new trusted device session (30-day expiry)."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     session = DeviceSession(
         user_id=user_id,
         family_id=family_id,
@@ -53,7 +53,7 @@ def trust_or_reuse_device(
 
     Returns (session, is_new). is_new=False means an existing session was reused.
     """
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     expires_at = now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS)
 
     if device_id:
@@ -126,7 +126,7 @@ def trust_or_reuse_device(
 
 def list_device_sessions(db: Session, *, user_id: int) -> list[DeviceSession]:
     """Return active (non-revoked, non-expired) device sessions for a user."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return (
         db.query(DeviceSession)
         .filter(
@@ -156,7 +156,7 @@ def revoke_device_session(db: Session, *, device_id: int, user_id: int) -> Devic
 
 def revoke_all_device_sessions(db: Session, *, user_id: int) -> list[str]:
     """Revoke all active device sessions for a user. Returns list of revoked JTIs."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     sessions = (
         db.query(DeviceSession)
         .filter(
@@ -183,7 +183,7 @@ def rotate_device_session_jti(db: Session, *, old_jti: str, new_jti: str) -> Dev
     if session is None:
         return None
     session.refresh_jti = new_jti
-    session.last_seen_at = datetime.utcnow()
+    session.last_seen_at = datetime.now(UTC)
     db.commit()
     db.refresh(session)
     return session
@@ -191,7 +191,7 @@ def rotate_device_session_jti(db: Session, *, old_jti: str, new_jti: str) -> Dev
 
 def get_device_session_by_jti(db: Session, *, jti: str) -> DeviceSession | None:
     """Look up an active device session by its current refresh JTI."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return db.query(DeviceSession).filter(
         DeviceSession.refresh_jti == jti,
         DeviceSession.is_revoked.is_(False),
@@ -201,7 +201,7 @@ def get_device_session_by_jti(db: Session, *, jti: str) -> DeviceSession | None:
 
 def cleanup_expired_device_sessions(db: Session) -> int:
     """Mark expired sessions as revoked. Called by scheduler."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     updated = (
         db.query(DeviceSession)
         .filter(
@@ -226,7 +226,7 @@ def list_family_device_sessions(
     Each entry is a dict merging DeviceSession fields with the owning User's
     display_name and avatar_color, plus an is_current flag.
     """
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     rows = (
         db.query(DeviceSession, User)
         .join(User, DeviceSession.user_id == User.id)
@@ -259,7 +259,7 @@ def list_family_device_sessions(
 
 def delete_old_revoked_sessions(db: Session) -> int:
     """Hard-delete revoked sessions older than 7 days. Called by scheduler."""
-    cutoff = datetime.utcnow() - timedelta(days=7)
+    cutoff = datetime.now(UTC) - timedelta(days=7)
     deleted = (
         db.query(DeviceSession)
         .filter(

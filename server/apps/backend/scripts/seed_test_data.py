@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import apps.backend.app.models
 from apps.backend.app.database import SessionLocal
@@ -83,7 +83,7 @@ def seed_test_users(db):
             code_record = db.query(FamilyInvitationCode).filter_by(code=user_data["invitation_code"]).first()
             if code_record:
                 code_record.is_used = True
-                code_record.used_at = code_record.used_at or datetime.utcnow()
+                code_record.used_at = code_record.used_at or datetime.now(UTC)
                 code_record.used_by_family_id = existing_user.family_id
                 code_record.used_by_username = existing_user.username
             continue
@@ -120,7 +120,7 @@ def seed_test_users(db):
         code_record = db.query(FamilyInvitationCode).filter_by(code=user_data["invitation_code"]).first()
         if code_record:
             code_record.is_used = True
-            code_record.used_at = datetime.utcnow()
+            code_record.used_at = datetime.now(UTC)
             code_record.used_by_family_id = family.id
             code_record.used_by_username = user.username
 

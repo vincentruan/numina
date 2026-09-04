@@ -29,7 +29,6 @@ from apps.backend.app.schemas.ai_task import (
     TaskHeartbeatRequest,
     TaskProgressRequest,
 )
-from apps.backend.app.schemas.base import ensure_utc
 
 if TYPE_CHECKING:
     from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -700,7 +699,7 @@ def internal_upsert_session(
     else:
         if row.family_id != int(family_id):
             raise AppError(ErrorCode.FORBIDDEN)
-        row.updated_at = datetime.utcnow()
+        row.updated_at = datetime.now(UTC)
         if body.last_model:
             row.last_model = body.last_model
         if body.agent_id and not row.agent_id:
@@ -768,7 +767,7 @@ def internal_update_session_summary(
         row.last_model = body.model
     if body.is_pinned is not None:
         row.is_pinned = body.is_pinned
-    row.updated_at = datetime.utcnow()
+    row.updated_at = datetime.now(UTC)
     db.commit()
     logger.info(
         "[backend] session updated successfully session=%s title=%s",
@@ -1057,7 +1056,7 @@ async def auto_generate_reports(
         if (
             latest_report is not None
             and latest_report.generated_at is not None
-            and (now - ensure_utc(latest_report.generated_at)) < report_ttl
+            and (now - latest_report.generated_at) < report_ttl
         ):
             skipped += 1
             continue
@@ -1363,7 +1362,7 @@ def internal_task_cancel_confirm(
     # Mark as cancelled (idempotent)
     if task.status in ("running", "post_processing", "queued"):
         task.status = "cancelled"
-        task.completed_at = datetime.utcnow()
+        task.completed_at = datetime.now(UTC)
         db.commit()
 
     return {"ok": True, "task_id": task_id, "status": "cancelled"}

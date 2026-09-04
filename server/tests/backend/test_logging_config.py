@@ -3,7 +3,7 @@
 import gzip
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from apps.backend.app.core.logging_config import (
@@ -140,7 +140,7 @@ class TestCleanupOldLogs:
         old_log.write_text("old content")
 
         # Set modification time to 40 days ago
-        old_time = datetime.now() - timedelta(days=40)
+        old_time = datetime.now(UTC) - timedelta(days=40)
         os.utime(old_log, (old_time.timestamp(), old_time.timestamp()))
 
         # Create a new log file
@@ -164,7 +164,7 @@ class TestCleanupOldLogs:
             f.write("old compressed content")
 
         # Set modification time to 40 days ago
-        old_time = datetime.now() - timedelta(days=40)
+        old_time = datetime.now(UTC) - timedelta(days=40)
         os.utime(old_gz, (old_time.timestamp(), old_time.timestamp()))
 
         deleted = cleanup_old_logs(log_dir, retention_days=30)
@@ -182,7 +182,7 @@ class TestCleanupOldLogs:
         old_rotated.write_text("rotated content")
 
         # Set modification time to 40 days ago
-        old_time = datetime.now() - timedelta(days=40)
+        old_time = datetime.now(UTC) - timedelta(days=40)
         os.utime(old_rotated, (old_time.timestamp(), old_time.timestamp()))
 
         deleted = cleanup_old_logs(log_dir, retention_days=30)
@@ -199,7 +199,7 @@ class TestCleanupOldLogs:
         recent_log = log_dir / "recent.log"
         recent_log.write_text("recent content")
 
-        recent_time = datetime.now() - timedelta(days=10)
+        recent_time = datetime.now(UTC) - timedelta(days=10)
         os.utime(recent_log, (recent_time.timestamp(), recent_time.timestamp()))
 
         deleted = cleanup_old_logs(log_dir, retention_days=30)
@@ -227,7 +227,7 @@ class TestArchiveOldLogs:
         old_rotated.write_text("rotated content to compress")
 
         # Set modification time to 10 days ago
-        old_time = datetime.now() - timedelta(days=10)
+        old_time = datetime.now(UTC) - timedelta(days=10)
         os.utime(old_rotated, (old_time.timestamp(), old_time.timestamp()))
 
         compressed = archive_old_logs(log_dir, compress_after_days=7)
@@ -249,7 +249,7 @@ class TestArchiveOldLogs:
         recent_rotated = log_dir / "app.log.1"
         recent_rotated.write_text("recent rotated content")
 
-        recent_time = datetime.now() - timedelta(days=3)
+        recent_time = datetime.now(UTC) - timedelta(days=3)
         os.utime(recent_rotated, (recent_time.timestamp(), recent_time.timestamp()))
 
         compressed = archive_old_logs(log_dir, compress_after_days=7)
@@ -271,7 +271,7 @@ class TestArchiveOldLogs:
             f.write("already compressed")
 
         # Set modification time to 10 days ago
-        old_time = datetime.now() - timedelta(days=10)
+        old_time = datetime.now(UTC) - timedelta(days=10)
         os.utime(old_rotated, (old_time.timestamp(), old_time.timestamp()))
 
         compressed = archive_old_logs(log_dir, compress_after_days=7)

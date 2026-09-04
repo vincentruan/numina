@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -28,11 +28,11 @@ class ASRProviderConfig(Base):
     circuit_state: Mapped[str] = mapped_column(String(20), default="closed", nullable=False)
     # circuit_state: closed | open | half_open
     failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_failure_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     # Test result
     test_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     test_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     test_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    tested_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())

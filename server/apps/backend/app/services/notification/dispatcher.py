@@ -1,7 +1,7 @@
 # backend/app/services/notification/dispatcher.py
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -134,12 +134,12 @@ def _calc_avg_monthly_spend(db: Session, family_id: int) -> float | None:
 
 
 def _resolve_expired_large_purchase(db: Session) -> None:
-    cutoff = datetime.now() - timedelta(hours=48)
+    cutoff = datetime.now(UTC) - timedelta(hours=48)
     db.query(Reminder).filter(
         Reminder.reminder_type == "large_purchase",
         Reminder.status == "active",
         Reminder.created_at <= cutoff,
-    ).update({"status": "resolved", "resolved_at": datetime.now()})
+    ).update({"status": "resolved", "resolved_at": datetime.now(UTC)})
     db.commit()
 
 

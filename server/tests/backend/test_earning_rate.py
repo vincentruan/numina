@@ -35,7 +35,7 @@ def _create_child(client, auth_headers, username="earner1"):
 
 def _insert_tx(db, child_id, family_id, amount, tx_type, days_ago=0):
     """Insert a CoinTransaction with created_at offset by days_ago from today."""
-    created = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days_ago)
+    created = datetime.now(UTC) - timedelta(days=days_ago)
     tx = CoinTransaction(
         id=next_id(),
         family_id=family_id,

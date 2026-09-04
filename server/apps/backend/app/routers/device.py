@@ -401,13 +401,13 @@ def check_device(
     client_ip = _get_real_client_ip(request)
     _check_device_check_rate_limit(client_ip)
 
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from apps.backend.app.models.device_session import DeviceSession
     from apps.backend.app.models.family import Family
     from apps.backend.app.models.user import User
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     sessions = (
         db.query(DeviceSession)
         .filter(
@@ -491,7 +491,7 @@ def select_device(
     client_ip = _get_real_client_ip(request)
     _check_device_check_rate_limit(client_ip)
 
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.auth.cookies import set_auth_cookies
     from apps.backend.app.auth.deps import (
@@ -502,7 +502,7 @@ def select_device(
     from apps.backend.app.models.device_session import DeviceSession
     from apps.backend.app.models.user import User
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     user_id = int(req.user_id)
 
     session = (
@@ -567,7 +567,7 @@ def device_webauthn_auth_options(
     No auth required — used in Step 0 before login. Rate-limited by IP.
     """
     import json as json_module
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from apps.backend.app.auth.webauthn import generate_authentication_challenge
     from apps.backend.app.models.device_session import DeviceSession
@@ -576,7 +576,7 @@ def device_webauthn_auth_options(
     client_ip = _get_real_client_ip(request)
     _check_device_check_rate_limit(client_ip)
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     user_id = int(req.user_id)
 
     session = (
@@ -620,7 +620,7 @@ def device_webauthn_verify(
     """
     import base64
     import json as json_module
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.auth.cookies import set_auth_cookies
     from apps.backend.app.auth.deps import (
@@ -635,7 +635,7 @@ def device_webauthn_verify(
     client_ip = _get_real_client_ip(request)
     _check_device_check_rate_limit(client_ip)
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     user_id = int(req.user_id)
 
     session = (
@@ -764,11 +764,11 @@ def device_ping(
 
         if device_id:
             # Validate device_id exists in database and is active
-            from datetime import datetime
+            from datetime import UTC, datetime
 
             from apps.backend.app.models.device_session import DeviceSession
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             valid_session = (
                 db.query(DeviceSession)
                 .filter(

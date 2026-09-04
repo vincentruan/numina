@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -23,4 +23,4 @@ class AIChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
     # status: pending | completed | error
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=func.now())

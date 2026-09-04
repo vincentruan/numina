@@ -93,19 +93,19 @@ def test_get_report_returns_latest_completed_report(client, auth_headers, db):
     """GET /ai/report returns the most recent completed report."""
     family_id = _enable_ai(db, auth_headers, client)
 
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     pending = AIReport(
         family_id=family_id,
         report_json={},
         status="pending",
-        generated_at=datetime.utcnow() - timedelta(hours=1),
+        generated_at=datetime.now(UTC) - timedelta(hours=1),
     )
     completed = AIReport(
         family_id=family_id,
         report_json={"overall_score": 85, "summary": "良好"},
         overall_score=85,
         status="completed",
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(UTC),
     )
     db.add_all([pending, completed])
     db.commit()
@@ -121,12 +121,12 @@ def test_get_report_ignores_error_status(client, auth_headers, db):
     """GET /ai/report only returns completed reports, ignores error/pending."""
     family_id = _enable_ai(db, auth_headers, client)
 
-    from datetime import datetime
+    from datetime import UTC, datetime
     error_report = AIReport(
         family_id=family_id,
         report_json={},
         status="error",
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(UTC),
     )
     db.add(error_report)
     db.commit()
@@ -220,7 +220,7 @@ def test_generate_report_requires_owner(client, auth_headers, db):
 
 def test_generate_report_resumes_running_task(client, auth_headers, db):
     """POST /ai/report/generate/events resumes an already running task instead of 409."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from apps.backend.app.models.ai_chat_session import AIChatSession
     from apps.backend.app.models.ai_task import AITask
@@ -241,7 +241,7 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
         skill_id="report",
         status="running",
         session_id=session.id,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(UTC),
     )
     db.add(task)
     db.commit()
@@ -263,7 +263,7 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
 
 def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
     """POST ?force=true cancels a zombie running task and starts a fresh generation."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from apps.backend.app.models.ai_chat_session import AIChatSession
     from apps.backend.app.models.ai_task import AITask
@@ -280,7 +280,7 @@ def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
         skill_id="report",
         status="running",
         session_id=session.id,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(UTC),
     )
     db.add(task)
     db.commit()
@@ -313,7 +313,7 @@ def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
 def test_generate_report_timeout_cancels_stale_task(client, auth_headers, db):
     """A running report task older than the per-skill timeout (10 min) is
     auto-marked timeout, allowing a fresh generation to proceed."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.models.ai_chat_session import AIChatSession
     from apps.backend.app.models.ai_task import AITask
@@ -332,7 +332,7 @@ def test_generate_report_timeout_cancels_stale_task(client, auth_headers, db):
         skill_id="report",
         status="running",
         session_id=session.id,
-        started_at=datetime.utcnow() - timedelta(minutes=15),
+        started_at=datetime.now(UTC) - timedelta(minutes=15),
     )
     db.add(task)
     db.commit()
@@ -428,13 +428,13 @@ def test_cross_family_report_isolation(client, auth_headers, second_user_headers
     ))
     db.commit()
 
-    from datetime import datetime
+    from datetime import UTC, datetime
     report = AIReport(
         family_id=family_a_id,
         report_json={"overall_score": 90},
         overall_score=90,
         status="completed",
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(UTC),
     )
     db.add(report)
     db.commit()

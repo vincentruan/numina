@@ -17,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -48,8 +48,8 @@ class AIChatMessageFeedback(Base):
     # feedback: 1=点赞, -1=点踩, 0=已取消
     feedback: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=func.now()
+        UTCDateTime(), nullable=False, default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now()
+        UTCDateTime(), nullable=False, default=func.now(), onupdate=func.now()
     )

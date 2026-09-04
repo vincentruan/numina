@@ -9,7 +9,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -266,7 +266,7 @@ class SecurityMonitor:
     async def _trigger_alert(self, event: SecurityEvent):
         """触发告警"""
         alert_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "event": asdict(event),
             "recommendation": self._get_recommendation(event),
         }
@@ -295,8 +295,8 @@ class SecurityMonitor:
         self, start_time: datetime | None = None, end_time: datetime | None = None
     ) -> dict:
         """获取安全统计信息"""
-        start_time = start_time or datetime.utcnow() - timedelta(hours=24)
-        end_time = end_time or datetime.utcnow()
+        start_time = start_time or datetime.now(UTC) - timedelta(hours=24)
+        end_time = end_time or datetime.now(UTC)
 
         stats = self._store.get_stats(start_time.timestamp(), end_time.timestamp())
 

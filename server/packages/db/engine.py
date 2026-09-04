@@ -71,9 +71,9 @@ class _PostgreSQLBackend(_DatabaseBackend):
         eng = super().create_engine(url)
 
         # Force every connection to use UTC so that PG-side ``now()`` returns
-        # UTC timestamps.  The ORM columns are ``DateTime`` (naive) and
-        # ``ensure_utc()`` treats stored values as UTC — this keeps the
-        # convention consistent regardless of the server/host timezone.
+        # UTC timestamps.  The ORM columns use tz-aware datetimes throughout
+        # the codebase — this keeps the convention consistent regardless of
+        # the server/host timezone.
         @event.listens_for(eng, "connect")
         def _set_pg_timezone(dbapi_conn, connection_record):
             cursor = dbapi_conn.cursor()

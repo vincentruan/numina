@@ -1,6 +1,6 @@
 """Tests for family invitation code validation during registration."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -25,7 +25,7 @@ def used_invitation_code(db):
     code = FamilyInvitationCode(
         code="TUSED",
         is_used=True,
-        used_at=datetime.utcnow(),
+        used_at=datetime.now(UTC),
         used_by_family_id="test-family-id",
         used_by_username="test-user",
     )
@@ -39,7 +39,7 @@ def revoked_invitation_code(db):
     """Create a revoked invitation code for testing."""
     code = FamilyInvitationCode(
         code="TRVOK",
-        revoked_at=datetime.utcnow(),
+        revoked_at=datetime.now(UTC),
     )
     db.add(code)
     db.commit()

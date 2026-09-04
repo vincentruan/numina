@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 # Association table: template ↔ assigned children
@@ -49,8 +49,8 @@ class ChoreTemplate(Base):
     real_reward_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     assignees = relationship("User", secondary=chore_template_assignees, lazy="selectin")
     instances = relationship("ChoreInstance", back_populates="template", lazy="dynamic")
@@ -72,17 +72,17 @@ class ChoreInstance(Base):
     date_bucket: Mapped[str] = mapped_column(String(10), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="available", nullable=False)
     # available / pending_approval / approved / rejected
-    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     streak_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     streak_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Tracks the actual child who submitted — needed for pool chores where child_user_id is family_id
     submitted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
     # Pool chore assignment tracking
     assigned_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
-    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    claimed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     # Transient (non-persisted) flags set by service layer for response serialization
     _is_pool_unclaimed: ClassVar[bool] = False

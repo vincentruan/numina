@@ -19,7 +19,6 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
-from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
@@ -73,7 +72,7 @@ async def trigger_finance_coach(
                 status_code=200,
                 content={
                     "status": "cached",
-                    "generated_at": ensure_utc(cached.generated_at).isoformat() if cached.generated_at else None,
+                    "generated_at": cached.generated_at.isoformat() if cached.generated_at else None,
                     "report": cached.report_json,
                 },
             )

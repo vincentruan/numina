@@ -8,7 +8,7 @@
 
 注意: ExchangeRateService._cache 是类级 dict，每个测试前清空避免交叉污染。
 """
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -29,7 +29,7 @@ def _add_rate(db, target: str, rate: float, fetched_at: datetime | None = None) 
     row = ExchangeRate(
         target_currency=target,
         rate=rate,
-        fetched_at=fetched_at or datetime.now(),
+        fetched_at=fetched_at or datetime.now(UTC),
     )
     db.add(row)
     db.flush()
@@ -64,7 +64,7 @@ def test_get_rate_db_fallback_when_cache_empty(packages_db):
 
 def test_get_rate_returns_latest_fetched_at_row(packages_db):
     """DB 有多行 → 取 fetched_at 最新的那条。"""
-    now = datetime.now()
+    now = datetime.now(UTC)
     _add_rate(packages_db, "USD", 7.0, fetched_at=now - timedelta(days=2))
     _add_rate(packages_db, "USD", 7.5, fetched_at=now - timedelta(days=1))
     rate, _ = ExchangeRateService.get_rate("USD", packages_db)
@@ -76,7 +76,7 @@ def test_get_rate_cache_hit_within_ttl_skips_db(packages_db):
 
     预填缓存后删除 DB 行，仍能返回 → 证明走了缓存路径。
     """
-    now = datetime.now()
+    now = datetime.now(UTC)
     ExchangeRateService._cache["EUR"] = (9.1, now, now)  # rate, fetched_at, cached_at
     rate, fetched_at = ExchangeRateService.get_rate("EUR", packages_db)
     assert rate == 9.1
@@ -85,8 +85,8 @@ def test_get_rate_cache_hit_within_ttl_skips_db(packages_db):
 
 def test_get_rate_stale_cache_falls_through_to_db(packages_db):
     """缓存过期（cached_at 超过 4h）→ 回退查库并刷新缓存。"""
-    stale_cached_at = datetime.now() - timedelta(hours=5)
-    ExchangeRateService._cache["GBP"] = (8.0, datetime.now(), stale_cached_at)
+    stale_cached_at = datetime.now(UTC) - timedelta(hours=5)
+    ExchangeRateService._cache["GBP"] = (8.0, datetime.now(UTC), stale_cached_at)
     _add_rate(packages_db, "GBP", 8.8)
     rate, _ = ExchangeRateService.get_rate("GBP", packages_db)
     assert rate == 8.8  # 来自 DB，而非过期缓存的 8.0
@@ -216,7 +216,7 @@ def test_fetch_and_store_rates_adds_new_currency_rows(packages_db, monkeypatch):
 
 def test_fetch_and_store_rates_clears_cache(packages_db, monkeypatch):
     """成功获取后清空类级缓存。"""
-    ExchangeRateService._cache["USD"] = (7.0, datetime.now(), datetime.now())
+    ExchangeRateService._cache["USD"] = (7.0, datetime.now(UTC), datetime.now(UTC))
     payload = {"rates": {"USD": 7.2}}
     monkeypatch.setattr(
         "packages.domain.exchange_rate.service.httpx.get",

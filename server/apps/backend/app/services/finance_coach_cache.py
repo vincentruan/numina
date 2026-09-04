@@ -20,7 +20,6 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_report import AIReport
-from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.utils.snowflake import next_id
 
 # Parametric TTL per skill (spec §7.2: non-hardcoded).
@@ -82,7 +81,7 @@ def is_cache_fresh(
             ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
     else:
         ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
-    age = datetime.now(UTC) - ensure_utc(row.generated_at)
+    age = datetime.now(UTC) - row.generated_at
     return bool(age < ttl)
 
 

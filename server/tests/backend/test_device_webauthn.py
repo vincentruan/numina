@@ -1,7 +1,7 @@
 """WebAuthn device authentication tests."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from apps.backend.app.models.device_session import DeviceSession
@@ -32,7 +32,7 @@ def _create_user_and_family(db):
 
 def _create_device_session(db, user, family, device_id="test-device-001"):
     """Create a valid device session."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     session = DeviceSession(
         user_id=user.id,
         family_id=family.id,

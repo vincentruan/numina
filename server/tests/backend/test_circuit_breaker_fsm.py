@@ -5,7 +5,7 @@ Uses simple dataclass mocks instead of SQLAlchemy entities.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -58,7 +58,7 @@ class TestRecordFailure:
     ) -> None:
         """Permanent auth failure should open circuit immediately."""
         entity = MockEntity()
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_failure(
             entity, FailureKind.PERMANENT_AUTH, default_config, now
@@ -76,7 +76,7 @@ class TestRecordFailure:
     ) -> None:
         """Transient failure below threshold should stay closed."""
         entity = MockEntity()
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_failure(
             entity, FailureKind.TRANSIENT_RATE_LIMIT, default_config, now
@@ -93,7 +93,7 @@ class TestRecordFailure:
     ) -> None:
         """Transient failures reaching threshold should open circuit."""
         entity = MockEntity(failure_count=4)
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_failure(
             entity, FailureKind.TRANSIENT_RATE_LIMIT, default_config, now
@@ -111,9 +111,9 @@ class TestRecordFailure:
         """Failure during half_open should immediately re-open."""
         entity = MockEntity(
             circuit_state="half_open",
-            half_open_window_start=datetime.now(),
+            half_open_window_start=datetime.now(UTC),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_failure(
             entity, FailureKind.TRANSIENT_SERVER, default_config, now
@@ -134,7 +134,7 @@ class TestRecordSuccess:
     ) -> None:
         """Success in closed state should decay failure count."""
         entity = MockEntity(failure_count=3)
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_success(entity, default_config, now)
 
@@ -150,9 +150,9 @@ class TestRecordSuccess:
         entity = MockEntity(
             circuit_state="half_open",
             half_open_success_count=1,
-            half_open_window_start=datetime.now(),
+            half_open_window_start=datetime.now(UTC),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_success(entity, default_config, now)
 
@@ -168,9 +168,9 @@ class TestRecordSuccess:
         entity = MockEntity(
             circuit_state="half_open",
             half_open_success_count=2,
-            half_open_window_start=datetime.now(),
+            half_open_window_start=datetime.now(UTC),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.record_success(entity, default_config, now)
 
@@ -191,9 +191,9 @@ class TestAttemptRecovery:
         """Open circuit should transition to half_open after cooldown."""
         entity = MockEntity(
             circuit_state="open",
-            last_failure_at=datetime.now() - timedelta(seconds=120),
+            last_failure_at=datetime.now(UTC) - timedelta(seconds=120),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.attempt_recovery(entity, default_config, now)
 
@@ -210,9 +210,9 @@ class TestAttemptRecovery:
         entity = MockEntity(
             circuit_state="open",
             circuit_reason="permanent_auth",
-            last_failure_at=datetime.now() - timedelta(seconds=120),
+            last_failure_at=datetime.now(UTC) - timedelta(seconds=120),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.attempt_recovery(entity, default_config, now)
 
@@ -225,9 +225,9 @@ class TestAttemptRecovery:
         """Before cooldown elapsed should stay open."""
         entity = MockEntity(
             circuit_state="open",
-            last_failure_at=datetime.now() - timedelta(seconds=30),
+            last_failure_at=datetime.now(UTC) - timedelta(seconds=30),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.attempt_recovery(entity, default_config, now)
 
@@ -246,7 +246,7 @@ class TestTransitionToHalfOpen:
             half_open_success_count=5,
             half_open_failure_count=3,
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.transition_to_half_open(entity, now)
 
@@ -270,9 +270,9 @@ class TestEvaluateHalfOpenWindow:
             circuit_state="half_open",
             half_open_success_count=8,
             half_open_failure_count=2,
-            half_open_window_start=datetime.now() - timedelta(seconds=360),
+            half_open_window_start=datetime.now(UTC) - timedelta(seconds=360),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.evaluate_half_open_window(
             entity, impl1_config, now
@@ -291,9 +291,9 @@ class TestEvaluateHalfOpenWindow:
             circuit_state="half_open",
             half_open_success_count=2,
             half_open_failure_count=8,
-            half_open_window_start=datetime.now() - timedelta(seconds=360),
+            half_open_window_start=datetime.now(UTC) - timedelta(seconds=360),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.evaluate_half_open_window(
             entity, impl1_config, now
@@ -313,9 +313,9 @@ class TestEvaluateHalfOpenWindow:
             circuit_state="half_open",
             half_open_success_count=0,
             half_open_failure_count=0,
-            half_open_window_start=datetime.now() - timedelta(seconds=360),
+            half_open_window_start=datetime.now(UTC) - timedelta(seconds=360),
         )
-        now = datetime.now()
+        now = datetime.now(UTC)
 
         transition = CircuitBreakerFSM.evaluate_half_open_window(
             entity, impl1_config, now
@@ -335,7 +335,7 @@ class TestReset:
             circuit_state="open",
             circuit_reason="transient_rate_limit",
             failure_count=10,
-            last_failure_at=datetime.now(),
+            last_failure_at=datetime.now(UTC),
             last_failure_type="transient_rate_limit",
         )
 

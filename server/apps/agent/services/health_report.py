@@ -8,7 +8,7 @@
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from apps.agent.core.backend_client import BackendClient
@@ -234,7 +234,7 @@ async def generate_health_report(
             logger.warning(f"[health_report] overall_score 无法转换为整数，使用默认值 60: {report_data['overall_score']!r}")
             report_data["overall_score"] = 60
 
-    report_data["generated_at"] = datetime.utcnow().isoformat()
+    report_data["generated_at"] = datetime.now(UTC).isoformat()
     report_data["data_completeness_score"] = data_completeness
 
     # Note: Raw PII data intentionally NOT attached to response per security invariant.

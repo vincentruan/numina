@@ -10,7 +10,7 @@ Cookie Configuration:
 - sameSite: strict (CSRF protection, same-site requests only)
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
@@ -45,7 +45,7 @@ logger = get_logger(__name__)
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access", "jti": str(uuid4()), "iat": now})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
@@ -57,7 +57,7 @@ def create_refresh_token(data: dict) -> str:
     Embeds token_version for session revocation support and JTI for single-use rotation.
     """
     to_encode = data.copy()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     # Embed token_version (defaults to 0 for backward compat)
     token_version = to_encode.get("token_version", 0)
@@ -80,7 +80,7 @@ def create_child_refresh_token(data: dict) -> str:
     Embeds token_version for session revocation support.
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         days=settings.CHILD_REFRESH_TOKEN_EXPIRE_DAYS
     )
     # Embed token_version (defaults to 0 for backward compat)
@@ -635,7 +635,7 @@ def create_temp_token(user_id: int, role: str) -> str:
         "sub": str(user_id),
         "role": role,
         "type": "temp",
-        "exp": datetime.utcnow() + timedelta(minutes=_TEMP_TOKEN_EXPIRE_MINUTES),
+        "exp": datetime.now(UTC) + timedelta(minutes=_TEMP_TOKEN_EXPIRE_MINUTES),
         "jti": str(uuid4()),
     }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)

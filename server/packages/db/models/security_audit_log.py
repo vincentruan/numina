@@ -5,11 +5,11 @@ Append-only: never UPDATE or DELETE rows from this table.
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, Text, func
+from sqlalchemy import BigInteger, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class SecurityAuditLog(Base):
@@ -24,5 +24,5 @@ class SecurityAuditLog(Base):
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)  # 'success' | 'failure'
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+        UTCDateTime(), server_default=func.now(), nullable=False, index=True
     )

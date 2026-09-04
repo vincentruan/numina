@@ -2,7 +2,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
-    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -13,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class LiteracyBadgeDefinition(Base):
@@ -29,7 +28,7 @@ class LiteracyBadgeDefinition(Base):
     criteria_summary: Mapped[str] = mapped_column(
         Text, nullable=False, comment="Short description for AI evaluation context"
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint("dimension", "level", name="uq_badge_def_dimension_level"),
@@ -48,8 +47,8 @@ class LiteracyBadge(Base):
     definition_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("literacy_badge_definitions.id"), nullable=False
     )
-    earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    earned_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), nullable=False)
+    superseded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     source: Mapped[str] = mapped_column(
         String(30), nullable=False, comment="scenario / scenario+passive / passive"
     )

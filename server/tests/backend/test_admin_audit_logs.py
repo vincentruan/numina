@@ -1,6 +1,6 @@
 """Tests for GET /api/v1/admin/audit-logs endpoint (R8)."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from apps.backend.app.models.security_audit_log import SecurityAuditLog
 from apps.backend.app.utils.snowflake import next_id
@@ -17,7 +17,7 @@ def _seed_logs(db, family_id: int, count: int = 3) -> list[SecurityAuditLog]:
             family_id=family_id,
             ip_address="127.0.0.1",
             outcome="success" if i % 2 == 0 else "failure",
-            created_at=datetime.utcnow() - timedelta(minutes=i),
+            created_at=datetime.now(UTC) - timedelta(minutes=i),
         )
         db.add(log)
         logs.append(log)

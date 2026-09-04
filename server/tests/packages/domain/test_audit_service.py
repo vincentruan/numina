@@ -9,7 +9,7 @@ purge_old_audit_logs 内部自建 SessionLocal() → 用 patch_session_local 打
 
 ENABLE_SECURITY_LOGGING 默认 True；为稳妥起见显式 monkeypatch 为 True。
 """
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -29,7 +29,7 @@ def _add_log(db, *, event_type="login", outcome="success", created_at=None, deta
         event_type=event_type,
         outcome=outcome,
         detail=detail,
-        created_at=created_at or datetime.now(),
+        created_at=created_at or datetime.now(UTC),
     )
     db.add(row)
     db.flush()
@@ -95,7 +95,7 @@ def test_write_audit_log_fails_silently_on_bad_db(packages_db):
 def test_purge_deletes_records_older_than_retention(packages_db, patch_session_local):
     """早于 retention_days 的记录被删除，新的保留，返回删除计数。"""
     patch_session_local(audit_mod)
-    now = datetime.now()
+    now = datetime.now(UTC)
     _add_log(packages_db, event_type="old", created_at=now - timedelta(days=100))
     _add_log(packages_db, event_type="recent", created_at=now - timedelta(days=10))
 
@@ -111,7 +111,7 @@ def test_purge_deletes_records_older_than_retention(packages_db, patch_session_l
 def test_purge_returns_zero_when_nothing_old(packages_db, patch_session_local):
     """没有过期记录 → 返回 0。"""
     patch_session_local(audit_mod)
-    _add_log(packages_db, event_type="recent", created_at=datetime.now())
+    _add_log(packages_db, event_type="recent", created_at=datetime.now(UTC))
     deleted = audit_mod.purge_old_audit_logs(retention_days=90)
     assert deleted == 0
 
@@ -119,7 +119,7 @@ def test_purge_returns_zero_when_nothing_old(packages_db, patch_session_local):
 def test_purge_respects_custom_retention_days(packages_db, patch_session_local):
     """自定义 retention_days: 仅删除早于该窗口的记录。"""
     patch_session_local(audit_mod)
-    now = datetime.now()
+    now = datetime.now(UTC)
     _add_log(packages_db, event_type="d40", created_at=now - timedelta(days=40))
     _add_log(packages_db, event_type="d20", created_at=now - timedelta(days=20))
     _add_log(packages_db, event_type="d5", created_at=now - timedelta(days=5))
@@ -136,7 +136,7 @@ def test_purge_respects_custom_retention_days(packages_db, patch_session_local):
 def test_purge_writes_purge_event_log(packages_db, patch_session_local):
     """purge 后写一条 audit_log_purge 审计事件。"""
     patch_session_local(audit_mod)
-    _add_log(packages_db, event_type="old", created_at=datetime.now() - timedelta(days=100))
+    _add_log(packages_db, event_type="old", created_at=datetime.now(UTC) - timedelta(days=100))
     audit_mod.purge_old_audit_logs(retention_days=90)
     events = {r.event_type for r in packages_db.query(SecurityAuditLog).all()}
     assert "audit_log_purge" in events

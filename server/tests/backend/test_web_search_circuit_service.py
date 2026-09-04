@@ -52,7 +52,7 @@ def test_transient_failures_open_after_threshold(db: Session, provider: FamilyWe
 def test_half_open_success_closes_circuit(db: Session, provider: FamilyWebSearchProvider):
     provider.circuit_state = "half_open"
     provider.half_open_success_count = 0
-    provider.half_open_window_start = datetime.now(UTC).replace(tzinfo=None)
+    provider.half_open_window_start = datetime.now(UTC)
     db.commit()
 
     WebSearchCircuitService.report_success(provider.id, db)
@@ -63,7 +63,7 @@ def test_half_open_success_closes_circuit(db: Session, provider: FamilyWebSearch
 def test_half_open_three_successes_closes(db: Session, provider: FamilyWebSearchProvider):
     provider.circuit_state = "half_open"
     provider.half_open_success_count = 2
-    provider.half_open_window_start = datetime.now(UTC).replace(tzinfo=None)
+    provider.half_open_window_start = datetime.now(UTC)
     db.commit()
 
     WebSearchCircuitService.report_success(provider.id, db)
@@ -76,7 +76,7 @@ def test_recovery_schedule_transitions_to_half_open(db: Session, provider: Famil
     provider.circuit_state = "open"
     provider.circuit_reason = "transient_rate_limit"
     provider.recovery_schedule = ":01,:31"
-    provider.last_failure_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=35)
+    provider.last_failure_at = datetime.now(UTC) - timedelta(minutes=35)
     db.commit()
 
     result = WebSearchCircuitService.check_recovery(provider.id, db)

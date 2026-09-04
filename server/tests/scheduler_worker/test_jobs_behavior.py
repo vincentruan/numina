@@ -402,13 +402,13 @@ class TestFileSyncJobBranches:
 
     async def test_cached_file_deleted_marks_failed(self, mock_session_local, no_real_sleep, tmp_path):
         """CachedFile 已删除（deleted_at 非空）→ 标记 failed。"""
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         loc = _make_loc(file_id=101)
         cf = _make_cached_file(
             file_id=101,
             local_path=str(tmp_path / "f.bin"),
-            deleted_at=datetime.now(),
+            deleted_at=datetime.now(UTC),
         )
         _configure_db_query(
             mock_session_local,

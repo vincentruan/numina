@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -26,4 +26,4 @@ class BalanceCorrection(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())

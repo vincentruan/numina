@@ -13,7 +13,7 @@ from sqlalchemy import (
     text,
 )
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -63,5 +63,5 @@ class AIAgent(Base):
     memory_enabled = Column(Boolean, nullable=False, server_default=text("true"))
     display_order = Column(Integer, nullable=False, default=0)
     created_by = Column(BigInteger, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(UTCDateTime(), server_default=func.now(), nullable=False)
+    updated_at = Column(UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False)

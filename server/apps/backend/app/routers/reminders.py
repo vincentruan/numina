@@ -1,5 +1,5 @@
 # backend/app/routers/reminders.py
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -45,7 +45,7 @@ def dismiss_reminder(
     if not reminder:
         raise AppError(ErrorCode.NOT_FOUND)
     reminder.status = "dismissed"
-    reminder.dismissed_at = datetime.now()
+    reminder.dismissed_at = datetime.now(UTC)
     db.commit()
     db.refresh(reminder)
     return ReminderResponse.model_validate(reminder)

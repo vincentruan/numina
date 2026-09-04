@@ -113,7 +113,7 @@ def test_trust_or_reuse_creates_new_when_revoked(db):
 
 def test_trust_or_reuse_creates_new_when_expired(db):
     """Same device_id but session expired → new row."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     family = _make_family(db)
     user = _make_user(db, family.id)
     session1, _ = device_service.trust_or_reuse_device(
@@ -127,7 +127,7 @@ def test_trust_or_reuse_creates_new_when_expired(db):
     device_id = session1.device_id
 
     # Expire the existing session
-    session1.expires_at = datetime.utcnow() - timedelta(days=1)
+    session1.expires_at = datetime.now(UTC) - timedelta(days=1)
     db.commit()
 
     session2, is_new = device_service.trust_or_reuse_device(

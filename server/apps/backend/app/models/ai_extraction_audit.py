@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, DateTime, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -19,7 +19,7 @@ class AIExtractionAudit(Base):
     method: Mapped[str] = mapped_column(String(32), nullable=False)
     # method: regex_html | regex_fence | regex_bare | llm_fallback_hit | failed
     extracted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        UTCDateTime(), nullable=False, server_default=func.now()
     )
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
     answer_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)

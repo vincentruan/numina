@@ -10,19 +10,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_serializer
 
-
-def ensure_utc(dt: datetime) -> datetime:
-    """Attach UTC tzinfo to a naive datetime so .isoformat() includes +00:00.
-
-    Backend stores naive UTC datetimes (``DateTime`` without timezone).
-    Without this, ``.isoformat()`` produces ``"2026-07-27T08:00:00"``
-    which JavaScript parses as local time — an 8h error for UTC+8 users.
-    """
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt
-
-
 class SnowflakeBase(BaseModel):
     """Inherit this instead of BaseModel for any schema that contains Snowflake IDs.
 

@@ -23,7 +23,6 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
-from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_result_parser import (
     _contains_markdown_table,
@@ -89,7 +88,7 @@ def get_report(
         return {"report": None}
     return {
         "report": report.report_json,
-        "generated_at": ensure_utc(report.generated_at).isoformat(),
+        "generated_at": report.generated_at.isoformat(),
     }
 
 
@@ -135,7 +134,7 @@ async def trigger_generate_events(
                         )
                     )
 
-            age = datetime.now(UTC) - ensure_utc(cached.generated_at)
+            age = datetime.now(UTC) - cached.generated_at
             if age < _report_ttl:
                 # security-lens Open Question #22 (P2, defense-in-depth): the
                 # cached report_json was validated on first write, but re-serving
@@ -152,7 +151,7 @@ async def trigger_generate_events(
                         status_code=200,
                         content={
                             "status": "cached",
-                            "generated_at": ensure_utc(cached.generated_at).isoformat(),
+                            "generated_at": cached.generated_at.isoformat(),
                             "report": cached_json,
                         },
                     )

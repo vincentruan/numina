@@ -12,7 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from apps.backend.app.database import Base
+from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
@@ -35,8 +35,8 @@ class BlindBoxDraw(Base):
     is_bonus: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("child_wishes.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_fulfillment")
-    draw_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    fulfilled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    draw_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    fulfilled_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     is_auto_triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     shown_to_child: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

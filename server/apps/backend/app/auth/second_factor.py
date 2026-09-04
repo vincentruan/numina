@@ -6,7 +6,7 @@ TOTP is reserved for future implementation.
 
 import time
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import bcrypt
@@ -53,7 +53,7 @@ def _record_failure(
         setattr(
             user,
             locked_until_attr,
-            datetime.utcnow() + timedelta(minutes=_LOCKOUT_MINUTES),
+            datetime.now(UTC) + timedelta(minutes=_LOCKOUT_MINUTES),
         )
         db.commit()
         del attempts[user_id]
@@ -61,7 +61,7 @@ def _record_failure(
 
 def _check_lockout(user: User, locked_until_attr: str) -> datetime | None:
     locked_until: datetime | None = getattr(user, locked_until_attr)
-    if locked_until is not None and locked_until > datetime.utcnow():
+    if locked_until is not None and locked_until > datetime.now(UTC):
         return locked_until
     return None
 

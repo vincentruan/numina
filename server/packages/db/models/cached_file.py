@@ -2,7 +2,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
-    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -13,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class CachedFile(Base):
@@ -28,8 +27,8 @@ class CachedFile(Base):
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     date_dir: Mapped[str] = mapped_column(String(8), nullable=False)  # yyyyMMdd
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     remote_locations = relationship("FileRemoteLocation", back_populates="cached_file")
 

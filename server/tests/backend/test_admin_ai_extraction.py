@@ -8,7 +8,7 @@ from apps.backend.app.utils.snowflake import next_id
 
 
 def _seed_audits(db, family_id: int):
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(UTC)
     methods = [
         "regex_html",
         "regex_html",
@@ -75,7 +75,7 @@ class TestListAudit:
                 family_id=99999,
                 skill_id="alerts",
                 method="regex_html",
-                extracted_at=datetime.now(UTC).replace(tzinfo=None),
+                extracted_at=datetime.now(UTC),
             )
         )
         db.commit()
@@ -100,7 +100,7 @@ class TestListAudit:
                 family_id=user.family_id,
                 skill_id="disposal",
                 method="regex_html",
-                extracted_at=datetime.now(UTC).replace(tzinfo=None),
+                extracted_at=datetime.now(UTC),
             )
         )
         db.commit()
@@ -132,8 +132,8 @@ class TestListCircuit:
                 family_id=2,
                 skill_id="disposal",
                 state="rate_limited",
-                opened_at=datetime.now(UTC).replace(tzinfo=None),
-                opened_until=datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=20),
+                opened_at=datetime.now(UTC),
+                opened_until=datetime.now(UTC) + timedelta(minutes=20),
             )
         )
         db.add(
@@ -142,7 +142,7 @@ class TestListCircuit:
                 family_id=3,
                 skill_id="spending_leak",
                 state="circuit_open",
-                opened_at=datetime.now(UTC).replace(tzinfo=None),
+                opened_at=datetime.now(UTC),
             )
         )
         db.commit()
@@ -165,7 +165,7 @@ class TestResetCircuit:
             family_id=10,
             skill_id="alerts",
             state="circuit_open",
-            opened_at=datetime.now(UTC).replace(tzinfo=None),
+            opened_at=datetime.now(UTC),
         )
         db.add(circuit)
         db.commit()

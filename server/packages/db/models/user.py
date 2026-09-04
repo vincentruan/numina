@@ -4,7 +4,6 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Date,
-    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -14,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.session import Base
+from packages.db.session import Base, UTCDateTime
 
 
 class User(Base):
@@ -40,7 +39,7 @@ class User(Base):
         String(255), nullable=True
     )  # bcrypt hash of 4-emoji PIN
     pin_fail_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    pin_locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pin_locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     token_version: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )  # for force-logout
@@ -48,7 +47,7 @@ class User(Base):
     # Numeric PIN fields (for adult accounts — optional second factor)
     numeric_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     numeric_pin_fail_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    numeric_pin_locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    numeric_pin_locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     # Second factor configuration
     second_factor_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'numeric_pin' | 'emoji_pin' | 'totp'
@@ -67,14 +66,14 @@ class User(Base):
     view_mode: Mapped[str] = mapped_column(
         String(20), default="card"
     )  # 'card' or 'list'
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCDateTime(), server_default=func.now(), onupdate=func.now()
     )
 
     # AI 功能
     ai_chat_last_read_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        UTCDateTime(), nullable=True
     )
 
     # 生日字段（用于盲盒特殊日期判定）

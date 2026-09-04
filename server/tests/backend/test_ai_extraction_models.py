@@ -1,6 +1,6 @@
 """Tests for ai_extraction_audit and ai_extraction_circuit models."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +29,7 @@ class TestAIExtractionAudit:
         assert rows[0].extracted_at is not None
 
     def test_query_by_family_skill_id_time_window(self, db):
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         for i in range(5):
             audit = AIExtractionAudit(
                 id=next_id(),
@@ -117,8 +117,8 @@ class TestAIExtractionCircuit:
             family_id=20,
             skill_id="spending_leak",
             state="rate_limited",
-            opened_at=datetime.utcnow(),
-            opened_until=datetime.utcnow() + timedelta(minutes=30),
+            opened_at=datetime.now(UTC),
+            opened_until=datetime.now(UTC) + timedelta(minutes=30),
         )
         db.add(circuit)
         db.commit()
@@ -127,7 +127,7 @@ class TestAIExtractionCircuit:
         assert row.opened_until is not None
 
     def test_manual_reset_fields(self, db):
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         circuit = AIExtractionCircuit(
             id=next_id(),
             family_id=30,
