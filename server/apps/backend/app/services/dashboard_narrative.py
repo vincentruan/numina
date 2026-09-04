@@ -274,7 +274,7 @@ async def generate_narrative(user: User, context: dict) -> dict:
     except Exception as exc:
         logger.warning("[dashboard-narrative] cache persist failed: %s", exc)
         # Still return the narrative even if persist failed
-        generated_at = datetime.now(UTC).replace(tzinfo=None).isoformat()
+        generated_at = datetime.now(UTC).isoformat()
 
     return {
         "narrative": narrative_text,

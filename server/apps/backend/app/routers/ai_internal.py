@@ -29,6 +29,7 @@ from apps.backend.app.schemas.ai_task import (
     TaskHeartbeatRequest,
     TaskProgressRequest,
 )
+from apps.backend.app.schemas.base import ensure_utc
 
 if TYPE_CHECKING:
     from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -1040,7 +1041,7 @@ async def auto_generate_reports(
 
     triggered = 0
     skipped = 0
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(UTC)
 
     for fid in eligible_ids:
         # 3. 检查是否有 1 小时内的报告
@@ -1056,7 +1057,7 @@ async def auto_generate_reports(
         if (
             latest_report is not None
             and latest_report.generated_at is not None
-            and (now - latest_report.generated_at) < report_ttl
+            and (now - ensure_utc(latest_report.generated_at)) < report_ttl
         ):
             skipped += 1
             continue

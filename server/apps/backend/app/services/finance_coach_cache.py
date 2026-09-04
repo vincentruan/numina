@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_report import AIReport
+from apps.backend.app.schemas.base import ensure_utc
 from apps.backend.app.utils.snowflake import next_id
 
 # Parametric TTL per skill (spec §7.2: non-hardcoded).
@@ -81,7 +82,7 @@ def is_cache_fresh(
             ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
     else:
         ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))
-    age = datetime.now(UTC).replace(tzinfo=None) - row.generated_at
+    age = datetime.now(UTC) - ensure_utc(row.generated_at)
     return bool(age < ttl)
 
 
@@ -103,7 +104,7 @@ def upsert_skill_result(
         report_json=payload,
         status="completed",
         skill_id=skill_id,
-        generated_at=datetime.now(UTC).replace(tzinfo=None),
+        generated_at=datetime.now(UTC),
     )
     db.add(row)
     db.flush()  # get the id without committing (caller commits)

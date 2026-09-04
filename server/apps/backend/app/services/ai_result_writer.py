@@ -56,7 +56,7 @@ def write_report_results(
             data_completeness_score=results.get("data_completeness_score"),
             status="completed",
             markdown_file_path=markdown_file_path,
-            generated_at=datetime.now(UTC).replace(tzinfo=None),
+            generated_at=datetime.now(UTC),
         )
         db.add(report)
         db.commit()

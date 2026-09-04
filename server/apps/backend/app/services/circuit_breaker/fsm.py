@@ -6,10 +6,23 @@ protocol via structural typing (duck typing).
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from apps.backend.app.services.circuit_breaker.config import CircuitBreakerConfig
 from apps.backend.app.services.circuit_breaker.types import FailureKind, State
+
+
+def _to_naive_utc(dt: datetime) -> datetime:
+    """Normalize a datetime to naive UTC for safe arithmetic.
+
+    Handles three cases from different backends:
+    - aware UTC → strip tzinfo (keeps correct UTC instant)
+    - aware non-UTC → convert to UTC then strip (corrects timezone)
+    - naive → assume already UTC (SQLite test data)
+    """
+    if dt.tzinfo is not None:
+        return dt.astimezone(UTC).replace(tzinfo=None)
+    return dt
 
 
 @dataclass
@@ -201,6 +214,10 @@ class CircuitBreakerFSM:
         """
         old_state = State(entity.circuit_state)  # type: ignore[attr-defined]
 
+        # Normalize both datetimes to naive UTC so subtraction works on
+        # SQLite (naive) and PostgreSQL (aware) without TypeError.
+        now = _to_naive_utc(now)
+
         if old_state != State.OPEN:
             return Transition(
                 old_state=old_state,
@@ -218,7 +235,7 @@ class CircuitBreakerFSM:
 
         # Check cooldown
         if entity.last_failure_at:  # type: ignore[attr-defined]
-            elapsed = (now - entity.last_failure_at).total_seconds()  # type: ignore[attr-defined]
+            elapsed = (now - _to_naive_utc(entity.last_failure_at)).total_seconds()  # type: ignore[attr-defined]
             if elapsed < config.recovery_cooldown_seconds:
                 return Transition(
                     old_state=old_state,
@@ -280,6 +297,9 @@ class CircuitBreakerFSM:
         """
         old_state = State(entity.circuit_state)  # type: ignore[attr-defined]
 
+        # Normalize `now` to naive UTC (same as attempt_recovery).
+        now = _to_naive_utc(now)
+
         if old_state != State.HALF_OPEN:
             return Transition(
                 old_state=old_state,
@@ -296,7 +316,7 @@ class CircuitBreakerFSM:
                 changed=False,
             )
 
-        elapsed = (now - window_start).total_seconds()
+        elapsed = (_to_naive_utc(now) - _to_naive_utc(window_start)).total_seconds()
         if elapsed < config.half_open_window_seconds:
             return Transition(
                 old_state=old_state,

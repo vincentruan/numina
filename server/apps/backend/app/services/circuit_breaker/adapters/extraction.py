@@ -83,7 +83,7 @@ class ExtractionAdapter(CircuitBreakerAdapter):
                 family_id=self._family_id,
                 skill_id=self._skill_id,
                 state="ok",
-                last_evaluated_at=datetime.now(UTC).replace(tzinfo=None),
+                last_evaluated_at=datetime.now(UTC),
             )
             db.add(self._circuit)
             try:
@@ -124,15 +124,17 @@ class ExtractionAdapter(CircuitBreakerAdapter):
             return True, "circuit_open"
 
         if circuit.state == "rate_limited":
-            if circuit.opened_until is not None and circuit.opened_until > datetime.now(
-                UTC
-            ).replace(tzinfo=None):
+            now_aware = datetime.now(UTC)
+            opened_until = circuit.opened_until
+            if opened_until is not None and opened_until.tzinfo is None:
+                opened_until = opened_until.replace(tzinfo=UTC)
+            if opened_until is not None and opened_until > now_aware:
                 return True, "rate_limited"
             # Rate limit window expired -> auto-recover to ok
             circuit.state = "ok"
             circuit.opened_at = None
             circuit.opened_until = None
-            circuit.last_evaluated_at = datetime.now(UTC).replace(tzinfo=None)
+            circuit.last_evaluated_at = datetime.now(UTC)
             try:
                 db.commit()
             except Exception:
@@ -146,7 +148,7 @@ class ExtractionAdapter(CircuitBreakerAdapter):
 
         Returns new state string. circuit_open takes priority over rate_limited.
         """
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = datetime.now(UTC)
 
         # 24h threshold (circuit_open has highest priority)
         circuit_window_start = now - timedelta(hours=CIRCUIT_OPEN_WINDOW_HOURS)
@@ -202,9 +204,9 @@ class ExtractionAdapter(CircuitBreakerAdapter):
         circuit.state = "ok"
         circuit.opened_at = None
         circuit.opened_until = None
-        circuit.manually_reset_at = datetime.now(UTC).replace(tzinfo=None)
+        circuit.manually_reset_at = datetime.now(UTC)
         circuit.reset_by_user_id = int(user_id)
-        circuit.last_evaluated_at = datetime.now(UTC).replace(tzinfo=None)
+        circuit.last_evaluated_at = datetime.now(UTC)
         try:
             db.commit()
             return True
@@ -227,7 +229,7 @@ class ExtractionAdapter(CircuitBreakerAdapter):
         circuit.state = new_state
         circuit.opened_at = opened_at
         circuit.opened_until = opened_until
-        circuit.last_evaluated_at = datetime.now(UTC).replace(tzinfo=None)
+        circuit.last_evaluated_at = datetime.now(UTC)
         try:
             db.commit()
         except Exception:

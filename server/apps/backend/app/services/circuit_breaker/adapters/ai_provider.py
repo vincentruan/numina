@@ -123,7 +123,7 @@ class AIProviderAdapter(CircuitBreakerAdapter):
             entity,
             FailureKind(failure_type),
             config,
-            datetime.now(UTC).replace(tzinfo=None),
+            datetime.now(UTC),
         )
 
         if transition.changed:
@@ -153,7 +153,10 @@ class AIProviderAdapter(CircuitBreakerAdapter):
         if self._config.circuit_state != "open":
             return False
 
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = datetime.now(UTC)
+
+        def _naive_utc(dt: datetime) -> datetime:
+            return dt.astimezone(UTC).replace(tzinfo=None) if dt.tzinfo else dt
 
         # Check recovery schedule first (adapter-specific trigger)
         schedule_match = (
@@ -176,7 +179,7 @@ class AIProviderAdapter(CircuitBreakerAdapter):
             and not self._config.recovery_schedule
             and self._config.circuit_open_until is None
             and self._config.last_failure_at is not None
-            and now - self._config.last_failure_at.replace(tzinfo=None)
+            and _naive_utc(now) - _naive_utc(self._config.last_failure_at)
             >= timedelta(seconds=self.DEFAULT_RECOVERY_COOLDOWN_SECONDS)
         )
 
@@ -212,7 +215,7 @@ class AIProviderAdapter(CircuitBreakerAdapter):
 
         config = self.get_config()
         transition = CircuitBreakerFSM.evaluate_half_open_window(
-            entity, config, datetime.now(UTC).replace(tzinfo=None)
+            entity, config, datetime.now(UTC)
         )
 
         if transition.changed:
@@ -256,7 +259,7 @@ class AIProviderAdapter(CircuitBreakerAdapter):
                 self._config,
                 FailureKind.TRANSIENT_SERVER,
                 self.get_config(),
-                datetime.now(UTC).replace(tzinfo=None),
+                datetime.now(UTC),
             )
             # Sync legacy boolean fields via on_transition
             if transition.changed:

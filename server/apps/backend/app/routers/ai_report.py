@@ -135,7 +135,7 @@ async def trigger_generate_events(
                         )
                     )
 
-            age = datetime.now(UTC).replace(tzinfo=None) - cached.generated_at
+            age = datetime.now(UTC) - ensure_utc(cached.generated_at)
             if age < _report_ttl:
                 # security-lens Open Question #22 (P2, defense-in-depth): the
                 # cached report_json was validated on first write, but re-serving

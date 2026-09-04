@@ -91,7 +91,7 @@ class ASRAdapter(CircuitBreakerAdapter):
             return
 
         self._config.failure_count += 1
-        self._config.last_failure_at = datetime.now(UTC).replace(tzinfo=None)
+        self._config.last_failure_at = datetime.now(UTC)
 
         if self._config.failure_count >= _CIRCUIT_FAILURE_THRESHOLD:
             self._config.circuit_state = "open"

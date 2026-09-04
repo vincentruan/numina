@@ -142,5 +142,5 @@ def reset_circuit(
         db=db,
     )
     return CircuitResetResponse(
-        ok=True, reset_at=datetime.now(UTC).replace(tzinfo=None)
+        ok=True, reset_at=datetime.now(UTC)
     )

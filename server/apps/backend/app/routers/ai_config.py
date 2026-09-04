@@ -817,7 +817,7 @@ def _upsert_test_results(db: Session, config_id: int, data: dict) -> None:
             existing.success = success
             existing.message = message
             existing.latency_ms = latency_ms
-            existing.tested_at = datetime.now(UTC).replace(tzinfo=None)
+            existing.tested_at = datetime.now(UTC)
         else:
             db.add(
                 AIProviderTestResult(

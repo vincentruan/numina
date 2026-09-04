@@ -79,7 +79,7 @@ class CircuitBreakerAdapter(ABC):
             entity,
             FailureKind(failure_type),
             config,
-            datetime.now(UTC).replace(tzinfo=None),
+            datetime.now(UTC),
         )
 
         if transition.changed:
@@ -103,7 +103,7 @@ class CircuitBreakerAdapter(ABC):
 
         config = self.get_config()
         transition = CircuitBreakerFSM.record_success(
-            entity, config, datetime.now(UTC).replace(tzinfo=None)
+            entity, config, datetime.now(UTC)
         )
 
         if transition.changed:
@@ -123,7 +123,7 @@ class CircuitBreakerAdapter(ABC):
 
         config = self.get_config()
         transition = CircuitBreakerFSM.attempt_recovery(
-            entity, config, datetime.now(UTC).replace(tzinfo=None)
+            entity, config, datetime.now(UTC)
         )
 
         if transition.changed:

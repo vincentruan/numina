@@ -362,6 +362,7 @@ defineExpose({ loadStatuses })
   align-items: center;
   gap: 2px;
   text-decoration: none;
+  margin-left: auto;
 }
 
 .literacy-error-state {
