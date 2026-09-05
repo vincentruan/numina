@@ -229,6 +229,7 @@ export default {
       thinkingElapsed: '正在思考（{seconds} 秒）',
       thinkingDone: '已思考（用时 {seconds} 秒）',
       thoughtFor: '已思考 {duration}',
+      thoughtLabel: '已思考',
       disclaimer: '基于 AI 分析，仅供参考',
       ariaLabel: '财务叙事卡片',
       generatedAt: '生成于 {time}',

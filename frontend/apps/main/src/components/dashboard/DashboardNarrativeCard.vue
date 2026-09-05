@@ -167,25 +167,9 @@ watch(
   },
 )
 
-// Derive thinkingElapsed from generatedAt when content loads without a live timer.
-// Covers: (1) cache hit — onDone fires immediately, timer never ran;
-// (2) task resume completed — onComplete fires, generatedAt set but timer reset to 0.
-// Only fires when there's no active stream and elapsed hasn't been tracked yet.
-// Guard: only use generatedAt when it's recent (< 10 min) — older timestamps mean
-// this is a cached result from a prior session, not a just-finished thinking run,
-// so computing "now - generatedAt" would produce absurd elapsed values (hours).
-watch(
-  [() => hasContent.value, () => generatedAt.value],
-  ([content, ts]) => {
-    if (content && ts && !streaming.value && thinkingElapsed.value === 0) {
-      const elapsed = Date.now() - new Date(ts).getTime()
-      if (elapsed < 10 * 60 * 1000) {
-        thinkingElapsed.value = Math.max(0, elapsed)
-      }
-    }
-  },
-  { immediate: true },
-)
+// thinkingElapsed is only set by the live timer during streaming.
+// For cache hits, thinkingElapsed stays at 0 and the UI falls back to
+// "思考过程" (no duration) instead of showing a fabricated value.
 
 // Watch expansion state to check scroll button visibility
 watch(
@@ -492,7 +476,10 @@ function formatTime(iso: string | null): string {
               <div class="narrative-thinking-header" @click="toggleThinking">
                 <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
                 <span class="narrative-thinking-title">
-                  {{ t('dashboard.narrative.thoughtFor', { duration: formattedElapsed }) }}
+                  {{ thinkingElapsed > 0
+                    ? t('dashboard.narrative.thoughtFor', { duration: formattedElapsed })
+                    : t('dashboard.narrative.thoughtLabel')
+                  }}
                 </span>
                 <span class="narrative-thinking-chevron" :class="{ 'narrative-thinking-chevron--collapsed': !isThinkingExpanded }">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">

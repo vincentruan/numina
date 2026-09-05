@@ -136,6 +136,8 @@ export default {
       thinkingPlaceholder: 'Analyzing your financial data, please wait…',
       thinkingElapsed: 'Thinking ({seconds}s)',
       thinkingDone: 'Thought for {seconds}s',
+      thoughtFor: 'Thought for {duration}',
+      thoughtLabel: 'Thought',
       ariaLabel: 'Financial narrative card',
       generatedAt: 'Generated at {time}',
       empty: 'No monthly narrative yet',
