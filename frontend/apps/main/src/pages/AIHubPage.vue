@@ -43,6 +43,7 @@
                 :placement="stat.type === 'alerts' ? 'bottom-end' : 'bottom'"
                 :offset="[0, 8]"
                 trigger="manual"
+                teleport="body"
               >
                 <div class="stat-popover-content">
                   <div class="stat-popover-header">
