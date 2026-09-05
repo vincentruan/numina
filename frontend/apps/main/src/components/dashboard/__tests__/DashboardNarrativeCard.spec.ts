@@ -48,7 +48,7 @@ describe('DashboardNarrativeCard — thinking elapsed persistence', () => {
     vi.useFakeTimers()
   })
 
-  it('derives thinkingElapsed from generatedAt on cache hit (timer never ran)', async () => {
+  it('keeps thinkingElapsed at 0 on cache hit (timer never ran)', async () => {
     const wrapper = mount(DashboardNarrativeCard, {
       global: {
         stubs: {
@@ -75,9 +75,9 @@ describe('DashboardNarrativeCard — thinking elapsed persistence', () => {
     await nextTick()
     await nextTick() // watcher needs a tick
 
-    expect(vm.thinkingElapsed).toBeGreaterThanOrEqual(19000)
-    expect(vm.thinkingElapsed).toBeLessThanOrEqual(21000)
-    expect(vm.formattedElapsed).toBe('20秒')
+    // thinkingElapsed is only set by the live timer during streaming.
+    // For cache hits it stays at 0 — the UI shows "思考过程" without duration.
+    expect(vm.thinkingElapsed).toBe(0)
 
     wrapper.unmount()
   })
