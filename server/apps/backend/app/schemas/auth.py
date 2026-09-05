@@ -1,7 +1,7 @@
 import json
 import re
-from datetime import date as date_type
 from datetime import UTC, datetime, timedelta
+from datetime import date as date_type
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -58,11 +58,14 @@ def parse_username_change_history(history_raw: str | None) -> list[datetime]:
     except (json.JSONDecodeError, TypeError):
         return []
     cutoff = datetime.now(UTC) - timedelta(days=_USERNAME_CHANGE_WINDOW_DAYS)
-    return [
-        datetime.fromisoformat(ts)
-        for ts in raw_list
-        if datetime.fromisoformat(ts) > cutoff
-    ]
+    result: list[datetime] = []
+    for ts in raw_list:
+        parsed = datetime.fromisoformat(ts)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        if parsed > cutoff:
+            result.append(parsed)
+    return result
 
 
 def compute_username_change_info(history_raw: str | None) -> tuple[int, str | None]:
