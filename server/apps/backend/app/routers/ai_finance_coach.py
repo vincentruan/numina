@@ -80,7 +80,11 @@ async def trigger_finance_coach(
     # Check if there's already a running task - resume it instead of 409
     existing = AITaskService.get_running_task(current_user.family_id, SKILL_ID, db)
     if existing:
-        # Already running — resume via bridge consumer
+        # Already running — resume via bridge consumer ONLY.
+        # The original caller's pump is still active and pushing events to the
+        # bridge.  Starting a duplicate pump would re-trigger the agent (500
+        # ConflictError) and the failing pump's publish_end would kill the
+        # shared bridge stream for ALL subscribers.
         task = existing
         session_id = str(task.session_id) if task.session_id else str(task.id)
         session = (
@@ -90,6 +94,21 @@ async def trigger_finance_coach(
         )
         if not session:
             raise AppError(ErrorCode.NOT_FOUND)
+
+        shared_bridge = get_shared_bridge()
+        last_event_id = request.headers.get("Last-Event-ID")
+        stream_gen = consume_task_stream(
+            task_id=str(task.id),
+            family_id=current_user.family_id,
+            last_event_id=last_event_id,
+            run_id=None,
+            bridge=shared_bridge,
+        )
+        return StreamingResponse(
+            tracked_sse_stream(str(task.id), stream_gen),
+            media_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no"},
+        )
     else:
         # No running task - create new session and task
         session = await ChatSessionService.create_session(

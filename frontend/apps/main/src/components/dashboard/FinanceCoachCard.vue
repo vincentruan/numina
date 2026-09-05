@@ -343,12 +343,14 @@ onUnmounted(() => {
               {{ t('aiTask.retry') }}
             </van-button>
           </div>
-          <van-empty
-            v-else
-            :description="t('dashboard.financeCoach.empty')"
-            image-size="60"
-            class="section-empty"
-          />
+          <div v-else class="fc-empty-state">
+            <van-empty
+              :description="t('dashboard.financeCoach.empty')"
+              image-size="60"
+              class="section-empty"
+            />
+            <van-button size="mini" plain icon="replay" :loading="loading" @click.stop="load(true)" />
+          </div>
         </template>
       </van-collapse-item>
     </van-collapse>
@@ -482,6 +484,13 @@ onUnmounted(() => {
 }
 .section-empty {
   padding: 12px 0;
+}
+.fc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
 }
 .fc-error-state {
   display: flex;
