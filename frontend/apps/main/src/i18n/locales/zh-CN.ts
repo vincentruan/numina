@@ -3833,6 +3833,12 @@ export default {
     saveFailed: '保存远程备份配置失败',
     alreadyExists: '当前家庭已配置远程备份，请先删除旧配置',
     encryptionRequired: '存储加密密钥未配置，请联系系统管理员',
+    syncNow: '立即同步',
+    syncBackfilled: '{count} 个历史文件已排队',
+    syncResetFailed: '{count} 个失败文件已重试',
+    syncSuccessDetail: '同步已触发：{detail}',
+    syncSuccessNoop: '所有文件已同步，无需操作',
+    syncFailed: '触发同步失败',
   },
   iconPicker: {
     tabGallery: '相册',

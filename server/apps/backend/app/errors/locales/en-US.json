@@ -56,6 +56,7 @@
   "STORAGE_ERROR": "Storage service error",
   "STORAGE_BACKEND_NOT_FOUND": "Remote backup configuration not found",
   "STORAGE_BACKEND_ALREADY_EXISTS": "This family already has a remote backup configured; please remove it first",
+  "STORAGE_BACKEND_INACTIVE": "Remote backup is disabled; please enable it first",
   "STORAGE_ENCRYPTION_KEY_NOT_CONFIGURED": "Storage encryption key is not configured; please contact the system administrator",
   "AI_NOT_ENABLED": "AI assistant is not enabled. Please ask the family owner to configure and enable it in Settings",
   "AI_SERVICE_UNAVAILABLE": "AI service is temporarily unavailable, please try again later",

@@ -63,3 +63,12 @@ export function updateStorageBackend(id: string, data: StorageBackendUpdateReque
 export function deleteStorageBackend(id: string) {
   return http.delete(`/family/storage/${id}`)
 }
+
+export interface TriggerSyncResponse {
+  reset_failed: number
+  backfilled: number
+}
+
+export function triggerStorageSync() {
+  return http.post<TriggerSyncResponse>('/family/storage/sync')
+}

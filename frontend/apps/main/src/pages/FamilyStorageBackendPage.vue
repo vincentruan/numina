@@ -47,6 +47,9 @@
           <van-button size="small" type="primary" plain @click="editing = true">
             {{ t('storageBackend.update') }}
           </van-button>
+          <van-button size="small" type="primary" :loading="syncing" plain @click="onSync">
+            {{ t('storageBackend.syncNow') }}
+          </van-button>
           <van-button size="small" type="danger" plain @click="onDelete">
             {{ t('storageBackend.delete') }}
           </van-button>
@@ -155,6 +158,7 @@ import {
   createStorageBackend,
   deleteStorageBackend,
   getStorageBackend,
+  triggerStorageSync,
   updateStorageBackend,
   type StorageBackendResponse,
 } from '@/api/storageBackend'
@@ -165,6 +169,7 @@ const { t } = useI18n()
 
 const loading = ref(true)
 const saving = ref(false)
+const syncing = ref(false)
 const editing = ref(false)
 const existingBackend = ref<StorageBackendResponse | null>(null)
 const showTypePicker = ref(false)
@@ -236,6 +241,25 @@ async function onSave() {
     showFailToast(t('storageBackend.saveFailed'))
   } finally {
     saving.value = false
+  }
+}
+
+async function onSync() {
+  syncing.value = true
+  try {
+    const res = await triggerStorageSync()
+    const { reset_failed, backfilled } = res.data
+    const parts: string[] = []
+    if (backfilled > 0) parts.push(t('storageBackend.syncBackfilled', { count: backfilled }))
+    if (reset_failed > 0) parts.push(t('storageBackend.syncResetFailed', { count: reset_failed }))
+    const msg = parts.length > 0
+      ? t('storageBackend.syncSuccessDetail', { detail: parts.join('，') })
+      : t('storageBackend.syncSuccessNoop')
+    showSuccessToast(msg)
+  } catch {
+    showFailToast(t('storageBackend.syncFailed'))
+  } finally {
+    syncing.value = false
   }
 }
 
