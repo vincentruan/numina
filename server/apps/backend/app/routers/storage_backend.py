@@ -149,6 +149,45 @@ def _backfill_pending_sync(db: Session, family_id: int, backend_id: int) -> int:
     return count
 
 
+@router.post("/sync", status_code=200)
+def trigger_sync(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Re-queue failed/pending files and backfill unsynced files for immediate sync.
+
+    Resets retry_count on failed locations so the next scheduler cycle picks them up.
+    Also backfills any CachedFiles that lack a FileRemoteLocation (e.g. uploaded
+    while the backend was inactive).
+    """
+    _require_owner(user)
+    backend = _get_owned_backend(db, user.family_id)
+    if backend is None:
+        raise AppError(ErrorCode.STORAGE_BACKEND_NOT_FOUND)
+    if not backend.is_active:
+        raise AppError(ErrorCode.STORAGE_BACKEND_INACTIVE)
+
+    # Reset failed locations so they can be retried
+    reset_count = (
+        db.query(FileRemoteLocation)
+        .filter_by(backend_id=backend.id)
+        .filter(FileRemoteLocation.sync_status == "failed")
+        .update(
+            {FileRemoteLocation.sync_status: "pending", FileRemoteLocation.retry_count: 0},
+            synchronize_session="fetch",
+        )
+    )
+
+    # Backfill any files that lack a remote location
+    backfill_count = _backfill_pending_sync(db, user.family_id, backend.id)
+
+    db.commit()
+    return {
+        "reset_failed": reset_count,
+        "backfilled": backfill_count,
+    }
+
+
 @router.patch("/{backend_id}", response_model=StorageBackendResponse)
 def update_backend(
     backend_id: int,
@@ -203,42 +242,3 @@ def delete_backend(
 
     db.delete(backend)
     db.commit()
-
-
-@router.post("/sync", status_code=200)
-def trigger_sync(
-    db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
-):
-    """Re-queue failed/pending files and backfill unsynced files for immediate sync.
-
-    Resets retry_count on failed locations so the next scheduler cycle picks them up.
-    Also backfills any CachedFiles that lack a FileRemoteLocation (e.g. uploaded
-    while the backend was inactive).
-    """
-    _require_owner(user)
-    backend = _get_owned_backend(db, user.family_id)
-    if backend is None:
-        raise AppError(ErrorCode.STORAGE_BACKEND_NOT_FOUND)
-    if not backend.is_active:
-        raise AppError(ErrorCode.STORAGE_BACKEND_INACTIVE)
-
-    # Reset failed locations so they can be retried
-    reset_count = (
-        db.query(FileRemoteLocation)
-        .filter_by(backend_id=backend.id)
-        .filter(FileRemoteLocation.sync_status == "failed")
-        .update(
-            {FileRemoteLocation.sync_status: "pending", FileRemoteLocation.retry_count: 0},
-            synchronize_session="fetch",
-        )
-    )
-
-    # Backfill any files that lack a remote location
-    backfill_count = _backfill_pending_sync(db, user.family_id, backend.id)
-
-    db.commit()
-    return {
-        "reset_failed": reset_count,
-        "backfilled": backfill_count,
-    }
