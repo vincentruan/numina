@@ -54,37 +54,39 @@ class WebDAVStorageConfig(BaseModel):
     def _valid_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):
             raise ValueError("base_url must start with http:// or https://")
-        # SSRF guard: reject loopback, link-local, and private RFC 1918 ranges.
-        # Accepts public hostnames and cloud-provider FQDNs only.
+        # Guard: reject loopback and link-local.
+        # This is a self-hosted app — the user IS the admin, and private
+        # RFC 1918 ranges (192.168.x, 10.x, 172.16.x) are legitimate targets
+        # (home NAS, Synology, etc.).  Link-local (169.254.x) is blocked to
+        # prevent cloud metadata SSRF (169.254.169.254).
         try:
             parsed = urlparse(v)
             hostname = parsed.hostname or ""
             if not hostname:
                 raise ValueError("base_url must include a hostname")
-            # Resolve literal IP addresses against private ranges
+            # Resolve literal IP addresses
             try:
                 addr = ipaddress.ip_address(hostname)
-                if addr.is_loopback or addr.is_private or addr.is_link_local:
+                if addr.is_loopback:
                     raise ValueError(
-                        "base_url must not point to a private or loopback address"
+                        "base_url must not point to a loopback address"
+                    )
+                if addr.is_link_local:
+                    raise ValueError(
+                        "base_url must not point to a link-local address"
                     )
             except ValueError as exc:
-                if "private" in str(exc) or "loopback" in str(exc):
+                if "loopback" in str(exc) or "link-local" in str(exc):
                     raise
                 # Not an IP literal — treat as hostname.
-                # Reject well-known internal hostnames.
+                # Reject well-known loopback hostnames.
                 lower = hostname.lower()
-                if lower in (
-                    "localhost",
-                    "127.0.0.1",
-                    "0.0.0.0",
-                    "metadata.google.internal",
-                ) or lower.endswith(".internal"):
+                if lower in ("localhost", "127.0.0.1", "0.0.0.0"):
                     raise ValueError(
-                        "base_url must not point to a private or loopback address"
+                        "base_url must not point to a loopback address"
                     ) from exc
         except ValueError as exc:
-            if "base_url" in str(exc) or "private" in str(exc) or "loopback" in str(exc):
+            if "base_url" in str(exc) or "loopback" in str(exc):
                 raise exc
             raise ValueError(f"Invalid base_url: {exc}") from exc
         return v

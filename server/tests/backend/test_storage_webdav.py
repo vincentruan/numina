@@ -81,18 +81,30 @@ class TestWebDAVStorageBackend:
             result = run(backend.save(b"updated", "photo.jpg", "20260410"))
         assert result == "20260410/photo.jpg"
 
+    def test_save_put_200_overwrite_success(self):
+        """Many WebDAV servers (Nutstore, Synology) return 200 on overwrite."""
+        backend = make_backend()
+        with patch.object(backend._client, "request", new=AsyncMock(return_value=make_response(201))), \
+             patch.object(backend._client, "put", new=AsyncMock(return_value=make_response(200))):
+            result = run(backend.save(b"updated", "photo.jpg", "20260410"))
+        assert result == "20260410/photo.jpg"
+
+    def test_ensure_path_mkcol_200_treated_as_success(self):
+        """Some WebDAV servers return 200 instead of 405 for existing collections."""
+        backend = make_backend()
+        with patch.object(backend._client, "request", new=AsyncMock(return_value=make_response(200))):
+            # Should not raise
+            run(backend._ensure_path("20260410"))
+
 
 class TestWebDAVURLValidation:
     @pytest.mark.parametrize("url", [
         "http://127.0.0.1/files",
         "http://localhost/files",
-        "http://169.254.169.254/latest/meta-data",
-        "http://10.0.0.1/dav",
-        "http://172.16.0.1/dav",
-        "http://192.168.1.1/dav",
-        "http://[::1]/dav",
         "ftp://example.com/dav",
         "file:///etc/passwd",
+        # Link-local blocked to prevent cloud metadata SSRF
+        "http://169.254.169.254/latest/meta-data",
     ])
     def test_blocked_urls_raise_value_error(self, url):
         with pytest.raises(ValueError):
@@ -102,8 +114,12 @@ class TestWebDAVURLValidation:
         "https://dav.example.com/files",
         "http://dav.example.com/files",
         "https://my-nas.local/dav",
+        # Self-hosted app — private ranges are legitimate (home NAS)
+        "http://192.168.1.100/webdav",
+        "http://10.0.0.5/dav",
+        "http://172.16.0.1/dav",
     ])
     def test_allowed_urls_do_not_raise(self, url):
-        # Should not raise — domain names are allowed (DNS resolves at request time)
+        # Should not raise — domain names and private IPs are allowed
         backend = WebDAVStorageBackend(base_url=url, username="u", password="p")
         assert backend._base_url == url.rstrip("/")

@@ -11,15 +11,14 @@ from packages.storage.base import (
     StorageConnectionError,
 )
 
-# Private/reserved IPv4 ranges that must not be reachable via user-supplied URLs
+# In a self-hosted app the user IS the admin — private RFC 1918 ranges are
+# legitimate targets (home NAS, Synology, etc.).  Loopback and link-local are
+# blocked: loopback prevents the server from connecting back to its own
+# container; link-local blocks cloud metadata endpoints (169.254.169.254).
 _BLOCKED_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),      # loopback
-    ipaddress.ip_network("10.0.0.0/8"),        # RFC 1918
-    ipaddress.ip_network("172.16.0.0/12"),     # RFC 1918
-    ipaddress.ip_network("192.168.0.0/16"),    # RFC 1918
-    ipaddress.ip_network("169.254.0.0/16"),    # link-local / AWS metadata
+    ipaddress.ip_network("127.0.0.0/8"),      # IPv4 loopback
     ipaddress.ip_network("::1/128"),           # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),          # IPv6 ULA
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local (cloud metadata)
     ipaddress.ip_network("fe80::/10"),         # IPv6 link-local
 ]
 
@@ -74,7 +73,7 @@ class WebDAVStorageBackend(StorageBackend):
                 response = await self._client.request("MKCOL", url)
             except httpx.TransportError as exc:
                 raise StorageConnectionError(str(exc)) from exc
-            if response.status_code not in (201, 405):
+            if response.status_code not in (200, 201, 405):
                 raise StorageConnectionError(
                     f"MKCOL {url} 返回 {response.status_code}"
                 )
@@ -95,7 +94,7 @@ class WebDAVStorageBackend(StorageBackend):
             )
         except httpx.TransportError as exc:
             raise StorageConnectionError(str(exc)) from exc
-        if response.status_code in (201, 204):
+        if response.status_code in (200, 201, 204):
             return remote_path
         if response.status_code in (401, 403):
             raise StorageAuthError(f"WebDAV 认证失败: {response.status_code}")
@@ -108,7 +107,7 @@ class WebDAVStorageBackend(StorageBackend):
             response = await self._client.delete(url, headers={"Depth": "infinity"})
         except httpx.TransportError as exc:
             raise StorageConnectionError(str(exc)) from exc
-        if response.status_code in (204, 404):
+        if response.status_code in (200, 204, 404):
             return
         if response.status_code in (401, 403):
             raise StorageAuthError(f"WebDAV 认证失败: {response.status_code}")
