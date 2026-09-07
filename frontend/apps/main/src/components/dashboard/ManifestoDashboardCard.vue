@@ -11,7 +11,6 @@
             <span class="manifesto-summary">
               {{ summary?.signed_count ?? 0 }}/{{ summary?.total_members ?? 0 }} {{ t('manifesto.signed') }}
             </span>
-            <van-icon name="arrow" class="manifesto-arrow" />
           </div>
         </template>
 
@@ -22,8 +21,17 @@
             :key="sig.userId"
             :title="sig.displayName"
             :value="sig.signed ? t('manifesto.signed') : t('manifesto.pending')"
-            :label="sig.signedAt ? `${t('manifesto.signedAt')} ${sig.signedAt}` : undefined"
+            :label="sig.signedAt ? `${t('manifesto.signedAt')} ${formatDateTime(sig.signedAt, locale)}` : undefined"
           >
+            <template #icon>
+              <van-icon
+                v-if="sig.role === 'child'"
+                name="friends-o"
+                size="16"
+                color="var(--van-primary-color, #1989fa)"
+                style="margin-right: 6px"
+              />
+            </template>
             <template #right-icon>
               <van-icon v-if="sig.signed" name="success" color="var(--van-success-color, #07c160)" />
               <van-icon v-else name="clock-o" color="var(--van-text-color-3, #c8c9cc)" />
@@ -51,8 +59,9 @@ import type {
   ManifestoSignature,
 } from '@/types/manifesto'
 import { useFamilyStore } from '@/stores/family'
+import { formatDateTime } from '@/utils/format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 
@@ -66,18 +75,24 @@ const signerRows = computed(() => {
   if (!manifesto.value) return []
   const signedUserIds = new Set(manifesto.value.signatures.map((s: ManifestoSignature) => s.user_id))
   return familyStore.members
-    .filter(m => m.role !== 'child')
     .map(m => ({
       userId: m.id,
       displayName: m.display_name,
+      role: m.role,
       signed: signedUserIds.has(m.id),
       signedAt: manifesto.value!.signatures.find((s: ManifestoSignature) => s.user_id === m.id)?.signed_at ?? null,
     }))
-    .sort((a, b) => (a.signed === b.signed ? 0 : a.signed ? -1 : 1))
+    .sort((a, b) => {
+      // Adults first (sorted by signed status), then children
+      if (a.role === b.role) return a.signed === b.signed ? 0 : a.signed ? -1 : 1
+      if (a.role === 'child') return 1
+      if (b.role === 'child') return -1
+      return 0
+    })
 })
 
 function goDetail() {
-  router.push('/manifesto/preview')
+  router.push('/manifesto/sign')
 }
 
 async function loadDetail() {
@@ -157,13 +172,9 @@ async function onExpandChange(names: string[]) {
   font-weight: 500;
 }
 .manifesto-summary {
-  margin-left: 8px;
+  margin-left: auto;
   font-size: 12px;
   color: var(--van-text-color-2);
-}
-.manifesto-arrow {
-  color: var(--van-text-color-3);
-  flex-shrink: 0;
 }
 .manifesto-loading {
   display: flex;
@@ -173,6 +184,11 @@ async function onExpandChange(names: string[]) {
 .manifesto-actions {
   display: flex;
   justify-content: flex-end;
-  padding: 12px 16px;
+  padding: 8px 16px 4px;
+}
+
+/* Compact cell spacing inside manifesto card */
+.manifesto-card :deep(.van-cell) {
+  padding: 10px 16px;
 }
 </style>

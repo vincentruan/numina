@@ -21,7 +21,7 @@ import { getTemplate } from './templates/templateRegistry'
 
 interface SignatureInfo {
   name: string
-  data: string | null
+  data: string | null | undefined
 }
 
 interface MemberInfo {

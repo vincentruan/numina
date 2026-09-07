@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideation: uni-app 跨平台迁移可行性</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --text: #1a1a2e;
+    --text-secondary: #555;
+    --accent: #4361ee;
+    --accent-soft: #eef1ff;
+    --success: #2d6a4f;
+    --success-soft: #e8f5e9;
+    --warn: #b45309;
+    --warn-soft: #fef3c7;
+    --danger: #be123c;
+    --danger-soft: #ffe4e6;
+    --border: #e2e8f0;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    font-size: 15px;
+  }
+  .container {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .meta {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+  .meta span { display: inline-flex; align-items: center; gap: 0.3rem; }
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 2rem 0 1rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .prose { max-width: 72ch; }
+  .prose p { margin-bottom: 0.75rem; }
+  section { margin-bottom: 2rem; }
+
+  /* Grounding */
+  .grounding-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 640px) { .grounding-grid { grid-template-columns: 1fr; } }
+  .grounding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .grounding-card h4 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  .grounding-card ul {
+    list-style: none;
+    font-size: 0.88rem;
+  }
+  .grounding-card li {
+    padding: 0.2rem 0;
+    padding-left: 1rem;
+    position: relative;
+  }
+  .grounding-card li::before {
+    content: '·';
+    position: absolute;
+    left: 0;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  /* Axes */
+  .axes-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+  }
+  .axis-chip {
+    background: var(--accent-soft);
+    border-radius: var(--radius);
+    padding: 0.6rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--accent);
+    text-align: center;
+  }
+
+  /* Idea cards */
+  .idea-nav {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .idea-nav-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
+  }
+  .idea-nav ol {
+    list-style: none;
+    counter-reset: nav;
+  }
+  .idea-nav li {
+    counter-increment: nav;
+    padding: 0.15rem 0;
+    font-size: 0.88rem;
+  }
+  .idea-nav li::before {
+    content: counter(nav) ". ";
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .idea-nav a {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .idea-nav a:hover { color: var(--accent); }
+
+  .idea-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .idea-card.recommended {
+    border-color: var(--success);
+    border-width: 2px;
+  }
+  .idea-card.recommended::after {
+    content: '★ 推荐';
+    position: absolute;
+    top: -0.6rem;
+    right: 1rem;
+    background: var(--success);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.6rem;
+    border-radius: 10px;
+  }
+  .idea-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .idea-meta {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+  .pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .pill-axis { background: var(--accent-soft); color: var(--accent); }
+  .pill-conf-high { background: var(--success-soft); color: var(--success); }
+  .pill-conf-med { background: var(--warn-soft); color: var(--warn); }
+  .pill-conf-low { background: var(--danger-soft); color: var(--danger); }
+  .pill-cx-low { background: #f0fdf4; color: #166534; }
+  .pill-cx-med { background: #fffbeb; color: #92400e; }
+  .pill-cx-high { background: #fef2f2; color: #991b1b; }
+
+  .idea-desc {
+    font-size: 0.92rem;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+  .idea-section {
+    margin-bottom: 0.5rem;
+  }
+  .idea-section-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin-bottom: 0.15rem;
+  }
+  .idea-section p {
+    font-size: 0.88rem;
+    color: var(--text);
+  }
+  .basis-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: var(--accent);
+    color: white;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    margin-right: 0.3rem;
+    vertical-align: middle;
+  }
+
+  /* Rejection table */
+  .rejection-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .rejection-table th {
+    text-align: left;
+    padding: 0.5rem;
+    border-bottom: 2px solid var(--border);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+  }
+  .rejection-table td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .rejection-table tr:last-child td { border-bottom: none; }
+
+  /* Architecture diagram */
+  .diagram-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+  .diagram-container svg {
+    display: block;
+    margin: 0 auto;
+  }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="eyebrow">Ideation Artifact</div>
+  <h1>uni-app 跨平台迁移可行性探索</h1>
+  <div class="meta">
+    <span>📅 2026-09-07</span>
+    <span>🎯 Vue 3 + Vant 4 → Android + PWA + H5</span>
+    <span>📍 repo-grounded</span>
+  </div>
+</header>
+
+<div class="stats-strip">
+  <div class="stat">
+    <div class="stat-value">3,621</div>
+    <div class="stat-label">Vant 组件引用</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">546</div>
+    <div class="stat-label">浏览器 API 调用点</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">55+</div>
+    <div class="stat-label">路由 (main app)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">7</div>
+    <div class="stat-label">候选方案</div>
+  </div>
+</div>
+
+<!-- ==================== Grounding Context ==================== -->
+<section>
+  <h2>Grounding Context</h2>
+  <div class="prose">
+    <p>Numina 当前有两套 Vue 3 + Vant 4 + TypeScript 前端应用，通过 pnpm workspace 组织，共享 <code>@numina/auth</code>、<code>@numina/math</code>、<code>@numina/assets</code> 三个包。主要服务手机端 H5 访问，现评估使用 uni-app 或替代方案扩展至 Android 原生 + PWA。</p>
+  </div>
+  <div class="grounding-grid">
+    <div class="grounding-card">
+      <h4>当前技术栈</h4>
+      <ul>
+        <li>Vue 3.5 + TypeScript 5.9 + Vite 8</li>
+        <li>Vant 4.9 (auto-import via unplugin)</li>
+        <li>Pinia 状态管理, vue-router 4</li>
+        <li>ECharts 6, vue-echarts 8</li>
+        <li>vue-i18n, axios, nprogress</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>鉴权架构</h4>
+      <ul>
+        <li>httpOnly Cookie 鉴权 (非 localStorage token)</li>
+        <li>设备指纹 + ETag 可信设备机制</li>
+        <li>localStorage 仅缓存用户 profile</li>
+        <li>2-step 登录 + WebAuthn passkey</li>
+        <li>子应用通过独立 SPA 入口 (/child/)</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>关键依赖风险</h4>
+      <ul>
+        <li><strong>Vant 4</strong> — 3,621 处引用，36 个文件，Web-only</li>
+        <li><strong>html2canvas/jspdf</strong> — DOM-only，原生端不可用</li>
+        <li><strong>WebAuthn</strong> — 无 uni-app 等价 API</li>
+        <li><strong>cropperjs/shiki/vuedraggable</strong> — DOM 依赖</li>
+        <li><strong>ECharts</strong> — 有 ucharts 替代方案</li>
+      </ul>
+    </div>
+    <div class="grounding-card">
+      <h4>uni-app 能力</h4>
+      <ul>
+        <li>✅ Vue 3 + Composition API + &lt;script setup&gt;</li>
+        <li>✅ Pinia 状态管理支持</li>
+        <li>✅ H5 模式输出 Web 应用</li>
+        <li>✅ App 模式输出 iOS/Android 原生</li>
+        <li>❌ 不支持 Vant 4 (DOM 组件)</li>
+        <li>❌ 路由系统不同 (pages.json vs vue-router)</li>
+        <li>⚠️ PWA 支持有限 (非一等公民)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== Topic Axes ==================== -->
+<section>
+  <h2>Topic Axes</h2>
+  <div class="axes-list">
+    <div class="axis-chip">UI 组件库兼容性</div>
+    <div class="axis-chip">工程结构与复用策略</div>
+    <div class="axis-chip">后端与鉴权适配</div>
+    <div class="axis-chip">多平台能力覆盖</div>
+  </div>
+</section>
+
+<!-- ==================== Ranked Ideas ==================== -->
+<section>
+  <h2>Ranked Ideas</h2>
+
+  <div class="idea-nav">
+    <div class="idea-nav-title">快速跳转</div>
+    <ol>
+      <li><a href="#idea1">Capacitor + PWA 双轨方案</a></li>
+      <li><a href="#idea2">PWA 优先渐进路线</a></li>
+      <li><a href="#idea3">共享核心 + 平台外壳架构</a></li>
+      <li><a href="#idea4">TWA (Trusted Web Activity) 封装</a></li>
+      <li><a href="#idea5">放弃原生 app，专注 H5 + PWA 优化</a></li>
+      <li><a href="#idea6">Child app 先行 uni-app 试点</a></li>
+      <li><a href="#idea7">uni-app + uv-ui 完全迁移</a></li>
+    </ol>
+  </div>
+
+  <!-- Idea 1 -->
+  <article class="idea-card recommended" id="idea1">
+    <div class="idea-title">1. Capacitor + PWA 双轨方案</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">工程结构与复用策略</span>
+      <span class="pill pill-conf-high">Confidence 90%</span>
+      <span class="pill pill-cx-med">Complexity Medium</span>
+    </div>
+    <div class="idea-desc">
+      使用 <strong>Capacitor</strong> 将现有 Vue 3 + Vant 4 H5 应用包装为 Android 原生应用，同时为 H5 添加 PWA 支持（Service Worker + manifest.json）。保持现有代码库不变，一次投入获得 Android App + PWA + H5 三端覆盖。
+    </div>
+
+    <div class="diagram-container">
+      <svg width="700" height="300" viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg">
+        <!-- Shared Code Base -->
+        <rect x="200" y="220" width="300" height="60" rx="8" fill="#eef1ff" stroke="#4361ee" stroke-width="2"/>
+        <text x="350" y="255" text-anchor="middle" font-size="14" font-weight="600" fill="#4361ee">Vue 3 + Vant 4 + Pinia (现有代码)</text>
+
+        <!-- Capacitor Layer -->
+        <rect x="30" y="100" width="180" height="80" rx="8" fill="#e8f5e9" stroke="#2d6a4f" stroke-width="2"/>
+        <text x="120" y="135" text-anchor="middle" font-size="13" font-weight="600" fill="#2d6a4f">Capacitor</text>
+        <text x="120" y="155" text-anchor="middle" font-size="11" fill="#555">WebView 容器</text>
+        <text x="120" y="170" text-anchor="middle" font-size="11" fill="#555">→ Android APK</text>
+
+        <!-- PWA Layer -->
+        <rect x="260" y="100" width="180" height="80" rx="8" fill="#e8f5e9" stroke="#2d6a4f" stroke-width="2"/>
+        <text x="350" y="135" text-anchor="middle" font-size="13" font-weight="600" fill="#2d6a4f">PWA (新增)</text>
+        <text x="350" y="155" text-anchor="middle" font-size="11" fill="#555">Service Worker</text>
+        <text x="350" y="170" text-anchor="middle" font-size="11" fill="#555">manifest.json + 离线</text>
+
+        <!-- H5 Layer -->
+        <rect x="490" y="100" width="180" height="80" rx="8" fill="#e8f5e9" stroke="#2d6a4f" stroke-width="2"/>
+        <text x="580" y="135" text-anchor="middle" font-size="13" font-weight="600" fill="#2d6a4f">H5 Web</text>
+        <text x="580" y="155" text-anchor="middle" font-size="11" fill="#555">现有移动端 H5</text>
+        <text x="580" y="170" text-anchor="middle" font-size="11" fill="#555">Nginx 部署</text>
+
+        <!-- Arrows -->
+        <line x1="250" y1="220" x2="120" y2="180" stroke="#4361ee" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="350" y1="220" x2="350" y2="180" stroke="#4361ee" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="450" y1="220" x2="580" y2="180" stroke="#4361ee" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Backend -->
+        <rect x="250" y="10" width="200" height="50" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="1"/>
+        <text x="350" y="40" text-anchor="middle" font-size="12" fill="#555">后端 FastAPI (零修改)</text>
+
+        <line x1="120" y1="100" x2="280" y2="60" stroke="#adb5bd" stroke-width="1" stroke-dasharray="4"/>
+        <line x1="350" y1="100" x2="350" y2="60" stroke="#adb5bd" stroke-width="1" stroke-dasharray="4"/>
+        <line x1="580" y1="100" x2="420" y2="60" stroke="#adb5bd" stroke-width="1" stroke-dasharray="4"/>
+
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#4361ee"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">external:</span> Rationale</div>
+      <p>Capacitor 是 Ionic 团队维护的成熟方案，专为"将 Web 应用打包为原生应用"设计。与 Cordova 相比更轻量，原生插件生态丰富。关键优势：现有 Vue 3 + Vant 4 代码<strong>零修改</strong>即可运行在 Android WebView 中。Cookie 鉴权在 WebView 中正常工作，后端无需任何改动。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p>Android 端实际运行在 WebView 中，性能不如真原生应用（但对家庭资产仪表盘类应用影响极小）。需要额外添加 ~10MB 的 Capacitor 运行时。App 内无法使用 Vant 之外的原生 UI 组件（但也不需要）。</p>
+    </div>
+  </article>
+
+  <!-- Idea 2 -->
+  <article class="idea-card recommended" id="idea2">
+    <div class="idea-title">2. PWA 优先渐进路线</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">多平台能力覆盖</span>
+      <span class="pill pill-conf-high">Confidence 85%</span>
+      <span class="pill pill-cx-low">Complexity Low</span>
+    </div>
+    <div class="idea-desc">
+      先为现有 H5 添加 PWA 能力（Service Worker 离线缓存、manifest.json 可安装、推送通知），获得"类原生"体验。后续再根据实际需求决定是否添加 Capacitor 打包 Android。这是最小成本、最高确定性的第一步。
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">reasoned:</span> Rationale</div>
+      <p>用户的核心需求是"手机端更好的体验"，PWA 已经可以满足：可添加到主屏幕、离线可用、推送通知、全屏运行无浏览器 UI。在大多数家庭资产管理场景中，PWA 与原生 app 的体验差距极小。而成本仅为添加 vite-plugin-pwa + 配置 Service Worker 策略，约 1-2 天工作量。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p>iOS 上 PWA 能力受限（推送通知 iOS 16.4+ 才支持，无 NFC/蓝牙等原生 API）。Android 浏览器兼容性极好但部分用户可能不知道"添加到主屏幕"功能。无法上架 Google Play（除非配合 TWA）。</p>
+    </div>
+  </article>
+
+  <!-- Idea 3 -->
+  <article class="idea-card" id="idea3">
+    <div class="idea-title">3. 共享核心 + 平台外壳架构</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">工程结构与复用策略</span>
+      <span class="pill pill-conf-med">Confidence 75%</span>
+      <span class="pill pill-cx-high">Complexity High</span>
+    </div>
+    <div class="idea-desc">
+      将现有共享包（<code>@numina/auth</code>、<code>@numina/math</code>、API 层、composables）保持为平台无关核心，Web 端保持 Vue 3 + Vant 4，Android 端用 uni-app + uni-ui 构建独立 UI。通过 workspace 共享业务逻辑，UI 层各自独立。
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">reasoned:</span> Rationale</div>
+      <p>这是"既保留现有 H5 投资，又获得 uni-app 原生能力"的折中方案。@numina/math（纯函数）和 @numina/auth（已解耦 HTTP 注入）可以直接在 uni-app 中复用。API 层的 axios 调用替换为 uni.request 即可。工作量主要在 UI 重写，但业务逻辑和鉴权完整复用。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p>维护两套 UI 代码（Web + uni-app），每个页面需要实现两次。新功能开发成本增加 ~40%。需要建立平台适配层的抽象（如 <code>uni-or-axios</code> HTTP wrapper），增加架构复杂度。Child app 跨 SPA 导航需要重新设计。</p>
+    </div>
+  </article>
+
+  <!-- Idea 4 -->
+  <article class="idea-card" id="idea4">
+    <div class="idea-title">4. TWA (Trusted Web Activity) 封装</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">多平台能力覆盖</span>
+      <span class="pill pill-conf-med">Confidence 70%</span>
+      <span class="pill pill-cx-low">Complexity Low</span>
+    </div>
+    <div class="idea-desc">
+      如果先做好了 PWA，可以用 TWA 将 PWA 封装为 Android 应用并上架 Google Play。TWA 是 Chrome 提供的机制，将符合 PWA 标准的 Web 应用以全屏方式运行在 Chrome Custom Tab 中，验证 Digital Asset Links 后无浏览器 UI。
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">external:</span> Rationale</div>
+      <p>TWA 是 Google 官方推荐的"Web 应用上架 Play Store"方案。相比 Capacitor 更轻量（无额外运行时），性能更好（直接使用 Chrome 引擎）。Bubblewrap CLI 可一键生成 TWA 项目。前提条件是 PWA 必须通过 Lighthouse 审计。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p>要求设备上安装 Chrome 72+（Android 上覆盖率极高）。需要域名验证（Digital Asset Links）。如果 PWA 不达标，TWA 会回退显示浏览器导航栏。本质仍是 WebView，与 Capacitor 方案效果类似但更受限。</p>
+    </div>
+  </article>
+
+  <!-- Idea 5 -->
+  <article class="idea-card" id="idea5">
+    <div class="idea-title">5. 放弃原生 app，专注 H5 + PWA 优化</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">多平台能力覆盖</span>
+      <span class="pill pill-conf-med">Confidence 65%</span>
+      <span class="pill pill-cx-low">Complexity Low</span>
+    </div>
+    <div class="idea-desc">
+      重新审视"需要 Android 原生 app"的前提假设。对于家庭资产可视化场景，H5 + PWA 可能已经足够好。将精力投入到 H5 体验优化（离线、推送、性能、动画）而非跨平台迁移，避免 3,600+ Vant 组件的重写成本。
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">reasoned:</span> Rationale</div>
+      <p>Numina 的核心场景是家庭资产查看和管理，不涉及相机、蓝牙、NFC 等强原生能力需求。用户"想要 Android app"的真实需求可能是"更好的手机体验"——这恰好是 PWA 的甜区。3,621 处 Vant 引用 + 546 处浏览器 API 的迁移成本极高，投入产出比可能不如直接优化 H5。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p>无法满足"在应用商店下载"的用户心理预期。某些企业场景可能需要原生 app 的管控能力。如果未来需要小程序（微信/支付宝），这个方案无法覆盖。</p>
+    </div>
+  </article>
+
+  <!-- Idea 6 -->
+  <article class="idea-card" id="idea6">
+    <div class="idea-title">6. Child app 先行 uni-app 试点</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">UI 组件库兼容性</span>
+      <span class="pill pill-conf-med">Confidence 60%</span>
+      <span class="pill pill-cx-med">Complexity Medium</span>
+    </div>
+    <div class="idea-desc">
+      先用儿童端（child app）做 uni-app 试点：14 个路由，更少的依赖，更简单的 UI。验证 uni-app + Vue 3 的可行性、Vant → uni-ui 的迁移模式、以及共享包（@numina/auth, @numina/math）在 uni-app 中的复用情况。试点成功后再迁移 main app。
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">direct:</span> Rationale</div>
+      <p>Child app 复杂度远低于 main app：14 路由 vs 55+ 路由，无 ECharts/jspdf/html2canvas 等重型依赖，UI 更简单（clay.css 风格）。是验证 uni-app 迁移路径的理想试验田。试点结果将决定 main app 是否值得全量迁移。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p>即使 child app 试点成功，main app 的迁移成本仍然是大头（3,600+ Vant 引用）。可能陷入"两套 UI 维护"的长期成本。Child app 使用了 WebAuthn passkey（uni-app 无等价 API），仍需特殊处理。</p>
+    </div>
+  </article>
+
+  <!-- Idea 7 -->
+  <article class="idea-card" id="idea7">
+    <div class="idea-title">7. uni-app + uv-ui 完全迁移</div>
+    <div class="idea-meta">
+      <span class="pill pill-axis">UI 组件库兼容性</span>
+      <span class="pill pill-conf-low">Confidence 40%</span>
+      <span class="pill pill-cx-high">Complexity Very High</span>
+    </div>
+    <div class="idea-desc">
+      将两个前端 app 完全迁移到 uni-app，使用 uv-ui（Vant 风格的 uni-app 组件库）替代 Vant 4，pages.json 替代 vue-router，uni.request 替代 axios。获得 Android + iOS + H5 + 小程序全平台覆盖。
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title"><span class="basis-tag">direct:</span> Rationale</div>
+      <p>这是用户最初提议的方案。uv-ui 提供了类似 Vant 的 API 设计，理论上可以降低组件替换成本。uni-app 的 H5 模式理论上可以替代现有 Vite 构建。全平台覆盖（包括微信小程序）是长期价值。</p>
+    </div>
+    <div class="idea-section">
+      <div class="idea-section-title">Downsides</div>
+      <p><strong>成本极高</strong>：3,621 处 Vant 引用需要手动迁移（uv-ui API 不完全兼容），55+ 路由重写为 pages.json 格式，605 处 :deep() 选择器需重新验证，ECharts → ucharts、jspdf → 服务端 PDF、html2canvas → uni.canvasToTempFilePath 均需重写。WebAuthn 无替代方案。估计工作量：2-3 个月全职开发。且 H5 输出与现有 Vite 构建行为不完全一致，可能引入回归。</p>
+    </div>
+  </article>
+</section>
+
+<!-- ==================== 关键问题回答 ==================== -->
+<section>
+  <h2>关键问题回答</h2>
+
+  <div class="grounding-card" style="margin-bottom:1rem">
+    <h4>Q1: Vue 3 + Vant 4 能否无缝切换到 uni-app？</h4>
+    <ul>
+      <li><strong>不能无缝切换。</strong>Vant 4 是纯 Web 组件库，依赖 DOM API，无法在 uni-app 的 App（原生）模式运行。</li>
+      <li>Vue 3 本身（Composition API、&lt;script setup&gt;、Pinia）在 uni-app 中完全支持。</li>
+      <li>uv-ui 提供类 Vant API 但覆盖度不足（约 70% 组件可映射），高级用法（slot、事件、动画）需逐个适配。</li>
+      <li>迁移成本主导因素：3,621 处 Vant 引用、605 处 :deep() 覆盖、55+ 路由重写。</li>
+    </ul>
+  </div>
+
+  <div class="grounding-card" style="margin-bottom:1rem">
+    <h4>Q2: 新增支持后，是多个前端工程还是一个？</h4>
+    <ul>
+      <li><strong>推荐方案：保持当前 pnpm workspace 结构 + 新增一个 uni-app app。</strong></li>
+      <li>如果走 Capacitor 路线：不新增工程，现有 main app 直接打包为 Android。</li>
+      <li>如果走 uni-app 路线：在 <code>frontend/apps/</code> 下新增 <code>native/</code> 作为 uni-app 工程，main 和 child 保持原样作为 H5。</li>
+      <li>共享包（@numina/auth, @numina/math）可直接被 uni-app 工程引用（纯逻辑部分）。</li>
+    </ul>
+  </div>
+
+  <div class="grounding-card" style="margin-bottom:1rem">
+    <h4>Q3: 后端是否需要调整？鉴权方式？</h4>
+    <ul>
+      <li><strong>后端基本零修改。</strong>当前使用 httpOnly Cookie 鉴权，在 Capacitor WebView 和 uni-app H5 模式中都正常工作。</li>
+      <li>uni-app App 模式需要配置 <code>uni.request</code> 的 <code>withCredentials: true</code> 以携带 Cookie。</li>
+      <li>设备指纹（ETag-based）在原生环境中需要适配：WebView 的 Cookie jar 行为与浏览器略有差异。</li>
+      <li>如果需要原生推送通知：后端需对接 uni-app 的 UniPush 或 FCM，新增推送通道。</li>
+      <li>WebAuthn passkey 登录在原生端无替代方案，需要 fallback 到密码 + 2FA。</li>
+    </ul>
+  </div>
+
+  <div class="grounding-card">
+    <h4>Q4: PWA 是否被 uni-app 覆盖？</h4>
+    <ul>
+      <li><strong>uni-app 的 PWA 支持有限</strong>，不是其一等公民能力。H5 模式可输出 Web 应用，但 Service Worker 和 manifest.json 需要手动配置。</li>
+      <li>如果 PWA 是核心需求，建议在现有 Vite 构建上直接添加（vite-plugin-pwa），这比 uni-app 的 PWA 支持更成熟。</li>
+      <li>Capacitor + PWA 组合 > uni-app 的 PWA 能力。前者 Service Worker 完整可控，后者需要处理 uni-app 构建流水线的兼容性问题。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== Rejection Summary ==================== -->
+<section>
+  <h2>Rejection Summary</h2>
+  <table class="rejection-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Idea</th>
+        <th>Reason Rejected</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Codemods 自动化 Vant → uni-ui 转换</td>
+        <td>API 差异过大（事件名、slot 结构、CSS 变量），无法可靠自动化</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Electron 桌面类比方案</td>
+        <td>移动端场景与桌面端差异大，Tauri Mobile 尚未成熟</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>微前端模式（qiankun/single-spa）</td>
+        <td>过度工程化，Numina 不需要多团队并行开发的架构</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Flutter 重写</td>
+        <td>完全不同的技术栈，放弃全部 Vue 投资，成本远超收益</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>NativeScript + Vue</td>
+        <td>社区萎缩，Vue 3 支持不完整，不如 Capacitor 成熟</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>React Native 重写</td>
+        <td>放弃 Vue 投资，学习成本曲线陡峭，不适合当前团队</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>localStorage → uni.storage 自动映射层</td>
+        <td>太细节，不是独立方向；属于具体实现步骤而非策略</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>去掉"两个 app 必须共享"的约束</td>
+        <td>不可行 — main 和 child 的用户群和功能紧密关联</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>uni-app 目标场景不匹配</td>
+        <td>是判断不是可执行 idea，已融入 #7 的 downside 分析</td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td>零预算 PWA only</td>
+        <td>与 Idea #2 (PWA 优先渐进路线) 重复</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td>去掉"必须 uni-app"约束评估所有方案</td>
+        <td>与 Idea #1 (Capacitor) 重复 — 该 idea 本身就是替代方案</td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td>平台适配器模式 (抽象 uni/axios 等)</td>
+        <td>与 Idea #3 (共享核心 + 平台外壳) 重复，已合并</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<footer class="composition-signal">
+  Composed 2026-09-07 by ce-ideate · Focus: <code>uni-app 跨平台迁移可行性</code> · Mode: repo-grounded
+</footer>
+
+</div>
+</body>
+</html>

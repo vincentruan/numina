@@ -24,7 +24,7 @@
 
       <div v-if="gatesPassed" class="sign-action-area">
         <p class="sign-hint">{{ t('manifesto.confirmSign') }}</p>
-        <SignaturePad ref="sigPadRef" :width="sigWidth" :height="120" @draw="onSignatureDraw" />
+        <SignaturePad ref="sigPadRef" :height="120" @draw="onSignatureDraw" />
         <van-button
           type="primary"
           block
@@ -53,7 +53,7 @@ import ManifestoViewer from '@/components/manifesto/ManifestoViewer.vue'
 import SignaturePad from '@/components/manifesto/SignaturePad.vue'
 import { useFamilyStore } from '@/stores/family'
 import * as manifestoApi from '@/api/manifesto'
-import type { Manifesto } from '@/types/manifesto'
+import type { Manifesto, ManifestoSignature } from '@/types/manifesto'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -64,7 +64,6 @@ const signing = ref(false)
 const manifesto = ref<Manifesto | null>(null)
 const sigPadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
 const sigPadEmpty = ref(true)
-const sigWidth = ref(300)
 
 const hasScrolledToBottom = ref(false)
 const hasWaitedLongEnough = ref(false)
@@ -79,18 +78,22 @@ const gatesPassed = computed(() => hasScrolledToBottom.value && hasWaitedLongEno
 
 const templateId = computed(() => manifesto.value?.current_version?.template_id ?? 'modern')
 
-const signatures = computed(() =>
-  familyStore.members.map(m => ({ name: m.display_name, data: null })),
-)
+const signatures = computed(() => {
+  if (!manifesto.value) return []
+  const sigMap = new Map(
+    manifesto.value.signatures.map(s => [s.user_id, s.signature_data ?? null]),
+  )
+  return familyStore.members.map(m => ({
+    name: m.display_name,
+    data: sigMap.has(m.id) ? sigMap.get(m.id) : undefined,
+  }))
+})
 
 const members = computed(() =>
   familyStore.members.map(m => ({ name: m.display_name, role: m.role })),
 )
 
 onMounted(async () => {
-  // Measure available width for signature pad
-  sigWidth.value = Math.min(window.innerWidth - 48, 400)
-
   // Fetch family members for display
   if (familyStore.members.length === 0) {
     try {
@@ -170,10 +173,12 @@ async function onConfirmSign() {
 
 <style scoped>
 .manifesto-sign-page {
-  min-height: 100vh;
+  /* Layout adds padding-bottom for tab bar; fill remaining viewport */
+  height: calc(100vh - 50px - env(safe-area-inset-bottom));
   background: var(--bg-primary, #fff);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .sign-loading {
@@ -185,6 +190,7 @@ async function onConfirmSign() {
 
 .sign-scroll-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
 }
@@ -195,11 +201,14 @@ async function onConfirmSign() {
 }
 
 .sign-action-area {
-  padding: 16px;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;
   border-top: 1px solid var(--card-bg, #f5f5ff);
+  background: var(--bg-primary, #fff);
 }
 
 .sign-hint {

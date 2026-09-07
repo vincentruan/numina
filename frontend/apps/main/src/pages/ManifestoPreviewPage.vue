@@ -77,8 +77,9 @@ const body = computed(() => {
   return state.value.blocks.filter((b: string) => b.trim()).join('\n\n')
 })
 
+// Preview shows all members as unsigned (no one has signed the new version yet)
 const signatures = computed(() =>
-  familyStore.members.map(m => ({ name: m.display_name, data: null })),
+  familyStore.members.map(m => ({ name: m.display_name, data: undefined })),
 )
 
 const members = computed(() =>

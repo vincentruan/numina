@@ -3692,6 +3692,8 @@ Keep the tone warm, like a chat between family members.`,
     template: {
       classic: 'Classic Certificate',
       modern: 'Modern Minimal',
+      classicDesc: 'Formal & ceremonial',
+      modernDesc: 'Clean & contemporary',
     },
     changeType: {
       initial: 'Initial',
@@ -3741,6 +3743,9 @@ Keep the tone warm, like a chat between family members.`,
     signedAt: 'Signed at',
     viewDetail: 'View Detail',
     unreadCount: '{count} unread',
+    ownerRole: 'Owner',
+    memberRole: 'Member',
+    childRole: 'Child',
   },
   bottomSheet: {
     impactLabel: 'Impact Preview',

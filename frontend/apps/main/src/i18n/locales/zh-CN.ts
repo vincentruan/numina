@@ -3735,6 +3735,8 @@ export default {
     template: {
       classic: '经典证书',
       modern: '现代简约',
+      classicDesc: '正式庄重，适合仪式感',
+      modernDesc: '简洁现代，清晰易读',
     },
     changeType: {
       initial: '初始版本',
@@ -3784,6 +3786,9 @@ export default {
     signedAt: '签署于',
     viewDetail: '查看详情',
     unreadCount: '{count} 条未读',
+    ownerRole: '管理员',
+    memberRole: '成员',
+    childRole: '孩子',
   },
   bottomSheet: {
     impactLabel: '影响预览',

@@ -1,9 +1,8 @@
 <template>
-  <div class="signature-pad-container">
+  <div ref="containerRef" class="signature-pad-container">
     <canvas
       ref="canvasRef"
       class="signature-canvas"
-      :style="{ width: width + 'px', height: height + 'px' }"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
@@ -14,17 +13,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
-  width?: number
   height?: number
   penColor?: string
 }>(), {
-  width: 300,
   height: 150,
   penColor: 'var(--color-ink)',
 })
@@ -33,6 +30,7 @@ const emit = defineEmits<{
   draw: []
 }>()
 
+const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
 let drawing = false
@@ -40,12 +38,21 @@ let lastX = 0
 let lastY = 0
 let lastTime = 0
 let hasDrawn = false
+let resolvedWidth = 300
+
+function measureWidth(): number {
+  if (containerRef.value) {
+    return containerRef.value.clientWidth
+  }
+  return 300
+}
 
 function initCanvas() {
   const canvas = canvasRef.value
   if (!canvas) return
   const dpr = window.devicePixelRatio || 1
-  canvas.width = props.width * dpr
+  resolvedWidth = measureWidth()
+  canvas.width = resolvedWidth * dpr
   canvas.height = props.height * dpr
   ctx = canvas.getContext('2d')
   if (!ctx) return
@@ -120,7 +127,7 @@ function onPointerUp(e: PointerEvent) {
 function clear() {
   const canvas = canvasRef.value
   if (!canvas || !ctx) return
-  ctx.clearRect(0, 0, props.width, props.height)
+  ctx.clearRect(0, 0, resolvedWidth, props.height)
   hasDrawn = false
 }
 
@@ -134,7 +141,8 @@ function toDataURL(): string {
 
 defineExpose({ clear, isEmpty, toDataURL })
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick()
   initCanvas()
 })
 
@@ -145,12 +153,15 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .signature-pad-container {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
 }
 
 .signature-canvas {
+  width: 100%;
+  height: auto;
   border: 1px solid var(--color-border, #dcdfe6);
   border-radius: 8px;
   background: var(--card-bg, #fff);
