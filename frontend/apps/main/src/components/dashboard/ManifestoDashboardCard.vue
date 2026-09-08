@@ -9,7 +9,7 @@
               <span class="manifesto-title__text">{{ t('manifesto.title') }}</span>
             </span>
             <span class="manifesto-summary">
-              {{ summary?.signed_count ?? 0 }}/{{ summary?.total_members ?? 0 }} {{ t('manifesto.signed') }}
+              {{ signedCount }}/{{ totalCount }} {{ t('manifesto.signed') }}
             </span>
           </div>
         </template>
@@ -37,6 +37,10 @@
               <van-icon v-else name="clock-o" color="var(--van-text-color-3, #c8c9cc)" />
             </template>
           </van-cell>
+          <div v-if="signingDeadline" class="manifesto-deadline">
+            <van-icon name="clock-o" size="14" color="var(--van-text-color-3, #c8c9cc)" />
+            <span>{{ t('manifesto.signDeadline') }} {{ formatDateTime(signingDeadline, locale) }}</span>
+          </div>
           <div class="manifesto-actions">
             <van-button plain type="primary" size="small" @click="goDetail">
               {{ t('manifesto.viewDetail') }}
@@ -83,13 +87,16 @@ const signerRows = computed(() => {
       signedAt: manifesto.value!.signatures.find((s: ManifestoSignature) => s.user_id === m.id)?.signed_at ?? null,
     }))
     .sort((a, b) => {
-      // Adults first (sorted by signed status), then children
       if (a.role === b.role) return a.signed === b.signed ? 0 : a.signed ? -1 : 1
       if (a.role === 'child') return 1
       if (b.role === 'child') return -1
       return 0
     })
 })
+
+const totalCount = computed(() => familyStore.members.length || (summary.value?.total_members ?? 0))
+const signedCount = computed(() => signerRows.value.filter(r => r.signed).length)
+const signingDeadline = computed(() => manifesto.value?.signing_deadline ?? null)
 
 function goDetail() {
   router.push('/manifesto/sign')
@@ -189,6 +196,32 @@ async function onExpandChange(names: string[]) {
 
 /* Compact cell spacing inside manifesto card */
 .manifesto-card :deep(.van-cell) {
-  padding: 10px 16px;
+  padding: 6px 16px;
+  min-height: auto;
+  line-height: 1.4;
+}
+
+/* Remove separator lines between member rows */
+.manifesto-card :deep(.van-cell::after) {
+  display: none;
+}
+
+.manifesto-card :deep(.van-cell__label) {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.manifesto-card :deep(.van-cell__value) {
+  font-size: 12px;
+}
+
+.manifesto-deadline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 16px 8px;
+  font-size: 12px;
+  color: var(--van-text-color-3, #c8c9cc);
 }
 </style>
