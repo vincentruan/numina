@@ -15,7 +15,7 @@
       >
         <div class="template-preview">
           <!-- Classic: certificate-style preview -->
-          <template v-if="tmpl.nameKey === 'manifesto.template.classic'">
+          <template v-if="tmpl.type === 'classic'">
             <div class="preview-classic">
               <div class="preview-classic__double-border">
                 <div class="preview-classic__emblem">⚜</div>
@@ -42,7 +42,7 @@
           </template>
         </div>
         <div class="template-name">{{ t(tmpl.nameKey) }}</div>
-        <div class="template-desc">{{ tmpl.nameKey === 'manifesto.template.classic' ? t('manifesto.template.classicDesc') : t('manifesto.template.modernDesc') }}</div>
+        <div class="template-desc">{{ tmpl.type === 'classic' ? t('manifesto.template.classicDesc') : t('manifesto.template.modernDesc') }}</div>
       </div>
     </div>
   </div>

@@ -67,5 +67,6 @@ export interface TemplateDefinition {
   id: string
   nameKey: string
   lang: 'zh' | 'en'
+  type: 'classic' | 'modern'
   component: Component
 }

@@ -53,7 +53,7 @@ import ManifestoViewer from '@/components/manifesto/ManifestoViewer.vue'
 import SignaturePad from '@/components/manifesto/SignaturePad.vue'
 import { useFamilyStore } from '@/stores/family'
 import * as manifestoApi from '@/api/manifesto'
-import type { Manifesto, ManifestoSignature } from '@/types/manifesto'
+import type { Manifesto } from '@/types/manifesto'
 
 const { t } = useI18n()
 const router = useRouter()

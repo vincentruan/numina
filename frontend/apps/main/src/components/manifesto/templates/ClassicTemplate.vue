@@ -32,7 +32,7 @@
       <div class="signature-grid">
         <div v-for="(member, idx) in members" :key="idx" class="signature-cell">
           <div class="signature-name">{{ member.name }}</div>
-          <div class="signature-role">{{ member.role === 'owner' ? t('manifesto.ownerRole') : member.role === 'member' ? t('manifesto.memberRole') : t('manifesto.childRole') }}</div>
+          <div class="signature-role">{{ getRoleLabel(member.role, t) }}</div>
           <div class="signature-content">
             <img
               v-if="signatures[idx]?.data"
@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getRoleLabel } from './templateRegistry'
 
 const { t } = useI18n()
 

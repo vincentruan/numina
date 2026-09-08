@@ -141,12 +141,27 @@ function toDataURL(): string {
 
 defineExpose({ clear, isEmpty, toDataURL })
 
+let resizeObserver: ResizeObserver | null = null
+
+function onResize() {
+  const newWidth = measureWidth()
+  if (newWidth !== resolvedWidth) {
+    initCanvas()
+  }
+}
+
 onMounted(async () => {
   await nextTick()
   initCanvas()
+  if (containerRef.value) {
+    resizeObserver = new ResizeObserver(onResize)
+    resizeObserver.observe(containerRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   ctx = null
 })
 </script>

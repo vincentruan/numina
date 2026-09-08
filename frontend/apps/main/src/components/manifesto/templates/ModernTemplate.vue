@@ -20,7 +20,7 @@
     <div class="modern-signatures">
       <div v-for="(member, idx) in members" :key="idx" class="signature-line">
         <div class="signature-label">{{ member.name }}</div>
-        <div class="signature-role">{{ member.role === 'owner' ? t('manifesto.ownerRole') : member.role === 'member' ? t('manifesto.memberRole') : t('manifesto.childRole') }}</div>
+        <div class="signature-role">{{ getRoleLabel(member.role, t) }}</div>
         <div class="signature-underline">
           <img
             v-if="signatures[idx]?.data"
@@ -28,7 +28,8 @@
             :alt="signatures[idx].name"
             class="signature-image"
           />
-          <span v-else-if="signatures[idx]?.data === null" class="tap-consented">✓ {{ t('manifesto.tapConsented') }}</span>
+          <span v-else-if="signatures[idx]?.data == null" class="tap-consented">✓ {{ t('manifesto.tapConsented') }}</span>
+          <span v-else class="signature-pending">{{ t('manifesto.pending') }}</span>
         </div>
       </div>
     </div>
@@ -38,6 +39,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getRoleLabel } from './templateRegistry'
 
 const { t } = useI18n()
 
@@ -189,5 +191,10 @@ const bodyParagraphs = computed(() => {
   color: var(--color-success, #07c160);
   font-size: 20px;
   font-weight: bold;
+}
+
+.signature-pending {
+  color: var(--text-secondary, #616161);
+  font-size: 13px;
 }
 </style>
