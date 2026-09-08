@@ -9,14 +9,24 @@ export const useLiabilityStore = defineStore('liability', () => {
   const currentLiability = ref<Liability | null>(null)
   const loading = ref(false)
 
+  // Dedup: module-level promise so concurrent callers share one in-flight request
+  let _fetchPromise: Promise<void> | null = null
+
   async function fetchLiabilities(params?: { is_active?: boolean }) {
-    loading.value = true
-    try {
-      const res = await liabilityApi.getLiabilities(params)
-      liabilities.value = res.data
-    } finally {
-      loading.value = false
+    if (_fetchPromise !== null) {
+      return _fetchPromise
     }
+    loading.value = true
+    _fetchPromise = (async () => {
+      try {
+        const res = await liabilityApi.getLiabilities(params)
+        liabilities.value = res.data
+      } finally {
+        loading.value = false
+        _fetchPromise = null
+      }
+    })()
+    return _fetchPromise
   }
 
   async function fetchLiability(id: string) {

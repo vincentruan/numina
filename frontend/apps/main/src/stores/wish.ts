@@ -8,14 +8,24 @@ export const useWishStore = defineStore('wish', () => {
   const currentWish = ref<Wish | null>(null)
   const loading = ref(false)
 
+  // Dedup: module-level promise so concurrent callers share one in-flight request
+  let _fetchPromise: Promise<void> | null = null
+
   async function fetchWishes(status?: string) {
-    loading.value = true
-    try {
-      const res = await wishApi.getWishes(status)
-      wishes.value = res.data
-    } finally {
-      loading.value = false
+    if (_fetchPromise !== null) {
+      return _fetchPromise
     }
+    loading.value = true
+    _fetchPromise = (async () => {
+      try {
+        const res = await wishApi.getWishes(status)
+        wishes.value = res.data
+      } finally {
+        loading.value = false
+        _fetchPromise = null
+      }
+    })()
+    return _fetchPromise
   }
 
   async function fetchWish(id: string) {

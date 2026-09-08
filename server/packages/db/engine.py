@@ -55,13 +55,15 @@ class _PostgreSQLBackend(_DatabaseBackend):
         return {}
 
     def get_pool_config(self) -> dict:
-        # Pool size configurable per service via DB_POOL_SIZE / DB_MAX_OVERFLOW.
-        # Production compose defaults: backend (15+5), agent (10+5), scheduler-worker (5+2).
+        # Pool size configurable per service via env vars.
+        # Defaults are sized for local dev (single user, 9+ concurrent dashboard
+        # requests on page load).  Production compose overrides these per service:
+        #   backend (15+5), agent (10+5), scheduler-worker (5+2).
         # Self-hosted PG max_connections=200, total budget ~42 connections.
         return {
-            "pool_size": int(os.environ.get("DB_POOL_SIZE", "3")),
-            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "2")),
-            "pool_timeout": 10,
+            "pool_size": int(os.environ.get("DB_POOL_SIZE", "10")),
+            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "5")),
+            "pool_timeout": float(os.environ.get("DB_POOL_TIMEOUT", "30")),
             "pool_recycle": 300,
             "pool_pre_ping": True,
             "pool_reset_on_return": "rollback",
