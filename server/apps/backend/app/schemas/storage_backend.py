@@ -146,6 +146,7 @@ class StorageBackendResponse(SnowflakeBase):
     backend_type: str
     display_name: str | None
     is_active: bool
+    last_synced_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -160,3 +161,4 @@ class StorageBackendStatusResponse(BaseModel):
     backend_type: str | None = None
     display_name: str | None = None
     is_active: bool = False
+    last_synced_at: datetime | None = None

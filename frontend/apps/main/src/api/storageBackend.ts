@@ -20,6 +20,7 @@ export interface StorageBackendResponse {
   backend_type: 'github' | 'webdav'
   display_name: string | null
   is_active: boolean
+  last_synced_at: string | null
   created_at: string
   updated_at: string
 }

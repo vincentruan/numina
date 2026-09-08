@@ -43,6 +43,10 @@
           :title="t('storageBackend.configured')"
           :value="existingBackend.is_active ? t('storageBackend.enabled') : t('storageBackend.disabled')"
         />
+        <van-cell
+          :title="t('storageBackend.lastSynced')"
+          :value="existingBackend.last_synced_at ? formatSyncTime(existingBackend.last_synced_at) : t('storageBackend.neverSynced')"
+        />
         <div class="actions">
           <van-button size="small" type="primary" plain @click="editing = true">
             {{ t('storageBackend.update') }}
@@ -165,7 +169,7 @@ import {
 
 defineOptions({ name: 'FamilyStorageBackend' })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -199,6 +203,16 @@ const typeColumns = computed(() => [
 function onTypeConfirm({ selectedOptions }: { selectedOptions: { value: string }[] }) {
   form.backend_type = selectedOptions[0]?.value as 'github' | 'webdav'
   showTypePicker.value = false
+}
+
+function formatSyncTime(isoStr: string): string {
+  return new Date(isoStr).toLocaleString(locale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 async function loadBackend() {

@@ -41,7 +41,7 @@ class TestStorageBackendEndpoints:
         token = _register_owner(client)
         resp = client.get("/api/v1/family/storage/status", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
-        assert resp.json()["data"] == {"configured": False, "backend_type": None, "display_name": None, "is_active": False}
+        assert resp.json()["data"] == {"configured": False, "backend_type": None, "display_name": None, "is_active": False, "last_synced_at": None}
 
     def test_get_backend_not_configured_returns_null(self, client, db):
         token = _register_owner(client)

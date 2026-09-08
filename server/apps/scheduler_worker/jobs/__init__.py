@@ -98,6 +98,7 @@ async def file_sync_job() -> None:
             }
 
             upload_dir = Path(settings.UPLOAD_DIR).resolve()
+            any_synced = False
 
             for loc in pending:
                 cached_file = cached_files.get(loc.file_id)
@@ -128,6 +129,7 @@ async def file_sync_job() -> None:
                     loc.remote_path = remote_path
                     loc.remote_url = backend.get_url(remote_path)
                     loc.synced_at = datetime.now(UTC)
+                    any_synced = True
                     db.commit()
                 except TimeoutError:
                     loc.retry_count += 1
@@ -157,6 +159,10 @@ async def file_sync_job() -> None:
                         loc.sync_status = "failed"
                     db.commit()
                     logger.exception(f"文件同步异常: {cached_file.id}: {e}")
+
+            if any_synced:
+                backend_row.last_synced_at = datetime.now(UTC)
+                db.commit()
 
             lo, hi = backend.write_delay_range
             await asyncio.sleep(random.uniform(lo, hi))

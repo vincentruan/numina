@@ -72,6 +72,7 @@ def get_status(
         backend_type=backend.backend_type,
         display_name=backend.display_name,
         is_active=backend.is_active,
+        last_synced_at=backend.last_synced_at,
     )
 
 
