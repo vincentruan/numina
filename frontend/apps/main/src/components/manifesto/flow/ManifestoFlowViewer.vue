@@ -13,6 +13,7 @@
       :fit-view-on-init="false"
       :min-zoom="1"
       :max-zoom="1"
+      @init="onFlowInit"
       @nodes-initialized="onNodesInitialized"
     >
       <template #node-flow-created="nodeProps">
@@ -24,11 +25,14 @@
       <template #node-flow-rejected="nodeProps">
         <FlowRejectedNode v-bind="nodeProps" />
       </template>
-      <template #node-flow-modifying="nodeProps">
-        <FlowModifyingNode v-bind="nodeProps" />
+      <template #node-flow-version-update="nodeProps">
+        <FlowVersionUpdateNode v-bind="nodeProps" />
       </template>
       <template #node-flow-effective="nodeProps">
         <FlowEffectiveNode v-bind="nodeProps" />
+      </template>
+      <template #node-flow-pending="nodeProps">
+        <FlowPendingNode v-bind="nodeProps" />
       </template>
       <template #edge-animated="edgeProps">
         <AnimatedFlowEdge v-bind="edgeProps" />
@@ -41,15 +45,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import type { Node, Edge } from '@vue-flow/core'
 import FlowCreatedNode from './FlowCreatedNode.vue'
 import FlowSigningNode from './FlowSigningNode.vue'
 import FlowRejectedNode from './FlowRejectedNode.vue'
-import FlowModifyingNode from './FlowModifyingNode.vue'
+import FlowVersionUpdateNode from './FlowVersionUpdateNode.vue'
 import FlowEffectiveNode from './FlowEffectiveNode.vue'
+import FlowPendingNode from './FlowPendingNode.vue'
 import AnimatedFlowEdge from './AnimatedFlowEdge.vue'
 import CompletedFlowEdge from './CompletedFlowEdge.vue'
 import type {
@@ -65,109 +70,128 @@ const props = defineProps<{
   memberStates: FlowMemberState[]
   deadlineInfo: FlowDeadlineInfo
   signingProgress: FlowSigningProgress
+  creatorName?: string
+  changeType?: string
+  hasRejection?: boolean
+  nextVersionNumber?: number
 }>()
 
-const NODE_SPACING = 180
+const NODE_GAP = 60
 const CENTER_X = 140
 
-const { fitView } = useVueFlow()
+const { fitView, getNodes, updateNode } = useVueFlow()
+
+/** Estimated heights per node type (used before DOM is measured). */
+const NODE_HEIGHT_ESTIMATE: Record<string, number> = {
+  'flow-created': 70,
+  'flow-signing': 200,
+  'flow-rejected': 100,
+  'flow-version-update': 80,
+  'flow-effective': 70,
+  'flow-pending': 70,
+}
 
 /** Build the list of flow nodes based on current state. */
 const nodes = computed<Node[]>(() => {
   const result: Node[] = []
-  let index = 0
+  let y = 0
+  const state = props.flowState
+  const isDraft = state === 'draft'
+  const isSigning = state === 'signing' || state === 'expired'
+  const isRejected = state === 'rejected'
+  const isEffective = state === 'effective'
+
+  function addNode(id: string, type: string, data: Record<string, unknown>) {
+    result.push({
+      id,
+      type,
+      position: { x: CENTER_X, y },
+      data,
+    } as Node)
+    y += (NODE_HEIGHT_ESTIMATE[type] ?? 100) + NODE_GAP
+  }
 
   // Node 1: Created (always present)
-  result.push({
-    id: 'created',
-    type: 'flow-created',
-    position: { x: CENTER_X, y: index * NODE_SPACING },
-    data: { dimmed: props.flowState !== 'draft' ? false : false },
+  addNode('created', 'flow-created', {
+    changeType: props.changeType ?? 'initial',
+    versionNumber: props.currentRound,
+    creatorName: props.creatorName ?? '',
+    createdAt: '',
+    dimmed: false,
   })
-  index++
 
-  if (props.flowState === 'draft') {
+  if (isDraft) {
     return result
   }
 
-  // Node 2: Signing (current or historical)
-  const isSigningActive = props.flowState === 'signing' || props.flowState === 'expired'
-  result.push({
-    id: 'signing',
-    type: 'flow-signing',
-    position: { x: CENTER_X, y: index * NODE_SPACING },
-    data: {
+  // Node 2: Signing (current round)
+  addNode('signing', 'flow-signing', {
+    memberStates: props.memberStates,
+    progress: props.signingProgress,
+    round: props.currentRound,
+    deadline: props.deadlineInfo.remaining,
+    deadlineExpired: props.deadlineInfo.expired,
+    isActive: isSigning,
+    dimmed: false,
+  })
+
+  if (isRejected) {
+    addNode('rejected', 'flow-rejected', {
+      memberStates: props.memberStates,
+      dimmed: false,
+    })
+
+    addNode('versionUpdate', 'flow-version-update', {
+      updaterName: props.creatorName ?? '',
+      currentVersion: props.currentRound,
+      nextVersion: props.nextVersionNumber ?? props.currentRound + 1,
+      dimmed: false,
+    })
+
+    addNode('signing-next', 'flow-signing', {
       memberStates: props.memberStates,
       progress: props.signingProgress,
-      round: props.currentRound,
+      round: props.nextVersionNumber ?? props.currentRound + 1,
       deadline: props.deadlineInfo.remaining,
       deadlineExpired: props.deadlineInfo.expired,
-      isActive: isSigningActive,
-      dimmed: false,
-    },
-  })
-  index++
-
-  if (props.flowState === 'rejected') {
-    // Node 3: Rejected
-    result.push({
-      id: 'rejected',
-      type: 'flow-rejected',
-      position: { x: CENTER_X, y: index * NODE_SPACING },
-      data: {
-        memberStates: props.memberStates,
-        dimmed: false,
-      },
+      isActive: false,
+      dimmed: true,
     })
-    index++
-
-    // Node 4: Modifying
-    result.push({
-      id: 'modifying',
-      type: 'flow-modifying',
-      position: { x: CENTER_X, y: index * NODE_SPACING },
-      data: { dimmed: true },
-    })
-    index++
   }
 
-  if (props.flowState === 'effective') {
-    // Effective node
-    result.push({
-      id: 'effective',
-      type: 'flow-effective',
-      position: { x: CENTER_X, y: index * NODE_SPACING },
-      data: { dimmed: false },
-    })
-  } else if (props.flowState !== 'rejected') {
-    // Future effective node (dimmed)
-    result.push({
-      id: 'effective',
-      type: 'flow-effective',
-      position: { x: CENTER_X, y: index * NODE_SPACING },
-      data: { dimmed: true },
+  if (isEffective) {
+    addNode('effective', 'flow-effective', { dimmed: false })
+  } else if (!isRejected && !isDraft) {
+    addNode('pending', 'flow-pending', {
+      deadline: props.deadlineInfo.remaining,
+      deadlineExpired: props.deadlineInfo.expired,
+      dimmed: true,
     })
   }
 
   return result
 })
 
-/** Build edges connecting adjacent nodes. */
+/** Build edges connecting nodes. */
 const edges = computed<Edge[]>(() => {
   const result: Edge[] = []
   const nodeList = nodes.value
 
+  // Linear edges between adjacent nodes
   for (let i = 0; i < nodeList.length - 1; i++) {
     const source = nodeList[i]
     const target = nodeList[i + 1]
     const isCompleted = isNodeCompleted(source.id)
     const isError = target.id === 'rejected'
 
+    // For the loop-back edge (versionUpdate → signing-next), use animated
+    const isLoopBack = source.id === 'versionUpdate' && target.id === 'signing-next'
+
     result.push({
       id: `e-${source.id}-${target.id}`,
       source: source.id,
       target: target.id,
-      type: isCompleted || isError ? 'animated' : 'completed',
+      type: (isCompleted || isError || isLoopBack) ? 'animated' : 'completed',
       data: { isError },
     })
   }
@@ -177,21 +201,19 @@ const edges = computed<Edge[]>(() => {
 
 function isNodeCompleted(nodeId: string): boolean {
   const state = props.flowState
-  if (nodeId === 'created') {
-    return state !== 'draft'
-  }
-  if (nodeId === 'signing') {
-    return state === 'effective' || state === 'rejected'
-  }
-  if (nodeId === 'rejected') {
-    return false // terminal for this round
-  }
+  if (nodeId === 'created') return state !== 'draft'
+  if (nodeId === 'signing') return state === 'effective' || state === 'rejected'
+  if (nodeId === 'rejected') return false
+  if (nodeId === 'versionUpdate') return true
+  if (nodeId === 'signing-next') return false
+  if (nodeId === 'pending') return false
   return false
 }
 
-const containerHeight = computed(() => `${nodes.value.length * NODE_SPACING}px`)
+const containerHeightPx = ref(0)
+const containerHeight = computed(() => `${containerHeightPx.value || nodes.value.length * (NODE_GAP + 100)}px`)
 
-let currentNodeId = computed(() => {
+const currentNodeId = computed(() => {
   switch (props.flowState) {
     case 'draft': return 'created'
     case 'signing':
@@ -202,7 +224,45 @@ let currentNodeId = computed(() => {
   }
 })
 
+function onFlowInit() {
+  // Inject arrow marker definitions into Vue Flow's SVG <defs>
+  const svg = document.querySelector('.vue-flow > svg')
+  if (!svg) return
+  let defs = svg.querySelector('defs')
+  if (!defs) {
+    defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
+    svg.insertBefore(defs, svg.firstChild)
+  }
+  defs.innerHTML = `
+    <marker id="arrow-primary" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--van-primary-color, #646cff)" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-secondary, #c0c0c0)" />
+    </marker>
+  `
+}
+
 function onNodesInitialized() {
+  // Measure actual DOM heights and reposition nodes with consistent gaps
+  const domNodes = getNodes.value
+  const measured: { id: string; y: number }[] = []
+  let nextY = 0
+
+  for (const node of domNodes) {
+    const el = document.querySelector(`[data-id="${node.id}"]`) as HTMLElement | null
+    const height = el?.offsetHeight ?? (NODE_HEIGHT_ESTIMATE[node.type as string] ?? 100)
+    measured.push({ id: node.id, y: nextY })
+    nextY += height + NODE_GAP
+  }
+
+  if (measured.length > 0) {
+    for (const m of measured) {
+      updateNode(m.id, { position: { x: CENTER_X, y: m.y } })
+    }
+    containerHeightPx.value = nextY
+  }
+
   const targetNode = currentNodeId.value
   fitView({
     nodes: [targetNode],

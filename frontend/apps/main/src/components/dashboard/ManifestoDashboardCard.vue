@@ -1,6 +1,9 @@
 <template>
-  <van-cell-group v-if="visible" inset class="chart-section manifesto-card">
-    <van-collapse v-model="expanded" @change="onExpandChange">
+  <div v-if="visible" class="manifesto-card">
+    <van-collapse
+      v-model="expanded"
+      @change="onExpandChange"
+    >
       <van-collapse-item name="manifesto">
         <template #title>
           <div class="manifesto-header">
@@ -22,6 +25,7 @@
             :title="sig.displayName"
             :value="sig.signed ? t('manifesto.signed') : t('manifesto.pending')"
             :label="sig.signedAt ? `${t('manifesto.signedAt')} ${formatDateTime(sig.signedAt, locale)}` : undefined"
+            class="signer-cell"
           >
             <template #icon>
               <van-icon
@@ -49,7 +53,7 @@
         </template>
       </van-collapse-item>
     </van-collapse>
-  </van-cell-group>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -139,8 +143,11 @@ async function onExpandChange(names: string[]) {
 
 <style scoped>
 .manifesto-card {
-  display: block;
-  margin: 8px 0;
+  margin: 12px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 .manifesto-card :deep(.van-collapse-item__title) {
   justify-content: flex-start;
@@ -192,6 +199,18 @@ async function onExpandChange(names: string[]) {
   display: flex;
   justify-content: flex-end;
   padding: 8px 16px 4px;
+}
+
+.signer-cell :deep(.van-cell__title) {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.signer-cell :deep(.van-cell__label) {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--van-text-color-3, #c8c9cc);
 }
 
 /* Compact cell spacing inside manifesto card */

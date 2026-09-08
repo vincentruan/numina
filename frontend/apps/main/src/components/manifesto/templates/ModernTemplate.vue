@@ -28,7 +28,7 @@
             :alt="signatures[idx].name"
             class="signature-image"
           />
-          <span v-else-if="signatures[idx]?.data == null" class="tap-consented">✓ {{ t('manifesto.tapConsented') }}</span>
+          <span v-else-if="signatures[idx]?.data === null" class="tap-consented">✓ {{ t('manifesto.tapConsented') }}</span>
           <span v-else class="signature-pending">{{ t('manifesto.pending') }}</span>
         </div>
       </div>

@@ -28,6 +28,7 @@ const edgeStyle = computed(() => {
     strokeWidth: 2,
     strokeDasharray: '8 4',
     animation: 'flow-dash 1.5s linear infinite',
+    markerEnd: 'url(#arrow-primary)',
   }
 })
 </script>

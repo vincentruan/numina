@@ -11,19 +11,8 @@
     </div>
 
     <template v-else-if="manifesto">
-      <!-- Flow visualization -->
-      <div class="sign-flow-area">
-        <ManifestoFlowViewer
-          :flow-state="flowState"
-          :current-round="currentRound"
-          :member-states="memberStates"
-          :deadline-info="deadlineInfo"
-          :signing-progress="signingProgress"
-        />
-      </div>
-
-      <!-- Manifesto content -->
-      <div ref="scrollContainer" class="sign-scroll-area">
+      <!-- 1. Manifesto content (full, scrollable) -->
+      <div class="sign-content-area">
         <ManifestoViewer
           :template-id="templateId"
           :title="manifesto.current_version!.title"
@@ -31,20 +20,19 @@
           :signatures="signatures"
           :members="members"
         />
-        <div ref="scrollSentinel" class="sign-sentinel" />
       </div>
 
-      <!-- Conditional action area -->
+      <!-- 2. Action area (signature pad + buttons) -->
       <div v-if="showActionArea" class="sign-action-area">
         <!-- Adult: pending sign → SignaturePad + buttons -->
-        <template v-if="currentUserState?.status === 'pending_sign' && gatesPassed">
+        <template v-if="currentUserState?.status === 'pending_sign'">
           <p class="sign-hint">{{ t('manifesto.confirmSign') }}</p>
           <SignaturePad ref="sigPadRef" :height="120" @draw="onSignatureDraw" />
           <van-button
             type="primary"
             block
             :loading="signing"
-            :disabled="sigPadEmpty"
+            :disabled="sigPadEmpty || !gatesPassed"
             @click="onConfirmSign"
           >
             {{ t('manifesto.action.confirmSign') }}
@@ -55,14 +43,19 @@
             type="danger"
             block
             :loading="rejecting"
+            :disabled="!gatesPassed"
             @click="onReject"
           >
             {{ t('manifesto.reject.btn') }}
           </van-button>
+          <div v-if="!gatesPassed" class="sign-gate-hint">
+            <van-icon name="info-o" />
+            <span>{{ t('manifesto.waitTimer') }}</span>
+          </div>
         </template>
 
         <!-- Child: pending confirm → confirm button only -->
-        <template v-else-if="currentUserState?.status === 'pending_confirm' && gatesPassed">
+        <template v-else-if="currentUserState?.status === 'pending_confirm'">
           <p class="sign-hint">{{ t('manifesto.action.confirmConsent') }}</p>
           <van-button
             type="primary"
@@ -73,12 +66,6 @@
             {{ t('manifesto.action.confirmConsent') }}
           </van-button>
         </template>
-
-        <!-- Gate not passed yet -->
-        <div v-else-if="!gatesPassed && (currentUserState?.status === 'pending_sign' || currentUserState?.status === 'pending_confirm')" class="sign-gate-hint">
-          <van-icon name="info-o" />
-          <span>{{ t('manifesto.waitTimer') }}</span>
-        </div>
 
         <!-- Already signed -->
         <div v-else-if="currentUserState?.status === 'signed'" class="sign-status-badge">
@@ -103,15 +90,28 @@
           <van-icon name="clock-o" color="var(--text-secondary, #616161)" />
           <span>{{ t('manifesto.flow.deadlineExpired') }}</span>
         </div>
+      </div>
 
-        <!-- Effective / Rejected / Draft: no action -->
+      <!-- 3. Flow chart (bottom, fixed height) -->
+      <div class="sign-flow-area">
+        <ManifestoFlowViewer
+          :flow-state="flowState"
+          :current-round="currentRound"
+          :member-states="memberStates"
+          :deadline-info="deadlineInfo"
+          :signing-progress="signingProgress"
+          :creator-name="creatorName"
+          :change-type="changeType"
+          :has-rejection="hasRejection"
+          :next-version-number="nextVersionNumber"
+        />
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
@@ -136,16 +136,8 @@ const manifesto = ref<Manifesto | null>(null)
 const sigPadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
 const sigPadEmpty = ref(true)
 
-const hasScrolledToBottom = ref(false)
-const hasWaitedLongEnough = ref(false)
-
-const scrollContainer = ref<HTMLElement | null>(null)
-const scrollSentinel = ref<HTMLElement | null>(null)
-let observer: IntersectionObserver | null = null
+const gatesPassed = ref(false)
 let timer: ReturnType<typeof setTimeout> | null = null
-let safetyTimer: ReturnType<typeof setTimeout> | null = null
-
-const gatesPassed = computed(() => hasScrolledToBottom.value && hasWaitedLongEnough.value)
 
 const templateId = computed(() => manifesto.value?.current_version?.template_id ?? 'modern')
 
@@ -160,7 +152,12 @@ const {
   currentUserState,
   canSign,
   canReject,
+  creatorName,
+  hasRejection,
+  nextVersionNumber,
 } = useManifestoFlow(manifesto, computed(() => familyStore.members), currentUserId)
+
+const changeType = computed(() => manifesto.value?.current_version?.change_type ?? 'initial')
 
 const showActionArea = computed(() => {
   const state = flowState.value
@@ -205,43 +202,20 @@ onMounted(async () => {
     loading.value = false
   }
 
-  await nextTick()
-
-  // Only set up scroll/timer gates if user needs to sign
+  // Simple timer gate: enable buttons after 3 seconds
   if (canSign.value && currentUserState.value?.status === 'pending_sign') {
     timer = setTimeout(() => {
-      hasWaitedLongEnough.value = true
+      gatesPassed.value = true
     }, 3000)
-
-    safetyTimer = setTimeout(() => {
-      hasScrolledToBottom.value = true
-    }, 5000)
-
-    if (scrollSentinel.value) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              hasScrolledToBottom.value = true
-              observer?.disconnect()
-            }
-          }
-        },
-        { root: scrollContainer.value, threshold: 0.1 },
-      )
-      observer.observe(scrollSentinel.value)
-    }
   } else {
-    // No gate needed — user already signed or doesn't need to act
-    hasScrolledToBottom.value = true
-    hasWaitedLongEnough.value = true
+    gatesPassed.value = true
   }
 })
 
+import { onBeforeUnmount } from 'vue'
+
 onBeforeUnmount(() => {
-  observer?.disconnect()
   if (timer) clearTimeout(timer)
-  if (safetyTimer) clearTimeout(safetyTimer)
 })
 
 function onSignatureDraw() {
@@ -287,7 +261,6 @@ async function onReject() {
     showSuccessToast(t('manifesto.reject.success'))
     await refreshManifesto()
   } catch {
-    // User cancelled dialog or request failed
     if (rejecting.value) {
       showFailToast(t('manifesto.reject.failed'))
     }
@@ -308,11 +281,9 @@ async function refreshManifesto() {
 
 <style scoped>
 .manifesto-sign-page {
-  height: calc(100vh - 50px - env(safe-area-inset-bottom));
+  min-height: 100vh;
   background: var(--bg-primary, #fff);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .sign-loading {
@@ -322,31 +293,17 @@ async function refreshManifesto() {
   padding: 40px;
 }
 
-.sign-flow-area {
-  flex-shrink: 0;
-  padding: 12px 16px 0;
-}
-
-.sign-scroll-area {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+.sign-content-area {
   padding: 16px;
 }
 
-.sign-sentinel {
-  height: 1px;
-  width: 100%;
-}
-
 .sign-action-area {
-  flex-shrink: 0;
   padding: 12px 16px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;
   border-top: 1px solid var(--card-bg, #f5f5ff);
+  border-bottom: 1px solid var(--card-bg, #f5f5ff);
   background: var(--bg-primary, #fff);
 }
 
@@ -362,9 +319,11 @@ async function refreshManifesto() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 16px;
-  font-size: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
   color: var(--text-secondary, #616161);
+  background: rgba(100, 108, 255, 0.04);
+  border-radius: 8px;
 }
 
 .sign-status-badge {
@@ -383,5 +342,9 @@ async function refreshManifesto() {
 .sign-status-badge--rejected {
   color: var(--color-error, #ee0a24);
   background: rgba(238, 10, 36, 0.06);
+}
+
+.sign-flow-area {
+  padding: 16px;
 }
 </style>

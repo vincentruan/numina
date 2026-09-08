@@ -1,5 +1,5 @@
 <template>
-  <van-cell-group inset class="chart-section reminders-card">
+  <div class="reminders-card">
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="reminders">
         <template #title>
@@ -153,7 +153,7 @@
         </template>
       </van-collapse-item>
     </van-collapse>
-  </van-cell-group>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -283,8 +283,11 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
 
 <style scoped>
 .reminders-card {
-  display: block;
-  margin: 8px 0;
+  margin: 12px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 .reminders-card :deep(.van-collapse-item__title) {
   justify-content: flex-start;

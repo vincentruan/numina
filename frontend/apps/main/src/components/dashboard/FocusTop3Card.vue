@@ -151,8 +151,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onActivated, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Tab, Tabs } from 'vant'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -162,6 +163,8 @@ import { useCurrency } from '@/composables/useCurrency'
 import { parseLocalDate } from '@/utils/format'
 import type { Liability, Wish } from '@/types'
 import { wishProgress } from '@/utils/wishProgress'
+
+defineOptions({ name: 'FocusTop3Card' })
 
 const { t } = useI18n()
 const dashboardStore = useDashboardStore()
@@ -343,6 +346,15 @@ function retryWishes() {
 onMounted(() => {
   // Liability/wish load independently so a single failure degrades only its own tab.
   // Assets read from the dashboard store's homeAssets (fetched by DashboardPage.fetchAll).
+  loadLiabilities()
+  loadWishes()
+})
+
+// KeepAlive: reload data when re-activated (returning from sub-pages).
+// Skip first onActivated — Vue 3 fires both onMounted and onActivated on first mount.
+let hasActivated = false
+onActivated(() => {
+  if (!hasActivated) { hasActivated = true; return }
   loadLiabilities()
   loadWishes()
 })

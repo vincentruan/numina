@@ -74,6 +74,8 @@ export function useManifestoFlow(
         isCurrentUser,
         signatureData: sig?.signature_data,
         rejectionReason: rej?.reason,
+        signedAt: sig?.signed_at ?? null,
+        rejectedAt: rej?.created_at ?? null,
       }
     })
   })
@@ -139,6 +141,22 @@ export function useManifestoFlow(
     return true
   })
 
+  const creatorName = computed<string>(() => {
+    const m = manifesto.value
+    if (!m) return ''
+    const member = members.value.find(mem => mem.id === m.created_by)
+    return member?.display_name ?? ''
+  })
+
+  const hasRejection = computed<boolean>(() => {
+    const m = manifesto.value
+    return !!(m?.rejections && m.rejections.length > 0)
+  })
+
+  const nextVersionNumber = computed<number>(() => {
+    return (manifesto.value?.current_version?.version_number ?? 1) + 1
+  })
+
   return {
     flowState,
     memberStates,
@@ -148,5 +166,8 @@ export function useManifestoFlow(
     currentUserState,
     canSign,
     canReject,
+    creatorName,
+    hasRejection,
+    nextVersionNumber,
   }
 }

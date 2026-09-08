@@ -1,15 +1,13 @@
 <template>
   <div :class="[baseClass, isDimmed ? nodeClasses.dimmed : '']">
     <div class="flow-node__icon">
-      <van-icon name="replay" />
+      <van-icon name="clock-o" />
     </div>
-    <div class="flow-version-update__content">
-      <div class="flow-node__label">{{ t('manifesto.flow.versionUpdate') }}</div>
-      <div v-if="updaterName" class="flow-version-update__meta">
-        {{ t('manifesto.flow.updatedBy') }}: {{ updaterName }}
-      </div>
-      <div v-if="currentVersion && nextVersion" class="flow-version-update__version">
-        v{{ currentVersion }} → v{{ nextVersion }}
+    <div class="flow-pending__content">
+      <div class="flow-node__label">{{ t('manifesto.flow.pendingEffective') }}</div>
+      <div v-if="deadline" class="flow-pending__deadline" :class="{ 'flow-pending__deadline--expired': deadlineExpired }">
+        <span v-if="deadlineExpired">{{ t('manifesto.flow.deadlineExpired') }}</span>
+        <span v-else>{{ t('manifesto.flow.deadline') }}: {{ deadline }}</span>
       </div>
     </div>
   </div>
@@ -25,15 +23,14 @@ const { t } = useI18n()
 
 const props = defineProps<NodeProps>()
 
-const baseClass = computed(() => nodeClasses.versionUpdate)
+const baseClass = 'flow-node--pending'
 const isDimmed = computed<boolean>(() => props.data?.dimmed === true)
-const updaterName = computed<string>(() => props.data?.updaterName ?? '')
-const currentVersion = computed<number>(() => props.data?.currentVersion ?? 0)
-const nextVersion = computed<number>(() => props.data?.nextVersion ?? 0)
+const deadline = computed<string | null>(() => props.data?.deadline ?? null)
+const deadlineExpired = computed<boolean>(() => props.data?.deadlineExpired === true)
 </script>
 
 <style scoped>
-.flow-node--version-update {
+.flow-node--pending {
   width: v-bind(NODE_WIDTH);
   padding: 12px 16px;
   border-radius: 12px;
@@ -55,22 +52,21 @@ const nextVersion = computed<number>(() => props.data?.nextVersion ?? 0)
   flex-shrink: 0;
 }
 
-.flow-node__label {
-  white-space: nowrap;
-}
-
-.flow-version-update__content {
+.flow-pending__content {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.flow-version-update__meta {
+.flow-node__label {
+  font-weight: 500;
+}
+
+.flow-pending__deadline {
   font-size: 12px;
 }
 
-.flow-version-update__version {
-  font-size: 12px;
-  color: var(--van-primary-color, #646cff);
+.flow-pending__deadline--expired {
+  color: var(--color-error, #ee0a24);
 }
 </style>

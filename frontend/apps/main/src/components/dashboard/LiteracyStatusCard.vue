@@ -1,5 +1,5 @@
 <template>
-  <van-cell-group v-if="childMembers.length > 0 && familyStore.aiEnabled" inset class="chart-section literacy-status-card">
+  <div v-if="childMembers.length > 0 && familyStore.aiEnabled" class="literacy-status-card">
     <van-collapse v-model="expanded">
       <van-collapse-item name="literacy">
         <template #title>
@@ -71,7 +71,7 @@
         </template>
       </van-collapse-item>
     </van-collapse>
-  </van-cell-group>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -196,8 +196,11 @@ defineExpose({ loadStatuses })
 
 <style scoped>
 .literacy-status-card {
-  display: block;
-  margin: 8px 0;
+  margin: 12px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 .literacy-status-card :deep(.van-collapse-item__title) {
   justify-content: flex-start;

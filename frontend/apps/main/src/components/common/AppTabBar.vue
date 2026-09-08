@@ -40,7 +40,7 @@ const activeTab = computed(() => {
   if (path.startsWith('/assets') || path.startsWith('/liabilities')) return 'finance'
   if (path.startsWith('/finance')) return 'finance'
   if (path.startsWith('/wishes')) return 'finance'
-  if (path.startsWith('/manifesto')) return 'settings'
+  // /manifesto/* routes are standalone pages — no tab highlight
   return 'dashboard'
 })
 

@@ -369,7 +369,7 @@ function formatTime(iso: string | null): string {
 </script>
 
 <template>
-  <van-cell-group inset class="narrative-card" data-test="dashboard-narrative-card">
+  <div class="narrative-card" data-test="dashboard-narrative-card">
     <van-collapse v-model="cardExpanded" @change="onCardToggle">
       <van-collapse-item name="narrative">
         <template #title>
@@ -574,13 +574,16 @@ function formatTime(iso: string | null): string {
         </div>
       </van-collapse-item>
     </van-collapse>
-  </van-cell-group>
+  </div>
 </template>
 
 <style scoped>
 .narrative-card {
-  display: block;
-  margin: 8px 0;
+  margin: 12px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 .narrative-card :deep(.van-collapse-item__title) {
   justify-content: flex-start;

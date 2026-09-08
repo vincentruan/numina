@@ -254,7 +254,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <van-cell-group inset class="chart-section finance-coach-card" data-test="finance-coach-card">
+  <div class="finance-coach-card" data-test="finance-coach-card">
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="coach">
         <template #title>
@@ -354,13 +354,16 @@ onUnmounted(() => {
         </template>
       </van-collapse-item>
     </van-collapse>
-  </van-cell-group>
+  </div>
 </template>
 
 <style scoped>
 .finance-coach-card {
-  display: block;
-  margin: 8px 0;
+  margin: 12px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 .finance-coach-card :deep(.van-collapse-item__title) {
   justify-content: flex-start;

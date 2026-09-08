@@ -23,6 +23,10 @@
       >
         {{ statusLabel(member.status, member.role) }}
       </van-tag>
+      <span v-if="getDateText(member)" class="member-status-item__date">
+        <van-icon name="info-o" size="12px" />
+        {{ getDateText(member) }}
+      </span>
     </div>
   </div>
 </template>
@@ -31,8 +35,9 @@
 import { useI18n } from 'vue-i18n'
 import type { FlowMemberState, MemberSigningStatus } from '@/types/manifesto'
 
-defineProps<{
+const props = defineProps<{
   members: FlowMemberState[]
+  deadline?: string | null
 }>()
 
 const { t } = useI18n()
@@ -69,6 +74,26 @@ function statusLabel(status: MemberSigningStatus, role: string): string {
     default:
       return ''
   }
+}
+
+function getDateText(member: FlowMemberState): string {
+  if (member.status === 'signed' || member.status === 'confirmed') {
+    return member.signedAt ? formatDate(member.signedAt) : ''
+  }
+  if (member.status === 'rejected') {
+    return member.rejectedAt ? formatDate(member.rejectedAt) : ''
+  }
+  if (member.status === 'expired') {
+    return props.deadline ?? ''
+  }
+  return ''
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  const month = d.getMonth() + 1
+  const day = d.getDate()
+  return `${month}/${day}`
 }
 </script>
 
@@ -112,6 +137,15 @@ function statusLabel(status: MemberSigningStatus, role: string): string {
 }
 
 .member-status-item__tag {
+  flex-shrink: 0;
+}
+
+.member-status-item__date {
+  font-size: 11px;
+  color: var(--text-secondary, #616161);
+  display: flex;
+  align-items: center;
+  gap: 2px;
   flex-shrink: 0;
 }
 </style>

@@ -25,5 +25,6 @@ const edgeStyle = computed(() => ({
   stroke: 'var(--text-secondary, #c0c0c0)',
   strokeWidth: 1.5,
   opacity: 0.5,
+  markerEnd: 'url(#arrow-muted)',
 }))
 </script>
