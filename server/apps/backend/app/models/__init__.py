@@ -56,6 +56,7 @@ from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.manifesto import (
     FamilyManifesto,
     ManifestoFeedback,
+    ManifestoRejection,
     ManifestoSignature,
     ManifestoVersion,
 )

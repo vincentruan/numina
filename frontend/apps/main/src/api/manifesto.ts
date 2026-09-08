@@ -45,6 +45,10 @@ export function signManifesto(signatureData: string | null) {
   return http.post<Manifesto>('/family/manifesto/sign', { signature_data: signatureData })
 }
 
+export function rejectManifesto(reason?: string | null) {
+  return http.post<Manifesto>('/family/manifesto/reject', { reason: reason ?? null })
+}
+
 export function getVersionHistory() {
   return http.get<ManifestoVersionHistoryItem[]>('/family/manifesto/history')
 }

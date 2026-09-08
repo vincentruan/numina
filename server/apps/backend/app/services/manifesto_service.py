@@ -13,6 +13,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.manifesto import (
     FamilyManifesto,
     ManifestoFeedback,
+    ManifestoRejection,
     ManifestoSignature,
     ManifestoVersion,
 )
@@ -143,7 +144,7 @@ def sign_manifesto(
     user_id: int,
     signature_data: str | None,
 ) -> ManifestoSignature:
-    """Sign a manifesto version. Raise 409 if already signed."""
+    """Sign a manifesto version. Raise 409 if already signed or rejected."""
     existing = (
         db.query(ManifestoSignature)
         .filter_by(version_id=version_id, user_id=user_id)
@@ -151,6 +152,15 @@ def sign_manifesto(
     )
     if existing is not None:
         raise AppError(ErrorCode.MANIFESTO_ALREADY_SIGNED)
+
+    # Cannot sign if already rejected
+    rejected = (
+        db.query(ManifestoRejection)
+        .filter_by(version_id=version_id, user_id=user_id)
+        .first()
+    )
+    if rejected is not None:
+        raise AppError(ErrorCode.MANIFESTO_ALREADY_REJECTED)
 
     sig = ManifestoSignature(
         version_id=version_id,
@@ -195,6 +205,46 @@ def sign_manifesto(
         raise AppError(ErrorCode.MANIFESTO_ALREADY_SIGNED) from None
     db.refresh(sig)
     return sig
+
+
+def reject_manifesto(
+    db: Session,
+    version_id: int,
+    user_id: int,
+    reason: str | None,
+) -> ManifestoRejection:
+    """Reject a manifesto version. Raise 409 if already rejected or signed."""
+    existing_rejection = (
+        db.query(ManifestoRejection)
+        .filter_by(version_id=version_id, user_id=user_id)
+        .first()
+    )
+    if existing_rejection is not None:
+        raise AppError(ErrorCode.MANIFESTO_ALREADY_REJECTED)
+
+    # Cannot reject if already signed
+    existing_sig = (
+        db.query(ManifestoSignature)
+        .filter_by(version_id=version_id, user_id=user_id)
+        .first()
+    )
+    if existing_sig is not None:
+        raise AppError(ErrorCode.MANIFESTO_ALREADY_SIGNED)
+
+    rejection = ManifestoRejection(
+        version_id=version_id,
+        user_id=user_id,
+        reason=reason,
+    )
+    db.add(rejection)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise AppError(ErrorCode.MANIFESTO_ALREADY_REJECTED) from None
+    db.refresh(rejection)
+    return rejection
 
 
 def get_unsigned_check(

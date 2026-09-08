@@ -111,5 +111,6 @@
   "CHORE_NOT_YOURS": "This chore does not belong to you",
   "MANIFESTO_NOT_FOUND": "Family manifesto not found",
   "MANIFESTO_ALREADY_SIGNED": "Already signed this manifesto",
-  "MANIFESTO_NOT_ACTIVE": "This manifesto is not active"
+  "MANIFESTO_NOT_ACTIVE": "This manifesto is not active",
+  "MANIFESTO_ALREADY_REJECTED": "Already rejected this manifesto"
 }

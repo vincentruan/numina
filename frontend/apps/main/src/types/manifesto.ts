@@ -8,6 +8,7 @@ export interface Manifesto {
   created_at: string
   current_version: ManifestoVersion | null
   signatures: ManifestoSignature[]
+  rejections: ManifestoRejection[]
 }
 
 export interface ManifestoVersion {
@@ -28,6 +29,13 @@ export interface ManifestoSignature {
   user_id: string
   signature_data: string | null // null = tap-to-consent
   signed_at: string
+}
+
+export interface ManifestoRejection {
+  id: string
+  user_id: string
+  reason: string | null
+  created_at: string
 }
 
 export interface ManifestoDashboardSummary {
@@ -69,4 +77,38 @@ export interface TemplateDefinition {
   lang: 'zh' | 'en'
   type: 'classic' | 'modern'
   component: Component
+}
+
+// ---------------------------------------------------------------------------
+// Flow visualization types
+// ---------------------------------------------------------------------------
+
+export type FlowState = 'draft' | 'signing' | 'rejected' | 'modifying' | 'effective' | 'expired'
+
+export type MemberSigningStatus =
+  | 'signed'
+  | 'confirmed'
+  | 'pending_sign'
+  | 'pending_confirm'
+  | 'rejected'
+  | 'expired'
+
+export interface FlowMemberState {
+  userId: string
+  displayName: string
+  role: 'owner' | 'member' | 'child'
+  status: MemberSigningStatus
+  isCurrentUser: boolean
+  signatureData: string | null | undefined
+  rejectionReason: string | null | undefined
+}
+
+export interface FlowDeadlineInfo {
+  expired: boolean
+  remaining: string | null
+}
+
+export interface FlowSigningProgress {
+  signed: number
+  total: number
 }

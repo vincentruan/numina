@@ -32,6 +32,10 @@ class ManifestoSignRequest(BaseModel):
     signature_data: str | None = Field(default=None, max_length=200_000)
 
 
+class ManifestoRejectRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class ManifestoFeedbackCreateRequest(BaseModel):
     content: str = Field(max_length=2000)
 
@@ -46,6 +50,13 @@ class ManifestoSignatureItem(SnowflakeBase):
     user_id: int
     signature_data: str | None
     signed_at: datetime
+
+
+class ManifestoRejectionItem(SnowflakeBase):
+    id: int
+    user_id: int
+    reason: str | None
+    created_at: datetime
 
 
 class ManifestoVersionItem(SnowflakeBase):
@@ -71,6 +82,7 @@ class ManifestoResponse(SnowflakeBase):
     created_at: datetime
     current_version: ManifestoVersionItem | None = None
     signatures: list[ManifestoSignatureItem] = []
+    rejections: list[ManifestoRejectionItem] = []
 
 
 class ManifestoDashboardSummaryResponse(SnowflakeBase):

@@ -111,5 +111,6 @@
   "CHORE_NOT_YOURS": "该家务不属于你",
   "MANIFESTO_NOT_FOUND": "家庭约定不存在",
   "MANIFESTO_ALREADY_SIGNED": "已签署过该约定",
-  "MANIFESTO_NOT_ACTIVE": "该约定未生效"
+  "MANIFESTO_NOT_ACTIVE": "该约定未生效",
+  "MANIFESTO_ALREADY_REJECTED": "已拒绝过该约定"
 }

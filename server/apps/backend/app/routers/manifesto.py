@@ -8,6 +8,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.manifesto import (
     FamilyManifesto,
+    ManifestoRejection,
     ManifestoSignature,
     ManifestoVersion,
 )
@@ -18,6 +19,8 @@ from apps.backend.app.schemas.manifesto import (
     ManifestoFeedbackCreateRequest,
     ManifestoFeedbackResponse,
     ManifestoPublishRequest,
+    ManifestoRejectionItem,
+    ManifestoRejectRequest,
     ManifestoResponse,
     ManifestoSignatureItem,
     ManifestoSignRequest,
@@ -34,6 +37,7 @@ def _build_manifesto_response(
     manifesto: FamilyManifesto,
     version: ManifestoVersion | None,
     signatures: list,
+    rejections: list | None = None,
 ) -> ManifestoResponse:
     return ManifestoResponse(
         id=manifesto.id,
@@ -45,6 +49,7 @@ def _build_manifesto_response(
         created_at=manifesto.created_at,
         current_version=ManifestoVersionItem.model_validate(version) if version else None,
         signatures=[ManifestoSignatureItem.model_validate(s) for s in signatures],
+        rejections=[ManifestoRejectionItem.model_validate(r) for r in (rejections or [])],
     )
 
 
@@ -77,13 +82,19 @@ def get_current_manifesto(
     )
     # Load signatures for current version
     sig_list: list = []
+    rejection_list: list = []
     if manifesto.current_version_id is not None:
         sig_list = (
             db.query(ManifestoSignature)
             .filter_by(version_id=manifesto.current_version_id)
             .all()
         )
-    return _build_manifesto_response(manifesto, version, sig_list)
+        rejection_list = (
+            db.query(ManifestoRejection)
+            .filter_by(version_id=manifesto.current_version_id)
+            .all()
+        )
+    return _build_manifesto_response(manifesto, version, sig_list, rejection_list)
 
 
 @router.get("/unsigned-check", response_model=UnsignedManifestoCheckResponse)
@@ -137,6 +148,24 @@ def sign_manifesto(
         signature_data=req.signature_data,
     )
     return ManifestoSignatureItem.model_validate(sig)
+
+
+@router.post("/reject", response_model=ManifestoRejectionItem, status_code=201)
+def reject_manifesto(
+    req: ManifestoRejectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    manifesto = manifesto_service.get_current_manifesto(db, family_id=user.family_id)
+    if manifesto is None or manifesto.current_version_id is None:
+        raise AppError(ErrorCode.MANIFESTO_NOT_FOUND)
+    rejection = manifesto_service.reject_manifesto(
+        db,
+        version_id=manifesto.current_version_id,
+        user_id=user.id,
+        reason=req.reason,
+    )
+    return ManifestoRejectionItem.model_validate(rejection)
 
 
 @router.get("/history", response_model=list[ManifestoVersionHistoryItem])

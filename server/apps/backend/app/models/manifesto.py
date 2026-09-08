@@ -64,6 +64,20 @@ class ManifestoSignature(Base):
     )
 
 
+class ManifestoRejection(Base):
+    __tablename__ = "manifesto_rejection"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    version_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("version_id", "user_id", name="uq_manifesto_rejection_version_user"),
+    )
+
+
 class ManifestoFeedback(Base):
     __tablename__ = "manifesto_feedback"
 
