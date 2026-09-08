@@ -62,15 +62,53 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { showLoadingToast, closeToast } from 'vant'
 import BlockEditor from '@/components/manifesto/BlockEditor.vue'
 import { useManifestoWizard } from '@/composables/useManifestoWizard'
+import { getCurrentManifesto } from '@/api/manifesto'
 
 const { t } = useI18n()
 const router = useRouter()
 const { state } = useManifestoWizard()
+
+const isLoading = ref(false)
+
+onMounted(async () => {
+  // Only load from API if sessionStorage is empty (fresh session)
+  const hasLocalData = state.value.title || state.value.body || state.value.blocks.some(b => b.trim())
+
+  if (!hasLocalData) {
+    isLoading.value = true
+    showLoadingToast({ message: t('common.loading'), forbidClick: true, duration: 0 })
+
+    try {
+      const res = await getCurrentManifesto()
+      const manifesto = res.data
+
+      // If there's an active manifesto with version data, populate wizard state
+      if (manifesto?.current_version) {
+        const version = manifesto.current_version
+        state.value.selectedTemplateId = version.template_id
+        state.value.title = version.title
+        state.value.body = version.body
+        state.value.blocks = version.body.split('\n\n')
+        state.value.trackableIndices = version.trackable_clause_indices || []
+        state.value.signingDeadline = manifesto.signing_deadline
+          ? manifesto.signing_deadline.slice(0, 10)
+          : null
+      }
+    } catch (error) {
+      // Silently fail - user might be creating a new manifesto
+      console.error('Failed to load manifesto:', error)
+    } finally {
+      isLoading.value = false
+      closeToast()
+    }
+  }
+})
 
 const showDeadlinePicker = ref(false)
 
