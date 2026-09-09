@@ -1,0 +1,931 @@
+<title>Ideation: Manifesto Ceremony Design</title>
+<style>
+:root {
+  --bg: #f8f7f4;
+  --surface: #ffffff;
+  --ink: #1a1a2e;
+  --muted: #6b6b80;
+  --accent: #1E3A5F;
+  --accent-soft: rgba(30,58,95,0.08);
+  --gold: #c9a84c;
+  --gold-soft: rgba(201,168,76,0.12);
+  --border: #e2e0db;
+  --success: #16A34A;
+  --success-soft: rgba(22,163,74,0.08);
+  --danger: #DC2626;
+  --serif: 'EB Garamond', 'Noto Serif SC', 'Georgia', serif;
+  --sans: 'Lato', 'Inter', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f1a;
+    --surface: #1a1a2e;
+    --ink: #f0f0f5;
+    --muted: #9090a8;
+    --accent: #7B93C4;
+    --accent-soft: rgba(123,147,196,0.12);
+    --gold: #d4b86a;
+    --gold-soft: rgba(212,184,106,0.10);
+    --border: #2a2a40;
+    --success: #22C55E;
+    --success-soft: rgba(34,197,94,0.10);
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.4);
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.page-container {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* ── Header ── */
+.doc-header {
+  text-align: center;
+  padding: 3rem 0 2rem;
+  border-bottom: 2px solid var(--gold);
+  margin-bottom: 2.5rem;
+  position: relative;
+}
+
+.doc-header::before,
+.doc-header::after {
+  content: '◆';
+  position: absolute;
+  bottom: -0.6rem;
+  font-size: 12px;
+  color: var(--gold);
+}
+.doc-header::before { left: 30%; }
+.doc-header::after { right: 30%; }
+
+.doc-header .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 0.75rem;
+}
+
+.doc-header h1 {
+  font-family: var(--serif);
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.meta-strip {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.meta-strip span { display: flex; align-items: center; gap: 4px; }
+
+/* ── Sections ── */
+section {
+  margin-bottom: 2.5rem;
+}
+
+section h2 {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+section h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 1.5rem 0 0.75rem;
+}
+
+/* ── Grounding ─ */
+.grounding-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.grounding-card h4 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.grounding-card ul {
+  list-style: none;
+  padding: 0;
+}
+
+.grounding-card li {
+  padding: 0.3rem 0;
+  padding-left: 1rem;
+  position: relative;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.grounding-card li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--gold);
+}
+
+.screenshot-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.screenshot-compare .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.screenshot-compare .panel .label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.screenshot-compare .panel .verdict {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Axes ── */
+.axis-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.axis-item {
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.axis-item .num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  display: block;
+}
+
+.axis-item .name {
+  font-size: 12px;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+/* ── Idea Cards ── */
+.idea-nav {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.idea-nav h4 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.idea-nav ol {
+  padding-left: 1.25rem;
+  font-size: 14px;
+}
+
+.idea-nav li {
+  padding: 0.2rem 0;
+}
+
+.idea-nav a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.idea-nav a:hover {
+  text-decoration: underline;
+}
+
+.idea-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.idea-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--accent));
+}
+
+.idea-card .idea-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.idea-card .idea-rank {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.idea-card .idea-title {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.idea-card .idea-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: 0.02em;
+}
+
+.chip-axis {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip-confidence {
+  background: var(--gold-soft);
+  color: #8B6914;
+}
+
+.chip-complexity {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.idea-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink);
+  margin-bottom: 1rem;
+}
+
+.idea-fields {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.idea-field {
+  font-size: 13px;
+}
+
+.idea-field .field-label {
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  display: block;
+  margin-bottom: 1px;
+}
+
+.idea-field .field-value {
+  color: var(--ink);
+}
+
+.idea-visual {
+  margin: 1.25rem 0;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--bg);
+  overflow-x: auto;
+}
+
+.idea-visual svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.idea-visual .caption {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* ── Rejection Table ── */
+.rejection-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 0.5rem;
+}
+
+.rejection-table th,
+.rejection-table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.rejection-table th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: var(--accent-soft);
+}
+
+.rejection-table td:first-child {
+  font-weight: 700;
+  color: var(--gold);
+  width: 40px;
+}
+
+/* ── Footer ── */
+.doc-footer {
+  text-align: center;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+  margin-top: 3rem;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .page-container { padding: 1rem; }
+  .doc-header h1 { font-size: 1.5rem; }
+  .screenshot-compare { grid-template-columns: 1fr; }
+  .axis-list { grid-template-columns: repeat(2, 1fr); }
+  .meta-strip { flex-direction: column; gap: 0.25rem; }
+  .idea-card .idea-header { flex-direction: column; gap: 0.25rem; }
+}
+</style>
+
+<div class="page-container">
+
+<!-- ═══════════ HEADER ═══════════ -->
+<header class="doc-header">
+  <div class="eyebrow">Ideation Artifact</div>
+  <h1>Manifesto Ceremony Design</h1>
+  <div class="meta-strip">
+    <span> 2026-09-08</span>
+    <span> Formality &amp; Family Meaning</span>
+    <span>🏠 Repo-grounded</span>
+    <span>📐 5 Axes · 7 Survivors</span>
+  </div>
+</header>
+
+<!-- ═══════════ GROUNDING CONTEXT ═══════════ -->
+<section>
+  <h2>Grounding Context</h2>
+
+  <div class="grounding-card">
+    <h4>Current State (Verified via bsk Screenshots)</h4>
+    <p style="font-size:14px;color:var(--ink);margin-bottom:0.75rem;">
+      Both pages were verified live against a running Docker instance (localhost:80) with <code>demouser / DemoPass123</code>.
+      The screenshots confirm the code-level analysis — the pages are functionally complete but visually flat.
+    </p>
+    <div class="screenshot-compare">
+      <div class="panel">
+        <div class="label">Sign Page</div>
+        <div class="verdict">White background, no texture, no ceremony. Just: title → subtitle → member names with underline → signature pad canvas → confirm button. The ClassicTemplate ornaments (, ⚜) are not rendering — likely missing font. The 3-second timer gate has no visual feedback.</div>
+      </div>
+      <div class="panel">
+        <div class="label">Preview Page</div>
+        <div class="verdict">Document in a thin gray border rectangle. No corner decorations, no emblem, no dividers visible. Full-width dark "发布" button. No TOC sidebar (no trackable clauses). The certificate looks like a form, not a proclamation.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grounding-card">
+    <h4>Key Codebase Findings</h4>
+    <ul>
+      <li><strong>Sign page</strong> (<code>ManifestoSignPage.vue</code>): Nav-bar + ManifestoViewer + action area (SignaturePad + buttons) + FlowViewer stacked vertically. Background is plain <code>#fff</code>, padding is 16px. No animations.</li>
+      <li><strong>Preview page</strong> (<code>ManifestoPreviewPage.vue</code>): Two-column with TOC sidebar. Scroll-to-publish pattern. Also plain white, no ceremony styling.</li>
+      <li><strong>ClassicTemplate.vue</strong>: Has corner ornaments (☙), family crest (⚜), gold accents (#c9a84c), serif font (Noto Serif SC), ornamental dividers (◆) — the code has ceremony elements but they don't render visually in the browser (font/glyph issue).</li>
+      <li><strong>ModernTemplate.vue</strong>: Clean/minimal with 3-dot accent, system sans-serif, blue primary accent. Less ceremonial by design.</li>
+      <li><strong>SignaturePad.vue</strong>: Canvas-based drawing with velocity-based stroke width (thinner when faster). No calligraphy effect, no visual feedback on signing.</li>
+      <li><strong>Template registry</strong> (<code>templateRegistry.ts</code>): Extensible — new templates can be added without modifying existing ones.</li>
+      <li><strong>CSS variable system</strong>: Theme tokens in <code>style.css</code> with dark mode support via <code>van-config-provider</code>. Ceremony-themed tokens can cascade.</li>
+    </ul>
+  </div>
+
+  <div class="grounding-card">
+    <h4>Design System (ui-ux-pro-max)</h4>
+    <ul>
+      <li><strong>Product pattern</strong>: E-signature / Document Workflow → Trust &amp; Authority + Minimalism</li>
+      <li><strong>Color palette</strong>: Trust navy (#1E3A5F) + signature green (#16A34A) + neutral grey. Matches manifesto "formal commitment" use case.</li>
+      <li><strong>Typography</strong>: EB Garamond + Lato — "Legal Professional" pairing. Serif for authority, sans for readability.</li>
+      <li><strong>Animation</strong>: GSAP scroll reveal (power1.out, 300–400ms) for subtle progressive disclosure; power2.out staggered for standard reveals.</li>
+    </ul>
+  </div>
+
+  <div class="grounding-card">
+    <h4>Frontend Constraints</h4>
+    <ul>
+      <li>Vue 3 + TypeScript + Vant 4, CSS variables + scoped styles</li>
+      <li>Dark mode required (CSS variable theming)</li>
+      <li>i18n required for all user-facing text</li>
+      <li>No new UI libraries; Iconify for icons</li>
+      <li>Mobile H5 primary (desktop secondary)</li>
+      <li>Snowflake IDs must be <code>string</code> type</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════ TOPIC AXES ═══════════ -->
+<section>
+  <h2>Topic Axes</h2>
+  <div class="axis-list">
+    <div class="axis-item"><span class="num">1</span><span class="name">Ceremonial Atmosphere</span></div>
+    <div class="axis-item"><span class="num">2</span><span class="name">Signing Interaction</span></div>
+    <div class="axis-item"><span class="num">3</span><span class="name">Family Identity &amp; Heritage</span></div>
+    <div class="axis-item"><span class="num">4</span><span class="name">Document Presentation</span></div>
+    <div class="axis-item"><span class="num">5</span><span class="name">Flow Narrative</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ RANKED IDEAS ═══════════ -->
+<section>
+  <h2>Ranked Ideas</h2>
+
+  <nav class="idea-nav">
+    <h4>Jump to Idea</h4>
+    <ol>
+      <li><a href="#i1">Ceremonial Chamber — Immersive Full-Screen Mode</a></li>
+      <li><a href="#i2">Calligraphy Signature — Brush Pen Rendering</a></li>
+      <li><a href="#i3">Living Family Crest — Dynamic Heraldry</a></li>
+      <li><a href="#i4">Progressive Scroll Reveal — Document as Ceremony</a></li>
+      <li><a href="#i5">Digital Wax Seal — Animated Signing Ritual</a></li>
+      <li><a href="#i6">Signing Milestone Timeline — Integrated Flow</a></li>
+      <li><a href="#i7">Parchment &amp; Ink Theme System — Visual Foundation</a></li>
+    </ol>
+  </nav>
+
+  <!-- ── Idea 1 ── -->
+  <article class="idea-card" id="i1">
+    <div class="idea-header">
+      <span class="idea-rank">1</span>
+      <span class="idea-title">Ceremonial Chamber — Immersive Full-Screen Mode</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Ceremonial Atmosphere</span>
+      <span class="chip chip-confidence">Confidence: 85%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <p class="idea-desc">
+      Transform the sign page into an immersive, full-screen ceremony "room." When the user enters the sign page, the nav-bar fades out, the background transitions to a warm parchment tone (or deep navy in dark mode), and the manifesto document appears centered with a subtle drop shadow — like a physical document placed on a table. The rest of the app chrome (tab bar, status bar) dims or hides. The user is no longer in "an app page" — they are in a ceremony space. On the preview page, a similar treatment applies: the document is framed as a certificate, not a form preview.
+    </p>
+
+    <div class="idea-visual">
+      <svg viewBox="0 0 500 300" width="500" xmlns="http://www.w3.org/2000/svg">
+        <!-- Dark background (ceremony room) -->
+        <rect width="500" height="300" fill="#1a1a2e" rx="4"/>
+        <!-- Ambient glow -->
+        <ellipse cx="250" cy="150" rx="180" ry="120" fill="rgba(201,168,76,0.05)"/>
+        <!-- Document card -->
+        <rect x="120" y="40" width="260" height="220" rx="6" fill="#fdf6e3" stroke="#c9a84c" stroke-width="1.5"/>
+        <!-- Double border -->
+        <rect x="128" y="48" width="244" height="204" rx="4" fill="none" stroke="#c9a84c" stroke-width="0.5" opacity="0.4"/>
+        <!-- Title -->
+        <text x="250" y="80" text-anchor="middle" font-family="serif" font-size="14" font-weight="bold" fill="#1a1a2e">和睦家庭公约</text>
+        <!-- Divider -->
+        <line x1="180" y1="90" x2="235" y2="90" stroke="#c9a84c" stroke-width="0.8" opacity="0.6"/>
+        <text x="250" y="93" text-anchor="middle" font-size="7" fill="#c9a84c">◆</text>
+        <line x1="265" y1="90" x2="320" y2="90" stroke="#c9a84c" stroke-width="0.8" opacity="0.6"/>
+        <!-- Body lines -->
+        <rect x="145" y="105" width="210" height="3" rx="1.5" fill="#1a1a2e" opacity="0.15"/>
+        <rect x="145" y="115" width="190" height="3" rx="1.5" fill="#1a1a2e" opacity="0.15"/>
+        <rect x="145" y="125" width="200" height="3" rx="1.5" fill="#1a1a2e" opacity="0.15"/>
+        <!-- Signature area -->
+        <line x1="160" y1="200" x2="220" y2="200" stroke="#1a1a2e" stroke-width="0.8"/>
+        <line x1="280" y1="200" x2="340" y2="200" stroke="#1a1a2e" stroke-width="0.8"/>
+        <text x="190" y="215" text-anchor="middle" font-size="7" fill="#6b6b80">演示用户</text>
+        <text x="310" y="215" text-anchor="middle" font-size="7" fill="#6b6b80">演示配偶</text>
+        <!-- Gold seal -->
+        <circle cx="250" cy="230" r="12" fill="none" stroke="#c9a84c" stroke-width="1"/>
+        <text x="250" y="234" text-anchor="middle" font-size="9" fill="#c9a84c">⚜</text>
+        <!-- "Entered ceremony" indicator -->
+        <text x="250" y="285" text-anchor="middle" font-size="9" fill="rgba(201,168,76,0.6)" font-style="italic">← Ceremony mode: app chrome hidden →</text>
+      </svg>
+      <div class="caption">Directional: Sign page transforms from "app page" to "ceremony room" — document centered, chrome dimmed, warm atmosphere.</div>
+    </div>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>reasoned:</strong> The sign page currently uses a standard <code>van-nav-bar</code> with the app's default white background (<code>ManifestoSignPage.vue:3-7</code>, line 285: <code>background: var(--bg-primary, #fff)</code>). This signals "utility page" to the user. E-signature platforms like DocuSign use immersive signing experiences that remove all non-essential UI. The structural problem is that a family covenant deserves a different spatial contract than checking account balances.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">The single biggest lever for perceived formality is the container, not the content. Moving from "a page in the app" to "a dedicated ceremony space" costs ~200 lines of CSS (overlay, transitions, hide/show logic) but fundamentally changes the user's mental model. This is the foundation that makes all other ceremony investments visible.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Hiding the nav-bar reduces discoverability of the back button — need a clear exit gesture (swipe-back or a subtle close icon). Must respect <code>prefers-reduced-motion</code> for the transition animation. The immersive mode should feel optional, not trapping.</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── Idea 2 ─ -->
+  <article class="idea-card" id="i2">
+    <div class="idea-header">
+      <span class="idea-rank">2</span>
+      <span class="idea-title">Calligraphy Signature — Brush Pen Rendering</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Signing Interaction</span>
+      <span class="chip chip-confidence">Confidence: 80%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <p class="idea-desc">
+      Replace the plain canvas signature pad with a calligraphy-style renderer. The SignaturePad already has velocity-based stroke width (<code>SignaturePad.vue:102-107</code>), but it maps to a uniform dark line. Upgrade it to simulate a brush pen: stroke width varies from thick (slow) to thin (fast), with a slight ink-bleed effect at direction changes. When the user lifts their finger, the signature "sets" with a subtle ink-spread animation. The clear button becomes "erase" with a wipe animation.
+    </p>
+
+    <div class="idea-visual">
+      <svg viewBox="0 0 500 200" width="500" xmlns="http://www.w3.org/2000/svg">
+        <!-- Before -->
+        <text x="125" y="20" text-anchor="middle" font-size="10" fill="#6b6b80" font-weight="bold">BEFORE: Plain line</text>
+        <rect x="20" y="35" width="210" height="120" rx="6" fill="var(--surface)" stroke="#dcdfe6" stroke-width="1"/>
+        <path d="M 60,100 Q 80,60 110,90 T 160,80 T 200,95" fill="none" stroke="#1a1a2e" stroke-width="2" stroke-linecap="round"/>
+        <!-- Arrow -->
+        <text x="250" y="100" text-anchor="middle" font-size="18" fill="#c9a84c">→</text>
+        <!-- After -->
+        <text x="375" y="20" text-anchor="middle" font-size="10" fill="#6b6b80" font-weight="bold">AFTER: Brush pen</text>
+        <rect x="270" y="35" width="210" height="120" rx="6" fill="var(--surface)" stroke="#c9a84c" stroke-width="1"/>
+        <path d="M 310,100 Q 330,55 355,85 T 400,78 T 440,95" fill="none" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+        <path d="M 310,100 Q 330,58 355,85 T 400,78 T 440,95" fill="none" stroke="#1a1a2e" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+        <!-- Ink dots at direction changes -->
+        <circle cx="355" cy="85" r="2" fill="#1a1a2e" opacity="0.3"/>
+        <circle cx="400" cy="78" r="1.5" fill="#1a1a2e" opacity="0.2"/>
+        <!-- Brush hint -->
+        <text x="375" y="140" text-anchor="middle" font-size="9" fill="#c9a84c" font-style="italic">thick→thin, ink spread</text>
+      </svg>
+      <div class="caption">Directional: The same stroke path rendered as plain line vs. brush pen calligraphy — velocity determines width, direction changes create ink variation.</div>
+    </div>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>direct:</strong> <code>SignaturePad.vue:99-107</code> already computes velocity and maps it to stroke width (1.5–3px range), but the mapping is linear and narrow. The infrastructure for pressure simulation exists — it just needs a non-linear curve (exponential) and ink-bleed post-processing. The <code>lineCap: 'round'</code> and <code>lineJoin: 'round'</code> are already set.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">In Japanese calligraphy (書道) and Chinese brush writing, the signature IS art — each stroke carries intention. Making the digital signature feel hand-crafted rather than machine-drawn is the single highest-impact change to the signing interaction. Users will feel their signature is "theirs" in a way a uniform line never achieves.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Requires canvas compositing knowledge for ink-bleed effect. Must test on low-end mobile devices — additional canvas operations cost GPU cycles. Dark mode needs careful contrast tuning for the ink color.</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── Idea 3 ── -->
+  <article class="idea-card" id="i3">
+    <div class="idea-header">
+      <span class="idea-rank">3</span>
+      <span class="idea-title">Living Family Crest — Dynamic Heraldry</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Family Identity &amp; Heritage</span>
+      <span class="chip chip-confidence">Confidence: 75%</span>
+      <span class="chip chip-complexity">Complexity: Medium</span>
+    </div>
+    <p class="idea-desc">
+      Generate a unique SVG family crest dynamically from the family's data: the family name (or first character), member count, and member roles (owner/child/member) determine the crest's composition. Display it prominently at the top of both the sign and preview pages — above the document title. Each time a new member signs, their initial is "added" to the crest's ring, making the crest a living record of the family's commitment. The crest uses the gold accent color (#c9a84c) from the existing ClassicTemplate palette.
+    </p>
+
+    <div class="idea-visual">
+      <svg viewBox="0 0 500 220" width="500" xmlns="http://www.w3.org/2000/svg">
+        <!-- Crest shield -->
+        <path d="M 250,20 L 310,50 L 310,120 Q 310,170 250,200 Q 190,170 190,120 L 190,50 Z" fill="none" stroke="#c9a84c" stroke-width="2"/>
+        <path d="M 250,28 L 302,54 L 302,118 Q 302,164 250,192 Q 198,164 198,118 L 198,54 Z" fill="rgba(201,168,76,0.06)"/>
+        <!-- Family character in center -->
+        <text x="250" y="120" text-anchor="middle" font-family="serif" font-size="36" fill="#c9a84c" font-weight="bold">家</text>
+        <!-- Member initials around the ring -->
+        <circle cx="250" cy="38" r="10" fill="#c9a84c" opacity="0.8"/>
+        <text x="250" y="42" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">演</text>
+        <circle cx="295" cy="60" r="10" fill="#c9a84c" opacity="0.6"/>
+        <text x="295" y="64" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">配</text>
+        <circle cx="210" cy="60" r="10" fill="#c9a84c" opacity="0.4"/>
+        <text x="210" y="64" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">小</text>
+        <circle cx="270" cy="80" r="10" fill="#c9a84c" opacity="0.3"/>
+        <text x="270" y="84" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">大</text>
+        <!-- Label -->
+        <text x="250" y="215" text-anchor="middle" font-size="10" fill="#6b6b80" font-style="italic">Auto-generated from family store data</text>
+      </svg>
+      <div class="caption">Directional: Family crest auto-generated from member data — initials placed around the shield, family character at center. Grows as members sign.</div>
+    </div>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>direct:</strong> <code>ClassicTemplate.vue:12</code> already has a static <code>.emblem-shield</code> with ⚜ — it's a hardcoded emoji that may not render. The <code>familyStore.members</code> array (<code>ManifestoSignPage.vue:181-183</code>) provides all the data needed: member names, roles, and count. The crest can be computed as a pure function of this data.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">A family crest is the universal symbol of lineage and shared identity across cultures. Making it dynamic (not a stock image) gives each family a unique emblem. The "living" aspect — members joining the crest as they sign — turns the document from static text into a growing family artifact. This directly leverages existing store data with no backend changes.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Generating aesthetically pleasing SVG layouts from arbitrary data is non-trivial — edge cases with 1 member vs. 8 members. Need a fallback for families without a clear "name" character. The crest should feel personal, not algorithmic.</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── Idea 4 ── -->
+  <article class="idea-card" id="i4">
+    <div class="idea-header">
+      <span class="idea-rank">4</span>
+      <span class="idea-title">Progressive Scroll Reveal — Document as Ceremony</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Document Presentation</span>
+      <span class="chip chip-confidence">Confidence: 82%</span>
+      <span class="chip chip-complexity">Complexity: Low</span>
+    </div>
+    <p class="idea-desc">
+      Instead of the manifesto text appearing all at once, each paragraph fades in as the user scrolls — like a scroll being unfurled. The title appears first with a gentle scale-up, then the ornamental divider draws itself (CSS animation on the width), then each paragraph fades up as it enters the viewport. The effect uses GSAP ScrollTrigger or IntersectionObserver with <code>power1.out</code> easing at 300–400ms. Respect <code>prefers-reduced-motion</code> by showing all content immediately. This transforms the act of reading from passive scanning to active "receiving" of the family covenant.
+    </p>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>external:</strong> GSAP ScrollTrigger's subtle tier: <code>gsap.from(el, { opacity: 0, y: 12, duration: 0.35, ease: 'power1.out' })</code> — the ui-ux-pro-max design system recommends this exact pattern for formal content. The ClassicTemplate already has the structural elements (divider, paragraphs) that benefit most from staggered reveal.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">Sacred texts across traditions are revealed progressively — Torah scrolls are unrolled section by section, sutras are chanted verse by verse. The pacing IS the meaning. A family covenant deserves the same treatment: the user doesn't "see" the document, they "receive" it. This is also the lowest-complexity idea with high visual impact — pure CSS/JS animation, no structural changes.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Must handle <code>prefers-reduced-motion</code> gracefully. On very long manifestos, the staggered reveal could feel slow — need to cap the total animation time. The preview page's scroll-to-publish pattern already tracks scroll position, so the infrastructure partially exists.</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── Idea 5 ── -->
+  <article class="idea-card" id="i5">
+    <div class="idea-header">
+      <span class="idea-rank">5</span>
+      <span class="idea-title">Digital Wax Seal — Animated Signing Ritual</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Signing Interaction</span>
+      <span class="chip chip-confidence">Confidence: 72%</span>
+      <span class="chip chip-complexity">Complexity: High</span>
+    </div>
+    <p class="idea-desc">
+      After the user draws their signature and taps "Confirm," instead of an instant toast notification, play a wax seal animation: a gold circle appears at the signature location, the user's initials are "pressed" into it with a stamp animation (scale down + slight rotation), then the seal "sets" with a subtle glow. The signature area transitions from "pending" to "sealed" with the member's name and a timestamp. This turns the confirmation from a UI event into a ceremonial moment — the digital equivalent of pressing a wax seal into a letter.
+    </p>
+
+    <div class="idea-visual">
+      <svg viewBox="0 0 500 200" width="500" xmlns="http://www.w3.org/2000/svg">
+        <!-- Step 1: Signature drawn -->
+        <rect x="20" y="20" width="140" height="160" rx="6" fill="var(--surface)" stroke="#dcdfe6" stroke-width="1"/>
+        <text x="90" y="40" text-anchor="middle" font-size="9" fill="#6b6b80">Step 1: Sign</text>
+        <path d="M 45,90 Q 60,60 80,85 T 120,80" fill="none" stroke="#1a1a2e" stroke-width="2"/>
+        <line x1="40" y1="120" x2="140" y2="120" stroke="#dcdfe6" stroke-width="0.8"/>
+        <text x="90" y="135" text-anchor="middle" font-size="8" fill="#6b6b80">待签署</text>
+        <!-- Arrow -->
+        <text x="175" y="100" font-size="16" fill="#c9a84c">→</text>
+        <!-- Step 2: Seal pressing -->
+        <rect x="190" y="20" width="140" height="160" rx="6" fill="var(--surface)" stroke="#c9a84c" stroke-width="1.5"/>
+        <text x="260" y="40" text-anchor="middle" font-size="9" fill="#6b6b80">Step 2: Seal</text>
+        <circle cx="260" cy="95" r="22" fill="#c9a84c" opacity="0.2" stroke="#c9a84c" stroke-width="1.5"/>
+        <text x="260" y="100" text-anchor="middle" font-size="12" fill="#c9a84c" font-weight="bold">演</text>
+        <text x="260" y="135" text-anchor="middle" font-size="8" fill="#16A34A">已签署 ✓</text>
+        <!-- Arrow -->
+        <text x="345" y="100" font-size="16" fill="#c9a84c">→</text>
+        <!-- Step 3: Sealed document -->
+        <rect x="360" y="20" width="120" height="160" rx="6" fill="var(--surface)" stroke="#c9a84c" stroke-width="1"/>
+        <text x="420" y="40" text-anchor="middle" font-size="9" fill="#6b6b80">Step 3: Done</text>
+        <circle cx="420" cy="90" r="15" fill="#c9a84c" opacity="0.15" stroke="#c9a84c" stroke-width="0.8"/>
+        <text x="420" y="94" text-anchor="middle" font-size="10" fill="#c9a84c">演</text>
+        <text x="420" y="120" text-anchor="middle" font-size="7" fill="#6b6b80">2026-09-08</text>
+      </svg>
+      <div class="caption">Directional: Three-stage ritual — sign → seal press → sealed document. The wax seal animation replaces the instant toast confirmation.</div>
+    </div>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>cross-domain analogy:</strong> Historical wax seals (used since medieval times for authenticating documents) carry three properties that digital confirmations lack: physicality (the press), uniqueness (each seal is one-of-a-kind), and permanence (once set, it cannot be undone). The current <code>showSuccessToast(t('manifesto.signSuccess'))</code> (<code>ManifestoSignPage.vue:231</code>) is a generic app notification — it carries none of these qualities.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">The moment of signing is the emotional climax of the entire manifesto flow. It currently resolves in 200ms with a toast. A wax seal animation extends that moment to 1.5–2 seconds of deliberate, satisfying interaction — the user watches their commitment become "real." This is the highest emotional ROI moment in the entire feature.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Highest complexity of all ideas — requires SVG animation sequencing, state management for the seal visual, and careful timing. Could feel slow if over-animated. Must be skippable for users who've signed before and just want to complete the flow quickly.</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── Idea 6 ─ -->
+  <article class="idea-card" id="i6">
+    <div class="idea-header">
+      <span class="idea-rank">6</span>
+      <span class="idea-title">Signing Milestone Timeline — Integrated Flow</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Flow Narrative</span>
+      <span class="chip chip-confidence">Confidence: 78%</span>
+      <span class="chip chip-complexity">Complexity: Low</span>
+    </div>
+    <p class="idea-desc">
+      Instead of the flow chart being a separate component at the bottom of the sign page (<code>ManifestoFlowViewer</code>), integrate the signing milestones directly into the document's signature area. Show a vertical timeline along the right edge of the document: each member's name appears with a status indicator (pending circle → signing pen icon → sealed checkmark). As members sign, their milestone animates from "awaiting" to "sealed" with a subtle glow pulse. The timeline becomes part of the document's visual identity — showing the family's collective commitment journey as a living record.
+    </p>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>direct:</strong> The <code>ManifestoFlowViewer</code> component and its node variants (<code>FlowSigningNode</code>, <code>FlowPendingNode</code>, <code>FlowEffectiveNode</code>) already compute all the flow state data. The <code>useManifestoFlow</code> composable provides <code>memberStates</code>, <code>signingProgress</code>, and <code>flowState</code>. The data layer is complete — only the presentation needs to move from a separate chart to an integrated timeline.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">The current flow viewer is disconnected from the document — it sits below the action area like a status dashboard. By integrating the flow into the document's signature grid, the signing progress becomes part of the family story. Each signature is not just a status update; it's a chapter in the family's commitment narrative. This also simplifies the layout by removing a separate component.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Merging two components (flow viewer + signature grid) requires careful UI design to avoid clutter. The current flow viewer has rich state information (rejection, version updates, deadlines) that may not fit a simple timeline. May need to keep the full flow viewer for complex states while using the simplified timeline for the happy path.</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── Idea 7 ── -->
+  <article class="idea-card" id="i7">
+    <div class="idea-header">
+      <span class="idea-rank">7</span>
+      <span class="idea-title">Parchment &amp; Ink Theme System — Visual Foundation</span>
+    </div>
+    <div class="idea-meta">
+      <span class="chip chip-axis">Axis: Ceremonial Atmosphere</span>
+      <span class="chip chip-confidence">Confidence: 88%</span>
+      <span class="chip chip-complexity">Complexity: Low</span>
+    </div>
+    <p class="idea-desc">
+      Establish a ceremony-specific CSS variable theme that all manifesto components share. Add tokens like <code>--ceremony-parchment</code> (#fdf6e3), <code>--ceremony-ink</code> (#1a1a2e), <code>--ceremony-gold</code> (#c9a84c), <code>--ceremony-border</code> (double-rule pattern), and <code>--ceremony-shadow</code> (warm drop shadow). Apply these to the ClassicTemplate (fixing the rendering issues), and make them available to any future ceremonial template. The theme auto-adapts for dark mode: parchment becomes deep navy, ink becomes warm white, gold stays gold. This is the visual foundation that makes every other ceremony idea cohesive.
+    </p>
+
+    <div class="idea-fields">
+      <div class="idea-field">
+        <span class="field-label">Basis</span>
+        <span class="field-value"><strong>direct:</strong> The app already uses CSS variables for theming (<code>frontend/apps/main/CLAUDE.md</code>: <code>--bg-primary</code>, <code>--card-bg</code>, <code>--text-primary</code>). The ClassicTemplate hardcodes colors like <code>#c9a84c</code> and <code>#0a0a0a</code> (<code>ClassicTemplate.vue:89-100</code>) instead of using tokens — making them non-themeable. The <code>van-config-provider</code> already handles dark mode switching.</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Rationale</span>
+        <span class="field-value">This is the lowest-complexity, highest-leverage idea. Every visual ceremony improvement (ornaments, textures, typography) needs a consistent color and style foundation. Without it, each feature adds ad-hoc styles that drift from each other. With it, every future template or component automatically participates in the ceremony aesthetic. It also fixes the existing ClassicTemplate rendering issues (hardcoded colors that don't adapt to dark mode, emoji glyphs that may not render).</span>
+      </div>
+      <div class="idea-field">
+        <span class="field-label">Downsides</span>
+        <span class="field-value">Adding new CSS variables increases the theme surface — needs documentation. The parchment color may not work well in dark mode without a proper inversion strategy. Existing templates need to be migrated to use the new tokens (backward-compatible fallback values mitigate this).</span>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+<!-- ═══════════ REJECTION SUMMARY ═══════════ -->
+<section>
+  <h2>Rejection Summary</h2>
+  <table class="rejection-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Idea</th>
+        <th>Reason Rejected</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Ambient Background Music</td>
+        <td>Cross-domain analogy (wedding/tea ceremony) — rejected: mobile H5 auto-play restrictions make this unreliable; users in public spaces would find it jarring. Better suited as an opt-in "atmosphere" toggle in a future iteration.</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Reading Confirmation Tracking (must-read-all-before-signing)</td>
+        <td>Constraint-flip — rejected: adds friction to an already slow flow. The 3-second timer gate already provides a minimum reading pause; tracking paragraph-level reading is surveillance, not ceremony. Risk of user frustration.</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Multi-Step Ceremony Sequence (Read→Affirm→Sign→Seal)</td>
+        <td>Assumption-breaking — rejected: 4 steps is too many for mobile. The current single-page flow (read → sign → confirm) is the right granularity. The ceremony sequence idea's best elements (affirmation, seal) are absorbed into Ideas 1 and 5.</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Family Oath Recitation (text-to-speech reading)</td>
+        <td>Cross-domain analogy — rejected: TTS on mobile feels robotic, not ceremonial. The manifesto content is personal and varies per family — a recorded voice would undermine the intimacy. Out of scope for current frontend constraints.</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Anniversary Date Stamp (show manifesto age)</td>
+        <td>Leverage — rejected: meaningful only for existing manifestos. The primary use case is creation and first signing. Can be added later as a dashboard enhancement; not critical for the sign/preview page ceremony.</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>Dark Mode as Default Ceremony</td>
+        <td>Constraint-flip — rejected: the app already supports dark mode via CSS variables. Forcing dark mode for ceremony would conflict with user theme preference. Better to enhance both light and dark with ceremony tokens (covered by Idea 7).</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Member Portrait Avatars</td>
+        <td>Pain &amp; friction — rejected: the app doesn't currently store avatar images for family members. Would require backend changes to the user profile schema. Out of scope for a frontend-only ceremony improvement.</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Template Ceremony Levels (encode ceremony intensity in templates)</td>
+        <td>Assumption-breaking — rejected: premature abstraction. With only 2 templates, adding a "ceremony level" dimension is over-engineering. The template registry can be extended later when more templates exist.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer class="doc-footer">
+  Composed 2026-09-08 by ce-ideate · Grounding verified via bsk screenshots on live Docker instance<br>
+  Design system: ui-ux-pro-max (E-signature product pattern) · Stack: Vue 3 + Vant 4 + TypeScript
+</footer>
+
+</div>
