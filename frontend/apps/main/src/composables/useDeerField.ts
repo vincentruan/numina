@@ -60,22 +60,21 @@ const STELLAR_COLORS: Array<{ core: [number, number, number]; halo: [number, num
   { core: [255, 220, 200], halo: [255, 170, 120], ratio: 0.05 },
 ]
 
-// Rainbow palette for light mode — each entry is a distinct hue
+// Rainbow palette for light mode — desaturated for white background
 // Core and halo use same hue at different lightness (no cross-hue discontinuity)
 const RAINBOW_COLORS: Array<{ core: [number, number, number]; halo: [number, number, number] }> = [
-  { core: [255, 107, 107], halo: [255, 160, 140] },  // red
-  { core: [255, 159, 67],  halo: [255, 190, 120] },  // orange
-  { core: [254, 202, 87],  halo: [254, 220, 140] },  // yellow
-  { core: [72, 219, 251],  halo: [130, 230, 255] },  // cyan
-  { core: [10, 189, 227],  halo: [80, 210, 240] },   // blue
-  { core: [95, 39, 205],   halo: [140, 100, 230] },  // indigo
-  { core: [162, 155, 254], halo: [195, 190, 255] },  // purple
+  { core: [220, 140, 140], halo: [235, 175, 170] },  // muted red
+  { core: [220, 170, 130], halo: [240, 200, 160] },  // muted orange
+  { core: [215, 195, 130], halo: [235, 215, 165] },  // muted yellow
+  { core: [140, 195, 200], halo: [175, 215, 220] },  // muted cyan
+  { core: [130, 165, 215], halo: [170, 195, 230] },  // muted blue
+  { core: [155, 140, 205], halo: [185, 175, 220] },  // muted indigo
+  { core: [175, 170, 215], halo: [200, 195, 230] },  // muted purple
 ]
 
-// Light-mode pixel grid: soft blue-purple-pink gradient
-// Each cell gets a deterministic color interpolated between two endpoints
-const GRID_LIGHT_START = { r: 120, g: 100, b: 220 }  // blue-purple
-const GRID_LIGHT_END = { r: 200, g: 140, b: 200 }     // pink
+// Light-mode pixel grid: muted but visible on white background
+const GRID_LIGHT_START = { r: 140, g: 130, b: 195 }  // soft lavender
+const GRID_LIGHT_END = { r: 195, g: 155, b: 195 }     // soft mauve
 
 const INTENSITY_LEVELS = ['soft', 'medium', 'bright'] as const
 
