@@ -1,11 +1,5 @@
 <template>
-  <div class="manifesto-sign-page">
-    <van-nav-bar
-      :title="t('manifesto.signPage')"
-      left-arrow
-      @click-left="router.back()"
-    />
-
+  <CeremonyRoom @close="router.back()">
     <div v-if="loading" class="sign-loading">
       <van-loading type="spinner" />
     </div>
@@ -107,7 +101,7 @@
         />
       </div>
     </template>
-  </div>
+  </CeremonyRoom>
 </template>
 
 <script setup lang="ts">
@@ -116,6 +110,8 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import ManifestoViewer from '@/components/manifesto/ManifestoViewer.vue'
+import CeremonyRoom from '@/components/manifesto/CeremonyRoom.vue'
+import { useCeremonyRoom } from '@/composables/useCeremonyRoom'
 import SignaturePad from '@/components/manifesto/SignaturePad.vue'
 import ManifestoFlowViewer from '@/components/manifesto/flow/ManifestoFlowViewer.vue'
 import { useFamilyStore } from '@/stores/family'
@@ -128,6 +124,7 @@ const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 const { currentUser } = useAuth()
+useCeremonyRoom(() => router.back())
 
 const loading = ref(true)
 const signing = ref(false)
@@ -280,12 +277,6 @@ async function refreshManifesto() {
 </script>
 
 <style scoped>
-.manifesto-sign-page {
-  min-height: 100vh;
-  background: var(--bg-primary, #fff);
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
 .sign-loading {
   display: flex;
   align-items: center;

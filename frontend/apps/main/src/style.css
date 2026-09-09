@@ -145,6 +145,20 @@
   --color-brand-orange: #fc4c02;
   --shadow-elevated: rgba(1, 1, 32, 0.1) 0px 4px 10px;
 
+  /* ── Ceremony Room Tokens ──
+   * Warm parchment atmosphere for manifesto sign/preview pages.
+   * Dark mode inverts to deep navy with warm document card.
+   * Consumed by CeremonyRoom.vue and .ceremony-mode body class. */
+  --ceremony-bg: #FAF7F0;
+  --ceremony-bg-dark: #0f1a2e;
+  --ceremony-ink: #1a1a2e;
+  --ceremony-ink-dark: #f0ece4;
+  --ceremony-gold: #c9a84c;
+  --ceremony-shadow: rgba(26, 26, 46, 0.12);
+  --ceremony-shadow-dark: rgba(0, 0, 0, 0.4);
+  --ceremony-doc-bg: #fffef9;
+  --ceremony-doc-bg-dark: #1a1a2e;
+
   --color-action-primary-active: #0d0d10;
 }
 
@@ -205,6 +219,12 @@
   --van-popup-background: #12122a;
   --van-action-sheet-background: #12122a;
   --van-action-sheet-header-background: #12122a;
+
+  /* Ceremony Room dark mode */
+  --ceremony-bg: #0f1a2e;
+  --ceremony-ink: #f0ece4;
+  --ceremony-shadow: rgba(0, 0, 0, 0.4);
+  --ceremony-doc-bg: #1a1a2e;
 }
 
 /* ── Vant Toast / Notify theme ── */
@@ -364,4 +384,14 @@ a {
 #nprogress .spinner-icon {
   border-top-color: var(--van-primary-color, #7c6bff) !important;
   border-left-color: var(--van-primary-color, #7c6bff) !important;
+}
+
+/* ── Ceremony Mode ──
+ * Body-class coordination: when a manifesto page enters ceremony mode,
+ * it adds .ceremony-mode to <body>. This rule dims the layout-level
+ * tab bar so the document is the visual focus. The tab bar remains
+ * functional (partial immersion per KTD1). */
+.ceremony-mode .app-tabbar {
+  opacity: 0.3;
+  transition: opacity 0.4s ease;
 }

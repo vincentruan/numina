@@ -1,11 +1,5 @@
 <template>
-  <div class="manifesto-preview-page">
-    <van-nav-bar
-      :title="t('manifesto.preview')"
-      left-arrow
-      @click-left="router.back()"
-    />
-
+  <CeremonyRoom @close="router.back()">
     <div v-if="templateId" class="preview-layout">
       <!-- TOC sidebar: shows trackable clauses -->
       <aside v-if="clauses.length > 0" class="preview-toc">
@@ -64,7 +58,7 @@
       :actions="changeTypeActions"
       @select="onChangeTypeSelect"
     />
-  </div>
+  </CeremonyRoom>
 </template>
 
 <script setup lang="ts">
@@ -73,12 +67,15 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import ManifestoViewer from '@/components/manifesto/ManifestoViewer.vue'
+import CeremonyRoom from '@/components/manifesto/CeremonyRoom.vue'
+import { useCeremonyRoom } from '@/composables/useCeremonyRoom'
 import { useManifestoWizard } from '@/composables/useManifestoWizard'
 import { useFamilyStore } from '@/stores/family'
 import * as manifestoApi from '@/api/manifesto'
 
 const { t } = useI18n()
 const router = useRouter()
+useCeremonyRoom(() => router.back())
 const { state, reset } = useManifestoWizard()
 const familyStore = useFamilyStore()
 
@@ -249,11 +246,6 @@ async function onChangeTypeSelect(action: { value: string }) {
 </script>
 
 <style scoped>
-.manifesto-preview-page {
-  min-height: 100vh;
-  background: var(--bg-primary, #fff);
-}
-
 /* ── Two-column layout ── */
 .preview-layout {
   display: flex;
