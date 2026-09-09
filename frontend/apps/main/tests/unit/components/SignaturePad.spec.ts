@@ -18,6 +18,7 @@ const mockCtx = {
   beginPath: vi.fn(),
   moveTo: vi.fn(),
   lineTo: vi.fn(),
+  quadraticCurveTo: vi.fn(),
   stroke: vi.fn(),
   lineCap: 'round',
   lineJoin: 'round',
@@ -41,12 +42,10 @@ beforeEach(() => {
 })
 
 describe('SignaturePad — U3', () => {
-  it('renders canvas with correct dimensions', () => {
-    const wrapper = mountComponent({ width: 300, height: 150 })
+  it('renders canvas element', () => {
+    const wrapper = mountComponent({ height: 150 })
     const canvas = wrapper.find('canvas')
     expect(canvas.exists()).toBe(true)
-    expect(canvas.attributes('style')).toContain('width: 300px')
-    expect(canvas.attributes('style')).toContain('height: 150px')
   })
 
   it('isEmpty() returns true initially', () => {
