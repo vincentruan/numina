@@ -95,8 +95,9 @@ const bodyParagraphs = computed(() => {
 })
 
 const isEffective = computed(() => {
-  return props.members.length > 0
-    && props.members.every(m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed')
+  const adults = props.members.filter(m => m.role !== 'child')
+  return adults.length > 0
+    && adults.every(m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed')
 })
 
 const familyName = computed(() => familyStore.family?.name ?? '')
@@ -129,7 +130,6 @@ function statusColor(status?: string): string {
 <style scoped>
 .classic-template {
   width: 100%;
-  position: relative;
 }
 
 .certificate-border {
@@ -263,6 +263,7 @@ function statusColor(status?: string): string {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+  margin-bottom: 4.5rem; /* reserve space for wax seal */
 }
 
 .signature-cell {

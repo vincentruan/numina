@@ -80,8 +80,9 @@ const bodyParagraphs = computed(() => {
 })
 
 const isEffective = computed(() => {
-  return props.members.length > 0
-    && props.members.every(m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed')
+  const adults = props.members.filter(m => m.role !== 'child')
+  return adults.length > 0
+    && adults.every(m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed')
 })
 
 const familyName = computed(() => familyStore.family?.name ?? '')
@@ -209,6 +210,7 @@ function statusColor(status?: string): string {
   gap: 1.5rem;
   padding: 1.5rem;
   border-top: 1px solid var(--color-border, #dcdfe6);
+  margin-bottom: 4rem; /* reserve space for wax seal */
 }
 
 .signature-line {

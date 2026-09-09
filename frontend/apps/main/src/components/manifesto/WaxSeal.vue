@@ -39,7 +39,7 @@ const sealChar = computed(() => {
   return name.length > 0 ? name.charAt(0) : '家'
 })
 
-const sealTitle = computed(() => props.familyName)
+const sealTitle = computed(() => props.familyName || '家庭')
 
 // Stamp animation: trigger after mount so the CSS transition plays
 const hasStamped = ref(false)
