@@ -17,8 +17,8 @@
       />
       <!-- Member initials around the ring -->
       <g
-        v-for="pos in memberPositions"
-        :key="pos.member.name"
+        v-for="(pos, idx) in memberPositions"
+        :key="idx"
         class="family-crest__member"
         :class="pos.isActive ? 'family-crest__member--active' : 'family-crest__member--muted'"
         :transform="`translate(${pos.x}, ${pos.y})`"
@@ -37,9 +37,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'FamilyCrest' })
+
+const { t } = useI18n()
 
 interface MemberInfo {
   name: string
@@ -80,29 +83,33 @@ const memberPositions = computed(() => {
   })
 })
 
-/** Aria label describing crest state */
+/** Aria label describing crest state (i18n) */
 const crestAriaLabel = computed(() => {
   const total = props.members.length
   const signedCount = props.members.filter(
     m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed',
   ).length
-  const name = sealChar.value
-  return `Family crest: ${name}, ${signedCount} of ${total} members have signed`
+  return t('manifesto.crestAria', { name: sealChar.value, signed: signedCount, total })
 })
 
 // Entrance animation (double-rAF, mirrors WaxSeal pattern)
 const revealed = ref(false)
+let rafId = 0
 
 onMounted(() => {
   if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
     revealed.value = true
     return
   }
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  rafId = requestAnimationFrame(() => {
+    rafId = requestAnimationFrame(() => {
       revealed.value = true
     })
   })
+})
+
+onUnmounted(() => {
+  if (rafId) cancelAnimationFrame(rafId)
 })
 </script>
 

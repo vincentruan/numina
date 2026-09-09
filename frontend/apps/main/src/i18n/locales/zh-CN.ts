@@ -3776,6 +3776,7 @@ export default {
     feedbackPlaceholder: '写下你的想法和建议...',
     feedbackSuccess: '反馈提交成功',
     settingsGroup: '家庭约定',
+    crestAria: '家庭徽章：{name}，{signed}/{total} 人已签署',
     editManifesto: '家庭约定管理',
     versionHistory: '版本历史',
     feedbackList: '成员反馈',

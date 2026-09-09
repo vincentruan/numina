@@ -4,9 +4,22 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import FamilyCrest from '../FamilyCrest.vue'
 
-// Mock i18n
+// Mock i18n — return interpolated template for crestAria
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string | number>) => {
+      if (key === 'manifesto.crestAria' && params) {
+        return `Family crest: ${params.name}, ${params.signed} of ${params.total} members have signed`
+      }
+      if (params) {
+        return Object.entries(params).reduce(
+          (s, [k, v]) => s.replace(`{${k}}`, String(v)),
+          key,
+        )
+      }
+      return key
+    },
+  }),
 }))
 
 /**
