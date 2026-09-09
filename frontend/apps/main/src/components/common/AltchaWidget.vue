@@ -234,16 +234,14 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 12px;
-  font-size: 11px;
+  padding: 5px 14px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  background: #0d0d2e;
+  border: 1px solid rgba(189, 187, 255, 0.2);
   border-radius: 100px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 /* ── Hidden altcha widget ── */

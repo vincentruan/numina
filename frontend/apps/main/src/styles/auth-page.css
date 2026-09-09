@@ -196,6 +196,26 @@
   color: rgba(255, 255, 255, 0.9);
   text-decoration: none;
   font-size: 14px;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.auth-links a::after {
+  content: '→';
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.5;
+  transition: opacity 0.2s, transform 0.2s;
+  display: inline-block;
+}
+
+.auth-links a:hover {
+  color: #bdbbff;
+}
+
+.auth-links a:hover::after {
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 .auth-links .divider {
@@ -276,6 +296,24 @@
 
 :root[data-theme="light"] .auth-links a {
   color: #010120;
+}
+
+:root[data-theme="light"] .auth-links a:hover {
+  color: rgba(189, 187, 255, 0.8);
+}
+
+:root[data-theme="light"] .auth-links a::after {
+  content: '→';
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.4;
+  transition: opacity 0.2s, transform 0.2s;
+  display: inline-block;
+}
+
+:root[data-theme="light"] .auth-links a:hover::after {
+  opacity: 0.8;
+  transform: translateX(2px);
 }
 
 :root[data-theme="light"] .auth-links .divider {

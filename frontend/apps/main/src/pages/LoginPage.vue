@@ -790,14 +790,15 @@ async function submitEmojiPin() {
 }
 
 .app-subtitle {
-  font-size: 15px;
+  font-size: 18px;
   font-family: 'ZCOOL KuaiLe', 'Ma Shan Zheng', 'Noto Sans SC', cursive, sans-serif;
-  font-weight: 400;
-  letter-spacing: 0.12em;
-  margin-top: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  margin-top: 12px;
   display: flex;
-  gap: 1px;
+  gap: 2px;
   justify-content: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
 }
 
 .subtitle-char {
@@ -915,28 +916,25 @@ async function submitEmojiPin() {
   padding: 20px 0 0;
 }
 
-/* Glass morphism button — background uses white glass token per Visual Standards */
+/* Glass morphism button — opaque background so deer canvas doesn't show through */
 .form-actions :deep(.van-button--primary) {
-  --van-button-primary-background: rgba(255, 255, 255, 0.12);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.6);
+  --van-button-primary-background: #0d0d2e;
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.35);
   --van-button-primary-color: #fff;
   font-weight: 600;
   letter-spacing: 0.06em;
   transition: box-shadow 0.25s, background 0.25s, border-color 0.25s;
   box-shadow:
-    0 0 0 1px rgba(189, 187, 255, 0.15),
-    0 0 20px rgba(189, 187, 255, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 0 0 1px rgba(189, 187, 255, 0.1),
+    0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .form-actions :deep(.van-button--primary:active) {
-  --van-button-primary-background: rgba(255, 255, 255, 0.2);
-  --van-button-primary-border-color: #bdbbff;
+  --van-button-primary-background: #161640;
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.55);
   box-shadow:
-    0 0 0 3px rgba(189, 187, 255, 0.35),
-    0 0 28px rgba(189, 187, 255, 0.55),
-    0 0 56px rgba(189, 187, 255, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    0 0 0 2px rgba(189, 187, 255, 0.25),
+    0 4px 24px rgba(0, 0, 0, 0.6);
 }
 
 .login-links {
@@ -948,6 +946,26 @@ async function submitEmojiPin() {
   color: rgba(255, 255, 255, 0.9);
   text-decoration: none;
   font-size: 14px;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.login-links a::after {
+  content: '→';
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.5;
+  transition: opacity 0.2s, transform 0.2s;
+  display: inline-block;
+}
+
+.login-links a:hover {
+  color: #bdbbff;
+}
+
+.login-links a:hover::after {
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 .divider {
@@ -1090,13 +1108,13 @@ async function submitEmojiPin() {
 .pin-confirm-btn {
   max-width: 280px;
   margin-bottom: 12px;
-  --van-button-primary-background: rgba(189, 187, 255, 0.18);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
+  --van-button-primary-background: #0d0d2e;
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.35);
   --van-button-primary-color: #fff;
   font-weight: 600;
   letter-spacing: 0.04em;
   transition: box-shadow 0.2s, background 0.2s;
-  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .back-actions {
@@ -1438,13 +1456,13 @@ async function submitEmojiPin() {
 }
 
 .quick-login-btn {
-  --van-button-primary-background: rgba(189, 187, 255, 0.18);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
+  --van-button-primary-background: #0d0d2e;
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.35);
   --van-button-primary-color: #fff;
   font-weight: 600;
   letter-spacing: 0.04em;
   transition: box-shadow 0.2s, background 0.2s;
-  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .captcha-hint {
@@ -1526,18 +1544,17 @@ async function submitEmojiPin() {
 }
 
 [data-theme="light"] .form-actions .van-button--primary {
-  --van-button-primary-background: rgba(189, 187, 255, 0.12);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.3);
-  --van-button-primary-color: #010120;
+  --van-button-primary-background: rgba(1, 1, 32, 0.92);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.2);
+  --van-button-primary-color: #ffffff;
   font-weight: 600;
   letter-spacing: 0.06em;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
 [data-theme="light"] .form-actions .van-button--primary:active {
-  --van-button-primary-background: rgba(189, 187, 255, 0.2);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.5);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  --van-button-primary-background: rgba(1, 1, 32, 0.97);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
 }
 
 [data-theme="light"] .pin-slot {
@@ -1631,6 +1648,24 @@ async function submitEmojiPin() {
   color: #010120;
 }
 
+[data-theme="light"] .login-links a:hover {
+  color: rgba(189, 187, 255, 0.8);
+}
+
+[data-theme="light"] .login-links a::after {
+  content: '→';
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.4;
+  transition: opacity 0.2s, transform 0.2s;
+  display: inline-block;
+}
+
+[data-theme="light"] .login-links a:hover::after {
+  opacity: 0.8;
+  transform: translateX(2px);
+}
+
 [data-theme="light"] .divider {
   color: rgba(1, 1, 32, 0.2);
 }
@@ -1643,10 +1678,22 @@ async function submitEmojiPin() {
 
 [data-theme="light"] .pin-confirm-btn,
 [data-theme="light"] .quick-login-btn {
-  --van-button-primary-background: rgba(189, 187, 255, 0.12);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.3);
-  --van-button-primary-color: #010120;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --van-button-primary-background: rgba(1, 1, 32, 0.92);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.2);
+  --van-button-primary-color: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Light mode: captcha disabled pill */
+[data-theme="light"] .altcha-dev-pill {
+  color: rgba(26, 26, 46, 0.5);
+  background: rgba(247, 248, 250, 0.9);
+  border-color: rgba(1, 1, 32, 0.1);
+}
+
+/* Light mode: slogan text shadow for readability over pixel grid */
+[data-theme="light"] .app-subtitle {
+  text-shadow: none;
 }
 @font-face {
   font-family: 'ZCOOL KuaiLe';
