@@ -202,3 +202,79 @@
   color: rgba(255, 255, 255, 0.5);
   margin: 0 12px;
 }
+
+/* ── Light mode overrides (Register + JoinFamily pages) ────────────── */
+
+:root[data-theme="light"] .auth-page {
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .auth-title {
+  color: #1a1a2e;
+}
+
+:root[data-theme="light"] .auth-subtitle {
+  color: rgba(26, 26, 46, 0.7);
+}
+
+:root[data-theme="light"] .auth-form :deep(.van-cell),
+:root[data-theme="light"] .auth-form .van-cell {
+  background: rgba(255, 255, 255, 0.65);
+  border: 2px solid rgba(180, 170, 230, 0.3);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root[data-theme="light"] .auth-form :deep(.van-cell):focus-within,
+:root[data-theme="light"] .auth-form .van-cell:focus-within {
+  border-color: rgba(120, 100, 220, 0.6);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 0 3px rgba(120, 100, 220, 0.15),
+    0 0 12px rgba(120, 100, 220, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme="light"] .auth-form :deep(.van-field__label),
+:root[data-theme="light"] .auth-form .van-field__label {
+  color: rgba(26, 26, 46, 0.9);
+}
+
+:root[data-theme="light"] .auth-form :deep(.van-field__control),
+:root[data-theme="light"] .auth-form .van-field__control {
+  color: #1a1a2e;
+  caret-color: rgba(120, 100, 220, 0.9);
+}
+
+:root[data-theme="light"] .auth-form :deep(.van-field__placeholder),
+:root[data-theme="light"] .auth-form .van-field__placeholder {
+  color: rgba(26, 26, 46, 0.35);
+}
+
+:root[data-theme="light"] .auth-form :deep(.van-field__right-icon),
+:root[data-theme="light"] .auth-form .van-field__right-icon {
+  color: rgba(120, 100, 220, 0.7);
+}
+
+:root[data-theme="light"] .form-actions :deep(.van-button--primary),
+:root[data-theme="light"] .form-actions .van-button--primary {
+  --van-button-primary-background: rgba(100, 80, 200, 0.85);
+  --van-button-primary-border-color: rgba(120, 100, 220, 0.5);
+  --van-button-primary-color: #fff;
+  box-shadow: 0 2px 12px rgba(100, 80, 200, 0.25);
+}
+
+:root[data-theme="light"] .form-actions :deep(.van-button--primary:active),
+:root[data-theme="light"] .form-actions .van-button--primary:active {
+  --van-button-primary-background: rgba(100, 80, 200, 0.95);
+  box-shadow: 0 2px 16px rgba(100, 80, 200, 0.35);
+}
+
+:root[data-theme="light"] .auth-links a {
+  color: rgba(100, 80, 200, 0.9);
+}
+
+:root[data-theme="light"] .auth-links .divider {
+  color: rgba(26, 26, 46, 0.3);
+}
