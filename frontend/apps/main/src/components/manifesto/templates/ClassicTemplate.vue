@@ -1,6 +1,9 @@
 <template>
   <div class="classic-template">
     <div class="certificate-border">
+      <!-- Wax seal: appears when all members have signed -->
+      <WaxSeal v-if="isEffective" :family-name="familyName" class="wax-seal-position" />
+
       <!-- Corner ornaments -->
       <span class="ornament ornament-tl"></span>
       <span class="ornament ornament-tr">☙</span>
@@ -62,8 +65,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFamilyStore } from '@/stores/family'
+import WaxSeal from '../WaxSeal.vue'
 
 const { t } = useI18n()
+const familyStore = useFamilyStore()
 
 interface SignatureInfo {
   name: string
@@ -87,6 +93,13 @@ const props = defineProps<{
 const bodyParagraphs = computed(() => {
   return props.body.split('\n\n').filter(p => p.trim())
 })
+
+const isEffective = computed(() => {
+  return props.members.length > 0
+    && props.members.every(m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed')
+})
+
+const familyName = computed(() => familyStore.family?.name ?? '')
 
 function statusIcon(status?: string): string {
   switch (status) {
@@ -116,6 +129,7 @@ function statusColor(status?: string): string {
 <style scoped>
 .classic-template {
   width: 100%;
+  position: relative;
 }
 
 .certificate-border {
@@ -124,6 +138,14 @@ function statusColor(status?: string): string {
   border-radius: 4px;
   position: relative;
   background: linear-gradient(180deg, rgba(253, 246, 227, 0.15) 0%, transparent 30%);
+}
+
+/* ── Wax seal: bottom-right of signature area ── */
+.wax-seal-position {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 2;
 }
 
 /* ── Corner ornaments ── */

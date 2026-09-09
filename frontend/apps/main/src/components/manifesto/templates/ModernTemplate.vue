@@ -1,5 +1,8 @@
 <template>
   <div class="modern-template">
+    <!-- Wax seal: appears when all members have signed -->
+    <WaxSeal v-if="isEffective" :family-name="familyName" class="wax-seal-position" />
+
     <!-- Top accent bar -->
     <div class="modern-accent-bar">
       <span class="accent-dot" />
@@ -47,8 +50,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFamilyStore } from '@/stores/family'
+import WaxSeal from '../WaxSeal.vue'
 
 const { t } = useI18n()
+const familyStore = useFamilyStore()
 
 interface SignatureInfo {
   name: string
@@ -72,6 +78,13 @@ const props = defineProps<{
 const bodyParagraphs = computed(() => {
   return props.body.split('\n\n').filter(p => p.trim())
 })
+
+const isEffective = computed(() => {
+  return props.members.length > 0
+    && props.members.every(m => m.signingStatus === 'signed' || m.signingStatus === 'confirmed')
+})
+
+const familyName = computed(() => familyStore.family?.name ?? '')
 
 function statusIcon(status?: string): string {
   switch (status) {
@@ -101,6 +114,15 @@ function statusColor(status?: string): string {
 <style scoped>
 .modern-template {
   width: 100%;
+  position: relative;
+}
+
+/* ── Wax seal: bottom-right of document ── */
+.wax-seal-position {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 2;
 }
 
 /* ── Top accent bar (3 dots) ── */
