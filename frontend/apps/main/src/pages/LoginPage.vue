@@ -743,9 +743,13 @@ async function submitEmojiPin() {
   z-index: 0;
 }
 
-/* The deer canvas is masked to the deer SVG silhouette — mask applied via JS (blob URL) for mobile compatibility */
+/* The deer canvas is masked to the deer SVG silhouette — mask applied via JS (blob URL) for mobile compatibility.
+ * Constrained to start below the login header (logo + slogan) so the deer pixel grid
+ * doesn't overlap the slogan text. */
 .deer-canvas--deer {
   z-index: 1;
+  top: calc(min(15vh, 60px) + 110px);
+  height: calc(100vh - min(15vh, 60px) - 110px);
   mask-repeat: no-repeat;
   mask-position: center center;
   mask-size: contain;
@@ -944,7 +948,9 @@ async function submitEmojiPin() {
 
 .login-links a {
   color: rgba(255, 255, 255, 0.9);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
   font-size: 14px;
   position: relative;
   transition: color 0.2s;
@@ -1646,6 +1652,9 @@ async function submitEmojiPin() {
 
 [data-theme="light"] .login-links a {
   color: #010120;
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
 }
 
 [data-theme="light"] .login-links a:hover {
