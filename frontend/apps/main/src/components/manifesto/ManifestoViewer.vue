@@ -1,5 +1,5 @@
 <template>
-  <div class="manifesto-viewer">
+  <div ref="containerRef" class="manifesto-viewer">
     <component
       v-if="resolvedComponent"
       :is="resolvedComponent"
@@ -10,14 +10,20 @@
     />
     <div v-else class="manifesto-viewer-fallback">
       <h2>{{ title }}</h2>
-      <p>{{ body }}</p>
+      <p
+        v-for="(paragraph, index) in fallbackParagraphs"
+        :key="index"
+        data-reveal
+        :style="{ '--reveal-index': index }"
+      >{{ paragraph }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { getTemplate } from './templates/templateRegistry'
+import { useScrollReveal } from '@/composables/useScrollReveal'
 
 interface SignatureInfo {
   name: string
@@ -43,6 +49,13 @@ const resolvedComponent = computed(() => {
   const tmpl = getTemplate(props.templateId)
   return tmpl?.component ?? null
 })
+
+const containerRef = ref<HTMLElement | null>(null)
+useScrollReveal(containerRef)
+
+const fallbackParagraphs = computed(() =>
+  props.body.split('\n\n').filter(p => p.trim()),
+)
 </script>
 
 <style scoped>
@@ -64,5 +77,26 @@ const resolvedComponent = computed(() => {
   color: var(--text-secondary, #616161);
   white-space: pre-wrap;
   margin: 0;
+}
+</style>
+
+<!-- Shared scroll reveal styles for all template paragraphs (unscoped) -->
+<style>
+.manifesto-viewer [data-reveal] {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s ease-out, transform 0.35s ease-out;
+  transition-delay: calc(min(var(--reveal-index, 0), 5) * 80ms);
+}
+.manifesto-viewer [data-reveal].revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .manifesto-viewer [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 </style>
