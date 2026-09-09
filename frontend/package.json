@@ -1,5 +1,8 @@
 {
 	"devDependencies": {
 		"@iconify/json": "^2.2.508"
+	},
+	"dependencies": {
+		"vant": "^4.10.2"
 	}
 }
