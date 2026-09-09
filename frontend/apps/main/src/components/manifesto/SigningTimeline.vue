@@ -124,16 +124,16 @@
       </div>
     </div>
 
-    <!-- Pending / Expired terminal -->
+    <!-- Pending terminal -->
     <div
-      v-if="flowState === 'expired' || (flowState === 'signing' && !hasRejection)"
+      v-if="flowState === 'signing' && !hasRejection"
       class="timeline-node timeline-node--pending"
     >
       <div class="timeline-node__indicator">
         <span class="timeline-node__dot timeline-node__dot--hollow" />
       </div>
       <div class="timeline-node__content timeline-node__content--muted">
-        {{ flowState === 'expired' ? t('manifesto.flow.deadlineExpired') : t('manifesto.flow.pendingEffective') }}
+        {{ t('manifesto.flow.pendingEffective') }}
       </div>
     </div>
   </div>
@@ -169,7 +169,7 @@ const props = defineProps<{
 const { t, locale } = useI18n()
 
 const showSigningNode = computed(() => {
-  return props.flowState === 'signing' || props.flowState === 'rejected' || props.flowState === 'expired'
+  return props.flowState === 'signing' || props.flowState === 'rejected'
 })
 
 /** Ordered list of visible node keys for connector-line logic. */
@@ -180,7 +180,7 @@ const visibleNodes = computed(() => {
     nodes.push('rejected', 'version-bridge')
   }
   if (props.flowState === 'effective') nodes.push('effective')
-  if (props.flowState === 'expired' || (props.flowState === 'signing' && !props.hasRejection)) {
+  if (props.flowState === 'signing' && !props.hasRejection) {
     nodes.push('pending')
   }
   return nodes

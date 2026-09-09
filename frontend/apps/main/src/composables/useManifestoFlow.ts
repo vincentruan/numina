@@ -22,19 +22,17 @@ export function useManifestoFlow(
     // Has rejections → rejected
     if (m.rejections && m.rejections.length > 0) return 'rejected'
 
-    // All adult members signed/confirmed → effective
     const adultMembers = members.value.filter(mem => mem.role !== 'child')
-    if (adultMembers.length > 0) {
-      const allSigned = adultMembers.every(mem =>
-        m.signatures.some(sig => sig.user_id === mem.id),
-      )
-      if (allSigned) return 'effective'
-    }
+    const deadlinePassed = m.signing_deadline
+      ? new Date(m.signing_deadline).getTime() < Date.now()
+      : false
 
-    // Deadline passed and not all signed → expired
-    if (m.signing_deadline) {
-      const deadline = new Date(m.signing_deadline).getTime()
-      if (deadline < Date.now()) return 'expired'
+    // All adult members: signed OR deadline passed (unsigned → treated as accepted by timeout)
+    if (adultMembers.length > 0) {
+      const allResolved = adultMembers.every(mem =>
+        m.signatures.some(sig => sig.user_id === mem.id) || deadlinePassed,
+      )
+      if (allResolved) return 'effective'
     }
 
     return 'signing'
@@ -46,7 +44,9 @@ export function useManifestoFlow(
 
     const sigMap = new Map(m.signatures.map(s => [s.user_id, s]))
     const rejMap = new Map((m.rejections ?? []).map(r => [r.user_id, r]))
-    const isExpired = flowState.value === 'expired'
+    const deadlinePassed = m.signing_deadline
+      ? new Date(m.signing_deadline).getTime() < Date.now()
+      : false
 
     return members.value.map(mem => {
       const sig = sigMap.get(mem.id)
@@ -60,7 +60,7 @@ export function useManifestoFlow(
       } else if (sig) {
         // null signature_data = tap-to-consent (child confirmation)
         status = isChild ? 'confirmed' : 'signed'
-      } else if (isExpired) {
+      } else if (deadlinePassed) {
         status = 'expired'
       } else {
         status = isChild ? 'pending_confirm' : 'pending_sign'

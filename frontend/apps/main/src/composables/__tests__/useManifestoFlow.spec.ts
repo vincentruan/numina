@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useManifestoFlow } from '../useManifestoFlow'
 import type { Manifesto } from '@/types/manifesto'
 import type { User } from '@/types'
@@ -79,15 +79,31 @@ describe('useManifestoFlow', () => {
       expect(flowState.value).toBe('effective')
     })
 
-    it('returns expired when deadline passed and not all signed', () => {
+    it('returns effective when deadline passed even with unsigned adults (auto-accepted)', () => {
+      const adults = [makeUser({ id: '1' }), makeUser({ id: '2', role: 'member' })]
+      const m = ref(makeManifesto({
+        signing_deadline: '2020-01-01T00:00:00Z',
+        signatures: [
+          { id: '1', user_id: '1', signature_data: 'sig', signed_at: '2026-01-01T00:00:00Z' },
+        ],
+        // user 2 unsigned → treated as expired/auto-accepted by deadline
+      }))
+      const members = ref<User[]>(adults)
+      const userId = ref<string | null>('1')
+      const { flowState } = useManifestoFlow(m, members, userId)
+      expect(flowState.value).toBe('effective')
+    })
+
+    it('returns effective when deadline passed and no one signed', () => {
+      const adults = [makeUser({ id: '1' }), makeUser({ id: '2', role: 'member' })]
       const m = ref(makeManifesto({
         signing_deadline: '2020-01-01T00:00:00Z',
         signatures: [],
       }))
-      const members = ref<User[]>([makeUser()])
+      const members = ref<User[]>(adults)
       const userId = ref<string | null>('1')
       const { flowState } = useManifestoFlow(m, members, userId)
-      expect(flowState.value).toBe('expired')
+      expect(flowState.value).toBe('effective')
     })
 
     it('returns signing when active and some pending', () => {
@@ -168,6 +184,23 @@ describe('useManifestoFlow', () => {
       expect(memberStates.value[0].isCurrentUser).toBe(false)
       expect(memberStates.value[1].isCurrentUser).toBe(true)
     })
+
+    it('maps unsigned adult to expired when deadline passed', () => {
+      const m = ref(makeManifesto({
+        signing_deadline: '2020-01-01T00:00:00Z',
+        signatures: [
+          { id: '1', user_id: '1', signature_data: 'sig', signed_at: '2026-01-01T00:00:00Z' },
+        ],
+      }))
+      const members = ref<User[]>([
+        makeUser({ id: '1' }),
+        makeUser({ id: '2', role: 'member' }),
+      ])
+      const userId = ref<string | null>('1')
+      const { memberStates } = useManifestoFlow(m, members, userId)
+      expect(memberStates.value[0].status).toBe('signed')
+      expect(memberStates.value[1].status).toBe('expired')
+    })
   })
 
   describe('canSign / canReject', () => {
@@ -181,7 +214,7 @@ describe('useManifestoFlow', () => {
       expect(canSign.value).toBe(true)
     })
 
-    it('canSign is false when expired', () => {
+    it('canSign is false when deadline passed (flow is effective)', () => {
       const m = ref(makeManifesto({
         signing_deadline: '2020-01-01T00:00:00Z',
       }))

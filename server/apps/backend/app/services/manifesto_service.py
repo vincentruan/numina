@@ -377,7 +377,9 @@ def get_dashboard_summary(
     )
     signed_count = (
         db.query(ManifestoSignature)
-        .filter_by(version_id=manifesto.current_version_id)
+        .join(User, ManifestoSignature.user_id == User.id)
+        .filter(ManifestoSignature.version_id == manifesto.current_version_id)
+        .filter(User.role != "child")
         .count()
     )
     return ManifestoDashboardSummaryResponse(
