@@ -289,13 +289,18 @@ async function refreshManifesto() {
 }
 
 .sign-action-area {
-  padding: 12px 16px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-top: 1px solid var(--card-bg, #f5f5ff);
-  border-bottom: 1px solid var(--card-bg, #f5f5ff);
-  background: var(--bg-primary, #fff);
+  margin-top: 8px;
+  border-top: 1px solid var(--ceremony-gold, #c9a84c);
+}
+
+.sign-flow-area {
+  padding: 16px;
+  margin-top: 8px;
+  border-top: 1px solid var(--ceremony-gold, #c9a84c);
 }
 
 .sign-hint {
@@ -333,9 +338,5 @@ async function refreshManifesto() {
 .sign-status-badge--rejected {
   color: var(--color-error, #ee0a24);
   background: rgba(238, 10, 36, 0.06);
-}
-
-.sign-flow-area {
-  padding: 16px;
 }
 </style>
