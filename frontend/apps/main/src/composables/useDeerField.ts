@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 
 // Two-layer background system:
 //   bgCanvas  — stellar particles with bright cores + irregular halos
@@ -59,6 +59,23 @@ const STELLAR_COLORS: Array<{ core: [number, number, number]; halo: [number, num
   { core: [255, 235, 210], halo: [255, 200, 150], ratio: 0.20 },
   { core: [255, 220, 200], halo: [255, 170, 120], ratio: 0.05 },
 ]
+
+// Rainbow palette for light mode — each entry is a distinct hue
+// Core and halo use same hue at different lightness (no cross-hue discontinuity)
+const RAINBOW_COLORS: Array<{ core: [number, number, number]; halo: [number, number, number] }> = [
+  { core: [255, 107, 107], halo: [255, 160, 140] },  // red
+  { core: [255, 159, 67],  halo: [255, 190, 120] },  // orange
+  { core: [254, 202, 87],  halo: [254, 220, 140] },  // yellow
+  { core: [72, 219, 251],  halo: [130, 230, 255] },  // cyan
+  { core: [10, 189, 227],  halo: [80, 210, 240] },   // blue
+  { core: [95, 39, 205],   halo: [140, 100, 230] },  // indigo
+  { core: [162, 155, 254], halo: [195, 190, 255] },  // purple
+]
+
+// Light-mode pixel grid: soft blue-purple-pink gradient
+// Each cell gets a deterministic color interpolated between two endpoints
+const GRID_LIGHT_START = { r: 120, g: 100, b: 220 }  // blue-purple
+const GRID_LIGHT_END = { r: 200, g: 140, b: 200 }     // pink
 
 const INTENSITY_LEVELS = ['soft', 'medium', 'bright'] as const
 
@@ -139,19 +156,37 @@ function flickerGrid(alphas: Float32Array, dt: number) {
   }
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D, grid: Grid) {
+function drawGrid(ctx: CanvasRenderingContext2D, grid: Grid, isDark: boolean = true) {
   const { cols, rows, alphas, dpr } = grid
   const step = (CELL_SIZE + CELL_GAP) * dpr
   const size = CELL_SIZE * dpr
 
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
-  for (let c = 0; c < cols; c++) {
-    for (let r = 0; r < rows; r++) {
-      const a = alphas[c * rows + r]
-      if (a < 0.01) continue
-      ctx.fillStyle = `rgba(189,187,255,${a})`
-      ctx.fillRect(c * step, r * step, size, size)
+  if (!isDark) {
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const a = alphas[c * rows + r]
+        if (a < 0.01) continue
+        // Each cell gets a stable color from its index (deterministic, no per-frame random)
+        const cellT = ((c * 7 + r * 13) % 100) / 100
+        const cr = Math.round(GRID_LIGHT_START.r + (GRID_LIGHT_END.r - GRID_LIGHT_START.r) * cellT)
+        const cg = Math.round(GRID_LIGHT_START.g + (GRID_LIGHT_END.g - GRID_LIGHT_START.g) * cellT)
+        const cb = Math.round(GRID_LIGHT_START.b + (GRID_LIGHT_END.b - GRID_LIGHT_START.b) * cellT)
+        // Light mode: increase max alpha slightly for visibility on white
+        const scaledA = Math.min(a * 1.3, 0.55)
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${scaledA})`
+        ctx.fillRect(c * step, r * step, size, size)
+      }
+    }
+  } else {
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const a = alphas[c * rows + r]
+        if (a < 0.01) continue
+        ctx.fillStyle = `rgba(189,187,255,${a})`
+        ctx.fillRect(c * step, r * step, size, size)
+      }
     }
   }
 }
@@ -242,17 +277,109 @@ function generateStarSprite(
   return sprite
 }
 
-function buildSprites(dpr: number = SPRITE_DPR_MAX): StarSprite[] {
+function generateRainbowSprite(
+  colorIndex: number,
+  intensityIndex: number,
+  dpr: number = SPRITE_DPR_MAX
+): HTMLCanvasElement {
+  const sprite = document.createElement('canvas')
+  const size = SPRITE_SIZE * dpr
+  sprite.width = size
+  sprite.height = size
+  const ctx = sprite.getContext('2d')!
+  const cx = size / 2
+  const cy = size / 2
+
+  const colorSpec = RAINBOW_COLORS[colorIndex]
+  const [coreR, coreG, coreB] = colorSpec.core
+  const [haloR, haloG, haloB] = colorSpec.halo
+
+  const intensityMult = intensityIndex === 2 ? 1.4 : intensityIndex === 1 ? 1.0 : 0.7
+  const rayCount = Math.floor((8 + Math.random() * 6) * intensityMult)
+  const baseHaloRadius = (size / 2 - 4) * intensityMult
+
+  // 1. Circular glow underlayer — same hue, softer
+  const glowRadius = baseHaloRadius * 0.9
+  const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius)
+  glowGrad.addColorStop(0, `rgba(${haloR},${haloG},${haloB},0.30)`)
+  glowGrad.addColorStop(0.5, `rgba(${haloR},${haloG},${haloB},0.06)`)
+  glowGrad.addColorStop(1, `rgba(${haloR},${haloG},${haloB},0)`)
+  ctx.beginPath()
+  ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2)
+  ctx.fillStyle = glowGrad
+  ctx.fill()
+
+  // 2. Irregular radiating rays — same hue
+  ctx.save()
+  ctx.translate(cx, cy)
+
+  for (let i = 0; i < rayCount; i++) {
+    const angle = (i / rayCount) * Math.PI * 2 + Math.random() * 0.3
+    const rayLength = baseHaloRadius * (0.6 + Math.random() * 0.8)
+    const rayWidth = (2 + Math.random() * 4) * dpr
+    const rayOpacity = 0.10 + Math.random() * 0.12
+
+    const endX = Math.cos(angle) * rayLength
+    const endY = Math.sin(angle) * rayLength
+    const rayGrad = ctx.createLinearGradient(0, 0, endX, endY)
+    rayGrad.addColorStop(0, `rgba(${haloR},${haloG},${haloB},0.20)`)
+    rayGrad.addColorStop(0.4, `rgba(${haloR},${haloG},${haloB},${rayOpacity.toFixed(3)})`)
+    rayGrad.addColorStop(0.8, `rgba(${haloR},${haloG},${haloB},0.02)`)
+    rayGrad.addColorStop(1, `rgba(${haloR},${haloG},${haloB},0)`)
+
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.lineTo(endX, endY)
+    ctx.strokeStyle = rayGrad
+    ctx.lineWidth = rayWidth
+    ctx.lineCap = 'round'
+    ctx.stroke()
+  }
+
+  ctx.restore()
+
+  // 3. Bright core — same hue, white center blending to hue
+  const coreRadius = 4 * dpr
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius)
+  coreGrad.addColorStop(0, `rgba(255,255,255,0.95)`)
+  coreGrad.addColorStop(0.35, `rgba(${coreR},${coreG},${coreB},0.85)`)
+  coreGrad.addColorStop(0.7, `rgba(${coreR},${coreG},${coreB},0.5)`)
+  coreGrad.addColorStop(1, `rgba(${coreR},${coreG},${coreB},0)`)
+  ctx.beginPath()
+  ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2)
+  ctx.fillStyle = coreGrad
+  ctx.fill()
+
+  return sprite
+}
+
+function buildSprites(dpr: number = SPRITE_DPR_MAX, isDark: boolean = true): StarSprite[] {
   const sprites: StarSprite[] = []
-  for (let tempIdx = 0; tempIdx < STELLAR_COLORS.length; tempIdx++) {
-    for (let intIdx = 0; intIdx < INTENSITY_LEVELS.length; intIdx++) {
-      sprites.push({
-        canvas: generateStarSprite(tempIdx, intIdx, dpr),
-        colorTempIndex: tempIdx,
-        intensityIndex: intIdx,
-      })
+
+  if (isDark) {
+    // Dark mode: original white-temperature stellar colors
+    for (let tempIdx = 0; tempIdx < STELLAR_COLORS.length; tempIdx++) {
+      for (let intIdx = 0; intIdx < INTENSITY_LEVELS.length; intIdx++) {
+        sprites.push({
+          canvas: generateStarSprite(tempIdx, intIdx, dpr),
+          colorTempIndex: tempIdx,
+          intensityIndex: intIdx,
+        })
+      }
+    }
+  } else {
+    // Light mode: rainbow colors — each hue × each intensity
+    for (let colorIdx = 0; colorIdx < RAINBOW_COLORS.length; colorIdx++) {
+      for (let intIdx = 0; intIdx < INTENSITY_LEVELS.length; intIdx++) {
+        sprites.push({
+          canvas: generateRainbowSprite(colorIdx, intIdx, dpr),
+          colorTempIndex: colorIdx,
+          intensityIndex: intIdx,
+        })
+      }
     }
   }
+
   return sprites
 }
 
@@ -276,14 +403,10 @@ function assignDepthLayer(): 'far' | 'mid' | 'near' {
   return 'near'
 }
 
-function assignColorTemp(): number {
+function assignColorTemp(colorCount: number): number {
   const r = Math.random()
-  let cumulative = 0
-  for (let i = 0; i < STELLAR_COLORS.length; i++) {
-    cumulative += STELLAR_COLORS[i].ratio
-    if (r < cumulative) return i
-  }
-  return STELLAR_COLORS.length - 1
+  // Uniform distribution for rainbow; weighted for stellar
+  return Math.floor(r * colorCount)
 }
 
 function getDepthParams(depth: 'far' | 'mid' | 'near') {
@@ -323,18 +446,21 @@ function initParticleFlow(p: Particle, w: number, h: number): void {
   p.noiseOffsetY = Math.random() * 1000
 }
 
-function buildParticles(w: number, h: number): Particle[] {
+function buildParticles(w: number, h: number, isDark: boolean = true): Particle[] {
   const particles: Particle[] = []
   const count = computeParticleCount(w, h)
+  const colorCount = isDark ? STELLAR_COLORS.length : RAINBOW_COLORS.length
 
   for (let i = 0; i < count; i++) {
     const depth = assignDepthLayer()
     const params = getDepthParams(depth)
-    const colorTempIdx = assignColorTemp()
+    const colorTempIdx = assignColorTemp(colorCount)
     const intensityIdx = Math.floor(Math.random() * INTENSITY_LEVELS.length)
 
     const baseRadius = rand(params.radiusMin, params.radiusMax)
-    const baseOpacity = rand(params.opacityMin, params.opacityMax)
+    // Light mode: reduce base opacity so particles don't overwhelm white bg
+    const opacityScale = isDark ? 1.0 : 0.6
+    const baseOpacity = rand(params.opacityMin, params.opacityMax) * opacityScale
     const driftSpeed = rand(params.speedMin, params.speedMax)
 
     const p: Particle = {
@@ -432,6 +558,7 @@ function drawParticles(
 export function useDeerField(
   bgCanvasRef: { value: HTMLCanvasElement | null },
   deerCanvasRef: { value: HTMLCanvasElement | null },
+  isDark: Ref<boolean> = ref(true),
 ) {
   let rafId: number | null = null
   let bgCtx: CanvasRenderingContext2D | null = null
@@ -448,6 +575,7 @@ export function useDeerField(
   let handleResize: (() => void) | null = null
   let handleVisibility: (() => void) | null = null
   let maskBlobUrl: string | null = null
+  let currentIsDark = isDark.value
 
   function resize() {
     const bg = bgCanvasRef.value
@@ -471,7 +599,7 @@ export function useDeerField(
     deerCtx = deer.getContext('2d')
     deerCtx?.setTransform(1, 0, 0, 1, 0, 0)
 
-    particles = buildParticles(vpW, vpH)
+    particles = buildParticles(vpW, vpH, currentIsDark)
   }
 
   function loop(ts: number) {
@@ -484,7 +612,7 @@ export function useDeerField(
       drawParticles(bgCtx, particles, sprites, bgDpr)
 
       flickerGrid(grid.alphas, dt)
-      drawGrid(deerCtx, grid)
+      drawGrid(deerCtx, grid, currentIsDark)
     }
     rafId = requestAnimationFrame(loop)
   }
@@ -498,7 +626,7 @@ export function useDeerField(
 
   function start() {
     resize()
-    sprites = buildSprites(SPRITE_DPR_MAX)
+    sprites = buildSprites(SPRITE_DPR_MAX, currentIsDark)
 
     const picked = ANIMAL_SVGS[Math.floor(Math.random() * ANIMAL_SVGS.length)]
     fetch(`/images/${picked}`)
@@ -543,6 +671,14 @@ export function useDeerField(
     sprites = []
     animTime = 0
   }
+
+  watch(isDark, (newVal) => {
+    currentIsDark = newVal
+    // Rebuild sprites for new color mode
+    sprites = buildSprites(SPRITE_DPR_MAX, currentIsDark)
+    // Rebuild particles with new sprite indices and opacity
+    particles = buildParticles(vpW, vpH, currentIsDark)
+  })
 
   onMounted(start)
   onUnmounted(stop)
