@@ -36,7 +36,7 @@ const isDimmed = computed<boolean>(() => props.data?.dimmed === true)
   width: v-bind(NODE_WIDTH);
   padding: 12px 16px;
   border-radius: 12px;
-  background: rgba(238, 10, 36, 0.06);
+  background: color-mix(in srgb, var(--color-error, #ee0a24) 6%, transparent);
   border: 1.5px solid var(--color-error, #ee0a24);
   display: flex;
   flex-direction: column;

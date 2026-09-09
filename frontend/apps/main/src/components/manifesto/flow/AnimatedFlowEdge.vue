@@ -41,7 +41,7 @@ const edgeStyle = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vue-flow__edge animatedFlowEdge {
+  .vue-flow__edge path {
     animation: none !important;
   }
 }

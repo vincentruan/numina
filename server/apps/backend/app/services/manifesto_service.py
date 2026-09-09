@@ -145,6 +145,16 @@ def sign_manifesto(
     signature_data: str | None,
 ) -> ManifestoSignature:
     """Sign a manifesto version. Raise 409 if already signed or rejected."""
+    # Lock the version row to serialize sign/reject races
+    version = (
+        db.query(ManifestoVersion)
+        .filter_by(id=version_id)
+        .with_for_update()
+        .first()
+    )
+    if version is None:
+        raise AppError(ErrorCode.MANIFESTO_NOT_FOUND)
+
     existing = (
         db.query(ManifestoSignature)
         .filter_by(version_id=version_id, user_id=user_id)
@@ -170,33 +180,31 @@ def sign_manifesto(
     db.add(sig)
 
     # Check if all family members have signed this version
-    version = db.query(ManifestoVersion).filter_by(id=version_id).first()
-    if version is not None:
-        manifesto = (
-            db.query(FamilyManifesto).filter_by(id=version.manifesto_id).first()
+    manifesto = (
+        db.query(FamilyManifesto).filter_by(id=version.manifesto_id).first()
+    )
+    if manifesto is not None:
+        total_members = (
+            db.query(User)
+            .filter_by(family_id=manifesto.family_id, is_active=True)
+            .filter(User.role != "child")
+            .count()
         )
-        if manifesto is not None:
-            total_members = (
-                db.query(User)
-                .filter_by(family_id=manifesto.family_id, is_active=True)
-                .filter(User.role != "child")
-                .count()
-            )
-            # Only count adult signatures — total_members excludes children
-            adult_signer_ids = (
-                db.query(User.id)
-                .filter_by(family_id=manifesto.family_id, is_active=True)
-                .filter(User.role != "child")
-                .subquery()
-            )
-            adult_signed_count = (
-                db.query(ManifestoSignature)
-                .filter_by(version_id=version_id)
-                .filter(ManifestoSignature.user_id.in_(db.query(adult_signer_ids)))
-                .count()
-            )
-            if adult_signed_count >= total_members and version.signed_at is None:
-                version.signed_at = sa_func.now()
+        # Only count adult signatures — total_members excludes children
+        adult_signer_ids = (
+            db.query(User.id)
+            .filter_by(family_id=manifesto.family_id, is_active=True)
+            .filter(User.role != "child")
+            .subquery()
+        )
+        adult_signed_count = (
+            db.query(ManifestoSignature)
+            .filter_by(version_id=version_id)
+            .filter(ManifestoSignature.user_id.in_(db.query(adult_signer_ids)))
+            .count()
+        )
+        if adult_signed_count >= total_members and version.signed_at is None:
+            version.signed_at = sa_func.now()
 
     try:
         db.commit()
@@ -214,6 +222,16 @@ def reject_manifesto(
     reason: str | None,
 ) -> ManifestoRejection:
     """Reject a manifesto version. Raise 409 if already rejected or signed."""
+    # Lock the version row to serialize sign/reject races
+    version = (
+        db.query(ManifestoVersion)
+        .filter_by(id=version_id)
+        .with_for_update()
+        .first()
+    )
+    if version is None:
+        raise AppError(ErrorCode.MANIFESTO_NOT_FOUND)
+
     existing_rejection = (
         db.query(ManifestoRejection)
         .filter_by(version_id=version_id, user_id=user_id)
@@ -265,6 +283,15 @@ def get_unsigned_check(
         .first()
     )
     if existing is not None:
+        return UnsignedManifestoCheckResponse(has_unsigned=False)
+
+    # Also check if user has already rejected
+    rejection = (
+        db.query(ManifestoRejection)
+        .filter_by(version_id=manifesto.current_version_id, user_id=user_id)
+        .first()
+    )
+    if rejection is not None:
         return UnsignedManifestoCheckResponse(has_unsigned=False)
 
     version = (

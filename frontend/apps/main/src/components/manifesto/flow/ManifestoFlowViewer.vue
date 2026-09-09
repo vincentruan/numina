@@ -191,7 +191,7 @@ const edges = computed<Edge[]>(() => {
       id: `e-${source.id}-${target.id}`,
       source: source.id,
       target: target.id,
-      type: (isCompleted || isError || isLoopBack) ? 'animated' : 'completed',
+      type: (!isCompleted || isError || isLoopBack) ? 'animated' : 'completed',
       data: { isError },
     })
   }

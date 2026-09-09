@@ -91,7 +91,7 @@ const isDimmed = computed<boolean>(() => props.data?.dimmed === true)
   font-size: 12px;
   color: var(--text-secondary, #616161);
   padding-top: 4px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid var(--van-border-color, rgba(0, 0, 0, 0.06));
 }
 
 .flow-signing__deadline--expired {

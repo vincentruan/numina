@@ -123,13 +123,19 @@ def publish_update(
         db.query(ManifestoVersion).filter_by(id=updated.current_version_id).first()
     )
     sig_list: list = []
+    rejection_list: list = []
     if updated.current_version_id is not None:
         sig_list = (
             db.query(ManifestoSignature)
             .filter_by(version_id=updated.current_version_id)
             .all()
         )
-    return _build_manifesto_response(updated, version, sig_list)
+        rejection_list = (
+            db.query(ManifestoRejection)
+            .filter_by(version_id=updated.current_version_id)
+            .all()
+        )
+    return _build_manifesto_response(updated, version, sig_list, rejection_list)
 
 
 @router.post("/sign", response_model=ManifestoSignatureItem, status_code=201)

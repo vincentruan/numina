@@ -133,20 +133,66 @@ def test_rejected_user_cannot_sign_409(client, auth_headers, manifesto):
 
 
 def test_get_manifesto_includes_rejections(client, auth_headers, member_headers, manifesto):
-    """GET /family/manifesto returns rejections list."""
+    """GET /family/manifesto returns rejections list (both owner and member can see)."""
     # Owner rejects
     client.post(
         "/api/v1/family/manifesto/reject",
         headers=auth_headers,
         json={"reason": "需要修改"},
     )
-    # Fetch manifesto
+    # Owner can see rejections
     resp = client.get("/api/v1/family/manifesto", headers=auth_headers)
     assert resp.status_code == 200
     data = _data(resp)
     assert "rejections" in data
     assert len(data["rejections"]) == 1
     assert data["rejections"][0]["reason"] == "需要修改"
+
+    # Member can also see rejections
+    resp = client.get("/api/v1/family/manifesto", headers=member_headers)
+    assert resp.status_code == 200
+    data = _data(resp)
+    assert len(data["rejections"]) == 1
+
+
+def test_child_cannot_reject_403(client, auth_headers, manifesto):
+    """Child-role user cannot reject — require_adult returns 403."""
+    # Create a child user
+    resp = client.post(
+        "/api/v1/family/children",
+        headers=auth_headers,
+        json={
+            "display_name": "RejectChild",
+            "password": "ChildPass1",
+            "username": "rejectchild",
+            "avatar_color": "#FF5733",
+            "pin": ["🐱", "🌟", "🎈", "🐶"],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    # Login as child
+    from tests.backend.conftest import child_login_two_phase
+    token = child_login_two_phase(
+        client, "rejectchild", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"]
+    )
+    child_headers = {"Authorization": f"Bearer {token}"}
+    # Try to reject — should be 403
+    resp = client.post(
+        "/api/v1/family/manifesto/reject",
+        headers=child_headers,
+        json={"reason": "child try"},
+    )
+    assert resp.status_code == 403
+
+
+def test_reject_without_manifesto_404(client, auth_headers):
+    """Rejecting when no manifesto exists returns 404."""
+    resp = client.post(
+        "/api/v1/family/manifesto/reject",
+        headers=auth_headers,
+        json={"reason": "no manifesto"},
+    )
+    assert resp.status_code == 404
 
 
 def test_get_manifesto_empty_rejections(client, auth_headers, manifesto):

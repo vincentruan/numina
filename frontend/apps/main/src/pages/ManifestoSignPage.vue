@@ -10,7 +10,7 @@
       <van-loading type="spinner" />
     </div>
 
-    <template v-else-if="manifesto">
+    <template v-else-if="manifesto?.current_version">
       <!-- 1. Manifesto content (full, scrollable) -->
       <div class="sign-content-area">
         <ManifestoViewer

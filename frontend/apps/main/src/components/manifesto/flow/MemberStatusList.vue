@@ -115,11 +115,11 @@ function formatDate(dateStr: string): string {
 }
 
 .member-status-item--me {
-  background: rgba(100, 108, 255, 0.08);
+  background: color-mix(in srgb, var(--van-primary-color, #646cff) 8%, transparent);
 }
 
 .member-status-item--pending.member-status-item--me {
-  background: rgba(100, 108, 255, 0.12);
+  background: color-mix(in srgb, var(--van-primary-color, #646cff) 12%, transparent);
   font-weight: 500;
 }
 

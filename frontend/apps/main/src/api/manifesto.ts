@@ -3,6 +3,8 @@ import type {
   Manifesto,
   ManifestoDashboardSummary,
   ManifestoFeedback,
+  ManifestoRejection,
+  ManifestoSignature,
   ManifestoVersionHistoryItem,
   UnsignedManifestoCheck,
 } from '@/types/manifesto'
@@ -42,11 +44,11 @@ export function publishUpdate(req: PublishUpdateRequest) {
 }
 
 export function signManifesto(signatureData: string | null) {
-  return http.post<Manifesto>('/family/manifesto/sign', { signature_data: signatureData })
+  return http.post<ManifestoSignature>('/family/manifesto/sign', { signature_data: signatureData })
 }
 
 export function rejectManifesto(reason?: string | null) {
-  return http.post<Manifesto>('/family/manifesto/reject', { reason: reason ?? null })
+  return http.post<ManifestoRejection>('/family/manifesto/reject', { reason: reason ?? null })
 }
 
 export function getVersionHistory() {
