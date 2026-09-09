@@ -12,7 +12,7 @@
  *   <NuminaLogo />                  -- default 220px wide (login screen)
  *   <NuminaLogo :width="80" />      -- compact agent-card icon variant
  */
-import { computed, useId } from 'vue'
+import { computed, useId, ref, onMounted, onUnmounted } from 'vue'
 
 withDefaults(
   defineProps<{
@@ -31,6 +31,22 @@ const ids = computed(() => ({
   shimmerGrad: `numina-${uid}-shimmerGrad`,
   shimmerMask: `numina-${uid}-shimmerMask`,
 }))
+
+// Theme detection for logo colors
+const isDark = ref(document.documentElement.getAttribute('data-theme') !== 'light')
+
+const themeObserver = new MutationObserver(() => {
+  const theme = document.documentElement.getAttribute('data-theme')
+  isDark.value = theme !== 'light'
+})
+
+onMounted(() => {
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+})
+
+onUnmounted(() => {
+  themeObserver.disconnect()
+})
 </script>
 
 <template>
@@ -44,13 +60,13 @@ const ids = computed(() => ({
   >
     <defs>
       <linearGradient :id="ids.flourishGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#bdbbff" stop-opacity="0.7" />
-        <stop offset="45%" stop-color="#e8e4ff" stop-opacity="1" />
-        <stop offset="100%" stop-color="#ffd6a5" stop-opacity="0.8" />
+        <stop offset="0%" :stop-color="isDark ? '#bdbbff' : '#7c6cc4'" :stop-opacity="isDark ? 0.7 : 0.9" />
+        <stop offset="45%" :stop-color="isDark ? '#e8e4ff' : '#5a4a9e'" :stop-opacity="1" />
+        <stop offset="100%" :stop-color="isDark ? '#ffd6a5' : '#c4884a'" :stop-opacity="isDark ? 0.8 : 0.9" />
       </linearGradient>
       <linearGradient :id="ids.textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#ffffff" />
-        <stop offset="100%" stop-color="rgba(255,255,255,0.85)" />
+        <stop offset="0%" :stop-color="isDark ? '#ffffff' : '#1a1a2e'" />
+        <stop offset="100%" :stop-color="isDark ? 'rgba(255,255,255,0.85)' : 'rgba(26,26,46,0.75)'" />
       </linearGradient>
       <filter :id="ids.logoGlow" x="-30%" y="-30%" width="160%" height="160%">
         <feGaussianBlur stdDeviation="2" result="b" />
@@ -63,11 +79,11 @@ const ids = computed(() => ({
 
       <!-- Shimmer sweep gradient: white band with soft edges -->
       <linearGradient :id="ids.shimmerGrad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
-        <stop offset="35%" stop-color="#ffffff" stop-opacity="0" />
-        <stop offset="50%" stop-color="#ffffff" stop-opacity="0.9" />
-        <stop offset="65%" stop-color="#ffffff" stop-opacity="0" />
-        <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+        <stop offset="0%" :stop-color="isDark ? '#ffffff' : '#7c6cc4'" stop-opacity="0" />
+        <stop offset="35%" :stop-color="isDark ? '#ffffff' : '#7c6cc4'" stop-opacity="0" />
+        <stop offset="50%" :stop-color="isDark ? '#ffffff' : '#7c6cc4'" :stop-opacity="isDark ? 0.9 : 0.4" />
+        <stop offset="65%" :stop-color="isDark ? '#ffffff' : '#7c6cc4'" stop-opacity="0" />
+        <stop offset="100%" :stop-color="isDark ? '#ffffff' : '#7c6cc4'" stop-opacity="0" />
       </linearGradient>
 
       <!-- Shimmer mask: re-renders the logo paths as opaque white shapes so the
