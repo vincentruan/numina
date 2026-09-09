@@ -114,24 +114,3 @@ export interface FlowSigningProgress {
   signed: number
   total: number
 }
-
-export interface FlowCreatedNodeData {
-  changeType: 'initial' | 'minor' | 'major'
-  versionNumber: number
-  creatorName: string
-  createdAt: string
-  dimmed?: boolean
-}
-
-export interface FlowPendingNodeData {
-  deadline: string | null
-  deadlineExpired: boolean
-  dimmed?: boolean
-}
-
-export interface FlowVersionUpdateNodeData {
-  updaterName: string
-  currentVersion: number
-  nextVersion: number
-  dimmed?: boolean
-}

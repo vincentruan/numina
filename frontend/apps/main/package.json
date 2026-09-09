@@ -28,7 +28,6 @@
     "@types/nprogress": "^0.2.3",
     "@vant/icons": "^3.0.1",
     "@vant/touch-emulator": "^1.5.0",
-    "@vue-flow/core": "^1.48.2",
     "axios": "^1.13.6",
     "cropperjs": "^1.6.2",
     "dompurify": "^3.4.1",

@@ -72,7 +72,7 @@
       <div class="sign-flow-area">
         <van-collapse v-model="flowExpanded">
           <van-collapse-item :title="t('manifesto.signSection.flowTitle')" name="flow">
-            <ManifestoFlowViewer
+            <SigningTimeline
               :flow-state="flowState"
               :current-round="currentRound"
               :member-states="memberStates"
@@ -82,6 +82,8 @@
               :change-type="changeType"
               :has-rejection="hasRejection"
               :next-version-number="nextVersionNumber"
+              :created-at="manifesto.created_at"
+              :effective-date="manifesto.current_version?.signed_at"
             />
           </van-collapse-item>
         </van-collapse>
@@ -97,7 +99,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import ManifestoViewer from '@/components/manifesto/ManifestoViewer.vue'
 import SignaturePad from '@/components/manifesto/SignaturePad.vue'
-import ManifestoFlowViewer from '@/components/manifesto/flow/ManifestoFlowViewer.vue'
+import SigningTimeline from '@/components/manifesto/SigningTimeline.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useAuth } from '@/composables/useAuth'
 import * as manifestoApi from '@/api/manifesto'
