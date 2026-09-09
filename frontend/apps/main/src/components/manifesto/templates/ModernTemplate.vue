@@ -15,7 +15,12 @@
       <div class="modern-title-rule" />
     </div>
     <div class="modern-body">
-      <p v-for="(paragraph, idx) in bodyParagraphs" :key="idx">
+      <p
+        v-for="(paragraph, idx) in bodyParagraphs"
+        :key="idx"
+        data-reveal
+        :style="{ '--reveal-index': idx }"
+      >
         <span v-if="bodyParagraphs.length > 1" class="para-marker">0{{ idx + 1 }}</span>
         {{ paragraph }}
       </p>
@@ -263,5 +268,53 @@ function statusColor(status?: string): string {
   font-size: 11px;
   color: var(--text-secondary, #616161);
   margin-top: 4px;
+}
+
+/* ── Scroll reveal: structural entrance animations ── */
+.accent-dot {
+  opacity: 0;
+  animation: sr-dot1-in 150ms ease-out 50ms forwards;
+}
+.accent-dot:nth-child(2) {
+  animation-name: sr-dot2-in;
+  animation-delay: 150ms;
+}
+.accent-dot:nth-child(3) {
+  animation-name: sr-dot3-in;
+  animation-delay: 250ms;
+}
+
+.modern-title {
+  opacity: 0;
+  animation: sr-modern-fade-in 350ms ease-out 350ms forwards;
+}
+
+.modern-title-rule {
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: sr-modern-rule-expand 300ms ease-out 500ms forwards;
+}
+
+@keyframes sr-dot1-in { to { opacity: 0.6; } }
+@keyframes sr-dot2-in { to { opacity: 0.8; } }
+@keyframes sr-dot3-in { to { opacity: 1; } }
+@keyframes sr-modern-fade-in { to { opacity: 1; } }
+@keyframes sr-modern-rule-expand { to { transform: scaleX(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .accent-dot {
+    animation: none !important;
+  }
+  .accent-dot:nth-child(1) { opacity: 0.6 !important; }
+  .accent-dot:nth-child(2) { opacity: 0.8 !important; }
+  .accent-dot:nth-child(3) { opacity: 1 !important; }
+  .modern-title {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .modern-title-rule {
+    transform: none !important;
+    animation: none !important;
+  }
 }
 </style>
