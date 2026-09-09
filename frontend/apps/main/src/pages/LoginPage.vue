@@ -1475,16 +1475,16 @@ async function submitEmojiPin() {
 [data-theme="light"] .pin-username,
 [data-theme="light"] .account-name,
 [data-theme="light"] .emoji-loading {
-  color: #1a1a2e;
+  color: #0a0a0a;
 }
 
 [data-theme="light"] .account-subtitle,
 [data-theme="light"] .pin-username-sub {
-  color: rgba(26, 26, 46, 0.55);
+  color: #616161;
 }
 
 [data-theme="light"] .account-role {
-  color: rgba(26, 26, 46, 0.65);
+  color: #75758a;
 }
 
 [data-theme="light"] .pin-error {
@@ -1492,158 +1492,161 @@ async function submitEmojiPin() {
 }
 
 [data-theme="light"] .login-form .van-cell {
-  background: rgba(255, 255, 255, 0.65);
-  border: 2px solid rgba(180, 170, 230, 0.3);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(1, 1, 32, 0.08);
   box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 1px 4px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 [data-theme="light"] .login-form .van-cell:focus-within {
-  border-color: rgba(120, 100, 220, 0.6);
-  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(155, 96, 170, 0.35);
+  background: rgba(255, 255, 255, 0.85);
   box-shadow:
-    0 0 0 3px rgba(120, 100, 220, 0.15),
-    0 0 12px rgba(120, 100, 220, 0.2),
+    0 0 0 3px rgba(155, 96, 170, 0.08),
+    0 0 8px rgba(155, 96, 170, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 [data-theme="light"] .login-form .van-field__label {
-  color: rgba(26, 26, 46, 0.9);
+  color: #0a0a0a;
 }
 
 [data-theme="light"] .login-form .van-field__control {
-  color: #1a1a2e;
-  caret-color: rgba(120, 100, 220, 0.9);
+  color: #0a0a0a;
+  caret-color: #9b60aa;
 }
 
 [data-theme="light"] .login-form .van-field__placeholder {
-  color: rgba(26, 26, 46, 0.35);
+  color: #93939f;
 }
 
 [data-theme="light"] .login-form .van-field__right-icon {
-  color: rgba(120, 100, 220, 0.7);
+  color: #75758a;
 }
 
 [data-theme="light"] .form-actions .van-button--primary {
-  --van-button-primary-background: rgba(100, 80, 200, 0.85);
-  --van-button-primary-border-color: rgba(120, 100, 220, 0.5);
-  --van-button-primary-color: #fff;
-  box-shadow: 0 2px 12px rgba(100, 80, 200, 0.25);
+  --van-button-primary-background: rgba(189, 187, 255, 0.12);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.3);
+  --van-button-primary-color: #010120;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="light"] .form-actions .van-button--primary:active {
-  --van-button-primary-background: rgba(100, 80, 200, 0.95);
-  box-shadow: 0 2px 16px rgba(100, 80, 200, 0.35);
+  --van-button-primary-background: rgba(189, 187, 255, 0.2);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.5);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="light"] .pin-slot {
-  border-color: rgba(120, 100, 220, 0.4);
+  border-color: rgba(1, 1, 32, 0.15);
 }
 
 [data-theme="light"] .pin-slot.filled {
-  background: rgba(120, 100, 220, 0.8);
-  border-color: rgba(120, 100, 220, 0.8);
-  box-shadow: 0 0 8px rgba(120, 100, 220, 0.3);
+  background: rgba(189, 187, 255, 0.3);
+  border-color: rgba(189, 187, 255, 0.5);
+  box-shadow: 0 0 4px rgba(189, 187, 255, 0.2);
 }
 
 [data-theme="light"] .numpad-btn {
-  border-color: rgba(180, 170, 230, 0.25);
-  background: rgba(255, 255, 255, 0.7);
-  color: #1a1a2e;
+  border-color: rgba(1, 1, 32, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  color: #0a0a0a;
 }
 
 [data-theme="light"] .numpad-btn:hover:not(:disabled) {
-  background: rgba(120, 100, 220, 0.08);
-  border-color: rgba(120, 100, 220, 0.35);
+  background: rgba(189, 187, 255, 0.08);
+  border-color: rgba(189, 187, 255, 0.25);
 }
 
 [data-theme="light"] .numpad-btn:active:not(:disabled) {
-  background: rgba(120, 100, 220, 0.15);
-  border-color: rgba(120, 100, 220, 0.5);
+  background: rgba(189, 187, 255, 0.15);
+  border-color: rgba(189, 187, 255, 0.4);
 }
 
 [data-theme="light"] .numpad-action {
-  background: rgba(120, 100, 220, 0.08) !important;
-  border-color: rgba(120, 100, 220, 0.35) !important;
-  color: rgba(100, 80, 200, 0.9) !important;
+  background: rgba(189, 187, 255, 0.1) !important;
+  border-color: rgba(189, 187, 255, 0.3) !important;
+  color: #010120 !important;
 }
 
 [data-theme="light"] .emoji-btn {
-  border-color: rgba(180, 170, 230, 0.25);
-  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(1, 1, 32, 0.08);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 [data-theme="light"] .emoji-btn:hover:not(:disabled) {
-  background: rgba(120, 100, 220, 0.08);
-  border-color: rgba(120, 100, 220, 0.35);
+  background: rgba(189, 187, 255, 0.08);
+  border-color: rgba(189, 187, 255, 0.25);
 }
 
 [data-theme="light"] .emoji-pin-slot {
-  border-color: rgba(120, 100, 220, 0.3);
-  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(1, 1, 32, 0.1);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 [data-theme="light"] .emoji-pin-slot.filled {
-  background: rgba(120, 100, 220, 0.12);
-  border-color: rgba(120, 100, 220, 0.7);
+  background: rgba(189, 187, 255, 0.15);
+  border-color: rgba(189, 187, 255, 0.4);
 }
 
 [data-theme="light"] .emoji-action-btn {
-  border-color: rgba(120, 100, 220, 0.3);
-  background: rgba(255, 255, 255, 0.6);
-  color: rgba(100, 80, 200, 0.9);
+  border-color: rgba(1, 1, 32, 0.1);
+  background: rgba(255, 255, 255, 0.7);
+  color: #010120;
 }
 
 [data-theme="light"] .account-card {
-  background: rgba(255, 255, 255, 0.65);
-  border-color: rgba(180, 170, 230, 0.3);
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(1, 1, 32, 0.08);
 }
 
 [data-theme="light"] .account-card.selected {
-  border-color: rgba(120, 100, 220, 0.7);
-  box-shadow: 0 0 16px rgba(120, 100, 220, 0.2);
+  border-color: rgba(189, 187, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(189, 187, 255, 0.1);
 }
 
 [data-theme="light"] .account-avatar--add {
-  background: rgba(120, 100, 220, 0.12);
-  color: rgba(100, 80, 200, 0.8);
+  background: rgba(189, 187, 255, 0.12);
+  color: rgba(1, 1, 32, 0.7);
 }
 
 [data-theme="light"] .carousel-arrow {
-  background: rgba(120, 100, 220, 0.1);
-  color: rgba(100, 80, 200, 0.8);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  color: #010120;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="light"] .account-swipe .van-swipe__indicator {
-  background: rgba(120, 100, 220, 0.25);
+  background: rgba(1, 1, 32, 0.15);
 }
 
 [data-theme="light"] .account-swipe .van-swipe__indicator--active {
-  background: rgba(120, 100, 220, 0.8);
+  background: rgba(189, 187, 255, 0.6);
 }
 
 [data-theme="light"] .login-links a {
-  color: rgba(100, 80, 200, 0.9);
+  color: #010120;
 }
 
 [data-theme="light"] .divider {
-  color: rgba(26, 26, 46, 0.3);
+  color: rgba(1, 1, 32, 0.2);
 }
 
 [data-theme="light"] .back-btn-primary {
-  --van-button-primary-background: rgba(255, 255, 255, 0.6);
-  --van-button-primary-border-color: rgba(180, 170, 230, 0.35);
-  --van-button-primary-color: rgba(26, 26, 46, 0.7);
+  --van-button-primary-background: rgba(255, 255, 255, 0.7);
+  --van-button-primary-border-color: rgba(1, 1, 32, 0.12);
+  --van-button-primary-color: #010120;
 }
 
 [data-theme="light"] .pin-confirm-btn,
 [data-theme="light"] .quick-login-btn {
-  --van-button-primary-background: rgba(100, 80, 200, 0.85);
-  --van-button-primary-border-color: rgba(120, 100, 220, 0.5);
-  --van-button-primary-color: #fff;
-  box-shadow: 0 2px 12px rgba(100, 80, 200, 0.2);
+  --van-button-primary-background: rgba(189, 187, 255, 0.12);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.3);
+  --van-button-primary-color: #010120;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 @font-face {
   font-family: 'ZCOOL KuaiLe';
