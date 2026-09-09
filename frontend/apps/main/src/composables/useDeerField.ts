@@ -403,10 +403,19 @@ function assignDepthLayer(): 'far' | 'mid' | 'near' {
   return 'near'
 }
 
-function assignColorTemp(colorCount: number): number {
-  const r = Math.random()
-  // Uniform distribution for rainbow; weighted for stellar
-  return Math.floor(r * colorCount)
+function assignColorTemp(colorCount: number, isDark: boolean): number {
+  if (isDark) {
+    // Preserve original weighted distribution for dark mode
+    const r = Math.random()
+    let cumulative = 0
+    for (let i = 0; i < colorCount; i++) {
+      cumulative += STELLAR_COLORS[i].ratio
+      if (r < cumulative) return i
+    }
+    return colorCount - 1
+  }
+  // Uniform for light mode (rainbow)
+  return Math.floor(Math.random() * colorCount)
 }
 
 function getDepthParams(depth: 'far' | 'mid' | 'near') {
@@ -454,7 +463,7 @@ function buildParticles(w: number, h: number, isDark: boolean = true): Particle[
   for (let i = 0; i < count; i++) {
     const depth = assignDepthLayer()
     const params = getDepthParams(depth)
-    const colorTempIdx = assignColorTemp(colorCount)
+    const colorTempIdx = assignColorTemp(colorCount, isDark)
     const intensityIdx = Math.floor(Math.random() * INTENSITY_LEVELS.length)
 
     const baseRadius = rand(params.radiusMin, params.radiusMax)
