@@ -10,10 +10,7 @@
       <span class="ornament ornament-bl">☙</span>
       <span class="ornament ornament-br"></span>
 
-      <!-- Family crest emblem -->
-      <div class="certificate-emblem">
-        <div class="emblem-shield">⚜</div>
-      </div>
+      <FamilyCrest :members="members" :familyName="familyName" />
 
       <h1 class="certificate-title">{{ title }}</h1>
       <div class="certificate-divider">
@@ -72,6 +69,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import WaxSeal from '../WaxSeal.vue'
+import FamilyCrest from '../FamilyCrest.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
@@ -183,26 +181,6 @@ function statusColor(status?: string): string {
   bottom: 6px;
   right: 10px;
   transform: scale(-1, -1);
-}
-
-/* ─ Family emblem ── */
-.certificate-emblem {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 0.5rem;
-}
-
-.emblem-shield {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 2px solid #c9a84c;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  color: #c9a84c;
-  background: rgba(201, 168, 76, 0.08);
 }
 
 /* ── Title ── */
@@ -328,11 +306,6 @@ function statusColor(status?: string): string {
   animation: sr-fade-in 200ms ease-out 100ms forwards;
 }
 
-.certificate-emblem {
-  opacity: 0;
-  animation: sr-fade-in 300ms ease-out 200ms forwards;
-}
-
 .certificate-title {
   opacity: 0;
   animation: sr-fade-in 400ms ease-out 300ms forwards;
@@ -353,7 +326,6 @@ function statusColor(status?: string): string {
 
 @media (prefers-reduced-motion: reduce) {
   .ornament,
-  .certificate-emblem,
   .certificate-title {
     opacity: 1 !important;
     animation: none !important;

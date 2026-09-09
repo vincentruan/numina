@@ -10,6 +10,8 @@
       <span class="accent-dot" />
     </div>
 
+    <FamilyCrest :members="members" :familyName="familyName" />
+
     <div class="modern-header">
       <h1 class="modern-title">{{ title }}</h1>
       <div class="modern-title-rule" />
@@ -57,6 +59,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import WaxSeal from '../WaxSeal.vue'
+import FamilyCrest from '../FamilyCrest.vue'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
