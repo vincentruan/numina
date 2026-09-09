@@ -3816,6 +3816,10 @@ export default {
       rejectedAtLabel: '拒绝于',
       nextRoundLabel: '→ 第{n}轮会签',
     },
+    signSection: {
+      title: '签署区',
+      flowTitle: '签署流程',
+    },
     memberStatus: {
       signed: '已签署',
       confirmed: '已确认',

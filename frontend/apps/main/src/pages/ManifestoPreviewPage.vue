@@ -1,5 +1,11 @@
 <template>
-  <CeremonyRoom @close="router.back()">
+  <div class="manifesto-preview-page">
+    <van-nav-bar
+      :title="t('manifesto.preview')"
+      left-arrow
+      @click-left="router.back()"
+    />
+
     <div v-if="templateId" class="preview-layout">
       <!-- TOC sidebar: shows trackable clauses -->
       <aside v-if="clauses.length > 0" class="preview-toc">
@@ -58,7 +64,7 @@
       :actions="changeTypeActions"
       @select="onChangeTypeSelect"
     />
-  </CeremonyRoom>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -67,15 +73,14 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import ManifestoViewer from '@/components/manifesto/ManifestoViewer.vue'
-import CeremonyRoom from '@/components/manifesto/CeremonyRoom.vue'
-import { useCeremonyRoom } from '@/composables/useCeremonyRoom'
 import { useManifestoWizard } from '@/composables/useManifestoWizard'
 import { useFamilyStore } from '@/stores/family'
 import * as manifestoApi from '@/api/manifesto'
 
+defineOptions({ name: 'ManifestoPreview' })
+
 const { t } = useI18n()
 const router = useRouter()
-useCeremonyRoom(() => router.back())
 const { state, reset } = useManifestoWizard()
 const familyStore = useFamilyStore()
 
@@ -147,7 +152,11 @@ const signatures = computed(() =>
 )
 
 const members = computed(() =>
-  familyStore.members.map(m => ({ name: m.display_name, role: m.role })),
+  familyStore.members.map(m => ({
+    name: m.display_name,
+    role: m.role,
+    signingStatus: 'pending_sign' as const,
+  })),
 )
 
 const changeTypeActions = computed(() => [
@@ -246,6 +255,11 @@ async function onChangeTypeSelect(action: { value: string }) {
 </script>
 
 <style scoped>
+.manifesto-preview-page {
+  min-height: 100vh;
+  background: var(--bg-primary, #ffffff);
+}
+
 /* ── Two-column layout ── */
 .preview-layout {
   display: flex;

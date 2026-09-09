@@ -1,7 +1,8 @@
 <template>
   <div class="ceremony-room">
-    <!-- Close button: replaces nav-bar back arrow -->
+    <!-- Close button: replaces nav-bar back arrow (hidden when PageHeader is used) -->
     <button
+      v-if="!hideClose"
       type="button"
       class="ceremony-close"
       aria-label="Close"
@@ -26,6 +27,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+
+const props = withDefaults(defineProps<{
+  hideClose?: boolean
+}>(), {
+  hideClose: false,
+})
 
 const emit = defineEmits<{
   close: []
@@ -62,23 +69,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ── Room: full-height parchment surface ── */
+/* ── Room: full-height surface ── */
 .ceremony-room {
   position: relative;
   min-height: calc(100vh - 50px); /* account for tab bar height */
   padding-bottom: env(safe-area-inset-bottom);
-  background-color: var(--ceremony-bg, #FAF7F0);
-}
-
-/* Parchment texture: subtle grain via SVG feTurbulence data URI */
-.ceremony-room::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
+  background-color: var(--bg-primary, #ffffff);
 }
 
 /* ── Close button: minimal × top-left ── */
@@ -115,15 +111,15 @@ onMounted(() => {
   background: rgba(240, 236, 228, 0.24);
 }
 
-/* ─ Document card: elevated on parchment ─ */
+/* ─ Document card: elevated surface ─ */
 .ceremony-document {
   position: relative;
   z-index: 1; /* above texture overlay */
   max-width: 100%;
   margin: 0;
   padding: 16px;
-  background: var(--ceremony-doc-bg, #fffef9);
-  box-shadow: 0 4px 24px var(--ceremony-shadow, rgba(26, 26, 46, 0.12));
+  background: var(--card-bg, #f5f5ff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border-radius: 4px;
 }
 

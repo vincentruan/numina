@@ -27,6 +27,8 @@ interface SignatureInfo {
 interface MemberInfo {
   name: string
   role: string
+  signingStatus?: 'signed' | 'confirmed' | 'pending_sign' | 'pending_confirm' | 'rejected' | 'expired'
+  signedDate?: string
 }
 
 const props = defineProps<{

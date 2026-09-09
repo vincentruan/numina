@@ -31,8 +31,15 @@
       </div>
       <div class="signature-grid">
         <div v-for="(member, idx) in members" :key="idx" class="signature-cell">
-          <div class="signature-name">{{ member.name }}</div>
-          <div class="signature-role">{{ getRoleLabel(member.role, t) }}</div>
+          <div class="signature-name-row">
+            <van-icon
+              :name="statusIcon(member.signingStatus)"
+              :color="statusColor(member.signingStatus)"
+              size="14"
+              class="signature-status-icon"
+            />
+            <span class="signature-name">{{ member.name }}</span>
+          </div>
           <div class="signature-content">
             <img
               v-if="signatures[idx]?.data"
@@ -45,6 +52,7 @@
             </span>
             <span v-else class="signature-pending">{{ t('manifesto.pending') }}</span>
           </div>
+          <div v-if="member.signedDate" class="signature-date">{{ member.signedDate }}</div>
         </div>
       </div>
     </div>
@@ -54,7 +62,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getRoleLabel } from './templateRegistry'
 
 const { t } = useI18n()
 
@@ -66,6 +73,8 @@ interface SignatureInfo {
 interface MemberInfo {
   name: string
   role: string
+  signingStatus?: 'signed' | 'confirmed' | 'pending_sign' | 'pending_confirm' | 'rejected' | 'expired'
+  signedDate?: string
 }
 
 const props = defineProps<{
@@ -78,6 +87,30 @@ const props = defineProps<{
 const bodyParagraphs = computed(() => {
   return props.body.split('\n\n').filter(p => p.trim())
 })
+
+function statusIcon(status?: string): string {
+  switch (status) {
+    case 'signed':
+    case 'confirmed':
+      return 'success'
+    case 'rejected':
+      return 'close'
+    default:
+      return 'clock-o'
+  }
+}
+
+function statusColor(status?: string): string {
+  switch (status) {
+    case 'signed':
+    case 'confirmed':
+      return 'var(--color-success, #07c160)'
+    case 'rejected':
+      return 'var(--color-error, #ee0a24)'
+    default:
+      return 'var(--text-secondary, #c8c9cc)'
+  }
+}
 </script>
 
 <style scoped>
@@ -215,16 +248,21 @@ const bodyParagraphs = computed(() => {
   padding: 0.5rem;
 }
 
+.signature-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.signature-status-icon {
+  flex-shrink: 0;
+}
+
 .signature-name {
   font-weight: 600;
   font-size: 14px;
   color: var(--text-primary, #0a0a0a);
-}
-
-.signature-role {
-  font-size: 12px;
-  color: var(--text-secondary, #616161);
-  margin-bottom: 0.5rem;
 }
 
 .signature-content {
@@ -248,5 +286,11 @@ const bodyParagraphs = computed(() => {
   color: var(--color-success, #1a7a4a);
   font-size: 13px;
   font-weight: 500;
+}
+
+.signature-date {
+  font-size: 11px;
+  color: var(--text-secondary, #616161);
+  margin-top: 4px;
 }
 </style>
