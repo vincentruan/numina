@@ -22,7 +22,12 @@
         <span class="divider-line" />
       </div>
       <div class="certificate-body">
-        <p v-for="(paragraph, idx) in bodyParagraphs" :key="idx">
+        <p
+          v-for="(paragraph, idx) in bodyParagraphs"
+          :key="idx"
+          data-reveal
+          :style="{ '--reveal-index': idx }"
+        >
           <span v-if="bodyParagraphs.length > 1" class="paragraph-num">{{ idx + 1 }}</span>
           {{ paragraph }}
         </p>
@@ -315,5 +320,47 @@ function statusColor(status?: string): string {
   font-size: 11px;
   color: var(--text-secondary, #616161);
   margin-top: 4px;
+}
+
+/* ── Scroll reveal: structural entrance animations ── */
+.ornament {
+  opacity: 0;
+  animation: sr-fade-in 200ms ease-out 100ms forwards;
+}
+
+.certificate-emblem {
+  opacity: 0;
+  animation: sr-fade-in 300ms ease-out 200ms forwards;
+}
+
+.certificate-title {
+  opacity: 0;
+  animation: sr-fade-in 400ms ease-out 300ms forwards;
+}
+
+.divider-line {
+  transform: scaleX(0);
+  animation: sr-divider-expand 300ms ease-out 500ms forwards;
+}
+
+@keyframes sr-fade-in {
+  to { opacity: 1; }
+}
+
+@keyframes sr-divider-expand {
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ornament,
+  .certificate-emblem,
+  .certificate-title {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .divider-line {
+    transform: none !important;
+    animation: none !important;
+  }
 }
 </style>
