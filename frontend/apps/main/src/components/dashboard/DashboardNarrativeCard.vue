@@ -296,9 +296,18 @@ async function onGenerate() {
   await triggerStream(true)
 }
 
-// Retry button handler. Re-checks for a reusable task (running/completed),
-// falls back to a fresh trigger when none exists.
+// Retry button handler. Resets error states immediately so the v-if chain
+// transitions away from the error/retry section before any async work begins.
+// Without this, the v-if chain still matches the error section during
+// retryTrigger()'s API call, making the button click appear to have no effect.
+// Also sets streaming=true so the streaming UI shows even when retryTrigger
+// finds a running task (it starts SSE directly, bypassing triggerStream).
 async function onRetry() {
+  initialLoadFailed.value = false
+  resumeHandle.triggerFailed.value = false
+  resumeHandle.status.value = 'idle'
+  streaming.value = true
+
   const reused = await resumeHandle.retryTrigger()
   if (!reused) {
     await triggerStream(true)
