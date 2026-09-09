@@ -60,16 +60,16 @@ const STELLAR_COLORS: Array<{ core: [number, number, number]; halo: [number, num
   { core: [255, 220, 200], halo: [255, 170, 120], ratio: 0.05 },
 ]
 
-// Rainbow palette for light mode — desaturated for white background
+// Rainbow palette for light mode — full saturation, vibrant on white background
 // Core and halo use same hue at different lightness (no cross-hue discontinuity)
 const RAINBOW_COLORS: Array<{ core: [number, number, number]; halo: [number, number, number] }> = [
-  { core: [220, 140, 140], halo: [235, 175, 170] },  // muted red
-  { core: [220, 170, 130], halo: [240, 200, 160] },  // muted orange
-  { core: [215, 195, 130], halo: [235, 215, 165] },  // muted yellow
-  { core: [140, 195, 200], halo: [175, 215, 220] },  // muted cyan
-  { core: [130, 165, 215], halo: [170, 195, 230] },  // muted blue
-  { core: [155, 140, 205], halo: [185, 175, 220] },  // muted indigo
-  { core: [175, 170, 215], halo: [200, 195, 230] },  // muted purple
+  { core: [255, 107, 107], halo: [255, 160, 140] },  // red
+  { core: [255, 159, 67],  halo: [255, 190, 120] },  // orange
+  { core: [254, 202, 87],  halo: [254, 220, 140] },  // yellow
+  { core: [72, 219, 251],  halo: [130, 230, 255] },  // cyan
+  { core: [10, 189, 227],  halo: [80, 210, 240] },   // blue
+  { core: [95, 39, 205],   halo: [140, 100, 230] },  // indigo
+  { core: [162, 155, 254], halo: [195, 190, 255] },  // purple
 ]
 
 // Light-mode pixel grid: muted but visible on white background
