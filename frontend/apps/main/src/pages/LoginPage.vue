@@ -1461,34 +1461,34 @@ async function submitEmojiPin() {
 }
 
 /* ── Light mode overrides ─────────────────────────────────────────── */
-:global(.theme-light) .login-page {
+:global([data-theme="light"]) .login-page {
   background: #ffffff;
 }
 
-:global(.theme-light) .step0-subtitle,
-:global(.theme-light) .pin-hint,
-:global(.theme-light) .pin-display-name,
-:global(.theme-light) .pin-username,
-:global(.theme-light) .account-name,
-:global(.theme-light) .emoji-loading {
+:global([data-theme="light"]) .step0-subtitle,
+:global([data-theme="light"]) .pin-hint,
+:global([data-theme="light"]) .pin-display-name,
+:global([data-theme="light"]) .pin-username,
+:global([data-theme="light"]) .account-name,
+:global([data-theme="light"]) .emoji-loading {
   color: #1a1a2e;
 }
 
-:global(.theme-light) .account-subtitle,
-:global(.theme-light) .pin-username-sub {
+:global([data-theme="light"]) .account-subtitle,
+:global([data-theme="light"]) .pin-username-sub {
   color: rgba(26, 26, 46, 0.55);
 }
 
-:global(.theme-light) .account-role {
+:global([data-theme="light"]) .account-role {
   color: rgba(26, 26, 46, 0.65);
 }
 
-:global(.theme-light) .pin-error {
+:global([data-theme="light"]) .pin-error {
   color: #d32f2f;
 }
 
 /* Glass-morphism form fields — light mode */
-:global(.theme-light) .login-form :deep(.van-cell) {
+:global([data-theme="light"]) .login-form :deep(.van-cell) {
   background: rgba(255, 255, 255, 0.65);
   border: 2px solid rgba(180, 170, 230, 0.3);
   box-shadow:
@@ -1496,7 +1496,7 @@ async function submitEmojiPin() {
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-:global(.theme-light) .login-form :deep(.van-cell):focus-within {
+:global([data-theme="light"]) .login-form :deep(.van-cell):focus-within {
   border-color: rgba(120, 100, 220, 0.6);
   background: rgba(255, 255, 255, 0.8);
   box-shadow:
@@ -1505,158 +1505,152 @@ async function submitEmojiPin() {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-:global(.theme-light) .login-form :deep(.van-field__label) {
+:global([data-theme="light"]) .login-form :deep(.van-field__label) {
   color: rgba(26, 26, 46, 0.9);
 }
 
-:global(.theme-light) .login-form :deep(.van-field__control) {
+:global([data-theme="light"]) .login-form :deep(.van-field__control) {
   color: #1a1a2e;
   caret-color: rgba(120, 100, 220, 0.9);
 }
 
-:global(.theme-light) .login-form :deep(.van-field__placeholder) {
+:global([data-theme="light"]) .login-form :deep(.van-field__placeholder) {
   color: rgba(26, 26, 46, 0.35);
 }
 
-:global(.theme-light) .login-form :deep(.van-field__right-icon) {
+:global([data-theme="light"]) .login-form :deep(.van-field__right-icon) {
   color: rgba(120, 100, 220, 0.7);
 }
 
 /* Buttons — light mode */
-:global(.theme-light) .form-actions :deep(.van-button--primary) {
+:global([data-theme="light"]) .form-actions :deep(.van-button--primary) {
   --van-button-primary-background: rgba(100, 80, 200, 0.85);
   --van-button-primary-border-color: rgba(120, 100, 220, 0.5);
   --van-button-primary-color: #fff;
   box-shadow: 0 2px 12px rgba(100, 80, 200, 0.25);
 }
 
-:global(.theme-light) .form-actions :deep(.van-button--primary:active) {
+:global([data-theme="light"]) .form-actions :deep(.van-button--primary:active) {
   --van-button-primary-background: rgba(100, 80, 200, 0.95);
   box-shadow: 0 2px 16px rgba(100, 80, 200, 0.35);
 }
 
 /* PIN slots — light mode */
-:global(.theme-light) .pin-slot {
+:global([data-theme="light"]) .pin-slot {
   border-color: rgba(120, 100, 220, 0.4);
 }
 
-:global(.theme-light) .pin-slot.filled {
+:global([data-theme="light"]) .pin-slot.filled {
   background: rgba(120, 100, 220, 0.8);
   border-color: rgba(120, 100, 220, 0.8);
   box-shadow: 0 0 8px rgba(120, 100, 220, 0.3);
 }
 
 /* Numpad — light mode */
-:global(.theme-light) .numpad-btn {
+:global([data-theme="light"]) .numpad-btn {
   border-color: rgba(180, 170, 230, 0.25);
   background: rgba(255, 255, 255, 0.7);
   color: #1a1a2e;
 }
 
-:global(.theme-light) .numpad-btn:hover:not(:disabled) {
+:global([data-theme="light"]) .numpad-btn:hover:not(:disabled) {
   background: rgba(120, 100, 220, 0.08);
   border-color: rgba(120, 100, 220, 0.35);
 }
 
-:global(.theme-light) .numpad-btn:active:not(:disabled) {
+:global([data-theme="light"]) .numpad-btn:active:not(:disabled) {
   background: rgba(120, 100, 220, 0.15);
   border-color: rgba(120, 100, 220, 0.5);
 }
 
-:global(.theme-light) .numpad-action {
+:global([data-theme="light"]) .numpad-action {
   background: rgba(120, 100, 220, 0.08) !important;
   border-color: rgba(120, 100, 220, 0.35) !important;
   color: rgba(100, 80, 200, 0.9) !important;
 }
 
 /* Emoji grid — light mode */
-:global(.theme-light) .emoji-btn {
+:global([data-theme="light"]) .emoji-btn {
   border-color: rgba(180, 170, 230, 0.25);
   background: rgba(255, 255, 255, 0.7);
 }
 
-:global(.theme-light) .emoji-btn:hover:not(:disabled) {
+:global([data-theme="light"]) .emoji-btn:hover:not(:disabled) {
   background: rgba(120, 100, 220, 0.08);
   border-color: rgba(120, 100, 220, 0.35);
 }
 
-:global(.theme-light) .emoji-pin-slot {
+:global([data-theme="light"]) .emoji-pin-slot {
   border-color: rgba(120, 100, 220, 0.3);
   background: rgba(255, 255, 255, 0.6);
 }
 
-:global(.theme-light) .emoji-pin-slot.filled {
+:global([data-theme="light"]) .emoji-pin-slot.filled {
   background: rgba(120, 100, 220, 0.12);
   border-color: rgba(120, 100, 220, 0.7);
 }
 
-:global(.theme-light) .emoji-action-btn {
+:global([data-theme="light"]) .emoji-action-btn {
   border-color: rgba(120, 100, 220, 0.3);
   background: rgba(255, 255, 255, 0.6);
   color: rgba(100, 80, 200, 0.9);
 }
 
 /* Account carousel — light mode */
-:global(.theme-light) .account-card {
+:global([data-theme="light"]) .account-card {
   background: rgba(255, 255, 255, 0.65);
   border-color: rgba(180, 170, 230, 0.3);
 }
 
-:global(.theme-light) .account-card.selected {
+:global([data-theme="light"]) .account-card.selected {
   border-color: rgba(120, 100, 220, 0.7);
   box-shadow: 0 0 16px rgba(120, 100, 220, 0.2);
 }
 
-:global(.theme-light) .account-avatar--add {
+:global([data-theme="light"]) .account-avatar--add {
   background: rgba(120, 100, 220, 0.12);
   color: rgba(100, 80, 200, 0.8);
 }
 
-:global(.theme-light) .carousel-arrow {
+:global([data-theme="light"]) .carousel-arrow {
   background: rgba(120, 100, 220, 0.1);
   color: rgba(100, 80, 200, 0.8);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-:global(.theme-light) .account-swipe :deep(.van-swipe__indicator) {
+:global([data-theme="light"]) .account-swipe :deep(.van-swipe__indicator) {
   background: rgba(120, 100, 220, 0.25);
 }
 
-:global(.theme-light) .account-swipe :deep(.van-swipe__indicator--active) {
+:global([data-theme="light"]) .account-swipe :deep(.van-swipe__indicator--active) {
   background: rgba(120, 100, 220, 0.8);
 }
 
 /* Links — light mode */
-:global(.theme-light) .login-links a {
+:global([data-theme="light"]) .login-links a {
   color: rgba(100, 80, 200, 0.9);
 }
 
-:global(.theme-light) .divider {
+:global([data-theme="light"]) .divider {
   color: rgba(26, 26, 46, 0.3);
 }
 
 /* Back button — light mode */
-:global(.theme-light) .back-btn-primary {
+:global([data-theme="light"]) .back-btn-primary {
   --van-button-primary-background: rgba(255, 255, 255, 0.6);
   --van-button-primary-border-color: rgba(180, 170, 230, 0.35);
   --van-button-primary-color: rgba(26, 26, 46, 0.7);
 }
 
 /* PIN confirm + quick login — light mode */
-:global(.theme-light) .pin-confirm-btn,
-:global(.theme-light) .quick-login-btn {
+:global([data-theme="light"]) .pin-confirm-btn,
+:global([data-theme="light"]) .quick-login-btn {
   --van-button-primary-background: rgba(100, 80, 200, 0.85);
   --van-button-primary-border-color: rgba(120, 100, 220, 0.5);
   --van-button-primary-color: #fff;
   box-shadow: 0 2px 12px rgba(100, 80, 200, 0.2);
 }
 
-/* Flash animation — light mode */
-:global(.theme-light) @keyframes flash {
-  0% { background: rgba(120, 100, 220, 0.05); box-shadow: none; }
-  40% { background: rgba(120, 100, 220, 0.25); box-shadow: 0 0 12px rgba(120, 100, 220, 0.2); }
-  100% { background: rgba(120, 100, 220, 0.05); box-shadow: none; }
-}
 </style>
 
 <style>

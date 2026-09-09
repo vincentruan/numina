@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -112,7 +112,18 @@ const showConfirmPassword = ref(false)
 
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
-useDeerField(bgCanvasRef, deerCanvasRef)
+
+// Theme detection — follow data-theme set by App.vue
+const isDark = ref(document.documentElement.getAttribute('data-theme') !== 'light')
+
+const themeObserver = new MutationObserver(() => {
+  isDark.value = document.documentElement.getAttribute('data-theme') !== 'light'
+})
+themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
+onUnmounted(() => { themeObserver.disconnect() })
+
+useDeerField(bgCanvasRef, deerCanvasRef, isDark)
 
 const form = ref({
   invite_code: '',
