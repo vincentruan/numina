@@ -99,7 +99,12 @@ const signerRows = computed(() => {
 })
 
 const totalCount = computed(() => familyStore.members.length || (summary.value?.total_members ?? 0))
-const signedCount = computed(() => signerRows.value.filter(r => r.signed).length)
+const signedCount = computed(() => {
+  // Prefer summary.signed_count (available immediately on mount) over computing
+  // from signerRows (which requires manifesto.value, only loaded on expand).
+  if (summary.value?.signed_count != null) return summary.value.signed_count
+  return signerRows.value.filter(r => r.signed).length
+})
 const signingDeadline = computed(() => manifesto.value?.signing_deadline ?? null)
 
 function goDetail() {
