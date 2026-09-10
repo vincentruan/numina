@@ -60,7 +60,6 @@
               <van-tag
                 v-if="member.isCurrentUser"
                 type="primary"
-                size="mini"
                 class="timeline-member__me-tag"
               >
                 {{ t('manifesto.flow.me') }}

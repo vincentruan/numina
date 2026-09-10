@@ -83,7 +83,7 @@
               :has-rejection="hasRejection"
               :next-version-number="nextVersionNumber"
               :created-at="manifesto.created_at"
-              :effective-date="manifesto.current_version?.signed_at"
+              :effective-date="manifesto.current_version?.signed_at ?? undefined"
             />
           </van-collapse-item>
         </van-collapse>
