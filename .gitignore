@@ -206,6 +206,7 @@ tmp-test-screenshots/
 e2e-screenshots/
 e2e-*.png
 tests/screenshots/
+tests/screenshot/
 tests/login-screenshot.png
 
 # Runtime artifacts
