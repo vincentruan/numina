@@ -270,6 +270,19 @@ http.interceptors.response.use(
       showFailToast(t('toast.networkTimeout'))
     } else if (error.message?.includes('Network Error')) {
       showFailToast(t('toast.networkError'))
+      // Enqueue non-GET mutations for later sync when back online
+      const method = originalRequest.method?.toUpperCase()
+      if (method && method !== 'GET') {
+        import('@/utils/offlineQueue').then(({ enqueue }) => {
+          enqueue({
+            method: method as 'POST' | 'PATCH' | 'DELETE',
+            url: originalRequest.url ?? '',
+            body: originalRequest.data,
+            idempotencyKey: crypto.randomUUID(),
+            tempId: originalRequest.data?.id,
+          })
+        })
+      }
     } else {
       const errMessage = error.message || '未知错误'
       console.error('[API Error]', errMessage, error)

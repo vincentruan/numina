@@ -23,10 +23,12 @@ from apps.backend.app.services.notification.sender import (
 )
 from apps.backend.app.services.storage.config_crypto import decrypt_config
 from apps.backend.app.utils.snowflake import next_id
+from packages.core.settings import settings
 from packages.db.models.notification_channel_config import (
     NotificationChannelConfig,
 )
 from packages.db.models.notification_config import NotificationConfig
+from packages.db.models.push_subscription import PushSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -266,6 +268,8 @@ def _dispatch_notifications(
                 )
             except RuntimeError:
                 pass
+        elif channel.channel_type == "webpush":
+            _send_webpush_sync(channel, reminder, template_vars, db)
     db.commit()
 
 
@@ -286,6 +290,63 @@ async def _send_feishu_async(
         reminder_id=reminder.id,
         channel_id=channel.id,
         status="sent" if success else "failed",
+    )
+    db.add(rn)
+    db.commit()
+
+
+def _send_webpush_sync(
+    channel: NotificationChannel,
+    reminder: Reminder,
+    template_vars: dict,
+    db: Session,
+) -> None:
+    """Send Web Push notifications to all subscriptions in the family."""
+    # R11 (large_purchase) should only notify main app subscriptions, not child
+    if reminder.reminder_type == "large_purchase":
+        subscriptions = db.query(PushSubscription).filter(
+            PushSubscription.family_id == reminder.family_id,
+            PushSubscription.app_type == "main",
+        ).all()
+    else:
+        subscriptions = db.query(PushSubscription).filter(
+            PushSubscription.family_id == reminder.family_id
+        ).all()
+    if not subscriptions:
+        return
+
+    config = _get_channel_config(db, channel)
+    vapid_private_key = config.get("vapid_private_key", settings.VAPID_PRIVATE_KEY)
+    vapid_claims = {"sub": settings.VAPID_SUBJECT}
+
+    title = render_template(reminder.reminder_type, "webpush_title", template_vars)
+    body = render_template(reminder.reminder_type, "webpush_body", template_vars)
+
+    any_success = False
+    for sub in subscriptions:
+        subscription_info = {
+            "endpoint": sub.endpoint,
+            "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+        }
+        notification_data = {
+            "title": title,
+            "body": body,
+            "reminder_type": reminder.reminder_type,
+            "reminder_id": str(reminder.id),
+        }
+        result = NotificationSender.send_webpush(
+            subscription_info, notification_data, vapid_private_key, vapid_claims
+        )
+        if result == "gone":
+            db.delete(sub)
+        else:
+            if result:
+                any_success = True
+
+    rn = ReminderNotification(
+        reminder_id=reminder.id,
+        channel_id=channel.id,
+        status="sent" if any_success else "failed",
     )
     db.add(rn)
     db.commit()

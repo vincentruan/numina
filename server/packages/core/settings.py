@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     # Backend external URL (for constructing internal MCP SSE endpoint URLs)
     BACKEND_BASE_URL: str = "http://localhost:8000"
 
+    # Web Push (VAPID)
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_SUBJECT: str = "mailto:admin@numina.app"
+
     # Snowflake ID generator
     SNOWFLAKE_MACHINE_ID: int | None = None  # 0-1023; None = auto-derive from container IP
 

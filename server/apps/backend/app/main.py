@@ -76,6 +76,7 @@ from apps.backend.app.models.notification_subscription import (
     NotificationSubscription,
 )
 from apps.backend.app.models.payment_record import PaymentRecord
+from apps.backend.app.models.push_subscription import PushSubscription
 from apps.backend.app.models.reminder import Reminder
 from apps.backend.app.models.revoked_token import RevokedToken
 from apps.backend.app.models.security_audit_log import SecurityAuditLog
@@ -148,6 +149,7 @@ from apps.backend.app.routers import (
     notification_channels as notification_channels_router,
 )
 from apps.backend.app.routers import notification_config as notification_config_router
+from apps.backend.app.routers import notification_push as notification_push_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
@@ -575,6 +577,7 @@ app.include_router(ai_tasks_router.router, prefix="/api/v1")
 app.include_router(ai_time_machine_router.router, prefix="/api/v1")
 app.include_router(notification_channels_router.router, prefix="/api/v1")
 app.include_router(notification_config_router.router, prefix="/api/v1")
+app.include_router(notification_push_router.router, prefix="/api/v1")
 app.include_router(reminders_router.router, prefix="/api/v1")
 app.include_router(ai_mcp_router.router, prefix="/api/v1")
 app.include_router(ai_skills_router.router, prefix="/api/v1")

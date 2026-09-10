@@ -279,7 +279,30 @@ def mark_complete(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    return chore_service.mark_complete(db, child, instance_id)
+    instance = chore_service.mark_complete(db, child, instance_id)
+
+    # R12: Notify parents via push that child completed a task
+    try:
+        from apps.backend.app.services.notification.push_service import (
+            send_family_interaction_push,
+        )
+
+        template_name = ""
+        if hasattr(instance, "chore_template") and instance.chore_template:
+            template_name = instance.chore_template.name
+        child_name = child.display_name or child.username or "孩子"
+        send_family_interaction_push(
+            db=db,
+            family_id=child.family_id,
+            title="孩子完成任务",
+            body=f"{child_name} 完成了任务「{template_name or '家务'}」" if template_name else f"{child_name} 完成了一项任务",
+            reminder_type="family_interaction",
+            navigate_to="/family/chores",
+        )
+    except Exception:
+        pass  # Push failure must never block chore completion
+
+    return instance
 
 
 @router.post("/child/chores/{instance_id}/claim", response_model=ChoreInstanceResponse)

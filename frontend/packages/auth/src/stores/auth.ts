@@ -72,6 +72,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
     user.value = null
     clearAuth()
+    // Clear SW caches to prevent data leakage on shared devices
+    if ('caches' in window) {
+      const cacheNames = await caches.keys()
+      await Promise.all(
+        cacheNames
+          .filter(name => name.startsWith('api-') || name.startsWith('workbox-'))
+          .map(name => caches.delete(name))
+      )
+    }
     options?.onLogout?.()
   }
 

@@ -1,6 +1,6 @@
 """add push_subscriptions table
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: psubscr00001
 Revises: 05b3d24d6b98
 Create Date: 2026-09-10 10:00:00.000000
 

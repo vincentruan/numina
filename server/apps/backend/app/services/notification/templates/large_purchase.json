@@ -8,5 +8,9 @@
   },
   "feishu": {
     "text": "🛒 大额消费提醒\n\n你正在考虑购买「{asset_name}」，金额 ¥{amount}。\n建议冷静 48 小时再决定。\n\n—— Numina 家庭资产管理"
+  },
+  "webpush": {
+    "title": "大额消费提醒",
+    "body": "您有一笔 ¥{amount} 的消费（{asset_name}），请关注"
   }
 }

@@ -14,6 +14,11 @@
       </div>
 
       <template v-else>
+        <!-- Offline data staleness indicator -->
+        <div style="padding: 8px 16px 0;">
+          <OfflineStaleness />
+        </div>
+
         <!-- Hero section: unified stat card (net worth + drill-down sub-stats) -->
         <div class="hero-section">
           <OverviewStatCard />
@@ -100,6 +105,7 @@ import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
 import ManifestoDashboardCard from '@/components/dashboard/ManifestoDashboardCard.vue'
 import LiteracyStatusCard from '@/components/dashboard/LiteracyStatusCard.vue'
 import ManifestoSigningPopup from '@/components/manifesto/ManifestoSigningPopup.vue'
+import OfflineStaleness from '@/components/OfflineStaleness.vue'
 import * as manifestoApi from '@/api/manifesto'
 
 const { t } = useI18n()
