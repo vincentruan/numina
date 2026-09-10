@@ -1,5 +1,6 @@
 from decimal import Decimal
-from sqlalchemy import func, case
+
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -12,6 +13,7 @@ from apps.backend.app.schemas.rental_contract import (
 )
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from packages.db.models.asset import Asset
+from packages.db.models.category import Category
 
 
 def list_rental_contracts(
@@ -40,15 +42,25 @@ def get_rental_contract(db: Session, user: User, contract_id: str) -> RentalCont
 
 
 def _validate_linked_asset(db: Session, user: User, asset_id: int | None) -> None:
-    """Validate linked_asset_id belongs to the user's family (landlord role only)."""
+    """Validate linked_asset_id belongs to the user's family and is a 房产 asset."""
     if asset_id is None:
         return
+    realestate_cat = (
+        db.query(Category.id)
+        .filter(Category.name == "房产", Category.is_system == True)  # noqa: E712
+        .scalar()
+    )
     asset = (
         db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.family_id == user.family_id)
+        .filter(
+            Asset.id == asset_id,
+            Asset.family_id == user.family_id,
+        )
         .first()
     )
     if not asset:
+        raise AppError(ErrorCode.RENTAL_CONTRACT_INVALID_ASSET)
+    if realestate_cat and asset.category_id != realestate_cat:
         raise AppError(ErrorCode.RENTAL_CONTRACT_INVALID_ASSET)
 
 

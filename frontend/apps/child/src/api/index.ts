@@ -30,8 +30,9 @@ http.interceptors.response.use(
     return response
   },
   (error) => {
+    const originalRequest = error.config as { method?: string; url?: string; data?: unknown } | undefined
     if (axios.isAxiosError(error) && error.response?.status === 401) {
-      const url = error.config?.url ?? ''
+      const url = originalRequest?.url ?? ''
       // Don't redirect for auth endpoints (login should handle its own errors)
       if (!url.includes('/auth/')) {
         clearAuth()
@@ -42,6 +43,23 @@ http.interceptors.response.use(
         window.location.replace(`${baseUrl}/login?redirect=/child/`)
       }
     }
+
+    // Enqueue non-GET mutations for later sync when network is unavailable
+    if (!error.response || error.message?.includes('Network Error')) {
+      const method = originalRequest?.method?.toUpperCase()
+      if (method && method !== 'GET') {
+        import('@/utils/offlineQueue').then(({ enqueue }) => {
+          enqueue({
+            method: method as 'POST' | 'PATCH' | 'DELETE',
+            url: originalRequest?.url ?? '',
+            body: originalRequest?.data,
+            idempotencyKey: crypto.randomUUID(),
+            tempId: (originalRequest?.data as { id?: string } | undefined)?.id,
+          })
+        })
+      }
+    }
+
     return Promise.reject(error)
   },
 )

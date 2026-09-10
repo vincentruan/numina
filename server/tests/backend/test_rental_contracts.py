@@ -5,12 +5,12 @@ import pytest
 
 @pytest.fixture
 def category_id(client, auth_headers):
-    """Get a physical category ID for creating assets (linked property)."""
+    """Get the 房产 (real estate) category ID for creating linked property assets."""
     response = client.get("/api/v1/categories", headers=auth_headers)
     assert response.status_code == 200
-    physical = [c for c in response.json()["data"] if c["asset_type"] == "physical"]
-    assert len(physical) > 0
-    return physical[0]["id"]
+    realestate = [c for c in response.json()["data"] if c["name"] == "房产"]
+    assert len(realestate) > 0
+    return realestate[0]["id"]
 
 
 @pytest.fixture
@@ -230,6 +230,33 @@ def test_valid_linked_asset_accepted(client, auth_headers, category_id):
     })
     assert resp.status_code == 201
     assert resp.json()["data"]["linked_asset_id"] == asset_id
+
+
+def test_non_realestate_linked_asset_rejected(client, auth_headers):
+    """Linking a non-房产 asset (e.g. 存款) must be rejected."""
+    # Get a financial category
+    cat_resp = client.get("/api/v1/categories", headers=auth_headers)
+    financial = [c for c in cat_resp.json()["data"] if c["asset_type"] == "financial"]
+    assert len(financial) > 0
+    financial_cat_id = financial[0]["id"]
+
+    asset_resp = client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "银行存款",
+        "category_id": financial_cat_id,
+        "asset_type": "financial",
+        "current_value": 100000,
+        "currency": "CNY",
+    })
+    assert asset_resp.status_code == 201
+    asset_id = asset_resp.json()["data"]["id"]
+
+    resp = client.post("/api/v1/rental-contracts", headers=auth_headers, json={
+        "role": "landlord",
+        "monthly_rent": 3000,
+        "start_date": "2026-01-01",
+        "linked_asset_id": int(asset_id),
+    })
+    assert resp.status_code == 400
 
 
 def test_negative_monthly_rent_rejected(client, auth_headers):

@@ -8,5 +8,9 @@
   },
   "feishu": {
     "text": "🔧 保修即将到期\n\n「{asset_name}」的保修将于 {expiry_date} 到期，还有 {days_left} 天。\n\n—— Numina 家庭资产管理"
+  },
+  "webpush": {
+    "title": "到期提醒",
+    "body": "{asset_name} 将在 {days_left} 天后到期"
   }
 }

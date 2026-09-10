@@ -21,7 +21,7 @@ from packages.db.models.notification_channel_config import (
 
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
 
-VALID_CHANNEL_TYPES = {"telegram", "email", "feishu"}
+VALID_CHANNEL_TYPES = {"telegram", "email", "feishu", "webpush"}
 VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
 
 

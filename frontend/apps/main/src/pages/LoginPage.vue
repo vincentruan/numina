@@ -280,6 +280,16 @@ const loading = ref(false)
 const altchaRef = ref()
 const showPassword = ref(false)
 
+// Post-login destination: honour ?redirect= so a session timeout during
+// navigation (e.g. /finance?tab=liabilities) restores the user's intended
+// page instead of always landing on the dashboard.
+function postLoginTarget(): string {
+  const redirect = route.query.redirect as string | undefined
+  // Block protocol-relative URLs (//evil.com) and backslash variants (/\evil.com)
+  if (redirect && redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.startsWith('/\\')) return redirect
+  return '/'
+}
+
 // Theme detection — follow data-theme set by App.vue
 const isDark = ref(document.documentElement.getAttribute('data-theme') !== 'light')
 
@@ -429,7 +439,7 @@ async function onStep1Submit() {
       }
         return
       }
-      router.push('/')
+      router.push(postLoginTarget())
     } else {
       // second_factor_required=true but no temp_token — malformed server response
       showFailToast(t('toast.loginFailedGeneric'))
@@ -493,7 +503,7 @@ async function onQuickLogin() {
         window.location.href = childBaseUrl
         return
       }
-      router.push('/')
+      router.push(postLoginTarget())
     }
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: { code?: string; message?: string }; status?: number } }
@@ -545,7 +555,7 @@ async function authenticateWithWebAuthn(user: BoundUser) {
         window.location.href = childBaseUrl
         return
       }
-      router.push('/')
+      router.push(postLoginTarget())
     }
   } catch {
     showFailToast(t('toast.webauthnFailed'))
@@ -619,7 +629,7 @@ async function submitPin() {
       }
       return
     }
-    router.push('/')
+    router.push(postLoginTarget())
   } catch (error: unknown) {
     shaking.value = true
     pinInput.value = ''
@@ -700,7 +710,7 @@ async function submitEmojiPin() {
       }
       return
     }
-    router.push('/')
+    router.push(postLoginTarget())
   } catch (error: unknown) {
     shaking.value = true
     emojiPin.value = []

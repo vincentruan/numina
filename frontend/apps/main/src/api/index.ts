@@ -15,6 +15,7 @@ import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
 import { showFailToast } from 'vant'
 import { clearAuth } from '@/utils/storage'
+import { configureSessionReset } from '@numina/auth'
 import router from '@/router'
 import i18n from '@/i18n'
 
@@ -100,7 +101,14 @@ function redirectToLogin() {
   const currentPath = router.currentRoute.value.path
   if (currentPath === '/login' || currentPath === '/register' || currentPath === '/join-family') return
   isRedirectingToLogin = true
-  router.replace('/login').finally(() => {
+  // Preserve the user's intended destination so post-login navigation restores it
+  // (including query params like ?tab=liabilities). Only save non-guest routes
+  // to avoid redirect loops.
+  const intended = router.currentRoute.value.fullPath
+  const loginTarget = (intended && !intended.startsWith('/login') && !intended.startsWith('/register') && !intended.startsWith('/join-family'))
+    ? { path: '/login', query: { redirect: intended } }
+    : '/login'
+  router.replace(loginTarget).finally(() => {
     isRedirectingToLogin = false
   })
 }
@@ -108,6 +116,10 @@ function redirectToLogin() {
 // Once the session is known expired, suppress further refresh attempts to
 // prevent cascading 401 → refresh → 401 loops from concurrent requests.
 let sessionExpired = false
+
+// Bridge: register the session-expired reset callback so fetchMe() success can
+// clear the flag and allow subsequent API calls to retry normally.
+configureSessionReset(() => { sessionExpired = false })
 
 // Response interceptor - handle 401 with automatic refresh
 http.interceptors.response.use(
@@ -270,6 +282,19 @@ http.interceptors.response.use(
       showFailToast(t('toast.networkTimeout'))
     } else if (error.message?.includes('Network Error')) {
       showFailToast(t('toast.networkError'))
+      // Enqueue non-GET mutations for later sync when back online
+      const method = originalRequest.method?.toUpperCase()
+      if (method && method !== 'GET') {
+        import('@/utils/offlineQueue').then(({ enqueue }) => {
+          enqueue({
+            method: method as 'POST' | 'PATCH' | 'DELETE',
+            url: originalRequest.url ?? '',
+            body: originalRequest.data,
+            idempotencyKey: crypto.randomUUID(),
+            tempId: originalRequest.data?.id,
+          })
+        })
+      }
     } else {
       const errMessage = error.message || '未知错误'
       console.error('[API Error]', errMessage, error)

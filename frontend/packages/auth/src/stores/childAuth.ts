@@ -10,7 +10,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import axios from 'axios'
 import type { ChildUser } from '../types'
-import { setUser, removeUser } from '../utils/storage'
+import { setUser, clearAuth } from '../utils/storage'
 import { getHttp } from './http'
 
 // Error code constants — app layer maps these to i18n keys
@@ -108,7 +108,7 @@ export const useChildAuthStore = defineStore('childAuth', () => {
       // Ignore logout API errors (Cookie might already be invalid)
     }
     childUser.value = null
-    removeUser()
+    clearAuth()
   }
 
   function clearLoginError() {

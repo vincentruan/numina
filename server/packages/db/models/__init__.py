@@ -13,6 +13,7 @@ from packages.db.models.literacy_scenario import (
     LiteracyScenario,
     LiteracyScenarioTemplate,
 )
+from packages.db.models.push_subscription import PushSubscription
 from packages.db.models.reminder import Reminder
 from packages.db.models.reminder_notification import ReminderNotification
 from packages.db.models.rental_contract import RentalContract
@@ -38,6 +39,7 @@ __all__ = [
     "LiteracyScenario",
     "LiteracyScenarioTemplate",
     "LiteracyWeeklyReport",
+    "PushSubscription",
     "Reminder",
     "ReminderNotification",
     "RentalContract",

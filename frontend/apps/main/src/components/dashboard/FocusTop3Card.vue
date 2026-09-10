@@ -146,6 +146,48 @@
           </router-link>
         </div>
       </van-tab>
+
+      <!-- 租约 tab: active contracts sorted by upcoming due date -->
+      <van-tab :title="t('nav.rentals')" name="rentals">
+        <div class="top3-body">
+          <van-skeleton v-if="rentalLoading" :row="3" animate data-test="rentals-skeleton" />
+          <button v-else-if="rentalError" class="top3-retry" data-test="rentals-retry" @click="retryRentals">
+            {{ t('financeHub.retry') }}
+          </button>
+          <van-empty v-else-if="topRentals.length === 0" :description="t('focusTop3.noRentals')" image-size="60" />
+          <template v-else>
+            <div
+              v-for="c in topRentals"
+              :key="c.id"
+              class="top3-rental"
+              role="button"
+              tabindex="0"
+              :aria-label="rentalAria(c)"
+              @click="$router.push({ path: '/finance', query: { tab: 'rentals' } })"
+              @keydown.enter="$router.push({ path: '/finance', query: { tab: 'rentals' } })"
+            >
+              <div class="top3-rental-head">
+                <van-icon :name="c.role === 'tenant' ? 'clock-o' : 'gold-coin-o'" class="top3-rental-icon" />
+                <span class="top3-rental-name">{{ c.counterparty || t('rental.contract') }}</span>
+                <span class="top3-rental-role" :class="`top3-rental-role--${c.role}`">
+                  {{ c.role === 'tenant' ? t('focusTop3.rentalRenewal') : t('focusTop3.rentCollection') }}
+                </span>
+              </div>
+              <div class="top3-rental-foot">
+                <span class="top3-rental-rent">
+                  <MoneyDisplay :amount="Number(c.monthly_rent)" /> / {{ t('rental.month') }}
+                </span>
+                <span class="top3-rental-date" :class="rentalUrgencyClass(c)">
+                  {{ rentalDueLabel(c) }}
+                </span>
+              </div>
+            </div>
+          </template>
+          <router-link :to="{ path: '/finance', query: { tab: 'rentals' } }" class="top3-view-all" data-test="view-all-rentals">
+            {{ t('financeHub.viewAll') }} ›
+          </router-link>
+        </div>
+      </van-tab>
     </van-tabs>
   </div>
 </template>
@@ -159,9 +201,10 @@ import AssetListItem from '@/components/asset/AssetListItem.vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
+import { useRentalContractStore } from '@/stores/rentalContract'
 import { useCurrency } from '@/composables/useCurrency'
 import { parseLocalDate } from '@/utils/format'
-import type { Liability, Wish } from '@/types'
+import type { Liability, Wish, RentalContract } from '@/types'
 import { wishProgress } from '@/utils/wishProgress'
 
 defineOptions({ name: 'FocusTop3Card' })
@@ -170,6 +213,7 @@ const { t } = useI18n()
 const dashboardStore = useDashboardStore()
 const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
+const rentalStore = useRentalContractStore()
 const currency = useCurrency()
 
 // High-interest thresholds mirror useDebtWarning defaults (W5 spec §5). Kept local
@@ -183,7 +227,7 @@ const HIGH_INTEREST_THRESHOLDS: Record<string, number> = {
   other: 10,
 }
 
-const activeTab = ref<'assets' | 'liabilities' | 'wishes'>('assets')
+const activeTab = ref<'assets' | 'liabilities' | 'wishes' | 'rentals'>('assets')
 
 // Per-domain loading / error. Liability/wish stores expose only `loading` (fetch
 // throws on failure), so their error is tracked here. Assets read the dashboard
@@ -194,6 +238,8 @@ const liabilityLoading = ref(false)
 const wishLoading = ref(false)
 const liabilityError = ref(false)
 const wishError = ref(false)
+const rentalLoading = ref(false)
+const rentalError = ref(false)
 const assetLoading = computed(() => dashboardStore.loading)
 
 // --- Top 3 selections (R13) ---
@@ -221,6 +267,35 @@ const topWishes = computed(() =>
   [...(wishStore.wishes || [])]
     .filter((w) => w.target_date)
     .sort((a, b) => (a.target_date! < b.target_date! ? -1 : 1))
+    .slice(0, 3),
+)
+
+// Rentals: active contracts sorted by upcoming urgency.
+// Tenant → end_date (lease renewal); Landlord → next rent collection day.
+function nextRentalDueDate(c: RentalContract): Date | null {
+  if (c.role === 'tenant' && c.end_date) {
+    return parseLocalDate(c.end_date)
+  }
+  if (c.role === 'landlord' && c.start_date) {
+    const today = new Date()
+    const day = parseLocalDate(c.start_date).getDate()
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), day)
+    if (thisMonth >= today) return thisMonth
+    return new Date(today.getFullYear(), today.getMonth() + 1, day)
+  }
+  return null
+}
+
+const topRentals = computed(() =>
+  [...(rentalStore.contracts || []).filter(c => c.is_active)]
+    .sort((a, b) => {
+      const da = nextRentalDueDate(a)
+      const db = nextRentalDueDate(b)
+      if (!da && !db) return 0
+      if (!da) return 1
+      if (!db) return -1
+      return da.getTime() - db.getTime()
+    })
     .slice(0, 3),
 )
 
@@ -312,6 +387,37 @@ function liabilityAria(liability: Liability): string {
   return listFormatter.format(parts)
 }
 
+// --- Rental compute ---
+
+function rentalDueLabel(c: RentalContract): string {
+  if (c.role === 'tenant' && c.end_date) {
+    return c.end_date
+  }
+  if (c.role === 'landlord' && c.start_date) {
+    const today = new Date()
+    const day = parseLocalDate(c.start_date).getDate()
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), day)
+    const next = thisMonth >= today ? thisMonth : new Date(today.getFullYear(), today.getMonth() + 1, day)
+    return t('focusTop3.rentalCollectionDay', { day: next.getDate() })
+  }
+  return t('focusTop3.rentalIndefinite')
+}
+
+function rentalUrgencyClass(c: RentalContract): string {
+  const due = nextRentalDueDate(c)
+  if (!due) return ''
+  const days = Math.round((due.getTime() - Date.now()) / 86_400_000)
+  if (days <= 7) return 'urgent'
+  if (days <= 30) return 'warning'
+  return ''
+}
+
+function rentalAria(c: RentalContract): string {
+  const parts = [c.counterparty || t('rental.contract')]
+  parts.push(c.role === 'tenant' ? t('focusTop3.rentalRenewal') : t('focusTop3.rentCollection'))
+  return listFormatter.format(parts)
+}
+
 async function loadLiabilities() {
   liabilityLoading.value = true
   liabilityError.value = false
@@ -343,11 +449,28 @@ function retryWishes() {
   loadWishes()
 }
 
+async function loadRentals() {
+  rentalLoading.value = true
+  rentalError.value = false
+  try {
+    await rentalStore.fetchContracts({ active_only: true })
+  } catch {
+    rentalError.value = true
+  } finally {
+    rentalLoading.value = false
+  }
+}
+
+function retryRentals() {
+  loadRentals()
+}
+
 onMounted(() => {
-  // Liability/wish load independently so a single failure degrades only its own tab.
+  // Liability/wish/rental load independently so a single failure degrades only its own tab.
   // Assets read from the dashboard store's homeAssets (fetched by DashboardPage.fetchAll).
   loadLiabilities()
   loadWishes()
+  loadRentals()
 })
 
 // KeepAlive: reload data when re-activated (returning from sub-pages).
@@ -357,6 +480,7 @@ onActivated(() => {
   if (!hasActivated) { hasActivated = true; return }
   loadLiabilities()
   loadWishes()
+  loadRentals()
 })
 </script>
 
@@ -608,4 +732,84 @@ onActivated(() => {
 }
 .top3-wish--overdue .top3-wish-meta { color: var(--color-danger, #ee0a24); font-weight: 600; }
 .top3-wish--achieved .top3-wish-meta { color: var(--color-success, #07c160); font-weight: 600; }
+
+/* Rental row */
+.top3-rental {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px 10px 8px;
+  border-bottom: 1px solid var(--separator);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 150ms ease-out;
+}
+.top3-rental:active { background: var(--bg-secondary); }
+.top3-rental:last-of-type { border-bottom: none; }
+.top3-rental-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.top3-rental-icon {
+  font-size: 18px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.top3-rental-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top3-rental-role {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.top3-rental-role--tenant {
+  background: rgba(25, 137, 250, 0.1);
+  color: var(--color-primary);
+}
+.top3-rental-role--landlord {
+  background: rgba(7, 193, 96, 0.1);
+  color: var(--color-success, #07c160);
+}
+.top3-rental-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.top3-rental-rent {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.top3-rental-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.top3-rental-date.urgent {
+  background: #fff1f0;
+  color: #cf1322;
+}
+.top3-rental-date.warning {
+  background: #fff7e6;
+  color: #d48806;
+}
+[data-theme='dark'] .top3-rental-date.urgent {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+[data-theme='dark'] .top3-rental-date.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
 </style>

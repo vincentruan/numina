@@ -109,9 +109,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Asset, RentalContract, RentalRequestPayload } from '@/types'
+import type { Asset, Category, RentalContract, RentalRequestPayload } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import { getAssets } from '@/api/assets'
+import { getCategories } from '@/api/categories'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const { t } = useI18n()
@@ -211,15 +212,22 @@ function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
   showEndPicker.value = false
 }
 
-// --- Asset picker (landlord only) ---
+// --- Asset picker (landlord only, filtered to 房产 category) ---
 const showAssetPicker = ref(false)
 const assets = ref<Asset[]>([])
+const realEstateCategoryId = ref<string | null>(null)
 const NONE_ASSET_VALUE = ''
 const assetPickerValue = ref<string[]>([])
 
+const propertyAssets = computed(() =>
+  realEstateCategoryId.value
+    ? assets.value.filter(a => a.category_id === realEstateCategoryId.value)
+    : [],
+)
+
 const assetPickerColumns = computed(() => [
   { text: t('liability.noLinkedAsset'), value: NONE_ASSET_VALUE },
-  ...assets.value.map(a => ({ text: a.name, value: a.id })),
+  ...propertyAssets.value.map(a => ({ text: a.name, value: a.id })),
 ])
 
 const linkedAssetDisplay = computed(() => {
@@ -242,10 +250,17 @@ watch(showAssetPicker, (open) => {
 
 onMounted(async () => {
   try {
-    const res = await getAssets()
-    // Backend returns PaginatedAssetResponse after envelope unwrap: { items: Asset[], ... }
-    const raw = res.data as unknown as { items?: Asset[] } | Asset[]
-    assets.value = Array.isArray(raw) ? raw : (raw.items ?? [])
+    const [assetsRes, categoriesRes] = await Promise.all([
+      getAssets(),
+      getCategories(),
+    ])
+    const rawAssets = assetsRes.data as unknown as { items?: Asset[] } | Asset[]
+    assets.value = Array.isArray(rawAssets) ? rawAssets : (rawAssets.items ?? [])
+    const categories = categoriesRes.data as unknown as Category[]
+    const realEstate = Array.isArray(categories)
+      ? categories.find(c => c.name === '房产')
+      : undefined
+    realEstateCategoryId.value = realEstate?.id ?? null
   } catch {
     assets.value = []
   }

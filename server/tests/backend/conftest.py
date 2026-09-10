@@ -43,6 +43,7 @@ from apps.backend.app.models.family_web_search_provider import FamilyWebSearchPr
 from apps.backend.app.models.notification_channel import NotificationChannel
 from apps.backend.app.models.notification_subscription import NotificationSubscription
 from apps.backend.app.models.payment_record import PaymentRecord
+from apps.backend.app.models.push_subscription import PushSubscription
 from apps.backend.app.models.reminder import Reminder
 from apps.backend.app.models.revoked_token import RevokedToken
 

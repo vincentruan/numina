@@ -14,6 +14,11 @@
       </div>
 
       <template v-else>
+        <!-- Offline data staleness indicator -->
+        <div style="padding: 8px 16px 0;">
+          <OfflineStaleness />
+        </div>
+
         <!-- Hero section: unified stat card (net worth + drill-down sub-stats) -->
         <div class="hero-section">
           <OverviewStatCard />
@@ -78,7 +83,7 @@ import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
-import { useFamilyStore } from '@/stores/family'
+
 import { getUpcomingPayments, getUpcomingRentals } from '@/api/dashboard'
 import type { UpcomingPaymentItem, UpcomingRentalItem } from '@/api/dashboard'
 
@@ -100,6 +105,7 @@ import FocusTop3Card from '@/components/dashboard/FocusTop3Card.vue'
 import ManifestoDashboardCard from '@/components/dashboard/ManifestoDashboardCard.vue'
 import LiteracyStatusCard from '@/components/dashboard/LiteracyStatusCard.vue'
 import ManifestoSigningPopup from '@/components/manifesto/ManifestoSigningPopup.vue'
+import OfflineStaleness from '@/components/OfflineStaleness.vue'
 import * as manifestoApi from '@/api/manifesto'
 
 const { t } = useI18n()
@@ -108,7 +114,7 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
-const familyStore = useFamilyStore()
+
 const { increment, decrement } = usePageLoading()
 const { checkFamilyChanges } = useMemberNotify()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
@@ -273,7 +279,6 @@ onMounted(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
-      familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
     // Passive check: notify if family state changed since last snapshot.
     checkFamilyChanges()
@@ -308,7 +313,6 @@ onActivated(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
-      familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
     // Passive check: notify if family state changed since last snapshot.
     checkFamilyChanges()

@@ -4,6 +4,8 @@ import 'vant/lib/index.css'
 import '@vant/touch-emulator'
 import 'virtual:svg-icons-register'
 import './style.css'
+// SW registration — PWA service worker
+import './register-sw'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'

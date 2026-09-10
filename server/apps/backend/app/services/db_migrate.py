@@ -376,8 +376,11 @@ def add_column(
     # Normalize type for different databases
     type_sql = col_type
 
-    # Handle common type mappings
-    if db_type == "sqlite":
+    if db_type == "postgresql":
+        # PostgreSQL uses TIMESTAMP WITH TIME ZONE, not DATETIME
+        if type_sql.upper() == "DATETIME":
+            type_sql = "TIMESTAMPTZ"
+    elif db_type == "sqlite":
         # SQLite doesn't support TEXT(n) syntax - strip length specifiers
         import re
 

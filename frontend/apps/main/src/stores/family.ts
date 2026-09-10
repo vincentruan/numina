@@ -17,15 +17,22 @@ export const useFamilyStore = defineStore('family', () => {
   // AI assistant master switch (family-level toggle, independent of provider configs)
   const aiEnabled = ref(false)
 
+  let _fetchPromise: Promise<void> | null = null
+
   async function fetchFamily() {
-    loading.value = true
-    try {
-      const res = await familyApi.getFamily()
-      family.value = res.data
-      members.value = res.data.members || []
-    } finally {
-      loading.value = false
-    }
+    if (_fetchPromise) return _fetchPromise
+    _fetchPromise = (async () => {
+      loading.value = true
+      try {
+        const res = await familyApi.getFamily()
+        family.value = res.data
+        members.value = res.data.members || []
+      } finally {
+        loading.value = false
+        _fetchPromise = null
+      }
+    })()
+    return _fetchPromise
   }
 
   async function fetchMembers() {

@@ -2,7 +2,7 @@
 
 Tracks when the scheduler last successfully synced files to each backend.
 
-Revision ID: a1b2c3d4e5f7
+Revision ID: lsyncat0001
 Revises: f5g6h7i8j9k0
 Create Date: 2026-09-08
 """
@@ -12,8 +12,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "a1b2c3d4e5f7"
-down_revision: str | None = "f5g6h7i8j9k0"
+revision: str = "lsyncat0001"
+down_revision: str | None = "c7timestz01"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

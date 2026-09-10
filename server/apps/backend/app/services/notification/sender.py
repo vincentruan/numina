@@ -24,6 +24,8 @@ def render_template(reminder_type: str, channel_type: str, variables: dict) -> s
     - "email_subject" → 返回 email.subject
     - "email_body" → 返回 email.body
     - "feishu" → 返回 feishu.text
+    - "webpush_title" → 返回 webpush.title
+    - "webpush_body" → 返回 webpush.body
     """
     template_path = _TEMPLATE_DIR / f"{reminder_type}.json"
     with open(template_path, encoding="utf-8") as f:
@@ -36,11 +38,15 @@ def render_template(reminder_type: str, channel_type: str, variables: dict) -> s
         return str(tmpl["email"]["body"].format_map(variables))
     elif channel_type == "feishu":
         return str(tmpl["feishu"]["text"].format_map(variables))
+    elif channel_type == "webpush_title":
+        return str(tmpl["webpush"]["title"].format_map(variables))
+    elif channel_type == "webpush_body":
+        return str(tmpl["webpush"]["body"].format_map(variables))
     raise ValueError(f"Unknown channel_type: {channel_type}")
 
 
 class NotificationSender:
-    """封装 Telegram、SMTP 和飞书 Webhook 发送逻辑。"""
+    """封装 Telegram、SMTP、飞书 Webhook 和 Web Push 发送逻辑。"""
 
     @staticmethod
     async def send_telegram(bot_token: str, chat_id: str, text: str) -> bool:
@@ -112,4 +118,32 @@ class NotificationSender:
                 return True
         except Exception as e:
             logger.warning("飞书发送失败: %s", e)
+            return False
+
+    @staticmethod
+    def send_webpush(
+        subscription_info: dict,
+        data: dict,
+        vapid_private_key: str,
+        vapid_claims: dict,
+    ) -> bool | str:
+        """Send a Web Push notification.
+
+        Returns True on success, False on failure, or "gone" if the
+        subscription is no longer valid (HTTP 410) and should be removed.
+        """
+        from pywebpush import WebPushException, webpush
+
+        try:
+            webpush(
+                subscription_info=subscription_info,
+                data=json.dumps(data),
+                vapid_private_key=vapid_private_key,
+                vapid_claims=vapid_claims,
+            )
+            return True
+        except WebPushException as exc:
+            if exc.response and exc.response.status_code == 410:
+                return "gone"
+            logger.warning("Web Push 发送失败: %s", exc)
             return False
