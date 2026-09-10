@@ -4,6 +4,7 @@ import path from 'node:path'
 import Components from 'unplugin-vue-components/vite'
 import { VantResolver } from '@vant/auto-import-resolver'
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons-ng'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: '/',
@@ -15,7 +16,29 @@ export default defineConfig({
     createSvgIconsPlugin({
       iconDirs: [path.resolve(import.meta.dirname, 'src/icons/svg')],
       symbolId: 'icon-[name]',
-    })
+    }),
+    VitePWA({
+      registerType: 'prompt',
+      injectRegister: false,
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      manifest: {
+        name: 'Numina',
+        short_name: 'Numina',
+        theme_color: '#4361ee',
+        background_color: '#ffffff',
+        display: 'standalone',
+        start_url: '/',
+        icons: [
+          { src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' },
+        ],
+      },
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,svg,png,woff2}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MiB — main bundle exceeds default 2 MiB
+      },
+    }),
   ],
   resolve: {
     alias: {

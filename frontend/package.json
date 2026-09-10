@@ -1,6 +1,7 @@
 {
 	"devDependencies": {
-		"@iconify/json": "^2.2.508"
+		"@iconify/json": "^2.2.508",
+		"vite-plugin-pwa": "^1.3.0"
 	},
 	"dependencies": {
 		"vant": "^4.10.2"
