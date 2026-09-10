@@ -361,22 +361,22 @@ def test_check_device_inactive_user(client, auth_headers, db):
 
 
 def test_check_device_rate_limited_by_ip(client, auth_headers):
-    """POST /auth/device/check is rate-limited to 20/min per IP."""
+    """POST /auth/device/check is rate-limited to 30/min per IP."""
     from apps.backend.app.services.cache import reset_rate_limit_cache
     reset_rate_limit_cache()
 
-    # 20 requests should succeed
-    for i in range(20):
+    # 30 requests should succeed
+    for i in range(30):
         resp = client.post(
             "/api/v1/auth/device/check",
             json={"device_id": f"00000000-0000-0000-0000-{i:012d}"},
         )
         assert resp.status_code == 200
 
-    # 21st should be rate-limited
+    # 31st should be rate-limited
     resp = client.post(
         "/api/v1/auth/device/check",
-        json={"device_id": "00000000-0000-0000-0000-000000000021"},
+        json={"device_id": "00000000-0000-0000-0000-000000000031"},
     )
     assert resp.status_code == 429
 

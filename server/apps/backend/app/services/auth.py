@@ -55,8 +55,8 @@ _LOCKOUT_SECONDS = 15 * 60  # 15 minutes
 # Dummy hash cache for timing attack protection
 _dummy_hash_cache: str | None = None
 
-# Refresh rate limit: 10 per minute per user_id
-_REFRESH_RATE_LIMIT_PER_MINUTE = 10
+# Refresh rate limit: 20 per minute per user (supports multi-tab usage)
+_REFRESH_RATE_LIMIT_PER_MINUTE = 20
 # Password change rate limit: 3 per hour per user_id
 _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR = 3
 # Invite code regeneration rate limit: 5 per hour per user_id

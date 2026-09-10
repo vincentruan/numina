@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # Rate limiting
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_LOCKOUT_SECONDS: int = 900  # 15 minutes
-    GLOBAL_RATE_LIMIT_PER_MINUTE: int = 100
+    GLOBAL_RATE_LIMIT_PER_MINUTE: int = 600
     REGISTER_RATE_LIMIT_PER_HOUR: int = 5  # Registration rate limit per IP
 
     # Trusted proxy configuration (for X-Forwarded-For validation)

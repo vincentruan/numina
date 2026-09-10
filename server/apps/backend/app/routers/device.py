@@ -362,11 +362,11 @@ def revoke_all_devices(
     return None
 
 
-_DEVICE_CHECK_RATE_LIMIT_PER_MINUTE = 20
+_DEVICE_CHECK_RATE_LIMIT_PER_MINUTE = 30
 
 
 def _check_device_check_rate_limit(ip: str) -> None:
-    """Limit /device/check to 20 requests per minute per IP."""
+    """Limit /device/check to 30 requests per minute per IP."""
     from packages.core.logging import get_logger
 
     logger = get_logger(__name__)
