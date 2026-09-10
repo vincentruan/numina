@@ -55,7 +55,7 @@ def upgrade() -> None:
             sa.Column('entity_id', sa.BigInteger(), nullable=False),
             sa.Column('title', sa.String(length=200), nullable=False),
             sa.Column('amount', sa.Float(), nullable=True),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()'))
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()'))
         )
 
     if not bind.dialect.has_table(bind, 'ai_chat_messages'):
@@ -65,7 +65,7 @@ def upgrade() -> None:
             sa.Column('role', sa.String(length=10), nullable=False),
             sa.Column('content', sa.Text(), nullable=False),
             sa.Column('status', sa.String(length=20), nullable=False),
-            sa.Column('created_at', sa.DateTime(), nullable=False)
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False)
         )
         op.create_index('ix_ai_chat_messages_family_id', 'ai_chat_messages', ['family_id'])
 
@@ -83,8 +83,8 @@ def upgrade() -> None:
             sa.Column('is_pinned', sa.Boolean(), nullable=False),
             sa.Column('source', sa.String(length=32), nullable=True),
             sa.Column('parent_thread_id', sa.String(length=64), nullable=True),
-            sa.Column('created_at', sa.DateTime(), nullable=False),
-            sa.Column('updated_at', sa.DateTime(), nullable=False)
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False)
         )
         op.create_index('ix_ai_chat_sessions_family_id', 'ai_chat_sessions', ['family_id'])
         op.create_index('ix_ai_chat_sessions_agent_id', 'ai_chat_sessions', ['agent_id'])
@@ -96,7 +96,7 @@ def upgrade() -> None:
             sa.Column('report_json', sa.JSON(), nullable=False),
             sa.Column('overall_score', sa.Integer(), nullable=True),
             sa.Column('data_completeness_score', sa.Float(), nullable=True),
-            sa.Column('generated_at', sa.DateTime(), nullable=False),
+            sa.Column('generated_at', sa.DateTime(timezone=True), nullable=False),
             sa.Column('status', sa.String(length=20), nullable=False),
             sa.Column('markdown_file_path', sa.String(length=255), nullable=True),
             sa.Column('capability', sa.String(length=32), nullable=False, server_default=sa.text("'report'"))
@@ -114,8 +114,8 @@ def upgrade() -> None:
             sa.Column('mime_type', sa.String(length=100), nullable=True),
             sa.Column('size_bytes', sa.Integer(), nullable=False),
             sa.Column('date_dir', sa.String(length=8), nullable=False),
-            sa.Column('deleted_at', sa.DateTime(), nullable=True),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
             sa.UniqueConstraint('sha256', 'family_id', name='uq_cached_files_sha256_family')
         )
         op.create_index('ix_cached_files_family_id', 'cached_files', ['family_id'])
@@ -136,7 +136,7 @@ def upgrade() -> None:
             sa.Column('family_id', sa.BigInteger(), sa.ForeignKey('families.id'), nullable=False),
             sa.Column('child_user_id', sa.BigInteger(), sa.ForeignKey('users.id'), nullable=False),
             sa.Column('milestone_type', sa.String(length=50), nullable=False),
-            sa.Column('triggered_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column('triggered_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
             sa.Column('ref_id', sa.BigInteger(), nullable=True),
             sa.Column('ref_type', sa.String(length=20), nullable=True)
         )
@@ -152,8 +152,8 @@ def upgrade() -> None:
             sa.Column('frequency', sa.String(length=10), nullable=False),
             sa.Column('assignment_type', sa.String(length=10), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()'))
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()'))
         )
 
     if not bind.dialect.has_table(bind, 'chore_template_assignees'):
@@ -174,15 +174,15 @@ def upgrade() -> None:
             sa.Column('coin_reward', sa.Integer(), nullable=False),
             sa.Column('date_bucket', sa.String(length=10), nullable=False),
             sa.Column('status', sa.String(length=20), nullable=False),
-            sa.Column('submitted_at', sa.DateTime(), nullable=True),
-            sa.Column('approved_at', sa.DateTime(), nullable=True),
+            sa.Column('submitted_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('approved_at', sa.DateTime(timezone=True), nullable=True),
             sa.Column('streak_count', sa.Integer(), nullable=False),
             sa.Column('streak_bonus', sa.Integer(), nullable=False),
             sa.Column('submitted_by_user_id', sa.BigInteger(), sa.ForeignKey('users.id'), nullable=True),
             sa.Column('assigned_by_user_id', sa.BigInteger(), sa.ForeignKey('users.id'), nullable=True),
-            sa.Column('claimed_at', sa.DateTime(), nullable=True),
-            sa.Column('consumed_at', sa.DateTime(), nullable=True),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column('claimed_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('consumed_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
             sa.UniqueConstraint('template_id', 'child_user_id', 'date_bucket', name='uq_chore_instance')
         )
 
@@ -197,7 +197,7 @@ def upgrade() -> None:
             sa.Column('narrative', sa.Text(), nullable=True),
             sa.Column('narrative_emoji', sa.String(length=20), nullable=True),
             sa.Column('streak_bonus', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
             sa.UniqueConstraint('ref_id', 'transaction_type', name='uq_coin_tx_ref_type')
         )
 
@@ -220,37 +220,40 @@ def upgrade() -> None:
             sa.Column('base_currency', sa.String(length=10), nullable=False),
             sa.Column('target_currency', sa.String(length=10), nullable=False),
             sa.Column('rate', sa.Float(), nullable=False),
-            sa.Column('fetched_at', sa.DateTime(), nullable=False),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column('fetched_at', sa.DateTime(timezone=True), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
             sa.UniqueConstraint('target_currency', 'fetched_at')
         )
 
     if not bind.dialect.has_table(bind, 'storage_backends'):
         op.create_table('storage_backends',
             sa.Column('id', sa.BigInteger(), nullable=False, primary_key=True),
+            sa.Column('family_id', sa.BigInteger(), sa.ForeignKey('families.id'), nullable=False),
             sa.Column('backend_type', sa.String(length=20), nullable=False),
             sa.Column('display_name', sa.String(length=200), nullable=True),
             sa.Column('config', sa.Text(), nullable=True),
-            sa.Column('is_default', sa.Boolean(), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()'))
+            sa.Column('last_synced_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+            sa.UniqueConstraint('family_id', name='uq_storage_backends_family_id')
         )
+        op.create_index('ix_storage_backends_family_id', 'storage_backends', ['family_id'])
 
     if not bind.dialect.has_table(bind, 'file_remote_locations'):
         op.create_table('file_remote_locations',
             sa.Column('id', sa.BigInteger(), nullable=False, primary_key=True),
             sa.Column('file_id', sa.BigInteger(), sa.ForeignKey('cached_files.id'), nullable=False),
-            sa.Column('backend_id', sa.BigInteger(), sa.ForeignKey('storage_backends.id'), nullable=False),
+            sa.Column('backend_id', sa.BigInteger(), sa.ForeignKey('storage_backends.id'), nullable=True),
             sa.Column('remote_path', sa.String(length=500), nullable=True),
             sa.Column('remote_url', sa.String(length=1000), nullable=True),
             sa.Column('remote_sha', sa.String(length=100), nullable=True),
             sa.Column('sync_status', sa.String(length=20), nullable=False),
-            sa.Column('synced_at', sa.DateTime(), nullable=True),
+            sa.Column('synced_at', sa.DateTime(timezone=True), nullable=True),
             sa.Column('last_error', sa.Text(), nullable=True),
             sa.Column('retry_count', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
             sa.UniqueConstraint('file_id', 'backend_id', name='uq_file_remote_locations_file_backend')
         )
         op.create_index('ix_file_remote_locations_backend_status', 'file_remote_locations', ['backend_id', 'sync_status'])
@@ -279,7 +282,7 @@ def upgrade() -> None:
             sa.Column('user_agent', sa.String(length=512), nullable=True),
             sa.Column('outcome', sa.String(length=16), nullable=False),
             sa.Column('detail', sa.Text(), nullable=True),
-            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()'))
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()'))
         )
         op.create_index('ix_security_audit_logs_family_id', 'security_audit_logs', ['family_id'])
         op.create_index('ix_security_audit_logs_user_id', 'security_audit_logs', ['user_id'])
@@ -293,7 +296,7 @@ def upgrade() -> None:
             sa.Column('backend_id', sa.BigInteger(), sa.ForeignKey('storage_backends.id'), nullable=True),
             sa.Column('event_type', sa.String(length=50), nullable=False),
             sa.Column('detail', sa.Text(), nullable=True),
-            sa.Column('occurred_at', sa.DateTime(), nullable=False, server_default=sa.text('now()'))
+            sa.Column('occurred_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()'))
         )
         op.create_index('ix_sync_events_file_id', 'sync_events', ['file_id'])
         op.create_index('ix_sync_events_backend_occurred', 'sync_events', ['backend_id', 'occurred_at'])
