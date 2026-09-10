@@ -95,6 +95,7 @@ export default {
     rentalRenewal: 'Renewal',
     rentCollection: 'Collection',
     rentalIndefinite: 'Indefinite',
+    rentalCollectionDay: 'Day {day} each month',
   },
   dashboard: {
     title: 'Dashboard',

@@ -398,7 +398,7 @@ function rentalDueLabel(c: RentalContract): string {
     const day = parseLocalDate(c.start_date).getDate()
     const thisMonth = new Date(today.getFullYear(), today.getMonth(), day)
     const next = thisMonth >= today ? thisMonth : new Date(today.getFullYear(), today.getMonth() + 1, day)
-    return `${t('rental.monthly')} ${next.getDate()}`
+    return t('focusTop3.rentalCollectionDay', { day: next.getDate() })
   }
   return t('focusTop3.rentalIndefinite')
 }

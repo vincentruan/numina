@@ -154,6 +154,7 @@ export default {
     rentalRenewal: '续租',
     rentCollection: '收租',
     rentalIndefinite: '不定期',
+    rentalCollectionDay: '每月{day}日',
   },
   dashboard: {
     title: '总览',
