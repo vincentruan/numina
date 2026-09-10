@@ -1173,7 +1173,6 @@ Keep the tone warm, like a chat between family members.`,
     historyTab: 'History',
     activeTab: 'Active',
     contract: 'Contract',
-    monthly: 'Monthly',
   },
   wish: {
     detail: 'Wish Detail',

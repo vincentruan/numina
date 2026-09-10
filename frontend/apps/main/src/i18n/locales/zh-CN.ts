@@ -1348,7 +1348,6 @@ export default {
     historyTab: '历史租约',
     activeTab: '生效中',
     contract: '租约',
-    monthly: '每月',
   },
   wish: {
     detail: '心愿详情',
