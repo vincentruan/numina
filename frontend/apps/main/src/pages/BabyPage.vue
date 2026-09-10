@@ -1195,7 +1195,6 @@ onActivated(async () => {
   if (!hasActivated) { hasActivated = true; return }
   increment()
   try {
-    await familyStore.fetchFamily()
     if (authStore.user?.role === 'owner') {
       await choreStore.fetchPendingApprovals()
     }

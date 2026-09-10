@@ -83,7 +83,7 @@ import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
-import { useFamilyStore } from '@/stores/family'
+
 import { getUpcomingPayments, getUpcomingRentals } from '@/api/dashboard'
 import type { UpcomingPaymentItem, UpcomingRentalItem } from '@/api/dashboard'
 
@@ -114,7 +114,7 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
-const familyStore = useFamilyStore()
+
 const { increment, decrement } = usePageLoading()
 const { checkFamilyChanges } = useMemberNotify()
 // Skip first onActivated — Vue 3 fires both onMounted and onActivated on first
@@ -279,7 +279,6 @@ onMounted(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
-      familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
     // Passive check: notify if family state changed since last snapshot.
     checkFamilyChanges()
@@ -314,7 +313,6 @@ onActivated(async () => {
         .catch(() => {
           // Non-critical: silently ignore if endpoint not available
         }),
-      familyStore.fetchFamily().catch(() => { /* non-critical */ }),
     ])
     // Passive check: notify if family state changed since last snapshot.
     checkFamilyChanges()
