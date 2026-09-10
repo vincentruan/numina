@@ -53,8 +53,8 @@ self.addEventListener('push', (event: PushEvent) => {
     const title = data.title || 'Numina'
     const options: NotificationOptions = {
       body: data.body || '',
-      icon: '/pwa-icon.svg',
-      badge: '/pwa-icon.svg',
+      icon: '/pwa-icon-192.png',
+      badge: '/pwa-icon-192.png',
       data: {
         navigateTo: data.navigate_to || '/',
         reminderType: data.reminder_type || '',
@@ -68,7 +68,7 @@ self.addEventListener('push', (event: PushEvent) => {
     event.waitUntil(
       self.registration.showNotification('Numina', {
         body: event.data.text(),
-        icon: '/pwa-icon.svg',
+        icon: '/pwa-icon-192.png',
       }),
     )
   }

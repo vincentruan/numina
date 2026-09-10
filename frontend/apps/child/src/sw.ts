@@ -53,8 +53,8 @@ self.addEventListener('push', (event: PushEvent) => {
     const title = data.title || 'Numina Kids'
     const options: NotificationOptions = {
       body: data.body || '',
-      icon: '/child/pwa-icon.svg',
-      badge: '/child/pwa-icon.svg',
+      icon: '/child/pwa-icon-192.png',
+      badge: '/child/pwa-icon-192.png',
       data: {
         navigateTo: data.navigate_to || '/child/',
         reminderType: data.reminder_type || '',
@@ -67,7 +67,7 @@ self.addEventListener('push', (event: PushEvent) => {
     event.waitUntil(
       self.registration.showNotification('Numina Kids', {
         body: event.data.text(),
-        icon: '/child/pwa-icon.svg',
+        icon: '/child/pwa-icon-192.png',
       }),
     )
   }
