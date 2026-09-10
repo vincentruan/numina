@@ -1171,6 +1171,8 @@ Keep the tone warm, like a chat between family members.`,
     tenantCount: 'Tenant {count}',
     historyTab: 'History',
     activeTab: 'Active',
+    contract: 'Contract',
+    monthly: 'Monthly',
   },
   wish: {
     detail: 'Wish Detail',

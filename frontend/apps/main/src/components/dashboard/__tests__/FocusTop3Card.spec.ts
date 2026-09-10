@@ -28,11 +28,13 @@ vi.mock('@/composables/useCurrency', () => ({
 // --- Store mocks ---
 const fetchLiabilitiesMock = vi.fn(() => Promise.resolve())
 const fetchWishesMock = vi.fn(() => Promise.resolve())
+const fetchContractsMock = vi.fn(() => Promise.resolve())
 
 const homeAssetsRef = ref<Record<string, Array<Record<string, unknown>>>>({})
 const loadingRef = ref(false)
 const liabilitiesRef = ref<Array<Record<string, unknown>>>([])
 const wishesRef = ref<Array<Record<string, unknown>>>([])
+const contractsRef = ref<Array<Record<string, unknown>>>([])
 
 vi.mock('@/stores/dashboard', () => ({
   useDashboardStore: () => ({
@@ -50,6 +52,12 @@ vi.mock('@/stores/wish', () => ({
   useWishStore: () => ({
     get wishes() { return wishesRef.value },
     fetchWishes: fetchWishesMock,
+  }),
+}))
+vi.mock('@/stores/rentalContract', () => ({
+  useRentalContractStore: () => ({
+    get contracts() { return contractsRef.value },
+    fetchContracts: fetchContractsMock,
   }),
 }))
 
@@ -93,10 +101,13 @@ function resetState() {
   loadingRef.value = false
   liabilitiesRef.value = []
   wishesRef.value = []
+  contractsRef.value = []
   fetchLiabilitiesMock.mockReset()
   fetchWishesMock.mockReset()
+  fetchContractsMock.mockReset()
   fetchLiabilitiesMock.mockResolvedValue(undefined)
   fetchWishesMock.mockResolvedValue(undefined)
+  fetchContractsMock.mockResolvedValue(undefined)
 }
 
 describe('FocusTop3Card', () => {
@@ -152,13 +163,14 @@ describe('FocusTop3Card', () => {
     expect(names).toEqual(['Sooner', 'Middle', 'Later']) // NoDate excluded, sorted asc by date
   })
 
-  it('renders 查看全部 links for all three tabs → /finance?tab=X (R14)', async () => {
+  it('renders 查看全部 links for all four tabs → /finance?tab=X (R14)', async () => {
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()
 
     expect(wrapper.find('[data-test="view-all-assets"]').attributes('href')).toContain('tab=assets')
     expect(wrapper.find('[data-test="view-all-liabilities"]').attributes('href')).toContain('tab=liabilities')
     expect(wrapper.find('[data-test="view-all-wishes"]').attributes('href')).toContain('tab=wishes')
+    expect(wrapper.find('[data-test="view-all-rentals"]').attributes('href')).toContain('tab=rentals')
   })
 
   it('shows all items when fewer than 3 (no padding/truncation)', async () => {
@@ -183,8 +195,8 @@ describe('FocusTop3Card', () => {
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()
 
-    // van-empty is stubbed; assert three empty placeholders render (one per tab).
-    expect(wrapper.findAll('van-empty-stub').length + wrapper.findAll('.van-empty').length).toBeGreaterThanOrEqual(3)
+    // van-empty is stubbed; assert four empty placeholders render (one per tab).
+    expect(wrapper.findAll('van-empty-stub').length + wrapper.findAll('.van-empty').length).toBeGreaterThanOrEqual(4)
   })
 
   it('shows assets skeleton while dashboard asset list is loading', async () => {
@@ -226,5 +238,51 @@ describe('FocusTop3Card', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="wishes-retry"]').exists()).toBe(false)
     expect(fetchWishesMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('sorts active rentals by upcoming due date and limits to top 3', async () => {
+    contractsRef.value = [
+      { id: 'r1', role: 'tenant', monthly_rent: '3000', start_date: '2025-01-01', end_date: '2027-12-31', is_active: true, counterparty: 'Far' },
+      { id: 'r2', role: 'landlord', monthly_rent: '5000', start_date: '2025-06-10', is_active: true, counterparty: 'Near' },
+      { id: 'r3', role: 'tenant', monthly_rent: '2000', start_date: '2025-03-01', end_date: '2026-09-15', is_active: true, counterparty: 'Soon' },
+      { id: 'r4', role: 'landlord', monthly_rent: '4000', start_date: '2025-01-20', is_active: false, counterparty: 'Inactive' },
+      { id: 'r5', role: 'tenant', monthly_rent: '1500', start_date: '2025-04-01', end_date: '2026-10-01', is_active: true, counterparty: 'Mid' },
+    ]
+
+    const wrapper = mount(FocusTop3Card, { global: { stubs } })
+    await flushPromises()
+
+    const names = wrapper.findAll('.top3-rental-name').map((n) => n.text())
+    // Active only, sorted by urgency; Inactive excluded; top 3 only
+    expect(names.length).toBeLessThanOrEqual(3)
+    expect(names).not.toContain('Inactive')
+  })
+
+  it('calls fetchContracts on mount with active_only', async () => {
+    contractsRef.value = []
+
+    const wrapper = mount(FocusTop3Card, { global: { stubs } })
+    await flushPromises()
+
+    expect(fetchContractsMock).toHaveBeenCalledWith({ active_only: true })
+    // Rentals empty state renders (no active contracts)
+    expect(wrapper.findAll('.top3-rental').length).toBe(0)
+  })
+
+  it('degrades only the rentals tab on fetch reject; inline retry refetches', async () => {
+    fetchContractsMock.mockRejectedValueOnce(new Error('network'))
+
+    const wrapper = mount(FocusTop3Card, { global: { stubs } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="rentals-retry"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="liabilities-retry"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="wishes-retry"]').exists()).toBe(false)
+
+    fetchContractsMock.mockResolvedValueOnce(undefined)
+    await wrapper.find('[data-test="rentals-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="rentals-retry"]').exists()).toBe(false)
+    expect(fetchContractsMock).toHaveBeenCalledTimes(2)
   })
 })
