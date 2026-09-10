@@ -9,6 +9,8 @@
  * Legacy localStorage token storage removed for security.
  */
 
+import { notifyAuthCleared } from '@numina/auth'
+
 const USER_KEY = 'numina_user'
 
 // User info stored in localStorage (non-sensitive)
@@ -58,6 +60,9 @@ export function removeUser(): void {
 export function clearAuth(): void {
   // Only clear user info (tokens are in httpOnly Cookie, managed by server)
   removeUser()
+  // Notify @numina/auth so its generation counter increments — prevents a
+  // slow in-flight fetchMe() from restoring localStorage after session expiry.
+  notifyAuthCleared()
 }
 
 // Legacy functions removed (tokens now in httpOnly Cookie):

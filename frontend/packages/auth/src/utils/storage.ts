@@ -46,6 +46,24 @@ export function removeUser(): void {
   localStorage.removeItem(USER_KEY)
 }
 
+// Generation counter: incremented on every clearAuth() (local or cross-module).
+// fetchMe() snapshots this before its HTTP call and checks after — if the
+// counter changed, the response is stale and must NOT call setUser().
+let authGeneration = 0
+
+export function getAuthGeneration(): number {
+  return authGeneration
+}
+
+// Cross-module bridge: the app-level clearAuth() (which manages the same
+// localStorage key) calls notifyAuthCleared() so the auth package's
+// generation counter stays in sync even when clearAuth() fires from the
+// axios interceptor layer.
+export function notifyAuthCleared(): void {
+  authGeneration++
+}
+
 export function clearAuth(): void {
   removeUser()
+  notifyAuthCleared()
 }

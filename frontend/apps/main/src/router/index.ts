@@ -510,9 +510,13 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
-  // Not logged in accessing protected route — redirect to login
+  // Not logged in accessing protected route — redirect to login, preserving
+  // the intended destination (including query params like ?tab=liabilities)
+  // so post-login navigation restores it. Skip redirect param for guest
+  // routes to avoid nested redirects (e.g. /login?redirect=/login?redirect=...).
   if (!isLoggedIn) {
-    next('/login')
+    const redirect = to.meta.guest ? undefined : to.fullPath
+    next(redirect ? { path: '/login', query: { redirect } } : { path: '/login' })
     return
   }
 

@@ -15,9 +15,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { User, LoginRequest, RegisterRequest, JoinFamilyRequest, LoginStep1Request, LoginStep1Response, LoginStep2Request } from '../types'
 import type { StoredUser } from '../utils/storage'
-import { getUser, setUser, clearAuth } from '../utils/storage'
-import { configureAuthHttp, getHttp } from './http'
+import { configureAuthHttp, getHttp, resetSessionExpired } from './http'
 import { readDeviceId, writeDeviceId, establishEtag } from '../utils/deviceIdentity'
+import { getUser, setUser, clearAuth, getAuthGeneration } from '../utils/storage'
 
 export { configureAuthHttp }
 
@@ -52,9 +52,22 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchMe() {
+    const gen = getAuthGeneration()
     const res = await getHttp().get<User>('/auth/me')
+    // Only update state if auth hasn't been cleared while this request was
+    // in-flight. Without this guard, a slow /auth/me response can restore
+    // localStorage after clearAuth() has already redirected to /login,
+    // causing the router guard to bounce the user back to dashboard.
+    // Throw (don't silently return) so the caller's .catch() fires — the
+    // session is dead and the caller should not proceed with .then() work.
+    if (getAuthGeneration() !== gen) {
+      throw new DOMException('Auth cleared during fetchMe', 'AbortError')
+    }
     user.value = res.data
     setUser(res.data as StoredUser)
+    // Session is alive — clear the expired flag so subsequent API calls
+    // are allowed to attempt token refresh again.
+    resetSessionExpired()
   }
 
   async function fetchChildMe(): Promise<User> {

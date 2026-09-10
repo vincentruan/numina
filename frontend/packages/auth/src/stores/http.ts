@@ -19,3 +19,16 @@ export function getHttp(): AxiosInstance {
   }
   return _http
 }
+
+// Session-expired reset bridge: the app's axios interceptor owns the
+// sessionExpired flag. When it clears (e.g. after successful fetchMe),
+// the interceptor calls resetSessionExpired() via the registered callback.
+let _resetSessionExpired: (() => void) | null = null
+
+export function configureSessionReset(fn: () => void) {
+  _resetSessionExpired = fn
+}
+
+export function resetSessionExpired(): void {
+  _resetSessionExpired?.()
+}

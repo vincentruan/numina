@@ -5,6 +5,8 @@ export { default as TrustedDeviceCard } from './components/TrustedDeviceCard.vue
 
 // HTTP client configuration — call configureAuthHttp(http) in main.ts before using stores
 export { configureAuthHttp } from './stores/http'
+// Session-expired reset bridge — the app interceptor registers its reset callback
+export { configureSessionReset } from './stores/http'
 
 // Types
 export type {
@@ -22,6 +24,7 @@ export type {
 export type { StoredUser } from './utils/storage'
 export {
   getUser, setUser, removeUser, clearAuth,
+  notifyAuthCleared,
 } from './utils/storage'
 
 // Device identity (cookie-based device discovery)
