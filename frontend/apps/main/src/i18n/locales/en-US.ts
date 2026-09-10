@@ -41,7 +41,8 @@ export default {
     family: 'Family',
     finance: 'Finance',
     ai: 'AI',
-    settings: 'Settings'
+    settings: 'Settings',
+    rentals: 'Rentals',
   },
   financeHub: {
     aria: {
@@ -90,6 +91,10 @@ export default {
     liabilityMonthsToClear: '~{months} mo to clear',
     liabilityCleared: 'Almost cleared',
     liabilityHighRate: 'High rate',
+    noRentals: 'No active rentals',
+    rentalRenewal: 'Renewal',
+    rentCollection: 'Collection',
+    rentalIndefinite: 'Indefinite',
   },
   dashboard: {
     title: 'Dashboard',
@@ -1132,6 +1137,7 @@ Keep the tone warm, like a chat between family members.`,
     roleLandlord: 'Landlord (collect)',
     roleTenant: 'Tenant (pay)',
     monthlyRent: 'Monthly Rent',
+    month: '/mo',
     deposit: 'Deposit',
     startDate: 'Start Date',
     endDate: 'End Date',

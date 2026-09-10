@@ -100,7 +100,8 @@ export default {
     family: '家庭',
     finance: '财务',
     ai: 'AI',
-    settings: '设置'
+    settings: '设置',
+    rentals: '租约',
   },
   financeHub: {
     aria: {
@@ -149,6 +150,10 @@ export default {
     liabilityMonthsToClear: '按计划还需 {months} 个月清零',
     liabilityCleared: '即将还清',
     liabilityHighRate: '高息',
+    noRentals: '暂无活跃租约',
+    rentalRenewal: '续租',
+    rentCollection: '收租',
+    rentalIndefinite: '不定期',
   },
   dashboard: {
     title: '总览',
@@ -1307,6 +1312,7 @@ export default {
     roleLandlord: '房东（收租）',
     roleTenant: '租客（付租）',
     monthlyRent: '月租金',
+    month: '月',
     deposit: '押金',
     startDate: '起租日',
     endDate: '到期日',
