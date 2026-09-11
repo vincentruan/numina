@@ -79,4 +79,4 @@ import { noTasksSvg } from '@numina/assets/empty-states'
 
 ## Links
 
-Parent [`CLAUDE.md`](../CLAUDE.md) — frontend workspace 约束
+- Parent [`CLAUDE.md`](../CLAUDE.md) — frontend workspace constraints

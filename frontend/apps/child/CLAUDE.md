@@ -1,19 +1,19 @@
 # frontend/apps/child/CLAUDE.md
 
-儿童端 H5 应用。继承 [`frontend/CLAUDE.md`](../../CLAUDE.md) 通用约束。
+Child H5 application. Inherits [`frontend/CLAUDE.md`](../../CLAUDE.md) common constraints.
 
 ## Commands
 
-`pnpm dev` — http://localhost:5174。其他命令见 parent [`CLAUDE.md`](../../CLAUDE.md)。
+`pnpm dev` — http://localhost:5174. Other commands — see parent [`CLAUDE.md`](../../CLAUDE.md).
 
 ## Directory Structure
 
 ```
 src/
-├── api/           # HTTP 请求封装
-├── components/    # 通用组件
-├── i18n/          # 国际化 (zh-CN.ts, en-US.ts)
-├── pages/         # 路由页面
+├── api/           # HTTP request wrappers
+├── components/    # Shared components
+├── i18n/          # Internationalization (zh-CN.ts, en-US.ts)
+├── pages/         # Route pages
 ├── router/        # Vue Router
 ├── stores/        # Pinia stores
 ├── types/         # TypeScript types
@@ -26,7 +26,7 @@ src/
 - **No `<van-config-provider>`** — dark mode via CSS variable overrides in `clay.css`
 - **Custom tabbar**: `ChildTabBar` component wraps `van-tabbar`
 - **Custom empty**: `EmptyState` component with illustration + action
-- Vant components auto-import via `unplugin-vue-components`
+- Vant components auto-imported via `unplugin-vue-components`
 
 ### Theme Token Mapping (Clay)
 
@@ -44,15 +44,15 @@ src/
 
 ## Dark Mode (Clay Warm-Throughout)
 
-`useDarkMode()` composable + `[data-theme="dark"]` on `<html>` + `clay.css`。
+`useDarkMode()` composable + `[data-theme="dark"]` on `<html>` + `clay.css`.
 
-| 规则 | 说明 |
-|------|------|
-| Warm 基调 | 禁止 `#FFFFFF` / 冷灰 |
-| 多色卡片 | `var(--color-surface-card)` 上叠 brand rgba |
-| 主文本 | `var(--color-ink)` |
+| Rule | Description |
+|------|------------|
+| Warm base | `#FFFFFF` / cold gray forbidden |
+| Multi-color cards | Stack brand rgba over `var(--color-surface-card)` |
+| Primary text | `var(--color-ink)` |
 
-**铁律**: 新 token 必须在 `:root` 和 `[data-theme="dark"]` 双向定义。
+**Iron rule**: New tokens must be defined in both `:root` and `[data-theme="dark"]`.
 
 ## Color Palette (Clay)
 
@@ -85,17 +85,17 @@ Shared image/icon package — `@numina/assets` — tree-shaken at the module bou
 - Child-only illustrations → prefer `@numina/assets/empty-states` (shared), unless truly child-specific
 - `src/assets/` → avoid new files here; prefer shared package or `public/`
 
-## Child App 问题排查指南
+## Child App Troubleshooting Guide
 
-遇到以下问题时，参考对应的 solution 文档：
+For the following issues, refer to the corresponding solution document:
 
-| 问题场景 | 参考文档 |
-|---------|---------|
-| NProgress 进度条卡住不消失 / guard flag 问题 | [`nprogress-stuck-child`](../../../docs/solutions/ui-bugs/nprogress-stuck-spinning-bypassed-guard.md) |
-| 设备指纹稳定性 / 认证相关 | [`device-fingerprint-stability`](../../../docs/solutions/integration-issues/device-fingerprint-stability.md) |
-| 儿童游戏化系统架构 | [`gamified-child-system`](../../../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) |
+| Problem | Reference |
+|---------|-----------|
+| NProgress bar stuck spinning / bypassed guard flag | [`nprogress-stuck-child`](../../../docs/solutions/ui-bugs/nprogress-stuck-spinning-bypassed-guard.md) |
+| Device fingerprint stability / authentication | [`device-fingerprint-stability`](../../../docs/solutions/integration-issues/device-fingerprint-stability.md) |
+| Child gamification system architecture | [`gamified-child-system`](../../../docs/solutions/best-practices/gamified-child-system-architecture-2026-04-17.md) |
 
 ## Links
 
-Parent [`CLAUDE.md`](../../CLAUDE.md) — frontend workspace 约束
-[`apps/main/CLAUDE.md`](../main/CLAUDE.md) — main app 配置
+- Parent [`CLAUDE.md`](../../CLAUDE.md) — frontend workspace constraints
+- [`apps/main/CLAUDE.md`](../main/CLAUDE.md) — main app config

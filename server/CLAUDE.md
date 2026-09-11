@@ -103,7 +103,7 @@ All API endpoints must respond with 200 directly — no 307 redirects.
 
 ### Error Messages
 
-Backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`.
+Backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="Asset not found")`. Note: actual code uses Chinese strings (e.g., `"资产不存在"`) — this documents the pattern, not the literal string to use.
 
 Backend uses `AppError` (`app/errors/exceptions.py`) with `ErrorCode` enum. The global `error_handlers.py` catches `AppError`, `RequestValidationError`, `StarletteHTTPException`, and `StorageError`, returning a unified JSON envelope: `{"code": "ERROR_CODE", "message": "localized message", "data": null, "request_id": "..."}`. Language is selected via `Accept-Language` header.
 

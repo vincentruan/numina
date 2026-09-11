@@ -15,7 +15,7 @@ These supersede general defaults in this repo:
 
 ## Project Overview
 
-Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visualization and management system. It helps families track, manage, and visualize their assets and liabilities across multiple members with role-based access control.
+Numina (Family Asset Visualization) is a privacy-first, self-hosted family asset visualization and management system. It helps families track, manage, and visualize their assets and liabilities across multiple members with role-based access control.
 
 **Tech Stack:**
 
@@ -63,23 +63,23 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
 
-## Solutions (经验教训库)
+## Solutions (Lessons Learned)
 
-`docs/solutions/` 存放已验证的问题解决方案和最佳实践，帮助避免重复踩坑。每个文档包含 YAML frontmatter（`date`, `module`, `problem_type`, `tags`, `applies_when`）和标准结构（Problem/Context → Solution → Prevention）。
+`docs/solutions/` contains verified solutions and best practices to help avoid repeating past mistakes. Each document includes YAML frontmatter (`date`, `module`, `problem_type`, `tags`, `applies_when`) and a standard structure (Problem/Context → Solution → Prevention).
 
-**在开始调试或实现前，检查是否有相关文档。**
+**Check for relevant docs before starting debugging or implementation.**
 
-### 目录映射
+### Directory Map
 
-| 子目录 | 内容类型 | 检查时机 |
-|--------|----------|----------|
-| `architecture-patterns/` | 架构设计模式 | MCP 集成、多 provider AI、熔断器、tenant isolation |
-| `best-practices/` | 最佳实践 | 缓存键设计、JWT 撤销、Snowflake ID 序列化、安全防护 |
-| `integration-issues/` | 集成问题 | DeerFlow adapter、设备指纹、stream 类型不匹配 |
-| `workflow-issues/` | 开发流程问题 | 模块拆分、monorepo 整合 |
-| `test-failures/` | 测试失败案例 | SQLAlchemy session 隔离、agent extraction 诊断 |
-| `ui-bugs/` | UI 问题 | 深色模式 CSS 特异性、Vant4 Field 绑定 |
-| `developer-experience/` | 开发体验 | CodeGraph 使用、CLAUDE.md 模块化、i18n 切换 |
+| Subdirectory | Content Type | When to Check |
+|--------------|-------------|---------------|
+| `architecture-patterns/` | Architecture design patterns | MCP integration, multi-provider AI, circuit breakers, tenant isolation |
+| `best-practices/` | Best practices | Cache key design, JWT revocation, Snowflake ID serialization, security |
+| `integration-issues/` | Integration issues | DeerFlow adapter, device fingerprints, stream type mismatches |
+| `workflow-issues/` | Development workflow issues | Module splitting, monorepo consolidation |
+| `test-failures/` | Test failure cases | SQLAlchemy session isolation, agent extraction diagnostics |
+| `ui-bugs/` | UI issues | Dark mode CSS specificity, Vant4 Field binding |
+| `developer-experience/` | Developer experience | CodeGraph usage, CLAUDE.md modularization, i18n switching |
 
 ## CodeGraph
 
@@ -154,26 +154,26 @@ docker-compose down           # Stop all
 
 ## Tests Directory (`tests/`)
 
-前端 E2E / 视觉回归 / 测试工具的根目录。Python 后端测试在 `server/tests/backend/`（见上方 Module Documentation）。
+E2E / visual regression / testing tools root directory. Python backend tests live in `server/tests/backend/` (see Module Documentation above).
 
 ```
 tests/
 ├── e2e/              # Playwright specs (*.spec.ts) + Python smoke (smoke_test.py)
-│   └── scripts/      # Shell 运行器 (acceptance.sh, extended.sh …)
-├── visual/           # 视觉回归 (visual.config.ts, visual-check.*)
-├── lib/              # TS 共享工具 (auth, fixtures, routes)
-├── data/             # Python 测试数据 (factories/, scenarios/, seed_data.py)
-├── fixtures/         # 静态夹具 (openapi.snapshot.json)
-├── tools/            # 独立工具 (screenshot/ 截图, page-agent/ 配置)
-├── scripts/          # 辅助脚本 (update-openapi-snapshot.js)
-├── reports/          # 历史审计报告 (ui-audit-*.md)
-├── docs/             # 测试文档 (TEST_SPEC.md …)
+│   └── scripts/      # Shell runners (acceptance.sh, extended.sh …)
+├── visual/           # Visual regression (visual.config.ts, visual-check.*)
+├── lib/              # TS shared utilities (auth, fixtures, routes)
+├── data/             # Python test data (factories/, scenarios/, seed_data.py)
+├── fixtures/         # Static fixtures (openapi.snapshot.json)
+├── tools/            # Standalone tools (screenshot/, page-agent/ config)
+├── scripts/          # Helper scripts (update-openapi-snapshot.js)
+├── reports/          # Historical audit reports (ui-audit-*.md)
+├── docs/             # Test documentation (TEST_SPEC.md …)
 ├── playwright.config.ts / tsconfig.json / package.json
-└── run-regression.sh # 一键回归入口
+└── run-regression.sh # One-command regression entry point
 ```
 
-**规则：**
-- 新增 spec 放 `e2e/`，shell 脚本放 `e2e/scripts/`
-- 截图产出（`.png`）已被 `.gitignore` 排除，不提交
-- `reports/` 仅存放历史审计报告
+**Rules:**
+- New specs go in `e2e/`, shell scripts go in `e2e/scripts/`
+- Screenshot outputs (`.png`) are `.gitignore`-excluded, not committed
+- `reports/` holds historical audit reports only
 

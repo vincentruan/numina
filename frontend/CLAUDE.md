@@ -1,14 +1,14 @@
 # frontend/CLAUDE.md
 
-前端 pnpm workspace。继承 root [`CLAUDE.md`](../CLAUDE.md) 项目级约束。
+Frontend pnpm workspace. Inherits root [`CLAUDE.md`](../CLAUDE.md) project-level constraints.
 
 ## Workspace Structure
 
 ```
 frontend/
 ├── apps/
-│   ├── main/      # 成人端 H5 (localhost:5173)
-│   └── child/     # 儿童端 H5 (localhost:5174)
+│   ├── main/      # Adult H5 app (localhost:5173)
+│   └── child/     # Child H5 app (localhost:5174)
 ├── packages/
 │   ├── auth/      # @numina/auth — auth stores, components, axios wiring
 │   └── math/      # @numina/math — pure business-logic functions
@@ -17,7 +17,7 @@ frontend/
 
 ## Commands
 
-Dev commands 见 root [`CLAUDE.md`](../CLAUDE.md) §Development Commands。Workspace-wide:
+Dev commands — see root [`CLAUDE.md`](../CLAUDE.md) §Development Commands. Workspace-wide:
 
 ```bash
 pnpm -r lint && pnpm -r typecheck && pnpm -r test:run
@@ -25,17 +25,17 @@ pnpm -r lint && pnpm -r typecheck && pnpm -r test:run
 
 ## Technology Stack
 
-(root 已述: Vue 3 + TS + Vite + Vant 4 + ECharts)
+(See root for full stack: Vue 3 + TS + Vite + Vant 4 + ECharts)
 
-| 技术 | 约束 |
-|------|------|
-| Vue | `<script setup lang="ts">` only，禁止 Options API |
-| Type | 禁止 `any`/`@ts-ignore`/`@ts-expect-error` |
-| UI | Vant 4 自动导入，禁止新 UI 库 |
-| Icon | Iconify 优先，本地 SVG 补充，禁止新图标库；共享位图/插图放 `@numina/assets` |
-| HTTP | Axios 统一封装 (`src/api/index.ts`)，禁止裸 `fetch`/`axios` |
-| State | Pinia，禁止全局变量/localStorage 代替状态管理 |
-| Style | CSS 变量 + scoped，禁止固定宽度溢出 |
+| Technology | Constraint |
+|------------|-----------|
+| Vue | `<script setup lang="ts">` only — Options API forbidden |
+| Types | `any` / `@ts-ignore` / `@ts-expect-error` forbidden |
+| UI | Vant 4 auto-imported — no additional UI libraries |
+| Icons | Iconify first, local SVG as fallback — no additional icon libraries; shared bitmaps/illustrations go in `@numina/assets` |
+| HTTP | Axios unified wrapper (`src/api/index.ts`) — bare `fetch`/`axios` forbidden |
+| State | Pinia — no global variables / localStorage as state management |
+| Style | CSS variables + scoped — no fixed-width overflow |
 
 ## Architecture Flow
 
@@ -48,16 +48,16 @@ components/ (reusable UI, no direct api calls)
 ## Key Invariants
 
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`
-- **Vant auto-import** — 不手动 import Vant 组件，仅 import functional API (`showToast`, `showDialog`)
+- **Vant auto-import** — don't manually import Vant components; only import functional API (`showToast`, `showDialog`)
 - **i18n required** — every user-facing string must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings in `.vue` or `.ts` — not even in template ternaries.
-- **日期格式化必须跟随 i18n locale** — `Date.toLocaleDateString()` / `toLocaleString()` 的第一个参数必须使用 `locale.value`（来自 `useI18n()`），禁止硬编码 `'zh-CN'` / `'en-US'` 或使用 `undefined`。禁止手动拼接中文日期格式（如 `${month}月${day}日`）。格式应跟随 app 语言设置，让 `Intl` API 按 locale 自动选择格式。
-- **雪花 ID 字段必须 `string`** — 后端 `SnowflakeBase` 在 JSON 层把 `id` / `*_id` 序列化为字符串。前端 TypeScript 类型必须对齐：凡字段名为 `id` 或 `*_id` 结尾，类型一律 `string`，禁止 `number`。新增 API 类型时对照此规则检查。
-- **Toast 使用 Vant 内置图标** — 根据场景选择正确的 toast 函数：
-  - ✅ 成功操作 → `showSuccessToast(message)` (自带成功图标)
-  - ❌ 失败/错误 → `showFailToast(message)` (自带失败图标)
-  - ⏳ 加载中 → `showLoadingToast(message)` (自带加载图标)
-  - ℹ️ 提示信息 → `showToast({ message })` (无图标纯文本)
-  - ⚠️ 警告提示 → `showToast({ message, icon: 'warning-o' })`
+- **Date formatting must follow i18n locale** — `Date.toLocaleDateString()` / `toLocaleString()` first argument must use `locale.value` (from `useI18n()`). Hard-coding `'zh-CN'` / `'en-US'` or using `undefined` is forbidden. Manual Chinese date formatting (e.g. `${month}月${day}日`) is forbidden. Formatting should follow the app language setting, letting `Intl` API auto-select the format per locale.
+- **Snowflake ID fields must be `string`** — the backend `SnowflakeBase` serializes `id` / `*_id` fields as strings at the JSON layer. Frontend TypeScript types must align: any field named `id` or ending in `*_id` must be typed as `string`, never `number`. Check new API types against this rule.
+- **Toast uses Vant built-in icons** — select the correct toast function for the scenario:
+  - ✅ Success → `showSuccessToast(message)` (built-in success icon)
+  - ❌ Failure → `showFailToast(message)` (built-in failure icon)
+  - ⏳ Loading → `showLoadingToast(message)` (built-in loading icon)
+  - ℹ️ Info → `showToast({ message })` (plain text, no icon)
+  - ⚠️ Warning → `showToast({ message, icon: 'warning-o' })`
 - **Path alias** — `@/` maps to `src/`
 
 ## Vant 4 Patterns
@@ -73,57 +73,57 @@ components/ (reusable UI, no direct api calls)
 | Picker | `van-field` (readonly, `is-link`) + `van-popup` + `van-picker` | Custom dropdown |
 
 **Gotchas:**
-- `van-field`: 用 `:model-value` (not `:value`) in Vant 4
-- `van-popup` + picker: 用 `destroy-on-close` reset state
-- `van-list` in pull-refresh: `van-list` must be inside, not sibling
+- `van-field`: use `:model-value` (not `:value`) in Vant 4
+- `van-popup` + picker: use `destroy-on-close` to reset state
+- `van-list` in pull-refresh: `van-list` must be inside, not a sibling
 
 ## Mobile H5 Patterns
 
 - **KeepAlive**: Tab pages cached via `<KeepAlive :include="cachedTabs">` — `defineOptions({ name: 'Xxx' })` required
-- **Refresh**: Use `onActivated` on cached pages, `onMounted` only fires once
-- **Safe area**: Bottom handled globally in layout, pages don't add own padding
+- **Refresh**: Use `onActivated` on cached pages; `onMounted` only fires once
+- **Safe area**: Bottom handled globally in layout; pages don't add own padding
 - **Pull-to-refresh**: All list pages wrap in `van-pull-refresh`
 - **Touch targets**: Min 44×44px for all interactive elements
 
-## 模板参考基线
+## Template Reference Baseline
 
-**主模板**: [yulimchen/vue3-h5-template](https://github.com/yulimchen/vue3-h5-template)（参考，非依赖）
+**Base template**: [yulimchen/vue3-h5-template](https://github.com/yulimchen/vue3-h5-template) (reference, not a dependency)
 
-| 原则 | 说明 |
-|------|------|
-| 已有优先 | 当前项目已有实现直接复用 |
-| Vant 优先 | 官方实践 > 个人封装 |
+| Principle | Description |
+|-----------|------------|
+| Existing first | Reuse current project implementations directly |
+| Vant first | Official practices > personal wrappers |
 
-## ECharts 规范
+## ECharts Guidelines
 
-已有 `vue-echarts` 封装，不引入 useECharts。容器考虑移动尺寸/横竖屏/暗黑；数据转换与渲染分离。
+`vue-echarts` wrapper already exists — don't import useECharts. Consider mobile sizing / orientation / dark mode for containers. Separate data transformation from rendering.
 
-## Dark Mode 规范
+## Dark Mode Guidelines
 
-CSS 变量实现。main: `van-config-provider`；child: `[data-theme="dark"]` + clay.css。不引入 designSetting store。
+CSS variable implementation. Main app: `van-config-provider`; Child app: `[data-theme="dark"]` + clay.css. No designSetting store.
 
 ## ESLint
 
-ESLint flat config + Prettier。不建议迁移；如需改进可单独引入 lint-staged。
+ESLint flat config + Prettier. Migration not recommended; if improvements are needed, consider lint-staged separately.
 
 ## Development Rules
 
-| 规则 | 说明 |
-|------|------|
-| 先查后写 | 查 Vant/组件/Iconify/request/结构后再写 |
-| 归纳优先 | 从现有代码归纳约定，不臆造 |
-| 样式一致 | 确认 CSS 变量选型，无规划不引入 Tailwind |
-| 变更说明 | 说明复用/参考/新增/影响 |
+| Rule | Description |
+|------|------------|
+| Research before writing | Check Vant/components/Iconify/request/structure before writing |
+| Generalize first | Derive conventions from existing code; don't invent |
+| Consistent style | Confirm CSS variable choices; don't introduce Tailwind without planning |
+| Change documentation | Explain reuse/reference/new additions/impact |
 
-**禁止:** 重复实现、技术栈分叉、无规划引入 UI/图标库
+**Forbidden:** Duplicate implementations, tech stack forking, unplanned UI/icon library additions
 
-### 冲突处理
+### Conflict Resolution
 
-优先级: 项目已有 > 主模板 > 补充模板 > Vant 官方 > 简单统一
+Priority: Project existing > Base template > Supplementary templates > Vant official > Simple unified
 
 ## Links
 
 - [`packages/CLAUDE.md`](packages/CLAUDE.md) — @numina/auth + @numina/math exports
-- [`apps/main/CLAUDE.md`](apps/main/CLAUDE.md) — main app 特有配置
-- [`apps/child/CLAUDE.md`](apps/child/CLAUDE.md) — child app 特有配置
-- Root [`CLAUDE.md`](../CLAUDE.md) — 项目级约束
+- [`apps/main/CLAUDE.md`](apps/main/CLAUDE.md) — main app specific config
+- [`apps/child/CLAUDE.md`](apps/child/CLAUDE.md) — child app specific config
+- Root [`CLAUDE.md`](../CLAUDE.md) — project-level constraints

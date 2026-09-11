@@ -90,8 +90,8 @@ Use modern features: `text-wrap: pretty`, CSS Grid `gap`, `aspect-ratio`, `clamp
 - **Tone**: Atmospheric, minimal, brand-recognition focus
 - **Language**: Chinese-first, no English leakage
 - **Structure**: Hero → Philosophy pillars → Feature showcase → Children highlight → Footer
-- **Philosophy pillars**: 隐私优先 / 家庭共享 / 开源透明 — use emojis or inline SVGs
-- **CTAs**: Soft, non-transactional ("探索功能 →", not "立即部署")
+- **Philosophy pillars**: Privacy First / Family Sharing / Open Source Transparency — use emojis or inline SVGs
+- **CTAs**: Soft, non-transactional ("Explore Features →", not "Deploy Now")
 - **Zero JavaScript** — no `<script>` tags on this page
 
 ### Project Page (Developer Docs)
@@ -123,7 +123,7 @@ open site/project/index.html
 
 ## Accessibility
 
-- Skip-link: `<a href="#features" class="skip-link">跳转到主要内容</a>`
+- Skip-link: `<a href="#features" class="skip-link">Skip to main content</a>` (actual HTML uses Chinese: `"跳转到主要内容"`)
 - Alt text for screenshots (meaningful description)
 - Alt="" for decorative icons
 - Min 44×44px touch targets on mobile
@@ -132,8 +132,8 @@ open site/project/index.html
 ## Cross-Links
 
 Both pages cross-link each other:
-- `overview/index.html` footer: "开发者？查看部署指南 →" → `../project/`
-- `project/index.html` footer: "产品介绍 →" → `../overview/`
+- `overview/index.html` footer: "Developer? View deployment guide →" (actual text: `"开发者？查看部署指南 →"`) → `../project/`
+- `project/index.html` footer: "Product intro →" (actual text: `"产品介绍 →"`) → `../overview/`
 
 ## What NOT to Do
 

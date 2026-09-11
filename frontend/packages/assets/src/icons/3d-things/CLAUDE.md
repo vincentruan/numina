@@ -1,150 +1,150 @@
-# 3D 图标目录 — CLAUDE.md
+# 3D Icon Directory — CLAUDE.md
 
-## 目录结构
+## Directory Structure
 
 ```
 3d-things/
-├── animals/             (1017) 动物生物 → 宠物类资产
-── art-culture/         (348)  艺术文化 → 奢侈品/收藏
-── buildings/           (508)  建筑地点 → 房产类资产
-├── clothing-accessories/(516)  服装配饰 → 服饰/珠宝/箱包
-├── electronics/         (345)  电子设备 → 数码类资产
-├── entertainment/       (296)  娱乐休闲 → 玩具类资产
-├── furniture/           (314)  家具家居 → 家具/家电
-── healthcare/          (256)  医疗健康 → 其他（医疗器械）
-── instruments/         (120)  音乐乐器 → 乐器类资产
-├── kitchenware/         (230)  厨房用品 → 家电（厨房电器）
-├── office-stationery/   (207)  办公文具 → 其他
-├── plants/              (303)  植物花卉 → 其他（珍稀植物）
-├── science-tech/        (293)  科学技术 → 数码（实验设备）
-├── sports/              (413)  运动健身 → 运动类资产
-├── tools/               (450)  工具器械 → 其他（工具）
-└── vehicles/            (405)  交通工具 → 车辆类资产
+├── animals/             (1017) Animal creatures → pet-type assets
+├── art-culture/         (348)  Art & culture → luxury goods / collectibles
+├── buildings/           (508)  Buildings & locations → real estate assets
+├── clothing-accessories/(516)  Clothing & accessories → apparel / jewelry / bags
+├── electronics/         (345)  Electronics → digital assets
+├── entertainment/       (296)  Entertainment & leisure → toy-type assets
+├── furniture/           (314)  Furniture & home → furniture / appliances
+├── healthcare/          (256)  Healthcare & medical → other (medical devices)
+├── instruments/         (120)  Musical instruments → instrument-type assets
+├── kitchenware/         (230)  Kitchenware → appliances (kitchen)
+├── office-stationery/   (207)  Office & stationery → other
+├── plants/              (303)  Plants & flowers → other (rare plants)
+├── science-tech/        (293)  Science & technology → digital (lab equipment)
+├── sports/              (413)  Sports & fitness → sports-type assets
+├── tools/               (450)  Tools & machinery → other (tools)
+└── vehicles/            (405)  Vehicles → vehicle-type assets
 ```
 
-**总计：** 16 分类，6021 图标，~447MB
+**Total:** 16 categories, 6021 icons, ~447MB
 
-## 缩略图管道
+## Thumbnail Pipeline
 
-### 生成命令
+### Generation Command
 
 ```bash
-# 从 repo 根目录运行
+# Run from repo root
 cd frontend/apps/main
 pnpm generate:thumbs
 ```
 
-### 规格
+### Specifications
 
-| 参数 | 值 |
-|------|-----|
-| 尺寸 | 256×256 px |
-| 格式 | WebP |
-| 质量 | 90 |
-| 输出 | `public/icons/3d-thumbs/{category}/{name}.webp` |
-| 总大小 | ~140MB（6021 张） |
+| Parameter | Value |
+|-----------|-------|
+| Size | 256×256 px |
+| Format | WebP |
+| Quality | 90 |
+| Output | `public/icons/3d-thumbs/{category}/{name}.webp` |
+| Total size | ~140MB (6021 files) |
 
-### 增量生成
+### Incremental Generation
 
-脚本跳过已存在的缩略图。添加新图标后重新运行即可。
+The script skips existing thumbnails. Just re-run after adding new icons.
 
-### 原始图
+### Original Images
 
 ```
 public/icons/3d/{category}/{name}.png|webp
 ```
 
-原始图通过 `deploy-icons.ts` 脚本以符号链接方式从本目录复制到 `public/icons/3d/`。
+Originals are deployed via `deploy-icons.ts` script as symlinks from this directory to `public/icons/3d/`.
 
-## 分类映射
+## Category Mapping
 
-### 系统资产分类 → 3D 图标分类
+### System Asset Categories → 3D Icon Categories
 
-| 系统分类 | 3D 图标分类 | 说明 |
-|---------|------------|------|
-| 房产 | buildings | 房屋、公寓、别墅 |
-| 车辆 | vehicles | 汽车、卡车、飞机 |
-| 数码 | electronics, science-tech | 手机、电脑、实验设备 |
-| 家电 | furniture, kitchenware | 家具、厨房电器 |
-| 珠宝 | clothing-accessories | 首饰、配饰 |
-| 服饰 | clothing-accessories | 服装、箱包 |
-| 美妆 | clothing-accessories | 化妆品、香水 |
-| 运动 | sports | 运动器材 |
-| 玩具 | entertainment | 玩具、游戏 |
-| 宠物 | animals | 猫、狗、鱼、鸟 |
-| 乐器 | instruments | 钢琴、吉他、鼓 |
-| 箱包 | clothing-accessories | 手提包、行李箱 |
-| 奢侈品 | art-culture, clothing-accessories | 艺术品、收藏品 |
+| System Category | 3D Icon Category | Notes |
+|----------------|-----------------|-------|
+| Real estate | buildings | Houses, apartments, villas |
+| Vehicles | vehicles | Cars, trucks, aircraft |
+| Digital | electronics, science-tech | Phones, computers, lab equipment |
+| Appliances | furniture, kitchenware | Furniture, kitchen appliances |
+| Jewelry | clothing-accessories | Jewelry, accessories |
+| Apparel | clothing-accessories | Clothing, bags |
+| Beauty | clothing-accessories | Cosmetics, perfume |
+| Sports | sports | Sports equipment |
+| Toys | entertainment | Toys, games |
+| Pets | animals | Cats, dogs, fish, birds |
+| Instruments | instruments | Piano, guitar, drums |
+| Bags | clothing-accessories | Handbags, suitcases |
+| Luxury | art-culture, clothing-accessories | Art, collectibles |
 
-### 命名约定
+### Naming Convention
 
-- **文件夹：** 英文 kebab-case（如 `clothing-accessories`）
-- **文件名：** `中文名_English Name.ext`（如 `吉他音箱_Guitar Amplifier.png`）
-- **缩略图：** `中文名_English Name.webp`（同名，扩展名改为 .webp）
+- **Folders:** English kebab-case (e.g. `clothing-accessories`)
+- **Files:** `ChineseName_English Name.ext` (e.g. `吉他音箱_Guitar Amplifier.png`)
+- **Thumbnails:** `ChineseName_English Name.webp` (same name, .webp extension)
 
-## Manifest 生成
+## Manifest Generation
 
 ```bash
 cd frontend/apps/main
-pnpm deploy:icons   # 先部署符号链接
-# 然后手动运行（暂无 npm script）
+pnpm deploy:icons   # Deploy symlinks first
+# Then run manually (no npm script yet)
 npx tsx scripts/build-icon-manifest.ts
 ```
 
-生成 `frontend/packages/assets/src/icons/icon-manifest.ts`，包含：
-- 16 个分类定义（id, nameZh, nameEn, folder, sortOrder, assetCategoryHints）
-- 6021 个图标条目（fileName, nameZh, nameEn）
+Generates `frontend/packages/assets/src/icons/icon-manifest.ts`, containing:
+- 16 category definitions (id, nameZh, nameEn, folder, sortOrder, assetCategoryHints)
+- 6021 icon entries (fileName, nameZh, nameEn)
 
-## 关键决策
+## Key Decisions
 
-### KTD-1: TypeScript manifest（非 CSV）
+### KTD-1: TypeScript manifest (not CSV)
 
-类型安全，IDE 自动补全，Vite tree-shaking。
+Type-safe, IDE autocomplete, Vite tree-shaking.
 
-### KTD-2: public 目录 serve（非 import）
+### KTD-2: public directory serve (not import)
 
-6021 个文件的 import 会创建数千个 Vite 模块。public 目录文件不进入 JS bundle，URL 引用天然支持懒加载。
+Importing 6021 files would create thousands of Vite modules. public directory files don't enter the JS bundle; URL references are naturally lazy-loaded.
 
-### KTD-3: 256px 缩略图
+### KTD-3: 256px thumbnails
 
-- 128px 太小，详情页不够清晰
-- 256px 在移动端详情页（~200px 显示尺寸）足够清晰
-- 单张 ~20KB，总 ~140MB，可接受
+- 128px is too small for detail page viewing
+- 256px is clear enough for mobile detail pages (~200px display size)
+- ~20KB per file, ~140MB total — acceptable
 
-### KTD-4: 3D 图标无水印
+### KTD-4: 3D icons without watermarks
 
-预设资源，非用户创作，无需水印保护。
+Preset resources, not user-created — no watermark protection needed.
 
-## 维护
+## Maintenance
 
-### 添加新图标
+### Adding new icons
 
-1. 将文件放入对应分类文件夹（遵循 `中文名_English Name.ext` 命名）
-2. 运行 `pnpm generate:thumbs` 生成缩略图
-3. 运行 `npx tsx scripts/build-icon-manifest.ts` 更新 manifest
-4. 提交到 git（通过 Git LFS）
+1. Place file in the appropriate category folder (follow `ChineseName_English Name.ext` naming)
+2. Run `pnpm generate:thumbs` to generate thumbnails
+3. Run `npx tsx scripts/build-icon-manifest.ts` to update manifest
+4. Commit to git (via Git LFS)
 
-### 添加新分类
+### Adding new categories
 
-1. 创建英文 kebab-case 文件夹
-2. 更新 `scripts/deploy-icons.ts` 的 `CATEGORIES` 数组
-3. 更新 `scripts/build-icon-manifest.ts` 的 `CATEGORY_DEFS` 数组
-4. 更新 `frontend/packages/assets/package.json` 的 `exports` 字段
-5. 运行 deploy + generate + build 脚本
-6. 更新本 CLAUDE.md 的目录结构
+1. Create English kebab-case folder
+2. Update `CATEGORIES` array in `scripts/deploy-icons.ts`
+3. Update `CATEGORY_DEFS` array in `scripts/build-icon-manifest.ts`
+4. Update `exports` field in `frontend/packages/assets/package.json`
+5. Run deploy + generate + build scripts
+6. Update this CLAUDE.md's directory structure
 
-### 删除分类
+### Removing categories
 
-反向操作上述步骤。注意检查是否有资产引用该分类的图标。
+Reverse the steps above. Check for asset references to the category's icons first.
 
 ## Git LFS
 
-所有 PNG/WebP 文件通过 Git LFS 追踪（`.gitattributes` 已配置）。
+All PNG/WebP files are tracked via Git LFS (`.gitattributes` already configured).
 
 ```bash
-# 查看 LFS 状态
+# Check LFS status
 git lfs ls-files | wc -l
 
-# 拉取 LFS 文件
+# Pull LFS files
 git lfs pull
 ```

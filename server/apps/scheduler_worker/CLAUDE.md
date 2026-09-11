@@ -87,9 +87,9 @@ def my_new_job() -> None:
     db = SessionLocal()
     try:
         my_service_function(db)
-        logger.info("任务完成")
+        logger.info("Task completed")
     except Exception as e:
-        logger.exception(f"任务失败: {e}")
+        logger.exception(f"Task failed: {e}")
     finally:
         db.close()
 ```

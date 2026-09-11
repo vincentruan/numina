@@ -14,22 +14,22 @@ These must hold in every code path — never bypass them:
 3. **Audit logging:** Every agent run emits an audit event via `audit_logger.log_call()` in the `finally` block of each per-app runner in `runtime/worker.py` (e.g. `_run_numina_agent`). Both success and error paths are covered — the `finally` placement guarantees it.
 4. **DeerFlow-only execution:** All multi-step agent orchestration goes through `DeerFlowAdapter.typed_stream_dispatch` (in `services/deerflow_adapter/`). Never implement a custom runtime, tool registry, skill loader, memory manager, orchestrator, or workflow engine. Lightweight single-call LLM paths (`suggest`, `input_polish`) use `core/llm.py` directly — these are explicitly exempt (no DeerFlow dispatch needed for one-shot calls).
 
-## DeerFlow 问题排查指南
+## DeerFlow Troubleshooting Guide
 
-遇到以下问题时，参考对应的 solution 文档：
+For the following issues, refer to the corresponding solution document:
 
-| 问题场景 | 参考文档 |
-|---------|---------|
-| DeerFlow stream 类型不匹配 / SSE 安全问题 | [`deerflow-stream-type-mismatch`](../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
-| GLM5 thinking provider endpoint 错误 | [`deerflow-glm5-thinking-mismatch`](../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
-| DeerFlow harness 静默 fallback / 并发问题 | [`deerflow-harness-fixes`](../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
-| MCP tools 加载失败 / 跨线程 asyncio.Lock 死锁 | [`mcp-cache-asyncio-lock-threading-deadlock`](../../../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) |
-| 会话标题显示 thinking-block 原始内容 | [`thinking-block-content-leaking-into-titles`](../../../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) |
-| stream 提前关闭 / 连接中断 | [`stream-closure-fix`](../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
-| 多 provider 熔断 / cascade retry | [`three-state-circuit-breaker`](../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
+| Problem | Reference |
+|---------|-----------|
+| DeerFlow stream type mismatch / SSE security issues | [`deerflow-stream-type-mismatch`](../../../docs/solutions/integration-issues/deerflow-adapter-stream-type-mismatch-and-security-issues-2026-05-16.md) |
+| GLM5 thinking provider endpoint mismatch | [`deerflow-glm5-thinking-mismatch`](../../../docs/solutions/integration-issues/deerflow-glm5-thinking-provider-endpoint-mismatch-2026-05-16.md) |
+| DeerFlow harness silent fallback / concurrency issues | [`deerflow-harness-fixes`](../../../docs/solutions/integration-issues/deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) |
+| MCP tools loading failure / cross-thread asyncio.Lock deadlock | [`mcp-cache-asyncio-lock-threading-deadlock`](../../../docs/solutions/integration-issues/mcp-cache-asyncio-lock-threading-deadlock.md) |
+| Thread title displaying thinking-block raw content | [`thinking-block-content-leaking-into-titles`](../../../docs/solutions/integration-issues/thinking-block-content-leaking-into-titles.md) |
+| Stream premature closure / connection interruption | [`stream-closure-fix`](../../../docs/solutions/integration-issues/stream-closure-fix-2026-06-15.md) |
+| Multi-provider circuit breaker / cascade retry | [`three-state-circuit-breaker`](../../../docs/solutions/architecture-patterns/three-state-circuit-breaker-with-cascade-retry-2026-05-20.md) |
 | MCP caller-bound principal / tenant isolation | [`mcp-caller-bound-principal`](../../../docs/solutions/architecture-patterns/mcp-caller-bound-principal-2026-05-31.md) |
-| MCP chat adapter 架构 | [`mcp-chat-adapter-architecture`](../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
-| 多 app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
+| MCP chat adapter architecture | [`mcp-chat-adapter-architecture`](../../../docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) |
+| Multi-app dispatch (stream_run) | [`two-ai-apps-unified-dispatch`](../../../docs/solutions/architecture-patterns/two-ai-apps-unified-dispatch-stream-run.md) |
 
 ## Cross-Cutting Invariants
 
@@ -90,7 +90,7 @@ Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trig
 
 ### R1 allowlist (frontend direct dispatch gate)
 
-`sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice` with **409** ("须经由后端触发端点"). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
+`sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice` with **409** ("must be triggered via backend endpoint" — actual message: `"须经由后端触发端点"`). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
 
 > **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) is `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "dashboard-narrative", "literacy-weekly-report"]` — it protects system skill IDs from custom-skill collision.
 
@@ -256,10 +256,10 @@ Each `SKILL.md` uses the DeerFlow-native frontmatter schema (prompts live in the
 ```markdown
 ---
 name: asset-report
-description: 生成家庭资产报告
+description: Generate family asset report
 trigger_phrases:
   - /asset-report
-  - 生成家庭资产报告
+  - Generate family asset report
 allowed-tools:
   - get_family_overview
   - get_assets
@@ -271,7 +271,7 @@ thinking: true
 max_tokens: 6000
 ---
 
-## 适用场景
+## Applicable Scenarios
 ...
 ```
 

@@ -1,21 +1,21 @@
 # frontend/apps/main/CLAUDE.md
 
-成人端 H5 应用。继承 [`frontend/CLAUDE.md`](../../CLAUDE.md) 通用约束。
+Adult H5 application. Inherits [`frontend/CLAUDE.md`](../../CLAUDE.md) common constraints.
 
 ## Commands
 
-`pnpm dev` — http://localhost:5173。其他命令见 parent [`CLAUDE.md`](../../CLAUDE.md)。
+`pnpm dev` — http://localhost:5173. Other commands — see parent [`CLAUDE.md`](../../CLAUDE.md).
 
 ## Directory Structure
 
 ```
 src/
-├── api/           # HTTP 请求封装
-├── components/    # 通用组件 (ai/, asset/, charts/, common/)
+├── api/           # HTTP request wrappers
+├── components/    # Shared components (ai/, asset/, charts/, common/)
 ├── composables/   # Vue composition functions
-├── i18n/          # 国际化
+├── i18n/          # Internationalization
 ├── layouts/       # MainLayout (KeepAlive + transitions)
-├── pages/         # 路由页面
+├── pages/         # Route pages
 ├── plugins/       # Vite/Vue plugins
 ├── router/        # Vue Router
 ├── stores/        # Pinia stores
@@ -26,7 +26,7 @@ src/
 ## Vant 4 (Main-Specific)
 
 - Uses `<van-config-provider :theme="resolvedTheme">` for dark mode auto-switch
-- Vant components auto-import via `unplugin-vue-components`
+- Vant components auto-imported via `unplugin-vue-components`
 - Theme tokens in `src/style.css`
 
 ### Theme Token Mapping
@@ -44,15 +44,15 @@ src/
 
 ## Dark Mode (WCAG AA)
 
-`App.vue` 用 `<van-config-provider :theme="resolvedTheme">`。主题色 `localStorage('theme-primary')`。
+`App.vue` uses `<van-config-provider :theme="resolvedTheme">`. Theme color from `localStorage('theme-primary')`.
 
-| 规则 | 说明 |
-|------|------|
-| 多色卡片 | `var(--card-bg)` 上叠 `rgba(<日间色>, 0.14)` |
-| 主文本 | `var(--text-primary)`，禁止 `#fff` |
-| 次级标签 | `var(--text-secondary)`，alpha ≥ 0.55 |
+| Rule | Description |
+|------|------------|
+| Multi-color cards | Stack `rgba(<daytime-color>, 0.14)` over `var(--card-bg)` |
+| Primary text | `var(--text-primary)` — `#fff` forbidden |
+| Secondary labels | `var(--text-secondary)`, alpha ≥ 0.55 |
 
-**红线**: 禁止 inline `style="color:..."` → 见 `docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md`
+**Red line**: No inline `style="color:..."` — see `docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md`
 
 ## Color Palette
 
@@ -66,9 +66,9 @@ src/
 
 ## UI Design Patterns
 
-按页面区域（总览/财务/AI/宝贝/设置）的 Vant 4 组件选择、卡片布局、表单模式、CRUD 交互、DeerFlow 复刻等实践详见 [`docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md`](../../../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md)。
+Per-page-area (Overview/Finance/AI/Baby/Settings) Vant 4 component selection, card layouts, form patterns, CRUD interactions, and DeerFlow replication practices — see [`docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md`](../../../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md).
 
-**核心约束**: 除 AI 场景外，整体 UI 组件尽量复用 Vant 4。AI 场景使用自定义组件复刻 DeerFlow 交互。
+**Core constraint**: Outside AI scenarios, reuse Vant 4 components as much as possible. AI scenarios use custom components replicating DeerFlow interactions.
 
 ## Shared Assets (`@numina/assets`)
 
@@ -92,23 +92,23 @@ Shared image/icon package — `@numina/assets` — tree-shaken at the module bou
 - Main-only SVG category icons → stay in `src/icons/svg/`
 - `src/assets/` → avoid new files here; prefer shared package or `public/`
 
-## UI 问题排查指南
+## UI Troubleshooting Guide
 
-遇到以下问题时，参考对应的 solution 文档：
+For the following issues, refer to the corresponding solution document:
 
-| 问题场景 | 参考文档 |
-|---------|---------|
-| 深色模式样式不生效 / `!important` 优先级问题 | [`dark-mode-inline-style-specificity`](../../../docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md) |
-| NProgress 进度条闪烁 / 卡住不消失 | [`nprogress-flicker`](../../../docs/solutions/ui-bugs/nprogress-flicker-page-navigation.md) |
-| Vant 4 `van-field` 绑定不生效 / picker 状态问题 | [`vant4-field-binding`](../../../docs/solutions/ui-bugs/vant4-field-modelvalue-binding-2026-04-08.md) |
-| Vue 3 Transition + KeepAlive 白屏 / 页面切换问题 | [`vue3-transition-keepalive-blank-screen`](../../../docs/solutions/ui-bugs/vue3-transition-keepalive-blank-screen.md) |
-| Onboarding overlay 阻挡导航 / 滚动泄漏 | [`onboarding-overlay-blocks-navigation`](../../../docs/solutions/ui-bugs/onboarding-overlay-blocks-navigation.md) |
-| Action-sheet / popup 在 swipeable tabs 内被裁剪 | [`action-sheet-clipped-in-transformed-container`](../../../docs/solutions/ui-bugs/action-sheet-clipped-in-transformed-container.md) |
-| 预期 404 响应触发错误 toast | [`silent-error-codes-for-expected-404`](../../../docs/solutions/ui-bugs/silent-error-codes-for-expected-404.md) |
-| 全宽按钮 + margin 导致视口溢出 | [`full-width-button-margin-overflow`](../../../docs/solutions/ui-bugs/full-width-button-margin-overflow.md) |
-| UI 设计模式 / 组件选择 / 卡片布局 | [`main-app-ui-design-patterns`](../../../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md) |
+| Problem | Reference |
+|---------|-----------|
+| Dark mode styles not applying / `!important` specificity issues | [`dark-mode-inline-style-specificity`](../../../docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md) |
+| NProgress bar flickering / stuck and not disappearing | [`nprogress-flicker`](../../../docs/solutions/ui-bugs/nprogress-flicker-page-navigation.md) |
+| Vant 4 `van-field` binding not working / picker state issues | [`vant4-field-binding`](../../../docs/solutions/ui-bugs/vant4-field-modelvalue-binding-2026-04-08.md) |
+| Vue 3 Transition + KeepAlive blank screen / page switch issues | [`vue3-transition-keepalive-blank-screen`](../../../docs/solutions/ui-bugs/vue3-transition-keepalive-blank-screen.md) |
+| Onboarding overlay blocking navigation / scroll leak | [`onboarding-overlay-blocks-navigation`](../../../docs/solutions/ui-bugs/onboarding-overlay-blocks-navigation.md) |
+| Action-sheet / popup clipped inside swipeable tabs | [`action-sheet-clipped-in-transformed-container`](../../../docs/solutions/ui-bugs/action-sheet-clipped-in-transformed-container.md) |
+| Expected 404 response triggering error toast | [`silent-error-codes-for-expected-404`](../../../docs/solutions/ui-bugs/silent-error-codes-for-expected-404.md) |
+| Full-width button + margin causing viewport overflow | [`full-width-button-margin-overflow`](../../../docs/solutions/ui-bugs/full-width-button-margin-overflow.md) |
+| UI design patterns / component selection / card layouts | [`main-app-ui-design-patterns`](../../../docs/solutions/best-practices/main-app-ui-design-patterns-2026-08-03.md) |
 
 ## Links
 
-Parent [`CLAUDE.md`](../../CLAUDE.md) — frontend workspace 约束
-[`apps/child/CLAUDE.md`](../child/CLAUDE.md) — child app 配置
+- Parent [`CLAUDE.md`](../../CLAUDE.md) — frontend workspace constraints
+- [`apps/child/CLAUDE.md`](../child/CLAUDE.md) — child app config
