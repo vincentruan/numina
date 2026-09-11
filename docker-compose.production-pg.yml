@@ -52,3 +52,9 @@ services:
       timeout: 5s
       retries: 5
 
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:1::/80

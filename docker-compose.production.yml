@@ -29,8 +29,8 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
-      - DB_POOL_SIZE=${DB_POOL_SIZE:-15}
-      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
+      - DB_POOL_SIZE=${BACKEND_DB_POOL_SIZE:-20}
+      - DB_MAX_OVERFLOW=${BACKEND_DB_MAX_OVERFLOW:-5}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY:?ALTCHA_HMAC_KEY must be set}
       - ENVIRONMENT=production
@@ -40,11 +40,8 @@ services:
       - BACKEND_BASE_URL=http://numina-backend:8000
       - NUMINA_PROJECT_ROOT=/app
       - SKIP_INITIAL_EXCHANGE_RATE_FETCH=${SKIP_INITIAL_EXCHANGE_RATE_FETCH:-}
-      - STREAM_BRIDGE_TYPE=redis
-      - REDIS_URL=redis://numina-redis:6379/0
-    depends_on:
-      redis:
-        condition: service_healthy
+      - STREAM_BRIDGE_TYPE=memory
+      - CACHE_BACKEND=memory
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -81,8 +78,8 @@ services:
       - NUMINA_PROJECT_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
       - DEERFLOW_DB_URL=${DEERFLOW_DB_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod_deerflow}
-      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
-      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
+      - DB_POOL_SIZE=${AGENT_DB_POOL_SIZE:-10}
+      - DB_MAX_OVERFLOW=${AGENT_DB_MAX_OVERFLOW:-5}
     depends_on:
       backend:
         condition: service_healthy
@@ -109,8 +106,8 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-postgresql://numina:numinapass@172.17.0.1:5432/numina_prod}
-      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
-      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-2}
+      - DB_POOL_SIZE=${SCHEDULER_DB_POOL_SIZE:-5}
+      - DB_MAX_OVERFLOW=${SCHEDULER_DB_MAX_OVERFLOW:-2}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY must be set}
@@ -173,19 +170,9 @@ services:
       frontend-child:
         condition: service_started
 
-  # Redis service for StreamBridge cross-process event delivery (agent ↔ backend)
-  redis:
-    image: redis:7-alpine
-    container_name: numina-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  redis_data:
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:1::/80

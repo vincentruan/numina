@@ -89,22 +89,109 @@ Production uses a **local Docker PostgreSQL** container (`numina-postgres-prod`)
 - DeerFlow self-initializes its schema on agent startup via `init_engine()` — **no manual migration step needed** for the DeerFlow DB
 - If the `numina_prod_deerflow` database doesn't exist yet, create it via: `CREATE DATABASE numina_prod_deerflow;`
 
+> **⚠️ `--remove-orphans` 危险**：`numina-postgres-prod` 不在 `docker-compose.production.yml` 中。使用 `docker compose up -d --remove-orphans` 会**删除 PG 容器**。永远不要对 app compose 使用 `--remove-orphans`；PG 容器由 `docker-compose.production-pg.yml` 独立管理。
+
+### Single-Instance Architecture (No Redis)
+
+生产环境以**单实例模式**运行，不依赖 Redis：
+
+| 组件 | 模式 | 环境变量 | 说明 |
+|------|------|----------|------|
+| StreamBridge (事件缓冲) | `memory` | `STREAM_BRIDGE_TYPE=memory` | 进程内 asyncio.Condition，agent↔backend 通过 HTTP SSE 通信 |
+| Cache (限流/验证码) | `memory` | `CACHE_BACKEND=memory` | 进程内 dict，单实例足够 |
+
+- **Agent** 始终使用 in-memory bridge（硬编码），无需配置
+- **Scheduler worker** 不使用 Redis 或 StreamBridge
+- `docker-compose.production.yml` 中**不包含 Redis 服务**
+- **仅当扩展到多实例**（多个 backend 进程）时，才需要启用 Redis：设 `STREAM_BRIDGE_TYPE=redis` + `CACHE_BACKEND=redis` + 添加 Redis 容器
+
+### Supabase Logical Replication (DDL Alignment)
+
+Supabase standby 通过逻辑复制订阅主库变更。**PostgreSQL 逻辑复制不复制 DDL** — 只复制 DML（INSERT/UPDATE/DELETE）。
+
+**DDL 对齐规则：** 任何 alembic migration（`upgrade head`）运行后，必须在 Supabase 端同步执行等效 DDL。**如果 Supabase 备库 DDL 未对齐，不发布新镜像。**
+
+原因：备库 schema 落后 → 复制的 DML 可能引用不存在的列/表 → 复制中断 → 数据丢失风险。
+
+**当前限制：** Supabase 域名只有 AAAA (IPv6) 记录，无 IPv4。Docker IPv6 已配置（`daemon.json` + compose `networks.default.enable_ipv6`）。如果 subscriptions 连接失败，参见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Enabling Docker IPv6。
+
+**检查 DDL 一致性：**
+```bash
+# 查看本地表数量
+sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';"
+
+# 查看 subscription 状态
+sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
+  "SELECT subname, subenabled FROM pg_subscription;"
+```
+
 ## Production Config vs Local
 
 生产服务器的 `.env` 与本地开发有显著差异。**不要将本地 `.env` 同步到服务器** — 服务器 `.env` 是手动维护的。
 
-| 配置项 | 本地开发 | 生产服务器 |
-|--------|----------|------------|
-| `CAPTCHA_ENABLED` | `false` (默认/可省略) | **`true` (必须启用)** |
-| `DATABASE_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod` |
-| `DEERFLOW_DB_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod_deerflow` |
-| SSL/TLS | 无 | Origin CA cert (`origin.crt` + `origin.key`) |
-| `*_IMAGE` | 无 (compose 默认) | `numina/<service>:latest` (Mode C) 或 `ghcr.io/...` (Mode A) |
-| CORS 域名 | `localhost` | 实际域名 |
+### 必要配置项（生产 vs 本地）
 
-**验证码 (CAPTCHA)：** 生产模式**必须启用** `CAPTCHA_ENABLED=true`。这是安全防护（防注册/登录暴力破解）。本地开发默认关闭以方便测试。Health check 时应验证 `curl -sk https://localhost/api/v1/captcha/config` 返回 `captcha_enabled: true`。
+| 配置项 | 本地开发 | 生产服务器 | 验证方式 |
+|--------|----------|------------|----------|
+| `ENVIRONMENT` | `development` (默认) | **`production`** | 启动日志 |
+| `CAPTCHA_ENABLED` | `false` (默认) | **`true`** | `curl -sk /api/v1/captcha/config` → `captcha_enabled: true` |
+| `DATABASE_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod` | backend 日志 |
+| `DEERFLOW_DB_URL` | SQLite 或 localhost PG | `postgresql://...@172.17.0.1:5432/numina_prod_deerflow` | agent 日志 |
+| SSL/TLS | 无 | Origin CA cert (`origin.crt` + `origin.key`) | `curl -sk https://localhost/` |
+| `*_IMAGE` | 无 (compose 默认) | `ghcr.io/...` (Mode A) 或 `numina/...` (Mode C) | `docker inspect` |
+| `CORS_ORIGINS` | `localhost` | 实际域名 JSON 数组 | 浏览器 CORS 头 |
 
-> **⚠️ 如果 Health check 显示 `captcha_enabled: false`**，检查服务器 `.env` 是否包含 `CAPTCHA_ENABLED=true`。缺失此配置不会导致服务启动失败，但会降低安全性。
+### 连接池配置（per-service 独立）
+
+Compose 通过独立变量映射到代码读取的 `DB_POOL_SIZE`，每个服务互不干扰：
+
+| 服务 | Compose 变量 | 默认值 | max_overflow |
+|------|-------------|--------|-------------|
+| backend | `${BACKEND_DB_POOL_SIZE:-20}` | 20 | `${BACKEND_DB_MAX_OVERFLOW:-5}` |
+| agent | `${AGENT_DB_POOL_SIZE:-10}` | 10 | `${AGENT_DB_MAX_OVERFLOW:-5}` |
+| scheduler_worker | `${SCHEDULER_DB_POOL_SIZE:-5}` | 5 | `${SCHEDULER_DB_MAX_OVERFLOW:-2}` |
+
+单实例默认值总计最大连接：(20+5) + (10+5) + (5+2) = **47**，远低于 `max_connections=200`。如需调整，在服务器 `.env` 中设置：
+```bash
+BACKEND_DB_POOL_SIZE=25
+AGENT_DB_POOL_SIZE=15
+```
+
+### 限流配置
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | 5 | 登录失败最大次数 |
+| `LOGIN_RATE_LIMIT_LOCKOUT_SECONDS` | 900 | 锁定时长（15 分钟） |
+| `GLOBAL_RATE_LIMIT_PER_MINUTE` | 600 | 全局限流（每 IP 每分钟） |
+| `REGISTER_RATE_LIMIT_PER_HOUR` | 5 | 注册限流（每 IP 每小时） |
+
+默认值对家庭应用足够。如果频繁误触发，在 `.env` 中覆盖。
+
+### 缓存与事件（单实例）
+
+| 配置项 | 生产值 | 说明 |
+|--------|--------|------|
+| `STREAM_BRIDGE_TYPE` | `memory` | 单实例进程内事件缓冲，已在 compose 中硬编码 |
+| `CACHE_BACKEND` | `memory` | 单实例进程内缓存（限流/验证码），已在 compose 中硬编码 |
+
+> 这些变量已在 `docker-compose.production.yml` 中固定为 `memory`，无需在 `.env` 中设置。
+
+### Health Check 验证清单
+
+每次部署后验证以下项目：
+```bash
+# 1. 验证码
+curl -sk https://localhost/api/v1/captcha/config   # → captcha_enabled: true
+# 2. 健康
+curl -sk https://localhost/api/health              # → {"status":"ok"}
+# 3. 前端
+curl -sk -o /dev/null -w "%{http_code}" https://localhost/        # → 200
+curl -sk -o /dev/null -w "%{http_code}" https://localhost/child/  # → 200
+# 4. 容器数
+sudo docker ps --format '{{.Names}}' | grep -c numina  # → 7 (app) + 1 (postgres-prod) = 8
+```
 
 ## Server Directory Layout
 
@@ -256,7 +343,31 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 "
 ```
 
-If it fails with DuplicateColumn/DuplicateTable → follow [db-migration.md](db-migration.md) §Handle Failures. **Never blindly `stamp head`** — it skips ALL pending migrations.
+If it fails with DuplicateColumn/DuplicateTable → follow [references/db-migration.md](references/db-migration.md) §Handle Failures. **Never blindly `stamp head`** — it skips ALL pending migrations.
+
+### Step 5b: DDL Alignment Gate (主库 + 备库)
+
+> **⚠️ 发布门禁：** 如果 Step 5 执行了 migration（current ≠ head），**必须**在发布新镜像前确认 Supabase 备库 DDL 已对齐。PostgreSQL 逻辑复制不复制 DDL — 备库 schema 落后会导致复制中断和数据不一致。
+
+**检查流程：**
+1. 确认主库 migration 完成（`alembic current` = `alembic heads`）
+2. 确认 Supabase 备库 subscription 状态正常（`subenabled = t`）
+3. 如果 Supabase 连接不可达（如 IPv6 问题），**暂停发布**，手动在 Supabase 端执行等效 DDL
+
+```bash
+# 检查 subscription 状态
+set -a && source .claude/deploy.env && set +a
+ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
+  sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
+    'SELECT subname, subenabled FROM pg_subscription;'
+"
+```
+
+- 如果 `subenabled = t` 且无连接错误 → DDL 通过 Supabase Dashboard 或手动 SQL 同步
+- 如果 `subenabled = f` 或连接失败 → 需要先在 Supabase 端手动执行 DDL，再恢复 subscription
+- 如果 subscriptions 已废弃（不再需要 Supabase 备份）→ 可跳过此步骤
+
+**如何对齐 Supabase DDL：** 在 Supabase Dashboard → SQL Editor 中执行与 alembic migration 等效的 DDL 语句。每个 migration 文件的 `upgrade()` 函数内容即为需要执行的 SQL。
 
 ### Step 6: Recreate Services
 
@@ -277,6 +388,8 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 "
 ```
 
+> **⚠️ 不要加 `--remove-orphans`！** 该参数会删除 `numina-postgres-prod`（它不在 app compose 中但属于同一 project）。PG 容器由 `docker-compose.production-pg.yml` 独立管理。
+
 ### Step 7: Health Check
 
 ```bash
@@ -296,7 +409,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 '
 ```
 
-**Success:** 8 containers running (7 in `docker-compose.production.yml` + `numina-postgres-prod`), backend `(healthy)`, `/api/health` returns `{"status":"ok"}`, `captcha_enabled: true`.
+**Success:** 7 containers running (6 in `docker-compose.production.yml` — backend, agent, scheduler_worker, frontend-main, frontend-child, nginx — + `numina-postgres-prod`), backend `(healthy)`, `/api/health` returns `{"status":"ok"}`, `captcha_enabled: true`.
 
 ---
 
@@ -331,7 +444,9 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 "
 ```
 
-If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures.
+If upgrade fails → follow [references/db-migration.md](references/db-migration.md) §Handle Failures.
+
+> **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐后再发布。
 
 ### Step 3: Build & Deploy
 
@@ -351,7 +466,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
 
 ### Step 4: Health Check
 
-Same as Mode A Step 6.
+Same as Mode A Step 7.
 
 ---
 
@@ -489,11 +604,13 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 "
 ```
 
-If upgrade fails → follow [db-migration.md](db-migration.md) §Handle Failures.
+If upgrade fails → follow [references/db-migration.md](references/db-migration.md) §Handle Failures.
+
+> **DDL 对齐：** 如果执行了 migration，参见 Mode A Step 5b — 确认 Supabase 备库 DDL 已对齐后再发布。
 
 ### Step 5: Health Check
 
-Same as Mode A Step 6.
+Same as Mode A Step 7.
 
 ### Step 6: Verify Frontend Content (Post-Deploy)
 
@@ -624,10 +741,11 @@ make deploy-remote  # uses existing dist/images.tar.gz
 
 | Task | Mode A (GHCR) | Mode B (Source) | Mode C (Local Build) |
 |------|---------------|-----------------|----------------------|
-| Full deploy | Steps 1-7 | Steps 1-4 | `make deploy-local` + Step 4 |
-| Config change only | Step 2 + Step 6 | Step 1 + Step 3 | Sync config + `make deploy-remote` |
-| Code change only | Steps 4-6 | Steps 2-3 | `make deploy-local` + Step 4 |
-| DB migration only | Steps 4-5 | Step 2 | Step 4 |
+| Full deploy | Steps 1-7 | Steps 1-4 | `make deploy-local` + Steps 4-5 |
+| Config change only | Step 2 + Step 7 | Step 1 + Step 3 | Sync config + `make deploy-remote` |
+| Code change only | Steps 4-7 | Steps 2-3 | `make deploy-local` + Steps 4-5 |
+| DB migration only | Steps 4-5b | Step 2 | Step 4 |
+| DDL alignment check | Step 5b | Step 2 (+ 5b gate) | Step 4 (+ 5b gate) |
 | Build images | (CI does this) | (server does this) | `make build-local` |
 | Health check | Step 7 | Step 4 | (automatic in `deploy-remote`) |
 | View logs | `sudo docker compose -f docker-compose.production.yml logs --tail 100 -f <service>` |
@@ -638,7 +756,7 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | Error | Fix |
 |-------|-----|
 | `No space left on device` | `sudo docker builder prune -af && sudo docker image prune -af` |
-| `DuplicateTable`/`DuplicateColumn` | Object already exists → stamp that revision, then `upgrade head` for remaining. **Never `stamp head` blindly** — it skips pending migrations with genuinely new DDL. See [db-migration.md](db-migration.md) §Handle Failures |
+| `DuplicateTable`/`DuplicateColumn` | Object already exists → stamp that revision, then `upgrade head` for remaining. **Never `stamp head` blindly** — it skips pending migrations with genuinely new DDL. See [references/db-migration.md](references/db-migration.md) §Handle Failures |
 | Container unhealthy | `sudo docker compose -f docker-compose.production.yml logs --tail 50 <service>` |
 | GHCR pull fails | Verify `*_IMAGE` in `.env`. Auth: `echo "$TOKEN" \| docker login ghcr.io -u <user> --password-stdin` |
 | CI didn't build images | Only builds on push to `main`. Check `gh run list --workflow=ci.yml` |
@@ -658,5 +776,10 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | `numina-postgres-prod` not running | Start with: `ssh ... "cd ${DEPLOY_REMOTE_DIR} && sudo docker compose -f docker-compose.production-pg.yml up -d"`. Data is in bind mount `/home/geek/data/numina-prod-db/data` — survives container restart. Check logs: `sudo docker compose -f docker-compose.production-pg.yml logs --tail 30` |
 | Backend can't reach postgres | `DATABASE_URL` in `.env` must use `172.17.0.1:5432` (Docker host bridge). Verify: `sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c "SELECT 1"`. If using compose defaults (no `.env` override), host is `postgres` which requires a postgres service in the compose stack — **not** the production-pg architecture |
 | `docker-compose.production-pg.yml` uses named volume but server uses bind mount | The local `docker-compose.production-pg.yml` uses `${PROD_PG_DATA_DIR:-/home/geek/data/numina-prod-db/data}` bind mount. If the server has a different data path, set `PROD_PG_DATA_DIR` on the server or override in a `.env` for the production-pg compose |
-| `captcha_enabled: false` in health check | Server `.env` missing `CAPTCHA_ENABLED=true`. Add it and `sudo docker compose -f docker-compose.production.yml restart backend`. 生产环境**必须启用**验证码 — 本地开发默认关闭 |
 | SSH: `cd: $DEPLOY_REMOTE_DIR: No such file or directory` | 单引号内 `$DEPLOY_REMOTE_DIR` 不会在远程展开（它是本地变量）。SSH 命令必须用双引号包裹，让本地 shell 先展开变量。见上方 "SSH quoting" 说明 |
+| `--remove-orphans` 误删 PG 容器 | 永远不要对 `docker-compose.production.yml` 使用 `--remove-orphans`，它会删除 `numina-postgres-prod`。恢复：`sudo docker compose -f docker-compose.production-pg.yml up -d` |
+| PG PANIC: `No space left on device` | 磁盘满导致 PG crash loop + 复制槽损坏。完整恢复流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Disk-Full Crash Recovery。快速修复：`sudo docker image prune -af`，PG 自动恢复 |
+| PG replication `Network unreachable` | Supabase 只有 IPv6，需 Docker IPv6。完整配置流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Enabling Docker IPv6。临时：`ALTER SUBSCRIPTION xxx DISABLE;` |
+| PG `can no longer get changes from replication slot` | 复制槽损坏（通常因磁盘满 crash）。修复流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Replication Slot Corruption |
+| PG `the database system is not yet accepting connections` | PG 处于 recovery 模式，通常因磁盘满 crash 后重启。先清理磁盘空间，PG 自动恢复。如持续报错，检查 `pg_logical/replorigin_checkpoint.tmp` 写入权限 |
+| `captcha_enabled: false` in health check | 见上方 "Production Config vs Local" §Health Check 验证清单。确认 `.env` 含 `CAPTCHA_ENABLED=true`，然后 `restart backend` |
