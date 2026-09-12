@@ -328,8 +328,8 @@ async def bridge_consumer(
         # consume_task_stream would raise immediately and the frontend
         # would see an error; with retries, we wait for the pump to catch
         # up (typically < 1 s for a local agent, a few seconds for remote).
-        _max_attempts = 10
-        _attempt_interval = 1.0  # seconds
+        _max_attempts = 15
+        _attempt_interval = 2.0  # seconds, total ~30s with linear backoff
         for _attempt in range(_max_attempts):
             db = SessionLocal()
             try:
@@ -342,10 +342,10 @@ async def bridge_consumer(
             finally:
                 db.close()
             if _attempt < _max_attempts - 1:
-                await asyncio.sleep(_attempt_interval)
+                await asyncio.sleep(_attempt_interval * (1 + _attempt * 0.1))
         if not run_id:
             raise RuntimeError(
-                f"Task {task_id} has no run_id after {_max_attempts}s "
+                f"Task {task_id} has no run_id after ~30s "
                 f"(agent may not have started yet)"
             )
 

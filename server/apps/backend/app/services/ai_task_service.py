@@ -214,8 +214,30 @@ class AITaskService:
         no other task is actively running for the family (respects the
         per-family single-running constraint).  The promoted task's router
         endpoint is expected to reconnect on the next frontend poll.
+
+        Also clears zombie running tasks (status=running but no run_id) that
+        were created by orphan recovery — these block promotion indefinitely.
         """
         try:
+            # Phase 1: Cancel zombie tasks — running but never got a run_id.
+            # These are created when orphan_detector marks a task interrupted
+            # then _try_promote_next starts the next queued task but the agent
+            # never picks it up.  Without this, they block all future promotion.
+            zombies = AITaskService.get_zombie_running_tasks(db, family_id)
+            for z in zombies:
+                logger.warning(
+                    "[ai-task] cancelling zombie task=%s family=%s "
+                    "(running with no run_id)",
+                    z.id, family_id,
+                )
+                z.status = "interrupted"
+                z.completed_at = datetime.now(UTC)
+                z.error_message = (
+                    "任务启动后 agent 未分配 run_id，自动取消（僵尸任务）"
+                )
+            if zombies:
+                db.flush()
+
             still_running = (
                 db.query(AITask)
                 .filter(
@@ -582,6 +604,33 @@ class AITaskService:
         query = db.query(AITask).filter(
             AITask.status.in_(["running", "post_processing", "queued"]),
             AITask.lease_expires_at < now,
+        )
+
+        if family_id is not None:
+            query = query.filter(AITask.family_id == int(family_id))
+
+        return query.all()
+
+    @staticmethod
+    def get_zombie_running_tasks(
+        db: Session,
+        family_id: int | str | None = None,
+    ) -> list[AITask]:
+        """Return running tasks that never got a run_id (zombie tasks).
+
+        These are tasks that were promoted to 'running' but the agent never
+        started them — no run_id was ever assigned.  They block all future
+        promotion and must be cancelled.
+
+        Args:
+            db: SQLAlchemy session.
+            family_id: Optional family ID for tenant-scoped query.
+
+        Returns tasks WHERE status='running' AND run_id IS NULL.
+        """
+        query = db.query(AITask).filter(
+            AITask.status == "running",
+            AITask.run_id.is_(None),
         )
 
         if family_id is not None:

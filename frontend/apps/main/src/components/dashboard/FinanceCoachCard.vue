@@ -77,6 +77,11 @@ async function load(force = false) {
         // Task completed (and Bug-1 fix ensures verification passes) —
         // reload from cache to display the fresh suggestions.
         await load(false)
+      } else if (task?.status === 'interrupted') {
+        // Zombie / orphan-recovered task — auto-retry with force=true
+        // to bypass cache and clear the stuck state. Only one retry
+        // to avoid infinite loops if the agent keeps failing.
+        await load(true)
       } else if (task?.status === 'failed' || task?.status === 'timeout') {
         // Surface the error so the retry button is visible with a message.
         resumeHandle.status.value = 'failed'

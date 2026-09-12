@@ -527,21 +527,21 @@ _COACH_REPAIR_PROMPT = (
     "structure (do NOT include any markdown code blocks, explanations, or "
     "extra content):\n"
     '{"suggestions": [\n'
-    '  {"id": "<string>", "severity": "high|medium|low", '
-    '"title": "<≤20 chars>", "action": "<≤50 chars>", '
-    '"target_type": "liability|asset|wish", '
-    '"target_id": "<entity id string>", "cta_label": "<≤8 chars>"}\n'
+    '  {"id": "s1", "severity": "high", '
+    '"title": "提前还款减少利息", "action": "对利率 18% 的信用卡账单优先还款 5000 元", '
+    '"target_type": "liability", '
+    '"target_id": "356329998564483072", "cta_label": "查看负债"}\n'
     "]}\n\n"
     "Requirements:\n"
     "- suggestions must have at most 3 items\n"
-    "- severity MUST be one of: high, medium, low (NOT numbers)\n"
+    "- severity MUST be one of: high, medium, low (NOT numbers, NOT priority)\n"
     "- target_type MUST be one of: liability, asset, wish\n"
     "- target_id MUST be copied VERBATIM from the snapshot's id field "
     "(high_interest_debts[].id, idle_assets[].id, top_daily_cost_assets[].id, "
     "or wishes[].id). NEVER fabricate or guess an id.\n"
     "- target_type must match the snapshot section the entity came from\n"
     "- action: a specific, actionable suggestion referencing real data\n"
-    "- cta_label: short button label (≤8 chars)"
+    "- cta_label: short button label (<=8 chars)"
 )
 
 

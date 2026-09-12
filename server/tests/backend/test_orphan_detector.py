@@ -27,6 +27,9 @@ class TestScanAndRecover:
         from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
 
         with patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
+            return_value=[],
+        ), patch(
             "apps.backend.app.services.ai_task_service.AITaskService.get_stale_running_tasks",
             return_value=[],
         ) as mock_get, patch(
@@ -46,6 +49,9 @@ class TestScanAndRecover:
         stale_task_2 = MagicMock(id=102, family_id=1, skill_id="coach")
 
         with patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
+            return_value=[],
+        ), patch(
             "apps.backend.app.services.ai_task_service.AITaskService.get_stale_running_tasks",
             return_value=[stale_task_1, stale_task_2],
         ), patch(
@@ -78,6 +84,9 @@ class TestScanAndRecover:
             return True
 
         with patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
+            return_value=[],
+        ), patch(
             "apps.backend.app.services.ai_task_service.AITaskService.get_stale_running_tasks",
             return_value=[stale_task_1, stale_task_2, stale_task_3],
         ), patch(
