@@ -2,9 +2,9 @@
   <div class="ai-report-page">
     <PageHeader :title="t('aiReport.title')" />
 
-    <!-- Three-step timeline (hidden once the report is available — cache or completed) -->
+    <!-- Three-step timeline (hidden once the report is available via cache) -->
     <ReportStepTimeline
-      v-if="(isGenerating || stream.cached.value) && !currentReport"
+      v-if="isGenerating || stream.cached.value"
       :step1-status="stream.step1Status.value"
       :step2-status="stream.step2Status.value"
       :step3-status="stream.step3Status.value"
