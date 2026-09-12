@@ -38,36 +38,13 @@
           <div class="hub-stat-item">
             <div class="hub-stat-num-wrap">
               <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
-              <van-popover
-                :show="activePopover === stat.type"
-                :placement="stat.type === 'alerts' ? 'bottom-end' : 'bottom'"
-                :offset="[0, 8]"
-                trigger="manual"
-                teleport="body"
-              >
-                <div class="stat-popover-content">
-                  <div class="stat-popover-header">
-                    <span class="stat-popover-value" :class="{ warn: stat.warn }">{{ stat.value }}</span>
-                    <span class="stat-popover-label">{{ stat.label }}</span>
-                  </div>
-                  <p class="stat-popover-desc">{{ stat.content || stat.tip }}</p>
-                  <button class="stat-popover-action" type="button" @click="goToReport(stat.scrollTarget)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                    </svg>
-                    {{ t('aiHub.viewReport') }}
-                  </button>
-                </div>
-                <template #reference>
-                  <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')" @click.stop="activePopover = activePopover === stat.type ? null : stat.type">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="12" y1="7" x2="12" y2="13"/>
-                      <line x1="12" y1="16.5" x2="12.01" y2="16.5"/>
-                    </svg>
-                  </button>
-                </template>
-              </van-popover>
+              <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')" @click.stop="openStatPopover(stat.type, $event)">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="7" x2="12" y2="13"/>
+                  <line x1="12" y1="16.5" x2="12.01" y2="16.5"/>
+                </svg>
+              </button>
             </div>
             <span class="hub-stat-label">{{ stat.label }}</span>
           </div>
@@ -94,6 +71,29 @@
           </template>
         </div>
       </div>
+      <!-- Stat detail popup (viewport-safe replacement for van-popover) -->
+      <van-popup
+        :show="activePopover !== null"
+        position="bottom"
+        round
+        :style="popupStyle"
+        @close="activePopover = null"
+        @click-overlay="activePopover = null"
+      >
+        <div v-if="activeStatItem" class="stat-popover-content">
+          <div class="stat-popover-header">
+            <span class="stat-popover-value" :class="{ warn: activeStatItem.warn }">{{ activeStatItem.value }}</span>
+            <span class="stat-popover-label">{{ activeStatItem.label }}</span>
+          </div>
+          <p class="stat-popover-desc">{{ activeStatItem.content || activeStatItem.tip }}</p>
+          <button class="stat-popover-action" type="button" @click="goToReport(activeStatItem.scrollTarget)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            {{ t('aiHub.viewReport') }}
+          </button>
+        </div>
+      </van-popup>
     </div>
 
     <!-- Report summary card -->
@@ -565,6 +565,7 @@ const reportAge = computed(() => {
 type HubStatType = 'suggestions' | 'alerts' | 'completeness'
 
 const activePopover = ref<HubStatType | null>(null)
+const popupPosition = ref({ left: 0, bottom: 0, width: 0 })
 
 const suggestionCount = computed(() => {
   const r = currentReport.value
@@ -715,6 +716,43 @@ function goToReport(scrollTarget?: string) {
   activePopover.value = null
   const path = scrollTarget ? `/ai/report#${scrollTarget}` : '/ai/report'
   router.push(path)
+}
+
+// --- Stat popup helpers ---
+// van-popup replaces van-popover to avoid viewport overflow on mobile.
+// The popup is positioned above the stats row using bottom CSS, which
+// Vant's position="bottom" respects via inline style override.
+
+const activeStatItem = computed(() =>
+  statItems.value.find((s) => s.type === activePopover.value) ?? null,
+)
+
+const popupStyle = computed(() => ({
+  left: `${popupPosition.value.left}px`,
+  width: `${popupPosition.value.width}px`,
+  bottom: `${popupPosition.value.bottom}px`,
+}))
+
+function openStatPopover(type: HubStatType, event: MouseEvent) {
+  if (activePopover.value === type) {
+    activePopover.value = null
+    return
+  }
+  const statsRow = (event.currentTarget as HTMLElement).closest('.hub-stats')
+  if (statsRow) {
+    const rowRect = statsRow.getBoundingClientRect()
+    const popupW = Math.min(rowRect.width * 0.88, 360)
+    const left = Math.max(
+      8,
+      Math.min(rowRect.left + (rowRect.width - popupW) / 2, window.innerWidth - popupW - 8),
+    )
+    popupPosition.value = {
+      left,
+      width: popupW,
+      bottom: window.innerHeight - rowRect.top + 4,
+    }
+  }
+  activePopover.value = type
 }
 
 async function loadReport() {
@@ -1121,26 +1159,15 @@ defineExpose({
 }
 
 .stat-popover-content {
-  padding: 12px 14px;
-  max-width: min(320px, calc(100vw - 32px));
-  width: max-content;
+  padding: 16px 16px 12px;
   box-sizing: border-box;
-}
-
-.stat-popover-desc {
-  word-break: break-word;
-  white-space: pre-line;
-  line-height: 1.6;
-  /* No max-height — content is already truncated to ~100 chars by
-     truncateForPopover, so it fits naturally without scrolling. */
-  margin: 0;
 }
 
 .stat-popover-header {
   display: flex;
   align-items: baseline;
   gap: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .stat-popover-value {
@@ -1159,7 +1186,9 @@ defineExpose({
 }
 
 .stat-popover-desc {
-  margin: 0 0 10px;
+  word-break: break-word;
+  white-space: pre-line;
+  margin: 0 0 12px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-secondary);
