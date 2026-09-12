@@ -501,6 +501,7 @@ async def generate_narrative(
             bridge=shared_bridge,
             run_id="",
             task_id=task_id,
+            family_id=family_id,
             on_run_id=_on_lc_run_id,
             on_authoritative_run_id=_on_authoritative_run_id,
         )

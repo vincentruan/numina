@@ -318,6 +318,7 @@ async def trigger_generate_events(
             bridge=shared_bridge,
             run_id="",
             task_id=task_id,
+            family_id=current_user.family_id,
             on_run_id=_on_run_id,
             on_authoritative_run_id=_on_authoritative_run_id,
         )

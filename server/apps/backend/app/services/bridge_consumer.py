@@ -81,6 +81,7 @@ async def _pump_agent_sse_to_bridge(
     bridge: Any,
     run_id: str,
     task_id: str,
+    family_id: int | str | None = None,
     on_run_id: Callable[[str], None] | None = None,
     on_authoritative_run_id: Callable[[str], None] | None = None,
 ) -> None:
@@ -105,6 +106,10 @@ async def _pump_agent_sse_to_bridge(
             callback before body consumption.  The pump uses a mutable list
             ``[run_id]`` so the resolved UUID is visible after the callback.
         task_id: AITask ID for logging.
+        family_id: Family ID for lease heartbeat renewal.  When provided, a
+            background heartbeat renews the task lease every 40 s so the orphan
+            detector does not kill long-running tasks when the agent-side
+            heartbeat fails (defence-in-depth for U12).
         on_run_id: Optional callback invoked with the run_id extracted from
             the agent's response ``Content-Location`` header.  Callers use
             this to spawn lifecycle consumers before the response body is
@@ -136,6 +141,42 @@ async def _pump_agent_sse_to_bridge(
         _set_run_id(cl)
         if original_on_run_id is not None:
             original_on_run_id(cl)
+
+    # ── Defensive lease heartbeat (U12 safety net) ──
+    # The agent runs its own heartbeat loop (every 40 s), but network issues
+    # or event-loop contention can cause missed beats.  This pump-side
+    # heartbeat renews the lease every 40 s as a fallback so the orphan
+    # detector (scan every 120 s, lease TTL 120 s) never kills a live task.
+    _hb_stop = asyncio.Event()
+    _hb_task: asyncio.Task | None = None
+
+    async def _pump_heartbeat() -> None:
+        while not _hb_stop.is_set():
+            try:
+                await asyncio.wait_for(_hb_stop.wait(), timeout=40.0)
+                break  # stop event set
+            except TimeoutError:
+                pass
+            if family_id is None:
+                continue
+            try:
+                from apps.backend.app.services.ai_task_service import AITaskService
+
+                _db = SessionLocal()
+                try:
+                    AITaskService.update_lease(
+                        int(task_id), int(family_id), _db
+                    )
+                finally:
+                    _db.close()
+                logger.debug("[pump-heartbeat] task=%s family=%s", task_id, family_id)
+            except Exception:
+                logger.warning(
+                    "[pump-heartbeat] failed task=%s", task_id, exc_info=True
+                )
+
+    if family_id is not None:
+        _hb_task = asyncio.create_task(_pump_heartbeat())
 
     try:
         async with agent_client.stream(
@@ -235,6 +276,10 @@ async def _pump_agent_sse_to_bridge(
             {"error": "报告生成服务中断", "error_type": type(exc).__name__},
         )
     finally:
+        # Stop the pump-side heartbeat
+        _hb_stop.set()
+        if _hb_task is not None:
+            _hb_task.cancel()
         await bridge.publish_end(resolved_run_id[0])
 
 

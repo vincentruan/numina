@@ -100,10 +100,18 @@ class TestPIIRedactorFreeText:
         assert "[已脱敏]" in result.free_text
 
     def test_bank_card_redacted(self):
-        ctx = self._make_ctx("银行卡号6222021234567890")
+        # 4111111111111111 is a standard Visa test number (passes Luhn)
+        ctx = self._make_ctx("银行卡号4111111111111111")
         result = self.redactor.redact(ctx)
-        assert "6222021234567890" not in result.free_text
+        assert "4111111111111111" not in result.free_text
         assert "[已脱敏]" in result.free_text
+
+    def test_snowflake_id_not_redacted(self):
+        # 18-digit snowflake IDs don't pass Luhn — must be preserved
+        ctx = self._make_ctx('{"id": "1828512128389180", "category": "credit_card"}')
+        result = self.redactor.redact(ctx)
+        assert "1828512128389180" in result.free_text
+        assert "[已脱敏]" not in result.free_text
 
     def test_no_pii_passes_through_unchanged(self):
         text = "我想了解家庭资产配置情况"

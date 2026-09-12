@@ -244,6 +244,7 @@ async def trigger_finance_coach(
             bridge=shared_bridge,
             run_id="",
             task_id=task_id,
+            family_id=current_user.family_id,
             on_run_id=_on_run_id,
             on_authoritative_run_id=_on_authoritative_run_id,
         )

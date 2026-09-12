@@ -10,13 +10,54 @@ from apps.agent.core.desensitize import (
 from apps.agent.schemas.context import FamilyContext, RedactedContext
 
 # 自由文本 PII 正则模式
+# All digit patterns use negative lookbehind/lookahead for digits (?<!\d) / (?!\d)
+# to avoid matching substrings of longer numeric sequences like snowflake IDs (18-digit).
 _PATTERNS = [
-    (re.compile(r'\d{17}[\dXx]'), "身份证号"),
-    (re.compile(r'1[3-9]\d{9}'), "手机号"),
-    (re.compile(r'\d{16,19}'), "银行卡号"),
-    (re.compile(r'[\u7701\u5e02\u533a\u8def\u53f7][\u4e00-\u9fff\d]{2,}[\u7701\u5e02\u533a\u8def\u53f7]'), "地址"),
+    # 18 chars (17 digits + digit/X), not part of a longer digit sequence
+    (re.compile(r'(?<!\d)\d{17}[\dXx](?!\d)'), "身份证号"),
+    # 11 digits starting with 1[3-9], standalone
+    (re.compile(r'(?<!\d)1[3-9]\d{9}(?!\d)'), "手机号"),
+    # Chinese address (no digit boundary needed)
+    (re.compile(r'[省市区路号][一-鿿\d]{2,}[省市区路号]'), "地址"),
 ]
 _REDACTED = "[已脱敏]"
+
+
+def _luhn_check(number: str) -> bool:
+    """Luhn algorithm — validates credit card numbers.
+
+    Returns True when the number is a plausible card number.
+    Snowflake IDs (18-digit) almost never pass Luhn, so this
+    distinguishes bank cards from internal entity IDs.
+    """
+    digits = [int(d) for d in number]
+    odd = digits[-1::-2]
+    even = digits[-2::-2]
+    total = sum(odd)
+    for d in even:
+        d2 = d * 2
+        total += d2 - 9 if d2 > 9 else d2
+    return total % 10 == 0
+
+
+def _redact_bank_cards(text: str) -> tuple[str, list[str]]:
+    """Redact bank card numbers (16-19 digits passing Luhn check).
+
+    Snowflake IDs (18-digit) are preserved — they don't pass Luhn.
+    Boundary assertions prevent matching substrings of longer numbers.
+    """
+    log: list[str] = []
+    pattern = re.compile(r'(?<!\d)\d{16,19}(?!\d)')
+
+    def _replace_if_card(match: re.Match) -> str:
+        num = match.group()
+        if _luhn_check(num):
+            log.append("free_text:银行卡号")
+            return _REDACTED
+        return num  # snowflake ID or other numeric — keep
+
+    text = pattern.sub(_replace_if_card, text)
+    return text, log
 
 
 def _redact_free_text(text: str) -> tuple[str, list[str]]:
@@ -26,6 +67,9 @@ def _redact_free_text(text: str) -> tuple[str, list[str]]:
         if pattern.search(text):
             text = pattern.sub(_REDACTED, text)
             log.append(f"free_text:{label}")
+    # Bank card redaction uses Luhn check to avoid redacting snowflake IDs
+    text, card_log = _redact_bank_cards(text)
+    log.extend(card_log)
     return text, log
 
 
