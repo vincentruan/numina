@@ -97,17 +97,21 @@ export async function cancelTaskById(
  * running after page reload / navigation. Returns the most recent chat
  * AITask for the given session, or null if none exists.
  *
- * Returns ONLY exact session_id matches — returning another thread's task
- * (even if it's the most recent chat task) would show the wrong banner state
- * after the user switches threads.
+ * Passes the thread_id (UUID) as a query parameter — the backend resolves
+ * it to the internal session_id (snowflake PK) before filtering. The
+ * previous client-side filter (`tasks.find(t => t.session_id === sessionId)`)
+ * never matched because AITask.session_id is a snowflake int serialized as
+ * string while the frontend only knows the UUID thread_id.
  *
- * @param sessionId - Session ID to match against AITask.session_id exactly.
+ * @param threadId - Agent thread UUID (from store.activeThreadId).
  */
 export async function getChatTaskForSession(
-  sessionId: string,
+  threadId: string,
 ): Promise<AITask | null> {
-  const tasks = await getAITasks('chat')
-  return tasks.find((t) => t.session_id === sessionId) ?? null
+  const params: Record<string, string> = { skill_id: 'chat', thread_id: threadId }
+  const response = await api.get('/ai/tasks', { params })
+  const tasks: AITask[] = response.data
+  return tasks.length > 0 ? tasks[0] : null
 }
 
 // ---------------------------------------------------------------------------

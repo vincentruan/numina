@@ -77,6 +77,10 @@ async def get_tasks(
     skill_id: str | None = Query(None, description="Filter by skill_id"),
     status: str | None = Query(None, description="Filter by status"),
     session_id: int | None = Query(None, description="Filter by session_id (U10)"),
+    thread_id: str | None = Query(
+        None,
+        description="Filter by thread_id (UUID) — resolves to session_id internally",
+    ),
     limit: int = Query(DEFAULT_TASK_LIMIT, ge=1, le=200, description="Max results"),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
@@ -85,6 +89,11 @@ async def get_tasks(
 
     Used by frontend useTaskResume hook to check for running tasks on page load.
     Returns tasks filtered by skill_id and/or status, scoped to the user's family.
+
+    ``thread_id`` accepts the agent's UUID thread identifier and resolves it
+    to the internal ``session_id`` (snowflake PK) before filtering — this
+    closes the ID-mismatch bug where the frontend only knows the UUID but
+    ``AITask.session_id`` stores the snowflake PK.
 
     Example: GET /api/v1/ai/tasks?skill_id=report&status=running
     """
@@ -100,6 +109,25 @@ async def get_tasks(
 
     if session_id:
         query = query.filter(AITask.session_id == session_id)
+
+    # Resolve thread_id (UUID) → session_id (snowflake PK) so the frontend
+    # can query tasks by the agent thread identifier it already has.
+    if thread_id:
+        from apps.backend.app.models.ai_chat_session import AIChatSession
+
+        resolved = (
+            db.query(AIChatSession.id)
+            .filter(
+                AIChatSession.thread_id == thread_id,
+                AIChatSession.family_id == current_user.family_id,
+            )
+            .scalar()
+        )
+        if resolved is not None:
+            query = query.filter(AITask.session_id == resolved)
+        else:
+            # No matching session — return empty rather than all tasks.
+            return []
 
     # Order by started_at descending (most recent first), bounded by limit
     query = query.order_by(AITask.started_at.desc()).limit(limit)

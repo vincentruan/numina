@@ -120,24 +120,46 @@ const realtimeTokenUsage = computed(() => {
  *  empty title when sync_title_from_checkpoint hasn't persisted yet — overwriting
  *  would regress the header from the temp title back to "新对话". When the API
  *  returns a non-empty title, merge it into the existing session so a prior
- *  temp title is replaced with the persisted one. */
-async function ensureThreadInSessions(threadId: string) {
+ *  temp title is replaced with the persisted one.
+ *
+ *  Title-refresh: when `titleGenerating` is true the temp title was set locally
+ *  but the LLM title SSE event was never received (e.g. user navigated away
+ *  before the title arrived).  In that case, always fetch from the API so the
+ *  server-generated title replaces the temp one.  After a full page refresh
+ *  the component is re-created and `titleGenerating` resets to undefined —
+ *  but the temp title from the previous mount persists in the Pinia store.
+ *  The `forceRefresh` flag (passed on mount/recovery) handles this by always
+ *  fetching from the API and comparing — if the server has a *different* title,
+ *  it replaces the local one. */
+async function ensureThreadInSessions(threadId: string, forceRefresh = false) {
   const existing = store.sessions.find(s => s.thread_id === threadId)
   if (existing) {
-    // Session already present — only patch the title when the API has a
-    // non-empty one and the local session has none (prevents regressions).
-    if (!existing.title) {
-      try {
-        const thread = await getThread(threadId)
-        if (thread.title) {
-          const idx = store.sessions.findIndex(s => s.thread_id === threadId)
-          if (idx !== -1) {
-            store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
+    const needsRefresh = forceRefresh || !existing.title || existing.titleGenerating === true
+    if (!needsRefresh) {
+      return
+    }
+    try {
+      const thread = await getThread(threadId)
+      if (thread.title && thread.title !== existing.title) {
+        const idx = store.sessions.findIndex(s => s.thread_id === threadId)
+        if (idx !== -1) {
+          store.sessions[idx] = {
+            ...store.sessions[idx],
+            title: thread.title,
+            titleGenerating: false,
           }
         }
-      } catch {
-        // Non-critical: title stays as-is until next refresh
+      } else if (thread.title) {
+        // Server has the same title — just clear the generating flag
+        if (existing.titleGenerating) {
+          const idx = store.sessions.findIndex(s => s.thread_id === threadId)
+          if (idx !== -1) {
+            store.sessions[idx] = { ...store.sessions[idx], titleGenerating: false }
+          }
+        }
       }
+    } catch {
+      // Non-critical: title stays as-is until next refresh
     }
     return
   }
@@ -242,8 +264,13 @@ async function checkChatTask() {
       chatTaskStatus.value = 'completed'
       chatTaskError.value = null
       stopChatTaskPolling()
-      // Task completed in background — reload canonical history from checkpointer.
-      await chat.loadHistory(threadId)
+      // Task completed in background — reload canonical history from checkpointer
+      // AND refresh the title (the server may have generated an LLM title while
+      // the user was away).
+      await Promise.all([
+        chat.loadHistory(threadId),
+        ensureThreadInSessions(threadId, true),
+      ])
     } else if (task.status === 'failed' || task.status === 'timeout') {
       chatTaskStatus.value = 'failed'
       chatTaskError.value = task.error_message || t('aiChat.chatTaskFailed')
@@ -341,28 +368,36 @@ onMounted(async () => {
     // call /ai/context (which would 400 and toast "上下文加载失败").
     const A1B_SOURCES = new Set(['liability_detail', 'wish_detail', 'liability_strategy', 'wish_advice'])
     if (route.query.source && A1B_SOURCES.has(route.query.source as string)) {
-      const a1bContext = await loadContext()
-      if (a1bContext) {
-        if (!familyStore.family) {
-          try {
-            await familyStore.fetchFamily()
-          } catch {
-            // fetchFamily failure is non-fatal — handleStartChat surfaces a toast.
+      // Guard: if we already have an active thread (from a previous mount that
+      // already created the A1b thread, or from the URL's thread_id param),
+      // skip context injection — otherwise re-mount creates a duplicate thread
+      // every time the user navigates away and back.
+      if (!store.activeThreadId) {
+        const a1bContext = await loadContext()
+        if (a1bContext) {
+          if (!familyStore.family) {
+            try {
+              await familyStore.fetchFamily()
+            } catch {
+              // fetchFamily failure is non-fatal — handleStartChat surfaces a toast.
+            }
           }
+          const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = 'pro'
+          const modeConfig = INPUT_MODE_CONFIGS[mode]
+          await handleStartChat({
+            text: a1bContext,
+            model_name: DEFAULT_MODEL,
+            mode,
+            thinking_enabled: modeConfig.thinking_enabled,
+            is_plan_mode: modeConfig.is_plan_mode,
+            subagent_enabled: modeConfig.subagent_enabled,
+            reasoning_effort: modeConfig.reasoning_effort,
+          })
+          return
         }
-        const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = 'pro'
-        const modeConfig = INPUT_MODE_CONFIGS[mode]
-        await handleStartChat({
-          text: a1bContext,
-          model_name: DEFAULT_MODEL,
-          mode,
-          thinking_enabled: modeConfig.thinking_enabled,
-          is_plan_mode: modeConfig.is_plan_mode,
-          subagent_enabled: modeConfig.subagent_enabled,
-          reasoning_effort: modeConfig.reasoning_effort,
-        })
-        return
       }
+      // Already have a thread for this A1b source — fall through to normal
+      // history loading below.
     }
     if (
       store.activeThreadId
@@ -383,7 +418,9 @@ onMounted(async () => {
         chat.loadHistory(store.activeThreadId)
       }
       // Watcher won't fire (same ID) - fetch thread metadata here too.
-      ensureThreadInSessions(store.activeThreadId)
+      // forceRefresh=true: on page return/refresh the server may have generated
+      // an LLM title that differs from the temp title in the Pinia store.
+      ensureThreadInSessions(store.activeThreadId, true)
       initialLoading.value = false
     }
     // Auto-send pending message from URL (passed from AIHubPage)
@@ -476,9 +513,10 @@ watch(
       await ensureFamilyLoaded()
       // Load messages and thread metadata in parallel - loadHistory only
       // fetches checkpoint messages, ensureThreadInSessions fetches the title.
+      // forceRefresh=true: replace any stale temp title from the Pinia store.
       await Promise.all([
         chat.loadHistory(newId),
-        ensureThreadInSessions(newId),
+        ensureThreadInSessions(newId, true),
       ])
     }
   }
