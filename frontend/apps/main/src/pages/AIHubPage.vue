@@ -741,6 +741,10 @@ function openStatPopover(type: HubStatType, event: MouseEvent) {
   const statsRow = (event.currentTarget as HTMLElement).closest('.hub-stats')
   if (statsRow) {
     const rowRect = statsRow.getBoundingClientRect()
+    // Use visualViewport for PWA standalone compatibility — window.innerHeight
+    // returns layout viewport (includes status bar area), while getBoundingClientRect
+    // is relative to visual viewport. Mismatch causes popup to overflow screen top.
+    const vpH = window.visualViewport?.height ?? window.innerHeight
     const popupW = Math.min(rowRect.width * 0.88, 360)
     const left = Math.max(
       8,
@@ -749,7 +753,7 @@ function openStatPopover(type: HubStatType, event: MouseEvent) {
     popupPosition.value = {
       left,
       width: popupW,
-      bottom: window.innerHeight - rowRect.top + 4,
+      bottom: vpH - rowRect.top + 4,
     }
   }
   activePopover.value = type
