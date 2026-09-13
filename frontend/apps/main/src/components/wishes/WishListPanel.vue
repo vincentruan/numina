@@ -95,7 +95,7 @@
                 </div>
 
                 <div class="wish-bottom">
-                  <span class="priority-badge" :class="wish.priority">
+                  <span class="priority-badge" :class="wish.priority" aria-hidden="true">
                     {{ t('wish.priorityText.' + wish.priority) }}{{ t('wish.prioritySuffix') }}
                   </span>
                   <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
@@ -108,10 +108,10 @@
                   class="afford-bar"
                   :class="affordStateClass(wish)"
                 >
-                  <span v-if="affordFor(wish).state.value.kind === 'unset_monthly'">{{ t('wish.afford.setMonthly') }}</span>
-                  <span v-else-if="affordFor(wish).state.value.kind === 'reached'">{{ t('wish.afford.reached') }} ✓</span>
-                  <span v-else-if="affordFor(wish).state.value.kind === 'progress'">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
-                  <span v-if="affordAccelerate(wish)" class="accelerate">! {{ t('wish.afford.needAccelerate') }}</span>
+                  <span v-if="affordFor(wish).state.value.kind === 'unset_monthly'" aria-hidden="true">{{ t('wish.afford.setMonthly') }}</span>
+                  <span v-else-if="affordFor(wish).state.value.kind === 'reached'" aria-hidden="true">{{ t('wish.afford.reached') }} ✓</span>
+                  <span v-else-if="affordFor(wish).state.value.kind === 'progress'" aria-hidden="true">{{ t('wish.afford.etaMonths', { n: affordMonths(wish) }) }}</span>
+                  <span v-if="affordAccelerate(wish)" class="accelerate" aria-hidden="true">! {{ t('wish.afford.needAccelerate') }}</span>
                 </div>
 
                 <!-- U3: savings progress bar (priority-colored, 3px). -->
@@ -242,7 +242,6 @@ import { useWishStore } from '@/stores/wish'
 import { useLiabilityStore } from '@/stores/liability'
 import { useDebtWarning } from '@/composables/useDebtWarning'
 import { useAffordBar } from '@/composables/useAffordBar'
-import { formatCurrency } from '@/utils/format'
 import { useCurrency } from '@/composables/useCurrency'
 import { useExchangeRate } from '@/composables/useExchangeRate'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'

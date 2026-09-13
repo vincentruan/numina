@@ -70,7 +70,7 @@
     <ManifestoSigningPopup
       :visible="showManifestoPopup"
       :manifesto-title="unsignedManifestoTitle"
-      @update:visible="(val: boolean) => showManifestoPopup = val"
+      @update:visible="(val: boolean) => { showManifestoPopup = val; if (!val) sessionStorage.setItem(MANIFESTO_DISMISSED_KEY, '1') }"
       @navigate="onManifestoNavigate"
     />
   </div>
@@ -221,10 +221,13 @@ async function maybeShowOnboarding() {
 }
 
 // Manifesto signing popup
+const MANIFESTO_DISMISSED_KEY = 'manifesto_popup_dismissed'
 const showManifestoPopup = ref(false)
 const unsignedManifestoTitle = ref('')
 
 async function checkUnsignedManifesto() {
+  // Don't re-show within the same browser session after user dismissed
+  if (sessionStorage.getItem(MANIFESTO_DISMISSED_KEY)) return
   try {
     const res = await manifestoApi.getUnsignedCheck()
     if (res.data.has_unsigned && res.data.title) {
@@ -238,6 +241,7 @@ async function checkUnsignedManifesto() {
 
 function onManifestoNavigate() {
   showManifestoPopup.value = false
+  sessionStorage.setItem(MANIFESTO_DISMISSED_KEY, '1')
   router.push('/manifesto/sign')
 }
 

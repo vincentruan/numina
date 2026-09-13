@@ -1075,6 +1075,16 @@ export default {
     resultDaysHeld: '持有天数',
     perDay: '/天',
   },
+  costEquivalence: {
+    title: '成本等价换算',
+    heldDays: '持有天数',
+    dailyCost: '日均成本',
+    timeCost: '时间成本（按时薪 {symbol}50/小时）',
+    opportunityCost: '机会成本（按年化 5%，10年）',
+    noData: '暂无数据',
+    hoursUnit: '小时',
+    daysUnit: '天',
+  },
   assetDetail: {
     pageTitle: '资产详情',
     sellPrice: '出售价格',

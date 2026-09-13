@@ -1,30 +1,35 @@
 <template>
-  <van-cell-group inset title="成本等价换算">
+  <van-cell-group inset :title="t('costEquivalence.title')">
     <van-loading v-if="loading" class="card-loading" />
     <template v-else-if="result">
-      <van-cell title="持有天数" :value="result.held_days != null ? `${result.held_days} 天` : '--'" />
-      <van-cell title="日均成本" :value="result.daily_cost != null ? format(Number(result.daily_cost)) : '--'" />
+      <van-cell :title="t('costEquivalence.heldDays')" :value="result.held_days != null ? `${result.held_days} ${t('costEquivalence.daysUnit')}` : '--'" />
+      <van-cell :title="t('costEquivalence.dailyCost')" :value="result.daily_cost != null ? format(Number(result.daily_cost)) : '--'" />
       <van-cell
-        title="时间成本（按时薪 ¥50/小时）"
-        :value="result.time_cost_hours != null ? `${result.time_cost_hours.toFixed(1)} 小时` : '--'"
+        :title="t('costEquivalence.timeCost', { symbol: symbol })"
+        :value="result.time_cost_hours != null ? `${result.time_cost_hours.toFixed(1)} ${t('costEquivalence.hoursUnit')}` : '--'"
       />
       <van-cell
-        title="机会成本（按年化 5%，10年）"
+        :title="t('costEquivalence.opportunityCost')"
         :value="result.opportunity_cost != null ? format(Number(result.opportunity_cost)) : '--'"
       />
     </template>
-    <van-empty v-else description="暂无数据" />
+    <van-empty v-else :description="t('costEquivalence.noData')" />
   </van-cell-group>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getCostEquivalence, type CostEquivalenceResult } from '@/api/assetsAnalysis'
 import { useCurrency } from '@/composables/useCurrency'
+import { CURRENCY_SYMBOLS } from '@/utils/format'
 
 const props = defineProps<{ assetId: string }>()
 
-const { format } = useCurrency()
+const { t } = useI18n()
+const { format, currency } = useCurrency()
+
+const symbol = computed(() => CURRENCY_SYMBOLS[currency.value] || currency.value)
 
 const loading = ref(false)
 const result = ref<CostEquivalenceResult | null>(null)
