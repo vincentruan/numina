@@ -26,7 +26,7 @@ export default defineConfig({
       manifest: {
         name: 'Numina',
         short_name: 'Numina',
-        theme_color: '#4361ee',
+        theme_color: '#4341a0',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
