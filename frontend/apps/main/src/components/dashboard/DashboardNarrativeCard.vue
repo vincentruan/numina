@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DashboardNarrativeCard — 本月洞察 (U15 + U17 + U21)
+ * DashboardNarrativeCard — 仪表盘叙事 (U15 + U17 + U21)
  *
  * Shows the AI-generated monthly financial narrative on the Dashboard.
  * Dual-mode (plan §R4 "双层模型"):

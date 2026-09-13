@@ -227,7 +227,7 @@ export default {
       },
     },
     narrative: {
-      title: '本月洞察',
+      title: '仪表盘叙事',
       expand: '展开',
       collapse: '收起',
       thinking: '思考过程',
@@ -241,12 +241,12 @@ export default {
       generatedAt: '生成于 {time}',
       regenerate: '重新生成',
       empty: '暂无本月财务叙事',
-      generate: '生成本月洞察',
+      generate: '生成仪表盘叙事',
       retry: '重试',
       retryHint: '任务创建超时，请重试',
       blocked: {
-        insufficient_assets: '需要至少 {threshold} 项资产才能生成本月洞察（当前 {count} 项）。添加更多资产后再试试吧。',
-        insufficient_history: '需要至少 1 个月的资产快照历史才能生成本月洞察。系统会持续记录，请稍后再试。',
+        insufficient_assets: '需要至少 {threshold} 项资产才能生成仪表盘叙事（当前 {count} 项）。添加更多资产后再试试吧。',
+        insufficient_history: '需要至少 1 个月的资产快照历史才能生成仪表盘叙事。系统会持续记录，请稍后再试。',
       },
       error: {
         auth_expired: '认证已过期',
@@ -3663,7 +3663,7 @@ export default {
     aiCacheTtlFinanceCoach: '财务教练缓存',
     aiCacheTtlFinanceCoachDesc: '财务教练建议缓存时间（分钟）',
     aiCacheTtlNarrative: '仪表盘叙事缓存',
-    aiCacheTtlNarrativeDesc: '仪表盘叙事卡片缓存时间（分钟）',
+    aiCacheTtlNarrativeDesc: '总览页仪表盘叙事卡片缓存时间（分钟），缓存期内重复请求直接返回缓存结果',
     dashboardGroup: '仪表盘阈值',
     minAssetCount: '最低资产数量',
     minAssetCountDesc: '触发叙事生成所需的最低资产数量',

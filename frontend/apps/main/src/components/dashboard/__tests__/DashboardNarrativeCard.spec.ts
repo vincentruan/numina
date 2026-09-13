@@ -9,7 +9,7 @@ vi.mock('vue-i18n', () => ({
     t: (key: string, params?: Record<string, unknown>) => {
       if (key === 'dashboard.narrative.thoughtFor') return `已思考 ${params?.duration ?? ''}`
       if (key === 'dashboard.narrative.generatedAt') return `生成于 ${params?.time ?? ''}`
-      if (key === 'dashboard.narrative.title') return '本月洞察'
+      if (key === 'dashboard.narrative.title') return '仪表盘叙事'
       if (key === 'dashboard.narrative.thinking') return '思考中'
       return key
     },

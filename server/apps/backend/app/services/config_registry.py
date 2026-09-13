@@ -35,7 +35,7 @@ FAMILY_SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
         description_key="familyConfig.aiCacheTtlFinanceCoachDesc",
     ),
     "ai_cache_ttl_dashboard_narrative": SettingDefinition(
-        type="int", default=240, min=30, max=720, step=30,
+        type="int", default=1440, min=60, max=1440, step=60,
         label_key="familyConfig.aiCacheTtlNarrative",
         description_key="familyConfig.aiCacheTtlNarrativeDesc",
     ),

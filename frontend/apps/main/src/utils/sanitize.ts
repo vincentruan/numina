@@ -2,7 +2,7 @@
  * Shared markdown sanitization config for LLM-generated HTML.
  *
  * Used by AIReportPage (indicator narratives, full report markdown) and
- * DashboardNarrativeCard (monthly insight narrative). Both consume
+ * DashboardNarrativeCard (dashboard narrative). Both consume
  * markdown rendered by `marked` and need to allow standard HTML tags
  * (headings, lists, emphasis, tables, links, code blocks, etc.) while
  * stripping scripts, event handlers, and data attributes.

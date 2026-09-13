@@ -271,7 +271,7 @@ async def generate_narrative(
     # 1. Cache check (R4) — uses request-scoped db
     if not force:
         cached = latest_by_skill(db, family_id, SKILL_ID)
-        if is_cache_fresh(cached, SKILL_ID, family_id=family_id) and cached is not None:
+        if is_cache_fresh(cached, SKILL_ID, family_id=family_id, config_key="ai_cache_ttl_dashboard_narrative") and cached is not None:
             report = cached.report_json or {}
             narrative = report.get("narrative", "")
             from apps.backend.app.services.dashboard_narrative import (

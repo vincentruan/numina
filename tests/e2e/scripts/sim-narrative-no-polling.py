@@ -211,7 +211,7 @@ def main():
         screenshot(page, "sim-narrative-first-visit")
 
         body = page.text_content("body") or ""
-        has_narrative = "本月洞察" in body
+        has_narrative = "仪表盘叙事" in body
         record("Narrative card visible", has_narrative)
 
         # ── Test 2: Reload — verify no polling ──────────────────────

@@ -45,9 +45,9 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlNarrativeDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="form.ai_cache_ttl_dashboard_narrative" :min="30" :max="720" :step="30" @change="onSave" />
+              <van-slider v-model="form.ai_cache_ttl_dashboard_narrative" :min="60" :max="1440" :step="60" @change="onSave" />
             </div>
-            <div class="slider-scale"><span>30</span><span>360</span><span>720</span></div>
+            <div class="slider-scale"><span>60</span><span>720</span><span>1440</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -287,7 +287,7 @@ const dayLabels = computed<string[]>(() => {
 const form = ref({
   ai_cache_ttl_report: 60,
   ai_cache_ttl_finance_coach: 480,
-  ai_cache_ttl_dashboard_narrative: 240,
+  ai_cache_ttl_dashboard_narrative: 1440,
   dashboard_min_asset_count: 5,
   dashboard_min_history_months: 1,
   dashboard_expiring_days_threshold: 180,
