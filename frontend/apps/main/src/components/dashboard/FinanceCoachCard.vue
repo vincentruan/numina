@@ -52,7 +52,7 @@ const resumeHandle = useTaskResume('coach', {
   },
 })
 
-async function load(force = false) {
+async function load(force = false, _retryCount = 0) {
   if (!familyStore.aiEnabled) {
     visible.value = false
     loading.value = false
@@ -76,12 +76,12 @@ async function load(force = false) {
       if (task?.status === 'completed') {
         // Task completed (and Bug-1 fix ensures verification passes) —
         // reload from cache to display the fresh suggestions.
-        await load(false)
-      } else if (task?.status === 'interrupted') {
+        await load(false, _retryCount)
+      } else if (task?.status === 'interrupted' && _retryCount < 1) {
         // Zombie / orphan-recovered task — auto-retry with force=true
         // to bypass cache and clear the stuck state. Only one retry
         // to avoid infinite loops if the agent keeps failing.
-        await load(true)
+        await load(true, _retryCount + 1)
       } else if (task?.status === 'failed' || task?.status === 'timeout') {
         // Surface the error so the retry button is visible with a message.
         resumeHandle.status.value = 'failed'

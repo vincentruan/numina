@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from apps.agent.schemas.context import FamilyContext
-from apps.agent.services.pii_redactor import PIIRedactor
+from apps.agent.services.pii_redactor import PIIRedactor, _luhn_check
 
 
 class TestPIIRedactorStructured:
@@ -133,3 +133,69 @@ class TestPIIRedactorFreeText:
         ctx = self._make_ctx("普通问题")
         result = self.redactor.redact(ctx)
         assert not any("free_text" in entry for entry in result.redaction_log)
+
+
+class TestLuhnCheck:
+    """Direct tests for _luhn_check — validates Luhn algorithm correctness."""
+
+    def test_valid_visa(self):
+        assert _luhn_check("4111111111111111") is True
+
+    def test_valid_mastercard(self):
+        assert _luhn_check("5500000000000004") is True
+
+    def test_valid_amex(self):
+        assert _luhn_check("378282246310005") is True
+
+    def test_snowflake_id_fails_luhn(self):
+        # Typical snowflake IDs are sequential — almost never pass Luhn
+        assert _luhn_check("1828512128389180") is False
+
+    def test_another_snowflake_id_fails(self):
+        assert _luhn_check("356329998564483072") is False
+
+    def test_all_zeros_fails(self):
+        assert _luhn_check("0000000000000000") is True  # 0 sum mod 10 = 0
+
+    def test_single_digit(self):
+        assert _luhn_check("0") is True
+        assert _luhn_check("1") is False
+
+
+class TestBankCardBoundary:
+    """Test that bank card regex boundary assertions work correctly."""
+
+    def setup_method(self):
+        self.redactor = PIIRedactor()
+
+    def _make_ctx(self, free_text: str) -> FamilyContext:
+        return FamilyContext(family_id="fam-1", free_text=free_text)
+
+    def test_card_embedded_in_longer_number_not_redacted(self):
+        r"""A valid card number inside a 20+ digit sequence should NOT be redacted
+        because the (?<!\d) / (?!\d) boundary assertions prevent partial match."""
+        # 999 + valid Visa + 999 = 22 digits total
+        text = "9994111111111111111999"
+        ctx = self._make_ctx(text)
+        result = self.redactor.redact(ctx)
+        # The full 22-digit number should pass through unchanged
+        assert result.free_text == text
+
+    def test_standalone_card_is_redacted(self):
+        """A standalone valid card number (space-bounded) IS redacted."""
+        ctx = self._make_ctx("卡号 4111111111111111 有效")
+        result = self.redactor.redact(ctx)
+        assert "4111111111111111" not in result.free_text
+        assert "[已脱敏]" in result.free_text
+
+    def test_card_at_start_of_string(self):
+        """Card at the start of string is correctly redacted."""
+        ctx = self._make_ctx("4111111111111111是卡号")
+        result = self.redactor.redact(ctx)
+        assert "4111111111111111" not in result.free_text
+
+    def test_card_at_end_of_string(self):
+        """Card at the end of string is correctly redacted."""
+        ctx = self._make_ctx("卡号是4111111111111111")
+        result = self.redactor.redact(ctx)
+        assert "4111111111111111" not in result.free_text

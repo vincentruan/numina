@@ -98,6 +98,66 @@ class TestScanAndRecover:
         # Task 1 failed, tasks 2+3 succeeded → recovered = 2
         assert result == 2
 
+    def test_zombies_cancelled_before_stale_scan(self):
+        """Phase 1: zombie running tasks (no run_id) are cancelled before stale scan."""
+        from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
+
+        zombie = MagicMock(id=301, family_id=1, skill_id="coach")
+
+        with patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
+            return_value=[zombie],
+        ) as mock_zombies, patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.cancel_zombie_tasks",
+        ) as mock_cancel, patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_stale_running_tasks",
+            return_value=[],
+        ):
+            result = _scan_and_recover_sync()
+
+        mock_zombies.assert_called_once()
+        mock_cancel.assert_called_once()
+        # cancel_zombie_tasks called with the zombie in a list
+        args, kwargs = mock_cancel.call_args
+        assert args[0] == [zombie]
+        assert kwargs["source"] == "orphan_detector"
+        assert result == 1
+        assert zombie.status == "interrupted" or mock_cancel.called
+
+    def test_zombie_cancel_failure_does_not_block_stale_scan(self):
+        """Phase 1 zombie cancellation failure does not prevent Phase 2 stale scan."""
+        from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
+
+        zombie = MagicMock(id=401, family_id=1, skill_id="coach")
+        stale_task = MagicMock(id=402, family_id=1, skill_id="narrative")
+
+        def cancel_side_effect(zombies, source="auto"):
+            raise RuntimeError("DB error during zombie cancel")
+
+        mock_db = MagicMock()
+
+        with patch(
+            "packages.db.session.SessionLocal",
+            return_value=mock_db,
+        ), patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
+            return_value=[zombie],
+        ), patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.cancel_zombie_tasks",
+            side_effect=cancel_side_effect,
+        ), patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.get_stale_running_tasks",
+            return_value=[stale_task],
+        ), patch(
+            "apps.backend.app.services.ai_task_service.AITaskService.mark_interrupted",
+            return_value=True,
+        ) as mock_mark:
+            result = _scan_and_recover_sync()
+
+        # Zombie cancel failed (0), but stale task recovered (1)
+        assert result == 1
+        mock_mark.assert_called_once()
+
     def test_session_closed_after_scan(self):
         """SessionLocal is always closed, even on exception."""
         from apps.backend.app.services.orphan_detector import _scan_and_recover_sync

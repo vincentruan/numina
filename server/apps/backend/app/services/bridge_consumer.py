@@ -151,19 +151,31 @@ async def _pump_agent_sse_to_bridge(
     _hb_task: asyncio.Task | None = None
 
     async def _pump_heartbeat() -> None:
+        if family_id is None:
+            return
         while not _hb_stop.is_set():
             try:
                 await asyncio.wait_for(_hb_stop.wait(), timeout=40.0)
                 break  # stop event set
             except TimeoutError:
                 pass
-            if family_id is None:
-                continue
             try:
                 from apps.backend.app.services.ai_task_service import AITaskService
 
                 _db = SessionLocal()
                 try:
+                    # Check task status — stop heartbeat if task is no longer active
+                    _task = AITaskService.get_task_by_id(
+                        int(task_id), int(family_id), _db
+                    )
+                    if _task is None or _task.status not in (
+                        "running", "post_processing", "queued",
+                    ):
+                        logger.debug(
+                            "[pump-heartbeat] task=%s status=%s — stopping",
+                            task_id, _task.status if _task else "gone",
+                        )
+                        break
                     AITaskService.update_lease(
                         int(task_id), int(family_id), _db
                     )

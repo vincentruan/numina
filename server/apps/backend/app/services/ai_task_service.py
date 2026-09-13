@@ -224,19 +224,9 @@ class AITaskService:
             # then _try_promote_next starts the next queued task but the agent
             # never picks it up.  Without this, they block all future promotion.
             zombies = AITaskService.get_zombie_running_tasks(db, family_id)
-            for z in zombies:
-                logger.warning(
-                    "[ai-task] cancelling zombie task=%s family=%s "
-                    "(running with no run_id)",
-                    z.id, family_id,
-                )
-                z.status = "interrupted"
-                z.completed_at = datetime.now(UTC)
-                z.error_message = (
-                    "任务启动后 agent 未分配 run_id，自动取消（僵尸任务）"
-                )
             if zombies:
-                db.flush()
+                AITaskService.cancel_zombie_tasks(zombies, source="auto")
+                db.commit()
 
             still_running = (
                 db.query(AITask)
@@ -612,9 +602,43 @@ class AITaskService:
         return query.all()
 
     @staticmethod
+    def cancel_zombie_tasks(
+        zombies: list[AITask],
+        source: str = "auto",
+    ) -> int:
+        """Cancel a list of zombie tasks by marking them interrupted.
+
+        Shared by _try_promote_next (batch) and orphan_detector (per-zombie).
+        Callers manage the session (commit/rollback).
+
+        Args:
+            zombies: List of zombie AITask objects to cancel.
+            source: Label for the error_message (e.g. "auto" or "orphan_detector").
+
+        Returns the number of zombies cancelled.
+        """
+        source_labels = {
+            "auto": "任务启动后 agent 未分配 run_id，自动取消（僵尸任务）",
+            "orphan_detector": "任务启动后 agent 未分配 run_id，孤儿检测自动取消",
+        }
+        error_msg = source_labels.get(source, source_labels["auto"])
+        cancelled = 0
+        for z in zombies:
+            z.status = "interrupted"
+            z.completed_at = datetime.now(UTC)
+            z.error_message = error_msg
+            cancelled += 1
+            logger.info(
+                "[%s] cancelled zombie task=%s family=%s skill=%s",
+                source, z.id, z.family_id, z.skill_id,
+            )
+        return cancelled
+
+    @staticmethod
     def get_zombie_running_tasks(
         db: Session,
         family_id: int | str | None = None,
+        grace_seconds: int = 60,
     ) -> list[AITask]:
         """Return running tasks that never got a run_id (zombie tasks).
 
@@ -622,15 +646,24 @@ class AITaskService:
         started them — no run_id was ever assigned.  They block all future
         promotion and must be cancelled.
 
+        A grace period (default 60s) excludes recently-promoted tasks that
+        may not have received their run_id yet — without this, concurrent
+        calls to _try_promote_next can kill a legitimately-promoted task
+        before the agent persists its run_id (self-propagating cascade).
+
         Args:
             db: SQLAlchemy session.
             family_id: Optional family ID for tenant-scoped query.
+            grace_seconds: Exclude tasks promoted within this many seconds.
 
-        Returns tasks WHERE status='running' AND run_id IS NULL.
+        Returns tasks WHERE status='running' AND run_id IS NULL
+        AND started_at < (now - grace_seconds).
         """
+        cutoff = datetime.now(UTC) - timedelta(seconds=grace_seconds)
         query = db.query(AITask).filter(
             AITask.status == "running",
             AITask.run_id.is_(None),
+            AITask.started_at < cutoff,
         )
 
         if family_id is not None:

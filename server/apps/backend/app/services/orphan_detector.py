@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +49,14 @@ def _scan_and_recover_sync() -> int:
         zombies = AITaskService.get_zombie_running_tasks(db)
         for z in zombies:
             try:
-                z.status = "interrupted"
-                z.completed_at = datetime.now(UTC)
-                z.error_message = "任务启动后 agent 未分配 run_id，孤儿检测自动取消"
+                AITaskService.cancel_zombie_tasks(
+                    [z], source="orphan_detector",
+                )
                 db.commit()
                 recovered += 1
-                logger.info(
-                    "[orphan_detector] cancelled zombie task=%s family=%s skill=%s",
-                    z.id, z.family_id, z.skill_id,
-                )
             except Exception:
                 db.rollback()
+                db.expunge(z)
                 logger.warning(
                     "[orphan_detector] failed to cancel zombie task=%s",
                     z.id, exc_info=True,

@@ -40,6 +40,9 @@ def _luhn_check(number: str) -> bool:
     return total % 10 == 0
 
 
+_BANK_CARD_PATTERN = re.compile(r'(?<!\d)\d{16,19}(?!\d)')
+
+
 def _redact_bank_cards(text: str) -> tuple[str, list[str]]:
     """Redact bank card numbers (16-19 digits passing Luhn check).
 
@@ -47,7 +50,6 @@ def _redact_bank_cards(text: str) -> tuple[str, list[str]]:
     Boundary assertions prevent matching substrings of longer numbers.
     """
     log: list[str] = []
-    pattern = re.compile(r'(?<!\d)\d{16,19}(?!\d)')
 
     def _replace_if_card(match: re.Match) -> str:
         num = match.group()
@@ -56,7 +58,7 @@ def _redact_bank_cards(text: str) -> tuple[str, list[str]]:
             return _REDACTED
         return num  # snowflake ID or other numeric — keep
 
-    text = pattern.sub(_replace_if_card, text)
+    text = _BANK_CARD_PATTERN.sub(_replace_if_card, text)
     return text, log
 
 

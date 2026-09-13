@@ -132,8 +132,9 @@ const realtimeTokenUsage = computed(() => {
  *  fetching from the API and comparing — if the server has a *different* title,
  *  it replaces the local one. */
 async function ensureThreadInSessions(threadId: string, forceRefresh = false) {
-  const existing = store.sessions.find(s => s.thread_id === threadId)
-  if (existing) {
+  const existingIdx = store.sessions.findIndex(s => s.thread_id === threadId)
+  if (existingIdx !== -1) {
+    const existing = store.sessions[existingIdx]
     const needsRefresh = forceRefresh || !existing.title || existing.titleGenerating === true
     if (!needsRefresh) {
       return
@@ -141,10 +142,11 @@ async function ensureThreadInSessions(threadId: string, forceRefresh = false) {
     try {
       const thread = await getThread(threadId)
       if (thread.title && thread.title !== existing.title) {
-        const idx = store.sessions.findIndex(s => s.thread_id === threadId)
-        if (idx !== -1) {
-          store.sessions[idx] = {
-            ...store.sessions[idx],
+        // Re-check index — array may have shifted during await
+        const curIdx = store.sessions.findIndex(s => s.thread_id === threadId)
+        if (curIdx !== -1) {
+          store.sessions[curIdx] = {
+            ...store.sessions[curIdx],
             title: thread.title,
             titleGenerating: false,
           }
@@ -152,9 +154,9 @@ async function ensureThreadInSessions(threadId: string, forceRefresh = false) {
       } else if (thread.title) {
         // Server has the same title — just clear the generating flag
         if (existing.titleGenerating) {
-          const idx = store.sessions.findIndex(s => s.thread_id === threadId)
-          if (idx !== -1) {
-            store.sessions[idx] = { ...store.sessions[idx], titleGenerating: false }
+          const curIdx = store.sessions.findIndex(s => s.thread_id === threadId)
+          if (curIdx !== -1) {
+            store.sessions[curIdx] = { ...store.sessions[curIdx], titleGenerating: false }
           }
         }
       }
