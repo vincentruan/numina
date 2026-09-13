@@ -565,7 +565,7 @@ const reportAge = computed(() => {
 type HubStatType = 'suggestions' | 'alerts' | 'completeness'
 
 const activePopover = ref<HubStatType | null>(null)
-const popupPosition = ref({ left: 0, bottom: 0, width: 0 })
+const popupPosition = ref({ left: 0, bottom: 0, width: 0, maxHeight: 0 })
 
 const suggestionCount = computed(() => {
   const r = currentReport.value
@@ -731,6 +731,7 @@ const popupStyle = computed(() => ({
   left: `${popupPosition.value.left}px`,
   width: `${popupPosition.value.width}px`,
   bottom: `${popupPosition.value.bottom}px`,
+  maxHeight: `${popupPosition.value.maxHeight}px`,
 }))
 
 function openStatPopover(type: HubStatType, event: MouseEvent) {
@@ -741,19 +742,20 @@ function openStatPopover(type: HubStatType, event: MouseEvent) {
   const statsRow = (event.currentTarget as HTMLElement).closest('.hub-stats')
   if (statsRow) {
     const rowRect = statsRow.getBoundingClientRect()
-    // Use visualViewport for PWA standalone compatibility — window.innerHeight
-    // returns layout viewport (includes status bar area), while getBoundingClientRect
-    // is relative to visual viewport. Mismatch causes popup to overflow screen top.
     const vpH = window.visualViewport?.height ?? window.innerHeight
     const popupW = Math.min(rowRect.width * 0.88, 360)
     const left = Math.max(
       8,
       Math.min(rowRect.left + (rowRect.width - popupW) / 2, window.innerWidth - popupW - 8),
     )
+    // Constrain popup height to available space above the stats row to prevent
+    // overflow beyond the viewport top on mobile H5/PWA.
+    const availableHeight = Math.max(rowRect.top - 4, 120)
     popupPosition.value = {
       left,
       width: popupW,
       bottom: vpH - rowRect.top + 4,
+      maxHeight: availableHeight,
     }
   }
   activePopover.value = type
@@ -1165,6 +1167,8 @@ defineExpose({
 .stat-popover-content {
   padding: 16px 16px 12px;
   box-sizing: border-box;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .stat-popover-header {
