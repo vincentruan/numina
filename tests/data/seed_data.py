@@ -135,6 +135,8 @@ def _sync_seed_credentials(db) -> None:
             continue
         child.password_hash = _hash(password)
         child.pin_hash = _hash(pin)
+        child.second_factor_enabled = True
+        child.second_factor_type = 'emoji_pin'
         updated += 1
 
     db.flush()

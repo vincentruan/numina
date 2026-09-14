@@ -168,10 +168,14 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
         db, display_name="小宝", family_id=fam.id, avatar_color="#FF6B6B",
         username="xiaobao", pin="🐱🐶🌟🌈",
     )
+    child1.second_factor_enabled = True
+    child1.second_factor_type = "emoji_pin"
     child2, _ = UserFactory.get_or_create_child(
         db, display_name="大宝", family_id=fam.id, avatar_color="#4ADE80",
         username="dabao", pin="🐱🐶🌟🌈",
     )
+    child2.second_factor_enabled = True
+    child2.second_factor_type = "emoji_pin"
 
     # 任务模板
     chores = [
