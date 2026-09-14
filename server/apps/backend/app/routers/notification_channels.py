@@ -152,9 +152,9 @@ def update_channel(
                         id=next_id(), channel_id=channel.id, reminder_type=rtype
                     )
                 )
-    if getattr(req, "digest_mode", None) is not None:
+    if req.digest_mode is not None:
         channel.digest_mode = req.digest_mode
-    if getattr(req, "digest_time", None) is not None:
+    if req.digest_time is not None:
         channel.digest_time = req.digest_time
     db.commit()
     db.refresh(channel)
