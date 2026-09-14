@@ -1289,6 +1289,32 @@ def internal_task_complete(
     # Mark as completed (idempotent)
     AITaskService.complete_task(int(task_id), db)
 
+    # Notification: AI task completion
+    try:
+        from apps.backend.app.models.ai_chat_session import AIChatSession
+        from apps.backend.app.services.notification.dispatcher import (
+            notify_ai_task_complete,
+        )
+
+        task_type = task.skill_id or task.capability or "unknown"
+        task_title = task.progress.get("result_summary") if task.progress else None
+        if not task_title:
+            # Fall back to session title when available
+            if task.session_id:
+                session = (
+                    db.query(AIChatSession)
+                    .filter(AIChatSession.id == task.session_id)
+                    .first()
+                )
+                task_title = (session and (session.title or session.original_title)) or task_type
+        else:
+            task_title = task_title[:100]  # truncate to avoid oversized payload
+
+        if task_title:
+            notify_ai_task_complete(db, int(family_id), task_type, task_title)
+    except Exception:
+        pass  # notification failure must never block task completion
+
     return {"ok": True, "task_id": task_id, "status": "completed"}
 
 

@@ -126,7 +126,19 @@ def realize_wish(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    return svc.realize_child_wish(db, user, wish_id, req)
+    result = svc.realize_child_wish(db, user, wish_id, req)
+
+    # Notification: wish redeemed
+    try:
+        from apps.backend.app.services.notification.dispatcher import (
+            notify_wish_redeemed,
+        )
+
+        notify_wish_redeemed(db, user.family_id, result.name, result.child_display_name)
+    except Exception:
+        pass  # notification failure must never block wish realization
+
+    return result
 
 
 @router.post("/family/child-wishes/{wish_id}/defer", response_model=ParentWishResponse)
