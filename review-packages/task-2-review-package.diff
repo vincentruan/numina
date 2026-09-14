@@ -1,0 +1,470 @@
+diff --git a/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py b/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py
+new file mode 100644
+index 00000000..56c024ba
+--- /dev/null
++++ b/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py
+@@ -0,0 +1,40 @@
++"""add_notification_enhancements
++
++Revision ID: 75e411962098
++Revises: a7b8c9d0e1f2
++Create Date: 2026-09-14 22:38:18.261048
++
++"""
++from typing import Sequence, Union
++
++from alembic import op
++import sqlalchemy as sa
++from packages.db.session import UTCDateTime
++
++
++# revision identifiers, used by Alembic.
++revision: str = '75e411962098'
++down_revision: Union[str, None] = 'a7b8c9d0e1f2'
++branch_labels: Union[str, Sequence[str], None] = None
++depends_on: Union[str, Sequence[str], None] = None
++
++
++def upgrade() -> None:
++    op.add_column(
++        'notification_channels',
++        sa.Column('digest_mode', sa.String(length=20), server_default='immediate', nullable=False),
++    )
++    op.add_column(
++        'notification_channels',
++        sa.Column('digest_time', sa.String(length=10), server_default='21:00', nullable=False),
++    )
++    op.add_column(
++        'reminders',
++        sa.Column('digest_sent_at', UTCDateTime(timezone=True), nullable=True),
++    )
++
++
++def downgrade() -> None:
++    op.drop_column('reminders', 'digest_sent_at')
++    op.drop_column('notification_channels', 'digest_time')
++    op.drop_column('notification_channels', 'digest_mode')
+diff --git a/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py b/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+index 0002d0dc..4b9b1e76 100644
+--- a/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
++++ b/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+@@ -19,10 +19,14 @@ depends_on: str | Sequence[str] | None = None
+ 
+ 
+ def upgrade() -> None:
+-    op.add_column(
+-        "storage_backends",
+-        sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
+-    )
++    conn = op.get_bind()
++    inspector = sa.inspect(conn)
++    existing_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
++    if "last_synced_at" not in existing_columns:
++        op.add_column(
++            "storage_backends",
++            sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
++        )
+ 
+ 
+ def downgrade() -> None:
+diff --git a/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py b/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+index 689f4754..ae7fa607 100644
+--- a/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
++++ b/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+@@ -19,6 +19,11 @@ from collections.abc import Sequence
+ 
+ from alembic import op
+ 
++revision: str = "a7b8c9d0e1f2"
++down_revision: str | None = "b6b918b0cb30"
++branch_labels: tuple[str, str] | None = None
++depends_on: str | None = None
++
+ 
+ def upgrade() -> None:
+     # ai_reports: cache-layer skill_id values
+diff --git a/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py b/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+index df0eebf9..f7ee9054 100644
+--- a/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
++++ b/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+@@ -179,7 +179,11 @@ def upgrade() -> None:
+         # SQLite: batch_alter_table recreates the table.
+         # SQLite stores datetimes as strings without timezone semantics,
+         # so no USING clause is needed — values are preserved as-is.
++        inspector = sa.inspect(bind)
++        existing_tables = set(inspector.get_table_names())
+         for table, column in COLUMNS:
++            if table not in existing_tables:
++                continue
+             with op.batch_alter_table(table, schema=None) as batch_op:
+                 batch_op.alter_column(
+                     column,
+diff --git a/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py b/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+index 47f42c46..bfdf4251 100644
+--- a/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
++++ b/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+@@ -16,6 +16,7 @@ Create Date: 2026-08-04
+ 
+ from collections.abc import Sequence
+ 
++import sqlalchemy as sa
+ from alembic import op
+ 
+ revision: str = "e4f5g6h7i8j9"
+@@ -25,18 +26,26 @@ depends_on: Sequence[str] | None = None
+ 
+ 
+ def upgrade() -> None:
+-    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
+-    op.create_check_constraint(
+-        "ck_ai_agents_name_format",
+-        "ai_agents",
+-        "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+-    )
++    conn = op.get_bind()
++    inspector = sa.inspect(conn)
++    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
++    if "ck_ai_agents_name_format" in existing_constraints:
++        with op.batch_alter_table("ai_agents") as batch_op:
++            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
++            batch_op.create_check_constraint(
++                "ck_ai_agents_name_format",
++                "agent_name ~ '^[a-z][a-z0-9_-]*$'",
++            )
+ 
+ 
+ def downgrade() -> None:
+-    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
+-    op.create_check_constraint(
+-        "ck_ai_agents_name_format",
+-        "ai_agents",
+-        "agent_name ~ '^[a-z][a-z0-9-]*$'",
+-    )
++    conn = op.get_bind()
++    inspector = sa.inspect(conn)
++    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
++    if "ck_ai_agents_name_format" in existing_constraints:
++        with op.batch_alter_table("ai_agents") as batch_op:
++            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
++            batch_op.create_check_constraint(
++                "ck_ai_agents_name_format",
++                "agent_name ~ '^[a-z][a-z0-9-]*$'",
++            )
+diff --git a/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py b/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+index ecd00b22..cef2986a 100644
+--- a/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
++++ b/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+@@ -24,6 +24,10 @@ depends_on: tuple[str, ...] | None = None
+ 
+ 
+ def upgrade() -> None:
++    conn = op.get_bind()
++    inspector = sa.inspect(conn)
++    sb_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
++
+     # Step 0: Make file_remote_locations.backend_id nullable so we can orphan
+     # references to legacy backends before deleting them.
+     with op.batch_alter_table("file_remote_locations") as batch_op:
+@@ -34,10 +38,11 @@ def upgrade() -> None:
+         )
+ 
+     # Step 1: Add family_id column (nullable first, so we can delete legacy rows)
+-    op.add_column(
+-        "storage_backends",
+-        sa.Column("family_id", sa.BigInteger(), nullable=True),
+-    )
++    if "family_id" not in sb_columns:
++        op.add_column(
++            "storage_backends",
++            sa.Column("family_id", sa.BigInteger(), nullable=True),
++        )
+ 
+     # Step 2: Orphan references to legacy global backends, then delete them
+     op.execute(
+@@ -47,6 +52,8 @@ def upgrade() -> None:
+     op.execute("DELETE FROM storage_backends WHERE family_id IS NULL")
+ 
+     # Step 3: Make family_id NOT NULL and add FK + index + unique constraint
++    existing_indexes = {idx["name"] for idx in inspector.get_indexes("storage_backends")}
++    existing_constraints = {c["name"] for c in inspector.get_unique_constraints("storage_backends")}
+     with op.batch_alter_table("storage_backends") as batch_op:
+         batch_op.alter_column(
+             "family_id",
+@@ -59,14 +66,17 @@ def upgrade() -> None:
+             ["family_id"],
+             ["id"],
+         )
+-        batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
+-        batch_op.create_unique_constraint(
+-            "uq_storage_backends_family_id", ["family_id"]
+-        )
++        if "ix_storage_backends_family_id" not in existing_indexes:
++            batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
++        if "uq_storage_backends_family_id" not in existing_constraints:
++            batch_op.create_unique_constraint(
++                "uq_storage_backends_family_id", ["family_id"]
++            )
+ 
+     # Step 4: Drop is_default column (semantics obsolete — one backend per family)
+-    with op.batch_alter_table("storage_backends") as batch_op:
+-        batch_op.drop_column("is_default")
++    if "is_default" in sb_columns:
++        with op.batch_alter_table("storage_backends") as batch_op:
++            batch_op.drop_column("is_default")
+ 
+ 
+ def downgrade() -> None:
+diff --git a/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py b/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+index d9bd6280..2868601c 100644
+--- a/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
++++ b/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+@@ -83,7 +83,10 @@ def upgrade() -> None:
+             )
+ 
+         # Add composite index for efficient task queries by family + skill + status
+-        if "ix_ai_tasks_family_skill_status" not in existing_indexes:
++        if (
++            "ix_ai_tasks_family_skill_status" not in existing_indexes
++            and "skill_id" in existing_columns
++        ):
+             batch_op.create_index(
+                 "ix_ai_tasks_family_skill_status",
+                 ["family_id", "skill_id", "status"],
+diff --git a/server/apps/backend/app/schemas/notification_channel.py b/server/apps/backend/app/schemas/notification_channel.py
+index b4720eda..0ca9d7a6 100644
+--- a/server/apps/backend/app/schemas/notification_channel.py
++++ b/server/apps/backend/app/schemas/notification_channel.py
+@@ -12,6 +12,8 @@ class NotificationChannelCreate(BaseModel):
+     config: dict  # 明文传输，服务层 JSON 序列化后加密存储
+     is_enabled: bool = True
+     subscriptions: list[str] = []  # reminder_type list
++    digest_mode: str = "immediate"
++    digest_time: str = "21:00"
+ 
+ 
+ class NotificationChannelUpdate(BaseModel):
+@@ -19,6 +21,8 @@ class NotificationChannelUpdate(BaseModel):
+     config: dict | None = None
+     is_enabled: bool | None = None
+     subscriptions: list[str] | None = None
++    digest_mode: str | None = None
++    digest_time: str | None = None
+ 
+ 
+ class NotificationChannelResponse(SnowflakeBase):
+@@ -29,5 +33,7 @@ class NotificationChannelResponse(SnowflakeBase):
+     is_enabled: bool
+     config: dict = {}
+     subscriptions: list[str] = []
++    digest_mode: str = "immediate"
++    digest_time: str = "21:00"
+     created_at: datetime
+     updated_at: datetime
+diff --git a/server/apps/backend/app/services/notification/registry.py b/server/apps/backend/app/services/notification/registry.py
+new file mode 100644
+index 00000000..71a00e00
+--- /dev/null
++++ b/server/apps/backend/app/services/notification/registry.py
+@@ -0,0 +1,120 @@
++"""Notification event registry.
++
++Central source of truth for all notification event types.
++Replaces the hardcoded VALID_REMINDER_TYPES set in notification_channels router.
++"""
++
++NOTIFICATION_CATEGORIES: dict[str, dict] = {
++    "asset": {
++        "label_key": "reminders.categories.asset",
++        "icon": "cube-outline",
++        "events": {
++            "large_purchase": {
++                "label_key": "reminders.types.large_purchase",
++                "default_severity": "warning",
++                "trigger": "realtime",
++            },
++            "expiring_soon": {
++                "label_key": "reminders.types.expiring_soon",
++                "default_severity": "warning",
++                "trigger": "scheduled",
++            },
++            "maturity": {
++                "label_key": "reminders.types.maturity",
++                "default_severity": "warning",
++                "trigger": "scheduled",
++            },
++        },
++    },
++    "ai_task": {
++        "label_key": "reminders.categories.ai_task",
++        "icon": "robot-outline",
++        "events": {
++            "ai_report_complete": {
++                "label_key": "reminders.types.ai_report_complete",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++            "ai_finance_coach_complete": {
++                "label_key": "reminders.types.ai_finance_coach_complete",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++            "ai_wish_advice_complete": {
++                "label_key": "reminders.types.ai_wish_advice_complete",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++            "ai_literacy_report_complete": {
++                "label_key": "reminders.types.ai_literacy_report_complete",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++        },
++    },
++    "children": {
++        "label_key": "reminders.categories.children",
++        "icon": "friends-outline",
++        "events": {
++            "chore_completed": {
++                "label_key": "reminders.types.chore_completed",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++            "treasure_redeemed": {
++                "label_key": "reminders.types.treasure_redeemed",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++        },
++    },
++    "wish": {
++        "label_key": "reminders.categories.wish",
++        "icon": "gift-outline",
++        "events": {
++            "wish_redeemed": {
++                "label_key": "reminders.types.wish_redeemed",
++                "default_severity": "info",
++                "trigger": "realtime",
++            },
++        },
++    },
++}
++
++
++def get_categorized_events() -> list[dict]:
++    """Return categorized event list for frontend rendering.
++
++    Each category includes its metadata and a list of events with:
++    - type: the reminder_type string
++    - label_key: i18n key for display
++    - severity: default severity level
++    """
++    result = []
++    for category_key, category in NOTIFICATION_CATEGORIES.items():
++        events = []
++        for event_key, event in category["events"].items():
++            events.append({
++                "type": event_key,
++                "label_key": event["label_key"],
++                "severity": event["default_severity"],
++            })
++        result.append({
++            "category": category_key,
++            "label_key": category["label_key"],
++            "icon": category["icon"],
++            "events": events,
++        })
++    return result
++
++
++def get_all_reminder_types() -> set[str]:
++    """Return flat set of all valid reminder_type values from the registry."""
++    types = set()
++    for category in NOTIFICATION_CATEGORIES.values():
++        types.update(category["events"].keys())
++    return types
++
++
++# Backward-compatible alias for the router's VALID_REMINDER_TYPES
++VALID_REMINDER_TYPES: set[str] = get_all_reminder_types()
+diff --git a/server/packages/db/models/notification_channel.py b/server/packages/db/models/notification_channel.py
+index ecb4c87a..061750f0 100644
+--- a/server/packages/db/models/notification_channel.py
++++ b/server/packages/db/models/notification_channel.py
+@@ -17,6 +17,8 @@ class NotificationChannel(Base):
+     channel_type: Mapped[str] = mapped_column(String(20), nullable=False)
+     name: Mapped[str] = mapped_column(String(100), nullable=False)
+     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
++    digest_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="immediate")
++    digest_time: Mapped[str] = mapped_column(String(10), nullable=False, server_default="21:00")
+     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+     updated_at: Mapped[datetime] = mapped_column(
+         UTCDateTime(), server_default=func.now(), onupdate=func.now()
+diff --git a/server/packages/db/models/reminder.py b/server/packages/db/models/reminder.py
+index 409bf548..ac2720d5 100644
+--- a/server/packages/db/models/reminder.py
++++ b/server/packages/db/models/reminder.py
+@@ -27,6 +27,7 @@ class Reminder(Base):
+     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+     dismissed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
++    digest_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+     updated_at: Mapped[datetime] = mapped_column(
+         UTCDateTime(), server_default=func.now(), onupdate=func.now()
+diff --git a/server/tests/backend/services/test_notification_registry.py b/server/tests/backend/services/test_notification_registry.py
+new file mode 100644
+index 00000000..0c98244d
+--- /dev/null
++++ b/server/tests/backend/services/test_notification_registry.py
+@@ -0,0 +1,51 @@
++"""Tests for notification event registry."""
++
++from apps.backend.app.services.notification.registry import (
++    NOTIFICATION_CATEGORIES,
++    get_categorized_events,
++    VALID_REMINDER_TYPES,
++)
++
++
++def test_get_categorized_events_returns_four_categories():
++    result = get_categorized_events()
++    assert len(result) == 4
++    categories = [c["category"] for c in result]
++    assert categories == ["asset", "ai_task", "children", "wish"]
++
++
++def test_get_categorized_events_has_ten_total_events():
++    result = get_categorized_events()
++    total = sum(len(c["events"]) for c in result)
++    assert total == 10
++
++
++def test_get_categorized_events_structure():
++    result = get_categorized_events()
++    asset_cat = result[0]
++    assert asset_cat["category"] == "asset"
++    assert "label_key" in asset_cat
++    assert "icon" in asset_cat
++    assert len(asset_cat["events"]) == 3
++    first_event = asset_cat["events"][0]
++    assert "type" in first_event
++    assert "label_key" in first_event
++    assert "severity" in first_event
++
++
++def test_valid_reminder_types_matches_registry():
++    """VALID_REMINDER_TYPES should be derived from the registry, not hardcoded."""
++    registry_types = set()
++    for cat in NOTIFICATION_CATEGORIES.values():
++        registry_types.update(cat["events"].keys())
++    assert VALID_REMINDER_TYPES == registry_types
++
++
++def test_each_event_has_required_fields():
++    for cat in NOTIFICATION_CATEGORIES.values():
++        for event_key, event in cat["events"].items():
++            assert "label_key" in event, f"Event {event_key} missing label_key"
++            assert "default_severity" in event, f"Event {event_key} missing default_severity"
++            assert "trigger" in event, f"Event {event_key} missing trigger"
++            assert event["trigger"] in ("realtime", "scheduled"), f"Event {event_key} invalid trigger"
++            assert event["default_severity"] in ("info", "warning", "critical")

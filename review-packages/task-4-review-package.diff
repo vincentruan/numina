@@ -1,0 +1,164 @@
+diff --git a/server/apps/backend/app/routers/notification_channels.py b/server/apps/backend/app/routers/notification_channels.py
+index 214115d7..05d35bca 100644
+--- a/server/apps/backend/app/routers/notification_channels.py
++++ b/server/apps/backend/app/routers/notification_channels.py
+@@ -13,6 +13,10 @@ from apps.backend.app.schemas.notification_channel import (
+     NotificationChannelResponse,
+     NotificationChannelUpdate,
+ )
++from apps.backend.app.services.notification.registry import (
++    VALID_REMINDER_TYPES,
++    get_categorized_events,
++)
+ from apps.backend.app.services.storage.config_crypto import (
+     decrypt_config,
+     encrypt_config,
+@@ -25,7 +29,6 @@ from packages.db.models.notification_channel_config import (
+ router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
+ 
+ VALID_CHANNEL_TYPES = {"telegram", "email", "feishu", "webpush"}
+-VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
+ 
+ 
+ def _to_response(
+@@ -54,11 +57,19 @@ def _to_response(
+         is_enabled=channel.is_enabled,
+         config=config,
+         subscriptions=[s.reminder_type for s in subs],
++        digest_mode=channel.digest_mode,
++        digest_time=channel.digest_time,
+         created_at=channel.created_at,
+         updated_at=channel.updated_at,
+     )
+ 
+ 
++@router.get("/events")
++def get_events(user: User = Depends(require_adult)):
++    """Return categorized event types for frontend event selector."""
++    return get_categorized_events()
++
++
+ @router.get("", response_model=list[NotificationChannelResponse])
+ def list_channels(db: Session = Depends(get_db), user: User = Depends(require_adult)):
+     channels = db.query(NotificationChannel).filter_by(family_id=user.family_id).all()
+@@ -79,6 +90,8 @@ def create_channel(
+         channel_type=req.channel_type,
+         name=req.name,
+         is_enabled=req.is_enabled if req.is_enabled is not None else True,
++        digest_mode=getattr(req, "digest_mode", "immediate"),
++        digest_time=getattr(req, "digest_time", "21:00"),
+     )
+     db.add(channel)
+     db.flush()
+@@ -139,6 +152,10 @@ def update_channel(
+                         id=next_id(), channel_id=channel.id, reminder_type=rtype
+                     )
+                 )
++    if getattr(req, "digest_mode", None) is not None:
++        channel.digest_mode = req.digest_mode
++    if getattr(req, "digest_time", None) is not None:
++        channel.digest_time = req.digest_time
+     db.commit()
+     db.refresh(channel)
+     return _to_response(channel, db)
+diff --git a/server/tests/backend/routers/test_notification_channels_events.py b/server/tests/backend/routers/test_notification_channels_events.py
+new file mode 100644
+index 00000000..a8f5ac0f
+--- /dev/null
++++ b/server/tests/backend/routers/test_notification_channels_events.py
+@@ -0,0 +1,95 @@
++"""Tests for GET /notification-channels/events endpoint.
++
++Verifies the endpoint returns the registry-derived categorized event list
++and that unauthenticated callers are rejected.
++"""
++
++from fastapi.testclient import TestClient
++
++
++def test_get_events_returns_four_categories(client: TestClient, auth_headers):
++    resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
++    assert resp.status_code == 200
++    data = resp.json()["data"]
++    assert len(data) == 4
++    categories = [c["category"] for c in data]
++    assert categories == ["asset", "ai_task", "children", "wish"]
++
++
++def test_get_events_asset_category_has_three_events(client: TestClient, auth_headers):
++    resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
++    asset = next(c for c in resp.json()["data"] if c["category"] == "asset")
++    assert len(asset["events"]) == 3
++    types = [e["type"] for e in asset["events"]]
++    assert "large_purchase" in types
++    assert "expiring_soon" in types
++    assert "maturity" in types
++
++
++def test_get_events_requires_auth(client: TestClient):
++    resp = client.get("/api/v1/notification-channels/events")
++    assert resp.status_code in (401, 403)
++
++
++def test_create_channel_persists_digest_fields(client: TestClient, auth_headers):
++    resp = client.post(
++        "/api/v1/notification-channels",
++        headers=auth_headers,
++        json={
++            "channel_type": "telegram",
++            "name": "Digest",
++            "config": {"bot_token": "t", "chat_id": "1"},
++            "is_enabled": True,
++            "subscriptions": ["large_purchase"],
++            "digest_mode": "daily",
++            "digest_time": "08:30",
++        },
++    )
++    assert resp.status_code == 201
++    data = resp.json()["data"]
++    assert data["digest_mode"] == "daily"
++    assert data["digest_time"] == "08:30"
++
++
++def test_create_channel_digest_defaults(client: TestClient, auth_headers):
++    resp = client.post(
++        "/api/v1/notification-channels",
++        headers=auth_headers,
++        json={
++            "channel_type": "telegram",
++            "name": "NoDigest",
++            "config": {"bot_token": "t", "chat_id": "1"},
++            "is_enabled": True,
++            "subscriptions": [],
++        },
++    )
++    assert resp.status_code == 201
++    data = resp.json()["data"]
++    assert data["digest_mode"] == "immediate"
++    assert data["digest_time"] == "21:00"
++
++
++def test_create_channel_accepts_registry_event_types(client: TestClient, auth_headers):
++    """Registry-derived VALID_REMINDER_TYPES now accepts ai/children/wish events."""
++    resp = client.post(
++        "/api/v1/notification-channels",
++        headers=auth_headers,
++        json={
++            "channel_type": "telegram",
++            "name": "Multi",
++            "config": {"bot_token": "t", "chat_id": "1"},
++            "is_enabled": True,
++            "subscriptions": [
++                "ai_report_complete",
++                "chore_completed",
++                "wish_redeemed",
++            ],
++        },
++    )
++    assert resp.status_code == 201
++    data = resp.json()["data"]
++    assert set(data["subscriptions"]) == {
++        "ai_report_complete",
++        "chore_completed",
++        "wish_redeemed",
++    }

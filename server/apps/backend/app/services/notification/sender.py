@@ -16,6 +16,33 @@ logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
+def _format_mention(text: str, channel_type: str, mention_config: dict | None) -> str:
+    """Prepend @mention markup to message text if mention_config is set.
+
+    Telegram: uses HTML <a href="tg://user?id=...">@username</a> format.
+    Feishu: uses <at user_id="open_id">name</at> format.
+    Other channel types: returns text unchanged.
+    """
+    if not mention_config:
+        return text
+
+    if channel_type == "telegram":
+        user_id = mention_config.get("user_id")
+        username = mention_config.get("username", "user")
+        if user_id:
+            mention = f'<a href="tg://user?id={user_id}">@{username}</a>\n\n'
+            return mention + text
+
+    elif channel_type == "feishu":
+        open_id = mention_config.get("open_id")
+        name = mention_config.get("name", "user")
+        if open_id:
+            mention = f'<at user_id="{open_id}">{name}</at>\n\n'
+            return mention + text
+
+    return text
+
+
 def render_template(reminder_type: str, channel_type: str, variables: dict) -> str:
     """加载模板并用 variables 渲染，返回渲染后的文本。
 
