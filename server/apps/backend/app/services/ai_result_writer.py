@@ -85,7 +85,7 @@ def write_skill_results(
         Number of records written
     """
     writers: dict[str, Callable[[int, Any, Session], int]] = {
-        "report": write_report_results,
+        "asset-report": write_report_results,
     }
 
     writer = writers.get(skill_id)

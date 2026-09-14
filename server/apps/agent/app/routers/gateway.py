@@ -258,7 +258,7 @@ async def trigger_asset_report_run(
     U4 step 5: the backend report trigger creates a stream_run with
     ``app="asset-report"`` via this X-Agent-Token-authenticated endpoint,
     bypassing R1's frontend 409 gate (internal=True). The worker's
-    ``_run_asset_report_pipeline`` then drives the 3-step pipeline and emits
+    ``_run_asset_report_agent`` then drives the 3-step pipeline and emits
     ``report.step2_json`` custom events; this endpoint streams them back as SSE
     for the backend to forward to the frontend.
     """

@@ -57,7 +57,7 @@ Numina 通过 adapter 层 (`services/deerflow_adapter/`) 集成这些能力，�
 | App | Runner | Skill | 用途 |
 |-----|--------|-------|------|
 | `numina` | `_run_numina_agent` | chat / chat-search | 实时对话 |
-| `asset-report` | `_run_asset_report_pipeline` | asset-report | 3 步资产报告 |
+| `asset-report` | `_run_asset_report_agent` | asset-report | 3 步资产报告 |
 | `import-parse` | `_run_import_parse_agent` | import-parse | PDF/账单解析 |
 | `finance-coach` | `_run_finance_coach_agent` | finance-coach | 理财建议 |
 | `wish-advice` | `_run_wish_advice_agent` | wish-advice | 愿望储蓄建议 |

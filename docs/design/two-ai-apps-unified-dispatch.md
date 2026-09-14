@@ -118,7 +118,7 @@ async def run_agent(bridge, run_manager, record, family_id, user_id, thread_id,
     if app == "numina":
         await _run_numina_agent(...)            # 现有 chat/chat-search + Path C 工具过滤
     elif app == "asset-report":
-        await _run_asset_report_pipeline(...)   # 三步流水线
+        await _run_asset_report_agent(...)   # 三步流水线
 ```
 
 ### 3.3 数鸣智能体（numina）
@@ -131,7 +131,7 @@ async def run_agent(bridge, run_manager, record, family_id, user_id, thread_id,
 > **架构（KTD-7 修订，2026-07-17 二次勘察确认）**：报告三步在**一个 `stream_run` agent run 内**完成，不再 backend 跨 HTTP 编排。worker `app="asset-report"` 分派 → 单次 `adapter.typed_stream_dispatch(skill_name="asset-report", ...)`，prompt（`skills/builtin/public/asset-report/SKILL.md`）引导 LLM 依次调 `write_file`（步骤1 落 markdown）→ `read_file` + 输出 JSON（步骤2）→ worker 收尾 json-repair 落库（步骤3）。步骤2 的 JSON 经 LangGraph `custom` 事件 `report.step2_json` 透传前端。backend `proxy_report_events` 两阶段编排废弃。
 
 ```python
-async def _run_asset_report_pipeline(...):
+async def _run_asset_report_agent(...):
     # 单 agent run，三步全在 prompt 引导下由 LLM 用工具完成
     async for sse_type, data in adapter.typed_stream_dispatch(
         skill_name="asset-report", thread=..., input=..., record=record, ...
@@ -274,7 +274,7 @@ async def _run_asset_report_pipeline(...):
 
 ### 阶段 3: AI 资产报告流水线 + 页面三步竖线轴 + 8h 缓存
 - [ ] 新建 `asset-report` skill 目录（`skills/builtin/public/asset-report/SKILL.md`），合并 `report`/`report_generate`/`report_structured` 三 SKILL.md 为单一 prompt（步骤1 markdown 生成 + `write_file` 落盘 + 步骤2 JSON 输出指示），`allowed-tools` 含 family-data MCP + `write_file`/`read_file`。归类 = 系统内置固定流程（KTD-8）：加入 `RESERVED_NAMES`，不进 `BUILTIN_CAPABILITIES`。再删 3 个 report skill 目录。
-- [ ] `worker.py` 新增 `_run_asset_report_pipeline`（三步，决策2+3）。
+- [ ] `worker.py` 新增 `_run_asset_report_agent`（三步，决策2+3）。
 - [ ] backend `ai_report.py`: `proxy_report_events` 改走统一 `stream_run`（`app="asset-report"`），不再调 orchestrator（**此步找回触发入口 1**）。
 - [ ] **保留**现有并发控制（`get_running_task` + `get_any_running_task` 排队），阶段 3 迁统一 `stream_run` 后仍生效。
 - [ ] **新增 8h 缓存（语义 b）**: `trigger_generate_events` 入口查最新 `AIReport`，8h 内且无 `force` → 返回 `{"status":"cached",...}` JSON（不启动流）；`?force=true` 或超 8h → 现有流程。缓存检查在并发检查之前；强制刷新仍受单家庭单任务约束。**无需 Alembic migration**（用 `generated_at`+`timedelta(hours=8)` 运行时计算）。

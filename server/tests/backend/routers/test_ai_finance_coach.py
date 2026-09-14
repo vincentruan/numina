@@ -35,7 +35,7 @@ def _make_fake_task():
     class _FakeTask:
         id = 12345
         family_id = 1
-        skill_id = "coach"
+        skill_id = "finance-coach"
         status = "running"
         session_id = "test-session-123"
         started_at = datetime.now(UTC)
@@ -50,7 +50,7 @@ def test_generate_returns_cached_when_fresh(client, auth_headers, db_session):
 
     family_id = _enable_ai(db_session, auth_headers, client)
     upsert_skill_result(
-        db_session, family_id, "finance_coach",
+        db_session, family_id, "finance-coach",
         {"suggestions": [{"id": "s1", "severity": "high", "title": "x", "action": "y",
                           "target_type": "liability", "target_id": "1", "cta_label": "去"}]},
     )
@@ -70,7 +70,7 @@ def test_generate_force_bypasses_cache(client, auth_headers, db_session):
     from apps.backend.app.services.finance_coach_cache import upsert_skill_result
 
     family_id = _enable_ai(db_session, auth_headers, client)
-    upsert_skill_result(db_session, family_id, "finance_coach", {"suggestions": []})
+    upsert_skill_result(db_session, family_id, "finance-coach", {"suggestions": []})
     db_session.commit()
 
     async def _fake_stream(*args, **kwargs):

@@ -46,7 +46,7 @@ async def run_agent(
     try:
         app = record.metadata.get("app", "numina") if record.metadata else "numina"
         if app == "asset-report":
-            await _run_asset_report_pipeline(...); return
+            await _run_asset_report_agent(...); return
         if app == "import-parse":
             await _run_import_parse_agent(...); return
         if app == "finance-coach":
@@ -107,7 +107,7 @@ Around these three pillars, the refactor made the supporting moves:
 
 - **U1** renamed `stream_run_v2` to `stream_run` in `runs_stream.py` (route path `/{thread_id}/runs/stream` unchanged — a pure rename so the wire contract stays stable while the internal symbol matches the dispatch vocabulary).
 - **U3** merged the four `family-*` skills (`family-asset-checkup`, `family-finance-insight-planner`, `family-liability-review`, `fixed-asset-followup`) into one `server/apps/agent/skills/builtin/public/chat/SKILL.md` "numina SOUL" skill and removed the orphaned agent profiles + `system_ids` via alembic migration `c3a1f5e7d901_remove_family_skill_orphans.py`.
-- **U4** built the `asset-report` 3-step pipeline (`_run_asset_report_pipeline`) on top of the F2 fixes; unified all agent file paths to the DeerFlow layout (family_id as effective user) with a `_deerflow_default_workspace_md` dual-root search helper (the LLM sometimes emits a host path; the worker translates to the container path); persisted `markdown_file_path` to `ai_reports`; added cache re-validation on entity change.
+- **U4** built the `asset-report` 3-step pipeline (`_run_asset_report_agent`) on top of the F2 fixes; unified all agent file paths to the DeerFlow layout (family_id as effective user) with a `_deerflow_default_workspace_md` dual-root search helper (the LLM sometimes emits a host path; the worker translates to the container path); persisted `markdown_file_path` to `ai_reports`; added cache re-validation on entity change.
 - **U6** migrated `suggest` (`server/apps/agent/services/asset_suggest.py`) to a lightweight single-LLM call (`_create_lightweight_llm` + `ainvoke`) and added XML-delimiter injection defense so the delimiter cannot appear in model output.
 - **U8** deleted the `Orchestrator` class + `dispatch` method + singleton entirely — `server/apps/agent/services/orchestrator.py` now retains only the module-level `_select_model` / `_fire_and_forget` helpers that `agent_dispatch.py` still imports, with a docstring noting the deletion.
 - `RESERVED_NAMES` in `server/apps/backend/app/routers/ai_skills.py:50` settled to `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "dashboard-narrative", "literacy-weekly-report"]` — these are the system fixed-flow / reserved ids that owners cannot shadow with a custom skill.

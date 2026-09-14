@@ -32,7 +32,7 @@ class TestGetZombieRunningTasks:
         # Create a zombie (running, no run_id)
         zombie = AITask(
             family_id=family_id,
-            skill_id="coach",
+            skill_id="finance-coach",
             status="running",
             run_id=None,
             started_at=datetime.now(UTC) - timedelta(seconds=120),
@@ -52,7 +52,7 @@ class TestGetZombieRunningTasks:
         # Create a completed task (not running)
         completed = AITask(
             family_id=family_id,
-            skill_id="report",
+            skill_id="asset-report",
             status="completed",
             run_id=None,
             started_at=datetime.now(UTC) - timedelta(seconds=120),
@@ -69,7 +69,7 @@ class TestGetZombieRunningTasks:
         # Recent zombie (within 60s grace)
         recent = AITask(
             family_id=family_id,
-            skill_id="coach",
+            skill_id="finance-coach",
             status="running",
             run_id=None,
             started_at=datetime.now(UTC) - timedelta(seconds=30),
@@ -102,7 +102,7 @@ class TestGetZombieRunningTasks:
         """Zombies from other families are not returned."""
         other_family_zombie = AITask(
             family_id=int(family_id) + 99999,
-            skill_id="coach",
+            skill_id="finance-coach",
             status="running",
             run_id=None,
             started_at=datetime.now(UTC) - timedelta(seconds=120),
@@ -126,7 +126,7 @@ class TestTryPromoteNextZombieCancellation:
         # Create a zombie
         zombie = AITask(
             family_id=family_id,
-            skill_id="coach",
+            skill_id="finance-coach",
             status="running",
             run_id=None,
             started_at=datetime.now(UTC) - timedelta(seconds=120),
@@ -157,7 +157,7 @@ class TestTryPromoteNextZombieCancellation:
         """Zombies are cancelled even when no queued task exists."""
         zombie = AITask(
             family_id=family_id,
-            skill_id="coach",
+            skill_id="finance-coach",
             status="running",
             run_id=None,
             started_at=datetime.now(UTC) - timedelta(seconds=120),

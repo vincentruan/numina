@@ -216,7 +216,7 @@ def _copy_asset_report_markdown(
 
     if declared_filename is None:
         logger.warning(
-            "[_run_asset_report_pipeline] no write_file path or WRITE_FILE "
+            "[_run_asset_report_agent] no write_file path or WRITE_FILE "
             "declaration recovered, markdown_file_path not persisted run=%s "
             "(write_file_paths=%s)",
             run_id,
@@ -239,7 +239,7 @@ def _copy_asset_report_markdown(
     )
     if source_path is None or not source_path.is_file():
         logger.warning(
-            "[_run_asset_report_pipeline] sandbox markdown not found at %s "
+            "[_run_asset_report_agent] sandbox markdown not found at %s "
             "(DeerFlow layout), markdown_file_path not persisted run=%s "
             "(declared_filename=%s)",
             source_path,
@@ -260,7 +260,7 @@ def _copy_asset_report_markdown(
         target_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source_path, target_path)
         logger.info(
-            "[_run_asset_report_pipeline] persisted markdown %s -> %s run=%s",
+            "[_run_asset_report_agent] persisted markdown %s -> %s run=%s",
             source_path,
             target_path,
             run_id,
@@ -268,7 +268,7 @@ def _copy_asset_report_markdown(
         return persisted_filename
     except Exception as exc:
         logger.warning(
-            "[_run_asset_report_pipeline] copy markdown failed run=%s err=%s",
+            "[_run_asset_report_agent] copy markdown failed run=%s err=%s",
             run_id,
             type(exc).__name__,
         )
@@ -298,7 +298,7 @@ async def run_agent(
 
     Apps:
       - ``numina``        → ``_run_numina_agent`` (the /ai/chat path, live).
-      - ``asset-report``  → ``_run_asset_report_pipeline`` (U4 3-step pipeline).
+      - ``asset-report``  → ``_run_asset_report_agent`` (U4 3-step pipeline).
       - ``import-parse``  → ``_run_import_parse_agent`` (U8 single-run parse).
       - ``finance-coach`` → ``_run_finance_coach_agent`` (Plan A single-run advice).
       - ``wish-advice``   → ``_run_wish_advice_agent`` (Plan B T7 single-run advice).
@@ -334,7 +334,7 @@ async def run_agent(
     try:
         app = record.metadata.get("app", "numina") if record.metadata else "numina"
         if app == "asset-report":
-            await _run_asset_report_pipeline(
+            await _run_asset_report_agent(
                 bridge=bridge,
                 run_manager=run_manager,
                 record=record,
@@ -520,7 +520,7 @@ def _persist_session_status(
         )
 
 
-async def _run_asset_report_pipeline(
+async def _run_asset_report_agent(
     *,
     bridge: StreamBridge,
     run_manager: RunManager,
@@ -601,7 +601,7 @@ async def _run_asset_report_pipeline(
             user_message = f"{lang_instruction}\n\n{user_message}"
 
         logger.info(
-            "[_run_asset_report_pipeline] language=%s trigger_preview=%s",
+            "[_run_asset_report_agent] language=%s trigger_preview=%s",
             user_language,
             user_message[:80],
         )
@@ -660,7 +660,7 @@ async def _run_asset_report_pipeline(
                         "max_attempts": 3,
                     },
                 ),
-                app_name="_run_asset_report_pipeline",
+                app_name="_run_asset_report_agent",
                 budget_seconds=240,
             )
             retry_count = repair_count
@@ -677,7 +677,7 @@ async def _run_asset_report_pipeline(
                 # because the LLM couldn't fix the JSON in-place, so we ask
                 # a fresh LLM call to extract JSON from scratch.
                 logger.info(
-                    "[_run_asset_report_pipeline] repair loop exhausted, "
+                    "[_run_asset_report_agent] repair loop exhausted, "
                     "attempting final LLM extraction fallback run=%s",
                     p.run_id,
                 )
@@ -695,7 +695,7 @@ async def _run_asset_report_pipeline(
                     fallback_errors = validate_report_json(fallback_payload)
                     if not fallback_errors:
                         logger.info(
-                            "[_run_asset_report_pipeline] final LLM extraction "
+                            "[_run_asset_report_agent] final LLM extraction "
                             "succeeded run=%s",
                             p.run_id,
                         )
@@ -703,7 +703,7 @@ async def _run_asset_report_pipeline(
                         validation_errors = []
                     else:
                         logger.warning(
-                            "[_run_asset_report_pipeline] final LLM extraction "
+                            "[_run_asset_report_agent] final LLM extraction "
                             "also invalid run=%s errors=%s",
                             p.run_id,
                             fallback_errors[:3],
@@ -712,7 +712,7 @@ async def _run_asset_report_pipeline(
             if validation_errors:
                 # Still invalid after all fallbacks — fail the run.
                 logger.error(
-                    "[_run_asset_report_pipeline] report JSON validation failed "
+                    "[_run_asset_report_agent] report JSON validation failed "
                     "after %d retries + final fallback run=%s errors=%s",
                     retry_count,
                     p.run_id,
@@ -753,13 +753,13 @@ async def _run_asset_report_pipeline(
                         )
                     except Exception:
                         logger.warning(
-                            "[_run_asset_report_pipeline] fallback persist "
+                            "[_run_asset_report_agent] fallback persist "
                             "failed run=%s",
                             p.run_id,
                         )
             elif step2_payload is not None:
                 logger.info(
-                    "[_run_asset_report_pipeline] Extracted report JSON: "
+                    "[_run_asset_report_agent] Extracted report JSON: "
                     "overall_score=%s indicators_count=%d ai_text_length=%d",
                     step2_payload.get("overall_score"),
                     len(step2_payload.get("indicators", [])),
@@ -801,7 +801,7 @@ async def _run_asset_report_pipeline(
                     # ai_reports has no row. Run status is set too so retries /
                     # /runs polling see failure.
                     logger.warning(
-                        "[_run_asset_report_pipeline] persist_report_result failed run=%s err=%s",
+                        "[_run_asset_report_agent] persist_report_result failed run=%s err=%s",
                         p.run_id,
                         type(persist_exc).__name__,
                     )

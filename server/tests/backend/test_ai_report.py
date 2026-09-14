@@ -184,7 +184,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
     _ = resp.content  # Force full response consumption
 
     db.expire_all()
-    task = db.query(AITask).filter_by(family_id=family_id, skill_id="report").first()
+    task = db.query(AITask).filter_by(family_id=family_id, skill_id="asset-report").first()
     assert task is not None
     assert task.status == "completed"
 
@@ -238,7 +238,7 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
 
     task = AITask(
         family_id=family_id,
-        skill_id="report",
+        skill_id="asset-report",
         status="running",
         session_id=session.id,
         started_at=datetime.now(UTC),
@@ -277,7 +277,7 @@ def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
 
     task = AITask(
         family_id=family_id,
-        skill_id="report",
+        skill_id="asset-report",
         status="running",
         session_id=session.id,
         started_at=datetime.now(UTC),
@@ -303,7 +303,7 @@ def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
     # A new task should exist
     new_task = db.query(AITask).filter(
         AITask.family_id == family_id,
-        AITask.skill_id == "report",
+        AITask.skill_id == "asset-report",
         AITask.id != zombie_task_id,
     ).first()
     assert new_task is not None
@@ -329,7 +329,7 @@ def test_generate_report_timeout_cancels_stale_task(client, auth_headers, db):
     # report timeout but within the 30-min default).
     task = AITask(
         family_id=family_id,
-        skill_id="report",
+        skill_id="asset-report",
         status="running",
         session_id=session.id,
         started_at=datetime.now(UTC) - timedelta(minutes=15),

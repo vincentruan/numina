@@ -53,7 +53,7 @@ JSON_FENCE_PATTERN = re.compile(r"```json\s*\n(.*?)\n\s*```", re.DOTALL)
 # U7: 5 外扩 trigger skill (alerts/disposal/spending_leak/allocation/liability) 全栈删除，
 # 仅保留 report schema；能力回归 numina SOUL（chat/SKILL.md 结构化分析框架）。
 SKILL_SCHEMAS = {
-    "report": {
+    "asset-report": {
         "type": "object",
         "required": ["overall_score", "indicators"],
         "properties": {
@@ -169,7 +169,7 @@ def _unwrap_agent_envelope(
 
     Args:
         data: Parsed JSON data (may be wrapped or direct)
-        skill_id: The skill name (e.g., "report")
+        skill_id: The skill name (e.g., "asset-report")
 
     Returns:
         Unwrapped data dict if envelope detected and inner structure valid.
@@ -180,8 +180,8 @@ def _unwrap_agent_envelope(
     if isinstance(data, dict) and "code" in data and "data" in data:
         inner = data.get("data")
         if isinstance(inner, dict):
-            # For report skill, data may be nested as {"report": {...}}
-            if skill_id == "report" and "report" in inner:
+            # For asset-report skill, data may be nested as {"report": {...}}
+            if skill_id == "asset-report" and "report" in inner:
                 report_data = inner.get("report")
                 if isinstance(report_data, dict):
                     logger.info(
@@ -355,7 +355,7 @@ def _build_extraction_prompt(
     schema_str = json.dumps(schema, ensure_ascii=False, indent=2)
 
     # Truncate long text to avoid token limits
-    if skill_id == "report" and len(answer_text) > 3000:
+    if skill_id == "asset-report" and len(answer_text) > 3000:
         truncated = answer_text[:1500] + "\n...\n" + answer_text[-2000:]
     else:
         truncated = answer_text[:3000]
@@ -368,8 +368,8 @@ def _build_extraction_prompt(
         f"仅输出 JSON，不输出任何解释。"
     )
 
-    # Enhanced prompt for report skill - handle markdown tables
-    if skill_id == "report":
+    # Enhanced prompt for asset-report skill - handle markdown tables
+    if skill_id == "asset-report":
         retry_hint = ""
         if retry_count > 0:
             retry_hint = f"\n\n【注意：这是第{retry_count + 1}次尝试，前次提取失败。如果之前因为表格格式失败，这次必须将表格转换为列表格式。】"
@@ -450,8 +450,8 @@ def _build_extraction_prompt_with_feedback(
         )
 
     # Insert failure history before the final "仅输出 JSON" instruction
-    if skill_id == "report":
-        # For report, insert before the retry hint section
+    if skill_id == "asset-report":
+        # For asset-report, insert before the retry hint section
         if "【注意：这是第" in base_prompt:
             # Insert after retry hint
             parts = base_prompt.split("仅输出 JSON。")
@@ -524,10 +524,10 @@ async def _llm_fallback_extract(
         logger.warning(f"[{skill_id}] LLM fallback: could not decrypt API key")
         return None, "api_key_error"
 
-    # Use higher retry count for report skill (Phase 2 retry loop)
+    # Use higher retry count for asset-report skill (Phase 2 retry loop)
     max_retries = (
         LLM_FALLBACK_MAX_RETRIES_REPORT
-        if skill_id == "report"
+        if skill_id == "asset-report"
         else LLM_FALLBACK_MAX_RETRIES
     )
 
@@ -605,11 +605,11 @@ async def _llm_fallback_extract(
         unwrapped_data = (
             _unwrap_agent_envelope(data, skill_id) if isinstance(data, dict) else data
         )
-        # Additional validation for report: check narrative fields don't contain markdown tables
+        # Additional validation for asset-report: check narrative fields don't contain markdown tables
         # Apply to unwrapped data if envelope was present
         data_to_check = unwrapped_data if isinstance(unwrapped_data, dict) else data
         if (
-            skill_id == "report"
+            skill_id == "asset-report"
             and isinstance(data_to_check, dict)
             and _contains_markdown_table(data_to_check)
         ):

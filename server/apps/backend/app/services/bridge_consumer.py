@@ -424,7 +424,7 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
         return True
     if not task:
         return False
-    if task.skill_id in ("report", "coach"):
+    if task.skill_id in ("asset-report", "finance-coach"):
         from datetime import UTC, datetime, timedelta
 
         from apps.backend.app.models.ai_report import AIReport
@@ -434,9 +434,7 @@ def _verify_task_result(task_id: str, family_id: int, db: Any) -> bool:
         # aware datetime for comparison.
         cutoff = datetime.now(UTC) - timedelta(minutes=10)
 
-        # AITask uses short skill_id ("coach") but AIReport uses the
-        # full name ("finance_coach"). Map before querying.
-        report_skill_id = "finance_coach" if task.skill_id == "coach" else task.skill_id
+        report_skill_id = task.skill_id
 
         recent_report = (
             db.query(AIReport)

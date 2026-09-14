@@ -156,7 +156,7 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
         )
         asset.tags = tags
     db.add(asset)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)
@@ -183,7 +183,7 @@ def update_asset(db: Session, user: User, asset_id: int, req: AssetUpdate) -> As
         )
         asset.tags = tags
 
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)
@@ -197,7 +197,7 @@ def update_asset(db: Session, user: User, asset_id: int, req: AssetUpdate) -> As
 def archive_asset(db: Session, user: User, asset_id: int) -> Asset:
     asset = get_asset(db, user, asset_id)
     asset.is_archived = True
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)
@@ -211,7 +211,7 @@ def update_asset_value(db: Session, user: User, asset_id: int, value: float) -> 
     asset.current_value = Decimal(str(value))
     valuation = AssetValuation(asset_id=asset.id, value=value)
     db.add(valuation)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)
@@ -246,7 +246,7 @@ def sell_asset(db: Session, user: User, asset_id: int, req) -> dict:
     )
     db.add(event)
 
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)
@@ -277,7 +277,7 @@ def retire_asset(db: Session, user: User, asset_id: int) -> Asset:
     )
     db.add(event)
 
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)
@@ -289,7 +289,7 @@ def reactivate_asset(db: Session, user: User, asset_id: int) -> Asset:
     if asset.status not in ("retired", "idle"):
         raise AppError(ErrorCode.ASSET_FORBIDDEN)
     asset.status = "in_use"
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(asset)

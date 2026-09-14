@@ -76,10 +76,10 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         ignore_debt_warning=req.ignore_debt_warning or False,
     )
     db.add(wish)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
-        db, user.family_id, "wish_advice"
+        db, user.family_id, "wish-advice"
     )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
@@ -95,10 +95,10 @@ def update_wish(db: Session, user: User, wish_id: int, req: WishUpdate) -> Wish:
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(wish, key, value)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
-        db, user.family_id, "wish_advice"
+        db, user.family_id, "wish-advice"
     )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
@@ -118,10 +118,10 @@ def set_ignore_debt_warning(
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
     wish.ignore_debt_warning = ignore
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
-        db, user.family_id, "wish_advice"
+        db, user.family_id, "wish-advice"
     )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
     db.refresh(wish)
@@ -134,10 +134,10 @@ def delete_wish(db: Session, user: User, wish_id: int) -> None:
     if wish.user_id != user.id:
         raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     invalidate_skill(
-        db, user.family_id, "wish_advice"
+        db, user.family_id, "wish-advice"
     )  # W4 (Plan B T7): wish change busts advice cache
     db.commit()
 
@@ -163,9 +163,9 @@ def complete_wish(db: Session, user: User, wish_id: int) -> Wish:
     wish.status = "realized"
     wish.fulfilled_at = datetime.now(UTC)
 
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
-    invalidate_skill(db, user.family_id, "wish_advice")
+    invalidate_skill(db, user.family_id, "wish-advice")
     db.commit()
     db.refresh(wish)
     _attach_savings_count(db, wish)
@@ -196,9 +196,9 @@ def copy_wish(db: Session, user: User, wish_id: int) -> Wish:
         monthly_saving=source.monthly_saving,
     )
     db.add(new_wish)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
-    invalidate_skill(db, user.family_id, "wish_advice")
+    invalidate_skill(db, user.family_id, "wish-advice")
     db.commit()
     db.refresh(new_wish)
     _attach_savings_count(db, new_wish)
@@ -253,10 +253,10 @@ def realize_wish(
         wish.fulfilled_at = datetime.now(UTC)
         asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
-        invalidate_skill(db, user.family_id, "finance_coach")
+        invalidate_skill(db, user.family_id, "finance-coach")
         invalidate_skill(db, user.family_id, "dashboard-narrative")
         invalidate_skill(
-            db, user.family_id, "wish_advice"
+            db, user.family_id, "wish-advice"
         )  # W4 (Plan B T7): wish change busts advice cache
         db.commit()
         db.refresh(asset)

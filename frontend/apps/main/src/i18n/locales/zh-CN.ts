@@ -87,7 +87,7 @@ export default {
     },
     ultra: {
       label: 'Ultra',
-      description: '继承自 Pro 模式，可调用子代理分工协作，适合复杂多步骤任务，能力最强',
+      description: '继承自 Pro 模式，可调用子智能体分工协作，适合复杂多步骤任务，能力最强',
     },
   },
   nav: {
@@ -515,7 +515,7 @@ export default {
     modeProLabel: '专业',
     modeProDesc: '计划模式，自动拆解任务',
     modeUltraLabel: '旗舰',
-    modeUltraDesc: '完整能力，子代理协作',
+    modeUltraDesc: '完整能力，子智能体协作',
     // Tenant resource messages
     tenantQuotaExceeded: '家庭额度不足，无法生成追问建议',
     tenantNoFamily: '未选择家庭',
@@ -585,7 +585,7 @@ export default {
     tokenUsageThinking: '思考',
     tokenUsageStepTotal: '步骤总计',
     tokenUsageSharedAttribution: '该 token 由此步骤中的多个动作共同消耗',
-    tokenUsageSubagentTask: '子代理任务',
+    tokenUsageSubagentTask: '子智能体任务',
     tokenUsageSearchAction: '搜索：{query}',
     tokenUsageSearchGeneric: '搜索',
     tokenUsageToolAction: '工具调用',

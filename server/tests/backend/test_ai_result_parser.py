@@ -170,21 +170,21 @@ class TestValidateJson:
                 {"key": "liquidity", "label": "流动性", "score": 3, "narrative": "ok"},
             ],
         }
-        assert _validate_json(data, "report") is True
+        assert _validate_json(data, "asset-report") is True
 
     def test_validate_report_missing_required_field_fails(self):
         """Missing a top-level required field (indicators) is rejected."""
         data = {"overall_score": 65}  # no "indicators"
-        assert _validate_json(data, "report") is False
+        assert _validate_json(data, "asset-report") is False
 
     def test_validate_report_missing_overall_score_fails(self):
         """Missing overall_score is rejected."""
         data = {"indicators": []}
-        assert _validate_json(data, "report") is False
+        assert _validate_json(data, "asset-report") is False
 
     def test_validate_report_wrong_type_fails(self):
         """A list instead of an object is rejected (report is type=object)."""
-        assert _validate_json([{"overall_score": 65}], "report") is False
+        assert _validate_json([{"overall_score": 65}], "asset-report") is False
 
     def test_validate_report_envelope_unwrapped(self):
         """A backend-style envelope is unwrapped before validation."""
@@ -193,7 +193,7 @@ class TestValidateJson:
             "message": "",
             "data": {"report": {"overall_score": 70, "indicators": []}},
         }
-        assert _validate_json(data, "report") is True
+        assert _validate_json(data, "asset-report") is True
 
     def test_validate_unknown_capability_returns_true(self):
         """Unknown capabilities skip validation (no schema to match)."""

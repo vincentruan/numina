@@ -47,7 +47,7 @@ def create_correction(
     if liability.remaining_amount == 0:
         liability.is_active = False
 
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(correction)

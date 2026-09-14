@@ -254,7 +254,7 @@ async def generate_narrative(
 
     # Phase 5.2: circuit breaker gate
 
-    blocked_resp = check_circuit_blocked(family_id, "narrative", db)
+    blocked_resp = check_circuit_blocked(family_id, "dashboard-narrative", db)
     if blocked_resp is not None:
         return blocked_resp
 

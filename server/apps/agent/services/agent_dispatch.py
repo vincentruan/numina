@@ -67,7 +67,7 @@ _NUMINA_AGENT_ID: int = 100000000000005
 _LEGACY_AI_ASSISTANT_AGENT_ID: int = 100000000000003
 
 # Skills that are reserved for internal system use only — never dispatched to any agent.
-_INTERNAL_ONLY_SKILLS: frozenset[str] = frozenset({"skill-creator", "skill-installer"})
+_INTERNAL_ONLY_SKILLS: frozenset[str] = frozenset({"skill-creator", "skill-installer", "skill-reviewer"})
 
 
 def _classify_stream_error(e: Exception) -> str:

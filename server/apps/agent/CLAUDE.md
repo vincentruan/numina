@@ -81,7 +81,7 @@ The dispatch app is carried in `body.metadata["app"]` (defaults to `"numina"`). 
 | App | Runner | Skill | Purpose |
 |-----|--------|-------|---------|
 | `numina` (default) | `_run_numina_agent` | `chat` / `chat-search` | `/ai/chat` live conversation |
-| `asset-report` | `_run_asset_report_pipeline` | `asset-report` | 3-step report pipeline |
+| `asset-report` | `_run_asset_report_agent` | `asset-report` | 3-step report pipeline |
 | `import-parse` | `_run_import_parse_agent` | `import-parse` | PDF/statement parse (single run) |
 | `finance-coach` | `_run_finance_coach_agent` | `finance-coach` | finance advice (single run) |
 | `wish-advice` | `_run_wish_advice_agent` | `wish-advice` | wish savings advice (single run) |

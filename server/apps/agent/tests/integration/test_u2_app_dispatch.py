@@ -246,7 +246,7 @@ class _FakeRunManager:
 
 
 async def test_run_agent_dispatches_asset_report_to_pipeline():
-    """app='asset-report' → _run_asset_report_pipeline runs the 3-step pipeline.
+    """app='asset-report' → _run_asset_report_agent runs the 3-step pipeline.
 
     U4: the 503 placeholder is replaced by a real adapter stream. Stubs the
     adapter to yield an AI message with a fenced JSON block (step 2 output),

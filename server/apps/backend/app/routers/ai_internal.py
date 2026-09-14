@@ -785,7 +785,7 @@ def internal_persist_report(
 ):
     """U4 step 7: persist an asset-report result (agent worker → backend).
 
-    The agent worker's ``_run_asset_report_pipeline`` calls this after step 3
+    The agent worker's ``_run_asset_report_agent`` calls this after step 3
     (json-repair) to store the indicators JSON + step-1 markdown audit path in
     ``ai_reports``. Service-to-service auth via ``verify_agent_token``; the
     family_id from the token scopes the write (defense in depth — the worker
@@ -813,7 +813,7 @@ def internal_persist_report(
     report_json = body.report_json
     if not (
         isinstance(report_json, dict)
-        and _validate_json(report_json, "report")
+        and _validate_json(report_json, "asset-report")
         and not _contains_markdown_table(report_json)
         and _validate_report_data_items(report_json)
     ):
@@ -1010,7 +1010,7 @@ async def auto_generate_reports(
     from apps.backend.app.services.finance_coach_cache import SKILL_TTL
     from packages.db.models.family import Family
 
-    report_ttl = SKILL_TTL["report"]
+    report_ttl = SKILL_TTL["asset-report"]
 
     # 1. 找到 report_auto_generate_enabled=True 的家庭
     auto_families = (
@@ -1086,7 +1086,7 @@ async def auto_generate_reports(
             )
             task = AITaskService.create_task(
                 family_id=fid,
-                skill_id="report",
+                skill_id="asset-report",
                 session_id=session.id,
                 db=db,
             )

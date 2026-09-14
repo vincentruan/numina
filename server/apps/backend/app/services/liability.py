@@ -56,7 +56,7 @@ def create_liability(db: Session, user: User, req: LiabilityCreate) -> Liability
     if req.generate_history and req.start_date and req.start_date < date.today():
         _generate_retroactive_history(db, liability, req)
 
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(liability)
@@ -108,7 +108,7 @@ def update_liability(db: Session, user: User, liability_id: str, req: LiabilityU
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(liability, key, value)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(liability)
@@ -118,7 +118,7 @@ def update_liability(db: Session, user: User, liability_id: str, req: LiabilityU
 def delete_liability(db: Session, user: User, liability_id: str) -> None:
     liability = get_liability(db, user, liability_id)
     db.delete(liability)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
 
@@ -131,7 +131,7 @@ def record_payment(db: Session, user: User, liability_id: str, amount: Decimal, 
         liability.is_active = False
     record = PaymentRecord(liability_id=liability_id, amount=amount, paid_at=datetime.combine(paid_at, datetime.min.time()) if paid_at else None)
     db.add(record)
-    invalidate_skill(db, user.family_id, "finance_coach")
+    invalidate_skill(db, user.family_id, "finance-coach")
     invalidate_skill(db, user.family_id, "dashboard-narrative")
     db.commit()
     db.refresh(liability)

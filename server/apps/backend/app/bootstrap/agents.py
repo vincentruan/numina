@@ -73,7 +73,7 @@ _NUMINA_AGENT = {
 }
 
 # System agent dedicated to asset report generation.
-# Unlike numina which holds all family skills, this agent is scoped to ["report"]
+# Unlike numina which holds all family skills, this agent is scoped to ["asset-report"]
 # and has a specialized persona for comprehensive asset health analysis.
 _ASSET_REPORT_AGENT = {
     "id": ASSET_REPORT_AGENT_ID,
@@ -145,7 +145,7 @@ _ASSET_REPORT_AGENT = {
 ## 不确定性表达
 
 - 数据不完整时在摘要中注明「数据可能不完整，分析仅供参考」""",
-    "skills": ["report"],
+    "skills": ["asset-report"],
     "agent_type": "system",
     # asset-report is a fixed 3-step pipeline (write_file → read_file → JSON);
     # it must be stateless — disable DeerMem injection + write so each run

@@ -46,7 +46,7 @@ class TestScanAndRecover:
         from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
 
         stale_task_1 = MagicMock(id=101, family_id=1, skill_id="narrative")
-        stale_task_2 = MagicMock(id=102, family_id=1, skill_id="coach")
+        stale_task_2 = MagicMock(id=102, family_id=1, skill_id="finance-coach")
 
         with patch(
             "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
@@ -71,8 +71,8 @@ class TestScanAndRecover:
         from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
 
         stale_task_1 = MagicMock(id=201, family_id=1, skill_id="narrative")
-        stale_task_2 = MagicMock(id=202, family_id=1, skill_id="coach")
-        stale_task_3 = MagicMock(id=203, family_id=1, skill_id="report")
+        stale_task_2 = MagicMock(id=202, family_id=1, skill_id="finance-coach")
+        stale_task_3 = MagicMock(id=203, family_id=1, skill_id="asset-report")
 
         call_count = 0
 
@@ -102,7 +102,7 @@ class TestScanAndRecover:
         """Phase 1: zombie running tasks (no run_id) are cancelled before stale scan."""
         from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
 
-        zombie = MagicMock(id=301, family_id=1, skill_id="coach")
+        zombie = MagicMock(id=301, family_id=1, skill_id="finance-coach")
 
         with patch(
             "apps.backend.app.services.ai_task_service.AITaskService.get_zombie_running_tasks",
@@ -128,7 +128,7 @@ class TestScanAndRecover:
         """Phase 1 zombie cancellation failure does not prevent Phase 2 stale scan."""
         from apps.backend.app.services.orphan_detector import _scan_and_recover_sync
 
-        zombie = MagicMock(id=401, family_id=1, skill_id="coach")
+        zombie = MagicMock(id=401, family_id=1, skill_id="finance-coach")
         stale_task = MagicMock(id=402, family_id=1, skill_id="narrative")
 
         def cancel_side_effect(zombies, source="auto"):

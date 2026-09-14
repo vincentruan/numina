@@ -106,7 +106,7 @@ async def _run_once(
         provider,
         timeout_seconds=240,
         subagent_enabled=False,
-        plan_mode=False,  # align with production worker (_run_asset_report_pipeline)
+        plan_mode=False,  # align with production worker (_run_asset_report_agent)
         mcp_servers=mcp_servers,
         # Isolate DeerMem bucket to match production (agent_name="asset-report"),
         # so the F1 baseline reflects the memory-isolated path, not the shared

@@ -5,7 +5,7 @@ in-graph middleware). The original plan preferred a middleware emission path
 (replicating DeerFlow's native custom-event pattern), but
 ``get_stream_writer()`` is no-op on numina's sync ``stream()`` path
 (PatchedChatOpenAI), so the worker synthesizes the event from the final AI
-message text instead (see ``_run_asset_report_pipeline`` step 9).
+message text instead (see ``_run_asset_report_agent`` step 9).
 
 ``parse_report_json`` is the shared parser used by the worker (event
 synthesis + persistence) and by the import-parse router. It is kept here to

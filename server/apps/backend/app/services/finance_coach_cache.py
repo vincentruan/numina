@@ -2,16 +2,16 @@
 
 The existing report cache (ai_report.py `_latest_report` + `REPORT_CACHE_TTL`)
 filters only by (family_id, status='completed') with NO skill distinction —
-a finance_coach row would collide with the report row for the same family (spec
+a finance-coach row would collide with the report row for the same family (spec
 §7.2 core issue 1). This module adds skill-scoped read/write/invalidate so
 the three cache keys coexist without pollution:
 
-  - family_id:report         (existing asset-report, TTL 8h)
-  - family_id:finance_coach  (D2 dashboard card, TTL 8h, entity-change invalidation)
-  - family_id:wish_advice:{fingerprint}  (Plan B W4, separate cache key — not here)
+  - family_id:asset-report       (existing asset-report, TTL 1h)
+  - family_id:finance-coach      (D2 dashboard card, TTL 8h, entity-change invalidation)
+  - family_id:wish-advice:{fingerprint}  (Plan B W4, separate cache key — not here)
 
 Entity-change invalidation: any asset/liability/wish write (Task 9) calls
-``invalidate_skill(family_id, "finance_coach", db)`` so the next dashboard
+``invalidate_skill(family_id, "finance-coach", db)`` so the next dashboard
 load regenerates with fresh data (spec §7.2: event-driven, not pure TTL).
 """
 from datetime import UTC, datetime, timedelta
@@ -27,8 +27,8 @@ from apps.backend.app.utils.snowflake import next_id
 # the task alive across page navigation, so the cache window is shortened to
 # avoid stale reports and repeated prompts within the same hour.
 SKILL_TTL: dict[str, timedelta] = {
-    "report": timedelta(hours=1),
-    "finance_coach": timedelta(hours=8),
+    "asset-report": timedelta(hours=1),
+    "finance-coach": timedelta(hours=8),
 }
 
 

@@ -33,7 +33,7 @@ class TestUnwrapAgentEnvelope:
                 }
             },
         }
-        result = _unwrap_agent_envelope(wrapped, "report")
+        result = _unwrap_agent_envelope(wrapped, "asset-report")
         assert result is not None
         assert result["overall_score"] == 65
         assert "indicators" in result
@@ -50,7 +50,7 @@ class TestUnwrapAgentEnvelope:
                 ],
             },
         }
-        result = _unwrap_agent_envelope(wrapped, "report")
+        result = _unwrap_agent_envelope(wrapped, "asset-report")
         assert result is not None
         assert result["overall_score"] == 70
 
@@ -62,7 +62,7 @@ class TestUnwrapAgentEnvelope:
                 {"key": "test", "label": "Test", "score": 2, "narrative": "Test"}
             ],
         }
-        result = _unwrap_agent_envelope(direct, "report")
+        result = _unwrap_agent_envelope(direct, "asset-report")
         assert result == direct
 
     def test_no_unwrap_for_non_report_capability(self):
@@ -99,7 +99,7 @@ class TestUnwrapAgentEnvelope:
                 }
             },
         }
-        result = _unwrap_agent_envelope(wrapped, "report")
+        result = _unwrap_agent_envelope(wrapped, "asset-report")
         assert result["overall_score"] == 35
         assert result["data_completeness_score"] == 0.85
         assert len(result["indicators"]) == 1
@@ -119,7 +119,7 @@ class TestUnwrapAgentEnvelope:
             },
         }
         # _validate_json should unwrap internally and pass validation
-        assert _validate_json(wrapped, "report") is True
+        assert _validate_json(wrapped, "asset-report") is True
 
     def test_validate_json_direct_format(self):
         """Validation works with direct format data."""
@@ -129,17 +129,17 @@ class TestUnwrapAgentEnvelope:
                 {"key": "test", "label": "Test", "score": 2, "narrative": "Test"}
             ],
         }
-        assert _validate_json(direct, "report") is True
+        assert _validate_json(direct, "asset-report") is True
 
     def test_validate_json_missing_required_field(self):
         """Validation fails when required fields are missing."""
         data = {"overall_score": 50}  # Missing 'indicators'
-        assert _validate_json(data, "report") is False
+        assert _validate_json(data, "asset-report") is False
 
     def test_unwrap_invalid_envelope_structure(self):
         """Invalid envelope structure returns original data."""
         invalid = {"code": "OK", "data": "not a dict"}
-        result = _unwrap_agent_envelope(invalid, "report")
+        result = _unwrap_agent_envelope(invalid, "asset-report")
         assert result == invalid
 
     def test_unwrap_missing_report_key_for_report_capability(self):
@@ -153,7 +153,7 @@ class TestUnwrapAgentEnvelope:
                 ],
             },
         }
-        result = _unwrap_agent_envelope(wrapped, "report")
+        result = _unwrap_agent_envelope(wrapped, "asset-report")
         # Should unwrap to data directly since it has required fields
         assert result is not None
         assert result["overall_score"] == 65

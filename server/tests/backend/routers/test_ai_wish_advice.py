@@ -88,7 +88,7 @@ def test_generate_returns_cached_when_fresh(client, auth_headers, db_session, fa
     upsert_skill_result(
         db_session,
         family_id,
-        "wish_advice",
+        "wish-advice",
         {"fingerprint": "stub-fingerprint", "advice": {
             "primary_wish_id": "1",
             "reason": "距目标近",

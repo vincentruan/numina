@@ -35,7 +35,7 @@ async def generate_wish_advice(
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
-    blocked = check_circuit_blocked(current_user.family_id, "wish_advice", db)
+    blocked = check_circuit_blocked(current_user.family_id, "wish-advice", db)
     if blocked is not None:
         return blocked
 
@@ -43,12 +43,12 @@ async def generate_wish_advice(
 
     if not force:
         # The wish_advice cache is keyed by fingerprint; we store under a single
-        # skill_id='wish_advice' row and compare fingerprints in the payload
+        # skill_id='wish-advice' row and compare fingerprints in the payload
         # (pragmatic adaptation — keeps the skill_id column's cardinality
         # bounded; see commit message for the spec §4.4 key-shape rationale).
-        cached = latest_by_skill(db, current_user.family_id, "wish_advice")
+        cached = latest_by_skill(db, current_user.family_id, "wish-advice")
         if (
-            is_cache_fresh(cached, "wish_advice")
+            is_cache_fresh(cached, "wish-advice")
             and cached
             and cached.report_json.get("fingerprint") == fingerprint
         ):
@@ -68,7 +68,7 @@ async def generate_wish_advice(
         return JSONResponse(status_code=200, content={"status": "empty", "report": None})
 
     upsert_skill_result(
-        db, current_user.family_id, "wish_advice", {"fingerprint": fp, "advice": advice}
+        db, current_user.family_id, "wish-advice", {"fingerprint": fp, "advice": advice}
     )
     db.commit()
     return JSONResponse(status_code=200, content={"status": "fresh", "report": advice})

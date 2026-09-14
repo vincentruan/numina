@@ -36,7 +36,7 @@ class TestWriteCapabilityResults:
 
     def test_dispatches_to_correct_writer(self, db_session, test_family):
         """Dispatches to correct writer based on capability."""
-        count = write_skill_results("report", test_family.id, {"overall_score": 80}, db_session)
+        count = write_skill_results("asset-report", test_family.id, {"overall_score": 80}, db_session)
         assert count == 1
 
     def test_returns_zero_for_unknown_capability(self, db_session, test_family):

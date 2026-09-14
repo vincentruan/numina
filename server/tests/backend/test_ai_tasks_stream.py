@@ -66,14 +66,14 @@ def completed_coach_task(db, family_id):
 
     task = AITaskService.create_task(
         family_id=family_id,
-        skill_id="coach",
+        skill_id="finance-coach",
         session_id=session.id,
         db=db,
     )
     task.status = "completed"
     task.run_id = "test-run-id-coach"
 
-    upsert_skill_result(db, family_id, "finance_coach", {"advice": "建议减少非必要开支"})
+    upsert_skill_result(db, family_id, "finance-coach", {"advice": "建议减少非必要开支"})
 
     db.commit()
     return task
@@ -131,7 +131,7 @@ def completed_literacy_task(client, auth_headers, db, family_id):
 
     task = AITaskService.create_task(
         family_id=family_id,
-        skill_id="literacy",
+        skill_id="literacy-weekly-report",
         session_id=session.id,
         db=db,
     )
@@ -331,7 +331,7 @@ class TestStreamTaskEventsActiveTask:
 
         task = AITaskService.create_task(
             family_id=family_id,
-            skill_id="coach",
+            skill_id="finance-coach",
             session_id=session.id,
             db=db,
         )

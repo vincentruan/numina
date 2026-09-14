@@ -44,7 +44,7 @@ router = APIRouter(prefix="/ai/literacy-report", tags=["ai-literacy-report"])
 logger = logging.getLogger(__name__)
 
 # skill_id for AITask tracking (matches VALID_SKILL_IDS in ai_tasks.py)
-SKILL_ID = "literacy"
+SKILL_ID = "literacy-weekly-report"
 
 
 def _check_ai_enabled(db: Session, family_id: int) -> None:
@@ -155,7 +155,7 @@ async def trigger_generate_events(
     """
     # Phase 5.2: circuit breaker gate
 
-    blocked_resp = check_circuit_blocked(current_user.family_id, "literacy", db)
+    blocked_resp = check_circuit_blocked(current_user.family_id, "literacy-weekly-report", db)
     if blocked_resp is not None:
         return blocked_resp
 

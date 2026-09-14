@@ -4,7 +4,7 @@ Verifies the ``POST /internal/gateway/runs/asset-report/{thread_id}`` endpoint:
 - ``X-Agent-Token`` auth (401 on bad/missing token).
 - ``internal=True`` bypasses R1's 409 gate (frontend direct dispatch stays 409,
   tested in test_u2_app_dispatch.py).
-- Triggers ``_run_asset_report_pipeline`` via ``start_run`` and streams SSE,
+- Triggers ``_run_asset_report_agent`` via ``start_run`` and streams SSE,
   including the ``report.step2_json`` custom event from the worker-synthesized
   step 3.
 """

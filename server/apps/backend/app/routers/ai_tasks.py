@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai/tasks", tags=["ai-tasks"])
 
 VALID_SKILL_IDS = {
-    "report",
+    "asset-report",
     "alerts",
     "disposal",
     "allocation",
@@ -40,7 +40,7 @@ VALID_SKILL_IDS = {
     "liability",
     "time_machine",
     # v2 features (U10)
-    "coach",
+    "finance-coach",
     "literacy-weekly-report",
     "dashboard-narrative",
     "chat",
@@ -315,14 +315,14 @@ def _load_scenario_result(task, db: Session) -> dict:
     """
     scenario = task.skill_id
 
-    if scenario in ("narrative", "coach"):
+    if scenario in ("dashboard-narrative", "finance-coach"):
         from apps.backend.app.services.finance_coach_cache import latest_by_skill
 
-        skill_key = "narrative" if scenario == "narrative" else "finance_coach"
+        skill_key = "dashboard-narrative" if scenario == "dashboard-narrative" else "finance-coach"
         cached = latest_by_skill(db, task.family_id, skill_key)
         if not cached:
             return {"error": "结果未找到"}
-        if scenario == "narrative":
+        if scenario == "dashboard-narrative":
             report_data = cached.report_json
             narrative_text = (
                 report_data.get("narrative", "")
@@ -333,7 +333,7 @@ def _load_scenario_result(task, db: Session) -> dict:
         else:
             return cached.report_json if isinstance(cached.report_json, dict) else {"data": cached.report_json}
 
-    elif scenario == "literacy":
+    elif scenario == "literacy-weekly-report":
         from packages.db.models.literacy_report import LiteracyWeeklyReport
 
         # LiteracyWeeklyReport has no family_id column - resolve through the
@@ -358,10 +358,10 @@ def _load_scenario_result(task, db: Session) -> dict:
             }
         }
 
-    elif scenario == "report":
+    elif scenario == "asset-report":
         from apps.backend.app.services.finance_coach_cache import latest_by_skill
 
-        cached = latest_by_skill(db, task.family_id, "report")
+        cached = latest_by_skill(db, task.family_id, "asset-report")
         if not cached:
             return {"error": "报告未找到"}
         return {"report": cached.report_json}

@@ -5,9 +5,9 @@ finance_coach cache row so the next dashboard load regenerates with fresh
 data (event-driven invalidation, not pure TTL).
 
 Each write endpoint calls ``invalidate_skill(db, user.family_id,
-"finance_coach")`` before its final ``db.commit()``. These tests mock
+"finance-coach")`` before its final ``db.commit()``. These tests mock
 ``invalidate_skill`` at each service module's import path and assert
-the call happens with the user's ``family_id`` and ``"finance_coach"``.
+the call happens with the user's ``family_id`` and ``"finance-coach"``.
 """
 from datetime import date
 from unittest.mock import patch
@@ -45,7 +45,7 @@ def _make_user(db_session) -> User:
 
 
 def _seed_cache(db_session, family_id) -> None:
-    upsert_skill_result(db_session, family_id, "finance_coach", {"suggestions": []})
+    upsert_skill_result(db_session, family_id, "finance-coach", {"suggestions": []})
     db_session.commit()
 
 
@@ -60,7 +60,7 @@ def test_wish_create_invalidates_finance_coach_cache(db_session):
     # W4 (Plan B T7): wish writes bust finance_coach, wish_advice, and dashboard-narrative caches.
     assert inv.call_count == 3
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "wish_advice", "dashboard-narrative"}
+    assert caps == {"finance-coach", "wish-advice", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -78,7 +78,7 @@ def test_wish_update_invalidates_finance_coach_cache(db_session):
 
     assert inv.call_count == 3
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "wish_advice", "dashboard-narrative"}
+    assert caps == {"finance-coach", "wish-advice", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -95,7 +95,7 @@ def test_wish_delete_invalidates_finance_coach_cache(db_session):
 
     assert inv.call_count == 3
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "wish_advice", "dashboard-narrative"}
+    assert caps == {"finance-coach", "wish-advice", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -116,7 +116,7 @@ def test_liability_write_invalidates_finance_coach_cache(db_session):
     # Dashboard narrative cache is also invalidated on liability writes.
     assert inv.call_count == 2
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "dashboard-narrative"}
+    assert caps == {"finance-coach", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)
 
@@ -144,6 +144,6 @@ def test_asset_write_invalidates_finance_coach_cache(db_session):
     # Dashboard narrative cache is also invalidated on asset writes.
     assert inv.call_count == 2
     caps = {call.args[2] for call in inv.call_args_list}
-    assert caps == {"finance_coach", "dashboard-narrative"}
+    assert caps == {"finance-coach", "dashboard-narrative"}
     for call in inv.call_args_list:
         assert str(call.args[1]) == str(user.family_id)

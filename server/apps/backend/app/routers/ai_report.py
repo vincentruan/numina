@@ -69,7 +69,7 @@ class MarkdownResponse(BaseModel):
 def _latest_report(family_id: int, db: Session) -> AIReport | None:
     from apps.backend.app.services.finance_coach_cache import latest_by_skill
 
-    return latest_by_skill(db, family_id, "report")
+    return latest_by_skill(db, family_id, "asset-report")
 
 
 # U4 step 6: report cache TTL. A trigger within this window returns the cached
@@ -81,7 +81,7 @@ def _latest_report(family_id: int, db: Session) -> AIReport | None:
 # Plan A T7: TTL now lives in the skill-scoped map (SKILL_TTL); keep
 # REPORT_CACHE_TTL as an alias so the existing `age < REPORT_CACHE_TTL` check
 # in trigger_generate_events preserves identical report behavior.
-REPORT_CACHE_TTL = SKILL_TTL["report"]  # keep existing report behavior
+REPORT_CACHE_TTL = SKILL_TTL["asset-report"]  # keep existing report behavior
 
 
 @router.get("")
@@ -113,7 +113,7 @@ async def trigger_generate_events(
     直接返回缓存 JSON（200，非流）；force=true 或超 1h 走 stream_run 重新生成。
     后台生成：SSE 连接断开后 agent pipeline 仍继续运行，用户可切离页面。
     """
-    blocked_resp = check_circuit_blocked(current_user.family_id, "report", db)
+    blocked_resp = check_circuit_blocked(current_user.family_id, "asset-report", db)
     if blocked_resp is not None:
         return blocked_resp
 
@@ -150,7 +150,7 @@ async def trigger_generate_events(
                 cached_json = cached.report_json
                 if (
                     isinstance(cached_json, dict)
-                    and _validate_json(cached_json, "report")
+                    and _validate_json(cached_json, "asset-report")
                     and not _contains_markdown_table(cached_json)
                 ):
                     return JSONResponse(
@@ -168,7 +168,7 @@ async def trigger_generate_events(
                 )
 
     # Check if there's already a running task.
-    existing = AITaskService.get_running_task(current_user.family_id, "report", db)
+    existing = AITaskService.get_running_task(current_user.family_id, "asset-report", db)
     if existing and not force:
         # 已有运行中任务 — 直接接续，不重复创建
         task = existing
@@ -199,7 +199,7 @@ async def trigger_generate_events(
                 "[trigger_generate_events] force=true, cancelling zombie task=%s",
                 existing.id,
             )
-            AITaskService.cancel_task(current_user.family_id, "report", db)
+            AITaskService.cancel_task(current_user.family_id, "asset-report", db)
         # No running task - create new session and task
         session = await ChatSessionService.create_session(
             family_id=current_user.family_id,
@@ -210,7 +210,7 @@ async def trigger_generate_events(
         if any_running and not force:
             task = AITaskService.create_queued_task(
                 family_id=current_user.family_id,
-                skill_id="report",
+                skill_id="asset-report",
                 session_id=session.id,
                 db=db,
             )
@@ -224,7 +224,7 @@ async def trigger_generate_events(
             )
         task = AITaskService.create_task(
             family_id=current_user.family_id,
-            skill_id="report",
+            skill_id="asset-report",
             session_id=session.id,
             db=db,
         )

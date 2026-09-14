@@ -42,7 +42,7 @@ router = APIRouter(prefix="/ai/finance-coach", tags=["ai-finance-coach"])
 logger = logging.getLogger(__name__)
 
 # skill_id for AITask tracking (matches VALID_SKILL_IDS in ai_tasks.py)
-SKILL_ID = "coach"
+SKILL_ID = "finance-coach"
 
 
 def _check_ai_enabled(db: Session, family_id: int) -> None:
@@ -66,14 +66,14 @@ async def trigger_finance_coach(
     8h cache check (force skips) -> AITask tracking + bridge consumer SSE.
     Cache hit returns JSON 200 (non-stream).
     """
-    blocked_resp = check_circuit_blocked(current_user.family_id, "finance_coach", db)
+    blocked_resp = check_circuit_blocked(current_user.family_id, "finance-coach", db)
     if blocked_resp is not None:
         return blocked_resp
 
     # 8h skill-cache check (before streaming). force=true regenerates.
     if not force:
-        cached = latest_by_skill(db, current_user.family_id, "finance_coach")
-        if is_cache_fresh(cached, "finance_coach", family_id=current_user.family_id) and cached is not None:
+        cached = latest_by_skill(db, current_user.family_id, "finance-coach")
+        if is_cache_fresh(cached, "finance-coach", family_id=current_user.family_id) and cached is not None:
             return JSONResponse(
                 status_code=200,
                 content={
@@ -192,7 +192,7 @@ async def trigger_finance_coach(
             suggestions = (payload or {}).get("suggestions") or []
             if not suggestions:
                 logger.warning(
-                    "[finance_coach] skip persisting empty result (keeps existing cache) task=%s",
+                    "[finance-coach] skip persisting empty result (keeps existing cache) task=%s",
                     task_id,
                 )
                 return
@@ -201,7 +201,7 @@ async def trigger_finance_coach(
 
                 _db = SessionLocal()
                 try:
-                    upsert_skill_result(_db, family_id, "finance_coach", payload)
+                    upsert_skill_result(_db, family_id, "finance-coach", payload)
                     _db.commit()
                 finally:
                     _db.close()
