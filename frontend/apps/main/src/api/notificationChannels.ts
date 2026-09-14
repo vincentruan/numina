@@ -6,6 +6,7 @@ export interface NotificationChannelResponse {
   channel_type: 'telegram' | 'email' | 'feishu'
   name: string
   is_enabled: boolean
+  config: Record<string, string | number>
   subscriptions: string[]
   created_at: string
   updated_at: string

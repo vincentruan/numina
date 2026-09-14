@@ -164,6 +164,22 @@ function editChannel(channel: NotificationChannelResponse) {
   form.name = channel.name
   form.channel_type = channel.channel_type
   form.subscriptions = [...channel.subscriptions]
+  // Populate config fields from decrypted config
+  const cfg = channel.config || {}
+  if (channel.channel_type === 'telegram') {
+    form.bot_token = String(cfg.bot_token || '')
+    form.chat_id = String(cfg.chat_id || '')
+  } else if (channel.channel_type === 'feishu') {
+    form.webhook_url = String(cfg.webhook_url || '')
+    form.secret = String(cfg.secret || '')
+  } else if (channel.channel_type === 'email') {
+    form.smtp_host = String(cfg.smtp_host || '')
+    form.smtp_port = typeof cfg.smtp_port === 'number' ? cfg.smtp_port : parseInt(String(cfg.smtp_port || '587')) || 587
+    form.smtp_user = String(cfg.smtp_user || '')
+    form.smtp_password = String(cfg.smtp_password || '')
+    form.smtp_from = String(cfg.smtp_from || '')
+    form.email_to = String(cfg.to || '')
+  }
   showSheet.value = true
 }
 

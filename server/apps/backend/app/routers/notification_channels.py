@@ -13,7 +13,10 @@ from apps.backend.app.schemas.notification_channel import (
     NotificationChannelResponse,
     NotificationChannelUpdate,
 )
-from apps.backend.app.services.storage.config_crypto import encrypt_config
+from apps.backend.app.services.storage.config_crypto import (
+    decrypt_config,
+    encrypt_config,
+)
 from apps.backend.app.utils.snowflake import next_id
 from packages.db.models.notification_channel_config import (
     NotificationChannelConfig,
@@ -25,14 +28,31 @@ VALID_CHANNEL_TYPES = {"telegram", "email", "feishu", "webpush"}
 VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
 
 
-def _to_response(channel: NotificationChannel, db: Session) -> NotificationChannelResponse:
+def _to_response(
+    channel: NotificationChannel, db: Session
+) -> NotificationChannelResponse:
     subs = db.query(NotificationSubscription).filter_by(channel_id=channel.id).all()
+    # Decrypt config for edit pre-fill
+    config_rows = (
+        db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).all()
+    )
+    config: dict = {}
+    for row in config_rows:
+        try:
+            decrypted = decrypt_config(row.value_encrypted)
+            if decrypted and isinstance(decrypted, dict):
+                config.update(decrypted)
+            else:
+                config[row.key] = row.value_encrypted
+        except Exception:
+            config[row.key] = row.value_encrypted
     return NotificationChannelResponse(
         id=channel.id,
         family_id=channel.family_id,
         channel_type=channel.channel_type,
         name=channel.name,
         is_enabled=channel.is_enabled,
+        config=config,
         subscriptions=[s.reminder_type for s in subs],
         created_at=channel.created_at,
         updated_at=channel.updated_at,
@@ -63,14 +83,20 @@ def create_channel(
     db.add(channel)
     db.flush()
     for key, value in (req.config or {}).items():
-        db.add(NotificationChannelConfig(
-            channel_id=channel.id,
-            key=key,
-            value_encrypted=encrypt_config({key: str(value)}),
-        ))
+        db.add(
+            NotificationChannelConfig(
+                channel_id=channel.id,
+                key=key,
+                value_encrypted=encrypt_config({key: str(value)}),
+            )
+        )
     for rtype in req.subscriptions:
         if rtype in VALID_REMINDER_TYPES:
-            db.add(NotificationSubscription(id=next_id(), channel_id=channel.id, reminder_type=rtype))
+            db.add(
+                NotificationSubscription(
+                    id=next_id(), channel_id=channel.id, reminder_type=rtype
+                )
+            )
     db.commit()
     db.refresh(channel)
     return _to_response(channel, db)
@@ -83,7 +109,11 @@ def update_channel(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    channel = db.query(NotificationChannel).filter_by(id=channel_id, family_id=user.family_id).first()
+    channel = (
+        db.query(NotificationChannel)
+        .filter_by(id=channel_id, family_id=user.family_id)
+        .first()
+    )
     if not channel:
         raise AppError(ErrorCode.NOT_FOUND)
     if req.name is not None:
@@ -91,18 +121,24 @@ def update_channel(
     if req.config is not None:
         db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).delete()
         for key, value in req.config.items():
-            db.add(NotificationChannelConfig(
-                channel_id=channel.id,
-                key=key,
-                value_encrypted=encrypt_config({key: str(value)}),
-            ))
+            db.add(
+                NotificationChannelConfig(
+                    channel_id=channel.id,
+                    key=key,
+                    value_encrypted=encrypt_config({key: str(value)}),
+                )
+            )
     if req.is_enabled is not None:
         channel.is_enabled = req.is_enabled
     if req.subscriptions is not None:
         db.query(NotificationSubscription).filter_by(channel_id=channel.id).delete()
         for rtype in req.subscriptions:
             if rtype in VALID_REMINDER_TYPES:
-                db.add(NotificationSubscription(id=next_id(), channel_id=channel.id, reminder_type=rtype))
+                db.add(
+                    NotificationSubscription(
+                        id=next_id(), channel_id=channel.id, reminder_type=rtype
+                    )
+                )
     db.commit()
     db.refresh(channel)
     return _to_response(channel, db)
@@ -114,7 +150,11 @@ def delete_channel(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    channel = db.query(NotificationChannel).filter_by(id=channel_id, family_id=user.family_id).first()
+    channel = (
+        db.query(NotificationChannel)
+        .filter_by(id=channel_id, family_id=user.family_id)
+        .first()
+    )
     if not channel:
         raise AppError(ErrorCode.NOT_FOUND)
     db.query(NotificationSubscription).filter_by(channel_id=channel.id).delete()

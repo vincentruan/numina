@@ -27,6 +27,7 @@ class NotificationChannelResponse(SnowflakeBase):
     channel_type: str
     name: str
     is_enabled: bool
+    config: dict = {}
     subscriptions: list[str] = []
     created_at: datetime
     updated_at: datetime

@@ -116,6 +116,16 @@ def run_scheduled_checks(db: Session) -> None:
     _retry_failed_notifications(db)
 
 
+# ── 环境前缀 ────────────────────────────────────────────────────────────────────
+
+
+def _env_prefix() -> str:
+    """非生产环境时返回消息前缀，避免用户与生产混淆。"""
+    if settings.ENVIRONMENT != "production":
+        return "【测试】"
+    return ""
+
+
 # ── 内部辅助 ──────────────────────────────────────────────────────────────────
 
 
@@ -243,6 +253,9 @@ def _dispatch_notifications(
             subject = render_template(
                 reminder.reminder_type, "email_subject", template_vars
             )
+            prefix = _env_prefix()
+            if prefix:
+                subject = f"{prefix} {subject}"
             body = render_template(reminder.reminder_type, "email_body", template_vars)
             success = NotificationSender.send_email(
                 smtp_host=config.get("smtp_host", ""),
@@ -281,6 +294,9 @@ async def _send_feishu_async(
 ) -> None:
     config = _get_channel_config(db, channel)
     text = render_template(reminder.reminder_type, "feishu", template_vars)
+    prefix = _env_prefix()
+    if prefix:
+        text = f"{prefix}\n\n{text}"
     success = await NotificationSender.send_feishu(
         webhook_url=config.get("webhook_url", ""),
         secret=config.get("secret", ""),
@@ -304,14 +320,20 @@ def _send_webpush_sync(
     """Send Web Push notifications to all subscriptions in the family."""
     # R11 (large_purchase) should only notify main app subscriptions, not child
     if reminder.reminder_type == "large_purchase":
-        subscriptions = db.query(PushSubscription).filter(
-            PushSubscription.family_id == reminder.family_id,
-            PushSubscription.app_type == "main",
-        ).all()
+        subscriptions = (
+            db.query(PushSubscription)
+            .filter(
+                PushSubscription.family_id == reminder.family_id,
+                PushSubscription.app_type == "main",
+            )
+            .all()
+        )
     else:
-        subscriptions = db.query(PushSubscription).filter(
-            PushSubscription.family_id == reminder.family_id
-        ).all()
+        subscriptions = (
+            db.query(PushSubscription)
+            .filter(PushSubscription.family_id == reminder.family_id)
+            .all()
+        )
     if not subscriptions:
         return
 
@@ -321,6 +343,9 @@ def _send_webpush_sync(
 
     title = render_template(reminder.reminder_type, "webpush_title", template_vars)
     body = render_template(reminder.reminder_type, "webpush_body", template_vars)
+    prefix = _env_prefix()
+    if prefix:
+        title = f"{prefix} {title}"
 
     any_success = False
     for sub in subscriptions:
@@ -360,6 +385,9 @@ async def _send_telegram_async(
 ) -> None:
     config = _get_channel_config(db, channel)
     text = render_template(reminder.reminder_type, "telegram", template_vars)
+    prefix = _env_prefix()
+    if prefix:
+        text = f"{prefix}\n\n{text}"
     success = await NotificationSender.send_telegram(
         bot_token=config.get("bot_token", ""),
         chat_id=config.get("chat_id", ""),
