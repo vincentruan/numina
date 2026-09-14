@@ -26,4 +26,11 @@ class ReminderSummary(BaseModel):
     large_purchase: int = 0
     expiring_soon: int = 0
     maturity: int = 0
+    ai_report_complete: int = 0
+    ai_finance_coach_complete: int = 0
+    ai_wish_advice_complete: int = 0
+    ai_literacy_report_complete: int = 0
+    chore_completed: int = 0
+    treasure_redeemed: int = 0
+    wish_redeemed: int = 0
     total: int = 0

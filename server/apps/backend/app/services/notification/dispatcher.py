@@ -77,6 +77,13 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
         large_purchase=counts.get("large_purchase", 0),
         expiring_soon=counts.get("expiring_soon", 0),
         maturity=counts.get("maturity", 0),
+        ai_report_complete=counts.get("ai_report_complete", 0),
+        ai_finance_coach_complete=counts.get("ai_finance_coach_complete", 0),
+        ai_wish_advice_complete=counts.get("ai_wish_advice_complete", 0),
+        ai_literacy_report_complete=counts.get("ai_literacy_report_complete", 0),
+        chore_completed=counts.get("chore_completed", 0),
+        treasure_redeemed=counts.get("treasure_redeemed", 0),
+        wish_redeemed=counts.get("wish_redeemed", 0),
         total=sum(counts.values()),
     )
 
