@@ -23,6 +23,7 @@ def setup_all_jobs() -> None:
         fetch_rates_job,
         file_sync_job,
         literacy_report_weekly_job,
+        notification_digest_job,
         reminder_job,
         revoked_token_cleanup_job,
         snapshot_job,
@@ -151,3 +152,17 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("识字周报生成任务已配置（每周日 02:00）")
+
+    # Job 10: Daily notification digest — daily at 21:00
+    scheduler.add_job(
+        notification_digest_job,
+        trigger="cron",
+        hour=21,
+        minute=0,
+        id="notification_digest",
+        name="notification_digest_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("通知摘要定时任务已配置（每日 21:00）")

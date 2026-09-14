@@ -340,3 +340,37 @@ def literacy_report_weekly_job() -> None:
         logger.exception(f"识字周报定时任务异常: {e}")
     finally:
         db.close()
+
+
+# ── Job 10: Daily notification digest ─────────────────────────────────────────
+
+async def notification_digest_job() -> None:
+    """Send daily digest notifications for channels with digest_mode='daily'."""
+    import logging
+
+    from packages.db.session import SessionLocal  # noqa: PLC0415
+    logger = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        from apps.backend.app.services.notification.dispatcher import (
+            _dispatch_digest,  # noqa: PLC0415
+        )
+        from packages.db.models.notification_channel import (
+            NotificationChannel,  # noqa: PLC0415
+        )
+
+        channels = (
+            db.query(NotificationChannel)
+            .filter_by(digest_mode="daily", is_enabled=True)
+            .all()
+        )
+        for channel in channels:
+            try:
+                await _dispatch_digest(db, channel)
+            except Exception as e:
+                logger.exception(f"Digest send failed for channel {channel.id}: {e}")
+        logger.info("Notification digest job completed")
+    except Exception as e:
+        logger.exception(f"Notification digest job failed: {e}")
+    finally:
+        db.close()
