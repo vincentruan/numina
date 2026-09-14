@@ -38,7 +38,7 @@
           <div class="hub-stat-item">
             <div class="hub-stat-num-wrap">
               <span class="hub-stat-num" :class="{ warn: stat.warn }">{{ stat.value }}</span>
-              <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')" @click.stop="openStatPopover(stat.type, $event)">
+              <button class="hub-stat-info" type="button" :aria-label="t('aiHub.viewDetail')" @click.stop="openStatPopover(stat.type)">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="10"/>
                   <line x1="12" y1="7" x2="12" y2="13"/>
@@ -71,12 +71,12 @@
           </template>
         </div>
       </div>
-      <!-- Stat detail popup (viewport-safe replacement for van-popover) -->
+      <!-- Stat detail popup: vant4 bottom sheet -->
       <van-popup
         :show="activePopover !== null"
         position="bottom"
         round
-        :style="popupStyle"
+        :style="{ maxHeight: '55vh' }"
         @close="activePopover = null"
         @click-overlay="activePopover = null"
       >
@@ -565,7 +565,6 @@ const reportAge = computed(() => {
 type HubStatType = 'suggestions' | 'alerts' | 'completeness'
 
 const activePopover = ref<HubStatType | null>(null)
-const popupPosition = ref({ left: 0, bottom: 0, width: 0, maxHeight: 0 })
 
 const suggestionCount = computed(() => {
   const r = currentReport.value
@@ -719,46 +718,13 @@ function goToReport(scrollTarget?: string) {
 }
 
 // --- Stat popup helpers ---
-// van-popup replaces van-popover to avoid viewport overflow on mobile.
-// The popup is positioned above the stats row using bottom CSS, which
-// Vant's position="bottom" respects via inline style override.
 
 const activeStatItem = computed(() =>
   statItems.value.find((s) => s.type === activePopover.value) ?? null,
 )
 
-const popupStyle = computed(() => ({
-  left: `${popupPosition.value.left}px`,
-  width: `${popupPosition.value.width}px`,
-  bottom: `${popupPosition.value.bottom}px`,
-  maxHeight: `${popupPosition.value.maxHeight}px`,
-}))
-
-function openStatPopover(type: HubStatType, event: MouseEvent) {
-  if (activePopover.value === type) {
-    activePopover.value = null
-    return
-  }
-  const statsRow = (event.currentTarget as HTMLElement).closest('.hub-stats')
-  if (statsRow) {
-    const rowRect = statsRow.getBoundingClientRect()
-    const vpH = window.visualViewport?.height ?? window.innerHeight
-    const popupW = Math.min(rowRect.width * 0.88, 360)
-    const left = Math.max(
-      8,
-      Math.min(rowRect.left + (rowRect.width - popupW) / 2, window.innerWidth - popupW - 8),
-    )
-    // Constrain popup height to available space above the stats row to prevent
-    // overflow beyond the viewport top on mobile H5/PWA.
-    const availableHeight = Math.max(rowRect.top - 4, 120)
-    popupPosition.value = {
-      left,
-      width: popupW,
-      bottom: vpH - rowRect.top + 4,
-      maxHeight: availableHeight,
-    }
-  }
-  activePopover.value = type
+function openStatPopover(type: HubStatType) {
+  activePopover.value = activePopover.value === type ? null : type
 }
 
 async function loadReport() {
