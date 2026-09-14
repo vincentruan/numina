@@ -142,19 +142,31 @@ def _db_seed_resources() -> list[Resource]:
         return None
 
     def _check_agents(db: Session) -> ResourceResult | None:
+        from apps.backend.app.bootstrap.agents import _NUMINA_AGENT
         from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
         from apps.backend.app.models.ai_agent import AIAgent
+
         existing = db.query(AIAgent).filter(AIAgent.id == NUMINA_AGENT_ID).first()
-        if existing:
-            return None
-        return ResourceResult(
-            resource_name="seed_agents",
-            resource_type=ResourceType.DATABASE_SEED,
-            desired_version="1",
-            status=ResourceStatus.DRIFTED,
-            current_version=None,
-            critical=True,
-        )
+        if not existing:
+            return ResourceResult(
+                resource_name="seed_agents",
+                resource_type=ResourceType.DATABASE_SEED,
+                desired_version="1",
+                status=ResourceStatus.DRIFTED,
+                current_version=None,
+                critical=True,
+            )
+        # Also detect display_name drift (e.g. renamed from "小鸣" → "数鸣")
+        if existing.display_name != _NUMINA_AGENT["display_name"]:
+            return ResourceResult(
+                resource_name="seed_agents",
+                resource_type=ResourceType.DATABASE_SEED,
+                desired_version="1",
+                status=ResourceStatus.DRIFTED,
+                current_version=f"display_name={existing.display_name!r}",
+                critical=False,
+            )
+        return None
 
     def _apply_agents(db: Session) -> ResourceResult | None:
         from apps.backend.app.bootstrap.agents import bootstrap_agents
