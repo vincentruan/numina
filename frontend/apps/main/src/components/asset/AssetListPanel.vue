@@ -1257,7 +1257,7 @@ defineExpose({
 .fab {
   position: fixed;
   right: 16px;
-  bottom: 72px;
+  bottom: calc(72px + env(safe-area-inset-bottom));
   width: 52px;
   height: 52px;
   border-radius: var(--radius-full);
