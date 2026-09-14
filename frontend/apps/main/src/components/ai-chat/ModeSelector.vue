@@ -10,7 +10,7 @@
  * - pro: 思考、计划再执行，获得更精准的结果，可能需要更多时间
  * - ultra: 继承自 Pro 模式，可调用子代理分工协作，适合复杂多步骤任务，能力最强
  */
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { InputMode } from '@/types/ai-chat/input-mode'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
@@ -28,9 +28,6 @@ const emit = defineEmits<{
 }>()
 
 const popupOpen = ref(false)
-const triggerRef = ref<HTMLElement | null>(null)
-
-// 可用模式列表（不过滤，全部展示，用 dimmed 表示不可用）
 const allModes = computed(() =>
   Object.values(INPUT_MODE_CONFIGS).map((config) => {
     let available = true
@@ -61,90 +58,18 @@ function onSelect(mode: InputMode) {
   popupOpen.value = false
 }
 
-// 弹出层位置：左对齐 trigger 按钮，显示在按钮上方
-// Uses ref updated on open + scroll/resize for reactive positioning
-const popupPosition = ref<Record<string, string>>({})
-
-function updatePopupPosition() {
-  if (!triggerRef.value || !popupOpen.value) return
-  const rect = triggerRef.value.getBoundingClientRect()
-  // Use visualViewport for mobile Safari compatibility (excludes browser chrome)
-  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-  const gap = 8
-  
-  const panelLeft = rect.left
-  const popupWidth = 300
-  let left = panelLeft
-  if (left + popupWidth > window.innerWidth - 16) {
-    left = Math.max(16, window.innerWidth - popupWidth - 16)
-  }
-
-  popupPosition.value = {
-    position: 'fixed' as const,
-    bottom: `${viewportHeight - rect.top + gap}px`,
-    left: `${left}px`,
-    maxWidth: `calc(100vw - 32px)`,
-  }
-}
-
 function togglePopup() {
   popupOpen.value = !popupOpen.value
-  if (popupOpen.value) {
-    nextTick(() => updatePopupPosition())
-  }
-}
-
-// Scroll/resize listener for reactive popup positioning
-function onScrollOrResize() {
-  updatePopupPosition()
 }
 
 function getModeIcon(mode: InputMode): string {
   return INPUT_MODE_CONFIGS[mode]?.icon || ''
 }
-
-function _getModeLabel(mode: InputMode): string {
-  return t(`mode.${mode}.label`)
-}
-
-// 点击页面其他位置关闭弹出层
-function onOutsideClick(e: MouseEvent) {
-  if (!popupOpen.value) return
-  const target = e.target as HTMLElement
-  if (triggerRef.value?.contains(target)) return
-  popupOpen.value = false
-}
-
-// Handle Escape key to close popup
-function onEscapeKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && popupOpen.value) {
-    popupOpen.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('keydown', onEscapeKey)
-  // 使用 capture 阶段拦截，确保先于其他组件的点击事件触发
-  document.addEventListener('click', onOutsideClick, true)
-  window.addEventListener('scroll', onScrollOrResize, true)
-  window.addEventListener('resize', onScrollOrResize)
-  // Listen for visualViewport changes (mobile Safari address bar show/hide)
-  window.visualViewport?.addEventListener('resize', onScrollOrResize)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', onEscapeKey)
-  document.removeEventListener('click', onOutsideClick, true)
-  window.removeEventListener('scroll', onScrollOrResize, true)
-  window.removeEventListener('resize', onScrollOrResize)
-  window.visualViewport?.removeEventListener('resize', onScrollOrResize)
-})
 </script>
 
 <template>
   <!-- 模式触发按钮 -->
   <button
-    ref="triggerRef"
     class="mode-trigger control-btn"
     :class="[`mode-trigger--${currentMode}`]"
     @click.stop="togglePopup"
@@ -154,35 +79,37 @@ onUnmounted(() => {
   </button>
 
   <!-- 模式选择弹出层 -->
-  <Teleport to="body">
-    <Transition name="mode-dropdown">
-      <div v-if="popupOpen" class="mode-dropdown" :style="popupPosition" @click.self="popupOpen = false">
-        <div class="mode-dropdown-card">
-          <!-- 模式列表 -->
-          <div
-            v-for="item in allModes"
-            :key="item.mode"
-            class="mode-item"
-            :class="{
-              'mode-item--active': isModeActive(item.mode),
-              'mode-item--dimmed': isModeDimmed(item.mode),
-              'mode-item--ultra': item.mode === 'ultra',
-            }"
-            @click="onSelect(item.mode)"
-          >
-            <div class="mode-item-header">
-              <IIcon :icon="item.icon" class="mode-item-icon" />
-              <span class="mode-item-label">{{ item.label }}</span>
-              <IIcon v-if="isModeActive(item.mode)" icon="lucide:check" class="mode-item-check" />
-              <div v-else class="mode-item-spacer" />
-            </div>
-            <div class="mode-item-desc">{{ item.description }}</div>
-          </div>
-
+  <van-popup
+    :show="popupOpen"
+    position="bottom"
+    round
+    :style="{ maxHeight: '60vh' }"
+    @close="popupOpen = false"
+    @click-overlay="popupOpen = false"
+  >
+    <div class="mode-dropdown-card">
+      <!-- 模式列表 -->
+      <div
+        v-for="item in allModes"
+        :key="item.mode"
+        class="mode-item"
+        :class="{
+          'mode-item--active': isModeActive(item.mode),
+          'mode-item--dimmed': isModeDimmed(item.mode),
+          'mode-item--ultra': item.mode === 'ultra',
+        }"
+        @click="onSelect(item.mode)"
+      >
+        <div class="mode-item-header">
+          <IIcon :icon="item.icon" class="mode-item-icon" />
+          <span class="mode-item-label">{{ item.label }}</span>
+          <IIcon v-if="isModeActive(item.mode)" icon="lucide:check" class="mode-item-check" />
+          <div v-else class="mode-item-spacer" />
         </div>
+        <div class="mode-item-desc">{{ item.description }}</div>
       </div>
-    </Transition>
-  </Teleport>
+    </div>
+  </van-popup>
 </template>
 
 <style scoped>
@@ -361,20 +288,9 @@ onUnmounted(() => {
   z-index: 2;
 }
 
-/* ── Dropdown ── */
-.mode-dropdown {
-  z-index: 1002;
-}
-
+/* ── Dropdown card content ── */
 .mode-dropdown-card {
-  width: 300px;
-  max-width: calc(100vw - 32px);
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   padding: 8px;
-  overflow: hidden;
 }
 
 /* ── Mode Item ── */
@@ -460,24 +376,8 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
-/* ── Transition ── */
-.mode-dropdown-enter-active,
-.mode-dropdown-leave-active {
-  transition: opacity 0.15s, transform 0.15s;
-}
-
-.mode-dropdown-enter-from,
-.mode-dropdown-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
 /* ── Responsive ── */
 @media (max-width: 375px) {
-  .mode-dropdown-card {
-    width: 270px;
-  }
-
   .mode-trigger {
     width: 28px;
     height: 28px;

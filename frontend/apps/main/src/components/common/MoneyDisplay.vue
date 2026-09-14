@@ -9,46 +9,40 @@
       @click.stop="togglePopover"
     >ⓘ</span>
 
-    <!-- Small bubble tooltip -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div
-          v-if="popoverVisible"
-          class="conversion-bubble"
-          :style="bubbleStyle"
-          @click.stop
-        >
-          <div class="bubble-row">
-            <span class="bubble-label">原始金额</span>
-            <span class="bubble-value">{{ originalAmountDisplay }}</span>
-          </div>
-          <div class="bubble-row">
-            <span class="bubble-label">汇率</span>
-            <span class="bubble-value">{{ rateDisplay }}</span>
-          </div>
-          <div class="bubble-time">
-            汇率更新: {{ formattedFetchTime }}
-          </div>
+    <!-- Conversion detail bottom sheet -->
+    <van-popup
+      :show="popoverVisible"
+      position="bottom"
+      round
+      :style="{ maxHeight: '40vh' }"
+      @close="popoverVisible = false"
+      @click-overlay="popoverVisible = false"
+    >
+      <div class="conversion-popup-content">
+        <div class="bubble-row">
+          <span class="bubble-label">{{ t('currency.originalAmount') }}</span>
+          <span class="bubble-value">{{ originalAmountDisplay }}</span>
         </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Overlay to close bubble -->
-    <Teleport to="body">
-      <div
-        v-if="popoverVisible"
-        class="conversion-overlay"
-        @click="popoverVisible = false"
-      ></div>
-    </Teleport>
+        <div class="bubble-row">
+          <span class="bubble-label">{{ t('currency.exchangeRate') }}</span>
+          <span class="bubble-value">{{ rateDisplay }}</span>
+        </div>
+        <div class="bubble-time">
+          {{ t('currency.rateUpdatedAt', { time: formattedFetchTime }) }}
+        </div>
+      </div>
+    </van-popup>
   </span>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { parseApiDate } from '@/utils/format'
 import { useExchangeRate } from '@/composables/useExchangeRate'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   // Money is str on the wire (money-as-str); coerced to number below. Accept both.
@@ -76,8 +70,6 @@ const { getCachedRate, getRateInfo } = useExchangeRate()
 
 const popoverVisible = ref(false)
 const rateInfo = ref<{ rate: number; fetched_at: string } | null>(null)
-const bubbleStyle = ref<Record<string, string>>({})
-const _iconElement = ref<HTMLElement | null>(null)
 
 // Fetch rate info when source currency differs from display currency
 watch(
@@ -216,31 +208,11 @@ const colorClass = computed(() => {
 
 const sizeClass = computed(() => `money-${props.size}`)
 
-function togglePopover(event: MouseEvent) {
+function togglePopover() {
   popoverVisible.value = !popoverVisible.value
-
-  if (popoverVisible.value) {
-    const target = event.target as HTMLElement
-    const rect = target.getBoundingClientRect()
-
-    // Position bubble above the icon
-    bubbleStyle.value = {
-      position: 'fixed',
-      left: `${Math.max(10, Math.min(rect.left - 40, window.innerWidth - 180))}px`,
-      top: `${rect.top - 95}px`,
-    }
-  }
-}
-
-// Close on escape key
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && popoverVisible.value) {
-    popoverVisible.value = false
-  }
 }
 
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
   // Pre-fetch target currency rate on mount
   if (currency.value && currency.value !== 'CNY') {
     void getRateInfo(currency.value)
@@ -251,9 +223,6 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
-})
 </script>
 
 <style scoped>
@@ -287,27 +256,10 @@ onUnmounted(() => {
   cursor: pointer;
   user-select: none;
 }
-.conversion-bubble {
-  position: fixed;
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 12px;
+.conversion-popup-content {
+  padding: 16px;
+  font-size: 13px;
   line-height: 1.5;
-  min-width: 150px;
-  max-width: 200px;
-  z-index: 2001;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-}
-.conversion-bubble::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: 50px;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid rgba(0, 0, 0, 0.85);
 }
 .bubble-row {
   display: flex;
@@ -315,36 +267,20 @@ onUnmounted(() => {
   gap: 12px;
 }
 .bubble-label {
-  color: #aaa;
+  color: var(--text-secondary, #969799);
   flex-shrink: 0;
 }
 .bubble-value {
   font-weight: 500;
   text-align: right;
   word-break: break-all;
+  color: var(--text-primary);
 }
 .bubble-time {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 11px;
-  color: #888;
-}
-.conversion-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2000;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  font-size: 12px;
+  color: var(--text-secondary, #969799);
 }
 </style>

@@ -45,10 +45,20 @@ const domain = computed(() => {
 const positionStyle = computed(() => {
   if (!props.anchorRect) return { display: 'none' }
   const rect = props.anchorRect
+  const cardWidth = 320
+  const margin = 12
+  // Center on anchor, but clamp to viewport
+  let left = rect.left + rect.width / 2
+  const halfCard = cardWidth / 2
+  if (left - halfCard < margin) {
+    left = margin + halfCard
+  } else if (left + halfCard > window.innerWidth - margin) {
+    left = window.innerWidth - margin - halfCard
+  }
   return {
     position: 'fixed' as const,
     top: `${rect.bottom + 6}px`,
-    left: `${rect.left + rect.width / 2}px`,
+    left: `${left}px`,
     transform: 'translateX(-50%)',
     zIndex: 1100,
   }
