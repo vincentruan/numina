@@ -19,10 +19,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "storage_backends",
-        sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
+    if "last_synced_at" not in existing_columns:
+        op.add_column(
+            "storage_backends",
+            sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
+        )
 
 
 def downgrade() -> None:

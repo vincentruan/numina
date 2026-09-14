@@ -24,6 +24,10 @@ depends_on: tuple[str, ...] | None = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    sb_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
+
     # Step 0: Make file_remote_locations.backend_id nullable so we can orphan
     # references to legacy backends before deleting them.
     with op.batch_alter_table("file_remote_locations") as batch_op:
@@ -34,10 +38,11 @@ def upgrade() -> None:
         )
 
     # Step 1: Add family_id column (nullable first, so we can delete legacy rows)
-    op.add_column(
-        "storage_backends",
-        sa.Column("family_id", sa.BigInteger(), nullable=True),
-    )
+    if "family_id" not in sb_columns:
+        op.add_column(
+            "storage_backends",
+            sa.Column("family_id", sa.BigInteger(), nullable=True),
+        )
 
     # Step 2: Orphan references to legacy global backends, then delete them
     op.execute(
@@ -47,6 +52,8 @@ def upgrade() -> None:
     op.execute("DELETE FROM storage_backends WHERE family_id IS NULL")
 
     # Step 3: Make family_id NOT NULL and add FK + index + unique constraint
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("storage_backends")}
+    existing_constraints = {c["name"] for c in inspector.get_unique_constraints("storage_backends")}
     with op.batch_alter_table("storage_backends") as batch_op:
         batch_op.alter_column(
             "family_id",
@@ -59,14 +66,17 @@ def upgrade() -> None:
             ["family_id"],
             ["id"],
         )
-        batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
-        batch_op.create_unique_constraint(
-            "uq_storage_backends_family_id", ["family_id"]
-        )
+        if "ix_storage_backends_family_id" not in existing_indexes:
+            batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
+        if "uq_storage_backends_family_id" not in existing_constraints:
+            batch_op.create_unique_constraint(
+                "uq_storage_backends_family_id", ["family_id"]
+            )
 
     # Step 4: Drop is_default column (semantics obsolete — one backend per family)
-    with op.batch_alter_table("storage_backends") as batch_op:
-        batch_op.drop_column("is_default")
+    if "is_default" in sb_columns:
+        with op.batch_alter_table("storage_backends") as batch_op:
+            batch_op.drop_column("is_default")
 
 
 def downgrade() -> None:

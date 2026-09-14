@@ -19,6 +19,11 @@ from collections.abc import Sequence
 
 from alembic import op
 
+revision: str = "a7b8c9d0e1f2"
+down_revision: str | None = "b6b918b0cb30"
+branch_labels: tuple[str, str] | None = None
+depends_on: str | None = None
+
 
 def upgrade() -> None:
     # ai_reports: cache-layer skill_id values
