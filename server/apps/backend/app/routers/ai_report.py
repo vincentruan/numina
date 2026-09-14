@@ -15,12 +15,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_serializer
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_report import AIReport
+from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
@@ -42,6 +42,13 @@ from packages.core.path_manager import PathManager
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
 logger = logging.getLogger(__name__)
+
+
+def _check_ai_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's AI master switch is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
 
 
 class MarkdownResponse(BaseModel):
@@ -97,7 +104,6 @@ async def trigger_generate_events(
     request: Request,
     force: bool = False,
     current_user: User = Depends(require_adult),
-    _ai: None = Depends(require_ai_enabled),
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
@@ -185,6 +191,8 @@ async def trigger_generate_events(
         if not session:
             raise AppError(ErrorCode.NOT_FOUND)
     else:
+        # AI-enabled gate (only enforced on generation path, not cache reads).
+        _check_ai_enabled(db, current_user.family_id)
         # force=true: cancel zombie running task so a fresh generation starts.
         if existing and force:
             logger.info(

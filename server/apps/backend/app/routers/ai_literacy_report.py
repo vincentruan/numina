@@ -13,11 +13,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
@@ -47,12 +47,18 @@ logger = logging.getLogger(__name__)
 SKILL_ID = "literacy"
 
 
+def _check_ai_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's AI master switch is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+
+
 @router.post("/generate")
 async def trigger_generate(
     child_id: str = Query(..., description="Child user ID"),
     force: bool = Query(False),
     current_user: User = Depends(require_adult),
-    _ai: User = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
     """Generate (or return cached) weekly literacy report for a child."""
@@ -82,6 +88,9 @@ async def trigger_generate(
         status = get_report_status(db, family_id=current_user.family_id, child_id=cid)
         if status["status"] == "ready":
             return status
+
+    # AI-enabled gate (only enforced on generation path, not cache reads).
+    _check_ai_enabled(db, current_user.family_id)
 
     report = await generate_literacy_report(
         db,
@@ -137,7 +146,6 @@ async def trigger_generate_events(
     child_id: str = Query(..., description="Child user ID"),
     force: bool = Query(False),
     current_user: User = Depends(require_adult),
-    _ai: User = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
     """Trigger literacy report generation with AITask-tracked SSE streaming (U14).
@@ -160,6 +168,9 @@ async def trigger_generate_events(
         status = get_report_status(db, family_id=current_user.family_id, child_id=cid)
         if status["status"] == "ready":
             return status
+
+    # AI-enabled gate (only enforced on generation path, not cache reads).
+    _check_ai_enabled(db, current_user.family_id)
 
     # Check if there's already a running task - resume it
     existing = AITaskService.get_running_task(current_user.family_id, SKILL_ID, db)

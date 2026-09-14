@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFinanceCoach } from '@/api/ai'
 import { useFamilyStore } from '@/stores/family'
@@ -53,12 +53,6 @@ const resumeHandle = useTaskResume('coach', {
 })
 
 async function load(force = false, _retryCount = 0) {
-  if (!familyStore.aiEnabled) {
-    visible.value = false
-    loading.value = false
-    loaded.value = true
-    return
-  }
   try {
     refreshing.value = force
     loading.value = true
@@ -198,39 +192,20 @@ async function onToggle(names: string[]) {
   }
 }
 
-// Fix race condition: aiEnabled may still be false when onMounted fires
-// because App.vue's loadCoinConfig() hasn't completed yet. Watch for it
-// to become true and trigger load() when it does. Use a hasStarted flag to
-// avoid double-loading when both onMounted (aiEnabled already true) and this
-// watch fire for the same enablement.
+// Always attempt cache-first load regardless of aiEnabled.
+// When AI is disabled and no valid cache exists, the backend returns 403
+// on the generation path → load() catch block hides the card silently.
+// When valid cache exists, the backend returns it even if AI is off.
 let hasStarted = false
 function startLoad() {
   if (hasStarted) return
   hasStarted = true
-  // Initial load: check cache directly. Skip resume() — if a completed task
-  // exists, resume() would call onComplete → load(false), which is the same
-  // as calling load(false) directly but with an extra round-trip.
-  // Running tasks are detected by load() via the 202-queued response.
   load(false)
 }
 
 onMounted(() => {
-  if (familyStore.aiEnabled) {
-    startLoad()
-  } else {
-    loading.value = false
-    loaded.value = true
-  }
+  startLoad()
 })
-
-watch(
-  () => familyStore.aiEnabled,
-  (enabled) => {
-    if (enabled && !hasStarted) {
-      startLoad()
-    }
-  },
-)
 
 // Dashboard is KeepAlive-cached; onActivated only reconnects SSE for running
 // tasks. Does NOT reload from cache when data is already present — this avoids
@@ -306,8 +281,8 @@ onUnmounted(() => {
           </div>
         </template>
 
-        <!-- AI disabled teaser -->
-        <div v-else-if="!familyStore.aiEnabled" class="fc-ai-gated">
+        <!-- AI disabled teaser — only when no cached data to display -->
+        <div v-else-if="!familyStore.aiEnabled && suggestions.length === 0" class="fc-ai-gated">
           <AiGatedInline
             :title="t('dashboard.financeCoach.title')"
             :is-owner="isOwner"

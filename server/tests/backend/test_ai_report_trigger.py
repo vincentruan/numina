@@ -62,15 +62,15 @@ def client(monkeypatch):
         # Default: no cached report (cache-miss -> stream). Cache-hit tests override
         # _latest_report locally.
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=None),
+        # AI-enabled gate is now a manual check (not a dependency) — bypass it.
+        patch("apps.backend.app.routers.ai_report._check_ai_enabled"),
     ):
         mock_agent_cls.return_value.stream = AsyncMock()  # stub; pump is mocked
-        from apps.backend.app.auth.ai_deps import require_ai_enabled
         from apps.backend.app.auth.deps import require_adult, require_owner
         from apps.backend.app.main import app
 
         _fake_user = type("U", (), {"id": 1, "family_id": "family-1", "role": "owner", "language": "zh-CN"})()
         app.dependency_overrides[require_adult] = lambda: _fake_user
-        app.dependency_overrides[require_ai_enabled] = lambda: None
         app.dependency_overrides[require_owner] = lambda: _fake_user
         try:
             with TestClient(app) as test_client:

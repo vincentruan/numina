@@ -1,5 +1,5 @@
 <template>
-  <div v-if="childMembers.length > 0 && familyStore.aiEnabled" class="literacy-status-card">
+  <div v-if="childMembers.length > 0" class="literacy-status-card">
     <van-collapse v-model="expanded">
       <van-collapse-item name="literacy">
         <template #title>
@@ -129,7 +129,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 async function loadStatuses() {
-  if (!familyStore.aiEnabled || !childMembers.value.length) {
+  if (!childMembers.value.length) {
     loading.value = false
     return
   }

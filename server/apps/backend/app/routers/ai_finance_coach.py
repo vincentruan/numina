@@ -12,11 +12,11 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
@@ -45,12 +45,18 @@ logger = logging.getLogger(__name__)
 SKILL_ID = "coach"
 
 
+def _check_ai_enabled(db: Session, family_id: int) -> None:
+    """Raise AI_NOT_ENABLED when the family's AI master switch is off."""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family or not family.ai_enabled:
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
+
+
 @router.post("/generate")
 async def trigger_finance_coach(
     request: Request,
     force: bool = False,
     current_user: User = Depends(require_adult),
-    _ai: None = Depends(require_ai_enabled),
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
@@ -79,6 +85,13 @@ async def trigger_finance_coach(
 
     # Check if there's already a running task - resume it instead of 409
     existing = AITaskService.get_running_task(current_user.family_id, SKILL_ID, db)
+
+    # AI-enabled gate (only enforced on generation path, not cache reads).
+    # When no cache and no running task, require ai_enabled before creating
+    # a new generation task. This allows cached results to be displayed even
+    # when the AI master switch is turned off.
+    if not existing:
+        _check_ai_enabled(db, current_user.family_id)
     if existing:
         # Already running — resume via bridge consumer ONLY.
         # The original caller's pump is still active and pushing events to the
