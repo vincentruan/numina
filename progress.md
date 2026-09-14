@@ -70,8 +70,57 @@
 - **Review:** APPROVED (Spec ✅, Quality ✅, Tests ✅)
 
 ### Task 5: Dispatcher Hooks + Mention Support + Dedup
-- **Status:** Implementer dispatching next
-- **Dependencies:** Tasks 1-4 ✅
+- **Status:** ✅ COMPLETE
+- **Commit:** `bf6d4e93` (feat: add dispatcher hooks, @mention formatting, and deduplication)
+- **Files:** 3 changed (dispatcher.py +185, sender.py +27, test file +45)
+- **Tests:** 24 passed, no regressions
+- **Review:** APPROVED (Spec ✅, Quality ✅, Tests ✅)
+
+### Task 6: Push Service Coordination
+- **Status:** ✅ COMPLETE
+- **Commit:** `927be46f` (feat: prevent duplicate webpush for reminder-pipeline events)
+- **Files:** 2 changed (push_service.py, test_web_push.py)
+- **Tests:** 29 passed, no regressions
+- **Review:** APPROVED (Spec ✅, Quality ✅, Tests ✅)
+
+### Task 7: Scheduler Digest Job
+- **Status:** ✅ COMPLETE
+- **Commit:** `74eb2463` (feat: wire daily digest job into scheduler_worker)
+- **Files:** 2 changed (jobs/__init__.py, scheduler.py)
+- **Tests:** 37 passed, no regressions
+- **Improvement:** Per-channel exception isolation (positive deviation from plan)
+- **Review:** APPROVED (Spec ✅, Quality ✅, Tests ✅)
+
+### Task 8: Integration Hooks
+- **Status:** ✅ COMPLETE
+- **Commit:** `78b1edaa` (feat: wire notification hooks at AI task/chore/wish endpoints)
+- **Files:** 3 changed (ai_internal.py, chores.py, child_wishes.py)
+- **Tests:** 6 passed
+- **Review:** APPROVED (Spec ✅, Safety ✅, Quality ✅)
+
+### Task 9: Frontend API + Types
+- **Status:** ✅ COMPLETE
+- **Commit:** `ca6e5cf4` (feat: add getEvents API and digest mode types to frontend)
+- **Files:** 1 changed (notificationChannels.ts, +22 lines)
+- **Typecheck:** Passed (pre-existing DashboardPage error unrelated)
+- **Review:** APPROVED (Spec ✅, Quality ✅)
+
+### Task 10: Frontend Event Selector Component
+- **Status:** ✅ COMPLETE
+- **Commit:** `c516fcfe` (feat: add EventSelectorPopup component with categorized event selection)
+- **Files:** 3 changed (EventSelectorPopup.vue, zh-CN.ts, en-US.ts)
+- **Typecheck:** Passed
+- **Review:** APPROVED (Spec ✅, Quality ✅)
+- **Improvement:** Per-category select/deselect (better than spec's global buttons)
+
+### Task 11: Frontend Config Page Updates + i18n
+- **Status:** ⏳ Implementer running
+- **Dependencies:** Tasks 1-10 ✅
+- **Review:** Pending
+
+### Task 12: Full Test Suite + Quality Check
+- **Status:** ⏳ Implementer running
+- **Dependencies:** Tasks 1-11 ✅
 - **Review:** Pending
 
 ---

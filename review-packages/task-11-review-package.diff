@@ -1,0 +1,382 @@
+diff --git a/frontend/apps/main/src/api/notificationChannels.ts b/frontend/apps/main/src/api/notificationChannels.ts
+index 0c0f7150..cae68fb0 100644
+--- a/frontend/apps/main/src/api/notificationChannels.ts
++++ b/frontend/apps/main/src/api/notificationChannels.ts
+@@ -19,7 +19,7 @@ export interface NotificationChannelResponse {
+   channel_type: 'telegram' | 'email' | 'feishu'
+   name: string
+   is_enabled: boolean
+-  config: Record<string, string | number>
++  config: Record<string, string | number | Record<string, string>>
+   subscriptions: string[]
+   digest_mode: 'immediate' | 'daily'
+   digest_time: string
+@@ -30,7 +30,7 @@ export interface NotificationChannelResponse {
+ export interface NotificationChannelCreate {
+   channel_type: 'telegram' | 'email' | 'feishu'
+   name: string
+-  config: Record<string, string | number>
++  config: Record<string, string | number | Record<string, string>>
+   is_enabled: boolean
+   subscriptions?: string[]
+   digest_mode?: 'immediate' | 'daily'
+@@ -39,7 +39,7 @@ export interface NotificationChannelCreate {
+ 
+ export interface NotificationChannelUpdate {
+   name?: string
+-  config?: Record<string, string | number>
++  config?: Record<string, string | number | Record<string, string>>
+   is_enabled?: boolean
+   subscriptions?: string[]
+   digest_mode?: 'immediate' | 'daily'
+diff --git a/frontend/apps/main/src/i18n/locales/en-US.ts b/frontend/apps/main/src/i18n/locales/en-US.ts
+index c0dec0c7..913c7b63 100644
+--- a/frontend/apps/main/src/i18n/locales/en-US.ts
++++ b/frontend/apps/main/src/i18n/locales/en-US.ts
+@@ -2380,6 +2380,23 @@ Keep the tone warm, like a chat between family members.`,
+       feishu: 'Feishu',
+     },
+     subscriptions: 'Subscribe to events',
++    noSubscriptions: 'None selected',
++    subscriptionCount: '{count} events',
++    digestMode: 'Daily Digest',
++    digestModeDesc: 'Send as daily summary',
++    digestTime: 'Delivery Time',
++    digestDailyShort: 'Daily Digest',
++    mentionConfig: '@Mention Settings',
++    mentionConfigTitle: '@Mention Settings',
++    notConfigured: 'Not set',
++    mentionUsername: 'Username',
++    mentionUsernamePlaceholder: 'e.g., vincent',
++    mentionUserId: 'User ID',
++    mentionUserIdPlaceholder: 'Telegram numeric ID',
++    mentionName: 'Name',
++    mentionNamePlaceholder: 'e.g., Vincent',
++    mentionOpenId: 'Open ID',
++    mentionOpenIdPlaceholder: 'Feishu Open ID',
+     thresholdFixed: 'Fixed threshold (¥)',
+     thresholdMultiplier: 'Monthly spend multiplier',
+     thresholdGroupTitle: 'Large Purchase Threshold',
+diff --git a/frontend/apps/main/src/i18n/locales/zh-CN.ts b/frontend/apps/main/src/i18n/locales/zh-CN.ts
+index 2c149c72..1e3b7a62 100644
+--- a/frontend/apps/main/src/i18n/locales/zh-CN.ts
++++ b/frontend/apps/main/src/i18n/locales/zh-CN.ts
+@@ -2652,6 +2652,23 @@ export default {
+       feishu: '飞书',
+     },
+     subscriptions: '订阅事件',
++    noSubscriptions: '未选择',
++    subscriptionCount: '{count} 个事件',
++    digestMode: '每日摘要',
++    digestModeDesc: '每日汇总发送',
++    digestTime: '发送时间',
++    digestDailyShort: '每日摘要',
++    mentionConfig: '@提及设置',
++    mentionConfigTitle: '@提及设置',
++    notConfigured: '未设置',
++    mentionUsername: '用户名',
++    mentionUsernamePlaceholder: '如 vincent',
++    mentionUserId: '用户 ID',
++    mentionUserIdPlaceholder: 'Telegram 数字 ID',
++    mentionName: '姓名',
++    mentionNamePlaceholder: '如 Vincent',
++    mentionOpenId: 'Open ID',
++    mentionOpenIdPlaceholder: '飞书 Open ID',
+     thresholdFixed: '固定金额阈值（元）',
+     thresholdMultiplier: '月均支出倍数',
+     thresholdGroupTitle: '大额消费阈值',
+diff --git a/frontend/apps/main/src/pages/NotificationConfigPage.vue b/frontend/apps/main/src/pages/NotificationConfigPage.vue
+index 593e730a..e9ac2d63 100644
+--- a/frontend/apps/main/src/pages/NotificationConfigPage.vue
++++ b/frontend/apps/main/src/pages/NotificationConfigPage.vue
+@@ -10,7 +10,7 @@
+       <van-swipe-cell v-for="channel in channels" :key="channel.id">
+         <van-cell
+           :title="channel.name"
+-          :label="`${t('reminders.channelType.' + channel.channel_type)} · ${channel.subscriptions.map((s) => t('reminders.types.' + s)).join('、')}`"
++          :label="channelLabel(channel)"
+           :value="channel.is_enabled ? t('reminders.channelEnabled') : t('reminders.channelDisabled')"
+           is-link
+           @click="editChannel(channel)"
+@@ -29,7 +29,7 @@
+     </van-cell-group>
+   </div>
+ 
+-  <van-popup v-model:show="showSheet" position="bottom" round teleport="body" :style="{ height: '75%' }">
++  <van-popup v-model:show="showSheet" position="bottom" round teleport="body" :style="{ height: '80%' }">
+     <div class="popup-content">
+       <van-nav-bar :title="editingChannel ? t('reminders.editChannelTitle') : t('reminders.addChannelTitle')">
+         <template #right>
+@@ -62,21 +62,39 @@
+           <van-field v-model="form.smtp_from" :label="t('reminders.smtpFromLabel')" :placeholder="t('reminders.smtpFromPlaceholder')" />
+           <van-field v-model="form.email_to" :label="t('reminders.emailToLabel')" :placeholder="t('reminders.smtpToPlaceholder')" />
+         </template>
+-        <van-cell :title="t('reminders.subscriptions')">
+-          <template #value>
+-            <van-checkbox-group v-model="form.subscriptions" direction="horizontal">
+-              <van-checkbox
+-                v-for="type in reminderTypes"
+-                :key="type"
+-                :name="type"
+-                shape="square"
+-                style="margin: 4px"
+-              >
+-                {{ t('reminders.types.' + type) }}
+-              </van-checkbox>
+-            </van-checkbox-group>
++
++        <!-- Subscription events — opens EventSelectorPopup -->
++        <van-cell
++          :title="t('reminders.subscriptions')"
++          :value="subscriptionSummary"
++          is-link
++          @click="showEventSelector = true"
++        />
++
++        <!-- Digest mode toggle -->
++        <van-cell :title="t('reminders.digestMode')" :value="t('reminders.digestModeDesc')">
++          <template #right-icon>
++            <van-switch v-model="form.digestEnabled" size="20px" />
+           </template>
+         </van-cell>
++        <van-field
++          v-if="form.digestEnabled"
++          :model-value="form.digest_time"
++          :label="t('reminders.digestTime')"
++          readonly
++          is-link
++          @click="showTimePicker = true"
++        />
++
++        <!-- Mention config — Telegram / Feishu only -->
++        <van-cell
++          v-if="form.channel_type === 'telegram' || form.channel_type === 'feishu'"
++          :title="t('reminders.mentionConfig')"
++          :value="mentionSummary"
++          is-link
++          @click="showMentionSheet = true"
++        />
++
+         <van-cell>
+           <van-button type="primary" block @click="saveChannel">{{ t('common.save') }}</van-button>
+         </van-cell>
+@@ -84,6 +102,48 @@
+     </div>
+   </van-popup>
+ 
++  <!-- Event selector popup -->
++  <EventSelectorPopup
++    v-model="showEventSelector"
++    :initial-types="form.subscriptions"
++    @save="onEventsSaved"
++  />
++
++  <!-- Mention config popup -->
++  <van-popup v-model:show="showMentionSheet" position="bottom" round teleport="body" :style="{ height: '50%' }">
++    <div class="popup-content">
++      <van-nav-bar :title="t('reminders.mentionConfigTitle')">
++        <template #right>
++          <van-icon name="cross" @click="showMentionSheet = false" />
++        </template>
++      </van-nav-bar>
++      <van-cell-group inset>
++        <template v-if="form.channel_type === 'telegram'">
++          <van-field v-model="form.mention_username" :label="t('reminders.mentionUsername')" :placeholder="t('reminders.mentionUsernamePlaceholder')" />
++          <van-field v-model="form.mention_user_id" :label="t('reminders.mentionUserId')" :placeholder="t('reminders.mentionUserIdPlaceholder')" />
++        </template>
++        <template v-if="form.channel_type === 'feishu'">
++          <van-field v-model="form.mention_name" :label="t('reminders.mentionName')" :placeholder="t('reminders.mentionNamePlaceholder')" />
++          <van-field v-model="form.mention_open_id" :label="t('reminders.mentionOpenId')" :placeholder="t('reminders.mentionOpenIdPlaceholder')" />
++        </template>
++        <van-cell>
++          <van-button type="primary" block @click="showMentionSheet = false">{{ t('common.save') }}</van-button>
++        </van-cell>
++      </van-cell-group>
++    </div>
++  </van-popup>
++
++  <!-- Time picker for digest time -->
++  <van-popup v-model:show="showTimePicker" position="bottom" round teleport="body" :z-index="3000">
++    <van-time-picker
++      v-model="digestTimeValue"
++      :title="t('reminders.digestTime')"
++      :columns-type="['hour', 'minute']"
++      @confirm="onTimeConfirm"
++      @cancel="showTimePicker = false"
++    />
++  </van-popup>
++
+   <van-popup v-model:show="showTypePicker" position="bottom" round :teleport="'body'" :z-index="3000">
+     <van-picker
+       :columns="typePickerColumns"
+@@ -107,10 +167,11 @@ const { t } = useI18n()
+ const channels = ref<NotificationChannelResponse[]>([])
+ const showSheet = ref(false)
+ const showTypePicker = ref(false)
++const showEventSelector = ref(false)
++const showMentionSheet = ref(false)
++const showTimePicker = ref(false)
+ const editingChannel = ref<NotificationChannelResponse | null>(null)
+ 
+-const reminderTypes = ['large_purchase', 'expiring_soon', 'maturity']
+-
+ const typePickerColumns = computed(() => [
+   { text: t('reminders.channelType.telegram'), value: 'telegram' },
+   { text: t('reminders.channelType.email'), value: 'email' },
+@@ -131,6 +192,44 @@ const form = reactive({
+   smtp_from: '',
+   email_to: '',
+   subscriptions: [] as string[],
++  digestEnabled: false,
++  digest_time: '21:00',
++  // Telegram mention
++  mention_username: '',
++  mention_user_id: '',
++  // Feishu mention
++  mention_name: '',
++  mention_open_id: '',
++})
++
++/** Digest time as [hour, minute] array for van-time-picker */
++const digestTimeValue = computed({
++  get: () => {
++    const [h, m] = form.digest_time.split(':')
++    return [h || '21', m || '00']
++  },
++  set: (val: string[]) => {
++    form.digest_time = `${val[0]}:${val[1]}`
++  },
++})
++
++const subscriptionSummary = computed(() => {
++  const count = form.subscriptions.length
++  if (count === 0) return t('reminders.noSubscriptions')
++  if (count <= 3) {
++    return form.subscriptions.map((s) => t('reminders.types.' + s)).join('、')
++  }
++  return t('reminders.subscriptionCount', { count })
++})
++
++const mentionSummary = computed(() => {
++  if (form.channel_type === 'telegram') {
++    return form.mention_username || t('reminders.notConfigured')
++  }
++  if (form.channel_type === 'feishu') {
++    return form.mention_name || t('reminders.notConfigured')
++  }
++  return ''
+ })
+ 
+ function resetForm() {
+@@ -147,6 +246,24 @@ function resetForm() {
+   form.smtp_from = ''
+   form.email_to = ''
+   form.subscriptions = []
++  form.digestEnabled = false
++  form.digest_time = '21:00'
++  form.mention_username = ''
++  form.mention_user_id = ''
++  form.mention_name = ''
++  form.mention_open_id = ''
++}
++
++function channelLabel(channel: NotificationChannelResponse): string {
++  const typeName = t('reminders.channelType.' + channel.channel_type)
++  const subCount = channel.subscriptions.length
++  const subLabel = subCount > 0
++    ? t('reminders.subscriptionCount', { count: subCount })
++    : t('reminders.noSubscriptions')
++  const digestLabel = channel.digest_mode === 'daily' ? t('reminders.digestDailyShort') : ''
++  const parts = [typeName, subLabel]
++  if (digestLabel) parts.push(digestLabel)
++  return parts.join(' · ')
+ }
+ 
+ onMounted(async () => {
+@@ -164,14 +281,22 @@ function editChannel(channel: NotificationChannelResponse) {
+   form.name = channel.name
+   form.channel_type = channel.channel_type
+   form.subscriptions = [...channel.subscriptions]
++  form.digestEnabled = channel.digest_mode === 'daily'
++  form.digest_time = channel.digest_time || '21:00'
+   // Populate config fields from decrypted config
+   const cfg = channel.config || {}
+   if (channel.channel_type === 'telegram') {
+     form.bot_token = String(cfg.bot_token || '')
+     form.chat_id = String(cfg.chat_id || '')
++    const mc = (cfg.mention_config || {}) as Record<string, string>
++    form.mention_username = String(mc.username || '')
++    form.mention_user_id = String(mc.user_id || '')
+   } else if (channel.channel_type === 'feishu') {
+     form.webhook_url = String(cfg.webhook_url || '')
+     form.secret = String(cfg.secret || '')
++    const mc = (cfg.mention_config || {}) as Record<string, string>
++    form.mention_name = String(mc.name || '')
++    form.mention_open_id = String(mc.open_id || '')
+   } else if (channel.channel_type === 'email') {
+     form.smtp_host = String(cfg.smtp_host || '')
+     form.smtp_port = typeof cfg.smtp_port === 'number' ? cfg.smtp_port : parseInt(String(cfg.smtp_port || '587')) || 587
+@@ -183,6 +308,15 @@ function editChannel(channel: NotificationChannelResponse) {
+   showSheet.value = true
+ }
+ 
++function onEventsSaved(types: string[]) {
++  form.subscriptions = types
++}
++
++function onTimeConfirm({ selectedValues }: { selectedValues: string[] }) {
++  form.digest_time = `${selectedValues[0]}:${selectedValues[1]}`
++  showTimePicker.value = false
++}
++
+ async function saveChannel() {
+   if (!form.name.trim()) {
+     showToast(t('reminders.channelNameRequired'))
+@@ -204,7 +338,8 @@ async function saveChannel() {
+     showToast(t('reminders.webhookUrlRequired'))
+     return
+   }
+-  const config: Record<string, string | number> =
++
++  const config: Record<string, string | number | Record<string, string>> =
+     form.channel_type === 'telegram'
+       ? { bot_token: form.bot_token, chat_id: form.chat_id }
+       : form.channel_type === 'feishu'
+@@ -218,11 +353,28 @@ async function saveChannel() {
+           to: form.email_to,
+         }
+ 
++  // Attach mention_config for telegram / feishu
++  if (form.channel_type === 'telegram' && (form.mention_username || form.mention_user_id)) {
++    config.mention_config = {
++      username: form.mention_username,
++      user_id: form.mention_user_id,
++    }
++  } else if (form.channel_type === 'feishu' && (form.mention_name || form.mention_open_id)) {
++    config.mention_config = {
++      name: form.mention_name,
++      open_id: form.mention_open_id,
++    }
++  }
++
++  const digestMode = form.digestEnabled ? 'daily' : 'immediate'
++
+   if (editingChannel.value) {
+     const updated = await notificationChannelsApi.update(editingChannel.value.id, {
+       name: form.name,
+       config,
+       subscriptions: form.subscriptions,
++      digest_mode: digestMode,
++      digest_time: form.digest_time,
+     })
+     const idx = channels.value.findIndex((c) => c.id === editingChannel.value!.id)
+     if (idx >= 0) channels.value[idx] = updated
+@@ -233,6 +385,8 @@ async function saveChannel() {
+       config,
+       is_enabled: true,
+       subscriptions: form.subscriptions,
++      digest_mode: digestMode,
++      digest_time: form.digest_time,
+     })
+     channels.value.push(created)
+   }

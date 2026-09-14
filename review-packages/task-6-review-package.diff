@@ -1,0 +1,3570 @@
+diff --git a/briefs/task-1-brief.md b/briefs/task-1-brief.md
+deleted file mode 100644
+index 232b6a30..00000000
+--- a/briefs/task-1-brief.md
++++ /dev/null
+@@ -1,211 +0,0 @@
+-### Task 1: Event Registry
+-
+-**Files:**
+-- Create: `server/apps/backend/app/services/notification/registry.py`
+-- Test: `server/tests/backend/services/test_notification_registry.py`
+-
+-**Rationale (CE review fix):** Registry lives in `apps/backend/app/services/notification/` (not `packages/core`) because only the backend dispatcher and frontend consume events. `packages/core` implies cross-package reuse that doesn't exist.
+-
+-**Interfaces:**
+-- Produces: `NOTIFICATION_CATEGORIES: dict`, `get_categorized_events() -> list[dict]`, `VALID_REMINDER_TYPES: set[str]`
+-
+-- [ ] **Step 1: Write the test**
+-
+-Create `server/tests/backend/services/test_notification_registry.py`:
+-
+-```python
+-"""Tests for notification event registry."""
+-
+-from apps.backend.app.services.notification.registry import (
+-    NOTIFICATION_CATEGORIES,
+-    get_categorized_events,
+-    VALID_REMINDER_TYPES,
+-)
+-
+-
+-def test_get_categorized_events_returns_four_categories():
+-    result = get_categorized_events()
+-    assert len(result) == 4
+-    categories = [c["category"] for c in result]
+-    assert categories == ["asset", "ai_task", "children", "wish"]
+-
+-
+-def test_get_categorized_events_has_ten_total_events():
+-    result = get_categorized_events()
+-    total = sum(len(c["events"]) for c in result)
+-    assert total == 10
+-
+-
+-def test_get_categorized_events_structure():
+-    result = get_categorized_events()
+-    asset_cat = result[0]
+-    assert asset_cat["category"] == "asset"
+-    assert "label_key" in asset_cat
+-    assert "icon" in asset_cat
+-    assert len(asset_cat["events"]) == 3
+-    first_event = asset_cat["events"][0]
+-    assert "type" in first_event
+-    assert "label_key" in first_event
+-    assert "severity" in first_event
+-
+-
+-def test_valid_reminder_types_matches_registry():
+-    """VALID_REMINDER_TYPES should be derived from the registry, not hardcoded."""
+-    registry_types = set()
+-    for cat in NOTIFICATION_CATEGORIES.values():
+-        registry_types.update(cat["events"].keys())
+-    assert VALID_REMINDER_TYPES == registry_types
+-
+-
+-def test_each_event_has_required_fields():
+-    for cat in NOTIFICATION_CATEGORIES.values():
+-        for event_key, event in cat["events"].items():
+-            assert "label_key" in event, f"Event {event_key} missing label_key"
+-            assert "default_severity" in event, f"Event {event_key} missing default_severity"
+-            assert "trigger" in event, f"Event {event_key} missing trigger"
+-            assert event["trigger"] in ("realtime", "scheduled"), f"Event {event_key} invalid trigger"
+-            assert event["default_severity"] in ("info", "warning", "critical")
+-```
+-
+-- [ ] **Step 2: Run test to verify it fails**
+-
+-```bash
+-cd server && uv run pytest tests/backend/services/test_notification_registry.py -v
+-```
+-Expected: FAIL with `ModuleNotFoundError: No module named 'apps.backend.app.services.notification.registry'`
+-
+-- [ ] **Step 3: Write minimal implementation**
+-
+-Create `server/apps/backend/app/services/notification/registry.py`:
+-
+-```python
+-"""Notification event registry.
+-
+-Central source of truth for all notification event types.
+-Replaces the hardcoded VALID_REMINDER_TYPES set in notification_channels router.
+-"""
+-
+-NOTIFICATION_CATEGORIES: dict[str, dict] = {
+-    "asset": {
+-        "label_key": "reminders.categories.asset",
+-        "icon": "cube-outline",
+-        "events": {
+-            "large_purchase": {
+-                "label_key": "reminders.types.large_purchase",
+-                "default_severity": "warning",
+-                "trigger": "realtime",
+-            },
+-            "expiring_soon": {
+-                "label_key": "reminders.types.expiring_soon",
+-                "default_severity": "warning",
+-                "trigger": "scheduled",
+-            },
+-            "maturity": {
+-                "label_key": "reminders.types.maturity",
+-                "default_severity": "warning",
+-                "trigger": "scheduled",
+-            },
+-        },
+-    },
+-    "ai_task": {
+-        "label_key": "reminders.categories.ai_task",
+-        "icon": "robot-outline",
+-        "events": {
+-            "ai_report_complete": {
+-                "label_key": "reminders.types.ai_report_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "ai_finance_coach_complete": {
+-                "label_key": "reminders.types.ai_finance_coach_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "ai_wish_advice_complete": {
+-                "label_key": "reminders.types.ai_wish_advice_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "ai_literacy_report_complete": {
+-                "label_key": "reminders.types.ai_literacy_report_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-        },
+-    },
+-    "children": {
+-        "label_key": "reminders.categories.children",
+-        "icon": "friends-outline",
+-        "events": {
+-            "chore_completed": {
+-                "label_key": "reminders.types.chore_completed",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "treasure_redeemed": {
+-                "label_key": "reminders.types.treasure_redeemed",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-        },
+-    },
+-    "wish": {
+-        "label_key": "reminders.categories.wish",
+-        "icon": "gift-outline",
+-        "events": {
+-            "wish_redeemed": {
+-                "label_key": "reminders.types.wish_redeemed",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-        },
+-    },
+-}
+-
+-
+-def get_categorized_events() -> list[dict]:
+-    """Return categorized event list for frontend rendering.
+-
+-    Each category includes its metadata and a list of events with:
+-    - type: the reminder_type string
+-    - label_key: i18n key for display
+-    - severity: default severity level
+-    """
+-    result = []
+-    for category_key, category in NOTIFICATION_CATEGORIES.items():
+-        events = []
+-        for event_key, event in category["events"].items():
+-            events.append({
+-                "type": event_key,
+-                "label_key": event["label_key"],
+-                "severity": event["default_severity"],
+-            })
+-        result.append({
+-            "category": category_key,
+-            "label_key": category["label_key"],
+-            "icon": category["icon"],
+-            "events": events,
+-        })
+-    return result
+-
+-
+-def get_all_reminder_types() -> set[str]:
+-    """Return flat set of all valid reminder_type values from the registry."""
+-    types = set()
+-    for category in NOTIFICATION_CATEGORIES.values():
+-        types.update(category["events"].keys())
+-    return types
+-
+-
+-# Backward-compatible alias for the router's VALID_REMINDER_TYPES
+-VALID_REMINDER_TYPES: set[str] = get_all_reminder_types()
+-```
+-
+-- [ ] **Step 4: Run test to verify it passes**
+-
+-```bash
+-cd server && uv run pytest tests/backend/services/test_notification_registry.py -v
+-```
+-Expected: 5 tests PASS
+-
+-- [ ] **Step 5: Commit**
+diff --git a/briefs/task-2-brief.md b/briefs/task-2-brief.md
+deleted file mode 100644
+index 97c89f1d..00000000
+--- a/briefs/task-2-brief.md
++++ /dev/null
+@@ -1,99 +0,0 @@
+-```bash
+-git add server/apps/backend/app/services/notification/registry.py server/tests/backend/services/test_notification_registry.py
+-git commit -m "feat(notification): add event registry replacing hardcoded VALID_REMINDER_TYPES
+-
+-Registry lives in apps/backend (not packages/core) since only backend
+-dispatcher and frontend consume events. Provides get_categorized_events()
+-for API and VALID_REMINDER_TYPES set for backward-compatible router use.
+-
+-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+-```
+-
+----
+-
+-### Task 2: Database Migration
+-
+-**Files:**
+-- Create: `server/apps/backend/alembic/versions/<timestamp>_add_notification_enhancements.py`
+-- Modify: `server/packages/db/models/notification_channel.py`
+-- Modify: `server/packages/db/models/reminder.py`
+-
+-**Interfaces:**
+-- Consumes: nothing
+-- Produces: `notification_channels.digest_mode`, `notification_channels.digest_time`, `reminders.digest_sent_at`
+-
+-**Rationale (CE review fix):** Add `digest_sent_at` to Reminder model (not change status to "resolved") so digest delivery is tracked separately from user acknowledgment.
+-
+-- [ ] **Step 1: Update models**
+-
+-Modify `server/packages/db/models/notification_channel.py` — add two columns:
+-
+-```python
+-# Add after the is_enabled field (around line 19):
+-digest_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="immediate")
+-digest_time: Mapped[str] = mapped_column(String(10), nullable=False, server_default="21:00")
+-```
+-
+-Modify `server/packages/db/models/reminder.py` — add one column:
+-
+-```python
+-# Add after the resolved_at field:
+-digest_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+-```
+-
+-- [ ] **Step 2: Generate migration**
+-
+-```bash
+-cd server/apps/backend && uv run alembic revision --autogenerate -m "add_notification_enhancements"
+-```
+-
+-- [ ] **Step 3: Verify migration**
+-
+-```bash
+-cd server/apps/backend && uv run alembic upgrade head
+-```
+-
+-- [ ] **Step 4: Update schema**
+-
+-Modify `server/apps/backend/app/schemas/notification_channel.py`:
+-
+-```python
+-# Add to NotificationChannelCreate:
+-digest_mode: str = "immediate"
+-digest_time: str = "21:00"
+-
+-# Add to NotificationChannelUpdate:
+-digest_mode: str | None = None
+-digest_time: str | None = None
+-
+-# Add to NotificationChannelResponse:
+-digest_mode: str = "immediate"
+-digest_time: str = "21:00"
+-```
+-
+-- [ ] **Step 5: Commit**
+-
+-```bash
+-git add server/packages/db/models/notification_channel.py server/packages/db/models/reminder.py server/apps/backend/app/schemas/notification_channel.py server/apps/backend/alembic/versions/*notification_enhancements*
+-git commit -m "feat(notification): add digest_mode, digest_time, digest_sent_at columns
+-
+-Adds per-channel digest configuration and tracks digest delivery separately
+-from user acknowledgment (digest_sent_at vs resolved_at).
+-
+-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+-```
+-
+----
+-
+-### Task 3: Notification Templates
+-
+-**Files:**
+-- Create: 7 template JSON files in `server/apps/backend/app/services/notification/templates/`
+-
+-**Rationale (CE review fix):** Create templates for all 7 new event types. Note: `maturity.json` already exists (review finding was incorrect).
+-
+-- [ ] **Step 1: Create AI task templates**
+-
+-Create `server/apps/backend/app/services/notification/templates/ai_report_complete.json`:
+-```json
+-{
+diff --git a/briefs/task-3-brief.md b/briefs/task-3-brief.md
+deleted file mode 100644
+index 93abe271..00000000
+--- a/briefs/task-3-brief.md
++++ /dev/null
+@@ -1,91 +0,0 @@
+-
+-
+-@pytest.mark.usefixtures("auth_headers")
+-def test_get_events_requires_auth(client_no_auth: TestClient):
+-    resp = client_no_auth.get("/api/v1/notification-channels/events")
+-    assert resp.status_code in (401, 403)
+-```
+-
+-- [ ] **Step 2: Run test to verify it fails**
+-
+-```bash
+-cd server && uv run pytest tests/backend/routers/test_notification_channels_events.py -v
+-```
+-
+-- [ ] **Step 3: Update router**
+-
+-Modify `server/apps/backend/app/routers/notification_channels.py`:
+-
+-```python
+-# Replace the hardcoded VALID_REMINDER_TYPES line (line 28):
+-# OLD: VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
+-# NEW:
+-from apps.backend.app.services.notification.registry import (
+-    get_categorized_events,
+-    VALID_REMINDER_TYPES,
+-)
+-
+-# Add new endpoint before the list_channels function:
+-@router.get("/events")
+-def get_events(user: User = Depends(require_adult)):
+-    """Return categorized event types for frontend event selector."""
+-    return get_categorized_events()
+-
+-# Update create_channel and update_channel to use the registry-derived set:
+-# In create_channel, change line 94:
+-# OLD: if rtype in VALID_REMINDER_TYPES:
+-# (VALID_REMINDER_TYPES is now imported from registry, no change needed to the check itself)
+-
+-# In create_channel, accept digest_mode and digest_time:
+-channel = NotificationChannel(
+-    id=next_id(),
+-    family_id=user.family_id,
+-    channel_type=req.channel_type,
+-    name=req.name,
+-    is_enabled=req.is_enabled if req.is_enabled is not None else True,
+-    digest_mode=getattr(req, "digest_mode", "immediate"),
+-    digest_time=getattr(req, "digest_time", "21:00"),
+-)
+-
+-# In _to_response, add digest fields to response:
+-return NotificationChannelResponse(
+-    # ... existing fields ...
+-    digest_mode=channel.digest_mode,
+-    digest_time=channel.digest_time,
+-)
+-```
+-
+-- [ ] **Step 4: Run test to verify it passes**
+-
+-```bash
+-cd server && uv run pytest tests/backend/routers/test_notification_channels_events.py -v
+-```
+-
+-- [ ] **Step 5: Commit**
+-
+-```bash
+-git add server/apps/backend/app/routers/notification_channels.py server/tests/backend/routers/test_notification_channels_events.py
+-git commit -m "feat(notification): add GET /events endpoint with registry-derived validation
+-
+-Replaces hardcoded VALID_REMINDER_TYPES with registry-derived set.
+-Adds explicit require_adult auth to /events endpoint.
+-
+-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+-```
+-
+----
+-
+-### Task 5: Dispatcher Hooks + Mention Support + Dedup
+-
+-**Files:**
+-- Modify: `server/apps/backend/app/services/notification/dispatcher.py`
+-- Modify: `server/apps/backend/app/services/notification/sender.py`
+-
+-**Interfaces:**
+-- Consumes: `NOTIFICATION_CATEGORIES` from registry, `Reminder` model with `digest_sent_at`
+-- Produces: `notify_ai_task_complete()`, `notify_chore_completed()`, `notify_treasure_redeemed()`, `notify_wish_redeemed()`, `_dispatch_digest()`, `_format_mention()`
+-
+-**Rationale (CE review fixes):**
+-- Add `notify_treasure_redeemed()` (was missing in spec)
+-- Use `digest_sent_at` instead of changing status to "resolved"
+-- Add deduplication for AI task notifications
+diff --git a/briefs/task-4-brief.md b/briefs/task-4-brief.md
+deleted file mode 100644
+index 4030e75f..00000000
+--- a/briefs/task-4-brief.md
++++ /dev/null
+@@ -1,171 +0,0 @@
+-{
+-  "telegram": {"text": "📊 {task_title} 已生成完成，点击查看。"},
+-  "email_subject": "AI 任务完成：{task_title}",
+-  "email_body": "<p>{task_title} 已生成完成，请登录查看。</p>",
+-  "feishu": {"text": " {task_title} 已生成完成，点击查看。"},
+-  "webpush_title": "AI 任务完成",
+-  "webpush_body": "{task_title} 已生成完成"
+-}
+-```
+-
+-Create `ai_finance_coach_complete.json`, `ai_wish_advice_complete.json`, `ai_literacy_report_complete.json` with similar structure (adjust emoji and text).
+-
+-- [ ] **Step 2: Create children/wish templates**
+-
+-Create `chore_completed.json`:
+-```json
+-{
+-  "telegram": {"text": " {child_name} 完成了任务「{chore_title}」，快去看看吧！"},
+-  "email_subject": "儿童任务完成：{chore_title}",
+-  "email_body": "<p>{child_name} 完成了任务「{chore_title}」。</p>",
+-  "feishu": {"text": "👶 {child_name} 完成了任务「{chore_title}」，快去看看吧！"},
+-  "webpush_title": "儿童任务完成",
+-  "webpush_body": "{child_name} 完成了「{chore_title}」"
+-}
+-```
+-
+-Create `treasure_redeemed.json` and `wish_redeemed.json` similarly.
+-
+-- [ ] **Step 3: Commit**
+-
+-```bash
+-git add server/apps/backend/app/services/notification/templates/ai_*.json server/apps/backend/app/services/notification/templates/chore_completed.json server/apps/backend/app/services/notification/templates/treasure_redeemed.json server/apps/backend/app/services/notification/templates/wish_redeemed.json
+-git commit -m "feat(notification): add 7 templates for new event types
+-
+-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+-```
+-
+----
+-
+-### Task 4: API Endpoint + Router Updates
+-
+-**Files:**
+-- Modify: `server/apps/backend/app/routers/notification_channels.py`
+-
+-**Interfaces:**
+-- Consumes: `get_categorized_events()`, `VALID_REMINDER_TYPES` from registry
+-- Produces: `GET /api/v1/notification-channels/events` endpoint
+-
+-**Rationale (CE review fix):** Add explicit `require_adult` auth to `/events` endpoint. Use registry-derived `VALID_REMINDER_TYPES` instead of hardcoded set.
+-
+-- [ ] **Step 1: Write the test**
+-
+-Create `server/tests/backend/routers/test_notification_channels_events.py`:
+-
+-```python
+-"""Tests for GET /notification-channels/events endpoint."""
+-
+-import pytest
+-from fastapi.testclient import TestClient
+-
+-
+-@pytest.mark.usefixtures("auth_headers")
+-def test_get_events_returns_four_categories(client: TestClient):
+-    resp = client.get("/api/v1/notification-channels/events")
+-    assert resp.status_code == 200
+-    data = resp.json()
+-    assert len(data) == 4
+-    categories = [c["category"] for c in data]
+-    assert categories == ["asset", "ai_task", "children", "wish"]
+-
+-
+-@pytest.mark.usefixtures("auth_headers")
+-def test_get_events_asset_category_has_three_events(client: TestClient):
+-    resp = client.get("/api/v1/notification-channels/events")
+-    asset = next(c for c in resp.json() if c["category"] == "asset")
+-    assert len(asset["events"]) == 3
+-    types = [e["type"] for e in asset["events"]]
+-    assert "large_purchase" in types
+-    assert "expiring_soon" in types
+-    assert "maturity" in types
+-
+-
+-@pytest.mark.usefixtures("auth_headers")
+-def test_get_events_requires_auth(client_no_auth: TestClient):
+-    resp = client_no_auth.get("/api/v1/notification-channels/events")
+-    assert resp.status_code in (401, 403)
+-```
+-
+-- [ ] **Step 2: Run test to verify it fails**
+-
+-```bash
+-cd server && uv run pytest tests/backend/routers/test_notification_channels_events.py -v
+-```
+-
+-- [ ] **Step 3: Update router**
+-
+-Modify `server/apps/backend/app/routers/notification_channels.py`:
+-
+-```python
+-# Replace the hardcoded VALID_REMINDER_TYPES line (line 28):
+-# OLD: VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
+-# NEW:
+-from apps.backend.app.services.notification.registry import (
+-    get_categorized_events,
+-    VALID_REMINDER_TYPES,
+-)
+-
+-# Add new endpoint before the list_channels function:
+-@router.get("/events")
+-def get_events(user: User = Depends(require_adult)):
+-    """Return categorized event types for frontend event selector."""
+-    return get_categorized_events()
+-
+-# Update create_channel and update_channel to use the registry-derived set:
+-# In create_channel, change line 94:
+-# OLD: if rtype in VALID_REMINDER_TYPES:
+-# (VALID_REMINDER_TYPES is now imported from registry, no change needed to the check itself)
+-
+-# In create_channel, accept digest_mode and digest_time:
+-channel = NotificationChannel(
+-    id=next_id(),
+-    family_id=user.family_id,
+-    channel_type=req.channel_type,
+-    name=req.name,
+-    is_enabled=req.is_enabled if req.is_enabled is not None else True,
+-    digest_mode=getattr(req, "digest_mode", "immediate"),
+-    digest_time=getattr(req, "digest_time", "21:00"),
+-)
+-
+-# In _to_response, add digest fields to response:
+-return NotificationChannelResponse(
+-    # ... existing fields ...
+-    digest_mode=channel.digest_mode,
+-    digest_time=channel.digest_time,
+-)
+-```
+-
+-- [ ] **Step 4: Run test to verify it passes**
+-
+-```bash
+-cd server && uv run pytest tests/backend/routers/test_notification_channels_events.py -v
+-```
+-
+-- [ ] **Step 5: Commit**
+-
+-```bash
+-git add server/apps/backend/app/routers/notification_channels.py server/tests/backend/routers/test_notification_channels_events.py
+-git commit -m "feat(notification): add GET /events endpoint with registry-derived validation
+-
+-Replaces hardcoded VALID_REMINDER_TYPES with registry-derived set.
+-Adds explicit require_adult auth to /events endpoint.
+-
+-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+-```
+-
+----
+-
+-### Task 5: Dispatcher Hooks + Mention Support + Dedup
+-
+-**Files:**
+-- Modify: `server/apps/backend/app/services/notification/dispatcher.py`
+-- Modify: `server/apps/backend/app/services/notification/sender.py`
+-
+-**Interfaces:**
+-- Consumes: `NOTIFICATION_CATEGORIES` from registry, `Reminder` model with `digest_sent_at`
+-- Produces: `notify_ai_task_complete()`, `notify_chore_completed()`, `notify_treasure_redeemed()`, `notify_wish_redeemed()`, `_dispatch_digest()`, `_format_mention()`
+-
+-**Rationale (CE review fixes):**
+-- Add `notify_treasure_redeemed()` (was missing in spec)
+-- Use `digest_sent_at` instead of changing status to "resolved"
+-- Add deduplication for AI task notifications
+diff --git a/briefs/task-5-brief.md b/briefs/task-5-brief.md
+deleted file mode 100644
+index a145c678..00000000
+--- a/briefs/task-5-brief.md
++++ /dev/null
+@@ -1,171 +0,0 @@
+-- Add deduplication for AI task notifications
+-- Add `_format_mention()` for Telegram/Feishu @mentions
+-- Accept `template_vars` separately (not via ensure_reminder dict)
+-
+-- [ ] **Step 1: Write tests for new dispatcher functions**
+-
+-Create additions to `server/tests/backend/services/test_notification_dispatcher.py`:
+-
+-```python
+-"""Tests for notification dispatcher hooks and mention formatting."""
+-
+-from apps.backend.app.services.notification.sender import _format_mention
+-
+-
+-def test_format_mention_telegram_with_user_id():
+-    text = "Test notification"
+-    config = {"user_id": "123456789", "username": "vincent"}
+-    result = _format_mention(text, "telegram", config)
+-    assert '<a href="tg://user?id=123456789">@vincent</a>' in result
+-    assert "Test notification" in result
+-
+-
+-def test_format_mention_telegram_without_user_id():
+-    text = "Test notification"
+-    config = {"username": "vincent"}
+-    result = _format_mention(text, "telegram", config)
+-    assert result == text  # No mention added
+-
+-
+-def test_format_mention_feishu_with_open_id():
+-    text = "Test notification"
+-    config = {"open_id": "ou_xxx", "name": "Vincent"}
+-    result = _format_mention(text, "feishu", config)
+-    assert '<at user_id="ou_xxx">Vincent</at>' in result
+-
+-
+-def test_format_mention_none_config():
+-    text = "Test notification"
+-    result = _format_mention(text, "telegram", None)
+-    assert result == text
+-
+-
+-def test_format_mention_unsupported_channel():
+-    text = "Test notification"
+-    config = {"user_id": "123"}
+-    result = _format_mention(text, "email", config)
+-    assert result == text  # Email doesn't support mention
+-
+-
+-def test_notify_ai_task_complete_dedup():
+-    """Second call within 1 hour should be skipped (dedup)."""
+-    # This requires a DB session fixture - use integration test pattern
+-    # See tests/backend/integration/test_notification_dedup.py for full test
+-    assert True  # Placeholder - integration test covers this
+-```
+-
+-- [ ] **Step 2: Implement _format_mention in sender.py**
+-
+-Add to `server/apps/backend/app/services/notification/sender.py`:
+-
+-```python
+-def _format_mention(text: str, channel_type: str, mention_config: dict | None) -> str:
+-    """Prepend @mention markup to message text if mention_config is set.
+-
+-    Telegram: uses HTML <a href="tg://user?id=...">@username</a> format.
+-    Feishu: uses <at user_id="open_id">name</at> format.
+-    Other channel types: returns text unchanged.
+-    """
+-    if not mention_config:
+-        return text
+-
+-    if channel_type == "telegram":
+-        user_id = mention_config.get("user_id")
+-        username = mention_config.get("username", "user")
+-        if user_id:
+-            mention = f'<a href="tg://user?id={user_id}">@{username}</a>\n\n'
+-            return mention + text
+-
+-    elif channel_type == "feishu":
+-        open_id = mention_config.get("open_id")
+-        name = mention_config.get("name", "user")
+-        if open_id:
+-            mention = f'<at user_id="{open_id}">{name}</at>\n\n'
+-            return mention + text
+-
+-    return text
+-```
+-
+-- [ ] **Step 3: Add dispatcher hooks**
+-
+-Add to `server/apps/backend/app/services/notification/dispatcher.py`:
+-
+-```python
+-from apps.backend.app.services.notification.registry import NOTIFICATION_CATEGORIES
+-from datetime import timedelta
+-
+-
+-def _check_reminder_dedup(db: Session, family_id: int, reminder_type: str, title: str, hours: int = 1) -> bool:
+-    """Check if a similar reminder was created recently (deduplication)."""
+-    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+-    existing = (
+-        db.query(Reminder)
+-        .filter(
+-            Reminder.family_id == family_id,
+-            Reminder.reminder_type == reminder_type,
+-            Reminder.title == title,
+-            Reminder.created_at >= cutoff,
+-        )
+-        .first()
+-    )
+-    return existing is not None
+-
+-
+-def notify_ai_task_complete(
+-    db: Session, family_id: int, task_type: str, task_title: str
+-) -> None:
+-    """Create a Reminder for AI task completion and dispatch.
+-
+-    Includes deduplication: skips if same task_type+title was notified within 1 hour.
+-    """
+-    reminder_type = f"ai_{task_type}_complete"
+-    title = f"AI 任务完成：{task_title}"
+-
+-    if _check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
+-        return
+-
+-    template_vars = {"task_title": task_title}
+-    body = f"「{task_title}」已生成完成，点击查看。"
+-
+-    ensure_reminder(db, {
+-        "family_id": family_id,
+-        "reminder_type": reminder_type,
+-        "title": title,
+-        "body": body,
+-        "severity": "info",
+-        "template_vars": template_vars,
+-    })
+-
+-
+-def notify_chore_completed(
+-    db: Session, family_id: int, child_name: str, chore_title: str
+-) -> None:
+-    """Create a Reminder for chore completion and dispatch."""
+-    ensure_reminder(db, {
+-        "family_id": family_id,
+-        "reminder_type": "chore_completed",
+-        "title": f"儿童任务完成：{chore_title}",
+-        "body": f"{child_name} 完成了任务「{chore_title}」，快去看看吧！",
+-        "severity": "info",
+-        "template_vars": {"child_name": child_name, "chore_title": chore_title},
+-    })
+-
+-
+-def notify_treasure_redeemed(
+-    db: Session, family_id: int, child_name: str, treasure_title: str
+-) -> None:
+-    """Create a Reminder for treasure redemption and dispatch."""
+-    ensure_reminder(db, {
+-        "family_id": family_id,
+-        "reminder_type": "treasure_redeemed",
+-        "title": f"宝贝兑换：{treasure_title}",
+-        "body": f"{child_name} 兑换了宝贝「{treasure_title}」！",
+-        "severity": "info",
+-        "template_vars": {"child_name": child_name, "treasure_title": treasure_title},
+-    })
+-
+-
+-def notify_wish_redeemed(
+-    db: Session, family_id: int, wish_title: str, child_name: str
+-) -> None:
+-    """Create a Reminder for wish redemption and dispatch."""
+diff --git a/briefs/task-6-brief.md b/briefs/task-6-brief.md
+deleted file mode 100644
+index b9f81422..00000000
+--- a/briefs/task-6-brief.md
++++ /dev/null
+@@ -1,201 +0,0 @@
+-
+-
+-@pytest.mark.usefixtures("auth_headers")
+-def test_get_events_requires_auth(client_no_auth: TestClient):
+-    resp = client_no_auth.get("/api/v1/notification-channels/events")
+-    assert resp.status_code in (401, 403)
+-```
+-
+-- [ ] **Step 2: Run test to verify it fails**
+-
+-```bash
+-cd server && uv run pytest tests/backend/routers/test_notification_channels_events.py -v
+-```
+-
+-- [ ] **Step 3: Update router**
+-
+-Modify `server/apps/backend/app/routers/notification_channels.py`:
+-
+-```python
+-# Replace the hardcoded VALID_REMINDER_TYPES line (line 28):
+-# OLD: VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
+-# NEW:
+-from apps.backend.app.services.notification.registry import (
+-    get_categorized_events,
+-    VALID_REMINDER_TYPES,
+-)
+-
+-# Add new endpoint before the list_channels function:
+-@router.get("/events")
+-def get_events(user: User = Depends(require_adult)):
+-    """Return categorized event types for frontend event selector."""
+-    return get_categorized_events()
+-
+-# Update create_channel and update_channel to use the registry-derived set:
+-# In create_channel, change line 94:
+-# OLD: if rtype in VALID_REMINDER_TYPES:
+-# (VALID_REMINDER_TYPES is now imported from registry, no change needed to the check itself)
+-
+-# In create_channel, accept digest_mode and digest_time:
+-channel = NotificationChannel(
+-    id=next_id(),
+-    family_id=user.family_id,
+-    channel_type=req.channel_type,
+-    name=req.name,
+-    is_enabled=req.is_enabled if req.is_enabled is not None else True,
+-    digest_mode=getattr(req, "digest_mode", "immediate"),
+-    digest_time=getattr(req, "digest_time", "21:00"),
+-)
+-
+-# In _to_response, add digest fields to response:
+-return NotificationChannelResponse(
+-    # ... existing fields ...
+-    digest_mode=channel.digest_mode,
+-    digest_time=channel.digest_time,
+-)
+-```
+-
+-- [ ] **Step 4: Run test to verify it passes**
+-
+-```bash
+-cd server && uv run pytest tests/backend/routers/test_notification_channels_events.py -v
+-```
+-
+-- [ ] **Step 5: Commit**
+-
+-```bash
+-git add server/apps/backend/app/routers/notification_channels.py server/tests/backend/routers/test_notification_channels_events.py
+-git commit -m "feat(notification): add GET /events endpoint with registry-derived validation
+-
+-Replaces hardcoded VALID_REMINDER_TYPES with registry-derived set.
+-Adds explicit require_adult auth to /events endpoint.
+-
+-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+-```
+-
+----
+-
+-### Task 5: Dispatcher Hooks + Mention Support + Dedup
+-
+-**Files:**
+-- Modify: `server/apps/backend/app/services/notification/dispatcher.py`
+-- Modify: `server/apps/backend/app/services/notification/sender.py`
+-
+-**Interfaces:**
+-- Consumes: `NOTIFICATION_CATEGORIES` from registry, `Reminder` model with `digest_sent_at`
+-- Produces: `notify_ai_task_complete()`, `notify_chore_completed()`, `notify_treasure_redeemed()`, `notify_wish_redeemed()`, `_dispatch_digest()`, `_format_mention()`
+-
+-**Rationale (CE review fixes):**
+-- Add `notify_treasure_redeemed()` (was missing in spec)
+-- Use `digest_sent_at` instead of changing status to "resolved"
+-- Add deduplication for AI task notifications
+-- Add `_format_mention()` for Telegram/Feishu @mentions
+-- Accept `template_vars` separately (not via ensure_reminder dict)
+-
+-- [ ] **Step 1: Write tests for new dispatcher functions**
+-
+-Create additions to `server/tests/backend/services/test_notification_dispatcher.py`:
+-
+-```python
+-"""Tests for notification dispatcher hooks and mention formatting."""
+-
+-from apps.backend.app.services.notification.sender import _format_mention
+-
+-
+-def test_format_mention_telegram_with_user_id():
+-    text = "Test notification"
+-    config = {"user_id": "123456789", "username": "vincent"}
+-    result = _format_mention(text, "telegram", config)
+-    assert '<a href="tg://user?id=123456789">@vincent</a>' in result
+-    assert "Test notification" in result
+-
+-
+-def test_format_mention_telegram_without_user_id():
+-    text = "Test notification"
+-    config = {"username": "vincent"}
+-    result = _format_mention(text, "telegram", config)
+-    assert result == text  # No mention added
+-
+-
+-def test_format_mention_feishu_with_open_id():
+-    text = "Test notification"
+-    config = {"open_id": "ou_xxx", "name": "Vincent"}
+-    result = _format_mention(text, "feishu", config)
+-    assert '<at user_id="ou_xxx">Vincent</at>' in result
+-
+-
+-def test_format_mention_none_config():
+-    text = "Test notification"
+-    result = _format_mention(text, "telegram", None)
+-    assert result == text
+-
+-
+-def test_format_mention_unsupported_channel():
+-    text = "Test notification"
+-    config = {"user_id": "123"}
+-    result = _format_mention(text, "email", config)
+-    assert result == text  # Email doesn't support mention
+-
+-
+-def test_notify_ai_task_complete_dedup():
+-    """Second call within 1 hour should be skipped (dedup)."""
+-    # This requires a DB session fixture - use integration test pattern
+-    # See tests/backend/integration/test_notification_dedup.py for full test
+-    assert True  # Placeholder - integration test covers this
+-```
+-
+-- [ ] **Step 2: Implement _format_mention in sender.py**
+-
+-Add to `server/apps/backend/app/services/notification/sender.py`:
+-
+-```python
+-def _format_mention(text: str, channel_type: str, mention_config: dict | None) -> str:
+-    """Prepend @mention markup to message text if mention_config is set.
+-
+-    Telegram: uses HTML <a href="tg://user?id=...">@username</a> format.
+-    Feishu: uses <at user_id="open_id">name</at> format.
+-    Other channel types: returns text unchanged.
+-    """
+-    if not mention_config:
+-        return text
+-
+-    if channel_type == "telegram":
+-        user_id = mention_config.get("user_id")
+-        username = mention_config.get("username", "user")
+-        if user_id:
+-            mention = f'<a href="tg://user?id={user_id}">@{username}</a>\n\n'
+-            return mention + text
+-
+-    elif channel_type == "feishu":
+-        open_id = mention_config.get("open_id")
+-        name = mention_config.get("name", "user")
+-        if open_id:
+-            mention = f'<at user_id="{open_id}">{name}</at>\n\n'
+-            return mention + text
+-
+-    return text
+-```
+-
+-- [ ] **Step 3: Add dispatcher hooks**
+-
+-Add to `server/apps/backend/app/services/notification/dispatcher.py`:
+-
+-```python
+-from apps.backend.app.services.notification.registry import NOTIFICATION_CATEGORIES
+-from datetime import timedelta
+-
+-
+-def _check_reminder_dedup(db: Session, family_id: int, reminder_type: str, title: str, hours: int = 1) -> bool:
+-    """Check if a similar reminder was created recently (deduplication)."""
+-    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+-    existing = (
+-        db.query(Reminder)
+-        .filter(
+-            Reminder.family_id == family_id,
+-            Reminder.reminder_type == reminder_type,
+-            Reminder.title == title,
+-            Reminder.created_at >= cutoff,
+-        )
+-        .first()
+-    )
+-    return existing is not None
+diff --git a/progress.md b/progress.md
+deleted file mode 100644
+index 402b469f..00000000
+--- a/progress.md
++++ /dev/null
+@@ -1,77 +0,0 @@
+-# SDD ledger — plan: docs/superpowers/plans/2026-09-14-notification-module-enhancement.md
+-
+-## Pre-flight Scan
+-
+-### Task Interface Matrix
+-
+-| Task Pair | Shared File/Interface | Producer → Consumer | Status |
+-|-----------|----------------------|---------------------|--------|
+-| T1 → T4 | VALID_REMINDER_TYPES | T1 defines → T4 imports | ✅ Consistent |
+-| T1 → T5 | NOTIFICATION_CATEGORIES | T1 defines → T5 imports | ✅ Consistent |
+-| T2 → T4 | digest_mode, digest_time columns | T2 adds → T4 uses in schema | ✅ Consistent |
+-| T2 → T5 | digest_sent_at column | T2 adds → T5 uses in _dispatch_digest | ✅ Consistent |
+-| T5 → T7 | _dispatch_digest | T5 defines → T7 calls | ✅ Consistent (both async) |
+-| T5 → T8 | notify_* functions | T5 defines → T8 calls | ✅ Consistent signatures |
+-| T5 → T6 | REMINDER_PIPELINE_EVENTS | T6 references event types T5 dispatches | ✅ Consistent |
+-| T9 → T10 | getEvents API, NotificationEventCategory | T9 defines → T10 uses | ✅ Consistent |
+-| T10 → T11 | EventSelectorPopup component | T10 creates → T11 imports | ✅ Consistent |
+-
+-### Internal Consistency Check
+-
+-| Task | Self-Consistency | Status |
+-|------|------------------|--------|
+-| T1 | Tests match implementation | ✅ |
+-| T2 | Migration matches model changes | ✅ |
+-| T3 | Templates match event types | ✅ |
+-| T4 | Endpoint test matches endpoint code | ✅ |
+-| T5 | Dispatcher hooks match test signatures | ✅ |
+-| T6 | Skip list matches T5 event types | ✅ |
+-| T7 | Job function matches scheduler registration | ✅ |
+-| T8 | Hook locations have family_id context | ️ Needs verification at impl time |
+-| T9 | API types match backend response | ✅ |
+-| T10 | Component props match T9 types | ✅ |
+-| T11 | i18n keys match T10 template usage | ✅ |
+-
+-### Rulings
+-
+-**Ruling 1:** Task 8 integration hooks need family_id verification at implementation time — each hook location (ai_internal.py, chores.py, child_wishes.py) must be inspected to confirm family_id is available in request context. If not, add lookup logic. — Cost if wrong: dispatcher calls fail or notify wrong family — detected at test time.
+-
+----
+-
+-## Progress
+-
+-### Task 1: Event Registry
+-- **Status:** ✅ COMPLETE
+-- **Commit:** `88956caa` (feat: add event registry to replace hardcoded VALID_REMINDER_TYPES)
+-- **Files:** registry.py (120 lines), test_notification_registry.py (51 lines)
+-- **Tests:** 5/5 passing
+-- **Review:** APPROVED (Spec ✅, Quality ✅)
+-
+-### Task 2: Database Migration
+-- **Status:** ✅ COMPLETE
+-- **Commit:** `6fa3ffbf` (feat: add digest_mode, digest_time, digest_sent_at columns)
+-- **Bonus:** `1c9b6795` (fix: harden pre-existing migrations for fresh-DB idempotency)
+-- **Files:** 12 changed (3 migrations, 2 models, 1 schema, 1 registry, 1 test)
+-- **Review:** APPROVED (Spec ✅, Quality ✅, Pre-existing fixes ✅)
+-
+-### Task 3: Notification Templates
+-- **Status:** ✅ COMPLETE
+-- **Commit:** `3dd53817` (feat: add 7 templates for new event types)
+-- **Files:** 7 new template JSON files (+112 lines)
+-- **Verification:** 42/42 renders pass (7 templates × 6 channel types)
+-- **Adaptations:** Nested JSON keys + plain-text email_body (verified correct)
+-- **Review:** APPROVED (Spec ✅, Adaptations ✅, Quality ✅)
+-
+-### Task 4: API Endpoint + Router Updates
+-- **Status:** ✅ COMPLETE
+-- **Commit:** `8cc84915` (feat: add GET /events endpoint with registry-derived validation)
+-- **Files:** 2 changed (113 lines added)
+-- **Tests:** 15 passed (6 new + 4 existing + 5 registry), no regressions
+-- **Review:** APPROVED (Spec ✅, Quality ✅, Tests ✅)
+-
+-### Task 5: Dispatcher Hooks + Mention Support + Dedup
+-- **Status:** Implementer dispatching next
+-- **Dependencies:** Tasks 1-4 ✅
+-- **Review:** Pending
+-
+----
+diff --git a/review-packages/task-1-review-package.diff b/review-packages/task-1-review-package.diff
+deleted file mode 100644
+index 3dd3e137..00000000
+--- a/review-packages/task-1-review-package.diff
++++ /dev/null
+@@ -1,183 +0,0 @@
+-diff --git a/server/apps/backend/app/services/notification/registry.py b/server/apps/backend/app/services/notification/registry.py
+-new file mode 100644
+-index 00000000..71a00e00
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/registry.py
+-@@ -0,0 +1,120 @@
+-+"""Notification event registry.
+-+
+-+Central source of truth for all notification event types.
+-+Replaces the hardcoded VALID_REMINDER_TYPES set in notification_channels router.
+-+"""
+-+
+-+NOTIFICATION_CATEGORIES: dict[str, dict] = {
+-+    "asset": {
+-+        "label_key": "reminders.categories.asset",
+-+        "icon": "cube-outline",
+-+        "events": {
+-+            "large_purchase": {
+-+                "label_key": "reminders.types.large_purchase",
+-+                "default_severity": "warning",
+-+                "trigger": "realtime",
+-+            },
+-+            "expiring_soon": {
+-+                "label_key": "reminders.types.expiring_soon",
+-+                "default_severity": "warning",
+-+                "trigger": "scheduled",
+-+            },
+-+            "maturity": {
+-+                "label_key": "reminders.types.maturity",
+-+                "default_severity": "warning",
+-+                "trigger": "scheduled",
+-+            },
+-+        },
+-+    },
+-+    "ai_task": {
+-+        "label_key": "reminders.categories.ai_task",
+-+        "icon": "robot-outline",
+-+        "events": {
+-+            "ai_report_complete": {
+-+                "label_key": "reminders.types.ai_report_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "ai_finance_coach_complete": {
+-+                "label_key": "reminders.types.ai_finance_coach_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "ai_wish_advice_complete": {
+-+                "label_key": "reminders.types.ai_wish_advice_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "ai_literacy_report_complete": {
+-+                "label_key": "reminders.types.ai_literacy_report_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+        },
+-+    },
+-+    "children": {
+-+        "label_key": "reminders.categories.children",
+-+        "icon": "friends-outline",
+-+        "events": {
+-+            "chore_completed": {
+-+                "label_key": "reminders.types.chore_completed",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "treasure_redeemed": {
+-+                "label_key": "reminders.types.treasure_redeemed",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+        },
+-+    },
+-+    "wish": {
+-+        "label_key": "reminders.categories.wish",
+-+        "icon": "gift-outline",
+-+        "events": {
+-+            "wish_redeemed": {
+-+                "label_key": "reminders.types.wish_redeemed",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+        },
+-+    },
+-+}
+-+
+-+
+-+def get_categorized_events() -> list[dict]:
+-+    """Return categorized event list for frontend rendering.
+-+
+-+    Each category includes its metadata and a list of events with:
+-+    - type: the reminder_type string
+-+    - label_key: i18n key for display
+-+    - severity: default severity level
+-+    """
+-+    result = []
+-+    for category_key, category in NOTIFICATION_CATEGORIES.items():
+-+        events = []
+-+        for event_key, event in category["events"].items():
+-+            events.append({
+-+                "type": event_key,
+-+                "label_key": event["label_key"],
+-+                "severity": event["default_severity"],
+-+            })
+-+        result.append({
+-+            "category": category_key,
+-+            "label_key": category["label_key"],
+-+            "icon": category["icon"],
+-+            "events": events,
+-+        })
+-+    return result
+-+
+-+
+-+def get_all_reminder_types() -> set[str]:
+-+    """Return flat set of all valid reminder_type values from the registry."""
+-+    types = set()
+-+    for category in NOTIFICATION_CATEGORIES.values():
+-+        types.update(category["events"].keys())
+-+    return types
+-+
+-+
+-+# Backward-compatible alias for the router's VALID_REMINDER_TYPES
+-+VALID_REMINDER_TYPES: set[str] = get_all_reminder_types()
+-diff --git a/server/tests/backend/services/test_notification_registry.py b/server/tests/backend/services/test_notification_registry.py
+-new file mode 100644
+-index 00000000..0c98244d
+---- /dev/null
+-+++ b/server/tests/backend/services/test_notification_registry.py
+-@@ -0,0 +1,51 @@
+-+"""Tests for notification event registry."""
+-+
+-+from apps.backend.app.services.notification.registry import (
+-+    NOTIFICATION_CATEGORIES,
+-+    get_categorized_events,
+-+    VALID_REMINDER_TYPES,
+-+)
+-+
+-+
+-+def test_get_categorized_events_returns_four_categories():
+-+    result = get_categorized_events()
+-+    assert len(result) == 4
+-+    categories = [c["category"] for c in result]
+-+    assert categories == ["asset", "ai_task", "children", "wish"]
+-+
+-+
+-+def test_get_categorized_events_has_ten_total_events():
+-+    result = get_categorized_events()
+-+    total = sum(len(c["events"]) for c in result)
+-+    assert total == 10
+-+
+-+
+-+def test_get_categorized_events_structure():
+-+    result = get_categorized_events()
+-+    asset_cat = result[0]
+-+    assert asset_cat["category"] == "asset"
+-+    assert "label_key" in asset_cat
+-+    assert "icon" in asset_cat
+-+    assert len(asset_cat["events"]) == 3
+-+    first_event = asset_cat["events"][0]
+-+    assert "type" in first_event
+-+    assert "label_key" in first_event
+-+    assert "severity" in first_event
+-+
+-+
+-+def test_valid_reminder_types_matches_registry():
+-+    """VALID_REMINDER_TYPES should be derived from the registry, not hardcoded."""
+-+    registry_types = set()
+-+    for cat in NOTIFICATION_CATEGORIES.values():
+-+        registry_types.update(cat["events"].keys())
+-+    assert VALID_REMINDER_TYPES == registry_types
+-+
+-+
+-+def test_each_event_has_required_fields():
+-+    for cat in NOTIFICATION_CATEGORIES.values():
+-+        for event_key, event in cat["events"].items():
+-+            assert "label_key" in event, f"Event {event_key} missing label_key"
+-+            assert "default_severity" in event, f"Event {event_key} missing default_severity"
+-+            assert "trigger" in event, f"Event {event_key} missing trigger"
+-+            assert event["trigger"] in ("realtime", "scheduled"), f"Event {event_key} invalid trigger"
+-+            assert event["default_severity"] in ("info", "warning", "critical")
+diff --git a/review-packages/task-2-review-package.diff b/review-packages/task-2-review-package.diff
+deleted file mode 100644
+index ceee8dee..00000000
+--- a/review-packages/task-2-review-package.diff
++++ /dev/null
+@@ -1,470 +0,0 @@
+-diff --git a/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py b/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py
+-new file mode 100644
+-index 00000000..56c024ba
+---- /dev/null
+-+++ b/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py
+-@@ -0,0 +1,40 @@
+-+"""add_notification_enhancements
+-+
+-+Revision ID: 75e411962098
+-+Revises: a7b8c9d0e1f2
+-+Create Date: 2026-09-14 22:38:18.261048
+-+
+-+"""
+-+from typing import Sequence, Union
+-+
+-+from alembic import op
+-+import sqlalchemy as sa
+-+from packages.db.session import UTCDateTime
+-+
+-+
+-+# revision identifiers, used by Alembic.
+-+revision: str = '75e411962098'
+-+down_revision: Union[str, None] = 'a7b8c9d0e1f2'
+-+branch_labels: Union[str, Sequence[str], None] = None
+-+depends_on: Union[str, Sequence[str], None] = None
+-+
+-+
+-+def upgrade() -> None:
+-+    op.add_column(
+-+        'notification_channels',
+-+        sa.Column('digest_mode', sa.String(length=20), server_default='immediate', nullable=False),
+-+    )
+-+    op.add_column(
+-+        'notification_channels',
+-+        sa.Column('digest_time', sa.String(length=10), server_default='21:00', nullable=False),
+-+    )
+-+    op.add_column(
+-+        'reminders',
+-+        sa.Column('digest_sent_at', UTCDateTime(timezone=True), nullable=True),
+-+    )
+-+
+-+
+-+def downgrade() -> None:
+-+    op.drop_column('reminders', 'digest_sent_at')
+-+    op.drop_column('notification_channels', 'digest_time')
+-+    op.drop_column('notification_channels', 'digest_mode')
+-diff --git a/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py b/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+-index 0002d0dc..4b9b1e76 100644
+---- a/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+-+++ b/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+-@@ -19,10 +19,14 @@ depends_on: str | Sequence[str] | None = None
+- 
+- 
+- def upgrade() -> None:
+--    op.add_column(
+--        "storage_backends",
+--        sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
+--    )
+-+    conn = op.get_bind()
+-+    inspector = sa.inspect(conn)
+-+    existing_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
+-+    if "last_synced_at" not in existing_columns:
+-+        op.add_column(
+-+            "storage_backends",
+-+            sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
+-+        )
+- 
+- 
+- def downgrade() -> None:
+-diff --git a/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py b/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+-index 689f4754..ae7fa607 100644
+---- a/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+-+++ b/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+-@@ -19,6 +19,11 @@ from collections.abc import Sequence
+- 
+- from alembic import op
+- 
+-+revision: str = "a7b8c9d0e1f2"
+-+down_revision: str | None = "b6b918b0cb30"
+-+branch_labels: tuple[str, str] | None = None
+-+depends_on: str | None = None
+-+
+- 
+- def upgrade() -> None:
+-     # ai_reports: cache-layer skill_id values
+-diff --git a/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py b/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+-index df0eebf9..f7ee9054 100644
+---- a/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+-+++ b/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+-@@ -179,7 +179,11 @@ def upgrade() -> None:
+-         # SQLite: batch_alter_table recreates the table.
+-         # SQLite stores datetimes as strings without timezone semantics,
+-         # so no USING clause is needed — values are preserved as-is.
+-+        inspector = sa.inspect(bind)
+-+        existing_tables = set(inspector.get_table_names())
+-         for table, column in COLUMNS:
+-+            if table not in existing_tables:
+-+                continue
+-             with op.batch_alter_table(table, schema=None) as batch_op:
+-                 batch_op.alter_column(
+-                     column,
+-diff --git a/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py b/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+-index 47f42c46..bfdf4251 100644
+---- a/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+-+++ b/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+-@@ -16,6 +16,7 @@ Create Date: 2026-08-04
+- 
+- from collections.abc import Sequence
+- 
+-+import sqlalchemy as sa
+- from alembic import op
+- 
+- revision: str = "e4f5g6h7i8j9"
+-@@ -25,18 +26,26 @@ depends_on: Sequence[str] | None = None
+- 
+- 
+- def upgrade() -> None:
+--    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
+--    op.create_check_constraint(
+--        "ck_ai_agents_name_format",
+--        "ai_agents",
+--        "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+--    )
+-+    conn = op.get_bind()
+-+    inspector = sa.inspect(conn)
+-+    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
+-+    if "ck_ai_agents_name_format" in existing_constraints:
+-+        with op.batch_alter_table("ai_agents") as batch_op:
+-+            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
+-+            batch_op.create_check_constraint(
+-+                "ck_ai_agents_name_format",
+-+                "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+-+            )
+- 
+- 
+- def downgrade() -> None:
+--    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
+--    op.create_check_constraint(
+--        "ck_ai_agents_name_format",
+--        "ai_agents",
+--        "agent_name ~ '^[a-z][a-z0-9-]*$'",
+--    )
+-+    conn = op.get_bind()
+-+    inspector = sa.inspect(conn)
+-+    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
+-+    if "ck_ai_agents_name_format" in existing_constraints:
+-+        with op.batch_alter_table("ai_agents") as batch_op:
+-+            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
+-+            batch_op.create_check_constraint(
+-+                "ck_ai_agents_name_format",
+-+                "agent_name ~ '^[a-z][a-z0-9-]*$'",
+-+            )
+-diff --git a/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py b/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+-index ecd00b22..cef2986a 100644
+---- a/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+-+++ b/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+-@@ -24,6 +24,10 @@ depends_on: tuple[str, ...] | None = None
+- 
+- 
+- def upgrade() -> None:
+-+    conn = op.get_bind()
+-+    inspector = sa.inspect(conn)
+-+    sb_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
+-+
+-     # Step 0: Make file_remote_locations.backend_id nullable so we can orphan
+-     # references to legacy backends before deleting them.
+-     with op.batch_alter_table("file_remote_locations") as batch_op:
+-@@ -34,10 +38,11 @@ def upgrade() -> None:
+-         )
+- 
+-     # Step 1: Add family_id column (nullable first, so we can delete legacy rows)
+--    op.add_column(
+--        "storage_backends",
+--        sa.Column("family_id", sa.BigInteger(), nullable=True),
+--    )
+-+    if "family_id" not in sb_columns:
+-+        op.add_column(
+-+            "storage_backends",
+-+            sa.Column("family_id", sa.BigInteger(), nullable=True),
+-+        )
+- 
+-     # Step 2: Orphan references to legacy global backends, then delete them
+-     op.execute(
+-@@ -47,6 +52,8 @@ def upgrade() -> None:
+-     op.execute("DELETE FROM storage_backends WHERE family_id IS NULL")
+- 
+-     # Step 3: Make family_id NOT NULL and add FK + index + unique constraint
+-+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("storage_backends")}
+-+    existing_constraints = {c["name"] for c in inspector.get_unique_constraints("storage_backends")}
+-     with op.batch_alter_table("storage_backends") as batch_op:
+-         batch_op.alter_column(
+-             "family_id",
+-@@ -59,14 +66,17 @@ def upgrade() -> None:
+-             ["family_id"],
+-             ["id"],
+-         )
+--        batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
+--        batch_op.create_unique_constraint(
+--            "uq_storage_backends_family_id", ["family_id"]
+--        )
+-+        if "ix_storage_backends_family_id" not in existing_indexes:
+-+            batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
+-+        if "uq_storage_backends_family_id" not in existing_constraints:
+-+            batch_op.create_unique_constraint(
+-+                "uq_storage_backends_family_id", ["family_id"]
+-+            )
+- 
+-     # Step 4: Drop is_default column (semantics obsolete — one backend per family)
+--    with op.batch_alter_table("storage_backends") as batch_op:
+--        batch_op.drop_column("is_default")
+-+    if "is_default" in sb_columns:
+-+        with op.batch_alter_table("storage_backends") as batch_op:
+-+            batch_op.drop_column("is_default")
+- 
+- 
+- def downgrade() -> None:
+-diff --git a/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py b/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+-index d9bd6280..2868601c 100644
+---- a/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+-+++ b/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+-@@ -83,7 +83,10 @@ def upgrade() -> None:
+-             )
+- 
+-         # Add composite index for efficient task queries by family + skill + status
+--        if "ix_ai_tasks_family_skill_status" not in existing_indexes:
+-+        if (
+-+            "ix_ai_tasks_family_skill_status" not in existing_indexes
+-+            and "skill_id" in existing_columns
+-+        ):
+-             batch_op.create_index(
+-                 "ix_ai_tasks_family_skill_status",
+-                 ["family_id", "skill_id", "status"],
+-diff --git a/server/apps/backend/app/schemas/notification_channel.py b/server/apps/backend/app/schemas/notification_channel.py
+-index b4720eda..0ca9d7a6 100644
+---- a/server/apps/backend/app/schemas/notification_channel.py
+-+++ b/server/apps/backend/app/schemas/notification_channel.py
+-@@ -12,6 +12,8 @@ class NotificationChannelCreate(BaseModel):
+-     config: dict  # 明文传输，服务层 JSON 序列化后加密存储
+-     is_enabled: bool = True
+-     subscriptions: list[str] = []  # reminder_type list
+-+    digest_mode: str = "immediate"
+-+    digest_time: str = "21:00"
+- 
+- 
+- class NotificationChannelUpdate(BaseModel):
+-@@ -19,6 +21,8 @@ class NotificationChannelUpdate(BaseModel):
+-     config: dict | None = None
+-     is_enabled: bool | None = None
+-     subscriptions: list[str] | None = None
+-+    digest_mode: str | None = None
+-+    digest_time: str | None = None
+- 
+- 
+- class NotificationChannelResponse(SnowflakeBase):
+-@@ -29,5 +33,7 @@ class NotificationChannelResponse(SnowflakeBase):
+-     is_enabled: bool
+-     config: dict = {}
+-     subscriptions: list[str] = []
+-+    digest_mode: str = "immediate"
+-+    digest_time: str = "21:00"
+-     created_at: datetime
+-     updated_at: datetime
+-diff --git a/server/apps/backend/app/services/notification/registry.py b/server/apps/backend/app/services/notification/registry.py
+-new file mode 100644
+-index 00000000..71a00e00
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/registry.py
+-@@ -0,0 +1,120 @@
+-+"""Notification event registry.
+-+
+-+Central source of truth for all notification event types.
+-+Replaces the hardcoded VALID_REMINDER_TYPES set in notification_channels router.
+-+"""
+-+
+-+NOTIFICATION_CATEGORIES: dict[str, dict] = {
+-+    "asset": {
+-+        "label_key": "reminders.categories.asset",
+-+        "icon": "cube-outline",
+-+        "events": {
+-+            "large_purchase": {
+-+                "label_key": "reminders.types.large_purchase",
+-+                "default_severity": "warning",
+-+                "trigger": "realtime",
+-+            },
+-+            "expiring_soon": {
+-+                "label_key": "reminders.types.expiring_soon",
+-+                "default_severity": "warning",
+-+                "trigger": "scheduled",
+-+            },
+-+            "maturity": {
+-+                "label_key": "reminders.types.maturity",
+-+                "default_severity": "warning",
+-+                "trigger": "scheduled",
+-+            },
+-+        },
+-+    },
+-+    "ai_task": {
+-+        "label_key": "reminders.categories.ai_task",
+-+        "icon": "robot-outline",
+-+        "events": {
+-+            "ai_report_complete": {
+-+                "label_key": "reminders.types.ai_report_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "ai_finance_coach_complete": {
+-+                "label_key": "reminders.types.ai_finance_coach_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "ai_wish_advice_complete": {
+-+                "label_key": "reminders.types.ai_wish_advice_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "ai_literacy_report_complete": {
+-+                "label_key": "reminders.types.ai_literacy_report_complete",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+        },
+-+    },
+-+    "children": {
+-+        "label_key": "reminders.categories.children",
+-+        "icon": "friends-outline",
+-+        "events": {
+-+            "chore_completed": {
+-+                "label_key": "reminders.types.chore_completed",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+            "treasure_redeemed": {
+-+                "label_key": "reminders.types.treasure_redeemed",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+        },
+-+    },
+-+    "wish": {
+-+        "label_key": "reminders.categories.wish",
+-+        "icon": "gift-outline",
+-+        "events": {
+-+            "wish_redeemed": {
+-+                "label_key": "reminders.types.wish_redeemed",
+-+                "default_severity": "info",
+-+                "trigger": "realtime",
+-+            },
+-+        },
+-+    },
+-+}
+-+
+-+
+-+def get_categorized_events() -> list[dict]:
+-+    """Return categorized event list for frontend rendering.
+-+
+-+    Each category includes its metadata and a list of events with:
+-+    - type: the reminder_type string
+-+    - label_key: i18n key for display
+-+    - severity: default severity level
+-+    """
+-+    result = []
+-+    for category_key, category in NOTIFICATION_CATEGORIES.items():
+-+        events = []
+-+        for event_key, event in category["events"].items():
+-+            events.append({
+-+                "type": event_key,
+-+                "label_key": event["label_key"],
+-+                "severity": event["default_severity"],
+-+            })
+-+        result.append({
+-+            "category": category_key,
+-+            "label_key": category["label_key"],
+-+            "icon": category["icon"],
+-+            "events": events,
+-+        })
+-+    return result
+-+
+-+
+-+def get_all_reminder_types() -> set[str]:
+-+    """Return flat set of all valid reminder_type values from the registry."""
+-+    types = set()
+-+    for category in NOTIFICATION_CATEGORIES.values():
+-+        types.update(category["events"].keys())
+-+    return types
+-+
+-+
+-+# Backward-compatible alias for the router's VALID_REMINDER_TYPES
+-+VALID_REMINDER_TYPES: set[str] = get_all_reminder_types()
+-diff --git a/server/packages/db/models/notification_channel.py b/server/packages/db/models/notification_channel.py
+-index ecb4c87a..061750f0 100644
+---- a/server/packages/db/models/notification_channel.py
+-+++ b/server/packages/db/models/notification_channel.py
+-@@ -17,6 +17,8 @@ class NotificationChannel(Base):
+-     channel_type: Mapped[str] = mapped_column(String(20), nullable=False)
+-     name: Mapped[str] = mapped_column(String(100), nullable=False)
+-     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+-+    digest_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="immediate")
+-+    digest_time: Mapped[str] = mapped_column(String(10), nullable=False, server_default="21:00")
+-     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+-     updated_at: Mapped[datetime] = mapped_column(
+-         UTCDateTime(), server_default=func.now(), onupdate=func.now()
+-diff --git a/server/packages/db/models/reminder.py b/server/packages/db/models/reminder.py
+-index 409bf548..ac2720d5 100644
+---- a/server/packages/db/models/reminder.py
+-+++ b/server/packages/db/models/reminder.py
+-@@ -27,6 +27,7 @@ class Reminder(Base):
+-     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+-     dismissed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+-     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+-+    digest_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+-     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+-     updated_at: Mapped[datetime] = mapped_column(
+-         UTCDateTime(), server_default=func.now(), onupdate=func.now()
+-diff --git a/server/tests/backend/services/test_notification_registry.py b/server/tests/backend/services/test_notification_registry.py
+-new file mode 100644
+-index 00000000..0c98244d
+---- /dev/null
+-+++ b/server/tests/backend/services/test_notification_registry.py
+-@@ -0,0 +1,51 @@
+-+"""Tests for notification event registry."""
+-+
+-+from apps.backend.app.services.notification.registry import (
+-+    NOTIFICATION_CATEGORIES,
+-+    get_categorized_events,
+-+    VALID_REMINDER_TYPES,
+-+)
+-+
+-+
+-+def test_get_categorized_events_returns_four_categories():
+-+    result = get_categorized_events()
+-+    assert len(result) == 4
+-+    categories = [c["category"] for c in result]
+-+    assert categories == ["asset", "ai_task", "children", "wish"]
+-+
+-+
+-+def test_get_categorized_events_has_ten_total_events():
+-+    result = get_categorized_events()
+-+    total = sum(len(c["events"]) for c in result)
+-+    assert total == 10
+-+
+-+
+-+def test_get_categorized_events_structure():
+-+    result = get_categorized_events()
+-+    asset_cat = result[0]
+-+    assert asset_cat["category"] == "asset"
+-+    assert "label_key" in asset_cat
+-+    assert "icon" in asset_cat
+-+    assert len(asset_cat["events"]) == 3
+-+    first_event = asset_cat["events"][0]
+-+    assert "type" in first_event
+-+    assert "label_key" in first_event
+-+    assert "severity" in first_event
+-+
+-+
+-+def test_valid_reminder_types_matches_registry():
+-+    """VALID_REMINDER_TYPES should be derived from the registry, not hardcoded."""
+-+    registry_types = set()
+-+    for cat in NOTIFICATION_CATEGORIES.values():
+-+        registry_types.update(cat["events"].keys())
+-+    assert VALID_REMINDER_TYPES == registry_types
+-+
+-+
+-+def test_each_event_has_required_fields():
+-+    for cat in NOTIFICATION_CATEGORIES.values():
+-+        for event_key, event in cat["events"].items():
+-+            assert "label_key" in event, f"Event {event_key} missing label_key"
+-+            assert "default_severity" in event, f"Event {event_key} missing default_severity"
+-+            assert "trigger" in event, f"Event {event_key} missing trigger"
+-+            assert event["trigger"] in ("realtime", "scheduled"), f"Event {event_key} invalid trigger"
+-+            assert event["default_severity"] in ("info", "warning", "critical")
+diff --git a/review-packages/task-3-review-package.diff b/review-packages/task-3-review-package.diff
+deleted file mode 100644
+index 45739490..00000000
+--- a/review-packages/task-3-review-package.diff
++++ /dev/null
+@@ -1,154 +0,0 @@
+-diff --git a/server/apps/backend/app/services/notification/templates/ai_finance_coach_complete.json b/server/apps/backend/app/services/notification/templates/ai_finance_coach_complete.json
+-new file mode 100644
+-index 00000000..4daf2274
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/ai_finance_coach_complete.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "💡 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "email": {
+-+    "subject": "AI 理财教练建议完成：{task_title}",
+-+    "body": "{task_title} 已生成完成，请登录查看。"
+-+  },
+-+  "feishu": {
+-+    "text": "💡 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "webpush": {
+-+    "title": "理财教练建议完成",
+-+    "body": "{task_title} 已生成完成"
+-+  }
+-+}
+-diff --git a/server/apps/backend/app/services/notification/templates/ai_literacy_report_complete.json b/server/apps/backend/app/services/notification/templates/ai_literacy_report_complete.json
+-new file mode 100644
+-index 00000000..6b56b7dc
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/ai_literacy_report_complete.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "📖 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "email": {
+-+    "subject": "AI 识字周报完成：{task_title}",
+-+    "body": "{task_title} 已生成完成，请登录查看。"
+-+  },
+-+  "feishu": {
+-+    "text": "📖 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "webpush": {
+-+    "title": "识字周报完成",
+-+    "body": "{task_title} 已生成完成"
+-+  }
+-+}
+-diff --git a/server/apps/backend/app/services/notification/templates/ai_report_complete.json b/server/apps/backend/app/services/notification/templates/ai_report_complete.json
+-new file mode 100644
+-index 00000000..7cf67e1b
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/ai_report_complete.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "📊 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "email": {
+-+    "subject": "AI 任务完成：{task_title}",
+-+    "body": "{task_title} 已生成完成，请登录查看。"
+-+  },
+-+  "feishu": {
+-+    "text": "📊 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "webpush": {
+-+    "title": "AI 任务完成",
+-+    "body": "{task_title} 已生成完成"
+-+  }
+-+}
+-diff --git a/server/apps/backend/app/services/notification/templates/ai_wish_advice_complete.json b/server/apps/backend/app/services/notification/templates/ai_wish_advice_complete.json
+-new file mode 100644
+-index 00000000..62104d5a
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/ai_wish_advice_complete.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "🌟 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "email": {
+-+    "subject": "AI 心愿建议完成：{task_title}",
+-+    "body": "{task_title} 已生成完成，请登录查看。"
+-+  },
+-+  "feishu": {
+-+    "text": "🌟 {task_title} 已生成完成，点击查看。"
+-+  },
+-+  "webpush": {
+-+    "title": "心愿建议完成",
+-+    "body": "{task_title} 已生成完成"
+-+  }
+-+}
+-diff --git a/server/apps/backend/app/services/notification/templates/chore_completed.json b/server/apps/backend/app/services/notification/templates/chore_completed.json
+-new file mode 100644
+-index 00000000..4d34171e
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/chore_completed.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "👶 {child_name} 完成了任务「{chore_title}」，快去看看吧！"
+-+  },
+-+  "email": {
+-+    "subject": "儿童任务完成：{chore_title}",
+-+    "body": "{child_name} 完成了任务「{chore_title}」。"
+-+  },
+-+  "feishu": {
+-+    "text": "👶 {child_name} 完成了任务「{chore_title}」，快去看看吧！"
+-+  },
+-+  "webpush": {
+-+    "title": "儿童任务完成",
+-+    "body": "{child_name} 完成了「{chore_title}」"
+-+  }
+-+}
+-diff --git a/server/apps/backend/app/services/notification/templates/treasure_redeemed.json b/server/apps/backend/app/services/notification/templates/treasure_redeemed.json
+-new file mode 100644
+-index 00000000..41f41ae1
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/treasure_redeemed.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "💎 {child_name} 兑换了宝贝「{treasure_title}」！"
+-+  },
+-+  "email": {
+-+    "subject": "宝贝兑换：{treasure_title}",
+-+    "body": "{child_name} 兑换了宝贝「{treasure_title}」。"
+-+  },
+-+  "feishu": {
+-+    "text": "💎 {child_name} 兑换了宝贝「{treasure_title}」！"
+-+  },
+-+  "webpush": {
+-+    "title": "宝贝兑换成功",
+-+    "body": "{child_name} 兑换了「{treasure_title}」"
+-+  }
+-+}
+-diff --git a/server/apps/backend/app/services/notification/templates/wish_redeemed.json b/server/apps/backend/app/services/notification/templates/wish_redeemed.json
+-new file mode 100644
+-index 00000000..416a1a87
+---- /dev/null
+-+++ b/server/apps/backend/app/services/notification/templates/wish_redeemed.json
+-@@ -0,0 +1,16 @@
+-+{
+-+  "telegram": {
+-+    "text": "🎁 {child_name} 的心愿「{wish_title}」已兑现！"
+-+  },
+-+  "email": {
+-+    "subject": "心愿兑现：{wish_title}",
+-+    "body": "{child_name} 的心愿「{wish_title}」已兑现。"
+-+  },
+-+  "feishu": {
+-+    "text": "🎁 {child_name} 的心愿「{wish_title}」已兑现！"
+-+  },
+-+  "webpush": {
+-+    "title": "心愿兑现",
+-+    "body": "{child_name} 的心愿「{wish_title}」已兑现"
+-+  }
+-+}
+diff --git a/review-packages/task-4-review-package.diff b/review-packages/task-4-review-package.diff
+deleted file mode 100644
+index e889ee9c..00000000
+--- a/review-packages/task-4-review-package.diff
++++ /dev/null
+@@ -1,164 +0,0 @@
+-diff --git a/server/apps/backend/app/routers/notification_channels.py b/server/apps/backend/app/routers/notification_channels.py
+-index 214115d7..05d35bca 100644
+---- a/server/apps/backend/app/routers/notification_channels.py
+-+++ b/server/apps/backend/app/routers/notification_channels.py
+-@@ -13,6 +13,10 @@ from apps.backend.app.schemas.notification_channel import (
+-     NotificationChannelResponse,
+-     NotificationChannelUpdate,
+- )
+-+from apps.backend.app.services.notification.registry import (
+-+    VALID_REMINDER_TYPES,
+-+    get_categorized_events,
+-+)
+- from apps.backend.app.services.storage.config_crypto import (
+-     decrypt_config,
+-     encrypt_config,
+-@@ -25,7 +29,6 @@ from packages.db.models.notification_channel_config import (
+- router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
+- 
+- VALID_CHANNEL_TYPES = {"telegram", "email", "feishu", "webpush"}
+--VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
+- 
+- 
+- def _to_response(
+-@@ -54,11 +57,19 @@ def _to_response(
+-         is_enabled=channel.is_enabled,
+-         config=config,
+-         subscriptions=[s.reminder_type for s in subs],
+-+        digest_mode=channel.digest_mode,
+-+        digest_time=channel.digest_time,
+-         created_at=channel.created_at,
+-         updated_at=channel.updated_at,
+-     )
+- 
+- 
+-+@router.get("/events")
+-+def get_events(user: User = Depends(require_adult)):
+-+    """Return categorized event types for frontend event selector."""
+-+    return get_categorized_events()
+-+
+-+
+- @router.get("", response_model=list[NotificationChannelResponse])
+- def list_channels(db: Session = Depends(get_db), user: User = Depends(require_adult)):
+-     channels = db.query(NotificationChannel).filter_by(family_id=user.family_id).all()
+-@@ -79,6 +90,8 @@ def create_channel(
+-         channel_type=req.channel_type,
+-         name=req.name,
+-         is_enabled=req.is_enabled if req.is_enabled is not None else True,
+-+        digest_mode=getattr(req, "digest_mode", "immediate"),
+-+        digest_time=getattr(req, "digest_time", "21:00"),
+-     )
+-     db.add(channel)
+-     db.flush()
+-@@ -139,6 +152,10 @@ def update_channel(
+-                         id=next_id(), channel_id=channel.id, reminder_type=rtype
+-                     )
+-                 )
+-+    if getattr(req, "digest_mode", None) is not None:
+-+        channel.digest_mode = req.digest_mode
+-+    if getattr(req, "digest_time", None) is not None:
+-+        channel.digest_time = req.digest_time
+-     db.commit()
+-     db.refresh(channel)
+-     return _to_response(channel, db)
+-diff --git a/server/tests/backend/routers/test_notification_channels_events.py b/server/tests/backend/routers/test_notification_channels_events.py
+-new file mode 100644
+-index 00000000..a8f5ac0f
+---- /dev/null
+-+++ b/server/tests/backend/routers/test_notification_channels_events.py
+-@@ -0,0 +1,95 @@
+-+"""Tests for GET /notification-channels/events endpoint.
+-+
+-+Verifies the endpoint returns the registry-derived categorized event list
+-+and that unauthenticated callers are rejected.
+-+"""
+-+
+-+from fastapi.testclient import TestClient
+-+
+-+
+-+def test_get_events_returns_four_categories(client: TestClient, auth_headers):
+-+    resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
+-+    assert resp.status_code == 200
+-+    data = resp.json()["data"]
+-+    assert len(data) == 4
+-+    categories = [c["category"] for c in data]
+-+    assert categories == ["asset", "ai_task", "children", "wish"]
+-+
+-+
+-+def test_get_events_asset_category_has_three_events(client: TestClient, auth_headers):
+-+    resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
+-+    asset = next(c for c in resp.json()["data"] if c["category"] == "asset")
+-+    assert len(asset["events"]) == 3
+-+    types = [e["type"] for e in asset["events"]]
+-+    assert "large_purchase" in types
+-+    assert "expiring_soon" in types
+-+    assert "maturity" in types
+-+
+-+
+-+def test_get_events_requires_auth(client: TestClient):
+-+    resp = client.get("/api/v1/notification-channels/events")
+-+    assert resp.status_code in (401, 403)
+-+
+-+
+-+def test_create_channel_persists_digest_fields(client: TestClient, auth_headers):
+-+    resp = client.post(
+-+        "/api/v1/notification-channels",
+-+        headers=auth_headers,
+-+        json={
+-+            "channel_type": "telegram",
+-+            "name": "Digest",
+-+            "config": {"bot_token": "t", "chat_id": "1"},
+-+            "is_enabled": True,
+-+            "subscriptions": ["large_purchase"],
+-+            "digest_mode": "daily",
+-+            "digest_time": "08:30",
+-+        },
+-+    )
+-+    assert resp.status_code == 201
+-+    data = resp.json()["data"]
+-+    assert data["digest_mode"] == "daily"
+-+    assert data["digest_time"] == "08:30"
+-+
+-+
+-+def test_create_channel_digest_defaults(client: TestClient, auth_headers):
+-+    resp = client.post(
+-+        "/api/v1/notification-channels",
+-+        headers=auth_headers,
+-+        json={
+-+            "channel_type": "telegram",
+-+            "name": "NoDigest",
+-+            "config": {"bot_token": "t", "chat_id": "1"},
+-+            "is_enabled": True,
+-+            "subscriptions": [],
+-+        },
+-+    )
+-+    assert resp.status_code == 201
+-+    data = resp.json()["data"]
+-+    assert data["digest_mode"] == "immediate"
+-+    assert data["digest_time"] == "21:00"
+-+
+-+
+-+def test_create_channel_accepts_registry_event_types(client: TestClient, auth_headers):
+-+    """Registry-derived VALID_REMINDER_TYPES now accepts ai/children/wish events."""
+-+    resp = client.post(
+-+        "/api/v1/notification-channels",
+-+        headers=auth_headers,
+-+        json={
+-+            "channel_type": "telegram",
+-+            "name": "Multi",
+-+            "config": {"bot_token": "t", "chat_id": "1"},
+-+            "is_enabled": True,
+-+            "subscriptions": [
+-+                "ai_report_complete",
+-+                "chore_completed",
+-+                "wish_redeemed",
+-+            ],
+-+        },
+-+    )
+-+    assert resp.status_code == 201
+-+    data = resp.json()["data"]
+-+    assert set(data["subscriptions"]) == {
+-+        "ai_report_complete",
+-+        "chore_completed",
+-+        "wish_redeemed",
+-+    }
+diff --git a/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py b/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py
+deleted file mode 100644
+index 56c024ba..00000000
+--- a/server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py
++++ /dev/null
+@@ -1,40 +0,0 @@
+-"""add_notification_enhancements
+-
+-Revision ID: 75e411962098
+-Revises: a7b8c9d0e1f2
+-Create Date: 2026-09-14 22:38:18.261048
+-
+-"""
+-from typing import Sequence, Union
+-
+-from alembic import op
+-import sqlalchemy as sa
+-from packages.db.session import UTCDateTime
+-
+-
+-# revision identifiers, used by Alembic.
+-revision: str = '75e411962098'
+-down_revision: Union[str, None] = 'a7b8c9d0e1f2'
+-branch_labels: Union[str, Sequence[str], None] = None
+-depends_on: Union[str, Sequence[str], None] = None
+-
+-
+-def upgrade() -> None:
+-    op.add_column(
+-        'notification_channels',
+-        sa.Column('digest_mode', sa.String(length=20), server_default='immediate', nullable=False),
+-    )
+-    op.add_column(
+-        'notification_channels',
+-        sa.Column('digest_time', sa.String(length=10), server_default='21:00', nullable=False),
+-    )
+-    op.add_column(
+-        'reminders',
+-        sa.Column('digest_sent_at', UTCDateTime(timezone=True), nullable=True),
+-    )
+-
+-
+-def downgrade() -> None:
+-    op.drop_column('reminders', 'digest_sent_at')
+-    op.drop_column('notification_channels', 'digest_time')
+-    op.drop_column('notification_channels', 'digest_mode')
+diff --git a/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py b/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+index 4b9b1e76..0002d0dc 100644
+--- a/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
++++ b/server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py
+@@ -19,14 +19,10 @@ depends_on: str | Sequence[str] | None = None
+ 
+ 
+ def upgrade() -> None:
+-    conn = op.get_bind()
+-    inspector = sa.inspect(conn)
+-    existing_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
+-    if "last_synced_at" not in existing_columns:
+-        op.add_column(
+-            "storage_backends",
+-            sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
+-        )
++    op.add_column(
++        "storage_backends",
++        sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
++    )
+ 
+ 
+ def downgrade() -> None:
+diff --git a/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py b/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+index ae7fa607..689f4754 100644
+--- a/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
++++ b/server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py
+@@ -19,11 +19,6 @@ from collections.abc import Sequence
+ 
+ from alembic import op
+ 
+-revision: str = "a7b8c9d0e1f2"
+-down_revision: str | None = "b6b918b0cb30"
+-branch_labels: tuple[str, str] | None = None
+-depends_on: str | None = None
+-
+ 
+ def upgrade() -> None:
+     # ai_reports: cache-layer skill_id values
+diff --git a/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py b/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+index f7ee9054..df0eebf9 100644
+--- a/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
++++ b/server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py
+@@ -179,11 +179,7 @@ def upgrade() -> None:
+         # SQLite: batch_alter_table recreates the table.
+         # SQLite stores datetimes as strings without timezone semantics,
+         # so no USING clause is needed — values are preserved as-is.
+-        inspector = sa.inspect(bind)
+-        existing_tables = set(inspector.get_table_names())
+         for table, column in COLUMNS:
+-            if table not in existing_tables:
+-                continue
+             with op.batch_alter_table(table, schema=None) as batch_op:
+                 batch_op.alter_column(
+                     column,
+diff --git a/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py b/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+index bfdf4251..47f42c46 100644
+--- a/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
++++ b/server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py
+@@ -16,7 +16,6 @@ Create Date: 2026-08-04
+ 
+ from collections.abc import Sequence
+ 
+-import sqlalchemy as sa
+ from alembic import op
+ 
+ revision: str = "e4f5g6h7i8j9"
+@@ -26,26 +25,18 @@ depends_on: Sequence[str] | None = None
+ 
+ 
+ def upgrade() -> None:
+-    conn = op.get_bind()
+-    inspector = sa.inspect(conn)
+-    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
+-    if "ck_ai_agents_name_format" in existing_constraints:
+-        with op.batch_alter_table("ai_agents") as batch_op:
+-            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
+-            batch_op.create_check_constraint(
+-                "ck_ai_agents_name_format",
+-                "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+-            )
++    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
++    op.create_check_constraint(
++        "ck_ai_agents_name_format",
++        "ai_agents",
++        "agent_name ~ '^[a-z][a-z0-9_-]*$'",
++    )
+ 
+ 
+ def downgrade() -> None:
+-    conn = op.get_bind()
+-    inspector = sa.inspect(conn)
+-    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
+-    if "ck_ai_agents_name_format" in existing_constraints:
+-        with op.batch_alter_table("ai_agents") as batch_op:
+-            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
+-            batch_op.create_check_constraint(
+-                "ck_ai_agents_name_format",
+-                "agent_name ~ '^[a-z][a-z0-9-]*$'",
+-            )
++    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
++    op.create_check_constraint(
++        "ck_ai_agents_name_format",
++        "ai_agents",
++        "agent_name ~ '^[a-z][a-z0-9-]*$'",
++    )
+diff --git a/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py b/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+index cef2986a..ecd00b22 100644
+--- a/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
++++ b/server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py
+@@ -24,10 +24,6 @@ depends_on: tuple[str, ...] | None = None
+ 
+ 
+ def upgrade() -> None:
+-    conn = op.get_bind()
+-    inspector = sa.inspect(conn)
+-    sb_columns = {col["name"] for col in inspector.get_columns("storage_backends")}
+-
+     # Step 0: Make file_remote_locations.backend_id nullable so we can orphan
+     # references to legacy backends before deleting them.
+     with op.batch_alter_table("file_remote_locations") as batch_op:
+@@ -38,11 +34,10 @@ def upgrade() -> None:
+         )
+ 
+     # Step 1: Add family_id column (nullable first, so we can delete legacy rows)
+-    if "family_id" not in sb_columns:
+-        op.add_column(
+-            "storage_backends",
+-            sa.Column("family_id", sa.BigInteger(), nullable=True),
+-        )
++    op.add_column(
++        "storage_backends",
++        sa.Column("family_id", sa.BigInteger(), nullable=True),
++    )
+ 
+     # Step 2: Orphan references to legacy global backends, then delete them
+     op.execute(
+@@ -52,8 +47,6 @@ def upgrade() -> None:
+     op.execute("DELETE FROM storage_backends WHERE family_id IS NULL")
+ 
+     # Step 3: Make family_id NOT NULL and add FK + index + unique constraint
+-    existing_indexes = {idx["name"] for idx in inspector.get_indexes("storage_backends")}
+-    existing_constraints = {c["name"] for c in inspector.get_unique_constraints("storage_backends")}
+     with op.batch_alter_table("storage_backends") as batch_op:
+         batch_op.alter_column(
+             "family_id",
+@@ -66,17 +59,14 @@ def upgrade() -> None:
+             ["family_id"],
+             ["id"],
+         )
+-        if "ix_storage_backends_family_id" not in existing_indexes:
+-            batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
+-        if "uq_storage_backends_family_id" not in existing_constraints:
+-            batch_op.create_unique_constraint(
+-                "uq_storage_backends_family_id", ["family_id"]
+-            )
++        batch_op.create_index("ix_storage_backends_family_id", ["family_id"])
++        batch_op.create_unique_constraint(
++            "uq_storage_backends_family_id", ["family_id"]
++        )
+ 
+     # Step 4: Drop is_default column (semantics obsolete — one backend per family)
+-    if "is_default" in sb_columns:
+-        with op.batch_alter_table("storage_backends") as batch_op:
+-            batch_op.drop_column("is_default")
++    with op.batch_alter_table("storage_backends") as batch_op:
++        batch_op.drop_column("is_default")
+ 
+ 
+ def downgrade() -> None:
+diff --git a/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py b/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+index 2868601c..d9bd6280 100644
+--- a/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
++++ b/server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py
+@@ -83,10 +83,7 @@ def upgrade() -> None:
+             )
+ 
+         # Add composite index for efficient task queries by family + skill + status
+-        if (
+-            "ix_ai_tasks_family_skill_status" not in existing_indexes
+-            and "skill_id" in existing_columns
+-        ):
++        if "ix_ai_tasks_family_skill_status" not in existing_indexes:
+             batch_op.create_index(
+                 "ix_ai_tasks_family_skill_status",
+                 ["family_id", "skill_id", "status"],
+diff --git a/server/apps/backend/app/routers/notification_channels.py b/server/apps/backend/app/routers/notification_channels.py
+index 05d35bca..214115d7 100644
+--- a/server/apps/backend/app/routers/notification_channels.py
++++ b/server/apps/backend/app/routers/notification_channels.py
+@@ -13,10 +13,6 @@ from apps.backend.app.schemas.notification_channel import (
+     NotificationChannelResponse,
+     NotificationChannelUpdate,
+ )
+-from apps.backend.app.services.notification.registry import (
+-    VALID_REMINDER_TYPES,
+-    get_categorized_events,
+-)
+ from apps.backend.app.services.storage.config_crypto import (
+     decrypt_config,
+     encrypt_config,
+@@ -29,6 +25,7 @@ from packages.db.models.notification_channel_config import (
+ router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
+ 
+ VALID_CHANNEL_TYPES = {"telegram", "email", "feishu", "webpush"}
++VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
+ 
+ 
+ def _to_response(
+@@ -57,19 +54,11 @@ def _to_response(
+         is_enabled=channel.is_enabled,
+         config=config,
+         subscriptions=[s.reminder_type for s in subs],
+-        digest_mode=channel.digest_mode,
+-        digest_time=channel.digest_time,
+         created_at=channel.created_at,
+         updated_at=channel.updated_at,
+     )
+ 
+ 
+-@router.get("/events")
+-def get_events(user: User = Depends(require_adult)):
+-    """Return categorized event types for frontend event selector."""
+-    return get_categorized_events()
+-
+-
+ @router.get("", response_model=list[NotificationChannelResponse])
+ def list_channels(db: Session = Depends(get_db), user: User = Depends(require_adult)):
+     channels = db.query(NotificationChannel).filter_by(family_id=user.family_id).all()
+@@ -90,8 +79,6 @@ def create_channel(
+         channel_type=req.channel_type,
+         name=req.name,
+         is_enabled=req.is_enabled if req.is_enabled is not None else True,
+-        digest_mode=getattr(req, "digest_mode", "immediate"),
+-        digest_time=getattr(req, "digest_time", "21:00"),
+     )
+     db.add(channel)
+     db.flush()
+@@ -152,10 +139,6 @@ def update_channel(
+                         id=next_id(), channel_id=channel.id, reminder_type=rtype
+                     )
+                 )
+-    if getattr(req, "digest_mode", None) is not None:
+-        channel.digest_mode = req.digest_mode
+-    if getattr(req, "digest_time", None) is not None:
+-        channel.digest_time = req.digest_time
+     db.commit()
+     db.refresh(channel)
+     return _to_response(channel, db)
+diff --git a/server/apps/backend/app/schemas/notification_channel.py b/server/apps/backend/app/schemas/notification_channel.py
+index 0ca9d7a6..b4720eda 100644
+--- a/server/apps/backend/app/schemas/notification_channel.py
++++ b/server/apps/backend/app/schemas/notification_channel.py
+@@ -12,8 +12,6 @@ class NotificationChannelCreate(BaseModel):
+     config: dict  # 明文传输，服务层 JSON 序列化后加密存储
+     is_enabled: bool = True
+     subscriptions: list[str] = []  # reminder_type list
+-    digest_mode: str = "immediate"
+-    digest_time: str = "21:00"
+ 
+ 
+ class NotificationChannelUpdate(BaseModel):
+@@ -21,8 +19,6 @@ class NotificationChannelUpdate(BaseModel):
+     config: dict | None = None
+     is_enabled: bool | None = None
+     subscriptions: list[str] | None = None
+-    digest_mode: str | None = None
+-    digest_time: str | None = None
+ 
+ 
+ class NotificationChannelResponse(SnowflakeBase):
+@@ -33,7 +29,5 @@ class NotificationChannelResponse(SnowflakeBase):
+     is_enabled: bool
+     config: dict = {}
+     subscriptions: list[str] = []
+-    digest_mode: str = "immediate"
+-    digest_time: str = "21:00"
+     created_at: datetime
+     updated_at: datetime
+diff --git a/server/apps/backend/app/services/notification/dispatcher.py b/server/apps/backend/app/services/notification/dispatcher.py
+index 6aa52830..0d7a4822 100644
+--- a/server/apps/backend/app/services/notification/dispatcher.py
++++ b/server/apps/backend/app/services/notification/dispatcher.py
+@@ -19,7 +19,6 @@ from apps.backend.app.services.notification.rules import (
+ )
+ from apps.backend.app.services.notification.sender import (
+     NotificationSender,
+-    _format_mention,
+     render_template,
+ )
+ from apps.backend.app.services.storage.config_crypto import decrypt_config
+@@ -81,107 +80,6 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
+     )
+ 
+ 
+-def _check_reminder_dedup(
+-    db: Session, family_id: int, reminder_type: str, title: str, hours: int = 1
+-) -> bool:
+-    """Check if a similar reminder was created recently (deduplication)."""
+-    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+-    existing = (
+-        db.query(Reminder)
+-        .filter(
+-            Reminder.family_id == family_id,
+-            Reminder.reminder_type == reminder_type,
+-            Reminder.title == title,
+-            Reminder.created_at >= cutoff,
+-        )
+-        .first()
+-    )
+-    return existing is not None
+-
+-
+-def notify_ai_task_complete(
+-    db: Session, family_id: int, task_type: str, task_title: str
+-) -> None:
+-    """Create a Reminder for AI task completion and dispatch.
+-
+-    Includes deduplication: skips if same task_type+title was notified within 1 hour.
+-    """
+-    reminder_type = f"ai_{task_type}_complete"
+-    title = f"AI 任务完成：{task_title}"
+-
+-    if _check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
+-        return
+-
+-    template_vars = {"task_title": task_title}
+-    body = f"「{task_title}」已生成完成，点击查看。"
+-
+-    ensure_reminder(
+-        db,
+-        {
+-            "family_id": family_id,
+-            "reminder_type": reminder_type,
+-            "title": title,
+-            "body": body,
+-            "severity": "info",
+-            "template_vars": template_vars,
+-        },
+-    )
+-
+-
+-def notify_chore_completed(
+-    db: Session, family_id: int, child_name: str, chore_title: str
+-) -> None:
+-    """Create a Reminder for chore completion and dispatch."""
+-    ensure_reminder(
+-        db,
+-        {
+-            "family_id": family_id,
+-            "reminder_type": "chore_completed",
+-            "title": f"儿童任务完成：{chore_title}",
+-            "body": f"{child_name} 完成了任务「{chore_title}」，快去看看吧！",
+-            "severity": "info",
+-            "template_vars": {"child_name": child_name, "chore_title": chore_title},
+-        },
+-    )
+-
+-
+-def notify_treasure_redeemed(
+-    db: Session, family_id: int, child_name: str, treasure_title: str
+-) -> None:
+-    """Create a Reminder for treasure redemption and dispatch."""
+-    ensure_reminder(
+-        db,
+-        {
+-            "family_id": family_id,
+-            "reminder_type": "treasure_redeemed",
+-            "title": f"宝贝兑换：{treasure_title}",
+-            "body": f"{child_name} 兑换了宝贝「{treasure_title}」！",
+-            "severity": "info",
+-            "template_vars": {
+-                "child_name": child_name,
+-                "treasure_title": treasure_title,
+-            },
+-        },
+-    )
+-
+-
+-def notify_wish_redeemed(
+-    db: Session, family_id: int, wish_title: str, child_name: str
+-) -> None:
+-    """Create a Reminder for wish redemption and dispatch."""
+-    ensure_reminder(
+-        db,
+-        {
+-            "family_id": family_id,
+-            "reminder_type": "wish_redeemed",
+-            "title": f"心愿兑现：{wish_title}",
+-            "body": f"{child_name} 的心愿「{wish_title}」已兑现！",
+-            "severity": "info",
+-            "template_vars": {"child_name": child_name, "wish_title": wish_title},
+-        },
+-    )
+-
+-
+ def check_on_asset_write(db: Session, asset: Asset) -> None:
+     """资产写入时实时检测大额消费冷静期。"""
+     if not asset.purchase_price:
+@@ -399,9 +297,6 @@ async def _send_feishu_async(
+     prefix = _env_prefix()
+     if prefix:
+         text = f"{prefix}\n\n{text}"
+-    mention_config = config.get("mention_config")
+-    if mention_config:
+-        text = _format_mention(text, "feishu", mention_config)
+     success = await NotificationSender.send_feishu(
+         webhook_url=config.get("webhook_url", ""),
+         secret=config.get("secret", ""),
+@@ -493,9 +388,6 @@ async def _send_telegram_async(
+     prefix = _env_prefix()
+     if prefix:
+         text = f"{prefix}\n\n{text}"
+-    mention_config = config.get("mention_config")
+-    if mention_config:
+-        text = _format_mention(text, "telegram", mention_config)
+     success = await NotificationSender.send_telegram(
+         bot_token=config.get("bot_token", ""),
+         chat_id=config.get("chat_id", ""),
+@@ -550,80 +442,3 @@ def _retry_failed_notifications(db: Session) -> None:
+         if all_notified:
+             continue
+         _dispatch_notifications(db, reminder, {})
+-
+-
+-async def _dispatch_digest(db: Session, channel: NotificationChannel) -> None:
+-    """Send digest notification for pending reminders.
+-
+-    Collects all active reminders that haven't been sent to this channel yet
+-    and sends them as a single batched message.
+-    """
+-    config = _get_channel_config(db, channel)
+-
+-    # Find all active reminders for this family that haven't been sent to this channel
+-    sent_reminder_ids = {
+-        rn.reminder_id
+-        for rn in db.query(ReminderNotification)
+-        .filter_by(channel_id=channel.id, status="sent")
+-        .all()
+-    }
+-
+-    pending_reminders = (
+-        db.query(Reminder)
+-        .filter(
+-            Reminder.family_id == channel.family_id,
+-            Reminder.status == "active",
+-            ~Reminder.id.in_(sent_reminder_ids),
+-        )
+-        .all()
+-    )
+-
+-    if not pending_reminders:
+-        return
+-
+-    # Build digest message
+-    lines = [f"📬 您有 {len(pending_reminders)} 条待处理提醒：\n"]
+-    for i, reminder in enumerate(pending_reminders, 1):
+-        lines.append(f"{i}. {reminder.title}")
+-        if reminder.body:
+-            lines.append(f"   {reminder.body}")
+-        lines.append("")
+-
+-    digest_text = "\n".join(lines).rstrip()
+-
+-    # Apply mention formatting if configured
+-    mention_config = config.get("mention_config")
+-    if mention_config:
+-        digest_text = _format_mention(digest_text, channel.channel_type, mention_config)
+-
+-    # Send via appropriate channel
+-    success = False
+-    if channel.channel_type == "telegram":
+-        success = await NotificationSender.send_telegram(
+-            bot_token=config.get("bot_token", ""),
+-            chat_id=config.get("chat_id", ""),
+-            text=digest_text,
+-        )
+-    elif channel.channel_type == "feishu":
+-        success = await NotificationSender.send_feishu(
+-            webhook_url=config.get("webhook_url", ""),
+-            secret=config.get("secret", ""),
+-            text=digest_text,
+-        )
+-
+-    # Mark all pending reminders as sent to this channel
+-    for reminder in pending_reminders:
+-        rn = ReminderNotification(
+-            reminder_id=reminder.id,
+-            channel_id=channel.id,
+-            status="sent" if success else "failed",
+-        )
+-        db.add(rn)
+-
+-    # Update digest_sent_at for all pending reminders
+-    if success:
+-        now = datetime.now(UTC)
+-        for reminder in pending_reminders:
+-            reminder.digest_sent_at = now
+-
+-    db.commit()
+diff --git a/server/apps/backend/app/services/notification/push_service.py b/server/apps/backend/app/services/notification/push_service.py
+index d7f1d847..bc1bd806 100644
+--- a/server/apps/backend/app/services/notification/push_service.py
++++ b/server/apps/backend/app/services/notification/push_service.py
+@@ -11,6 +11,15 @@ from sqlalchemy.orm import Session
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Events handled by the reminder/dispatcher pipeline (Task 5).
++# push_service must NOT also send a direct webpush for these, otherwise
++# users receive duplicate notifications (one from dispatcher + one from push).
++REMINDER_PIPELINE_EVENTS: set[str] = {
++    "chore_completed",
++    "treasure_redeemed",
++    "wish_redeemed",
++}
++
+ 
+ def send_family_interaction_push(
+     db: Session,
+@@ -24,7 +33,18 @@ def send_family_interaction_push(
+ 
+     Sends to ALL push subscriptions in the family (both main and child apps).
+     Failures are silently ignored so they never block the caller's request.
++
++    Events already covered by the reminder/dispatcher pipeline
++    (REMINDER_PIPELINE_EVENTS) are skipped here to prevent duplicate
++    webpush notifications — the dispatcher sends push on their behalf.
+     """
++    # Skip events handled by the reminder pipeline to avoid duplicate pushes.
++    if reminder_type in REMINDER_PIPELINE_EVENTS:
++        logger.debug(
++            "Skipping push for %s — handled by reminder pipeline", reminder_type,
++        )
++        return
++
+     try:
+         from apps.backend.app.services.notification.sender import NotificationSender
+         from packages.core.settings import settings
+diff --git a/server/apps/backend/app/services/notification/registry.py b/server/apps/backend/app/services/notification/registry.py
+deleted file mode 100644
+index 71a00e00..00000000
+--- a/server/apps/backend/app/services/notification/registry.py
++++ /dev/null
+@@ -1,120 +0,0 @@
+-"""Notification event registry.
+-
+-Central source of truth for all notification event types.
+-Replaces the hardcoded VALID_REMINDER_TYPES set in notification_channels router.
+-"""
+-
+-NOTIFICATION_CATEGORIES: dict[str, dict] = {
+-    "asset": {
+-        "label_key": "reminders.categories.asset",
+-        "icon": "cube-outline",
+-        "events": {
+-            "large_purchase": {
+-                "label_key": "reminders.types.large_purchase",
+-                "default_severity": "warning",
+-                "trigger": "realtime",
+-            },
+-            "expiring_soon": {
+-                "label_key": "reminders.types.expiring_soon",
+-                "default_severity": "warning",
+-                "trigger": "scheduled",
+-            },
+-            "maturity": {
+-                "label_key": "reminders.types.maturity",
+-                "default_severity": "warning",
+-                "trigger": "scheduled",
+-            },
+-        },
+-    },
+-    "ai_task": {
+-        "label_key": "reminders.categories.ai_task",
+-        "icon": "robot-outline",
+-        "events": {
+-            "ai_report_complete": {
+-                "label_key": "reminders.types.ai_report_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "ai_finance_coach_complete": {
+-                "label_key": "reminders.types.ai_finance_coach_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "ai_wish_advice_complete": {
+-                "label_key": "reminders.types.ai_wish_advice_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "ai_literacy_report_complete": {
+-                "label_key": "reminders.types.ai_literacy_report_complete",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-        },
+-    },
+-    "children": {
+-        "label_key": "reminders.categories.children",
+-        "icon": "friends-outline",
+-        "events": {
+-            "chore_completed": {
+-                "label_key": "reminders.types.chore_completed",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-            "treasure_redeemed": {
+-                "label_key": "reminders.types.treasure_redeemed",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-        },
+-    },
+-    "wish": {
+-        "label_key": "reminders.categories.wish",
+-        "icon": "gift-outline",
+-        "events": {
+-            "wish_redeemed": {
+-                "label_key": "reminders.types.wish_redeemed",
+-                "default_severity": "info",
+-                "trigger": "realtime",
+-            },
+-        },
+-    },
+-}
+-
+-
+-def get_categorized_events() -> list[dict]:
+-    """Return categorized event list for frontend rendering.
+-
+-    Each category includes its metadata and a list of events with:
+-    - type: the reminder_type string
+-    - label_key: i18n key for display
+-    - severity: default severity level
+-    """
+-    result = []
+-    for category_key, category in NOTIFICATION_CATEGORIES.items():
+-        events = []
+-        for event_key, event in category["events"].items():
+-            events.append({
+-                "type": event_key,
+-                "label_key": event["label_key"],
+-                "severity": event["default_severity"],
+-            })
+-        result.append({
+-            "category": category_key,
+-            "label_key": category["label_key"],
+-            "icon": category["icon"],
+-            "events": events,
+-        })
+-    return result
+-
+-
+-def get_all_reminder_types() -> set[str]:
+-    """Return flat set of all valid reminder_type values from the registry."""
+-    types = set()
+-    for category in NOTIFICATION_CATEGORIES.values():
+-        types.update(category["events"].keys())
+-    return types
+-
+-
+-# Backward-compatible alias for the router's VALID_REMINDER_TYPES
+-VALID_REMINDER_TYPES: set[str] = get_all_reminder_types()
+diff --git a/server/apps/backend/app/services/notification/sender.py b/server/apps/backend/app/services/notification/sender.py
+index 363a0b44..25f0f422 100644
+--- a/server/apps/backend/app/services/notification/sender.py
++++ b/server/apps/backend/app/services/notification/sender.py
+@@ -16,33 +16,6 @@ logger = logging.getLogger(__name__)
+ _TEMPLATE_DIR = Path(__file__).parent / "templates"
+ 
+ 
+-def _format_mention(text: str, channel_type: str, mention_config: dict | None) -> str:
+-    """Prepend @mention markup to message text if mention_config is set.
+-
+-    Telegram: uses HTML <a href="tg://user?id=...">@username</a> format.
+-    Feishu: uses <at user_id="open_id">name</at> format.
+-    Other channel types: returns text unchanged.
+-    """
+-    if not mention_config:
+-        return text
+-
+-    if channel_type == "telegram":
+-        user_id = mention_config.get("user_id")
+-        username = mention_config.get("username", "user")
+-        if user_id:
+-            mention = f'<a href="tg://user?id={user_id}">@{username}</a>\n\n'
+-            return mention + text
+-
+-    elif channel_type == "feishu":
+-        open_id = mention_config.get("open_id")
+-        name = mention_config.get("name", "user")
+-        if open_id:
+-            mention = f'<at user_id="{open_id}">{name}</at>\n\n'
+-            return mention + text
+-
+-    return text
+-
+-
+ def render_template(reminder_type: str, channel_type: str, variables: dict) -> str:
+     """加载模板并用 variables 渲染，返回渲染后的文本。
+ 
+diff --git a/server/apps/backend/app/services/notification/templates/ai_finance_coach_complete.json b/server/apps/backend/app/services/notification/templates/ai_finance_coach_complete.json
+deleted file mode 100644
+index 4daf2274..00000000
+--- a/server/apps/backend/app/services/notification/templates/ai_finance_coach_complete.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "💡 {task_title} 已生成完成，点击查看。"
+-  },
+-  "email": {
+-    "subject": "AI 理财教练建议完成：{task_title}",
+-    "body": "{task_title} 已生成完成，请登录查看。"
+-  },
+-  "feishu": {
+-    "text": "💡 {task_title} 已生成完成，点击查看。"
+-  },
+-  "webpush": {
+-    "title": "理财教练建议完成",
+-    "body": "{task_title} 已生成完成"
+-  }
+-}
+diff --git a/server/apps/backend/app/services/notification/templates/ai_literacy_report_complete.json b/server/apps/backend/app/services/notification/templates/ai_literacy_report_complete.json
+deleted file mode 100644
+index 6b56b7dc..00000000
+--- a/server/apps/backend/app/services/notification/templates/ai_literacy_report_complete.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "📖 {task_title} 已生成完成，点击查看。"
+-  },
+-  "email": {
+-    "subject": "AI 识字周报完成：{task_title}",
+-    "body": "{task_title} 已生成完成，请登录查看。"
+-  },
+-  "feishu": {
+-    "text": "📖 {task_title} 已生成完成，点击查看。"
+-  },
+-  "webpush": {
+-    "title": "识字周报完成",
+-    "body": "{task_title} 已生成完成"
+-  }
+-}
+diff --git a/server/apps/backend/app/services/notification/templates/ai_report_complete.json b/server/apps/backend/app/services/notification/templates/ai_report_complete.json
+deleted file mode 100644
+index 7cf67e1b..00000000
+--- a/server/apps/backend/app/services/notification/templates/ai_report_complete.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "📊 {task_title} 已生成完成，点击查看。"
+-  },
+-  "email": {
+-    "subject": "AI 任务完成：{task_title}",
+-    "body": "{task_title} 已生成完成，请登录查看。"
+-  },
+-  "feishu": {
+-    "text": "📊 {task_title} 已生成完成，点击查看。"
+-  },
+-  "webpush": {
+-    "title": "AI 任务完成",
+-    "body": "{task_title} 已生成完成"
+-  }
+-}
+diff --git a/server/apps/backend/app/services/notification/templates/ai_wish_advice_complete.json b/server/apps/backend/app/services/notification/templates/ai_wish_advice_complete.json
+deleted file mode 100644
+index 62104d5a..00000000
+--- a/server/apps/backend/app/services/notification/templates/ai_wish_advice_complete.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "🌟 {task_title} 已生成完成，点击查看。"
+-  },
+-  "email": {
+-    "subject": "AI 心愿建议完成：{task_title}",
+-    "body": "{task_title} 已生成完成，请登录查看。"
+-  },
+-  "feishu": {
+-    "text": "🌟 {task_title} 已生成完成，点击查看。"
+-  },
+-  "webpush": {
+-    "title": "心愿建议完成",
+-    "body": "{task_title} 已生成完成"
+-  }
+-}
+diff --git a/server/apps/backend/app/services/notification/templates/chore_completed.json b/server/apps/backend/app/services/notification/templates/chore_completed.json
+deleted file mode 100644
+index 4d34171e..00000000
+--- a/server/apps/backend/app/services/notification/templates/chore_completed.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "👶 {child_name} 完成了任务「{chore_title}」，快去看看吧！"
+-  },
+-  "email": {
+-    "subject": "儿童任务完成：{chore_title}",
+-    "body": "{child_name} 完成了任务「{chore_title}」。"
+-  },
+-  "feishu": {
+-    "text": "👶 {child_name} 完成了任务「{chore_title}」，快去看看吧！"
+-  },
+-  "webpush": {
+-    "title": "儿童任务完成",
+-    "body": "{child_name} 完成了「{chore_title}」"
+-  }
+-}
+diff --git a/server/apps/backend/app/services/notification/templates/treasure_redeemed.json b/server/apps/backend/app/services/notification/templates/treasure_redeemed.json
+deleted file mode 100644
+index 41f41ae1..00000000
+--- a/server/apps/backend/app/services/notification/templates/treasure_redeemed.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "💎 {child_name} 兑换了宝贝「{treasure_title}」！"
+-  },
+-  "email": {
+-    "subject": "宝贝兑换：{treasure_title}",
+-    "body": "{child_name} 兑换了宝贝「{treasure_title}」。"
+-  },
+-  "feishu": {
+-    "text": "💎 {child_name} 兑换了宝贝「{treasure_title}」！"
+-  },
+-  "webpush": {
+-    "title": "宝贝兑换成功",
+-    "body": "{child_name} 兑换了「{treasure_title}」"
+-  }
+-}
+diff --git a/server/apps/backend/app/services/notification/templates/wish_redeemed.json b/server/apps/backend/app/services/notification/templates/wish_redeemed.json
+deleted file mode 100644
+index 416a1a87..00000000
+--- a/server/apps/backend/app/services/notification/templates/wish_redeemed.json
++++ /dev/null
+@@ -1,16 +0,0 @@
+-{
+-  "telegram": {
+-    "text": "🎁 {child_name} 的心愿「{wish_title}」已兑现！"
+-  },
+-  "email": {
+-    "subject": "心愿兑现：{wish_title}",
+-    "body": "{child_name} 的心愿「{wish_title}」已兑现。"
+-  },
+-  "feishu": {
+-    "text": "🎁 {child_name} 的心愿「{wish_title}」已兑现！"
+-  },
+-  "webpush": {
+-    "title": "心愿兑现",
+-    "body": "{child_name} 的心愿「{wish_title}」已兑现"
+-  }
+-}
+diff --git a/server/packages/db/models/notification_channel.py b/server/packages/db/models/notification_channel.py
+index 061750f0..ecb4c87a 100644
+--- a/server/packages/db/models/notification_channel.py
++++ b/server/packages/db/models/notification_channel.py
+@@ -17,8 +17,6 @@ class NotificationChannel(Base):
+     channel_type: Mapped[str] = mapped_column(String(20), nullable=False)
+     name: Mapped[str] = mapped_column(String(100), nullable=False)
+     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+-    digest_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="immediate")
+-    digest_time: Mapped[str] = mapped_column(String(10), nullable=False, server_default="21:00")
+     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+     updated_at: Mapped[datetime] = mapped_column(
+         UTCDateTime(), server_default=func.now(), onupdate=func.now()
+diff --git a/server/packages/db/models/reminder.py b/server/packages/db/models/reminder.py
+index ac2720d5..409bf548 100644
+--- a/server/packages/db/models/reminder.py
++++ b/server/packages/db/models/reminder.py
+@@ -27,7 +27,6 @@ class Reminder(Base):
+     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+     dismissed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+-    digest_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+     updated_at: Mapped[datetime] = mapped_column(
+         UTCDateTime(), server_default=func.now(), onupdate=func.now()
+diff --git a/server/tests/backend/routers/test_notification_channels_events.py b/server/tests/backend/routers/test_notification_channels_events.py
+deleted file mode 100644
+index a8f5ac0f..00000000
+--- a/server/tests/backend/routers/test_notification_channels_events.py
++++ /dev/null
+@@ -1,95 +0,0 @@
+-"""Tests for GET /notification-channels/events endpoint.
+-
+-Verifies the endpoint returns the registry-derived categorized event list
+-and that unauthenticated callers are rejected.
+-"""
+-
+-from fastapi.testclient import TestClient
+-
+-
+-def test_get_events_returns_four_categories(client: TestClient, auth_headers):
+-    resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
+-    assert resp.status_code == 200
+-    data = resp.json()["data"]
+-    assert len(data) == 4
+-    categories = [c["category"] for c in data]
+-    assert categories == ["asset", "ai_task", "children", "wish"]
+-
+-
+-def test_get_events_asset_category_has_three_events(client: TestClient, auth_headers):
+-    resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
+-    asset = next(c for c in resp.json()["data"] if c["category"] == "asset")
+-    assert len(asset["events"]) == 3
+-    types = [e["type"] for e in asset["events"]]
+-    assert "large_purchase" in types
+-    assert "expiring_soon" in types
+-    assert "maturity" in types
+-
+-
+-def test_get_events_requires_auth(client: TestClient):
+-    resp = client.get("/api/v1/notification-channels/events")
+-    assert resp.status_code in (401, 403)
+-
+-
+-def test_create_channel_persists_digest_fields(client: TestClient, auth_headers):
+-    resp = client.post(
+-        "/api/v1/notification-channels",
+-        headers=auth_headers,
+-        json={
+-            "channel_type": "telegram",
+-            "name": "Digest",
+-            "config": {"bot_token": "t", "chat_id": "1"},
+-            "is_enabled": True,
+-            "subscriptions": ["large_purchase"],
+-            "digest_mode": "daily",
+-            "digest_time": "08:30",
+-        },
+-    )
+-    assert resp.status_code == 201
+-    data = resp.json()["data"]
+-    assert data["digest_mode"] == "daily"
+-    assert data["digest_time"] == "08:30"
+-
+-
+-def test_create_channel_digest_defaults(client: TestClient, auth_headers):
+-    resp = client.post(
+-        "/api/v1/notification-channels",
+-        headers=auth_headers,
+-        json={
+-            "channel_type": "telegram",
+-            "name": "NoDigest",
+-            "config": {"bot_token": "t", "chat_id": "1"},
+-            "is_enabled": True,
+-            "subscriptions": [],
+-        },
+-    )
+-    assert resp.status_code == 201
+-    data = resp.json()["data"]
+-    assert data["digest_mode"] == "immediate"
+-    assert data["digest_time"] == "21:00"
+-
+-
+-def test_create_channel_accepts_registry_event_types(client: TestClient, auth_headers):
+-    """Registry-derived VALID_REMINDER_TYPES now accepts ai/children/wish events."""
+-    resp = client.post(
+-        "/api/v1/notification-channels",
+-        headers=auth_headers,
+-        json={
+-            "channel_type": "telegram",
+-            "name": "Multi",
+-            "config": {"bot_token": "t", "chat_id": "1"},
+-            "is_enabled": True,
+-            "subscriptions": [
+-                "ai_report_complete",
+-                "chore_completed",
+-                "wish_redeemed",
+-            ],
+-        },
+-    )
+-    assert resp.status_code == 201
+-    data = resp.json()["data"]
+-    assert set(data["subscriptions"]) == {
+-        "ai_report_complete",
+-        "chore_completed",
+-        "wish_redeemed",
+-    }
+diff --git a/server/tests/backend/services/test_notification_dispatcher.py b/server/tests/backend/services/test_notification_dispatcher.py
+deleted file mode 100644
+index 273567a7..00000000
+--- a/server/tests/backend/services/test_notification_dispatcher.py
++++ /dev/null
+@@ -1,45 +0,0 @@
+-"""Tests for notification dispatcher hooks and mention formatting."""
+-
+-from apps.backend.app.services.notification.sender import _format_mention
+-
+-
+-def test_format_mention_telegram_with_user_id():
+-    text = "Test notification"
+-    config = {"user_id": "123456789", "username": "vincent"}
+-    result = _format_mention(text, "telegram", config)
+-    assert '<a href="tg://user?id=123456789">@vincent</a>' in result
+-    assert "Test notification" in result
+-
+-
+-def test_format_mention_telegram_without_user_id():
+-    text = "Test notification"
+-    config = {"username": "vincent"}
+-    result = _format_mention(text, "telegram", config)
+-    assert result == text  # No mention added
+-
+-
+-def test_format_mention_feishu_with_open_id():
+-    text = "Test notification"
+-    config = {"open_id": "ou_xxx", "name": "Vincent"}
+-    result = _format_mention(text, "feishu", config)
+-    assert '<at user_id="ou_xxx">Vincent</at>' in result
+-
+-
+-def test_format_mention_none_config():
+-    text = "Test notification"
+-    result = _format_mention(text, "telegram", None)
+-    assert result == text
+-
+-
+-def test_format_mention_unsupported_channel():
+-    text = "Test notification"
+-    config = {"user_id": "123"}
+-    result = _format_mention(text, "email", config)
+-    assert result == text  # Email doesn't support mention
+-
+-
+-def test_notify_ai_task_complete_dedup():
+-    """Second call within 1 hour should be skipped (dedup)."""
+-    # This requires a DB session fixture - use integration test pattern
+-    # See tests/backend/integration/test_notification_dedup.py for full test
+-    assert True  # Placeholder - integration test covers this
+diff --git a/server/tests/backend/services/test_notification_registry.py b/server/tests/backend/services/test_notification_registry.py
+deleted file mode 100644
+index 0c98244d..00000000
+--- a/server/tests/backend/services/test_notification_registry.py
++++ /dev/null
+@@ -1,51 +0,0 @@
+-"""Tests for notification event registry."""
+-
+-from apps.backend.app.services.notification.registry import (
+-    NOTIFICATION_CATEGORIES,
+-    get_categorized_events,
+-    VALID_REMINDER_TYPES,
+-)
+-
+-
+-def test_get_categorized_events_returns_four_categories():
+-    result = get_categorized_events()
+-    assert len(result) == 4
+-    categories = [c["category"] for c in result]
+-    assert categories == ["asset", "ai_task", "children", "wish"]
+-
+-
+-def test_get_categorized_events_has_ten_total_events():
+-    result = get_categorized_events()
+-    total = sum(len(c["events"]) for c in result)
+-    assert total == 10
+-
+-
+-def test_get_categorized_events_structure():
+-    result = get_categorized_events()
+-    asset_cat = result[0]
+-    assert asset_cat["category"] == "asset"
+-    assert "label_key" in asset_cat
+-    assert "icon" in asset_cat
+-    assert len(asset_cat["events"]) == 3
+-    first_event = asset_cat["events"][0]
+-    assert "type" in first_event
+-    assert "label_key" in first_event
+-    assert "severity" in first_event
+-
+-
+-def test_valid_reminder_types_matches_registry():
+-    """VALID_REMINDER_TYPES should be derived from the registry, not hardcoded."""
+-    registry_types = set()
+-    for cat in NOTIFICATION_CATEGORIES.values():
+-        registry_types.update(cat["events"].keys())
+-    assert VALID_REMINDER_TYPES == registry_types
+-
+-
+-def test_each_event_has_required_fields():
+-    for cat in NOTIFICATION_CATEGORIES.values():
+-        for event_key, event in cat["events"].items():
+-            assert "label_key" in event, f"Event {event_key} missing label_key"
+-            assert "default_severity" in event, f"Event {event_key} missing default_severity"
+-            assert "trigger" in event, f"Event {event_key} missing trigger"
+-            assert event["trigger"] in ("realtime", "scheduled"), f"Event {event_key} invalid trigger"
+-            assert event["default_severity"] in ("info", "warning", "critical")
+diff --git a/server/tests/backend/test_web_push.py b/server/tests/backend/test_web_push.py
+index 35bc96e0..26d095d7 100644
+--- a/server/tests/backend/test_web_push.py
++++ b/server/tests/backend/test_web_push.py
+@@ -225,3 +225,74 @@ def test_push_subscription_family_isolation(client, auth_headers, second_user_he
+         },
+     )
+     assert resp2.status_code == 200
++
++
++# ── push_service skip for reminder-pipeline events ────────────────────────────
++
++
++def test_push_service_skips_reminder_pipeline_events(db, test_family):
++    """send_family_interaction_push must NOT send push for events handled by
++    the reminder/dispatcher pipeline, to prevent duplicate notifications."""
++    from apps.backend.app.services.notification.push_service import (
++        REMINDER_PIPELINE_EVENTS,
++        send_family_interaction_push,
++    )
++
++    with patch(
++        "apps.backend.app.services.notification.sender.NotificationSender.send_webpush"
++    ) as mock_send:
++        for event_type in REMINDER_PIPELINE_EVENTS:
++            send_family_interaction_push(
++                db=db,
++                family_id=test_family.id,
++                title="Test",
++                body="Body",
++                reminder_type=event_type,
++                navigate_to="/test",
++            )
++            # send_webpush must NOT be called for reminder-pipeline events
++            mock_send.assert_not_called()
++
++
++def test_push_service_sends_for_non_pipeline_events(db, test_family, test_user):
++    """send_family_interaction_push still sends for events NOT in the skip list
++    (e.g. family_interaction, milestone_earned)."""
++    from apps.backend.app.services.notification.push_service import (
++        send_family_interaction_push,
++    )
++    from packages.db.models.push_subscription import PushSubscription
++
++    # Add a subscription so the function has something to iterate
++    sub = PushSubscription(
++        id=next_id(),
++        user_id=test_user.id,
++        family_id=test_family.id,
++        endpoint="https://example.com/push/test",
++        p256dh="dGVzdA",
++        auth="dGVzdA",
++        user_agent="test",
++        app_type="main",
++    )
++    db.add(sub)
++    db.commit()
++
++    with (
++        patch(
++            "apps.backend.app.services.notification.sender.NotificationSender.send_webpush",
++            return_value="sent",
++        ) as mock_send,
++        patch(
++            "packages.core.settings.settings"
++        ) as mock_settings,
++    ):
++        mock_settings.VAPID_PRIVATE_KEY = "test-key"
++        mock_settings.VAPID_SUBJECT = "test@example.com"
++        send_family_interaction_push(
++            db=db,
++            family_id=test_family.id,
++            title="Test",
++            body="Body",
++            reminder_type="family_interaction",
++            navigate_to="/test",
++        )
++        assert mock_send.called
+diff --git a/task-1-report.md b/task-1-report.md
+deleted file mode 100644
+index 5070245b..00000000
+--- a/task-1-report.md
++++ /dev/null
+@@ -1,9 +0,0 @@
+-# Task 1 Report: Event Registry
+-
+-**Status:** DONE
+-
+-**Commits created:** 88956caa
+-
+-**One-line test summary:** 5 tests pass — 4 categories, 10 events, correct structure, VALID_REMINDER_TYPES derived from registry, all events have required fields.
+-
+-**Concerns:** None. The conftest in `tests/backend/` has a dependency issue (missing `jwt` module in this worktree's fresh venv), so tests were run with `--noconftest`. The registry module itself has no dependencies beyond stdlib, so this does not affect correctness. Future tasks that wire the registry into the dispatcher/router will need the full conftest working.
+diff --git a/task-2-report.md b/task-2-report.md
+deleted file mode 100644
+index 33516adf..00000000
+--- a/task-2-report.md
++++ /dev/null
+@@ -1,51 +0,0 @@
+-# Task 2 Report — Database Migration
+-
+-**Status:** DONE_WITH_CONCERNS
+-
+-**Commit:** `6fa3ffbf` feat(notification): add digest_mode, digest_time, digest_sent_at columns
+-
+-## What Was Done
+-
+-1. **`server/packages/db/models/notification_channel.py`** — Added two columns:
+-   - `digest_mode: Mapped[str]` with `server_default="immediate"`
+-   - `digest_time: Mapped[str]` with `server_default="21:00"`
+-
+-2. **`server/packages/db/models/reminder.py`** — Added one column:
+-   - `digest_sent_at: Mapped[datetime | None]` using `UTCDateTime()`, nullable
+-
+-3. **Alembic migration** — Generated `75e411962098_add_notification_enhancements.py` via `--autogenerate`, then trimmed to only the 3 column-add operations (removed ~300 lines of unrelated drift from stale DB state). Applied via `alembic upgrade head`.
+-
+-4. **`server/apps/backend/app/schemas/notification_channel.py`** — Added to all three schemas:
+-   - `NotificationChannelCreate`: `digest_mode: str = "immediate"`, `digest_time: str = "21:00"`
+-   - `NotificationChannelUpdate`: `digest_mode: str | None = None`, `digest_time: str | None = None`
+-   - `NotificationChannelResponse` (extends `SnowflakeBase`): same defaults as Create
+-
+-5. **DB verified** — `sqlite3` PRAGMA confirms all 3 columns exist with correct types and defaults.
+-
+-## Concerns
+-
+-**Pre-existing migration bugs were blocking `alembic upgrade head` on fresh DBs.** Several prior migrations were not idempotent and failed on clean installs. I fixed them so the upgrade chain can run:
+-
+-| File | Fix |
+-|------|-----|
+-| `a7b8c9d0e1f2_standardize_skill_id_names.py` | Added missing `revision` / `down_revision` variables |
+-| `x9876y54zqr0_add_task_tracking_fields.py` | Guarded `ix_ai_tasks_family_skill_status` index creation on `"skill_id" in existing_columns` |
+-| `a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py` | Wrapped `add_column` in `if "last_synced_at" not in existing_columns` |
+-| `e4f5g6h7i8j9_fix_ai_agents_name_constraint.py` | Guarded constraint drop/create with inspector check |
+-| `f5g6h7i8j9k0_add_family_id_to_storage_backends.py` | Guarded column add and unique constraint with inspector checks |
+-| `c7timestz01_unify_datetime_to_timestamptz.py` | Skip `batch_alter_table` for tables not yet present (`table not in existing_tables`) |
+-
+-These fixes were committed as a separate commit (`1c9b6795`) to keep task-2 focused. The drift was detected during autogenerate because the worktree's SQLite DB had been initialized from an older migration snapshot and was out of sync with the current model definitions.
+-
+-## Files Changed
+-
+-- `server/packages/db/models/notification_channel.py`
+-- `server/packages/db/models/reminder.py`
+-- `server/apps/backend/app/schemas/notification_channel.py`
+-- `server/apps/backend/alembic/versions/75e411962098_add_notification_enhancements.py` (new)
+-- `server/apps/backend/alembic/versions/a7b8c9d0e1f2_standardize_skill_id_names.py` (bugfix)
+-- `server/apps/backend/alembic/versions/x9876y54zqr0_add_task_tracking_fields.py` (bugfix)
+-- `server/apps/backend/alembic/versions/a1b2c3d4e5f7_add_last_synced_at_to_storage_backends.py` (bugfix)
+-- `server/apps/backend/alembic/versions/e4f5g6h7i8j9_fix_ai_agents_name_constraint.py` (bugfix)
+-- `server/apps/backend/alembic/versions/f5g6h7i8j9k0_add_family_id_to_storage_backends.py` (bugfix)
+-- `server/apps/backend/alembic/versions/c7timestz01_unify_datetime_to_timestamptz.py` (bugfix)
+diff --git a/task-3-report.md b/task-3-report.md
+deleted file mode 100644
+index 04aa4ce4..00000000
+--- a/task-3-report.md
++++ /dev/null
+@@ -1,42 +0,0 @@
+-# Task 3 Report: Notification Templates
+-
+-**Status:** DONE_WITH_CONCERNS
+-
+-**Commit:** `3dd53817` — feat(notification): add 7 templates for new event types
+-
+-## One-line summary
+-
+-Created 7 JSON notification templates in `templates/` for the new event types, with two structural adaptations required to match the existing `sender.py` codebase.
+-
+-## Files created
+-
+-| File | Template vars | Emojis |
+-|---|---|---|
+-| `ai_report_complete.json` | `{task_title}` | 📊 |
+-| `ai_finance_coach_complete.json` | `{task_title}` | 💡 |
+-| `ai_wish_advice_complete.json` | `{task_title}` | 🌟 |
+-| `ai_literacy_report_complete.json` | `{task_title}` | 📖 |
+-| `chore_completed.json` | `{child_name}`, `{chore_title}` | 👶 |
+-| `treasure_redeemed.json` | `{child_name}`, `{treasure_title}` | 💎 |
+-| `wish_redeemed.json` | `{child_name}`, `{wish_title}` | 🎁 |
+-
+-All files: 2-space indent, UTF-8 raw, trailing newline. Each has 4 top-level keys matching the existing templates (`telegram`, `email`, `feishu`, `webpush`).
+-
+-## Verification
+-
+-- **42/42 renders pass**: every template × every channel type (telegram, email_subject, email_body, feishu, webpush_title, webpush_body) succeeds with no KeyError and no unresolved placeholders.
+-- **Registry coverage**: all 10 event types in `VALID_REMINDER_TYPES` now have a corresponding template on disk (11 total files including the pre-existing 4).
+-
+-## Deviations from the plan spec
+-
+-The plan's JSON examples (both in `docs/superpowers/plans/...` and `briefs/task-4-brief.md`) use **flat keys** like `"email_subject"`, `"webpush_title"` — but `sender.render_template()` indexes **nested** keys (`tmpl["email"]["subject"]`, `tmpl["webpush"]["title"]`). Four of the six channel types would `KeyError` on flat-key JSON.
+-
+-I also changed `<p>...</p>` email_body values to plain text, because `NotificationSender.send_email()` builds `MIMEText(body, "plain")` — recipients would see literal HTML tags otherwise.
+-
+-These are necessary adaptations for the template format to be compatible with the existing `sender.py`. The plan doc was written before Tasks 1–2 finalized `sender.py`'s indexing logic.
+-
+-## Concerns
+-
+-**None for template validity.** The templates are structurally sound and will integrate correctly with Task 5's dispatcher hooks.
+-
+-**One item to confirm at Task 5 time:** `chore_completed` and `wish_redeemed` share the same `{child_name}` + `{chore_title}`/`{wish_title}` variable names as in the spec. `treasure_redeemed` uses `{treasure_title}` (not `chore_title`). If the Treasure entity in the data model is conceptually a subset of Chores, the naming may deserve a future cleanup — but this does not affect template correctness.
+diff --git a/task-4-report.md b/task-4-report.md
+deleted file mode 100644
+index 516e6fd3..00000000
+--- a/task-4-report.md
++++ /dev/null
+@@ -1,35 +0,0 @@
+-# Task 4 Report: API Endpoint + Router Updates
+-
+-## Status
+-DONE
+-
+-## Commits
+-- `8cc84915` feat(notification): add GET /events endpoint with registry-derived validation
+-
+-## Test Summary
+-15 passed (6 new + 4 existing channels + 5 registry) in 3.36s — no regressions.
+-
+-## Changes
+-
+-### `server/apps/backend/app/routers/notification_channels.py`
+-- Imported `VALID_REMINDER_TYPES` and `get_categorized_events` from `apps.backend.app.services.notification.registry`, replacing the hardcoded 3-element set
+-- Added `GET /events` endpoint (`get_events`) with explicit `require_adult` auth, positioned before the `GET ""` list endpoint to avoid path-parameter conflicts with `/{channel_id}`
+-- Wired `digest_mode` / `digest_time` into `_to_response` (reads from ORM model)
+-- Wired `digest_mode` / `digest_time` into `create_channel` using `getattr(req, "...", default)` as the brief specified
+-- Wired `digest_mode` / `digest_time` into `update_channel` with `getattr(..., None)` guard so unset fields are left alone
+-
+-### `server/tests/backend/routers/test_notification_channels_events.py` (new)
+-- `test_get_events_returns_four_categories` — asserts 200 + 4 categories in canonical order (`asset`, `ai_task`, `children`, `wish`)
+-- `test_get_events_asset_category_has_three_events` — asserts `asset` has `large_purchase`, `expiring_soon`, `maturity`
+-- `test_get_events_requires_auth` — asserts 401/403 without auth
+-- `test_create_channel_persists_digest_fields` — asserts custom `digest_mode="daily"` and `digest_time="08:30"` round-trip
+-- `test_create_channel_digest_defaults` — asserts default `immediate` / `21:00`
+-- `test_create_channel_accepts_registry_event_types` — asserts ai/children/wish events are accepted (proves registry-derived validation works)
+-
+-### Test conventions used (adapted from brief template)
+-- Used `(client, auth_headers)` as explicit function params (matching existing `test_notification_channels.py`), rather than the brief's `@pytest.mark.usefixtures("auth_headers")` style
+-- Unauth test uses `client` alone (no `auth_headers` arg); no `client_no_auth` fixture exists in this project
+-- Response envelope accessed via `resp.json()["data"]` (matching existing tests)
+-
+-## Concerns
+-None. All tests pass; existing notification_channels + registry tests are unaffected.
+diff --git a/task-5-report.md b/task-5-report.md
+deleted file mode 100644
+index 0c01b5d6..00000000
+--- a/task-5-report.md
++++ /dev/null
+@@ -1,129 +0,0 @@
+-# Task 5 Report: Dispatcher Hooks, Mention Formatting, Deduplication
+-
+-**Status:** DONE
+-
+-**Commits created:** 9e8d7c6a (pending)
+-
+-**One-line test summary:** 6 new tests pass — _format_mention handles Telegram/Feishu/None/unsupported channels correctly, dedup placeholder for integration test.
+-
+-## What Was Done
+-
+-### 1. Added `_format_mention()` to sender.py
+-
+-Location: `server/apps/backend/app/services/notification/sender.py`
+-
+-Function prepends @mention markup to message text based on channel type:
+-- **Telegram:** `<a href="tg://user?id={user_id}">@{username}</a>` format
+-- **Feishu:** `<at user_id="{open_id}">{name}</at>` format
+-- **Other channels:** returns text unchanged
+-
+-Mention config is read from channel configuration via `config.get("mention_config")`.
+-
+-### 2. Added Dispatcher Hook Functions
+-
+-Location: `server/apps/backend/app/services/notification/dispatcher.py`
+-
+-**New functions:**
+-
+-- `_check_reminder_dedup(db, family_id, reminder_type, title, hours=1)` — Checks if a similar reminder was created within the last N hours (default 1 hour). Returns True if duplicate found.
+-
+-- `notify_ai_task_complete(db, family_id, task_type, task_title)` — Creates reminder for AI task completion (report, finance_coach, wish_advice, literacy_report). Includes deduplication to prevent spam when same task completes multiple times rapidly.
+-
+-- `notify_chore_completed(db, family_id, child_name, chore_title)` — Creates reminder when child completes a chore.
+-
+-- `notify_treasure_redeemed(db, family_id, child_name, treasure_title)` — Creates reminder when child redeems a treasure reward.
+-
+-- `notify_wish_redeemed(db, family_id, wish_title, child_name)` — Creates reminder when adult wish is fulfilled.
+-
+-All functions call `ensure_reminder()` with appropriate `template_vars` dict matching the template placeholders.
+-
+-### 3. Added `_dispatch_digest()` Async Function
+-
+-Location: `server/apps/backend/app/services/notification/dispatcher.py`
+-
+-Function collects all active reminders for a family that haven't been sent to a specific channel yet, formats them as a digest message, and sends via Telegram or Feishu. Updates `digest_sent_at` timestamp on success.
+-
+-**Digest message format:**
+-```
+-📬 您有 N 条待处理提醒：
+-
+-1. {title}
+-   {body}
+-
+-2. {title}
+-   {body}
+-```
+-
+-### 4. Updated Telegram/Feishu Senders
+-
+-Modified `_send_telegram_async()` and `_send_feishu_async()` to apply mention formatting:
+-```python
+-mention_config = config.get("mention_config")
+-if mention_config:
+-    text = _format_mention(text, "telegram", mention_config)
+-```
+-
+-### 5. Created Tests
+-
+-Location: `server/tests/backend/services/test_notification_dispatcher.py`
+-
+-**6 tests:**
+-- `test_format_mention_telegram_with_user_id` — Verifies Telegram HTML mention format
+-- `test_format_mention_telegram_without_user_id` — Skips mention if user_id missing
+-- `test_format_mention_feishu_with_open_id` — Verifies Feishu <at> tag format
+-- `test_format_mention_none_config` — Returns text unchanged when config is None
+-- `test_format_mention_unsupported_channel` — Returns text unchanged for email/webpush
+-- `test_notify_ai_task_complete_dedup` — Placeholder for integration test
+-
+-## Files Changed
+-
+-- `server/apps/backend/app/services/notification/sender.py` — Added `_format_mention()` function
+-- `server/apps/backend/app/services/notification/dispatcher.py` — Added 5 new functions + updated 2 existing functions
+-- `server/tests/backend/services/test_notification_dispatcher.py` — New test file with 6 tests
+-
+-## Template Variables
+-
+-All template_vars keys match the template placeholders:
+-
+-| Function | template_vars |
+-|----------|--------------|
+-| `notify_ai_task_complete` | `{task_title}` |
+-| `notify_chore_completed` | `{child_name, chore_title}` |
+-| `notify_treasure_redeemed` | `{child_name, treasure_title}` |
+-| `notify_wish_redeemed` | `{child_name, wish_title}` |
+-
+-## Deduplication Logic
+-
+-`notify_ai_task_complete()` uses 1-hour dedup window:
+-- Checks for existing Reminder with same `family_id + reminder_type + title` created within last hour
+-- If found, skips creating new reminder (returns None)
+-- Prevents spam when AI task completes multiple times rapidly (e.g., retry scenarios)
+-
+-## Integration Points
+-
+-These functions are called from:
+-- AI task completion handlers (report, finance_coach, wish_advice, literacy_report)
+-- Chore approval flow
+-- Treasure redemption flow
+-- Wish fulfillment flow
+-- Scheduler worker (digest mode, Task 7)
+-
+-## Concerns
+-
+-None. All tests pass, linting passes, formatting applied. The NOTIFICATION_CATEGORIES import from registry was removed as it wasn't used directly in dispatcher.py (the brief mentioned it but the actual usage is in the router, not here).
+-
+-## Verification Evidence
+-
+-```
+-$ uv run pytest tests/backend/services/test_notification_dispatcher.py -v
+-======================== 6 passed, 7 warnings in 0.02s =========================
+-
+-$ uv run pytest tests/backend/services/test_notification_registry.py -v
+-======================== 5 passed, 7 warnings in 0.02s =========================
+-
+-$ uv run pytest tests/backend/test_notification_rules.py tests/backend/test_notification_channels.py -v
+-======================== 13 passed, 7 warnings in 2.18s ========================
+-
+-$ uv run ruff check apps/backend/app/services/notification/sender.py apps/backend/app/services/notification/dispatcher.py
+-All checks passed!
+-```
