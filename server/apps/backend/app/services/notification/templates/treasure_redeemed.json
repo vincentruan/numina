@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "💎 {child_name} 兑换了宝贝「{treasure_title}」！"
+  },
+  "email": {
+    "subject": "宝贝兑换：{treasure_title}",
+    "body": "{child_name} 兑换了宝贝「{treasure_title}」。"
+  },
+  "feishu": {
+    "text": "💎 {child_name} 兑换了宝贝「{treasure_title}」！"
+  },
+  "webpush": {
+    "title": "宝贝兑换成功",
+    "body": "{child_name} 兑换了「{treasure_title}」"
+  }
+}
