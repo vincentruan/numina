@@ -19,7 +19,7 @@ export interface NotificationChannelResponse {
   channel_type: 'telegram' | 'email' | 'feishu'
   name: string
   is_enabled: boolean
-  config: Record<string, string | number>
+  config: Record<string, string | number | Record<string, string>>
   subscriptions: string[]
   digest_mode: 'immediate' | 'daily'
   digest_time: string
@@ -30,7 +30,7 @@ export interface NotificationChannelResponse {
 export interface NotificationChannelCreate {
   channel_type: 'telegram' | 'email' | 'feishu'
   name: string
-  config: Record<string, string | number>
+  config: Record<string, string | number | Record<string, string>>
   is_enabled: boolean
   subscriptions?: string[]
   digest_mode?: 'immediate' | 'daily'
@@ -39,7 +39,7 @@ export interface NotificationChannelCreate {
 
 export interface NotificationChannelUpdate {
   name?: string
-  config?: Record<string, string | number>
+  config?: Record<string, string | number | Record<string, string>>
   is_enabled?: boolean
   subscriptions?: string[]
   digest_mode?: 'immediate' | 'daily'
