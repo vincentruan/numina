@@ -8,7 +8,7 @@ a typed ``@property`` that transparently round-trips through ``json.loads`` /
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any
 
 
 def json_text(column_name: str) -> property:
