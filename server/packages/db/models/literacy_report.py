@@ -11,6 +11,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
 
@@ -33,4 +34,9 @@ class LiteracyWeeklyReport(Base):
     thread_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True,
         comment="DeerFlow thread ID for the dedicated chat session",
+    )
+
+    # JSON accessor for the ``report_json`` Text column
+    report_data: dict | list | None = property(  # type: ignore[misc]
+        json_text("report_json"),
     )

@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
 
@@ -92,3 +93,11 @@ class User(Base):
     assets = relationship("Asset", back_populates="user")
     liabilities = relationship("Liability", back_populates="user")
     wishes = relationship("Wish", back_populates="user")
+
+    # JSON accessors for Text columns
+    webauthn_credentials_data: list | dict | None = property(  # type: ignore[misc]
+        json_text("webauthn_credentials"),
+    )
+    username_change_history_data: list | dict | None = property(  # type: ignore[misc]
+        json_text("username_change_history"),
+    )

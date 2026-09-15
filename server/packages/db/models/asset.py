@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
 asset_tags = Table(
@@ -64,3 +65,8 @@ class Asset(Base):
     tags = relationship("Tag", secondary=asset_tags, back_populates="assets")
     linked_liabilities = relationship("Liability", back_populates="linked_asset")
     from_wish = relationship("Wish", foreign_keys=[from_wish_id])
+
+    # JSON accessor for the ``properties`` Text column
+    properties_json: dict | list | None = property(  # type: ignore[misc]
+        json_text("properties"),
+    )

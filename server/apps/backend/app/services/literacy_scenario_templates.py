@@ -209,7 +209,7 @@ def seed_templates(db: Session) -> int:
             dimension=tmpl["dimension"],
             age_group=tmpl["age_group"],
             story_template=tmpl["story_template"],
-            choices_json=json.dumps(tmpl["choices"], ensure_ascii=False),
+            choices_data=tmpl["choices"],
             is_active=True,
         )
         db.add(row)
@@ -346,12 +346,12 @@ async def generate_templates_batch(
             logger.warning("generate_templates_batch: invalid template structure for %s/%s", dimension, age_group)
             continue
 
-        choices_json = json.dumps(data["choices"], ensure_ascii=False)
+        choices_data = data["choices"]
         generated.append({
             "dimension": dimension,
             "age_group": age_group,
             "story_template": data["story_template"],
-            "choices_json": choices_json,
+            "choices_data": choices_data,
         })
 
     return generated

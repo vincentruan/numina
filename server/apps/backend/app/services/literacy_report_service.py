@@ -247,15 +247,12 @@ def _persist_report_result(
 
     # Build structured report JSON with full data for audit/debugging.
     thinking = report_payload.get("thinking", "") if report_payload else ""
-    report_json = json.dumps(
-        {
-            "week_start": week_start.isoformat(),
-            "source": "agent_sse",
-            "narrative": narrative,
-            "thinking": thinking,
-        },
-        ensure_ascii=False,
-    )
+    report_data = {
+        "week_start": week_start.isoformat(),
+        "source": "agent_sse",
+        "narrative": narrative,
+        "thinking": thinking,
+    }
 
     # Upsert: check for existing row first
     existing = db.execute(
@@ -268,7 +265,7 @@ def _persist_report_result(
     if existing is not None:
         existing.narrative = narrative
         existing.thread_id = thread_id
-        existing.report_json = report_json
+        existing.report_data = report_data
         db.commit()
         db.refresh(existing)
         return existing
@@ -276,7 +273,7 @@ def _persist_report_result(
     row = LiteracyWeeklyReport(
         child_id=child_id,
         week_start=week_start,
-        report_json=report_json,
+        report_data=report_data,
         narrative=narrative,
         thread_id=thread_id,
     )
