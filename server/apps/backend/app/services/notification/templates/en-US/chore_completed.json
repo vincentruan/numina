@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "👶 {child_name} completed the chore \"{chore_title}\", go check it out!"
+  },
+  "email": {
+    "subject": "Chore Completed: {chore_title}",
+    "body": "{child_name} completed the chore \"{chore_title}\"."
+  },
+  "feishu": {
+    "text": "👶 {child_name} completed the chore \"{chore_title}\", go check it out!"
+  },
+  "webpush": {
+    "title": "Chore Completed",
+    "body": "{child_name} completed \"{chore_title}\""
+  }
+}

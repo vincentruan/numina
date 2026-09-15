@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "💰 *Financial Product Maturity*\n\n*{asset_name}* matures on {maturity_date}, {days_left} days left, amount ¥{amount}.\n\n_Numina Family Asset Manager_"
+  },
+  "email": {
+    "subject": "[Numina] Financial Product Maturity Reminder",
+    "body": "Hi,\n\nThe following financial product is about to mature:\n\nProduct: {asset_name}\nMaturity Date: {maturity_date}\nDays Left: {days_left}\nAmount: ¥{amount}\n\nPlease handle renewal or redemption in time.\n\nNumina Family Asset Manager"
+  },
+  "feishu": {
+    "text": "💰 Financial Product Maturity\n\n\"{asset_name}\" matures on {maturity_date}, {days_left} days left, amount ¥{amount}.\n\n—— Numina Family Asset Manager"
+  },
+  "webpush": {
+    "title": "Maturity Reminder",
+    "body": "{asset_name} matures in {days_left} days, amount ¥{amount}"
+  }
+}

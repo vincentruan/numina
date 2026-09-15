@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "📊 *Asset Allocation Drift Alert*\n\n{category} is currently at {current_pct}%, target {target_pct}%, drift {drift_pct}%.\nConsider rebalancing.\n\n_Numina Family Asset Manager_"
+  },
+  "email": {
+    "subject": "[Numina] Asset Allocation Drift Alert",
+    "body": "Hi,\n\nYour asset allocation has drifted:\n\nCategory: {category}\nCurrent: {current_pct}%\nTarget: {target_pct}%\nDrift: {drift_pct}%\n\nConsider rebalancing your assets.\n\nNumina Family Asset Manager"
+  },
+  "feishu": {
+    "text": "📊 Asset Allocation Drift Alert\n\n{category} is currently at {current_pct}%, target {target_pct}%, drift {drift_pct}%.\nConsider rebalancing.\n\n—— Numina Family Asset Manager"
+  },
+  "webpush": {
+    "title": "Allocation Alert",
+    "body": "{category} drifted {drift_pct}%, consider rebalancing"
+  }
+}
