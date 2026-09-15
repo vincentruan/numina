@@ -16,10 +16,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.archivable import ArchivableMixin
 from packages.db.session import Base, UTCDateTime
 
 
-class Liability(Base):
+class Liability(ArchivableMixin, Base):
     __tablename__ = "liabilities"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
