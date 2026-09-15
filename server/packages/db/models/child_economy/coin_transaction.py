@@ -37,6 +37,20 @@ class CoinTransaction(Base):
     streak_bonus: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
+    @property
+    def ref_type(self) -> str | None:
+        """Maps transaction_type to the referenced entity type.
+
+        chore_earn  -> "chore_instance"  (the ChoreInstance that earned coins)
+        wish_spend  -> "child_wish"      (the ChildWish that was purchased)
+        parent_grant, gift_sent, gift_received -> None (no referenced entity)
+        """
+        _MAP = {
+            "chore_earn": "chore_instance",
+            "wish_spend": "child_wish",
+        }
+        return _MAP.get(self.transaction_type)
+
     __table_args__ = (
         # Idempotency: prevent duplicate writes for the same chore/wish
         UniqueConstraint("ref_id", "transaction_type", name="uq_coin_tx_ref_type"),

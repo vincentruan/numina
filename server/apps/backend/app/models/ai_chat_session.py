@@ -19,6 +19,16 @@ from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
 
 
+class SessionSource:
+    """Known values for AIChatSession.source.
+
+    system_default: auto-created session used for caching context between
+    user-initiated chat turns (see get_system_default_session endpoint).
+    """
+
+    SYSTEM_DEFAULT = "system_default"
+
+
 class AIChatSession(Base):
     __tablename__ = "ai_chat_sessions"
 
@@ -30,7 +40,10 @@ class AIChatSession(Base):
         BigInteger, ForeignKey("users.id"), nullable=True
     )
     agent_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True, index=True
+        BigInteger,
+        ForeignKey("ai_agents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     # Preserved auto-generated title (from DeerFlow TitleMiddleware) before the
@@ -54,7 +67,9 @@ class AIChatSession(Base):
     # context and cross-family access is enforced at the application layer
     # (get_thread family gating). Null for non-branch sessions.
     parent_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=func.now()
+    )
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=func.now(), onupdate=func.now()
     )

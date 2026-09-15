@@ -21,13 +21,12 @@ logger = get_logger(__name__)
 
 def fetch_rates_job() -> None:
     """Fetch and store latest exchange rates from exchangerate-api.com."""
-    from packages.domain.exchange_rate.service import (
-        ExchangeRateService,
-    )
+    from packages.core.exchange_rate_adapter import ExchangeRateAdapter
 
     db = SessionLocal()
     try:
-        success = ExchangeRateService.fetch_and_store_rates(db)
+        adapter = ExchangeRateAdapter()
+        success = adapter.fetch_and_store_rates(db)
         if success:
             logger.info("定时汇率更新成功")
     except Exception as e:

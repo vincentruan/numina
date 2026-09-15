@@ -48,3 +48,8 @@ class Liability(Base):
 
     user = relationship("User", back_populates="liabilities")
     linked_asset = relationship("Asset", back_populates="linked_liabilities")
+
+    @property
+    def status(self) -> str:
+        """Derived status: 'active' when is_active=True, 'paid_off' otherwise."""
+        return "active" if self.is_active else "paid_off"

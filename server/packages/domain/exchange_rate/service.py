@@ -1,36 +1,48 @@
-from datetime import UTC, datetime, timedelta
+from __future__ import annotations
 
-import httpx
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy.orm import Session
 
 from packages.core.logging import get_logger
-from packages.db.models.currency import Currency
 from packages.db.models.exchange_rate import ExchangeRate
+
+if TYPE_CHECKING:
+    from packages.core.exchange_rate_adapter import ExchangeRateAdapter
 
 logger = get_logger(__name__)
 
-_CACHE_TTL = timedelta(hours=4)
-
 
 class ExchangeRateService:
-    # Maps currency code → (rate, fetched_at, cached_at)
-    _cache: dict[str, tuple[float, datetime, datetime]] = {}
+    """Thin domain-layer service for exchange-rate lookups and conversions.
+
+    Infrastructure concerns (HTTP, caching) live in
+    :class:`packages.core.exchange_rate_adapter.ExchangeRateAdapter`.
+    This class delegates to the adapter when one is supplied; otherwise it
+    performs plain DB lookups (no caching) for backward compatibility.
+    """
 
     @classmethod
-    def get_rate(cls, target_currency: str, db: Session) -> tuple[float | None, datetime | None]:
-        """Return (rate, fetched_at) for target_currency relative to CNY base.
+    def get_rate(
+        cls,
+        target_currency: str,
+        db: Session,
+        adapter: ExchangeRateAdapter | None = None,
+    ) -> tuple[float | None, datetime | None]:
+        """Return (rate, fetched_at) for *target_currency* relative to CNY base.
 
-        Returns (None, None) when no rate row exists — callers must handle this
-        instead of silently treating missing rates as 1:1.
+        Returns ``(None, None)`` when no rate row exists — callers must handle
+        this instead of silently treating missing rates as 1:1.
         """
         if target_currency == "CNY":
             return (1.0, datetime.now(UTC))
 
-        entry = cls._cache.get(target_currency)
-        if entry is not None:
-            rate, fetched_at, cached_at = entry
-            if datetime.now(UTC) - cached_at < _CACHE_TTL:
+        if adapter is not None:
+            rate, fetched_at = adapter.get_cached_rate(target_currency)
+            if rate is not None:
                 return (rate, fetched_at)
+            # Cache miss or stale — fall through to DB lookup
 
         row = (
             db.query(ExchangeRate)
@@ -42,58 +54,11 @@ class ExchangeRateService:
             logger.warning(f"汇率数据不存在: {target_currency}")
             return (None, None)
 
-        cls._cache[target_currency] = (row.rate, row.fetched_at, datetime.now(UTC))
+        # Update adapter cache so subsequent calls use it
+        if adapter is not None:
+            adapter._cache[target_currency] = (row.rate, row.fetched_at, datetime.now(UTC))
+
         return (row.rate, row.fetched_at)
-
-    @classmethod
-    def fetch_and_store_rates(cls, db: Session) -> bool:
-        """Fetch latest rates from exchangerate-api.com and persist to DB."""
-        try:
-            resp = httpx.get(
-                "https://api.exchangerate-api.com/v4/latest/CNY",
-                timeout=10,
-                proxy=None,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            logger.exception(f"汇率获取失败: {e}")
-            return False
-
-        fetched_at = datetime.now(UTC)
-        rates: dict[str, float] = data.get("rates", {})
-
-        for code, rate in rates.items():
-            if code == "CNY":
-                continue
-            try:
-                with db.begin_nested():
-                    row = ExchangeRate(
-                        target_currency=code,
-                        rate=rate,
-                        fetched_at=fetched_at,
-                    )
-                    db.add(row)
-            except Exception:
-                continue
-
-        existing_codes = {c.code for c in db.query(Currency.code).all()}
-        for code in rates:
-            if code not in existing_codes:
-                db.add(Currency(
-                    code=code,
-                    name_zh=code,
-                    name_en=code,
-                    symbol=code,
-                    flag_emoji="🏳️",
-                    is_favorite=False,
-                    sort_order=999,
-                ))
-
-        db.commit()
-        cls._cache.clear()
-        logger.info(f"汇率更新完成，共 {len(rates)} 种货币")
-        return True
 
     @classmethod
     def convert(
@@ -102,17 +67,18 @@ class ExchangeRateService:
         from_currency: str,
         to_currency: str,
         db: Session,
+        adapter: ExchangeRateAdapter | None = None,
     ) -> float:
-        """Convert amount from from_currency to to_currency via CNY as intermediate.
+        """Convert *amount* from *from_currency* to *to_currency* via CNY.
 
-        Returns the original amount unchanged when either rate is missing — this
-        avoids silently distorting values with a 1:1 fallback.
+        Returns the original amount unchanged when either rate is missing —
+        this avoids silently distorting values with a 1:1 fallback.
         """
         if from_currency == to_currency:
             return amount
 
-        rate_from, _ = cls.get_rate(from_currency, db)
-        rate_to, _ = cls.get_rate(to_currency, db)
+        rate_from, _ = cls.get_rate(from_currency, db, adapter=adapter)
+        rate_to, _ = cls.get_rate(to_currency, db, adapter=adapter)
 
         if rate_from is None or rate_to is None:
             logger.warning(
@@ -128,3 +94,23 @@ class ExchangeRateService:
             return round(result)
 
         return round(result, 2)
+
+    @classmethod
+    def fetch_and_store_rates(cls, db: Session) -> bool:
+        """Deprecated: use :class:`ExchangeRateAdapter` directly.
+
+        .. deprecated::
+            Use ``ExchangeRateAdapter().fetch_and_store_rates(db)`` instead.
+        """
+        import warnings
+
+        warnings.warn(
+            "ExchangeRateService.fetch_and_store_rates is deprecated, "
+            "use ExchangeRateAdapter",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+
+        adapter = ExchangeRateAdapter()
+        return adapter.fetch_and_store_rates(db)

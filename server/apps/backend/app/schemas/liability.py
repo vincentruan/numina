@@ -31,8 +31,11 @@ def _coerce_money_str(v: Any) -> str | None:
 def _validate_repayment_method(v: str) -> str:
     """Validate that v is a known repayment method. Shared by Create/Update schemas."""
     from packages.domain.liability_calculator import VALID_METHODS
+
     if v not in VALID_METHODS:
-        raise ValueError(f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}")
+        raise ValueError(
+            f"Invalid repayment method: {v}. Must be one of: {', '.join(sorted(VALID_METHODS))}"
+        )
     return v
 
 
@@ -60,7 +63,9 @@ class LiabilityCreate(BaseModel):
     def _validate_method(cls, v: str) -> str:
         return _validate_repayment_method(v)
 
-    @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
+    @field_validator(
+        "original_amount", "remaining_amount", "monthly_payment", mode="before"
+    )
     @classmethod
     def _coerce_money(cls, v):
         return _coerce_to_decimal(v)
@@ -88,7 +93,9 @@ class LiabilityUpdate(BaseModel):
             return v
         return _validate_repayment_method(v)
 
-    @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
+    @field_validator(
+        "original_amount", "remaining_amount", "monthly_payment", mode="before"
+    )
     @classmethod
     def _coerce_money(cls, v):
         return _coerce_to_decimal(v)
@@ -156,11 +163,14 @@ class LiabilityResponse(SnowflakeBase):
     linked_asset_id: int | None = None
     notes: str | None = None
     is_active: bool
+    status: str
     currency: str = "CNY"
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    @field_validator("original_amount", "remaining_amount", "monthly_payment", mode="before")
+    @field_validator(
+        "original_amount", "remaining_amount", "monthly_payment", mode="before"
+    )
     @classmethod
     def _coerce_money(cls, v):
         return _coerce_money_str(v)
