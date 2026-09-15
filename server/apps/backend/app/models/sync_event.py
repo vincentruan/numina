@@ -24,6 +24,4 @@ class SyncEvent(Base):
     )
 
     # JSON accessor for the ``detail`` Text column
-    detail_data: dict | list | None = property(  # type: ignore[assignment]
-        json_text("detail"),
-    )
+    detail_data: dict | list | None = json_text("detail")  # type: ignore[misc]

@@ -311,7 +311,7 @@ def _build_evaluation_context(
             context["latest_scenario"] = {
                 "dimension": _scenario_dimension(db, scenario),
                 "choice_index": scenario.choice_index,
-                "feedback": scenario.feedback_json,
+                "feedback": scenario.feedback_data,
             }
 
     return context

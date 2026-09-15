@@ -353,7 +353,7 @@ def _load_scenario_result(task, db: Session) -> dict:
                 "child_id": str(report.child_id),
                 "week_start": report.week_start.isoformat() if report.week_start else None,
                 "narrative": report.narrative,
-                "report_json": report.report_json,
+                "report_json": report.report_data,
                 "generated_at": report.generated_at.isoformat() if report.generated_at else None,
             }
         }

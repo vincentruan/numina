@@ -9,7 +9,6 @@ in response body for backward compatibility.
 """
 
 import base64
-import json
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session

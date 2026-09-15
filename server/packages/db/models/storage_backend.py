@@ -40,6 +40,4 @@ class StorageBackend(Base):
     remote_locations = relationship("FileRemoteLocation", back_populates="backend")
 
     # JSON accessor for the ``config`` Text column
-    config_data: dict | list | None = property(  # type: ignore[assignment]
-        json_text("config"),
-    )
+    config_data: dict | list | None = json_text("config")  # type: ignore[misc]

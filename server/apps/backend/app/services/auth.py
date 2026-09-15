@@ -15,7 +15,6 @@ Rate Limiting Trade-offs:
 See design.md for detailed trade-off analysis.
 """
 
-import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta

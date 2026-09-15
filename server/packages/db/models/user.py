@@ -95,9 +95,5 @@ class User(Base):
     wishes = relationship("Wish", back_populates="user")
 
     # JSON accessors for Text columns
-    webauthn_credentials_data: list | dict | None = property(  # type: ignore[assignment]
-        json_text("webauthn_credentials"),
-    )
-    username_change_history_data: list | dict | None = property(  # type: ignore[assignment]
-        json_text("username_change_history"),
-    )
+    webauthn_credentials_data: list | dict | None = json_text("webauthn_credentials")  # type: ignore[misc]
+    username_change_history_data: list | dict | None = json_text("username_change_history")  # type: ignore[misc]

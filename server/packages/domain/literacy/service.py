@@ -8,7 +8,6 @@ Idempotent: at most one report per (child_id, week_start).
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -303,12 +302,11 @@ async def generate_weekly_report(
         "signals": signals,
         "week_start": week_start.isoformat(),
     }
-    report_json = json.dumps(report_data, ensure_ascii=False)
 
     report = LiteracyWeeklyReport(
         child_id=child.id,
         week_start=week_start,
-        report_json=report_json,
+        report_data=report_data,
         narrative=narrative,
     )
     db.add(report)

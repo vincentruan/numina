@@ -6,7 +6,6 @@ a child user (``get_current_child_user``).
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from datetime import date
 from typing import Any
