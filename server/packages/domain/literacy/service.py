@@ -75,7 +75,7 @@ def _aggregate_signals(db: Session, child_id: int, week_start: date) -> dict[str
     we_dt = datetime.combine(week_end, datetime.min.time())
 
     # -- Chore completion rate --
-    from apps.backend.app.models.chore import ChoreInstance  # TODO(S7): see above
+    from packages.db.models.child_economy.chore import ChoreInstance
 
     total_chores = (
         db.execute(
@@ -103,7 +103,7 @@ def _aggregate_signals(db: Session, child_id: int, week_start: date) -> dict[str
     )
 
     # -- Coin earn/spend --
-    from apps.backend.app.models.coin_transaction import CoinTransaction
+    from packages.db.models.child_economy.coin_transaction import CoinTransaction
 
     coin_earned = (
         db.execute(
