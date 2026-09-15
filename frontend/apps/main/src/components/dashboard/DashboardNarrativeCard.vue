@@ -441,7 +441,7 @@ function formatTime(iso: string | null): string {
             <div class="narrative-thinking-header-wrapper">
               <div class="narrative-thinking-header" @click="toggleThinking">
                 <IIcon :icon="'lucide:brain'" size="18" class="narrative-thinking-icon" />
-                <span class="narrative-thinking-title">{{ t('dashboard.narrative.thinking') }}</span>
+                <span class="narrative-thinking-title" :class="{ 'narrative-thinking-title--shimmer': streaming }">{{ streaming ? t('dashboard.narrative.thinkingActive') : t('dashboard.narrative.thinking') }}</span>
                 <span class="narrative-thinking-chevron" :class="{ 'narrative-thinking-chevron--collapsed': !isThinkingExpanded }">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"></polyline>
@@ -700,6 +700,20 @@ function formatTime(iso: string | null): string {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+}
+/* Shimmer on thinking title during streaming */
+.narrative-thinking-title--shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--text-primary) 50%,
+    var(--text-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 2s ease-in-out infinite;
 }
 .narrative-thinking-chevron {
   flex-shrink: 0;
