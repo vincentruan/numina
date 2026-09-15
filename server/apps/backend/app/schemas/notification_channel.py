@@ -12,6 +12,8 @@ class NotificationChannelCreate(BaseModel):
     config: dict  # 明文传输，服务层 JSON 序列化后加密存储
     is_enabled: bool = True
     subscriptions: list[str] = []  # reminder_type list
+    digest_mode: str = "immediate"
+    digest_time: str = "21:00"
 
 
 class NotificationChannelUpdate(BaseModel):
@@ -19,6 +21,8 @@ class NotificationChannelUpdate(BaseModel):
     config: dict | None = None
     is_enabled: bool | None = None
     subscriptions: list[str] | None = None
+    digest_mode: str | None = None
+    digest_time: str | None = None
 
 
 class NotificationChannelResponse(SnowflakeBase):
@@ -29,5 +33,7 @@ class NotificationChannelResponse(SnowflakeBase):
     is_enabled: bool
     config: dict = {}
     subscriptions: list[str] = []
+    digest_mode: str = "immediate"
+    digest_time: str = "21:00"
     created_at: datetime
     updated_at: datetime

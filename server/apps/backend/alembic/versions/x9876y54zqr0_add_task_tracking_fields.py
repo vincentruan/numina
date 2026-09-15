@@ -83,7 +83,10 @@ def upgrade() -> None:
             )
 
         # Add composite index for efficient task queries by family + skill + status
-        if "ix_ai_tasks_family_skill_status" not in existing_indexes:
+        if (
+            "ix_ai_tasks_family_skill_status" not in existing_indexes
+            and "skill_id" in existing_columns
+        ):
             batch_op.create_index(
                 "ix_ai_tasks_family_skill_status",
                 ["family_id", "skill_id", "status"],

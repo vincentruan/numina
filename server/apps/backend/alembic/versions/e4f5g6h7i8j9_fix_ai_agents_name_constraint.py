@@ -16,6 +16,7 @@ Create Date: 2026-08-04
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e4f5g6h7i8j9"
@@ -25,18 +26,26 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
-    op.create_check_constraint(
-        "ck_ai_agents_name_format",
-        "ai_agents",
-        "agent_name ~ '^[a-z][a-z0-9_-]*$'",
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
+    if "ck_ai_agents_name_format" in existing_constraints:
+        with op.batch_alter_table("ai_agents") as batch_op:
+            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
+            batch_op.create_check_constraint(
+                "ck_ai_agents_name_format",
+                "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+            )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_ai_agents_name_format", "ai_agents", type_="check")
-    op.create_check_constraint(
-        "ck_ai_agents_name_format",
-        "ai_agents",
-        "agent_name ~ '^[a-z][a-z0-9-]*$'",
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_constraints = {c["name"] for c in inspector.get_check_constraints("ai_agents")}
+    if "ck_ai_agents_name_format" in existing_constraints:
+        with op.batch_alter_table("ai_agents") as batch_op:
+            batch_op.drop_constraint("ck_ai_agents_name_format", type_="check")
+            batch_op.create_check_constraint(
+                "ck_ai_agents_name_format",
+                "agent_name ~ '^[a-z][a-z0-9-]*$'",
+            )

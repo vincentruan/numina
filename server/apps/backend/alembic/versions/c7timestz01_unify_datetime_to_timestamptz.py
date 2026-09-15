@@ -179,7 +179,11 @@ def upgrade() -> None:
         # SQLite: batch_alter_table recreates the table.
         # SQLite stores datetimes as strings without timezone semantics,
         # so no USING clause is needed — values are preserved as-is.
+        inspector = sa.inspect(bind)
+        existing_tables = set(inspector.get_table_names())
         for table, column in COLUMNS:
+            if table not in existing_tables:
+                continue
             with op.batch_alter_table(table, schema=None) as batch_op:
                 batch_op.alter_column(
                     column,

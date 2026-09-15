@@ -17,6 +17,8 @@ class NotificationChannel(Base):
     channel_type: Mapped[str] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    digest_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="immediate")
+    digest_time: Mapped[str] = mapped_column(String(10), nullable=False, server_default="21:00")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now()

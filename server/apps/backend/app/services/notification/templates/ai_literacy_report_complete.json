@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "📖 {task_title} 已生成完成，点击查看。"
+  },
+  "email": {
+    "subject": "AI 识字周报完成：{task_title}",
+    "body": "{task_title} 已生成完成，请登录查看。"
+  },
+  "feishu": {
+    "text": "📖 {task_title} 已生成完成，点击查看。"
+  },
+  "webpush": {
+    "title": "识字周报完成",
+    "body": "{task_title} 已生成完成"
+  }
+}

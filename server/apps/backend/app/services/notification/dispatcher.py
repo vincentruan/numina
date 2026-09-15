@@ -19,6 +19,7 @@ from apps.backend.app.services.notification.rules import (
 )
 from apps.backend.app.services.notification.sender import (
     NotificationSender,
+    _format_mention,
     render_template,
 )
 from apps.backend.app.services.storage.config_crypto import decrypt_config
@@ -76,7 +77,115 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
         large_purchase=counts.get("large_purchase", 0),
         expiring_soon=counts.get("expiring_soon", 0),
         maturity=counts.get("maturity", 0),
+        ai_report_complete=counts.get("ai_report_complete", 0),
+        ai_finance_coach_complete=counts.get("ai_finance_coach_complete", 0),
+        ai_wish_advice_complete=counts.get("ai_wish_advice_complete", 0),
+        ai_literacy_report_complete=counts.get("ai_literacy_report_complete", 0),
+        chore_completed=counts.get("chore_completed", 0),
+        treasure_redeemed=counts.get("treasure_redeemed", 0),
+        wish_redeemed=counts.get("wish_redeemed", 0),
         total=sum(counts.values()),
+    )
+
+
+def _check_reminder_dedup(
+    db: Session, family_id: int, reminder_type: str, title: str, hours: int = 1
+) -> bool:
+    """Check if a similar reminder was created recently (deduplication)."""
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    existing = (
+        db.query(Reminder)
+        .filter(
+            Reminder.family_id == family_id,
+            Reminder.reminder_type == reminder_type,
+            Reminder.title == title,
+            Reminder.created_at >= cutoff,
+        )
+        .first()
+    )
+    return existing is not None
+
+
+def notify_ai_task_complete(
+    db: Session, family_id: int, task_type: str, task_title: str
+) -> None:
+    """Create a Reminder for AI task completion and dispatch.
+
+    Includes deduplication: skips if same task_type+title was notified within 1 hour.
+    """
+    reminder_type = f"ai_{task_type}_complete"
+    title = f"AI 任务完成：{task_title}"
+
+    if _check_reminder_dedup(db, family_id, reminder_type, title, hours=1):
+        return
+
+    template_vars = {"task_title": task_title}
+    body = f"「{task_title}」已生成完成，点击查看。"
+
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": reminder_type,
+            "title": title,
+            "body": body,
+            "severity": "info",
+            "template_vars": template_vars,
+        },
+    )
+
+
+def notify_chore_completed(
+    db: Session, family_id: int, child_name: str, chore_title: str
+) -> None:
+    """Create a Reminder for chore completion and dispatch."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "chore_completed",
+            "title": f"儿童任务完成：{chore_title}",
+            "body": f"{child_name} 完成了任务「{chore_title}」，快去看看吧！",
+            "severity": "info",
+            "template_vars": {"child_name": child_name, "chore_title": chore_title},
+        },
+    )
+
+
+def notify_treasure_redeemed(
+    db: Session, family_id: int, child_name: str, treasure_title: str
+) -> None:
+    """Create a Reminder for treasure redemption and dispatch."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "treasure_redeemed",
+            "title": f"宝贝兑换：{treasure_title}",
+            "body": f"{child_name} 兑换了宝贝「{treasure_title}」！",
+            "severity": "info",
+            "template_vars": {
+                "child_name": child_name,
+                "treasure_title": treasure_title,
+            },
+        },
+    )
+
+
+def notify_wish_redeemed(
+    db: Session, family_id: int, wish_title: str, child_name: str
+) -> None:
+    """Create a Reminder for wish redemption and dispatch."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "wish_redeemed",
+            "title": f"心愿兑现：{wish_title}",
+            "body": f"{child_name} 的心愿「{wish_title}」已兑现！",
+            "severity": "info",
+            "template_vars": {"child_name": child_name, "wish_title": wish_title},
+        },
     )
 
 
@@ -297,6 +406,9 @@ async def _send_feishu_async(
     prefix = _env_prefix()
     if prefix:
         text = f"{prefix}\n\n{text}"
+    mention_config = config.get("mention_config")
+    if mention_config:
+        text = _format_mention(text, "feishu", mention_config)
     success = await NotificationSender.send_feishu(
         webhook_url=config.get("webhook_url", ""),
         secret=config.get("secret", ""),
@@ -388,6 +500,9 @@ async def _send_telegram_async(
     prefix = _env_prefix()
     if prefix:
         text = f"{prefix}\n\n{text}"
+    mention_config = config.get("mention_config")
+    if mention_config:
+        text = _format_mention(text, "telegram", mention_config)
     success = await NotificationSender.send_telegram(
         bot_token=config.get("bot_token", ""),
         chat_id=config.get("chat_id", ""),
@@ -442,3 +557,80 @@ def _retry_failed_notifications(db: Session) -> None:
         if all_notified:
             continue
         _dispatch_notifications(db, reminder, {})
+
+
+async def _dispatch_digest(db: Session, channel: NotificationChannel) -> None:
+    """Send digest notification for pending reminders.
+
+    Collects all active reminders that haven't been sent to this channel yet
+    and sends them as a single batched message.
+    """
+    config = _get_channel_config(db, channel)
+
+    # Find all active reminders for this family that haven't been sent to this channel
+    sent_reminder_ids = {
+        rn.reminder_id
+        for rn in db.query(ReminderNotification)
+        .filter_by(channel_id=channel.id, status="sent")
+        .all()
+    }
+
+    pending_reminders = (
+        db.query(Reminder)
+        .filter(
+            Reminder.family_id == channel.family_id,
+            Reminder.status == "active",
+            ~Reminder.id.in_(sent_reminder_ids),
+        )
+        .all()
+    )
+
+    if not pending_reminders:
+        return
+
+    # Build digest message
+    lines = [f"📬 您有 {len(pending_reminders)} 条待处理提醒：\n"]
+    for i, reminder in enumerate(pending_reminders, 1):
+        lines.append(f"{i}. {reminder.title}")
+        if reminder.body:
+            lines.append(f"   {reminder.body}")
+        lines.append("")
+
+    digest_text = "\n".join(lines).rstrip()
+
+    # Apply mention formatting if configured
+    mention_config = config.get("mention_config")
+    if mention_config:
+        digest_text = _format_mention(digest_text, channel.channel_type, mention_config)
+
+    # Send via appropriate channel
+    success = False
+    if channel.channel_type == "telegram":
+        success = await NotificationSender.send_telegram(
+            bot_token=config.get("bot_token", ""),
+            chat_id=config.get("chat_id", ""),
+            text=digest_text,
+        )
+    elif channel.channel_type == "feishu":
+        success = await NotificationSender.send_feishu(
+            webhook_url=config.get("webhook_url", ""),
+            secret=config.get("secret", ""),
+            text=digest_text,
+        )
+
+    # Mark all pending reminders as sent to this channel
+    for reminder in pending_reminders:
+        rn = ReminderNotification(
+            reminder_id=reminder.id,
+            channel_id=channel.id,
+            status="sent" if success else "failed",
+        )
+        db.add(rn)
+
+    # Update digest_sent_at for all pending reminders
+    if success:
+        now = datetime.now(UTC)
+        for reminder in pending_reminders:
+            reminder.digest_sent_at = now
+
+    db.commit()

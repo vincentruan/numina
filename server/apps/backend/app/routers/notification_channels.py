@@ -13,6 +13,10 @@ from apps.backend.app.schemas.notification_channel import (
     NotificationChannelResponse,
     NotificationChannelUpdate,
 )
+from apps.backend.app.services.notification.registry import (
+    VALID_REMINDER_TYPES,
+    get_categorized_events,
+)
 from apps.backend.app.services.storage.config_crypto import (
     decrypt_config,
     encrypt_config,
@@ -25,7 +29,6 @@ from packages.db.models.notification_channel_config import (
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
 
 VALID_CHANNEL_TYPES = {"telegram", "email", "feishu", "webpush"}
-VALID_REMINDER_TYPES = {"large_purchase", "expiring_soon", "maturity"}
 
 
 def _to_response(
@@ -54,9 +57,17 @@ def _to_response(
         is_enabled=channel.is_enabled,
         config=config,
         subscriptions=[s.reminder_type for s in subs],
+        digest_mode=channel.digest_mode,
+        digest_time=channel.digest_time,
         created_at=channel.created_at,
         updated_at=channel.updated_at,
     )
+
+
+@router.get("/events")
+def get_events(user: User = Depends(require_adult)):
+    """Return categorized event types for frontend event selector."""
+    return get_categorized_events()
 
 
 @router.get("", response_model=list[NotificationChannelResponse])
@@ -79,6 +90,8 @@ def create_channel(
         channel_type=req.channel_type,
         name=req.name,
         is_enabled=req.is_enabled if req.is_enabled is not None else True,
+        digest_mode=getattr(req, "digest_mode", "immediate"),
+        digest_time=getattr(req, "digest_time", "21:00"),
     )
     db.add(channel)
     db.flush()
@@ -139,6 +152,10 @@ def update_channel(
                         id=next_id(), channel_id=channel.id, reminder_type=rtype
                     )
                 )
+    if req.digest_mode is not None:
+        channel.digest_mode = req.digest_mode
+    if req.digest_time is not None:
+        channel.digest_time = req.digest_time
     db.commit()
     db.refresh(channel)
     return _to_response(channel, db)

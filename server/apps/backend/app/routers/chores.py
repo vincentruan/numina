@@ -195,6 +195,22 @@ async def approve_instance(
         except Exception:
             db.rollback()
 
+    # Notification: chore approved → completed
+    try:
+        from apps.backend.app.services.notification.dispatcher import (
+            notify_chore_completed,
+        )
+
+        child_name = getattr(instance, "_child_display_name", None) or (
+            child.display_name if child else None
+        ) or "未知用户"
+        chore_title = instance.chore_name or "家务任务"
+        notify_chore_completed(
+            db, user.family_id, child_name, chore_title
+        )
+    except Exception:
+        pass  # notification failure must never block chore approval
+
     return resp
 
 

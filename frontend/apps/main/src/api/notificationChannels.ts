@@ -1,13 +1,28 @@
 import http from './index'
 
+export interface NotificationEvent {
+  type: string
+  label_key: string
+  severity: string
+}
+
+export interface NotificationEventCategory {
+  category: string
+  label_key: string
+  icon: string
+  events: NotificationEvent[]
+}
+
 export interface NotificationChannelResponse {
   id: string
   family_id: string
   channel_type: 'telegram' | 'email' | 'feishu'
   name: string
   is_enabled: boolean
-  config: Record<string, string | number>
+  config: Record<string, string | number | Record<string, string>>
   subscriptions: string[]
+  digest_mode: 'immediate' | 'daily'
+  digest_time: string
   created_at: string
   updated_at: string
 }
@@ -15,16 +30,20 @@ export interface NotificationChannelResponse {
 export interface NotificationChannelCreate {
   channel_type: 'telegram' | 'email' | 'feishu'
   name: string
-  config: Record<string, string | number>
+  config: Record<string, string | number | Record<string, string>>
   is_enabled: boolean
   subscriptions?: string[]
+  digest_mode?: 'immediate' | 'daily'
+  digest_time?: string
 }
 
 export interface NotificationChannelUpdate {
   name?: string
-  config?: Record<string, string | number>
+  config?: Record<string, string | number | Record<string, string>>
   is_enabled?: boolean
   subscriptions?: string[]
+  digest_mode?: 'immediate' | 'daily'
+  digest_time?: string
 }
 
 export interface NotificationConfig {
@@ -58,5 +77,8 @@ export const notificationChannelsApi = {
     large_purchase_threshold_multiplier?: number | null
   }): Promise<NotificationConfig> {
     return http.put<NotificationConfig>('/notification-config', data).then((r) => r.data)
+  },
+  getEvents(): Promise<NotificationEventCategory[]> {
+    return http.get<NotificationEventCategory[]>('/notification-channels/events').then((r) => r.data)
   },
 }

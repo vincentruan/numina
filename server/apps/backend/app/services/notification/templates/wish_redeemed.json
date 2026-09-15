@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "🎁 {child_name} 的心愿「{wish_title}」已兑现！"
+  },
+  "email": {
+    "subject": "心愿兑现：{wish_title}",
+    "body": "{child_name} 的心愿「{wish_title}」已兑现。"
+  },
+  "feishu": {
+    "text": "🎁 {child_name} 的心愿「{wish_title}」已兑现！"
+  },
+  "webpush": {
+    "title": "心愿兑现",
+    "body": "{child_name} 的心愿「{wish_title}」已兑现"
+  }
+}
