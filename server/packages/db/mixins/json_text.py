@@ -8,10 +8,13 @@ a typed ``@property`` that transparently round-trips through ``json.loads`` /
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    pass
 
 
-def json_text(column_name: str) -> property:
+def json_text(column_name: str) -> Any:  # type: ignore[return-value]
     """Return a ``@property`` that serialises/deserialises a ``Text`` column.
 
     Read: parses the stored JSON string (or returns ``None`` when empty).

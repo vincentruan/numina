@@ -35,6 +35,6 @@ class AssetSnapshot(Base):
     family = relationship("Family", back_populates="snapshots")
 
     # JSON accessor for the ``breakdown`` Text column
-    breakdown_json: dict | list | None = property(  # type: ignore[misc]
+    breakdown_json: dict | list | None = property(  # type: ignore[assignment]
         json_text("breakdown"),
     )

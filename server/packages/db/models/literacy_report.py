@@ -37,6 +37,6 @@ class LiteracyWeeklyReport(Base):
     )
 
     # JSON accessor for the ``report_json`` Text column
-    report_data: dict | list | None = property(  # type: ignore[misc]
+    report_data: dict | list | None = property(  # type: ignore[assignment]
         json_text("report_json"),
     )

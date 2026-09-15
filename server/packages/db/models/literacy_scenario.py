@@ -35,7 +35,7 @@ class LiteracyScenarioTemplate(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     # JSON accessor for the ``choices_json`` Text column
-    choices_data: list | dict | None = property(  # type: ignore[misc]
+    choices_data: list | dict | None = property(  # type: ignore[assignment]
         json_text("choices_json"),
     )
 
@@ -62,9 +62,9 @@ class LiteracyScenario(Base):
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     # JSON accessors for Text columns
-    content_data: dict | list | None = property(  # type: ignore[misc]
+    content_data: dict | list | None = property(  # type: ignore[assignment]
         json_text("content_json"),
     )
-    feedback_data: dict | list | None = property(  # type: ignore[misc]
+    feedback_data: dict | list | None = property(  # type: ignore[assignment]
         json_text("feedback_json"),
     )

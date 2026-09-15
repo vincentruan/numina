@@ -67,6 +67,4 @@ class Asset(Base):
     from_wish = relationship("Wish", foreign_keys=[from_wish_id])
 
     # JSON accessor for the ``properties`` Text column
-    properties_json: dict | list | None = property(  # type: ignore[misc]
-        json_text("properties"),
-    )
+    properties_json = json_text("properties")  # type: ignore[assignment]
