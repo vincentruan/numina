@@ -70,7 +70,7 @@
     <ManifestoSigningPopup
       :visible="showManifestoPopup"
       :manifesto-title="unsignedManifestoTitle"
-      @update:visible="(val: boolean) => { showManifestoPopup = val; if (!val) sessionStorage.setItem(MANIFESTO_DISMISSED_KEY, '1') }"
+      @update:visible="onManifestoDismiss"
       @navigate="onManifestoNavigate"
     />
   </div>
@@ -237,6 +237,11 @@ async function checkUnsignedManifesto() {
   } catch {
     // Non-critical: silently ignore
   }
+}
+
+function onManifestoDismiss(val: boolean) {
+  showManifestoPopup.value = val
+  if (!val) sessionStorage.setItem(MANIFESTO_DISMISSED_KEY, '1')
 }
 
 function onManifestoNavigate() {
