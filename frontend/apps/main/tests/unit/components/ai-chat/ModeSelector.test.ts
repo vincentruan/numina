@@ -35,9 +35,18 @@ vi.mock('@/composables/ai-chat/useTenantAiResources', () => ({
   INPUT_MODE_CONFIGS,
 }))
 
+// VanPopup stub (auto-imported in production, needs explicit stub in tests)
+const VanPopupStub = {
+  name: 'VanPopup',
+  template: '<div class="van-popup-stub"><slot /></div>',
+  props: ['show', 'position', 'round'],
+  emits: ['close', 'click-overlay', 'update:show'],
+}
+
 // Stub child components
 const childStubs = {
   IIcon: { template: '<span class="i-icon-stub" />', props: ['icon', 'size', 'color'] },
+  VanPopup: VanPopupStub,
 }
 
 // Teleport stub that renders content inline (happy-dom workaround)
@@ -194,90 +203,46 @@ describe('ModeSelector', () => {
   // ─── Popup close behaviors ────────────────────────────────────────────────
 
   describe('popup close behaviors', () => {
-    it('closes popup on Escape key', async () => {
+    it('closes popup when van-popup emits close', async () => {
       await openPopup(wrapper)
+      expect((wrapper.vm as any).popupOpen).toBe(true)
 
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      const popup = wrapper.findComponent(VanPopupStub)
+      await popup.vm.$emit('close')
       await nextTick()
 
       expect((wrapper.vm as any).popupOpen).toBe(false)
     })
 
-    it('does not close popup on non-Escape key', async () => {
+    it('closes popup when van-popup emits click-overlay', async () => {
       await openPopup(wrapper)
-
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
-      await nextTick()
-
       expect((wrapper.vm as any).popupOpen).toBe(true)
-    })
 
-    it('closes popup when clicking outside the trigger', async () => {
-      await openPopup(wrapper)
-
-      const vm = wrapper.vm as any
-      const mockEvent = new MouseEvent('click', { bubbles: true })
-      vm.onOutsideClick(mockEvent)
+      const popup = wrapper.findComponent(VanPopupStub)
+      await popup.vm.$emit('click-overlay')
       await nextTick()
 
+      expect((wrapper.vm as any).popupOpen).toBe(false)
+    })
+  })
+
+  // ─── Popup rendering ──────────────────────────────────────────────────────
+
+  describe('popup rendering', () => {
+    it('renders van-popup with bottom position', async () => {
+      await openPopup(wrapper)
+
+      const popup = wrapper.findComponent(VanPopupStub)
+      expect(popup.exists()).toBe(true)
+      expect(popup.props('position')).toBe('bottom')
+    })
+
+    it('passes show prop to van-popup based on popupOpen state', async () => {
+      const vm = wrapper.vm as any
       expect(vm.popupOpen).toBe(false)
-    })
 
-    it('does not close popup when clicking the trigger itself', async () => {
       await openPopup(wrapper)
-
-      const vm = wrapper.vm as any
-      const trigger = wrapper.find('.mode-trigger').element
-      const mockEvent = new MouseEvent('click', { bubbles: true })
-      Object.defineProperty(mockEvent, 'target', { value: trigger })
-
-      vm.onOutsideClick(mockEvent)
-      await nextTick()
-
       expect(vm.popupOpen).toBe(true)
-    })
-  })
-
-  // ─── Popup styling ────────────────────────────────────────────────────────
-
-  describe('popup styling', () => {
-    it('returns positioning style when popup is open', async () => {
-      await openPopup(wrapper)
-
-      const vm = wrapper.vm as any
-      vm.updatePopupPosition()
-      await nextTick()
-      expect(vm.popupPosition.position).toBe('fixed')
-      expect(typeof vm.popupPosition.bottom).toBe('string')
-      expect(typeof vm.popupPosition.left).toBe('string')
-    })
-
-    it('returns style with bottom computed from trigger position', async () => {
-      await openPopup(wrapper)
-
-      const vm = wrapper.vm as any
-      vm.updatePopupPosition()
-      await nextTick()
-      expect(vm.popupPosition.bottom).toContain('px')
-      expect(vm.popupPosition.left).toContain('px')
-    })
-  })
-
-  // ─── Lifecycle cleanup ────────────────────────────────────────────────────
-
-  describe('lifecycle cleanup', () => {
-    it('removes event listeners on unmount', () => {
-      const addSpy = vi.spyOn(document, 'addEventListener')
-      const removeSpy = vi.spyOn(document, 'removeEventListener')
-
-      const localWrapper = makeWrapper({ currentMode: 'flash' })
-
-      expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
-      expect(addSpy).toHaveBeenCalledWith('click', expect.any(Function), true)
-
-      localWrapper.unmount()
-      expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
-      expect(removeSpy).toHaveBeenCalledWith('click', expect.any(Function), true)
     })
   })
 })

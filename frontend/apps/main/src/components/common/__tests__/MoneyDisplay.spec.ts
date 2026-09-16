@@ -7,6 +7,12 @@ import MoneyDisplay from '../MoneyDisplay.vue'
 // numAmount/numOriginalValue. These tests exercise the string-amount rendering path
 // that every other suite stubs out (MoneyDisplay: true).
 
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
 // Display currency is CNY; no conversion unless sourceCurrency differs.
 vi.mock('@/composables/useCurrency', () => ({
   useCurrency: () => ({
