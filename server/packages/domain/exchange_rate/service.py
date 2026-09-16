@@ -9,7 +9,7 @@ from packages.core.logging import get_logger
 from packages.db.models.exchange_rate import ExchangeRate
 
 if TYPE_CHECKING:
-    from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+    from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 
 logger = get_logger(__name__)
 
@@ -18,7 +18,7 @@ class ExchangeRateService:
     """Thin domain-layer service for exchange-rate lookups and conversions.
 
     Infrastructure concerns (HTTP, caching) live in
-    :class:`packages.core.exchange_rate_adapter.ExchangeRateAdapter`.
+    :class:`packages.db.exchange_rate_adapter.ExchangeRateAdapter`.
     This class delegates to the adapter when one is supplied; otherwise it
     performs plain DB lookups (no caching) for backward compatibility.
     """
@@ -56,7 +56,7 @@ class ExchangeRateService:
 
         # Update adapter cache so subsequent calls use it
         if adapter is not None:
-            adapter._cache[target_currency] = (row.rate, row.fetched_at, datetime.now(UTC))
+            adapter.populate_cache(target_currency, row.rate, row.fetched_at)
 
         return (row.rate, row.fetched_at)
 
@@ -110,7 +110,7 @@ class ExchangeRateService:
             DeprecationWarning,
             stacklevel=2,
         )
-        from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+        from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 
         adapter = ExchangeRateAdapter()
         return adapter.fetch_and_store_rates(db)

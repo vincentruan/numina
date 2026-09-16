@@ -21,7 +21,7 @@ class TestExchangeRateJob:
     def test_fetch_rates_job_calls_service(self, mock_session_local):
         """Verify fetch_rates_job invokes ExchangeRateService correctly."""
         with patch(
-            "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+            "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
             return_value=True,
         ) as mock_fetch:
             from apps.scheduler_worker.jobs import fetch_rates_job
@@ -33,7 +33,7 @@ class TestExchangeRateJob:
     def test_fetch_rates_job_handles_failure(self, mock_session_local):
         """Verify fetch_rates_job handles service failure gracefully."""
         with patch(
-            "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+            "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
             return_value=False,
         ) as mock_fetch:
             from apps.scheduler_worker.jobs import fetch_rates_job

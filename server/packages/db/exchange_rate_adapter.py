@@ -64,21 +64,16 @@ class ExchangeRateAdapter:
 
         return (None, None)
 
-    def get_rate_from_db(
-        self, currency: str, db: Session
-    ) -> tuple[float | None, datetime | None]:
-        """DB-only lookup — used by the domain service when no adapter is
-        provided (backward-compat path)."""
-        row = (
-            db.query(ExchangeRate)
-            .filter(ExchangeRate.target_currency == currency)
-            .order_by(ExchangeRate.fetched_at.desc())
-            .first()
-        )
-        if row is None:
-            logger.warning(f"汇率数据不存在: {currency}")
-            return (None, None)
-        return (row.rate, row.fetched_at)
+    def populate_cache(
+        self, currency: str, rate: float, fetched_at: datetime
+    ) -> None:
+        """Write a rate into the in-memory cache (thread-safe).
+
+        Used by the domain service to promote DB-looked-up rates into the
+        cache so subsequent calls avoid redundant queries.
+        """
+        with self._lock:
+            self._cache[currency] = (rate, fetched_at, datetime.now(UTC))
 
     def fetch_and_store_rates(self, db: Session) -> bool:
         """Fetch from API, persist rates + Currency rows, clear cache.

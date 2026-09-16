@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from packages.db.models.currency import Currency
 from packages.db.models.exchange_rate import ExchangeRate
 
@@ -39,7 +39,7 @@ def test_fetch_rates_returns_dict(packages_db, monkeypatch):
     """fetch_rates() returns the rates dict from the API response."""
     payload = {"rates": {"USD": 7.2, "EUR": 7.8, "JPY": 20.5, "CNY": 1.0}}
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get",
+        "packages.db.exchange_rate_adapter.httpx.get",
         lambda *a, **k: _FakeResponse(payload),
     )
     adapter = ExchangeRateAdapter()
@@ -58,7 +58,7 @@ def test_fetch_rates_raises_on_http_error(monkeypatch):
             return {}
 
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get",
+        "packages.db.exchange_rate_adapter.httpx.get",
         lambda *a, **k: _ErrResponse(),
     )
     adapter = ExchangeRateAdapter()
@@ -112,7 +112,7 @@ def test_fetch_and_store_rates_stores_rates_skips_cny(packages_db, adapter, monk
     """Successful fetch: writes non-CNY ExchangeRate rows; CNY is skipped."""
     payload = {"rates": {"CNY": 1.0, "USD": 7.2, "EUR": 7.8}}
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get",
+        "packages.db.exchange_rate_adapter.httpx.get",
         lambda *a, **k: _FakeResponse(payload),
     )
     ok = adapter.fetch_and_store_rates(packages_db)
@@ -134,7 +134,7 @@ def test_fetch_and_store_rates_adds_new_currency_rows(packages_db, adapter, monk
 
     payload = {"rates": {"CNY": 1.0, "USD": 7.2, "ABC": 3.3}}
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get",
+        "packages.db.exchange_rate_adapter.httpx.get",
         lambda *a, **k: _FakeResponse(payload),
     )
     adapter.fetch_and_store_rates(packages_db)
@@ -149,7 +149,7 @@ def test_fetch_and_store_rates_clears_cache(packages_db, adapter, monkeypatch):
     adapter._cache["USD"] = (7.0, datetime.now(UTC), datetime.now(UTC))
     payload = {"rates": {"USD": 7.2}}
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get",
+        "packages.db.exchange_rate_adapter.httpx.get",
         lambda *a, **k: _FakeResponse(payload),
     )
     adapter.fetch_and_store_rates(packages_db)
@@ -163,7 +163,7 @@ def test_fetch_and_store_rates_returns_false_on_exception(packages_db, adapter, 
         raise RuntimeError("network down")
 
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get", _boom
+        "packages.db.exchange_rate_adapter.httpx.get", _boom
     )
     ok = adapter.fetch_and_store_rates(packages_db)
     assert ok is False
@@ -179,7 +179,7 @@ def test_fetch_and_store_rates_is_thread_safe(packages_db, adapter, monkeypatch)
     """Concurrent calls to fetch_and_store_rates are serialized by the lock."""
     payload = {"rates": {"USD": 7.2, "EUR": 7.8}}
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.httpx.get",
+        "packages.db.exchange_rate_adapter.httpx.get",
         lambda *a, **k: _FakeResponse(payload),
     )
 

@@ -12,6 +12,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from packages.db.session import UTCDateTime
+
 revision: str = "m3x9k7p2qr5w"
 down_revision: str | None = "1fnymxs8brc2"
 branch_labels: str | Sequence[str] | None = None
@@ -46,7 +48,7 @@ def upgrade() -> None:
             )
         )
         batch_op.add_column(
-            sa.Column("half_open_window_start", sa.DateTime(), nullable=True)
+            sa.Column("half_open_window_start", UTCDateTime(), nullable=True)
         )
 
 

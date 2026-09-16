@@ -5,7 +5,7 @@ import pytest
 
 from apps.backend.app.models.exchange_rate import ExchangeRate
 from apps.backend.app.services.exchange_rate import ExchangeRateService
-from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 
 
 def test_convert_same_currency(db):
@@ -138,7 +138,7 @@ def test_deprecated_fetch_and_store_rates_warns(db, monkeypatch):
     """Deprecated wrapper emits DeprecationWarning and delegates to adapter."""
     mock_adapter_fetch = MagicMock(return_value=True)
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+        "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
         mock_adapter_fetch,
     )
 

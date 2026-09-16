@@ -38,7 +38,7 @@ class TestFetchRatesJobBehavior:
     def test_happy_path_closes_session(self, mock_session_local):
         """service 成功时：以 session 调用、不外抛、session 关闭。"""
         with patch(
-            "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+            "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
             return_value=True,
         ) as mock_fetch:
             from apps.scheduler_worker.jobs import fetch_rates_job
@@ -51,7 +51,7 @@ class TestFetchRatesJobBehavior:
     def test_service_returning_false_still_closes(self, mock_session_local):
         """service 返回 False（未成功）时：不抛异常、session 仍关闭。"""
         with patch(
-            "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+            "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
             return_value=False,
         ):
             from apps.scheduler_worker.jobs import fetch_rates_job
@@ -63,7 +63,7 @@ class TestFetchRatesJobBehavior:
     def test_service_exception_not_propagated(self, mock_session_local):
         """service 抛异常时：job 捕获并记录，不外抛，session 仍关闭。"""
         with patch(
-            "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+            "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
             side_effect=RuntimeError("网络超时"),
         ):
             from apps.scheduler_worker.jobs import fetch_rates_job

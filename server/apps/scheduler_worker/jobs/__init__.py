@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 def fetch_rates_job() -> None:
     """Fetch and store latest exchange rates from exchangerate-api.com."""
-    from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+    from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 
     db = SessionLocal()
     try:

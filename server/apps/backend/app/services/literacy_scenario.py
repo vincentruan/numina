@@ -273,6 +273,7 @@ async def generate_weekly_scenario(
     if enriched is None:
         # Use the template's story_template + choices verbatim.
         choices = template.choices_data or []
+        content = {"story": template.story_template, "choices": choices}
     else:
         content = enriched
 
@@ -280,7 +281,7 @@ async def generate_weekly_scenario(
         child_id=child.id,
         week_start=week_start,
         template_id=template.id,
-        content_json=json.dumps(content, ensure_ascii=False),
+        content_data=content,
     )
     db.add(scenario)
     db.commit()

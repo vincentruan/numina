@@ -158,7 +158,7 @@ from apps.backend.app.routers import uploads as uploads_serve_router
 from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
-from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
 from packages.db.models.notification_config import NotificationConfig

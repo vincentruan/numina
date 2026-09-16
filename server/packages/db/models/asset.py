@@ -3,7 +3,6 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
-    Boolean,
     Column,
     Date,
     Float,
@@ -18,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.archivable import ArchivableMixin
 from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
@@ -29,7 +29,7 @@ asset_tags = Table(
 )
 
 
-class Asset(Base):
+class Asset(ArchivableMixin, Base):
     __tablename__ = "assets"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
@@ -54,7 +54,6 @@ class Asset(Base):
     properties: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_daily_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
-    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     from_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("wishes.id", ondelete="SET NULL", use_alter=True, name="fk_assets_from_wish_id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())

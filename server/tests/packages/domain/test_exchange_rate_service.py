@@ -9,7 +9,7 @@
 """
 from datetime import UTC, datetime, timedelta
 
-from packages.core.exchange_rate_adapter import ExchangeRateAdapter
+from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from packages.db.models.exchange_rate import ExchangeRate
 from packages.domain.exchange_rate.service import ExchangeRateService
 
@@ -165,7 +165,7 @@ class _FakeResponse:
 def test_deprecated_fetch_and_store_rates_warns(packages_db, monkeypatch):
     """Deprecated wrapper emits DeprecationWarning and delegates to adapter."""
     monkeypatch.setattr(
-        "packages.core.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
+        "packages.db.exchange_rate_adapter.ExchangeRateAdapter.fetch_and_store_rates",
         lambda self, db: True,
     )
     import warnings

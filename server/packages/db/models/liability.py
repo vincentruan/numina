@@ -16,11 +16,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
-from packages.db.mixins.archivable import ArchivableMixin
 from packages.db.session import Base, UTCDateTime
 
 
-class Liability(ArchivableMixin, Base):
+class Liability(Base):
     __tablename__ = "liabilities"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
@@ -52,5 +51,7 @@ class Liability(ArchivableMixin, Base):
 
     @property
     def status(self) -> str:
-        """Derived status: 'active' when is_active=True, 'paid_off' otherwise."""
-        return "active" if self.is_active else "paid_off"
+        """Derived status: 'active', 'paid_off', or 'archived'."""
+        if self.is_active:
+            return "active"
+        return "archived" if self.is_archived else "paid_off"

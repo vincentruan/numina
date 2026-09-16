@@ -224,7 +224,7 @@ class TestGenerateTemplatesBatch:
         for tmpl in result:
             assert tmpl["dimension"] in VALID_DIMENSIONS
             assert tmpl["age_group"] in VALID_AGE_GROUPS
-            choices = json.loads(tmpl["choices_json"])
+            choices = tmpl["choices_data"]
             assert isinstance(choices, list)
             assert 2 <= len(choices) <= 4
 
