@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.backend.app.database import Base, UTCDateTime
 from apps.backend.app.utils.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 
 
 class SyncEvent(Base):
@@ -21,3 +22,6 @@ class SyncEvent(Base):
         Index("ix_sync_events_file_id", "file_id"),
         Index("ix_sync_events_backend_occurred", "backend_id", "occurred_at"),
     )
+
+    # JSON accessor for the ``detail`` Text column
+    detail_data: dict | list | None = json_text("detail")  # type: ignore[misc]

@@ -15,7 +15,6 @@ Rate Limiting Trade-offs:
 See design.md for detailed trade-off analysis.
 """
 
-import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -649,7 +648,7 @@ def change_username(db: Session, user: User, new_username: str) -> User:
     # Convert recent datetimes back to ISO strings for storage, then append current
     history_to_store = [ts.isoformat() for ts in recent]
     history_to_store.append(now.isoformat())
-    user.username_change_history = json.dumps(history_to_store)
+    user.username_change_history_data = history_to_store
     db.commit()
     db.refresh(user)
     write_audit_log(

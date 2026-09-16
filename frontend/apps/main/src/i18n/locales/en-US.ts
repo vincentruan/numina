@@ -139,6 +139,7 @@ export default {
       expand: 'Expand',
       collapse: 'Collapse',
       thinking: 'Thinking process',
+      thinkingActive: 'Thinking…',
       thinkingPlaceholder: 'Analyzing your financial data, please wait…',
       thinkingElapsed: 'Thinking ({seconds}s)',
       thinkingDone: 'Thought for {seconds}s',

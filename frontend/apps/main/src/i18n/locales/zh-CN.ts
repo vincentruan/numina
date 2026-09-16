@@ -231,6 +231,7 @@ export default {
       expand: '展开',
       collapse: '收起',
       thinking: '思考过程',
+      thinkingActive: '思考中',
       thinkingPlaceholder: '正在分析您的财务数据，请稍候…',
       thinkingElapsed: '正在思考（{seconds} 秒）',
       thinkingDone: '已思考（用时 {seconds} 秒）',

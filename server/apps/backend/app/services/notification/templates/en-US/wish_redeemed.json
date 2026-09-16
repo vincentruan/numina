@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "🎁 {child_name}'s wish \"{wish_title}\" has been fulfilled!"
+  },
+  "email": {
+    "subject": "Wish Fulfilled: {wish_title}",
+    "body": "{child_name}'s wish \"{wish_title}\" has been fulfilled."
+  },
+  "feishu": {
+    "text": "🎁 {child_name}'s wish \"{wish_title}\" has been fulfilled!"
+  },
+  "webpush": {
+    "title": "Wish Fulfilled",
+    "body": "{child_name}'s wish \"{wish_title}\" has been fulfilled"
+  }
+}

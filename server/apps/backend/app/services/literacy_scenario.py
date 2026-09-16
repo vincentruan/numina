@@ -173,7 +173,7 @@ async def _enrich_with_llm(
         "你正在为一位小朋友设计一个财商启蒙小场景。请根据下面的故事模板，"
         "输出一个更生动、更适合这个年龄段孩子的故事，并给出 2-4 个选择项和每个选择的反馈。\n\n"
         f"模板故事：\n{template.story_template}\n\n"
-        f"模板选择项（参考，可改写）：\n{template.choices_json}\n\n"
+        f"模板选择项（参考，可改写）：\n{template.choices_data}\n\n"
         "请用 JSON 输出，格式：{\"story\": \"...\", \"choices\": [{\"text\": \"...\", \"feedback\": \"...\"}]}。"
         "只输出 JSON，不要附加解释。"
     )
@@ -261,7 +261,7 @@ async def generate_weekly_scenario(
             child_id=child.id,
             week_start=week_start,
             template_id=None,
-            content_json=json.dumps(content, ensure_ascii=False),
+            content_data=content,
         )
         db.add(scenario)
         db.commit()
@@ -271,11 +271,8 @@ async def generate_weekly_scenario(
     # Attempt LLM enrichment; fall back to the raw template on any failure.
     enriched = await _enrich_with_llm(child.family_id, child.id, template)
     if enriched is None:
-        # Use the template's story_template + choices_json verbatim.
-        try:
-            choices = json.loads(template.choices_json)
-        except (json.JSONDecodeError, TypeError):
-            choices = []
+        # Use the template's story_template + choices verbatim.
+        choices = template.choices_data or []
         content = {"story": template.story_template, "choices": choices}
     else:
         content = enriched
@@ -284,7 +281,7 @@ async def generate_weekly_scenario(
         child_id=child.id,
         week_start=week_start,
         template_id=template.id,
-        content_json=json.dumps(content, ensure_ascii=False),
+        content_data=content,
     )
     db.add(scenario)
     db.commit()

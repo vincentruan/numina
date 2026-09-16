@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
 
@@ -32,6 +33,9 @@ class LiteracyScenarioTemplate(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+
+    # JSON accessor for the ``choices_json`` Text column
+    choices_data: list | dict | None = json_text("choices_json")  # type: ignore[misc]
 
 
 class LiteracyScenario(Base):
@@ -54,3 +58,7 @@ class LiteracyScenario(Base):
     choice_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     feedback_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    # JSON accessors for Text columns
+    content_data: dict | list | None = json_text("content_json")  # type: ignore[misc]
+    feedback_data: dict | list | None = json_text("feedback_json")  # type: ignore[misc]

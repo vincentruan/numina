@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "🛒 *Large Purchase Alert*\n\nYou're about to buy *{asset_name}* for ¥{amount}.\nConsider waiting 48 hours before deciding.\n\n_Numina Family Asset Manager_"
+  },
+  "email": {
+    "subject": "[Numina] Large Purchase Cooling-Off Reminder",
+    "body": "Hi,\n\nYou're about to purchase \"{asset_name}\" for ¥{amount}, which exceeds your configured large purchase threshold ({threshold}).\n\nConsider waiting 48 hours before making the decision.\n\nNumina Family Asset Manager"
+  },
+  "feishu": {
+    "text": "🛒 Large Purchase Alert\n\nYou're about to buy \"{asset_name}\" for ¥{amount}.\nConsider waiting 48 hours before deciding.\n\n—— Numina Family Asset Manager"
+  },
+  "webpush": {
+    "title": "Large Purchase Alert",
+    "body": "You have a ¥{amount} purchase ({asset_name}), please review"
+  }
+}

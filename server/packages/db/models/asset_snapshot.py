@@ -12,6 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
 
@@ -32,3 +33,6 @@ class AssetSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     family = relationship("Family", back_populates="snapshots")
+
+    # JSON accessor for the ``breakdown`` Text column
+    breakdown_json: dict | list | None = json_text("breakdown")  # type: ignore[misc]

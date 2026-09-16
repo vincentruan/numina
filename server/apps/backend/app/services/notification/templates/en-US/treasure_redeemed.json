@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "💎 {child_name} redeemed the treasure \"{treasure_title}\"!"
+  },
+  "email": {
+    "subject": "Treasure Redeemed: {treasure_title}",
+    "body": "{child_name} redeemed the treasure \"{treasure_title}\"."
+  },
+  "feishu": {
+    "text": "💎 {child_name} redeemed the treasure \"{treasure_title}\"!"
+  },
+  "webpush": {
+    "title": "Treasure Redeemed",
+    "body": "{child_name} redeemed \"{treasure_title}\""
+  }
+}

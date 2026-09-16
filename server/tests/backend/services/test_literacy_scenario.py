@@ -29,15 +29,14 @@ from packages.db.models.literacy_scenario import (
 # ---------------------------------------------------------------------------
 
 def _make_template(**overrides):
+    _choices = [{"label": "每天存一点", "feedback": "很好！"}, {"label": "全部花掉", "feedback": "要注意预算哦"}]
     defaults = dict(
         id=1,
         dimension="saving",
         age_group="mid",
         story_template="小兔子想存钱买胡萝卜……",
-        choices_json=json.dumps(
-            [{"label": "每天存一点", "feedback": "很好！"}, {"label": "全部花掉", "feedback": "要注意预算哦"}],
-            ensure_ascii=False,
-        ),
+        choices_json=json.dumps(_choices, ensure_ascii=False),
+        choices_data=_choices,
         is_active=True,
     )
     defaults.update(overrides)
@@ -114,6 +113,7 @@ def template_low_saving(db):
         age_group="low",
         story_template="故事A",
         choices_json="[]",
+        choices_data=[],
         is_active=True,
     )
     db.add(t)
@@ -130,6 +130,7 @@ def template_low_earning(db):
         age_group="low",
         story_template="故事B",
         choices_json="[]",
+        choices_data=[],
         is_active=True,
     )
     db.add(t)
@@ -146,6 +147,7 @@ def template_low_inactive(db):
         age_group="low",
         story_template="故事C",
         choices_json="[]",
+        choices_data=[],
         is_active=False,
     )
     db.add(t)

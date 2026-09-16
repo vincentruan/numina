@@ -9,7 +9,6 @@ in response body for backward compatibility.
 """
 
 import base64
-import json
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
@@ -390,7 +389,7 @@ def child_webauthn_register_options(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    existing_creds = json.loads(child.webauthn_credentials or "[]")
+    existing_creds = child.webauthn_credentials_data or []
     options = webauthn_helper.generate_registration_challenge(
         user_id=str(child.id),
         display_name=child.display_name,
@@ -426,9 +425,9 @@ def child_webauthn_register(
             ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)
         ) from e
 
-    existing_creds = json.loads(child.webauthn_credentials or "[]")
+    existing_creds = child.webauthn_credentials_data or []
     existing_creds.append(verified_cred)
-    child.webauthn_credentials = json.dumps(existing_creds)
+    child.webauthn_credentials_data = existing_creds
 
     try:
         db.commit()
@@ -457,10 +456,10 @@ def child_webauthn_login_options(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    if not child.webauthn_credentials:
+    if not child.webauthn_credentials_data:
         raise AppError(ErrorCode.AUTH_NO_PASSKEY_REGISTERED)
 
-    credentials = json.loads(child.webauthn_credentials)
+    credentials = child.webauthn_credentials_data or []
     options = webauthn_helper.generate_authentication_challenge(credentials)
 
     return WebAuthnAuthenticationOptionsResponse(
@@ -483,10 +482,10 @@ def child_webauthn_login(
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
-    if not child.webauthn_credentials:
+    if not child.webauthn_credentials_data:
         raise AppError(ErrorCode.AUTH_NO_PASSKEY_REGISTERED)
 
-    credentials = json.loads(child.webauthn_credentials)
+    credentials = child.webauthn_credentials_data or []
     credential_id = req.credential["id"]
 
     stored_cred = next((c for c in credentials if c["id"] == credential_id), None)
@@ -507,7 +506,7 @@ def child_webauthn_login(
         ) from e
 
     stored_cred["sign_count"] = verification["new_sign_count"]
-    child.webauthn_credentials = json.dumps(credentials)
+    child.webauthn_credentials_data = credentials
 
     try:
         db.commit()

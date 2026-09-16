@@ -3,6 +3,8 @@ from packages.db.models.asset_snapshot import AssetSnapshot
 from packages.db.models.cached_file import CachedFile
 from packages.db.models.category import Category
 from packages.db.models.device_session import DeviceSession
+from packages.db.models.child_economy.chore import ChoreInstance, ChoreTemplate
+from packages.db.models.child_economy.coin_transaction import CoinTransaction
 from packages.db.models.exchange_rate import ExchangeRate
 from packages.db.models.family import Family
 from packages.db.models.file_remote_location import FileRemoteLocation
@@ -29,6 +31,9 @@ __all__ = [
     "AssetSnapshot",
     "CachedFile",
     "Category",
+    "ChoreInstance",
+    "ChoreTemplate",
+    "CoinTransaction",
     "DeviceSession",
     "ExchangeRate",
     "Family",

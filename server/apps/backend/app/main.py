@@ -158,6 +158,7 @@ from apps.backend.app.routers import uploads as uploads_serve_router
 from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
+from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
 from packages.db.models.notification_config import NotificationConfig
@@ -316,7 +317,8 @@ async def lifespan(app: FastAPI):
                 has_rates = db.query(ExchangeRate).first() is not None
                 if not has_rates:
                     logger.info("首次启动，立即获取汇率数据...")
-                    ExchangeRateService.fetch_and_store_rates(db)
+                    adapter = ExchangeRateAdapter()
+                    adapter.fetch_and_store_rates(db)
             except Exception as e:
                 logger.warning(f"初始汇率获取失败: {e}")
     finally:

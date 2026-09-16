@@ -6,7 +6,6 @@ a child user (``get_current_child_user``).
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from datetime import date
 from typing import Any
@@ -51,15 +50,11 @@ MAX_LEVEL = 3
 # ---------------------------------------------------------------------------
 
 
-def _parse_content(content_json: str) -> dict[str, Any]:
-    """Safely parse the scenario ``content_json`` blob."""
-    try:
-        data = json.loads(content_json)
-    except (json.JSONDecodeError, TypeError):
+def _parse_content(content_data: dict[str, Any] | None) -> dict[str, Any]:
+    """Safely parse the scenario content (already deserialised)."""
+    if not isinstance(content_data, dict):
         return {"story": "", "choices": []}
-    if not isinstance(data, dict):
-        return {"story": "", "choices": []}
-    return data
+    return content_data
 
 
 async def _get_or_generate_scenario(
@@ -81,7 +76,7 @@ async def _get_or_generate_scenario(
 
 
 def _scenario_to_response(scenario: LiteracyScenario, age_group: str) -> ScenarioResponse:
-    content = _parse_content(scenario.content_json)
+    content = _parse_content(scenario.content_data)
     return ScenarioResponse(
         id=scenario.id,
         story=content.get("story", ""),
@@ -124,7 +119,7 @@ async def post_scenario_choose(
     if scenario.completed_at is not None:
         raise AppError(ErrorCode.LITERACY_SCENARIO_COMPLETED)
 
-    content = _parse_content(scenario.content_json)
+    content = _parse_content(scenario.content_data)
     choices = content.get("choices", [])
     if body.choice_index < 0 or body.choice_index >= len(choices):
         raise AppError(
@@ -155,9 +150,8 @@ async def post_scenario_choose(
         from datetime import UTC, datetime
 
         scenario.choice_index = body.choice_index
-        scenario.feedback_json = json.dumps(
-            chosen if isinstance(chosen, dict) else {"feedback": feedback_text},
-            ensure_ascii=False,
+        scenario.feedback_data = (
+            chosen if isinstance(chosen, dict) else {"feedback": feedback_text}
         )
         scenario.completed_at = datetime.now(UTC)
         db.commit()

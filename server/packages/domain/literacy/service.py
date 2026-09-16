@@ -8,7 +8,6 @@ Idempotent: at most one report per (child_id, week_start).
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -75,7 +74,7 @@ def _aggregate_signals(db: Session, child_id: int, week_start: date) -> dict[str
     we_dt = datetime.combine(week_end, datetime.min.time())
 
     # -- Chore completion rate --
-    from apps.backend.app.models.chore import ChoreInstance  # TODO(S7): see above
+    from packages.db.models.child_economy.chore import ChoreInstance
 
     total_chores = (
         db.execute(
@@ -103,7 +102,7 @@ def _aggregate_signals(db: Session, child_id: int, week_start: date) -> dict[str
     )
 
     # -- Coin earn/spend --
-    from apps.backend.app.models.coin_transaction import CoinTransaction
+    from packages.db.models.child_economy.coin_transaction import CoinTransaction
 
     coin_earned = (
         db.execute(
@@ -303,12 +302,11 @@ async def generate_weekly_report(
         "signals": signals,
         "week_start": week_start.isoformat(),
     }
-    report_json = json.dumps(report_data, ensure_ascii=False)
 
     report = LiteracyWeeklyReport(
         child_id=child.id,
         week_start=week_start,
-        report_json=report_json,
+        report_data=report_data,
         narrative=narrative,
     )
     db.add(report)

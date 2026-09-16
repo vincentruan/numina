@@ -29,7 +29,7 @@ from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
 from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_feedback import AIChatMessageFeedback
-from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.ai_chat_session import AIChatSession, SessionSource
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.schemas.base import SnowflakeBase
@@ -265,7 +265,9 @@ async def chat_stream(
         )
         ai_task_id = ai_task.id
     except Exception:
-        logger.warning("[chat-stream] AITask creation failed session=%s", session_id, exc_info=True)
+        logger.warning(
+            "[chat-stream] AITask creation failed session=%s", session_id, exc_info=True
+        )
 
     # Capture user attributes before generator (session closes after handler returns)
     _family_id = str(current_user.family_id)
@@ -315,9 +317,7 @@ async def chat_stream(
         chat_run_id: str | None = None
         client_disconnected = False
         try:
-            agent_client = AgentClient(
-                _family_id, _user_id, timeout=130.0
-            )
+            agent_client = AgentClient(_family_id, _user_id, timeout=130.0)
             async with agent_client.stream(
                 "POST",
                 agent_url,
@@ -328,11 +328,15 @@ async def chat_stream(
                 # Needed when the proxy loop exits due to client disconnect —
                 # the lifecycle consumer uses run_id to subscribe to the bridge
                 # and detect agent completion independently.
-                chat_run_id = AITaskService.extract_and_attach_run_id(
-                    str(ai_task_id),
-                    resp.headers.get("Content-Location"),
-                    _family_id,
-                ) if resp.headers.get("Content-Location") else None
+                chat_run_id = (
+                    AITaskService.extract_and_attach_run_id(
+                        str(ai_task_id),
+                        resp.headers.get("Content-Location"),
+                        _family_id,
+                    )
+                    if resp.headers.get("Content-Location")
+                    else None
+                )
 
                 # runs.py returns SSE directly — passthrough with SSE-aware parsing
                 sse_buffer: list[str] = []
@@ -358,11 +362,17 @@ async def chat_stream(
                 try:
                     _fdb = SessionLocal()
                     try:
-                        AITaskService.fail_task(ai_task_id, f"chat stream error: {type(e).__name__}", _fdb)
+                        AITaskService.fail_task(
+                            ai_task_id, f"chat stream error: {type(e).__name__}", _fdb
+                        )
                     finally:
                         _fdb.close()
                 except Exception:
-                    logger.warning("[chat-stream] AITask fail failed task=%s", ai_task_id, exc_info=True)
+                    logger.warning(
+                        "[chat-stream] AITask fail failed task=%s",
+                        ai_task_id,
+                        exc_info=True,
+                    )
                 err_payload = json.dumps(
                     {
                         "error": "抱歉，AI 服务暂时不可用。",
@@ -382,7 +392,8 @@ async def chat_stream(
                 if chat_run_id:
                     logger.info(
                         "[chat-stream] client disconnected, spawning lifecycle consumer task=%s run=%s",
-                        ai_task_id, chat_run_id,
+                        ai_task_id,
+                        chat_run_id,
                     )
                     _spawn_lifecycle_consumer(
                         task_id=str(ai_task_id),
@@ -404,7 +415,11 @@ async def chat_stream(
                         finally:
                             _cdb.close()
                     except Exception:
-                        logger.warning("[chat-stream] AITask complete failed task=%s", ai_task_id, exc_info=True)
+                        logger.warning(
+                            "[chat-stream] AITask complete failed task=%s",
+                            ai_task_id,
+                            exc_info=True,
+                        )
             else:
                 try:
                     _cdb = SessionLocal()
@@ -413,7 +428,11 @@ async def chat_stream(
                     finally:
                         _cdb.close()
                 except Exception:
-                    logger.warning("[chat-stream] AITask complete failed task=%s", ai_task_id, exc_info=True)
+                    logger.warning(
+                        "[chat-stream] AITask complete failed task=%s",
+                        ai_task_id,
+                        exc_info=True,
+                    )
 
     return StreamingResponse(
         proxy_stream(),
@@ -435,7 +454,7 @@ def get_system_default_session(
         .filter(
             AIChatSession.family_id == current_user.family_id,
             AIChatSession.user_id == current_user.id,
-            AIChatSession.source == "system_default",
+            AIChatSession.source == SessionSource.SYSTEM_DEFAULT,
             AIChatSession.created_at >= cutoff,
         )
         .order_by(AIChatSession.created_at.desc())
@@ -857,8 +876,19 @@ _MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
 
 _ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 _ALLOWED_FILE_EXTS = {
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-    ".txt", ".csv", ".md", ".json", ".yaml", ".yml",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".txt",
+    ".csv",
+    ".md",
+    ".json",
+    ".yaml",
+    ".yml",
 } | _ALLOWED_IMAGE_EXTS
 
 

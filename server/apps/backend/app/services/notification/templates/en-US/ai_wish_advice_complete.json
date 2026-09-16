@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "🌟 {task_title} is ready. Tap to view."
+  },
+  "email": {
+    "subject": "AI Wish Advice Ready: {task_title}",
+    "body": "{task_title} is ready. Please log in to view."
+  },
+  "feishu": {
+    "text": "🌟 {task_title} is ready. Tap to view."
+  },
+  "webpush": {
+    "title": "Wish Advice Ready",
+    "body": "{task_title} is ready"
+  }
+}

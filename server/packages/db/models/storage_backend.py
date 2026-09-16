@@ -12,6 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.snowflake import next_id
+from packages.db.mixins.json_text import json_text
 from packages.db.session import Base, UTCDateTime
 
 
@@ -37,3 +38,6 @@ class StorageBackend(Base):
 
     family = relationship("Family", back_populates="storage_backend")
     remote_locations = relationship("FileRemoteLocation", back_populates="backend")
+
+    # JSON accessor for the ``config`` Text column
+    config_data: dict | list | None = json_text("config")  # type: ignore[misc]

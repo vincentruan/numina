@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "text": "🔧 *Warranty Expiring Soon*\n\n*{asset_name}* warranty expires on {expiry_date}, {days_left} days left.\n\n_Numina Family Asset Manager_"
+  },
+  "email": {
+    "subject": "[Numina] Warranty Expiring Soon Reminder",
+    "body": "Hi,\n\nThe following asset's warranty is about to expire:\n\nAsset: {asset_name}\nExpiry Date: {expiry_date}\nDays Left: {days_left}\n\nPlease take action in time.\n\nNumina Family Asset Manager"
+  },
+  "feishu": {
+    "text": "🔧 Warranty Expiring Soon\n\n\"{asset_name}\" warranty expires on {expiry_date}, {days_left} days left.\n\n—— Numina Family Asset Manager"
+  },
+  "webpush": {
+    "title": "Expiry Reminder",
+    "body": "{asset_name} expires in {days_left} days"
+  }
+}

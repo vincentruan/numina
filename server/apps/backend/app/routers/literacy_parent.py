@@ -5,7 +5,6 @@ an adult user (``require_adult``).
 """
 from __future__ import annotations
 
-import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
@@ -35,16 +34,9 @@ router = APIRouter(prefix="/literacy-reports", tags=["literacy-parent"])
 # ---------------------------------------------------------------------------
 
 
-def _parse_report_json(raw: str) -> dict:
-    """Safely parse the ``report_json`` Text column into a dict."""
-    try:
-        data = json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return data
-
+# ---------------------------------------------------------------------------
+# GET /literacy-reports/status
+# ---------------------------------------------------------------------------
 
 def _validate_child_in_family(db: Session, child_id: int, family_id: int) -> User:
     """Return the child User if they belong to the caller's family, else raise."""
@@ -139,7 +131,7 @@ def get_report(
         id=report.id,
         child_id=report.child_id,
         week_start=report.week_start,
-        report_json=_parse_report_json(report.report_json),
+        report_json=report.report_data,
         narrative=report.narrative,
         generated_at=report.generated_at,
     )

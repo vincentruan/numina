@@ -11,6 +11,7 @@ from apps.backend.app.models.notification_channel import NotificationChannel
 from apps.backend.app.models.notification_subscription import NotificationSubscription
 from apps.backend.app.models.reminder import Reminder
 from apps.backend.app.models.reminder_notification import ReminderNotification
+from apps.backend.app.models.user import User
 from apps.backend.app.schemas.reminder import ReminderSummary
 from apps.backend.app.services.notification.rules import (
     check_expiring_soon,
@@ -225,13 +226,21 @@ def run_scheduled_checks(db: Session) -> None:
     _retry_failed_notifications(db)
 
 
-# ── 环境前缀 ────────────────────────────────────────────────────────────────────
+# ── 语言解析 & 环境前缀 ──────────────────────────────────────────────────────────
 
 
-def _env_prefix() -> str:
-    """非生产环境时返回消息前缀，避免用户与生产混淆。"""
+def _resolve_locale(db: Session, family_id: int) -> str:
+    """从 family owner 解析通知语言，fallback zh-CN。"""
+    owner = db.query(User).filter_by(family_id=family_id, role="owner").first()
+    if owner and owner.language:
+        return owner.language
+    return "zh-CN"
+
+
+def _env_prefix(locale: str = "zh-CN") -> str:
+    """非生产环境时返回本地化消息前缀，避免用户与生产混淆。"""
     if settings.ENVIRONMENT != "production":
-        return "【测试】"
+        return "【测试】" if locale.startswith("zh") else "[Test]"
     return ""
 
 
@@ -325,6 +334,7 @@ def _dispatch_notifications(
     db: Session, reminder: Reminder, template_vars: dict
 ) -> None:
     """向订阅了该 reminder_type 的所有启用渠道发送通知（失败静默）。"""
+    locale = _resolve_locale(db, reminder.family_id)
     channels = (
         db.query(NotificationChannel)
         .join(
@@ -354,18 +364,23 @@ def _dispatch_notifications(
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(
-                    _send_telegram_async(channel, reminder, template_vars, db)
+                    _send_telegram_async(channel, reminder, template_vars, db, locale)
                 )
             except RuntimeError:
                 pass
         elif channel.channel_type == "email":
             subject = render_template(
-                reminder.reminder_type, "email_subject", template_vars
+                reminder.reminder_type,
+                "email_subject",
+                template_vars,
+                locale=locale,
             )
-            prefix = _env_prefix()
+            prefix = _env_prefix(locale)
             if prefix:
                 subject = f"{prefix} {subject}"
-            body = render_template(reminder.reminder_type, "email_body", template_vars)
+            body = render_template(
+                reminder.reminder_type, "email_body", template_vars, locale=locale
+            )
             success = NotificationSender.send_email(
                 smtp_host=config.get("smtp_host", ""),
                 smtp_port=int(config.get("smtp_port", 587)),
@@ -386,12 +401,12 @@ def _dispatch_notifications(
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(
-                    _send_feishu_async(channel, reminder, template_vars, db)
+                    _send_feishu_async(channel, reminder, template_vars, db, locale)
                 )
             except RuntimeError:
                 pass
         elif channel.channel_type == "webpush":
-            _send_webpush_sync(channel, reminder, template_vars, db)
+            _send_webpush_sync(channel, reminder, template_vars, db, locale)
     db.commit()
 
 
@@ -400,10 +415,13 @@ async def _send_feishu_async(
     reminder: Reminder,
     template_vars: dict,
     db: Session,
+    locale: str = "zh-CN",
 ) -> None:
     config = _get_channel_config(db, channel)
-    text = render_template(reminder.reminder_type, "feishu", template_vars)
-    prefix = _env_prefix()
+    text = render_template(
+        reminder.reminder_type, "feishu", template_vars, locale=locale
+    )
+    prefix = _env_prefix(locale)
     if prefix:
         text = f"{prefix}\n\n{text}"
     mention_config = config.get("mention_config")
@@ -428,6 +446,7 @@ def _send_webpush_sync(
     reminder: Reminder,
     template_vars: dict,
     db: Session,
+    locale: str = "zh-CN",
 ) -> None:
     """Send Web Push notifications to all subscriptions in the family."""
     # R11 (large_purchase) should only notify main app subscriptions, not child
@@ -453,9 +472,13 @@ def _send_webpush_sync(
     vapid_private_key = config.get("vapid_private_key", settings.VAPID_PRIVATE_KEY)
     vapid_claims = {"sub": settings.VAPID_SUBJECT}
 
-    title = render_template(reminder.reminder_type, "webpush_title", template_vars)
-    body = render_template(reminder.reminder_type, "webpush_body", template_vars)
-    prefix = _env_prefix()
+    title = render_template(
+        reminder.reminder_type, "webpush_title", template_vars, locale=locale
+    )
+    body = render_template(
+        reminder.reminder_type, "webpush_body", template_vars, locale=locale
+    )
+    prefix = _env_prefix(locale)
     if prefix:
         title = f"{prefix} {title}"
 
@@ -494,10 +517,13 @@ async def _send_telegram_async(
     reminder: Reminder,
     template_vars: dict,
     db: Session,
+    locale: str = "zh-CN",
 ) -> None:
     config = _get_channel_config(db, channel)
-    text = render_template(reminder.reminder_type, "telegram", template_vars)
-    prefix = _env_prefix()
+    text = render_template(
+        reminder.reminder_type, "telegram", template_vars, locale=locale
+    )
+    prefix = _env_prefix(locale)
     if prefix:
         text = f"{prefix}\n\n{text}"
     mention_config = config.get("mention_config")

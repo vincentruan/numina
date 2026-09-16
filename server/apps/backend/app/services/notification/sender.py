@@ -43,7 +43,19 @@ def _format_mention(text: str, channel_type: str, mention_config: dict | None) -
     return text
 
 
-def render_template(reminder_type: str, channel_type: str, variables: dict) -> str:
+def _normalize_locale(locale: str) -> str:
+    """归一化 locale：zh-* → zh-CN，其他 → en-US。"""
+    if locale.startswith("zh"):
+        return "zh-CN"
+    return "en-US"
+
+
+def render_template(
+    reminder_type: str,
+    channel_type: str,
+    variables: dict,
+    locale: str = "zh-CN",
+) -> str:
     """加载模板并用 variables 渲染，返回渲染后的文本。
 
     channel_type 可选值：
@@ -53,8 +65,13 @@ def render_template(reminder_type: str, channel_type: str, variables: dict) -> s
     - "feishu" → 返回 feishu.text
     - "webpush_title" → 返回 webpush.title
     - "webpush_body" → 返回 webpush.body
+
+    locale 可选值：任意 locale 字符串，zh-* 归一化为 zh-CN，其余归一化为 en-US。
     """
-    template_path = _TEMPLATE_DIR / f"{reminder_type}.json"
+    normalized = _normalize_locale(locale)
+    template_path = _TEMPLATE_DIR / normalized / f"{reminder_type}.json"
+    if not template_path.exists():
+        template_path = _TEMPLATE_DIR / "zh-CN" / f"{reminder_type}.json"
     with open(template_path, encoding="utf-8") as f:
         tmpl = json.load(f)
     if channel_type == "telegram":

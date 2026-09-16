@@ -197,8 +197,6 @@ def device_trust_webauthn_register_options(
     db: Session = Depends(get_db),
 ):
     """Generate WebAuthn registration options for the authenticated user."""
-    import json as json_module
-
     from apps.backend.app.auth.webauthn import generate_registration_challenge
     from apps.backend.app.models.user import User
 
@@ -209,7 +207,7 @@ def device_trust_webauthn_register_options(
     if not user:
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    existing = json_module.loads(user.webauthn_credentials or "[]")
+    existing = user.webauthn_credentials_data or []
     options = generate_registration_challenge(
         user_id=str(user.id),
         display_name=user.display_name,
@@ -231,7 +229,6 @@ def device_trust_webauthn_register(
 ):
     """Complete WebAuthn registration — store credential on user."""
     import base64
-    import json as json_module
 
     from apps.backend.app.auth.webauthn import verify_registration
     from apps.backend.app.models.user import User
@@ -252,9 +249,9 @@ def device_trust_webauthn_register(
     except Exception:
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS) from None
 
-    existing = json_module.loads(user.webauthn_credentials or "[]")
+    existing = user.webauthn_credentials_data or []
     existing.append(verified)
-    user.webauthn_credentials = json_module.dumps(existing)
+    user.webauthn_credentials_data = existing
     db.commit()
 
     return {"registered": True}
@@ -566,7 +563,6 @@ def device_webauthn_auth_options(
 
     No auth required — used in Step 0 before login. Rate-limited by IP.
     """
-    import json as json_module
     from datetime import UTC, datetime
 
     from apps.backend.app.auth.webauthn import generate_authentication_challenge
@@ -596,7 +592,7 @@ def device_webauthn_auth_options(
     if not user:
         raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
 
-    credentials = json_module.loads(user.webauthn_credentials or "[]")
+    credentials = user.webauthn_credentials_data or []
     if not credentials:
         raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
 
@@ -619,7 +615,6 @@ def device_webauthn_verify(
     No ALTCHA required — biometric IS the proof of presence.
     """
     import base64
-    import json as json_module
     from datetime import UTC, datetime, timedelta
 
     from apps.backend.app.auth.cookies import set_auth_cookies
@@ -655,7 +650,7 @@ def device_webauthn_verify(
     if not user:
         raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
 
-    credentials = json_module.loads(user.webauthn_credentials or "[]")
+    credentials = user.webauthn_credentials_data or []
     credential_id = req.credential.get("id", "")
     matched = next((c for c in credentials if c["id"] == credential_id), None)
     if not matched:
@@ -673,7 +668,7 @@ def device_webauthn_verify(
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS) from None
 
     matched["sign_count"] = result["new_sign_count"]
-    user.webauthn_credentials = json_module.dumps(credentials)
+    user.webauthn_credentials_data = credentials
 
     session.last_seen_at = now
     session.expires_at = now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS)
