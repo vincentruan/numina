@@ -6,7 +6,7 @@
     <router-view v-slot="{ Component }">
       <Transition>
         <KeepAlive :include="cachedTabs">
-          <component :is="Component" />
+          <component :is="Component" :key="$route.path" />
         </KeepAlive>
       </Transition>
     </router-view>
@@ -44,7 +44,7 @@ const cachedTabs = ref<string[]>([
   'AIHub',
   'Baby',
   'Family',
-  'Settings',
+  // 'Settings' removed to force remount on navigation (fixes stale data)
 ])
 
 onMounted(() => {

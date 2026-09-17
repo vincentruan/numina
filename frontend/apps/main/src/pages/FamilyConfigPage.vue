@@ -393,23 +393,14 @@ async function loadFamilyConfig() {
   try {
     const res = await getFamilyConfig()
     Object.assign(form.value, res.data)
-    // Sync backend minutes → UI hours, clamped to [1, 168] and aligned to 12h step.
-    // Legacy values outside the new range are corrected on load and persisted on next save.
-    // Snap so that hours * 60 is always a multiple of 720 (backend step in minutes).
-    const STEP = 12
-    const snapHours = (v: number) => {
-      const clamped = Math.max(1, Math.min(168, Math.round(v / 60)))
-      return Math.max(12, Math.round(clamped / STEP) * STEP)
-    }
-    hourRefs.report = snapHours(form.value.ai_cache_ttl_report)
-    hourRefs.financeCoach = snapHours(form.value.ai_cache_ttl_finance_coach)
-    hourRefs.narrative = snapHours(form.value.ai_cache_ttl_dashboard_narrative)
-    hourRefs.literacyWeeklyReport = snapHours(form.value.ai_cache_ttl_literacy_weekly_report)
-    // Update form minutes to match clamped hours
-    form.value.ai_cache_ttl_report = hourRefs.report * 60
-    form.value.ai_cache_ttl_finance_coach = hourRefs.financeCoach * 60
-    form.value.ai_cache_ttl_dashboard_narrative = hourRefs.narrative * 60
-    form.value.ai_cache_ttl_literacy_weekly_report = hourRefs.literacyWeeklyReport * 60
+    // Sync backend minutes → UI hours for display.
+    // form.value still holds raw API minutes; hourRefs shows rounded hours.
+    // No snapping — van-slider step=12 handles visual alignment; onSave converts hours→minutes.
+    const toHours = (v: number) => Math.max(1, Math.min(168, Math.round(v / 60)))
+    hourRefs.report = toHours(form.value.ai_cache_ttl_report)
+    hourRefs.financeCoach = toHours(form.value.ai_cache_ttl_finance_coach)
+    hourRefs.narrative = toHours(form.value.ai_cache_ttl_dashboard_narrative)
+    hourRefs.literacyWeeklyReport = toHours(form.value.ai_cache_ttl_literacy_weekly_report)
   } finally {
     loading.value = false
   }
