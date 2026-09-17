@@ -259,7 +259,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
@@ -423,8 +423,12 @@ async function loadFamilyConfig() {
     showFailToast(t('toast.operationFailed2'))
   } finally {
     loading.value = false
-    initializing.value = false
-    console.log('[FamilyConfig] loadFamilyConfig END')
+    // Defer initializing=false to nextTick so that @update:model-value events
+    // triggered by hourRefs changes are still blocked by the initializing guard
+    nextTick(() => {
+      initializing.value = false
+      console.log('[FamilyConfig] initializing set to false')
+    })
   }
 }
 
