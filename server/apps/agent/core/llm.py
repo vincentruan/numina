@@ -153,6 +153,7 @@ class LLMClient:
         self._base_url = base_url
         self._anthropic_client = None
         self._openai_client = None
+        self._gemini_client = None
         if provider == "anthropic":
             import anthropic
 
@@ -167,6 +168,10 @@ class LLMClient:
             if base_url:
                 kwargs["base_url"] = base_url
             self._openai_client = AsyncOpenAI(**kwargs)
+        elif provider == "gemini":
+            from google import genai
+
+            self._gemini_client = genai.Client(api_key=api_key)
 
     async def complete(
         self, prompt: str, max_tokens: int = 512, system: str | None = None
@@ -176,6 +181,8 @@ class LLMClient:
             return await self._complete_anthropic(prompt, max_tokens, system)
         elif self.provider in ("openai", "openai_compatible"):
             return await self._complete_openai(prompt, max_tokens, system)
+        elif self.provider == "gemini":
+            return await self._complete_gemini(prompt, max_tokens, system)
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
@@ -224,6 +231,16 @@ class LLMClient:
                     )
                     return await self._complete_openai(prompt, max_tokens, system)
                 raise
+        elif self.provider == "gemini":
+            # Gemini has no native JSON mode — use system hint (same as Anthropic)
+            json_system = (
+                "You are a structured data extractor. "
+                "Output ONLY valid JSON. No markdown, no prose, no code fences."
+            )
+            combined_system = (
+                f"{json_system}\n{system}" if system else json_system
+            )
+            return await self._complete_gemini(prompt, max_tokens, combined_system)
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
@@ -239,6 +256,9 @@ class LLMClient:
                 prompt, max_tokens, system, enable_thinking=False
             ):
                 yield chunk
+        elif self.provider == "gemini":
+            async for chunk in self._stream_gemini_text(prompt, max_tokens, system):
+                yield chunk
 
     async def stream_with_thinking(
         self,
@@ -251,7 +271,10 @@ class LLMClient:
         Yields (block_type, text_chunk) where block_type is 'thinking' or 'text'.
         - Anthropic: uses native extended_thinking blocks
         - OpenAI-compatible: reads reasoning_content field, falls back to  tag parsing
+        - Gemini: not supported (raises ValueError)
         """
+        if self.provider == "gemini":
+            raise ValueError("Gemini 不支持思考模式")
         if self.provider == "anthropic":
             async for item in self._stream_anthropic_thinking(
                 prompt, max_tokens, system, thinking_budget
@@ -381,6 +404,10 @@ class LLMClient:
             )
         elif self.provider in ("openai", "openai_compatible"):
             return await self._complete_openai_vision(
+                prompt, image_data, max_tokens, system
+            )
+        elif self.provider == "gemini":
+            return await self._complete_gemini_vision(
                 prompt, image_data, max_tokens, system
             )
         else:
@@ -539,6 +566,81 @@ class LLMClient:
             messages=cast(Any, messages),
         )
         return response.choices[0].message.content or ""
+
+    async def _complete_gemini(
+        self, prompt: str, max_tokens: int, system: str | None
+    ) -> str:
+        """Gemini 单次补全请求。
+
+        Raises:
+            LLMResponseError: 响应为空
+        """
+        from google.genai import types
+
+        assert self._gemini_client is not None
+        config_kwargs: dict[str, Any] = {"max_output_tokens": max_tokens}
+        if system:
+            config_kwargs["system_instruction"] = system
+        config = types.GenerateContentConfig(**config_kwargs)
+
+        response = await self._gemini_client.aio.models.generate_content(
+            model=self.model_id,
+            contents=prompt,
+            config=config,
+        )
+        text = response.text
+        if text:
+            return text
+        raise LLMResponseError(
+            provider="gemini",
+            message="Response content is empty",
+            details=f"model={self.model_id}",
+        )
+
+    async def _stream_gemini_text(
+        self, prompt: str, max_tokens: int, system: str | None
+    ):
+        """Gemini 流式输出纯文本。"""
+        from google.genai import types
+
+        assert self._gemini_client is not None
+        config_kwargs: dict[str, Any] = {"max_output_tokens": max_tokens}
+        if system:
+            config_kwargs["system_instruction"] = system
+        config = types.GenerateContentConfig(**config_kwargs)
+
+        stream = await self._gemini_client.aio.models.generate_content_stream(
+            model=self.model_id,
+            contents=prompt,
+            config=config,
+        )
+        async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
+
+    async def _complete_gemini_vision(
+        self, prompt: str, image_data: str, max_tokens: int, system: str | None
+    ) -> str:
+        """Gemini 图像理解请求。"""
+        import base64
+
+        from google.genai import types
+
+        assert self._gemini_client is not None
+        image_bytes = base64.b64decode(image_data)
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+
+        config_kwargs: dict[str, Any] = {"max_output_tokens": max_tokens}
+        if system:
+            config_kwargs["system_instruction"] = system
+        config = types.GenerateContentConfig(**config_kwargs)
+
+        response = await self._gemini_client.aio.models.generate_content(
+            model=self.vision_model_id,
+            contents=[image_part, prompt],
+            config=config,
+        )
+        return response.text or ""
 
 
 def get_llm_client(

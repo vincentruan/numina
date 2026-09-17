@@ -72,6 +72,8 @@ async def test_connection(provider, api_key, model_id, base_url=None):
 
 async def test_thinking(provider, api_key, model_id, base_url=None):
     """Test extended thinking capability (120s timeout)."""
+    if provider == "gemini":
+        return {"success": False, "message": "Gemini 不支持思考模式", "latency_ms": None}
     start = time.monotonic()
     try:
         client = _make_client(provider, api_key, model_id, base_url, None, 120.0)
