@@ -319,8 +319,17 @@ onUnmounted(() => {
 })
 
 function onSave() {
+  console.log('[FamilyConfig] onSave called, initializing:', initializing.value, 'hourRefs:', JSON.stringify({
+    report: hourRefs.report,
+    coach: hourRefs.financeCoach,
+    narrative: hourRefs.narrative,
+    literacy: hourRefs.literacyWeeklyReport,
+  }))
   // Block auto-save during initial data load to prevent sending default values
-  if (initializing.value) return
+  if (initializing.value) {
+    console.log('[FamilyConfig] onSave blocked by initializing')
+    return
+  }
   // Convert UI hours → backend minutes before persisting.
   // All ai_cache_ttl_* fields are stored and consumed as MINUTES in the backend
   // (config_registry definitions, timedelta(minutes=ttl) in cache consumers).
