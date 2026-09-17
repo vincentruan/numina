@@ -43,7 +43,7 @@ class TestLLMClientSingleton:
     def test_unsupported_provider_raises(self):
         import pytest
         with pytest.raises(ValueError, match="不支持的 LLM Provider"):
-            client = LLMClient("gemini", "test-key", "gemini-pro")
+            client = LLMClient("mistral", "test-key", "mistral-large")
             import asyncio
             asyncio.run(client.complete("hello"))
 
@@ -124,3 +124,24 @@ class TestJSONFenceStripping:
         raw = 'outer {bad} ```json\n{"score": 2}\n```'
         result = json.loads(self._extract_json(raw))
         assert result["score"] == 2
+
+
+class TestGeminiCompleteJson:
+    async def test_gemini_complete_json_uses_response_mime_type(self):
+        """Gemini complete_json should pass response_mime_type to SDK config."""
+        # Bypass __init__ — mock the gemini client directly on the instance.
+        client = LLMClient.__new__(LLMClient)
+        client.provider = "gemini"
+        client.model_id = "gemini-2.5-pro"
+        client._gemini_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = '{"key": "value"}'
+        client._gemini_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        result = await client.complete_json("extract data", max_tokens=100)
+        assert result == '{"key": "value"}'
+
+        # Verify response_mime_type was passed to GenerateContentConfig
+        call_kwargs = client._gemini_client.aio.models.generate_content.call_args.kwargs
+        config = call_kwargs["config"]
+        assert config.response_mime_type == "application/json"

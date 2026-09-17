@@ -234,15 +234,26 @@ class LLMClient:
                     return await self._complete_openai(prompt, max_tokens, system)
                 raise
         elif self.provider == "gemini":
-            # Gemini has no native JSON mode — use system hint (same as Anthropic)
-            json_system = (
-                "You are a structured data extractor. "
-                "Output ONLY valid JSON. No markdown, no prose, no code fences."
-            )
-            combined_system = (
-                f"{json_system}\n{system}" if system else json_system
-            )
-            return await self._complete_gemini(prompt, max_tokens, combined_system)
+            # Gemini native SDK supports response_mime_type for JSON mode.
+            # Falls back to system hint only if the API rejects it.
+            try:
+                return await self._complete_gemini(
+                    prompt, max_tokens, system, response_mime_type="application/json"
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[complete_json] Gemini response_mime_type rejected, "
+                    "falling back to system hint: %s",
+                    exc,
+                )
+                json_system = (
+                    "You are a structured data extractor. "
+                    "Output ONLY valid JSON. No markdown, no prose, no code fences."
+                )
+                combined_system = (
+                    f"{json_system}\n{system}" if system else json_system
+                )
+                return await self._complete_gemini(prompt, max_tokens, combined_system)
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
@@ -570,7 +581,11 @@ class LLMClient:
         return response.choices[0].message.content or ""
 
     async def _complete_gemini(
-        self, prompt: str, max_tokens: int, system: str | None
+        self,
+        prompt: str,
+        max_tokens: int,
+        system: str | None,
+        response_mime_type: str | None = None,
     ) -> str:
         """Gemini 单次补全请求。
 
@@ -583,6 +598,8 @@ class LLMClient:
         config_kwargs: dict[str, Any] = {"max_output_tokens": max_tokens}
         if system:
             config_kwargs["system_instruction"] = system
+        if response_mime_type:
+            config_kwargs["response_mime_type"] = response_mime_type
         config = types.GenerateContentConfig(**config_kwargs)
 
         response = await self._gemini_client.aio.models.generate_content(

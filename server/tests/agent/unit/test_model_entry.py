@@ -461,3 +461,18 @@ class TestMaxTokensEmission:
             "model_1_capabilities": ["text_generation"],
         })
         assert "max_tokens" not in entry
+
+
+class TestGeminiThinkingConfig:
+    def test_build_thinking_config_returns_empty_for_gemini(self):
+        """Even if Gemini row has thinking_supported=True (shouldn't happen),
+        _build_thinking_config returns {} instead of silently falling through."""
+        from packages.core.model_entry import _build_thinking_config
+
+        result = _build_thinking_config(
+            provider="gemini",
+            base_url=None,
+            model_id="gemini-2.5-pro",
+            resolved_max_tokens=4096,
+        )
+        assert result == {}

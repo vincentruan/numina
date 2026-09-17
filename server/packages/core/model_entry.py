@@ -211,6 +211,9 @@ def _build_thinking_config(
 
     See module docstring for provider contracts.
     """
+    if provider == "gemini":
+        # Gemini native API does not expose thinking tokens — no thinking config.
+        return {}
     if "deepseek" in model_id.lower():
         # DeepSeek R1 thinking is intrinsic; both branches set extra_body.thinking.type.
         return {
