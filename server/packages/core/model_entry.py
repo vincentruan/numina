@@ -37,6 +37,7 @@ _PROVIDER_CLASS_MAP: dict[str, str] = {
     "anthropic": "langchain_anthropic:ChatAnthropic",
     "openai": "langchain_openai:ChatOpenAI",
     "openai_compatible": "langchain_openai:ChatOpenAI",
+    "gemini": "langchain_google_genai:ChatGoogleGenerativeAI",
 }
 
 _THINKING_CLASS_OVERRIDES: dict[str, str] = {
@@ -151,12 +152,18 @@ def build_model_entry(ai_provider: dict[str, Any]) -> dict[str, Any]:
         "name": "main",
         "use": use_class,
         "model": model_id,
-        "api_key": api_key,
         "supports_thinking": thinking_supported,
         "supports_vision": vision_supported,
     }
 
-    if base_url:
+    # Gemini uses gemini_api_key (ChatGoogleGenerativeAI constructor param);
+    # all other providers use the generic api_key.
+    if provider == "gemini":
+        entry["gemini_api_key"] = api_key
+    else:
+        entry["api_key"] = api_key
+
+    if base_url and provider != "gemini":
         entry["base_url"] = base_url
 
     # Resolve max_tokens (user → yaml → None) and emit when known.
