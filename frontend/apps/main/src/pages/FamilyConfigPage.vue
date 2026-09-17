@@ -392,15 +392,20 @@ async function loadFamilyConfig() {
   loading.value = true
   try {
     const res = await getFamilyConfig()
-    Object.assign(form.value, res.data)
-    // Sync backend minutes → UI hours for display.
-    // form.value still holds raw API minutes; hourRefs shows rounded hours.
-    // No snapping — van-slider step=12 handles visual alignment; onSave converts hours→minutes.
+    // Reset form with API data to clear any corrupted values
+    form.value = {
+      ...form.value,
+      ...res.data,
+    }
+    // Sync backend minutes → UI hours for display
     const toHours = (v: number) => Math.max(1, Math.min(168, Math.round(v / 60)))
     hourRefs.report = toHours(form.value.ai_cache_ttl_report)
     hourRefs.financeCoach = toHours(form.value.ai_cache_ttl_finance_coach)
     hourRefs.narrative = toHours(form.value.ai_cache_ttl_dashboard_narrative)
     hourRefs.literacyWeeklyReport = toHours(form.value.ai_cache_ttl_literacy_weekly_report)
+  } catch (error) {
+    console.error('Failed to load family config:', error)
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     loading.value = false
   }
