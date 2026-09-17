@@ -320,17 +320,8 @@ onUnmounted(() => {
 })
 
 function onSave() {
-  console.log('[FamilyConfig] onSave called, initializing:', initializing.value, 'hourRefs:', JSON.stringify({
-    report: hourRefs.report,
-    coach: hourRefs.financeCoach,
-    narrative: hourRefs.narrative,
-    literacy: hourRefs.literacyWeeklyReport,
-  }))
   // Block auto-save during initial data load to prevent sending default values
-  if (initializing.value) {
-    console.log('[FamilyConfig] onSave blocked by initializing')
-    return
-  }
+  if (initializing.value) return
   // Convert UI hours → backend minutes before persisting.
   // All ai_cache_ttl_* fields are stored and consumed as MINUTES in the backend
   // (config_registry definitions, timedelta(minutes=ttl) in cache consumers).
@@ -405,29 +396,19 @@ function onAutoApproveChange() {
 
 async function loadFamilyConfig() {
   loading.value = true
-  console.log('[FamilyConfig] loadFamilyConfig START, initializing:', initializing.value)
   try {
     const res = await getFamilyConfig()
-    console.log('[FamilyConfig] API response:', JSON.stringify(res.data))
     // Reset form with API data to clear any corrupted values
     form.value = {
       ...form.value,
       ...res.data,
     }
-    console.log('[FamilyConfig] form after assign:', JSON.stringify({
-      coach: form.value.ai_cache_ttl_finance_coach,
-      literacy: form.value.ai_cache_ttl_literacy_weekly_report,
-    }))
     // Sync backend minutes → UI hours for display
     const toHours = (v: number) => Math.max(1, Math.min(168, Math.round(v / 60)))
     hourRefs.report = toHours(form.value.ai_cache_ttl_report)
     hourRefs.financeCoach = toHours(form.value.ai_cache_ttl_finance_coach)
     hourRefs.narrative = toHours(form.value.ai_cache_ttl_dashboard_narrative)
     hourRefs.literacyWeeklyReport = toHours(form.value.ai_cache_ttl_literacy_weekly_report)
-    console.log('[FamilyConfig] hourRefs after toHours:', JSON.stringify({
-      coach: hourRefs.financeCoach,
-      literacy: hourRefs.literacyWeeklyReport,
-    }))
   } catch (error) {
     console.error('[FamilyConfig] Failed to load family config:', error)
     showFailToast(t('toast.operationFailed2'))
@@ -437,7 +418,6 @@ async function loadFamilyConfig() {
     // triggered by hourRefs changes are still blocked by the initializing guard
     nextTick(() => {
       initializing.value = false
-      console.log('[FamilyConfig] initializing set to false')
     })
   }
 }
@@ -445,11 +425,6 @@ async function loadFamilyConfig() {
 onMounted(() => {
   loadFamilyConfig()
   loadEducationSettings()
-  // Watch hourRefs changes to debug who is overwriting the values
-  watch(hourRefs, (newVal) => {
-    console.log('[FamilyConfig] hourRefs changed:', JSON.stringify(newVal))
-    console.trace('[FamilyConfig] hourRefs change stack trace')
-  }, { deep: true })
 })
 
 onActivated(() => {
