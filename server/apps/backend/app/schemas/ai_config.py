@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
-_VALID_PROVIDERS = ("anthropic", "openai", "openai_compatible")
+_VALID_PROVIDERS = ("anthropic", "openai", "openai_compatible", "gemini")
 
 
 class AIProviderTestResultResponse(SnowflakeBase):
@@ -157,7 +157,7 @@ class ModelInfo(BaseModel):
     """
     name: str  # Model ID (e.g., "claude-sonnet-4-20250514")
     display_name: str  # User-friendly name (e.g., "Claude Sonnet 4")
-    provider: str  # Provider type: "anthropic" | "openai" | "openai_compatible"
+    provider: str  # Provider type: "anthropic" | "openai" | "openai_compatible" | "gemini"
     provider_name: str = ""  # Provider display name (e.g., "Anthropic", "OpenAI")
     supports_thinking: bool = False  # Extended thinking / reasoning capability
     supports_vision: bool = False  # Image input capability
