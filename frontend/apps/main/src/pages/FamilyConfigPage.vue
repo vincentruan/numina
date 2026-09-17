@@ -259,7 +259,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
@@ -305,9 +305,10 @@ const form = ref({
 
 // AI cache TTL: form stores MINUTES (backend storage + cache logic unit), hourRefs stores HOURS (UI display unit)
 // Backend config_registry defines min/max/step in minutes; cache consumers (ai_report.py, finance_coach_cache.py) use timedelta(minutes=ttl)
+// Initialize with step-aligned values (12, 24, ...) to prevent van-slider from snapping on mount
 const hourRefs = reactive({
-  report: 1,
-  financeCoach: 8,
+  report: 12,
+  financeCoach: 12,
   narrative: 24,
   literacyWeeklyReport: 168,
 })
@@ -444,6 +445,11 @@ async function loadFamilyConfig() {
 onMounted(() => {
   loadFamilyConfig()
   loadEducationSettings()
+  // Watch hourRefs changes to debug who is overwriting the values
+  watch(hourRefs, (newVal) => {
+    console.log('[FamilyConfig] hourRefs changed:', JSON.stringify(newVal))
+    console.trace('[FamilyConfig] hourRefs change stack trace')
+  }, { deep: true })
 })
 
 onActivated(() => {
