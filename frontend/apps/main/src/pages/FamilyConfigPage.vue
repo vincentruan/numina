@@ -395,25 +395,36 @@ function onAutoApproveChange() {
 
 async function loadFamilyConfig() {
   loading.value = true
+  console.log('[FamilyConfig] loadFamilyConfig START, initializing:', initializing.value)
   try {
     const res = await getFamilyConfig()
+    console.log('[FamilyConfig] API response:', JSON.stringify(res.data))
     // Reset form with API data to clear any corrupted values
     form.value = {
       ...form.value,
       ...res.data,
     }
+    console.log('[FamilyConfig] form after assign:', JSON.stringify({
+      coach: form.value.ai_cache_ttl_finance_coach,
+      literacy: form.value.ai_cache_ttl_literacy_weekly_report,
+    }))
     // Sync backend minutes → UI hours for display
     const toHours = (v: number) => Math.max(1, Math.min(168, Math.round(v / 60)))
     hourRefs.report = toHours(form.value.ai_cache_ttl_report)
     hourRefs.financeCoach = toHours(form.value.ai_cache_ttl_finance_coach)
     hourRefs.narrative = toHours(form.value.ai_cache_ttl_dashboard_narrative)
     hourRefs.literacyWeeklyReport = toHours(form.value.ai_cache_ttl_literacy_weekly_report)
+    console.log('[FamilyConfig] hourRefs after toHours:', JSON.stringify({
+      coach: hourRefs.financeCoach,
+      literacy: hourRefs.literacyWeeklyReport,
+    }))
   } catch (error) {
-    console.error('Failed to load family config:', error)
+    console.error('[FamilyConfig] Failed to load family config:', error)
     showFailToast(t('toast.operationFailed2'))
   } finally {
     loading.value = false
     initializing.value = false
+    console.log('[FamilyConfig] loadFamilyConfig END')
   }
 }
 
