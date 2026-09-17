@@ -14,40 +14,40 @@
         <van-cell>
           <template #title>
             <span>{{ t('familyConfig.aiCacheTtlReport') }}</span>
-            <span class="value">{{ form.ai_cache_ttl_report }} {{ t('familyConfig.unitMinutes') }}</span>
+            <span class="value">{{ hourRefs.report }} {{ t('familyConfig.unitHours') }}</span>
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlReportDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="form.ai_cache_ttl_report" :min="5" :max="480" :step="5" @change="onSave" />
+              <van-slider v-model="hourRefs.report" :min="1" :max="168" :step="12" @change="onSave" />
             </div>
-            <div class="slider-scale"><span>5</span><span>240</span><span>480</span></div>
+            <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
         </van-cell>
         <van-cell>
           <template #title>
             <span>{{ t('familyConfig.aiCacheTtlFinanceCoach') }}</span>
-            <span class="value">{{ form.ai_cache_ttl_finance_coach }} {{ t('familyConfig.unitMinutes') }}</span>
+            <span class="value">{{ hourRefs.financeCoach }} {{ t('familyConfig.unitHours') }}</span>
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlFinanceCoachDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="form.ai_cache_ttl_finance_coach" :min="60" :max="1440" :step="30" @change="onSave" />
+              <van-slider v-model="hourRefs.financeCoach" :min="1" :max="168" :step="12" @change="onSave" />
             </div>
-            <div class="slider-scale"><span>60</span><span>720</span><span>1440</span></div>
+            <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
         </van-cell>
         <van-cell>
           <template #title>
             <span>{{ t('familyConfig.aiCacheTtlNarrative') }}</span>
-            <span class="value">{{ form.ai_cache_ttl_dashboard_narrative }} {{ t('familyConfig.unitMinutes') }}</span>
+            <span class="value">{{ hourRefs.narrative }} {{ t('familyConfig.unitHours') }}</span>
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlNarrativeDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="form.ai_cache_ttl_dashboard_narrative" :min="60" :max="1440" :step="60" @change="onSave" />
+              <van-slider v-model="hourRefs.narrative" :min="1" :max="168" :step="12" @change="onSave" />
             </div>
-            <div class="slider-scale"><span>60</span><span>720</span><span>1440</span></div>
+            <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -183,14 +183,14 @@
         <van-cell>
           <template #title>
             <span>{{ t('familyConfig.literacyCacheTtl') }}</span>
-            <span class="value">{{ form.ai_cache_ttl_literacy_weekly_report }} {{ t('familyConfig.unitMinutes') }}</span>
+            <span class="value">{{ hourRefs.literacyWeeklyReport }} {{ t('familyConfig.unitHours') }}</span>
           </template>
           <template #label>
             <span class="desc">{{ t('familyConfig.literacyCacheTtlDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="form.ai_cache_ttl_literacy_weekly_report" :min="1440" :max="20160" :step="1440" @change="onSave" />
+              <van-slider v-model="hourRefs.literacyWeeklyReport" :min="1" :max="168" :step="12" @change="onSave" />
             </div>
-            <div class="slider-scale"><span>1440</span><span>10080</span><span>20160</span></div>
+            <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
         </van-cell>
       </van-cell-group>
@@ -259,7 +259,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
@@ -300,6 +300,15 @@ const form = ref({
   ai_cache_ttl_literacy_weekly_report: 10080,
 })
 
+// AI cache TTL: form stores MINUTES (backend storage + cache logic unit), hourRefs stores HOURS (UI display unit)
+// Backend config_registry defines min/max/step in minutes; cache consumers (ai_report.py, finance_coach_cache.py) use timedelta(minutes=ttl)
+const hourRefs = reactive({
+  report: 1,
+  financeCoach: 8,
+  narrative: 24,
+  literacyWeeklyReport: 168,
+})
+
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 onUnmounted(() => {
@@ -307,6 +316,13 @@ onUnmounted(() => {
 })
 
 function onSave() {
+  // Convert UI hours → backend minutes before persisting.
+  // All ai_cache_ttl_* fields are stored and consumed as MINUTES in the backend
+  // (config_registry definitions, timedelta(minutes=ttl) in cache consumers).
+  form.value.ai_cache_ttl_report = hourRefs.report * 60
+  form.value.ai_cache_ttl_finance_coach = hourRefs.financeCoach * 60
+  form.value.ai_cache_ttl_dashboard_narrative = hourRefs.narrative * 60
+  form.value.ai_cache_ttl_literacy_weekly_report = hourRefs.literacyWeeklyReport * 60
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
     try {
@@ -376,6 +392,11 @@ onMounted(async () => {
   try {
     const res = await getFamilyConfig()
     Object.assign(form.value, res.data)
+    // Sync backend minutes → UI hours
+    hourRefs.report = Math.round(form.value.ai_cache_ttl_report / 60)
+    hourRefs.financeCoach = Math.round(form.value.ai_cache_ttl_finance_coach / 60)
+    hourRefs.narrative = Math.round(form.value.ai_cache_ttl_dashboard_narrative / 60)
+    hourRefs.literacyWeeklyReport = Math.round(form.value.ai_cache_ttl_literacy_weekly_report / 60)
   } finally {
     loading.value = false
   }

@@ -3730,6 +3730,7 @@ export default {
     weeklyScanHourDesc: '扫描执行的小时（0-23）',
     dayLabels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
     unitMinutes: '分钟',
+    unitHours: '小时',
     unitHour: '时',
     literacyGroup: '财商启蒙',
     literacyReportDay: '周报生成日',
