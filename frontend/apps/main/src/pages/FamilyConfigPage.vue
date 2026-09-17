@@ -19,7 +19,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlReportDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.report" :min="1" :max="168" :step="12" @change="onSave" />
+              <van-slider v-model="hourRefs.report" :min="1" :max="168" :step="12" @update:model-value="onSave" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -32,7 +32,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlFinanceCoachDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.financeCoach" :min="1" :max="168" :step="12" @change="onSave" />
+              <van-slider v-model="hourRefs.financeCoach" :min="1" :max="168" :step="12" @update:model-value="onSave" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -45,7 +45,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlNarrativeDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.narrative" :min="1" :max="168" :step="12" @change="onSave" />
+              <van-slider v-model="hourRefs.narrative" :min="1" :max="168" :step="12" @update:model-value="onSave" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -188,7 +188,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.literacyCacheTtlDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.literacyWeeklyReport" :min="1" :max="168" :step="12" @change="onSave" />
+              <van-slider v-model="hourRefs.literacyWeeklyReport" :min="1" :max="168" :step="12" @update:model-value="onSave" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -259,7 +259,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { getFamilyConfig, updateFamilyConfig } from '@/api/config'
@@ -388,19 +388,40 @@ function onAutoApproveChange() {
     })
 }
 
-onMounted(async () => {
+async function loadFamilyConfig() {
+  loading.value = true
   try {
     const res = await getFamilyConfig()
     Object.assign(form.value, res.data)
-    // Sync backend minutes → UI hours
-    hourRefs.report = Math.round(form.value.ai_cache_ttl_report / 60)
-    hourRefs.financeCoach = Math.round(form.value.ai_cache_ttl_finance_coach / 60)
-    hourRefs.narrative = Math.round(form.value.ai_cache_ttl_dashboard_narrative / 60)
-    hourRefs.literacyWeeklyReport = Math.round(form.value.ai_cache_ttl_literacy_weekly_report / 60)
+    // Sync backend minutes → UI hours, clamped to [1, 168] and aligned to 12h step.
+    // Legacy values outside the new range are corrected on load and persisted on next save.
+    // Snap so that hours * 60 is always a multiple of 720 (backend step in minutes).
+    const STEP = 12
+    const snapHours = (v: number) => {
+      const clamped = Math.max(1, Math.min(168, Math.round(v / 60)))
+      return Math.max(12, Math.round(clamped / STEP) * STEP)
+    }
+    hourRefs.report = snapHours(form.value.ai_cache_ttl_report)
+    hourRefs.financeCoach = snapHours(form.value.ai_cache_ttl_finance_coach)
+    hourRefs.narrative = snapHours(form.value.ai_cache_ttl_dashboard_narrative)
+    hourRefs.literacyWeeklyReport = snapHours(form.value.ai_cache_ttl_literacy_weekly_report)
+    // Update form minutes to match clamped hours
+    form.value.ai_cache_ttl_report = hourRefs.report * 60
+    form.value.ai_cache_ttl_finance_coach = hourRefs.financeCoach * 60
+    form.value.ai_cache_ttl_dashboard_narrative = hourRefs.narrative * 60
+    form.value.ai_cache_ttl_literacy_weekly_report = hourRefs.literacyWeeklyReport * 60
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  loadFamilyConfig()
   loadEducationSettings()
+})
+
+onActivated(() => {
+  loadFamilyConfig()
 })
 
 async function loadEducationSettings() {
