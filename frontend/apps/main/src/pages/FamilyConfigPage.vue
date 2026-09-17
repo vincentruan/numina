@@ -273,6 +273,9 @@ const { t } = useI18n()
 const { isOwner } = useAuth()
 const familyStore = useFamilyStore()
 const loading = ref(true)
+// Block auto-save until initial data is loaded (prevents saving default values
+// before loadFamilyConfig completes and overwrites them with API data)
+const initializing = ref(true)
 const educationRewardEnabled = ref(false)
 const coinToYuanRate = ref(1)
 const autoApproveHours = ref(0)
@@ -316,6 +319,8 @@ onUnmounted(() => {
 })
 
 function onSave() {
+  // Block auto-save during initial data load to prevent sending default values
+  if (initializing.value) return
   // Convert UI hours → backend minutes before persisting.
   // All ai_cache_ttl_* fields are stored and consumed as MINUTES in the backend
   // (config_registry definitions, timedelta(minutes=ttl) in cache consumers).
@@ -408,6 +413,7 @@ async function loadFamilyConfig() {
     showFailToast(t('toast.operationFailed2'))
   } finally {
     loading.value = false
+    initializing.value = false
   }
 }
 
