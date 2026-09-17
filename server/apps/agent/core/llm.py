@@ -170,8 +170,10 @@ class LLMClient:
             self._openai_client = AsyncOpenAI(**kwargs)
         elif provider == "gemini":
             from google import genai
+            from google.genai import types
 
-            self._gemini_client = genai.Client(api_key=api_key)
+            http_options = types.HttpOptions(timeout=timeout * 1000)  # SDK uses milliseconds
+            self._gemini_client = genai.Client(api_key=api_key, http_options=http_options)
 
     async def complete(
         self, prompt: str, max_tokens: int = 512, system: str | None = None

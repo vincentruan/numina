@@ -39,6 +39,29 @@ class TestProviderClassMapping:
         assert entry["use"] == "langchain_openai:ChatOpenAI"
         assert entry["base_url"] == "https://api.zhipu.ai/v4"
 
+    def test_gemini_non_thinking(self):
+        entry = build_model_entry({
+            "ai_provider": "gemini",
+            "ai_model_id": "gemini-2.5-pro",
+            "api_key": "AIza-test",
+            "model_1_capabilities": ["text_generation"],
+        })
+        assert entry["use"] == "langchain_google_genai:ChatGoogleGenerativeAI"
+        assert entry["gemini_api_key"] == "AIza-test"
+        assert "api_key" not in entry
+        assert "base_url" not in entry
+        assert entry["supports_thinking"] is False
+
+    def test_gemini_ignores_base_url(self):
+        entry = build_model_entry({
+            "ai_provider": "gemini",
+            "ai_model_id": "gemini-2.0-flash",
+            "api_key": "AIza-test",
+            "ai_base_url": "https://some-proxy.example.com",
+            "model_1_capabilities": ["text_generation"],
+        })
+        assert "base_url" not in entry
+
     def test_unknown_provider_defaults_to_openai(self):
         entry = build_model_entry({
             "ai_provider": "unknown_vendor",

@@ -76,6 +76,16 @@ class TestTestConnection:
 
 
 class TestTestThinking:
+    async def test_gemini_short_circuits(self):
+        """Gemini does not support thinking — should return immediately without calling LLM."""
+        with patch("apps.agent.services.model_tester.get_llm_client") as mock_factory:
+            result = await _test_thinking("gemini", "AIza-test", "gemini-2.5-pro")
+
+        assert result["success"] is False
+        assert "不支持思考模式" in result["message"]
+        assert result["latency_ms"] is None
+        mock_factory.assert_not_called()
+
     async def test_anthropic_with_thinking_block(self):
         async def fake_stream(*args, **kwargs):
             yield ("thinking", "some thought")
