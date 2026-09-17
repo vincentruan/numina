@@ -19,7 +19,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlReportDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.report" :min="1" :max="168" :step="12" :disabled="loading" @change="onSave" />
+              <van-slider :model-value="hourRefs.report" :min="1" :max="168" :step="12" :disabled="loading" @change="(v: number) => { hourRefs.report = v; onSave() }" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -32,7 +32,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlFinanceCoachDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.financeCoach" :min="1" :max="168" :step="12" :disabled="loading" @change="onSave" />
+              <van-slider :model-value="hourRefs.financeCoach" :min="1" :max="168" :step="12" :disabled="loading" @change="(v: number) => { hourRefs.financeCoach = v; onSave() }" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -45,7 +45,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.aiCacheTtlNarrativeDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.narrative" :min="1" :max="168" :step="12" :disabled="loading" @change="onSave" />
+              <van-slider :model-value="hourRefs.narrative" :min="1" :max="168" :step="12" :disabled="loading" @change="(v: number) => { hourRefs.narrative = v; onSave() }" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
@@ -188,7 +188,7 @@
           <template #label>
             <span class="desc">{{ t('familyConfig.literacyCacheTtlDesc') }}</span>
             <div class="slider-track">
-              <van-slider v-model="hourRefs.literacyWeeklyReport" :min="1" :max="168" :step="12" :disabled="loading" @change="onSave" />
+              <van-slider :model-value="hourRefs.literacyWeeklyReport" :min="1" :max="168" :step="12" :disabled="loading" @change="(v: number) => { hourRefs.literacyWeeklyReport = v; onSave() }" />
             </div>
             <div class="slider-scale"><span>1</span><span>84</span><span>168</span></div>
           </template>
