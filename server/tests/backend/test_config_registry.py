@@ -14,8 +14,8 @@ class TestGetDefinition:
         defn = get_definition("family", "ai_cache_ttl_report")
         assert defn.type == "int"
         assert defn.default == 60
-        assert defn.min == 5
-        assert defn.max == 480
+        assert defn.min == 60
+        assert defn.max == 10080
 
     def test_known_user_key(self):
         defn = get_definition("user", "dashboard_trend_period")
@@ -37,18 +37,18 @@ class TestValidateValue:
         assert validate_value("family", "ai_cache_ttl_report", "120") == 120
 
     def test_int_below_min(self):
-        with pytest.raises(ValueError, match="must be >= 5"):
+        with pytest.raises(ValueError, match="must be >= 60"):
             validate_value("family", "ai_cache_ttl_report", 3)
 
     def test_int_above_max(self):
-        with pytest.raises(ValueError, match="must be <= 480"):
-            validate_value("family", "ai_cache_ttl_report", 999)
+        with pytest.raises(ValueError, match="must be <= 10080"):
+            validate_value("family", "ai_cache_ttl_report", 99999)
 
     def test_int_at_boundary_min(self):
-        assert validate_value("family", "ai_cache_ttl_report", 5) == 5
+        assert validate_value("family", "ai_cache_ttl_report", 60) == 60
 
     def test_int_at_boundary_max(self):
-        assert validate_value("family", "ai_cache_ttl_report", 480) == 480
+        assert validate_value("family", "ai_cache_ttl_report", 10080) == 10080
 
     def test_bool_rejected_as_int(self):
         with pytest.raises(ValueError, match="must be an integer"):

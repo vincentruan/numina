@@ -24,18 +24,19 @@ class SettingDefinition(BaseModel):
 
 FAMILY_SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     # --- AI cache TTLs (minutes) ---
+    # UI displays hours (1-168h, step 12h); stored & validated as minutes.
     "ai_cache_ttl_report": SettingDefinition(
-        type="int", default=60, min=5, max=480, step=5,
+        type="int", default=60, min=60, max=10080, step=720,
         label_key="familyConfig.aiCacheTtlReport",
         description_key="familyConfig.aiCacheTtlReportDesc",
     ),
     "ai_cache_ttl_finance_coach": SettingDefinition(
-        type="int", default=480, min=60, max=1440, step=30,
+        type="int", default=480, min=60, max=10080, step=720,
         label_key="familyConfig.aiCacheTtlFinanceCoach",
         description_key="familyConfig.aiCacheTtlFinanceCoachDesc",
     ),
     "ai_cache_ttl_dashboard_narrative": SettingDefinition(
-        type="int", default=1440, min=60, max=1440, step=60,
+        type="int", default=1440, min=60, max=10080, step=720,
         label_key="familyConfig.aiCacheTtlNarrative",
         description_key="familyConfig.aiCacheTtlNarrativeDesc",
     ),
@@ -88,7 +89,7 @@ FAMILY_SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
         description_key="familyConfig.literacyReportHourDesc",
     ),
     "ai_cache_ttl_literacy_weekly_report": SettingDefinition(
-        type="int", default=10080, min=1440, max=20160, step=1440,
+        type="int", default=10080, min=60, max=10080, step=720,
         label_key="familyConfig.aiCacheTtlLiteracyReport",
         description_key="familyConfig.aiCacheTtlLiteracyReportDesc",
     ),

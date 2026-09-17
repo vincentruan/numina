@@ -33,10 +33,10 @@ class TestFamilySettings:
     def test_update_multiple_keys(self, db):
         update_family_settings(
             db, FAMILY_ID,
-            {"ai_cache_ttl_report": 30, "dashboard_min_asset_count": 10},
+            {"ai_cache_ttl_report": 120, "dashboard_min_asset_count": 10},
         )
         result = get_all_family_settings(db, FAMILY_ID)
-        assert result["ai_cache_ttl_report"] == 30
+        assert result["ai_cache_ttl_report"] == 120
         assert result["dashboard_min_asset_count"] == 10
 
     def test_update_unknown_key_raises(self, db):
@@ -45,7 +45,7 @@ class TestFamilySettings:
 
     def test_update_out_of_range_raises(self, db):
         with pytest.raises(AppError):
-            update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 9999})
+            update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 99999})
 
     def test_update_overwrites_existing(self, db):
         update_family_settings(db, FAMILY_ID, {"ai_cache_ttl_report": 120})
