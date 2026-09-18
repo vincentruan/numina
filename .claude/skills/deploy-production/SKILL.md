@@ -23,10 +23,10 @@ Deploy Numina to the production Docker server. Three modes:
 
 ## Prerequisites
 
-SSH config in `.claude/deploy.env` (gitignored). If missing, ask the user and create it:
+SSH config in `.claude/skills/deploy-production/deploy.env` (gitignored). If missing, ask the user and create it:
 
 ```bash
-# .claude/deploy.env — DO NOT COMMIT
+# .claude/skills/deploy-production/deploy.env — DO NOT COMMIT
 DEPLOY_SSH_HOST=<server-ip>
 DEPLOY_SSH_PORT=<ssh-port>
 DEPLOY_SSH_USER=<ssh-user>
@@ -39,7 +39,7 @@ DEPLOY_REMOTE_DIR=<absolute-path>   # 必须用绝对路径，不能用 ~
 **Variable sourcing** — shell state does NOT persist between bash calls. Source in every command block:
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ```
 
 **SSH quoting** — `$DEPLOY_REMOTE_DIR` 是**本地变量**，不在远程服务器上。SSH 命令必须用**双引号**包裹，让本地 shell 先展开变量：
@@ -227,7 +227,7 @@ No git on the server. CI builds images on push to `main`; server just pulls them
 The production database (`numina-postgres-prod`) runs as a **separate container** from the app stack. It must be healthy before deploying app services.
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   if sudo docker ps --format '{{.Names}}' | grep -q 'numina-postgres-prod'; then
     echo '✓ numina-postgres-prod is running'
@@ -269,7 +269,7 @@ done'
 Push config changes from local repo to server (skip if no config file changes since last deploy):
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 rsync -avz --progress -e "ssh -p ${DEPLOY_SSH_PORT:-22}" \
   docker-compose.production.yml \
   docker-compose.production-pg.yml \
@@ -290,7 +290,7 @@ rsync -avz --progress -e "ssh -p ${DEPLOY_SSH_PORT:-22}" \
 ### Step 3: Check Disk Space
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
   'df -h / | tail -1 && echo "---" && sudo docker system df'
 ```
@@ -307,7 +307,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
 Pull new images first — migration must run with the new image that contains updated alembic files.
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
   echo '=== Pull GHCR images ===' &&
@@ -334,7 +334,7 @@ If current ≠ head → run upgrade:
 > **Note:** This only applies to the **Numina database** (`DATABASE_URL`). The **DeerFlow checkpoint database** (`DEERFLOW_DB_URL`) is self-managing — DeerFlow's `init_engine()` creates/updates its own schema on agent startup. No manual migration step needed for DeerFlow.
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
@@ -356,7 +356,7 @@ If it fails with DuplicateColumn/DuplicateTable → follow [references/db-migrat
 
 ```bash
 # 检查 subscription 状态
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   sudo docker exec numina-postgres-prod psql -U numina -d numina_prod -c \
     'SELECT subname, subenabled FROM pg_subscription;'
@@ -372,7 +372,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 ### Step 6: Recreate Services
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
   echo '=== Recreate services ===' &&
@@ -393,7 +393,7 @@ ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
 ### Step 7: Health Check
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   echo "=== CONTAINERS ===" &&
   sudo docker ps --format "table {{.Names}}\t{{.Status}}" | grep numina &&
@@ -420,7 +420,7 @@ Use when you need custom changes not yet merged to main, or CI hasn't built imag
 ### Step 1: Pull Latest Code on Server
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
   'cd ~/data/numina && GIT_SSH_COMMAND="ssh" git fetch origin && GIT_SSH_COMMAND="ssh" git checkout main && GIT_SSH_COMMAND="ssh" git pull origin main'
 ```
@@ -432,7 +432,7 @@ If conflicts → **stop and report**. Never resolve conflicts on the server.
 Same check as Mode A Step 4 — run migration on the server before rebuilding:
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ~/data/numina &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c '
@@ -451,7 +451,7 @@ If upgrade fails → follow [references/db-migration.md](references/db-migration
 ### Step 3: Build & Deploy
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd ~/data/numina &&
   echo "=== Build images ===" &&
@@ -480,7 +480,7 @@ production server (health check after recreate) — local only builds, does NOT 
 ### Prerequisites
 
 - Docker with BuildKit enabled on the local machine
-- `.claude/deploy.env` configured (same as Mode A)
+- `.claude/skills/deploy-production/deploy.env` configured (same as Mode A)
 - Production server architecture must match `DOCKER_PLATFORM` (default: `linux/amd64`)
   - Mac Apple Silicon → cross-compile: `DOCKER_PLATFORM=linux/amd64` (default)
   - Mac ARM server: `DOCKER_PLATFORM=linux/arm64`
@@ -581,7 +581,7 @@ This single target handles:
 Always run after `deploy-remote`. The new image is already loaded:
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} "
   cd ${DEPLOY_REMOTE_DIR} &&
   echo '=== Check migration state ===' &&
@@ -617,7 +617,7 @@ Same as Mode A Step 7.
 After recreating containers, verify the frontend actually contains the new code:
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   echo "=== Search for feature-specific strings in JS bundles ===" &&
   sudo docker exec numina-frontend-main sh -c "grep -rl \"<unique-string-from-your-change>\" /usr/share/nginx/html/assets/*.js 2>/dev/null | head -3"
@@ -699,7 +699,7 @@ Running from `/app/apps/backend` fails because the relative `script_location` re
 ### Mode A Rollback (GHCR — pin to specific SHA)
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT:-22} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} '
   cd ~/data/numina &&
   # Temporarily pin images to previous SHA in .env

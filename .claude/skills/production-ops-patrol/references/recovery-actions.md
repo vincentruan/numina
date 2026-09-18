@@ -96,7 +96,7 @@ python .claude/skills/production-ops-patrol/scripts/state_db.py record-patrol \
 **执行 restart（仅当前三步全部通过）：**
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/production-ops-patrol/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} \
   'sudo docker compose -f docker-compose.production.yml restart <container>'
 ```

@@ -726,8 +726,8 @@ package-images:
 # 传输镜像包 + 配置到远程服务器，加载并部署
 # 注意: DEPLOY_REMOTE_DIR 必须使用绝对路径 (不能用 ~)
 deploy-remote:
-	@test -f .claude/deploy.env || { echo "✗ .claude/deploy.env 不存在 (见 SKILL.md prerequisites)"; exit 1; }
-	@set -a && source .claude/deploy.env && set +a && \
+	@test -f .claude/skills/deploy-production/deploy.env || { echo "✗ .claude/skills/deploy-production/deploy.env 不存在 (见 SKILL.md prerequisites)"; exit 1; }
+	@set -a && source .claude/skills/deploy-production/deploy.env && set +a && \
 	echo "═══════════════════════════════════════════════" && \
 	echo "  部署到远程服务器" && \
 	echo "  目标: $${DEPLOY_SSH_USER}@$${DEPLOY_SSH_HOST}:$${DEPLOY_REMOTE_DIR}" && \

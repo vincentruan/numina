@@ -35,10 +35,14 @@ description: >
 
 ## Prerequisites
 
-复用 deploy-production 的 SSH 配置。若 `.claude/deploy.env` 不存在，提示用户先配置 deploy-production。
+SSH 配置在 `.claude/skills/production-ops-patrol/deploy.env`（gitignored）。若不存在，从 `deploy.env.example` 复制并填写：
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+cp .claude/skills/production-ops-patrol/deploy.env.example .claude/skills/production-ops-patrol/deploy.env
+```
+
+```bash
+set -a && source .claude/skills/production-ops-patrol/deploy.env && set +a
 ```
 
 状态存储：`~/.hermes/state/production-ops-patrol.db`（SQLite，脚本自动创建）。

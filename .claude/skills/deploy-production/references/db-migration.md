@@ -13,7 +13,7 @@ Deploying new code first, then running migrations → new code references column
 
 ```bash
 # Source deploy config (every command block)
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 
 # 1. Check current state
 ssh -p ${DEPLOY_SSH_PORT} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} 'cd $DEPLOY_REMOTE_DIR &&
@@ -41,7 +41,7 @@ The production image's `WORKDIR=/app`, `alembic.ini` at `/app/apps/backend/alemb
 ## Step 1: Check Current State
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} 'cd $DEPLOY_REMOTE_DIR &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
     cd /app && uv run alembic current && uv run alembic heads
@@ -59,7 +59,7 @@ ssh -p ${DEPLOY_SSH_PORT} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} 'cd $DEPLOY_REMO
 ## Step 2: Run Migration
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} 'cd $DEPLOY_REMOTE_DIR &&
   sudo docker compose -f docker-compose.production.yml run --rm --no-deps backend bash -c "
     cd /app && uv run alembic upgrade head 2>&1
@@ -163,7 +163,7 @@ This allows `upgrade head` to run safely on any DB state — fresh, bootstrapped
 After migration, verify no errors in backend logs after restart:
 
 ```bash
-set -a && source .claude/deploy.env && set +a
+set -a && source .claude/skills/deploy-production/deploy.env && set +a
 ssh -p ${DEPLOY_SSH_PORT} ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} 'cd $DEPLOY_REMOTE_DIR &&
   sudo docker compose -f docker-compose.production.yml restart backend &&
   sleep 10 &&
