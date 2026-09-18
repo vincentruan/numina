@@ -3048,6 +3048,7 @@ export default {
     providerAnthropic: 'Anthropic Messages API',
     providerOpenAI: 'OpenAI Responses API',
     providerOpenAICompatible: 'OpenAI Chat Completions (兼容格式)',
+    providerGemini: 'Google Gemini 原生协议',
     validationSelectProvider: '请选择 AI Provider',
     validationApiKeyRequired: '请填写 API Key',
     validationModelIdRequired: '请填写模型 ID',

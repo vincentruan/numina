@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
-_VALID_PROVIDERS = ("anthropic", "openai", "openai_compatible")
+_VALID_PROVIDERS = ("anthropic", "openai", "openai_compatible", "gemini")
 
 
 class AIProviderTestResultResponse(SnowflakeBase):
@@ -88,6 +88,16 @@ class AIConfigCreate(BaseModel):
             raise ValueError(f"provider 必须为 {_VALID_PROVIDERS} 之一")
         return v
 
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None, info) -> str | None:
+        # Gemini uses Google AI Studio's fixed endpoint — base_url is not configurable.
+        # Prevent storing stale/proxied URLs that would be silently ignored by the agent.
+        provider = info.data.get("provider") if hasattr(info, "data") else None
+        if provider == "gemini" and v is not None:
+            raise ValueError("Gemini provider 不支持 base_url")
+        return v
+
 
 class AIConfigUpdate(BaseModel):
     name: str | None = None
@@ -116,6 +126,14 @@ class AIConfigUpdate(BaseModel):
     def validate_provider(cls, v: str | None) -> str | None:
         if v is not None and v not in _VALID_PROVIDERS:
             raise ValueError(f"provider 必须为 {_VALID_PROVIDERS} 之一")
+        return v
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None, info) -> str | None:
+        provider = info.data.get("provider") if hasattr(info, "data") else None
+        if provider == "gemini" and v is not None:
+            raise ValueError("Gemini provider 不支持 base_url")
         return v
 
 
@@ -157,7 +175,7 @@ class ModelInfo(BaseModel):
     """
     name: str  # Model ID (e.g., "claude-sonnet-4-20250514")
     display_name: str  # User-friendly name (e.g., "Claude Sonnet 4")
-    provider: str  # Provider type: "anthropic" | "openai" | "openai_compatible"
+    provider: str  # Provider type: "anthropic" | "openai" | "openai_compatible" | "gemini"
     provider_name: str = ""  # Provider display name (e.g., "Anthropic", "OpenAI")
     supports_thinking: bool = False  # Extended thinking / reasoning capability
     supports_vision: bool = False  # Image input capability

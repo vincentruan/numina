@@ -14,7 +14,7 @@ class AIProviderConfig(CircuitBreakerMixin, Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # 'anthropic' | 'openai' | 'openai_compatible'
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # 'anthropic' | 'openai' | 'openai_compatible' | 'gemini'
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
