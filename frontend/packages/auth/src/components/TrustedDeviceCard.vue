@@ -16,7 +16,14 @@
       </div>
 
       <!-- Avatar -->
+      <img
+        v-if="avatarUrl"
+        class="device-avatar-img"
+        :src="avatarUrl"
+        :alt="displayName"
+      />
       <div
+        v-else
         class="device-avatar"
         :style="{ background: avatarColor }"
         aria-hidden="true"
@@ -47,6 +54,7 @@
 const props = defineProps<{
   displayName: string
   avatarColor: string
+  avatarUrl?: string | null
   loading: boolean
 }>()
 
@@ -117,6 +125,14 @@ const emit = defineEmits<{
 }
 
 /* Avatar */
+.device-avatar-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .device-avatar {
   width: 64px;
   height: 64px;
@@ -168,32 +184,32 @@ const emit = defineEmits<{
 }
 
 /* Light theme overrides */
-:global(.theme-light) .trusted-device-card {
+[data-theme="light"] .trusted-device-card {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-:global(.theme-light) .trusted-device-card:hover {
+[data-theme="light"] .trusted-device-card:hover {
   background: rgba(0, 0, 0, 0.07);
 }
 
-:global(.theme-light) .trusted-device-card:active {
+[data-theme="light"] .trusted-device-card:active {
   background: rgba(0, 0, 0, 0.1);
 }
 
-:global(.theme-light) .device-name {
+[data-theme="light"] .device-name {
   color: #1a1a2e;
 }
 
-:global(.theme-light) .device-hint {
+[data-theme="light"] .device-hint {
   color: rgba(0, 0, 0, 0.4);
 }
 
-:global(.theme-light) .switch-account-btn {
+[data-theme="light"] .switch-account-btn {
   color: rgba(0, 0, 0, 0.5);
 }
 
-:global(.theme-light) .switch-account-btn:hover {
+[data-theme="light"] .switch-account-btn:hover {
   color: rgba(0, 0, 0, 0.8);
 }
 </style>

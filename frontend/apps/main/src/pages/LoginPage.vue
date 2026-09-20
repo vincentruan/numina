@@ -153,6 +153,7 @@
           v-if="trustedUser"
           :display-name="trustedUser.displayName"
           :avatar-color="trustedUser.avatarColor"
+          :avatar-url="trustedUser.avatarUrl"
           :loading="loading"
           class="trusted-card"
           @confirm="focusPinHint"
@@ -327,6 +328,7 @@ const submitting = ref(false)
 interface TrustedUser {
   displayName: string
   avatarColor: string
+  avatarUrl: string | null
 }
 const trustedUser = ref<TrustedUser | null>(null)
 
@@ -432,7 +434,7 @@ async function onStep1Submit() {
       await authStore.fetchMe()
       // fetchMe() succeeded — safe to show success and navigate
       showSuccessToast(t('toast.loginSuccess'))
-      if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
+      authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
       const user = authStore.user
       if (user?.role === 'child') {
         const childBaseUrl = getChildBaseUrl()
@@ -496,12 +498,13 @@ async function onQuickLogin() {
       trustedUser.value = {
         displayName: data.display_name ?? user.displayName,
         avatarColor: data.avatar_color ?? user.avatarColor,
+        avatarUrl: data.avatar_url ?? user.avatarUrl ?? null,
       }
       step.value = 2
     } else {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
-      if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
+      authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
       const authUser = authStore.user
       if (authUser?.role === 'child') {
         const childBaseUrl = getChildBaseUrl()
@@ -548,12 +551,13 @@ async function authenticateWithWebAuthn(user: BoundUser) {
       trustedUser.value = {
         displayName: data.display_name ?? user.displayName,
         avatarColor: data.avatar_color ?? user.avatarColor,
+        avatarUrl: data.avatar_url ?? user.avatarUrl ?? null,
       }
       step.value = 2
     } else {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
-      if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
+      authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
       const authUser = authStore.user
       if (authUser?.role === 'child') {
         const childBaseUrl = getChildBaseUrl()
@@ -622,7 +626,7 @@ async function submitPin() {
       payload: { pin: pinInput.value },
     })
     showSuccessToast(t('toast.loginSuccess'))
-    if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
+    authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
     // Redirect based on user role
     const user = authStore.user
     if (user?.role === 'child') {
@@ -705,7 +709,7 @@ async function submitEmojiPin() {
       payload: { pin_sequence: emojiPin.value },
     })
     showSuccessToast(t('toast.loginSuccess'))
-    if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
+    authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
     const user = authStore.user
     if (user?.role === 'child') {
       const childBaseUrl = getChildBaseUrl()

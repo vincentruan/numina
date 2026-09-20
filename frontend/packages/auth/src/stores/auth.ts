@@ -40,6 +40,12 @@ export const useAuthStore = defineStore('auth', () => {
     await getHttp().post('/auth/login/step2', data)
     await fetchMe()
   }
+
+  /** Show trust-device prompt only when the device isn't already trusted. */
+  function maybeShowTrustPrompt(deviceAlreadyTrusted: boolean) {
+    if (!deviceAlreadyTrusted) showTrustPrompt.value = true
+  }
+
   async function register(data: RegisterRequest) {
     await getHttp().post('/auth/register', data)
     await fetchMe()
@@ -117,5 +123,5 @@ export const useAuthStore = defineStore('auth', () => {
     showTrustPrompt.value = false
   }
 
-  return { user, showTrustPrompt, login, loginStep1, loginStep2, register, joinFamily, fetchMe, fetchChildMe, logout, trustDevice, dismissTrustPrompt }
+  return { user, showTrustPrompt, maybeShowTrustPrompt, login, loginStep1, loginStep2, register, joinFamily, fetchMe, fetchChildMe, logout, trustDevice, dismissTrustPrompt }
 })
