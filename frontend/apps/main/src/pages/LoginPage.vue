@@ -1702,13 +1702,6 @@ async function submitEmojiPin() {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Light mode: captcha disabled pill */
-[data-theme="light"] .altcha-dev-pill {
-  color: rgba(26, 26, 46, 0.5);
-  background: rgba(247, 248, 250, 0.9);
-  border-color: rgba(1, 1, 32, 0.1);
-}
-
 /* Light mode: slogan text shadow for readability over pixel grid */
 [data-theme="light"] .app-subtitle {
   text-shadow: none;

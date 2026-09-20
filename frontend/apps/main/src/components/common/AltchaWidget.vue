@@ -464,3 +464,73 @@ defineExpose({
   }
 }
 </style>
+
+<style>
+/* ─ Light mode overrides (unscoped — scoped [data-theme] selectors are stripped by Vue) ── */
+
+[data-theme="light"] .captcha-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1.5px solid rgba(1, 1, 32, 0.1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: #0a0a0a;
+}
+
+[data-theme="light"] .captcha-card:active {
+  box-shadow: 0 0 0 1px rgba(155, 96, 170, 0.25), 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .captcha-card--verified {
+  box-shadow: 0 0 0 1.5px #07c160;
+}
+
+[data-theme="light"] .captcha-card--error {
+  box-shadow: 0 0 0 1.5px #ee0a24;
+}
+
+[data-theme="light"] .captcha-label__text {
+  color: #0a0a0a;
+}
+
+[data-theme="light"] .captcha-label__text--muted {
+  color: #93939f;
+}
+
+[data-theme="light"] .captcha-label__text--success {
+  color: #07c160;
+}
+
+[data-theme="light"] .captcha-label__text--error {
+  color: #ee0a24;
+}
+
+[data-theme="light"] .captcha-brand__text {
+  color: rgba(1, 1, 32, 0.3);
+}
+
+[data-theme="light"] .checkbox-box {
+  border-color: rgba(1, 1, 32, 0.2);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="light"] .captcha-card:hover .checkbox-box {
+  border-color: rgba(1, 1, 32, 0.4);
+}
+
+[data-theme="light"] .progress-ring__track {
+  stroke: rgba(1, 1, 32, 0.1);
+}
+
+[data-theme="light"] .check-mark {
+  stroke: #fff;
+}
+
+[data-theme="light"] .error-line {
+  stroke: #fff;
+}
+
+[data-theme="light"] .altcha-dev-pill {
+  color: rgba(26, 26, 46, 0.5);
+  background: rgba(247, 248, 250, 0.9);
+  border-color: rgba(1, 1, 32, 0.1);
+}
+</style>
