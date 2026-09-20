@@ -151,7 +151,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { getWish, createWish, updateWish, deleteWish } from '@/api/wishes'
+import { getWish } from '@/api/wishes'
+import { useWishStore } from '@/stores/wish'
 import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
@@ -163,6 +164,7 @@ const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
+const wishStore = useWishStore()
 const authStore = useAuthStore()
 
 const wishId = computed(() => route.params.id as string | undefined)
@@ -213,10 +215,10 @@ async function onSubmit() {
       target_date: form.value.target_date || undefined,
     }
     if (isEdit.value) {
-      await updateWish(wishId.value!, payload)
+      await wishStore.updateWish(wishId.value!, payload)
       showSuccessToast(t('toast.wishSaved'))
     } else {
-      await createWish(payload)
+      await wishStore.createWish(payload)
       showSuccessToast(t('toast.wishAdded'))
     }
     if (!isEdit.value) {
@@ -232,7 +234,7 @@ async function onSubmit() {
 async function onDelete() {
   if (!isEdit.value) return
   await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDeleteIrrevocable') })
-  await deleteWish(wishId.value!)
+  await wishStore.deleteWish(wishId.value!)
   showSuccessToast(t('toast.deleteSuccess'))
   router.back()
 }

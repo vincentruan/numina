@@ -257,7 +257,8 @@ const liabilityStore = useLiabilityStore()
 const currency = useCurrency()
 const { ensureRate } = useExchangeRate()
 
-const wishes = ref<Wish[]>([])
+// Reactive alias to store — picks up createWish/unshift immediately
+const wishes = toRef(wishStore, 'wishes')
 
 // Swipe cell refs for closing after actions (乐观锁: prevent stale open state).
 const swipeRefs = new Map<string, ComponentPublicInstance<{ close: (pos?: string) => void }>>()
@@ -420,10 +421,9 @@ async function onSwipeCopy(wish: Wish) {
   }
 }
 
-/** Re-fetch wishes from store and sync local ref (after mutations). */
+/** Re-fetch wishes from store (local ref follows store reactively). */
 async function refreshWishes() {
   await wishStore.fetchWishes()
-  wishes.value = wishStore.wishes
 }
 
 async function loadWishes() {
