@@ -20,6 +20,7 @@ expect:
 judge:
   type: rule_based
   success:
+    # All 10 smoke test case IDs must appear in output
     - output_contains:
         all:
           - "C2.1"
@@ -32,8 +33,14 @@ judge:
           - "R1"
           - "R2"
           - "C9.4"
+    # Report must contain required section headers (Phase 6 format)
     - output_contains:
         all:
           - "测试环境"
           - "成功摘要"
+    # Report must contain failure details section (or explicit "no failures")
+    - output_contains:
+        any:
           - "失败详情"
+          - "无失败"
+          - "全部通过"

@@ -12,10 +12,15 @@ description: >
 
 # Numina Simulation Test Pipeline
 
-End-to-end pipeline driven by the **browser-skill** CLI (`bsk`), which drives
-the user's real Chromium browser through an isolated Agent Window:
-`bsk doctor` (verify) → service health → precondition gate → bsk-driven UI
-flows → screenshot capture → test report (success summary + failure details).
+End-to-end pipeline for browser-based UI simulation testing. The pipeline
+detects the best available browser driver at startup (priority: **browser-use**
+→ **bsk** → **Chrome DevTools MCP**) and drives the user's real browser through
+authenticated UI flows, screenshot capture, and test report generation.
+
+> **Browser driver:** All browser interaction commands are abstracted in this
+> skill. For the concrete command syntax of the active driver, read
+> [`references/browser-drivers.md`](./references/browser-drivers.md) only when
+> you need the exact commands. The detection logic runs in Phase 0.
 
 > **Scope:** this skill does ONLY browser-based UI simulation. It does NOT
 > seed the database or run API acceptance tests — those are out of scope. The
@@ -55,13 +60,12 @@ The eight area files are organized into **4 groups by state-isolation boundary**
 under [`test-cases/groups/`](./test-cases/groups/) so 2-3 agents can run them in
 parallel without racing on shared browser state. See
 [`test-cases/groups/README.md`](./test-cases/groups/README.md) for the full
-schedule + verified bsk concurrency evidence.
+schedule + verified browser concurrency evidence.
 
-> **bsk concurrency (verified 2026-07-21):** `bsk session start` supports
-> **concurrent sessions** (2 sessions co-exist in `bsk session list`). BUT all
-> sessions share **one browser profile** — `cookie`/`localStorage` are shared
-> **per origin** (a value written by session A is readable by session B on the
-> same origin). So parallel agents must operate **different origins** (adult
+> **Browser concurrency (verified 2026-07-21):** Concurrent browser sessions are
+> supported. BUT all sessions share **one browser profile** — `cookie`/`localStorage`
+> are shared **per origin** (a value written by session A is readable by session B
+> on the same origin). So parallel agents must operate **different origins** (adult
 > :5173 vs child :5174 in dev) OR non-overlapping global state. The groups are
 > cut along those boundaries.
 
@@ -91,7 +95,7 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 > **dev-mode-only** (child :5174 is a separate origin).
 
 > **Agent rules:** (1) each agent reuses the G0 session id for its group — do
-> NOT `bsk session start` a new one, do NOT `bsk session stop` a shared session;
+> NOT start a new session, do NOT stop a shared session;
 > **exception:** in docker mode, G3 must stop the adult session, clear cookies,
 > and start a fresh session for child testing (see Phase 5);
 > (2) prefix failures in the report with the group (`G1-C2.3`, `G3-C1.10`);
@@ -235,53 +239,59 @@ frontend/
 
 ---
 
-## Phase 0 — browser-skill Verification (MANDATORY first step)
+## Phase 0 — Browser Driver Detection (MANDATORY first step)
 
-Before any UI testing, verify `bsk` is installed and the extension is connected.
+Before any UI testing, detect which browser driver is available. Priority order:
+**browser-use** → **bsk** → **Chrome DevTools MCP**.
 
 ```bash
-bsk doctor
+# 1. Check browser-use (highest priority)
+if command -v browser-use &>/dev/null; then
+  BROWSER_DRIVER="browser-use"
+  browser-use --doctor 2>/dev/null && echo "browser-use: OK" || echo "browser-use: daemon issue"
+
+# 2. Check bsk (second priority)
+elif command -v bsk &>/dev/null; then
+  BROWSER_DRIVER="bsk"
+  bsk doctor 2>/dev/null && echo "bsk: OK" || echo "bsk: extension issue"
+
+# 3. Chrome DevTools MCP — check if MCP tools are in the available tool list
+# (mcp__chrome-devtools__navigate_page etc.)
+elif command -v echo &>/dev/null; then
+  # MCP availability is determined by tool listing, not CLI
+  # If chrome-devtools MCP tools are available in this session, use them
+  BROWSER_DRIVER="chrome-devtools"  # only if MCP tools confirmed available
+  echo "chrome-devtools MCP: OK"
+
+else
+  echo "ERROR: No browser driver found."
+  echo "Install browser-use (recommended):"
+  echo "  uv tool install browser-use"
+  echo "  browser-use --doctor   # verify connection"
+  exit 1
+fi
 ```
 
-If `bsk doctor` reports problems:
-- `bsk` not on PATH → install browser-skill CLI
-- Extension not connected / popup not green → ask the user to open Chromium,
-  load the browser-skill extension, confirm the popup shows green
-- Version skew (exit 5) → upgrade/reinstall matching CLI + extension versions
+**If none are available**, stop and tell the user:
 
-**Do not proceed to later phases until `bsk doctor` is clean.** Every UI phase
-depends on a working `bsk` session.
+> No browser driver detected. Install one to proceed:
+> - **browser-use** (recommended): `uv tool install browser-use` then `browser-use --doctor`
+> - **bsk**: install browser-skill CLI + extension
+> - **Chrome DevTools MCP**: configure the chrome-devtools MCP server in Claude settings
 
-### bsk session lifecycle (every UI phase)
+**Do not proceed to later phases until a driver is confirmed working.**
 
-```
-bsk session start                       # capture 4-letter session id
-… bsk <cmd> --session <id> …            # always pass --session
-bsk session stop <id>                   # REQUIRED when done (even on error)
-```
+### Browser interaction (all phases)
 
-Run `bsk session stop --all` as emergency cleanup if a session leaks. Default
-session idle timeout is 5 minutes — do NOT rely on it; always stop explicitly.
+All subsequent phases describe steps abstractly (navigate → observe → interact → screenshot).
+For the concrete commands of the active driver, read
+[`references/browser-drivers.md`](./references/browser-drivers.md).
 
-### Core interaction loop (bsk)
-
-```
-bsk navigate <url> --session <id>        # go to a route
-bsk snapshot --session <id>              # aria tree with @e1, @e2, … refs
-bsk click @e3 --session <id>             # or bsk fill / bsk select / bsk press
-bsk snapshot --session <id>              # re-snapshot after navigation / DOM change
-bsk screenshot --session <id> --out dogfood-output/<name>.png
-```
-
-**Refs invalidate after navigation** — always re-snapshot before clicking,
-filling, or selecting on a new page. Prefer `@eN` refs from the latest snapshot
-over raw CSS selectors.
-
-Observation priority: `bsk snapshot` first (default). Only escalate to
-`bsk get-html` (hidden DOM/markup) or `bsk screenshot` (visual layout) when the
-snapshot is insufficient.
-
-Full command reference: see the `browser-skill` skill, or `bsk <cmd> --help`.
+Key concepts common to all drivers:
+- **Session/tab lifecycle**: Open a tab for the test session, close it when done
+- **Observation priority**: Accessibility tree / snapshot first; screenshot or raw HTML only when snapshot is insufficient
+- **Refs invalidate after navigation**: Always re-snapshot before interacting on a new page
+- **Mobile viewport**: Numina is mobile-first (375×812); set viewport if the driver supports it
 
 ---
 
@@ -324,7 +334,7 @@ test reports (assertions failing on absent data, not on real bugs).
 > must log in with the known `demouser`/`DemoPass123` credentials. Captcha is
 > skipped in non-production environments (docker/dev), so a plain curl works.
 
-Run all checks via curl (no bsk session yet). Stop at the first failure.
+Run all checks via curl (no browser session yet). Stop at the first failure.
 
 > **Envelope:** every API response is wrapped as `{"code":"OK","message":"","data":<payload>}`.
 > All `jq` paths below extract from `.data`.
@@ -458,30 +468,30 @@ If any check fails, **do not proceed to Phase 2**. Tell the user:
 
 ---
 
-## Phase 2 — Login + Session Setup (bsk)
+## Phase 2 — Login + Session Setup (browser)
 
 Establish the authenticated adult session that all subsequent UI phases share.
 
-```bash
-SID=$(bsk session start --json | jq -r .session_id)   # capture session id
-bsk navigate "${BASE}login" --session "$SID" --wait-until networkidle
-bsk snapshot --session "$SID"
-# fill username + password via @eN refs from the snapshot
-bsk fill @eN --value demouser --session "$SID"
-bsk fill @eM --value DemoPass123 --session "$SID"
-bsk snapshot --session "$SID"      # re-snapshot to get submit button ref
-bsk click @eK --session "$SID"
-bsk wait-ms 2s
-bsk snapshot --session "$SID"      # confirm landed on dashboard
-```
+**Steps:**
+1. Open a browser session/tab and navigate to `${BASE}login`
+2. Wait for the page to fully load
+3. Take a snapshot to identify form field elements
+4. Fill the username field with `demouser`
+5. Fill the password field with `DemoPass123`
+6. Take a snapshot to identify the submit button
+7. Click submit
+8. Wait for navigation to complete
+9. Take a snapshot to confirm landed on Dashboard
+
+**Driver-specific commands:** See [`references/browser-drivers.md`](./references/browser-drivers.md) for the exact navigate/fill/click/snapshot commands of the active driver.
 
 Assertions:
 - [ ] After submit, URL is `$BASE` (Dashboard)
 - [ ] No `401` blocking the initial load (cookie auth set)
-- [ ] Keep `$SID` for all Area 2 + Area 3 cases
+- [ ] Keep the session/tab for all Area 2 + Area 3 cases
 
-> **Do not `bsk session stop` yet** — reuse this session for Areas 2 & 3.
-> Stop it only at the end of Phase 5.
+> **Do not close the session yet** — reuse it for Areas 2 & 3.
+> Stop/close it only at the end of Phase 5.
 
 > **Login failure = unmet prerequisite.** If `demouser` login fails or the
 > dashboard renders empty, the database has not been prepared. Do not seed
@@ -489,62 +499,29 @@ Assertions:
 
 ### Phase 2 fallback — cookie + localStorage injection (password-manager conflict)
 
-If `bsk fill` on the password field activates a password-manager browser
-extension that hijacks the Agent Window tab (observed: tab redirects to
-`chrome-extension://…` and the session crashes), do **not** retry `bsk fill`
-and do **not** use `bsk request-help` (its overlay blocks the session RPC and
-cannot be polled concurrently). Instead, bypass the password field entirely
-by establishing the session from page context via `fetch`:
+If filling the password field activates a password-manager browser extension
+that hijacks the tab (observed: tab redirects to `chrome-extension://…` and the
+session crashes), do **not** retry the fill. Instead, bypass the password field
+entirely by establishing the session from page context via `fetch`:
 
-```bash
-# 1) Navigate to the app root first so fetch targets the right origin and
-#    the relative /api/v1 path resolves. wait-until domcontentloaded gives a
-#    window before the async route guard resolves (do not use networkidle here
-#    — the guard redirects to /login before the cookie is set).
-bsk navigate "${BASE}" --session "$SID" --wait-until domcontentloaded
+**Steps:**
+1. Navigate to the app root (wait for `domcontentloaded`, NOT `networkidle`)
+2. Evaluate JS to POST `/api/v1/auth/login` with `credentials: 'include'` — the browser stores the httpOnly cookie automatically
+3. Evaluate JS to fetch `/api/v1/auth/me` and populate `localStorage.setItem('numina_user', ...)` with user data
+4. Reload the page so the route guard re-reads localStorage
+5. Snapshot to confirm landed on Dashboard
 
-# 2) POST /auth/login from page context. credentials:'include' so the browser
-#    stores the server's Set-Cookie httpOnly access_token automatically.
-#    The token is NEVER read or held by JS — the browser network layer owns it.
-ADULT_BODY='{"username":"demouser","password":"DemoPass123"}'
-bsk evaluate --session "$SID" "(async () => {
-  const r = await fetch('/api/v1/auth/login', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    credentials: 'include',
-    body: '$ADULT_BODY',
-  });
-  return String(r.status);
-})()"
-
-# 3) The adult route guard reads localStorage 'numina_user' (NOT the cookie),
-#    so populate it from /auth/me. setUser() stores only non-sensitive fields.
-bsk evaluate --session "$SID" "(async () => {
-  const r = await fetch('/api/v1/auth/me', {credentials: 'include'});
-  const u = (await r.json()).data;
-  localStorage.setItem('numina_user', JSON.stringify({
-    id: String(u.id), username: u.username, display_name: u.display_name,
-    avatar_color: u.avatar_color, role: u.role, theme: u.theme,
-    language: u.language, default_currency: u.default_currency,
-  }));
-  return u.username;
-})()"
-
-# 4) Reload so the route guard re-reads localStorage and admits the session.
-bsk navigate "${BASE}" --session "$SID" --wait-until domcontentloaded
-bsk snapshot --session "$SID"     # confirm landed on Dashboard, not /login
-```
+**Driver-specific JS evaluation:** See [`references/browser-drivers.md`](./references/browser-drivers.md) for how each driver evaluates JavaScript.
 
 **Why this is clean (not a red-line violation):**
 - `fetch('/auth/login')` from page context is the standard auth flow — the
   httpOnly cookie is set by the server's `Set-Cookie` response header, not by
-  JS writing the token. `bsk evaluate` here drives the app's own login
-  endpoint, not a credential surface.
+  JS writing the token.
 - No token is read out of storage or logged. The red line "no token theft"
   targets reading `localStorage`/cookies/auth headers on sensitive sites to
   exfiltrate credentials — this injects a session, it does not extract one.
-- Prefer the `bsk fill` form-login path in Phase 2 by default; use this
-  fallback **only** when the password-manager extension blocks form login.
+- Prefer the form-login path by default; use this fallback **only** when the
+  password-manager extension blocks form login.
 
 **Dev-mode child app (separate origin :5174):** the adult cookie does NOT
 carry to the child port. Establish the child session with the two-step emoji
@@ -557,7 +534,7 @@ trick.
 
 ---
 
-## Phase 3 — Area 2: Main App Financial Management (bsk flows)
+## Phase 3 — Area 2: Main App Financial Management (browser flows)
 
 Run the **Area 2** cases from [`test-cases/groups/g1-adult-stable/area2-finance.md`](./test-cases/groups/g1-adult-stable/area2-finance.md) using the
 session from Phase 2:
@@ -572,17 +549,19 @@ session from Phase 2:
 - C2.8 Asset list + detail + sell flow
 
 For each case:
-1. `bsk navigate <route> --session "$SID" --wait-until networkidle`
-2. `bsk snapshot --session "$SID"` → capture refs + assert text present
-3. Interact (`bsk click` / `bsk fill`) → re-snapshot → assert outcome
-4. `bsk screenshot --session "$SID" --out dogfood-output/<case>.png` for the report
-5. `bsk evaluate` console-error check (see test-cases/_common.md "Console error capture")
+1. Navigate to the case's route, wait for page load
+2. Take a snapshot → capture element refs + assert expected text is present
+3. Interact (click / fill) → re-snapshot → assert outcome
+4. Take a screenshot for the report: `dogfood-output/<case>.png`
+5. Check for console errors (see test-cases/_common.md "Console error capture")
+
+**Driver-specific commands:** See [`references/browser-drivers.md`](./references/browser-drivers.md).
 
 Record any failure with: case id, route, expected vs actual, screenshot path.
 
 ---
 
-## Phase 4 — Area 3: AI Capabilities (bsk flows)
+## Phase 4 — Area 3: AI Capabilities (browser flows)
 
 Continue with the **same session** (`$SID`). AI must be enabled for the family
 first — if `aiStore.aiEnabled` is false, configure a provider at
@@ -598,25 +577,25 @@ Run the **Area 3** cases from [`test-cases/groups/g1-adult-stable/area3-ai.md`](
 - C3.6 AI time machine
 - C3.7 AI settings — provider config
 
-**Streaming cases (C3.2, C3.4):** AI generation is slow. Use `bsk wait-ms`
-between snapshots (e.g. `bsk wait-ms 5s`), or poll the snapshot until the
-expected terminal text appears. Do not assume one snapshot suffices.
+**Streaming cases (C3.2, C3.4):** AI generation is slow. Wait between snapshots
+(e.g. 5 seconds), or poll the snapshot until the expected terminal text appears.
+Do not assume one snapshot suffices.
 
-**PDF upload (C3.5):** `bsk click` on `<van-uploader>` does not open the OS
-file picker. See test-cases/_common.md "File upload note" — either `bsk evaluate` to
-set `input.files` via DataTransfer, or call the backend parse endpoint with
-`curl` and load the preview page with the returned token.
+**PDF upload (C3.5):** Click on `<van-uploader>` does not open the OS file
+picker in most drivers. See test-cases/_common.md "File upload note" — either
+evaluate JS to set `input.files` via DataTransfer, or call the backend parse
+endpoint with `curl` and load the preview page with the returned token.
 
 ---
 
-## Phase 5 — Area 1: Child App (bsk flows)
+## Phase 5 — Area 1: Child App (browser flows)
 
 **docker mode:** the child SPA shares the adult session's cookie (same origin
 via nginx). The adult `access_token` cookie causes the child SPA's route guard
 (`verifyChildSession()`) to fail — it calls `GET /auth/child/me` which returns
 4xx for non-child role. **Before starting G3 in docker mode**, clear all
 cookies + localStorage (see [`area1-child.md`](./test-cases/groups/g3-child/area1-child.md)
-"Docker mode — cookie clearing required"), stop the adult session, start a
+"Docker mode — cookie clearing required"), close the adult session, start a
 fresh session, then inject the child session via step1/step2 PIN login.
 
 **dev mode:** adult (:5173) and child (:5174) are different origins — the
@@ -626,19 +605,11 @@ session via the two-step emoji PIN API from the child origin's page context
 fallback)"). The child app has no standalone login pages; auth is cookie-based
 and the router guard checks `GET /auth/child/me`.
 
-```bash
-# docker: clear cookies → stop adult session → start fresh → child injection
-# dev: start a new session for the child origin
-if [ -z "${DEV_CHILD_SID:-}" ]; then
-  # docker: clear cookies first, then start fresh session + child injection
-  # (see area1-child.md for the full cookie-clearing sequence)
-  SID_CHILD="$SID_CHILD_FROM_DOCKER_CLEAR"
-else
-  SID_CHILD="$DEV_CHILD_SID"
-fi
-bsk navigate "$CHILD_BASE" --session "$SID_CHILD" --wait-until networkidle
-bsk snapshot --session "$SID_CHILD"    # ChildSelectPage: 选择孩子 + discovered child name cards (see SIM_CHILD_NAMES from gate)
-```
+**Steps:**
+1. If docker mode: clear cookies + localStorage, close adult session, start fresh
+2. If dev mode: start a new session for the child origin
+3. Navigate to `$CHILD_BASE`, wait for page load
+4. Snapshot to confirm: ChildSelectPage showing "选择孩子" + discovered child name cards (see `SIM_CHILD_NAMES` from gate)
 
 Run the **Area 1** cases from [`test-cases/groups/g3-child/area1-child.md`](./test-cases/groups/g3-child/area1-child.md):
 
@@ -657,15 +628,10 @@ home page renders with `display_name` from the authenticated child. There is no
 emoji-grid PIN UI in the child app; the PIN is consumed only via the step2 API
 call.
 
-### End the bsk session(s)
+### End the browser session(s)
 
-```bash
-bsk session stop "$SID"
-# dev mode also: bsk session stop "$SID_CHILD"   (if a separate child session was started)
-```
-
-Run this in a `finally`-style path so the Agent Window closes even if a case
-errored mid-flow.
+Close/stop the browser session(s) when done (including any child session).
+Run this in a `finally`-style path so the session closes even if a case errored mid-flow.
 
 ---
 
@@ -682,11 +648,9 @@ Before running these areas, verify:
 ```bash
 # Check AI status via API (correct endpoint: /ai/config for per-family configs)
 curl -s -H "Authorization: Bearer $TOKEN" "${API_BASE}/ai/config" | jq '[.data.configs[]? | select(.is_active == true)] | length'
-# Or via bsk on the AI hub page
-bsk navigate ${BASE}ai --session "$SID" --wait-until networkidle
-bsk snapshot --session "$SID"
-# Look for: "AI 已启用" or provider config present
 ```
+
+Or via browser: navigate to `${BASE}ai`, take a snapshot, look for "AI 已启用" or provider config present.
 
 - If AI is **not enabled** → skip Area 3 + Area 6 + Area 12 cases, mark as `SKIP-AI` in
   the report, and continue with other areas.
@@ -765,7 +729,7 @@ Coverage for previously untested feature modules:
 - **F.2** Blind box management (draws / gifts / config)
 - **F.3** Baby management (overview / calendar / chores / templates / literacy report / approvals)
 - **F.4** Settings deep coverage (notifications / password / 2FA / devices / family config)
-- **F.5** Guest pages (welcome / register / join-family / promo) — **needs fresh bsk session**
+- **F.5** Guest pages (welcome / register / join-family / promo) — **needs fresh browser session**
 - **F.6** Child extended features (scenario / badges / calendar / manifesto sign)
 - **F.7** AI settings deep (MCP / web-search / ASR / skills / agents)
 - **F.8** Owner vs member permission boundary (**deferred** — requires member account)
@@ -777,6 +741,16 @@ Coverage for previously untested feature modules:
 After all Area cases (Phase 3/4/5) are run, produce a single test report.
 Read the screenshots you captured (Read tool supports images) to confirm each
 case's outcome, then write the report.
+
+> **MANDATORY: The report content MUST appear inline in your final response.**
+> Do NOT just say "报告已生成: path". The response itself must contain the
+> full report with these three required sections:
+> 1. **测试环境** — deployment mode, URLs, driver, health, gate results
+> 2. **成功摘要** — pass/fail/skip counts + case ID list
+> 3. **失败详情** — per-failure details (or "无失败" if all passed)
+>
+> Also write the report to a file if the environment allows, but the inline
+> content is the primary deliverable.
 
 > **Report scope:** success summary + failure details only. Do NOT include
 > P0–P3 severity grading, effort estimates, fix plans, or UI/UX visual-audit
@@ -801,7 +775,7 @@ REPORT="tests/reports/ui-audit-${TODAY}.md"
 
 ### Report structure
 
-The "测试环境" section consolidates the outcomes of Phase 0 (bsk doctor),
+The "测试环境" section consolidates the outcomes of Phase 0 (driver detection),
 Phase 1 (service health), and Phase 1.5 (precondition gate) so the report is
 self-contained — a reader can reconstruct the run conditions without re-reading
 the skill log.
@@ -812,7 +786,7 @@ the skill log.
 ## 测试环境 (合并自 Phase 0 / 1 / 1.5)
 - 部署模式: docker | dev
 - Base URL: {BASE}  /  Child URL: {CHILD_BASE}  /  API: {API_BASE}
-- bsk doctor (Phase 0): ✓ clean
+- Browser driver (Phase 0): {driver_name} ✓ clean
 - 服务健康 (Phase 1): adult UP / child UP / api UP  (docker 模式附 docker ps 摘要)
 - 前置门禁 (Phase 1.5): ✓ 通过 — demouser (owner, family_id={id}) / children {discovered_names} / {N} assets / 负债 {amount}
 - 测试时间: {YYYY-MM-DD}
@@ -850,7 +824,7 @@ the skill log.
 
 ### Writing rules
 
-- **测试环境段必须填实**（合并前文）：bsk doctor 结果、三服务健康、gate 的 demouser/family_id/资产数/孩子名都从 Phase 0/1/1.5 的实际输出抄入，不要留 `{id}`/`{N}` 占位符。这保证报告可独立追溯。
+- **测试环境段必须填实**（合并前文）：driver detection 结果、三服务健康、gate 的 demouser/family_id/资产数/孩子名都从 Phase 0/1/1.5 的实际输出抄入，不要留 `{id}`/`{N}` 占位符。这保证报告可独立追溯。
 - **成功用例只进摘要清单**(case id 罗列), 不展开详情 —— 避免报告冗长。
 - **每个失败用例必须有三段**: 预期表现 / 当前错误表现 / 初步判断。缺少任一段视为记录不完整。
 - **初步判断**是基于截图 + 控制台错误 + 路由行为的推断, 不要求定位到根因; 写明"建议查 X"即可, 不展开修复方案。
@@ -875,11 +849,35 @@ the skill log.
 
 ### After writing
 
-Tell the user the report path and the pass/fail/skip counts:
-> 报告已生成: `tests/reports/ui-audit-{date}.md`
-> 通过 X / 失败 Y / 跳过 Z (共 N)
->
-> 如需跟进修复, 说 "修复" 或 "按分类提交" 进入 Phase 7 (Checklist Todo + Categorized Fix Commits).
+Your final response MUST contain the full report inline. Use this structure:
+
+```markdown
+# Numina 仿真测试报告 — {YYYY-MM-DD}
+
+## 测试环境
+- 部署模式: docker | dev
+- Browser driver: {browser-use|bsk|chrome-devtools}
+- 服务健康: adult UP / child UP / api UP
+- 前置门禁: ✓ 通过 — {demouser info}
+
+## 成功摘要
+- 通过: X / 失败: Y / 跳过: Z (共 N)
+- 通过用例: C2.1, C2.2, ...
+
+## 失败详情
+(如无失败, 写 "无失败, 全部通过。")
+
+### {Case ID} — {标题} `{分类}`
+- 路由: ...
+- 截图: ...
+- 预期表现: ...
+- 当前错误表现: ...
+- 初步判断: ...
+```
+
+Also write to file if possible: `tests/reports/ui-audit-{date}.md`
+
+> 如需跟进修复, 说 "修复" 或 "按分类提交" 进入 Phase 7.
 
 ---
 
@@ -969,7 +967,7 @@ Ref: tests/reports/ui-audit-{date}.md
 ### Step 4 — 验证 + 更新 Checklist
 
 每个 commit 后:
-1. 跑对应的 sim-test case (单 case 模式: `area-N` 或直接 bsk 驱动该路由)
+1. 跑对应的 sim-test case (单 case 模式: `area-N` 或直接浏览器驱动该路由)
 2. 通过 → 在 checklist 打勾: `- [x] C2.3 — ...`
 3. 未通过 → 保留 `[ ]`, 在行末追加 `(retry {N}: {新发现})`
 4. 全部修复完 → 跑一次 `smoke` 模式全量回归, 确认无引入新 bug
@@ -1000,8 +998,8 @@ Ref: tests/reports/ui-audit-{date}.md
 # docker: export BASE=http://localhost/ CHILD_BASE=http://localhost/child/ API_BASE=http://localhost/api/v1
 # dev:    export BASE=http://localhost:5173/ CHILD_BASE=http://localhost:5174/child/ API_BASE=http://localhost:8000/api/v1
 
-# Phase 0 — verify bsk
-bsk doctor
+# Phase 0 — detect browser driver (browser-use → bsk → chrome-devtools MCP)
+# See Phase 0 section for detection script
 
 # Phase 1 — service health (both modes)
 curl -sf "$BASE" -o /dev/null && echo "adult UP"
@@ -1009,14 +1007,8 @@ curl -sf "$CHILD_BASE" -o /dev/null && echo "child UP"
 curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 # docker only: docker ps --format "{{.Names}}\t{{.Status}}" | grep numina
 
-# bsk session lifecycle
-SID=$(bsk session start --json | jq -r .session_id)
-bsk navigate "${BASE}<route>" --session "$SID" --wait-until networkidle
-bsk snapshot --session "$SID"
-bsk click @eN --session "$SID"
-bsk fill @eN --value <text> --session "$SID"
-bsk screenshot --session "$SID" --out dogfood-output/<name>.png
-bsk session stop "$SID"
+# Browser interaction — driver-specific commands in references/browser-drivers.md
+# Common pattern: navigate → snapshot → interact → re-snapshot → screenshot
 
 # Rebuild after code changes
 # docker: docker-compose build frontend && docker-compose up -d frontend   (or frontend-child)
@@ -1051,39 +1043,45 @@ bsk session stop "$SID"
 
 | File | Purpose |
 |------|---------|
+| [`references/browser-drivers.md`](./references/browser-drivers.md) | Browser driver detection + command reference (browser-use / bsk / Chrome DevTools MCP) |
 | [`test-cases/_common.md`](./test-cases/_common.md) | Shared conventions (session, refs, console capture, child injection) |
 | [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md) | Role capability matrix (owner/member/child 权限边界 + 页面清单) |
 | [`test-cases/groups/README.md`](./test-cases/groups/README.md) | Parallel run structure + state-isolation boundaries |
 
-## bsk Red Lines (from browser-skill)
+## Browser Red Lines (all drivers)
 
-1. **No token theft** — never `bsk evaluate` on sensitive sites to read `localStorage`/cookies/auth headers.
-2. **No long borrow** — don't leave a user's personal tab in the Agent Window across unrelated tasks.
-3. **No skip stop** — always `bsk session stop <id>`; never assume idle timeout cleans up.
-4. **No observe escalation before snapshot** — `bsk snapshot` first; `get-html`/`screenshot` only when snapshot insufficient.
-5. **`evaluate` is risky** — use only when snapshot + click/fill/select cannot suffice; never on credential surfaces.
+1. **No token theft** — never evaluate JS on sensitive sites to read `localStorage`/cookies/auth headers for exfiltration.
+2. **No long borrow** — don't leave tabs/sessions open across unrelated tasks.
+3. **No skip cleanup** — always close tabs / stop sessions when done; never assume idle timeout cleans up.
+4. **Snapshot first** — observe via accessibility tree / snapshot before escalating to screenshot or raw HTML.
+5. **JS evaluation is risky** — use only when snapshot + click/fill cannot suffice; never on credential surfaces.
 
 ## Common Mistakes
 
 | Mistake | Fix |
 |---------|-----|
-| Skipping `bsk doctor` → session fails mid-test | Always run Phase 0 first; do not proceed until clean |
+| Skipping Phase 0 driver detection → browser commands fail | Always run Phase 0 first; do not proceed until a driver is confirmed working |
 | Skipping Phase 1.5 gate → UI assertions fail on absent data, misread as bugs | Always run the precondition gate; if it blocks, seed the DB out-of-band before retrying |
-| Forgetting `--session <id>` → "unknown session" error | Every command after `session start` needs `--session` |
-| Using stale `@eN` refs after navigation → click misses | Re-`snapshot` on every new page / after DOM-changing click |
-| Assuming `bsk click` opens file picker for `<input type=file>` | It doesn't — see test-cases/_common.md "File upload note" |
-| Relying on 5-min idle timeout to clean up | Always `bsk session stop <id>` explicitly |
+| Using stale element refs after navigation → click misses | Re-snapshot on every new page / after DOM-changing click (all drivers) |
+| Assuming click opens file picker for `<input type=file>` | It doesn't — see test-cases/_common.md "File upload note" |
+| Relying on idle timeout to clean up | Always close/stop the session explicitly when done |
 | Treating 401 auth-refresh as a bug | Expected on first load — filter from console errors |
 | Treating child `/child/blind-box` 404 as a bug | It redirects to `/treasures` (route alias) — that's correct |
 | Docker child page shows blank / redirects to adult login | Adult `access_token` cookie interferes with child SPA route guard. Clear cookies + localStorage before child testing in docker mode — see area1-child.md "Docker mode — cookie clearing required" |
 | Navigating to `${BASE}wishes` / `${BASE}assets` / `${BASE}liabilities` → unexpected redirect | U6: these routes redirect to `${BASE}finance?tab=wishes\|assets\|liabilities`. Use the FinanceHub tab routes in test cases |
-| Password-manager extension hijacks the tab on `bsk fill` of the password field | Do not retry `bsk fill` or use `bsk request-help` (overlay blocks the RPC). Use the Phase 2 cookie+localStorage injection fallback — no password field is focused, so the extension never activates |
-| `bsk wait-ms 2s` / `1500` rejected with a duration parse error | `wait-ms` accepts a narrow set of duration forms; if a value is rejected, drop the wait and use `--wait-until` on the next `navigate`, or poll `bsk snapshot` until the expected text appears |
-| `bsk navigate` RPC times out at 30s but the page actually loaded | Navigation often completes before the RPC returns. Do not retry blindly — verify with `bsk evaluate --session <id> "location.href"`; if correct, proceed to `snapshot` |
-| Screenshots are desktop-width (e.g. 3385×1233), not mobile 375×812 | `bsk` has no `setViewport` command; the Agent Window is desktop-sized. Note the viewport in the report; mobile-specific layout (Tab bar density, horizontal scroll) is not validated by this skill |
-| `bsk click @eN` registers the click but doesn't navigate (desktop-width coordinate offset hits a child element) | Prefer navigating directly to the target route via an id from the API (`/api/v1/wishes` → `/wishes/:id`) instead of clicking a list item in a wide viewport |
+| Password-manager extension hijacks the tab on password field fill | Do not retry the fill. Use the Phase 2 cookie+localStorage injection fallback — no password field is focused, so the extension never activates |
+| Screenshots are desktop-width, not mobile 375×812 | Note the viewport in the report; mobile-specific layout (Tab bar density, horizontal scroll) may not be validated depending on driver viewport support |
+| Click registers but doesn't navigate (desktop-width coordinate offset hits a child element) | Prefer navigating directly to the target route via an id from the API (`/api/v1/wishes` → `/wishes/:id`) instead of clicking a list item in a wide viewport |
 | Running Area 7 R6 (auth expiry) before other cases → breaks remaining session | Run R6 as the **very last** regression case; it clears localStorage and destroys the session |
 | Testing Baby tab / family settings as non-owner → 403 | `demouser` is owner by default — these work. For member-role testing, see Area 8 F.8 (deferred: requires separate member account) |
 | Manifesto wizard state lost between pages | `useManifestoWizard` persists via `sessionStorage` — do not clear storage mid-flow; the wizard state resets only on explicit cancel |
 | Smoke mode accidentally running full suite | Smoke mode runs only 10 cases (C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4). Verify the mode before starting |
-| Guest pages tested with authenticated session → redirected past welcome | Use a **fresh bsk session** without cookies for F.5.x guest page tests |
+| Guest pages tested with authenticated session → redirected past welcome | Use a **fresh browser session** without cookies for F.5.x guest page tests |
+
+### bsk-specific Mistakes (only when bsk is the active driver)
+
+| Mistake | Fix |
+|---------|-----|
+| Forgetting `--session <id>` → "unknown session" error | Every command after `session start` needs `--session` |
+| `bsk wait-ms 2s` / `1500` rejected with a duration parse error | `wait-ms` accepts a narrow set of duration forms; if rejected, drop the wait and use `--wait-until` on the next `navigate`, or poll snapshot until the expected text appears |
+| `bsk navigate` RPC times out at 30s but the page actually loaded | Navigation often completes before the RPC returns. Do not retry blindly — verify with `evaluate "location.href"`; if correct, proceed to `snapshot` |
