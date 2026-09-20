@@ -313,6 +313,7 @@ def validate_import_parse_json(data: dict | None) -> list[str]:
 
     Schema: ``{source: string, report_date: string|null, items: [{name, ...}]}``
     Each item must have at least a ``name`` field.
+    Supports both financial holdings and shopping receipt items.
     """
     if not isinstance(data, dict):
         return ["import-parse JSON 不是有效的对象"]
@@ -321,6 +322,8 @@ def validate_import_parse_json(data: dict | None) -> list[str]:
 
     if "source" not in data:
         errors.append("缺少必填字段 'source'")
+    if "items" not in data:
+        errors.append("缺少必填字段 'items'")
 
     items = data.get("items")
     if items is not None and not isinstance(items, list):
@@ -334,9 +337,14 @@ def validate_import_parse_json(data: dict | None) -> list[str]:
                 continue
             if not item.get("name"):
                 errors.append(f"items[{idx}] 缺少必填字段 'name'")
+            # Financial items: current_value must be number if present.
             cv = item.get("current_value")
             if cv is not None and not isinstance(cv, (int, float)):
                 errors.append(f"items[{idx}].current_value 必须是数字")
+            # Physical items: purchase_price must be number if present.
+            pp = item.get("purchase_price")
+            if pp is not None and not isinstance(pp, (int, float)):
+                errors.append(f"items[{idx}].purchase_price 必须是数字")
 
     return errors
 
@@ -608,17 +616,22 @@ _IMPORT_PARSE_REPAIR_PROMPT = (
     "Please re-output a valid JSON that strictly conforms to the following "
     "structure (do NOT include any markdown code blocks, explanations, or "
     "extra content):\n"
-    '{"source": "<string: document source name>",\n'
+    '{"source": "<string: document source or platform>",\n'
     ' "report_date": "<YYYY-MM-DD or null>",\n'
     ' "items": [\n'
-    '   {"name": "<item name>", "asset_type": "<string>", '
-    '"category_hint": "<string>", "current_value": <number>, '
-    '"currency": "<3-letter code>", "quantity": <number or null>}\n'
-    "]}\n\n"
+    '   {"name": "<item name>", "asset_type": "financial|physical", '
+    '"category_hint": "<string>", "current_value": <number|null>, '
+    '"purchase_price": <number|null>, '
+    '"currency": "<3-letter code>", "quantity": <number or null>, '
+    '"source_platform": "<string or empty>"}\n'
+    "]\n}\n\n"
     "Requirements:\n"
     "- items must be non-empty\n"
     "- each item MUST have a 'name' field\n"
-    "- current_value must be a number\n"
+    "- asset_type must be 'financial' (holdings) or 'physical' (purchased items)\n"
+    "- financial: set current_value (market value), purchase_price=null, source_platform=''\n"
+    "- physical: set purchase_price (amount paid), current_value=null, source_platform=platform name\n"
+    "- current_value and purchase_price must be numbers or null\n"
     "- Output ONLY the JSON itself."
 )
 

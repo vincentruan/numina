@@ -414,6 +414,7 @@ class RunPipeline:
                     self.app_name,
                     self.run_id,
                     self._error_type,
+                    exc_info=True,
                 )
                 await self.run_manager.set_status(
                     self.run_id, RunStatus.error, error=str(exc_val)

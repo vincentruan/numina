@@ -1077,7 +1077,7 @@ async def _run_import_parse_agent(
                 app_name="_run_import_parse_agent",
             )
 
-            # Final fallback: standalone LLM extraction
+            # Final fallback: standalone LLM extraction (only when repair failed)
             if parsed is not None and validate_import_parse_json(parsed):
                 fallback = await extract_json_via_llm(
                     p.ai_text, _IMPORT_PARSE_REPAIR_PROMPT, p.selected_provider,
@@ -1085,7 +1085,7 @@ async def _run_import_parse_agent(
                 if fallback is not None and not validate_import_parse_json(fallback):
                     parsed = fallback
 
-            if parsed is not None and not validate_import_parse_json(parsed):
+            if parsed is not None and validate_import_parse_json(parsed):
                 logger.error(
                     "[_run_import_parse_agent] import-parse JSON validation failed "
                     "after %d retries + fallback run=%s errors=%s",

@@ -123,7 +123,7 @@ class TestParseEndpoint:
         data = _unwrap(resp.json())
         assert data["items"] == []
         assert data["message"] is not None
-        assert "未在文件中识别到财务数据" in data["message"]
+        assert "未在文件中识别到资产数据" in data["message"]
 
     def test_parse_file_too_large(self, client, auth_headers, db):
         """POST /parse with oversized Excel returns 413."""

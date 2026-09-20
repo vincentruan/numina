@@ -7,9 +7,12 @@ export interface ImportPreviewItem {
   asset_type: string
   category_hint: string
   current_value: number | null
+  purchase_price: number | null  // Shopping receipt: purchase price
   currency: string
   quantity: number | null
   notes: string | null
+  source_platform: string | null  // Shopping receipt: platform name (闲鱼/淘宝 etc.)
+  purchase_date: string | null    // Shopping receipt: purchase date YYYY-MM-DD
   matched_asset_id: string | null
   matched_asset_name: string | null
   action: 'update' | 'create'

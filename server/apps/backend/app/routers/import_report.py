@@ -296,9 +296,12 @@ class ImportPreviewItem(BaseModel):
     asset_type: str = "financial"
     category_hint: str = ""
     current_value: float | None = None
+    purchase_price: float | None = None  # Shopping receipt: purchase price
     currency: str = "CNY"
     quantity: float | None = None
     notes: str | None = None
+    source_platform: str | None = None  # Shopping receipt: platform name (闲鱼/淘宝 etc.)
+    purchase_date: str | None = None  # Shopping receipt: purchase date YYYY-MM-DD
     matched_asset_id: str | None = None
     matched_asset_name: str | None = None
     action: str = "create"  # "update" | "create"
@@ -327,9 +330,12 @@ class ConfirmItem(BaseModel):
     asset_type: str = "financial"
     category_hint: str = ""
     current_value: float | None = None
+    purchase_price: float | None = None  # Shopping receipt: purchase price
     currency: str = "CNY"
     quantity: float | None = None
     notes: str | None = None
+    source_platform: str | None = None  # Shopping receipt: platform name
+    purchase_date: str | None = None  # Shopping receipt: purchase date YYYY-MM-DD
     matched_asset_id: str | None = None
     action: str = "create"  # "update" | "create"
     # Liability-specific fields (R6)
@@ -455,6 +461,13 @@ async def parse_file(
         target_model = raw_item.get("target_model", "asset")
         confidence = raw_item.get("confidence")
         current_value = raw_item.get("current_value") or raw_item.get("market_value")
+        purchase_price = raw_item.get("purchase_price")
+        source_platform = raw_item.get("source_platform") or None
+        purchase_date = raw_item.get("purchase_date") or None
+        asset_type = raw_item.get("asset_type", "financial")
+
+        # For physical assets from receipts: use purchase_price as value signal.
+        effective_value = current_value if asset_type != "physical" else (purchase_price or current_value)
 
         # Asset matching (only for target_model=asset).
         matched_asset_id = None
@@ -468,19 +481,22 @@ async def parse_file(
                 matched_asset_id = str(matched.id)
                 matched_asset_name = matched.name
                 action = "update"
-            if current_value is None:
+            if effective_value is None:
                 warning = "amount_not_recognized"
 
         preview_items.append(ImportPreviewItem(
             temp_id=f"tmp_{uuid.uuid4().hex[:8]}",
             name=item_name,
             target_model=target_model,
-            asset_type=raw_item.get("asset_type", "financial"),
+            asset_type=asset_type,
             category_hint=raw_item.get("category_hint", ""),
             current_value=current_value,
+            purchase_price=purchase_price,
             currency=raw_item.get("currency", "CNY"),
             quantity=raw_item.get("quantity"),
             notes=raw_item.get("notes"),
+            source_platform=source_platform,
+            purchase_date=purchase_date,
             matched_asset_id=matched_asset_id,
             matched_asset_name=matched_asset_name,
             action=action,
@@ -497,7 +513,7 @@ async def parse_file(
     # R7a: zero items → return with guidance message (not an error).
     message = None
     if not preview_items:
-        message = "未在文件中识别到财务数据，请确认文件格式正确（支持 PDF、截图、Excel、CSV）"
+        message = "未在文件中识别到资产数据，请确认文件内容正确（支持金融账单、购物小票、PDF、截图、Excel、CSV）"
 
     # R21: create DraftImport record.
     draft = DraftImport(
@@ -594,16 +610,36 @@ def confirm_import(
                     error=f"未知分类: {item.category_hint}",
                 ))
                 continue
+            # Determine effective value: physical assets use purchase_price,
+            # financial assets use current_value.
+            effective_value = item.purchase_price if item.asset_type == "physical" else item.current_value
+            # Build notes: append source_platform for physical assets.
+            notes_parts = []
+            if item.notes:
+                notes_parts.append(item.notes)
+            if item.source_platform:
+                notes_parts.append(f"来源: {item.source_platform}")
+            combined_notes = "; ".join(notes_parts) if notes_parts else None
+            # Parse purchase_date if provided.
+            purchase_date = None
+            if item.purchase_date:
+                from datetime import date as _date
+                try:
+                    purchase_date = _date.fromisoformat(item.purchase_date)
+                except (ValueError, TypeError):
+                    purchase_date = None
+
             new_asset = Asset(
                 user_id=current_user.id,
                 family_id=current_user.family_id,
                 category_id=category_id,
                 name=item.name,
                 asset_type=item.asset_type,
-                current_value=item.current_value,
-                purchase_price=item.current_value,
+                current_value=effective_value,
+                purchase_price=effective_value,
+                purchase_date=purchase_date,
                 currency=item.currency,
-                notes=item.notes,
+                notes=combined_notes,
                 status="in_use",
             )
             db.add(new_asset)

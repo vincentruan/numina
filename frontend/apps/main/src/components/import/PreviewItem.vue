@@ -34,14 +34,41 @@
 
     <!-- Asset-specific fields -->
     <template v-if="item.target_model === 'asset'">
-      <van-field
-        :model-value="item.current_value ?? undefined"
-        :label="t('importReport.currentValue')"
-        type="number"
-        inputmode="decimal"
-        :placeholder="t('importReport.enterValue')"
-        @update:model-value="(v: string) => emit('update', item.temp_id, { current_value: safeNumber(v) })"
-      />
+      <!-- Financial asset fields -->
+      <template v-if="item.asset_type === 'financial'">
+        <van-field
+          :model-value="item.current_value ?? undefined"
+          :label="t('importReport.currentValue')"
+          type="number"
+          inputmode="decimal"
+          :placeholder="t('importReport.enterValue')"
+          @update:model-value="(v: string) => emit('update', item.temp_id, { current_value: safeNumber(v) })"
+        />
+      </template>
+      <!-- Physical asset (shopping receipt) fields -->
+      <template v-if="item.asset_type === 'physical'">
+        <van-field
+          :model-value="item.purchase_price ?? undefined"
+          :label="t('importReport.purchasePrice')"
+          type="number"
+          inputmode="decimal"
+          :placeholder="t('importReport.enterValue')"
+          @update:model-value="(v: string) => emit('update', item.temp_id, { purchase_price: safeNumber(v) })"
+        />
+        <van-field
+          :model-value="item.source_platform ?? ''"
+          :label="t('importReport.sourcePlatform')"
+          :placeholder="t('importReport.enterValue')"
+          @update:model-value="(v: string) => emit('update', item.temp_id, { source_platform: v })"
+        />
+        <van-field
+          :model-value="item.purchase_date ?? ''"
+          :label="t('importReport.purchaseDateField')"
+          type="date"
+          :placeholder="t('importReport.enterValue')"
+          @update:model-value="(v: string) => emit('update', item.temp_id, { purchase_date: v })"
+        />
+      </template>
       <van-field
         :model-value="item.asset_type === 'financial' ? t('importReport.financial') : t('importReport.physical')"
         is-link
@@ -213,6 +240,9 @@ function onModelConfirm({ selectedValues }: { selectedValues: string[] }) {
     updates.asset_type = ''
     updates.category_hint = ''
     updates.current_value = null
+    updates.purchase_price = null
+    updates.source_platform = null
+    updates.purchase_date = null
     updates.quantity = null
   }
   emit('update', props.item.temp_id, updates)

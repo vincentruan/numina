@@ -96,6 +96,7 @@ async def parse_import(
         run_id=run_id,
         status=RunStatus.pending,
         abort_event=asyncio.Event(),
+        metadata={},  # Required by worker.py:1026 record.metadata access
     )
 
     # _run_import_parse_agent expects a RunManager with set_status; provide a
@@ -188,7 +189,10 @@ async def parse_import(
         )
         record.abort_event.set()
     except Exception as exc:
-        logger.warning("[parse_import] agent run failed family=%s err=%s", family_id, type(exc).__name__)
+        logger.warning(
+            "[parse_import] agent run failed family=%s err=%s: %s",
+            family_id, type(exc).__name__, exc, exc_info=True,
+        )
         return dict(_EMPTY_RESULT)
     finally:
         # Mirror worker.run_agent (worker.py:369-370): this endpoint sets the
