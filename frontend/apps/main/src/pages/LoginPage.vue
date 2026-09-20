@@ -6,7 +6,7 @@
     <canvas ref="deerCanvasRef" class="deer-canvas deer-canvas--deer" aria-hidden="true"></canvas>
 
     <!-- Login content (above canvas) -->
-    <div class="login-content">
+    <div class="login-content" :class="{ 'login-content--pin-step': step === 2 }">
       <div class="login-header">
         <!-- Numina cursive wordmark — extracted to <NuminaLogo /> so the AI hub
              agent grid and other surfaces can reuse the same SVG. -->
@@ -162,10 +162,10 @@
         <!-- User identity card — shown when step1 returned display_name/avatar_color -->
         <div v-else-if="step2User" class="pin-user-card">
           <UserAvatar
-            :avatar-url="null"
+            :avatar-url="getAvatarDisplayUrl(step2User.avatarUrl, step2User.avatarToken)"
             :avatar-color="step2User.avatarColor"
             :display-name="step2User.displayName"
-            :size="56"
+            :size="64"
           />
           <div class="pin-user-info">
             <p class="pin-display-name">{{ step2User.displayName }}</p>
@@ -349,7 +349,7 @@ const deviceAlreadyTrusted = ref(false)
 const webauthnSupported = ref(false)
 
 // User info from step1 response — shown in step2 header
-const step2User = ref<{ displayName: string; avatarColor: string } | null>(null)
+const step2User = ref<{ displayName: string; avatarColor: string; avatarUrl: string | null; avatarToken: string | null } | null>(null)
 
 const form = ref({
   username: '',
@@ -419,7 +419,12 @@ async function onStep1Submit() {
       tempToken.value = result.temp_token
       secondFactorType.value = result.second_factor_type ?? 'numeric_pin'
       if (result.display_name && result.avatar_color) {
-        step2User.value = { displayName: result.display_name, avatarColor: result.avatar_color }
+        step2User.value = {
+          displayName: result.display_name,
+          avatarColor: result.avatar_color,
+          avatarUrl: result.avatar_url ?? null,
+          avatarToken: null,
+        }
       }
       step.value = 2
     } else if (!result.second_factor_required) {
@@ -617,6 +622,7 @@ async function submitPin() {
       payload: { pin: pinInput.value },
     })
     showSuccessToast(t('toast.loginSuccess'))
+    if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
     // Redirect based on user role
     const user = authStore.user
     if (user?.role === 'child') {
@@ -699,6 +705,7 @@ async function submitEmojiPin() {
       payload: { pin_sequence: emojiPin.value },
     })
     showSuccessToast(t('toast.loginSuccess'))
+    if (!deviceAlreadyTrusted.value) authStore.showTrustPrompt = true
     const user = authStore.user
     if (user?.role === 'child') {
       const childBaseUrl = getChildBaseUrl()
@@ -788,6 +795,11 @@ async function submitEmojiPin() {
   flex-direction: column;
   align-items: center;
   width: 100%;
+}
+
+/* Tighter top position for PIN step (no logo header) */
+.login-content--pin-step {
+  margin-top: -48px;
 }
 
 .login-header {
@@ -998,16 +1010,24 @@ async function submitEmojiPin() {
   padding: 0 16px;
 }
 
+.pin-user-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .pin-hint {
   color: rgba(255, 255, 255, 0.9);
   font-size: 16px;
-  margin: 0 0 24px;
+  margin: 0 0 16px;
 }
 
 .pin-display {
   display: flex;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .pin-slot {
@@ -1040,7 +1060,7 @@ async function submitEmojiPin() {
 .pin-error {
   color: #ffcdd2;
   font-size: 14px;
-  margin: 0 0 16px;
+  margin: 0 0 12px;
 }
 
 .numpad {
@@ -1147,14 +1167,6 @@ async function submitEmojiPin() {
 
 .trusted-card {
   margin-bottom: 24px;
-}
-
-.pin-user-card {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
 }
 
 .pin-avatar {

@@ -39,7 +39,6 @@ export const useAuthStore = defineStore('auth', () => {
   async function loginStep2(data: LoginStep2Request): Promise<void> {
     await getHttp().post('/auth/login/step2', data)
     await fetchMe()
-    showTrustPrompt.value = true
   }
   async function register(data: RegisterRequest) {
     await getHttp().post('/auth/register', data)
