@@ -65,6 +65,7 @@ class DeviceSelectResponse(BaseModel):
     second_factor_type: str | None = None
     display_name: str | None = None
     avatar_color: str | None = None
+    avatar_url: str | None = None
 
 
 class DeviceTrustRequest(BaseModel):

@@ -540,6 +540,7 @@ def select_device(
             second_factor_type=second_factor_type,
             display_name=user.display_name,
             avatar_color=user.avatar_color,
+            avatar_url=user.avatar_url,
         )
 
     # No second factor — issue tokens directly
