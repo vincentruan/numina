@@ -154,6 +154,8 @@ from apps.backend.app.routers import notification_config as notification_config_
 from apps.backend.app.routers import notification_push as notification_push_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import rental_contracts as rental_contracts_router
+from apps.backend.app.routers import shared as shared_router
+from apps.backend.app.routers import split_groups as split_groups_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import trips as trips_router
@@ -607,6 +609,8 @@ app.include_router(child_manifesto_router.router, prefix="/api/v1")
 app.include_router(trips_router.router, prefix="/api/v1")
 app.include_router(expenses_router.router, prefix="/api/v1")
 app.include_router(expense_categories_router.router, prefix="/api/v1")
+app.include_router(split_groups_router.router, prefix="/api/v1")
+app.include_router(shared_router.router, prefix="/api/v1")
 
 # Serve uploaded files — authenticated endpoint with tenant isolation
 app.include_router(uploads_serve_router.router)
