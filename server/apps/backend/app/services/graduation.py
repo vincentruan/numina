@@ -42,7 +42,7 @@ def graduate_to_trip(
         family_id=wish.family_id,
         user_id=wish.user_id,
         name=wish.name,
-        destination=wish.name,  # Use wish name as initial destination hint (wish has no separate destination field)
+        destination=(wish.description or wish.name)[:200] if wish.description != wish.name else wish.name,
         departure_date=wish.target_date,
         planned_budget=wish.expected_price,
         initial_funding=wish.saved_amount,
