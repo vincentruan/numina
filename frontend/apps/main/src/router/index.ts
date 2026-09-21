@@ -162,6 +162,28 @@ const router = createRouter({
           component: () => import('@/pages/ImportReportPage.vue'),
         },
         {
+          path: 'travel',
+          redirect: '/finance?tab=travel',
+        },
+        {
+          path: 'travel/new',
+          name: 'TravelCreate',
+          component: () => import('@/pages/TravelFormPage.vue'),
+          meta: { title: '新建旅行' },
+        },
+        {
+          path: 'travel/:id',
+          name: 'TravelDetail',
+          component: () => import('@/pages/TravelDetailPage.vue'),
+          meta: { title: '行程详情' },
+        },
+        {
+          path: 'travel/:id/edit',
+          name: 'TravelEdit',
+          component: () => import('@/pages/TravelFormPage.vue'),
+          meta: { title: '编辑行程' },
+        },
+        {
           path: 'blind-box/draws',
           name: 'BlindBoxDraws',
           component: () => import('@/pages/BlindBoxDrawsPage.vue')
