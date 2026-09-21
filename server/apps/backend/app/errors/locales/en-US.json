@@ -116,5 +116,16 @@
   "TRIP_NOT_FOUND": "Trip not found",
   "TRIP_STATUS_CONFLICT": "Trip status does not allow this operation",
   "EXPENSE_NOT_FOUND": "Expense entry not found",
-  "EXPENSE_CATEGORY_NOT_FOUND": "Expense category not found"
+  "EXPENSE_CATEGORY_NOT_FOUND": "Expense category not found",
+  "WISH_NOT_FOUND": "Wish not found",
+  "SPLIT_GROUP_NOT_FOUND": "Split group not found",
+  "SPLIT_GROUP_ALREADY_EXISTS": "A split group already exists for this trip",
+  "SPLIT_GROUP_INACTIVE": "Split group is inactive",
+  "SPLIT_PARTICIPANT_LIMIT": "Participant limit reached (max 20)",
+  "SPLIT_PARTICIPANT_NAME_CONFLICT": "Participant name already exists in this group",
+  "SPLIT_PARTICIPANT_NOT_FOUND": "Participant not found",
+  "SETTLEMENT_NOT_FOUND": "Settlement record not found",
+  "SETTLEMENT_REVERSE_EXPIRED": "Settlement reversal exceeded 24-hour window",
+  "CO_ORGANIZER_LIMIT": "Maximum 3 co-organizers allowed",
+  "CO_ORGANIZER_NOT_ALLOWED": "Only the trip organizer can manage co-organizers"
 }
