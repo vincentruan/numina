@@ -76,7 +76,7 @@
               class="expense-item"
             >
               <div class="expense-header">
-                <span class="expense-amount">{{ formatAmount(expense.amount) }}</span>
+                <span class="expense-amount">{{ formatAmount(expense.amount, expense.currency) }}</span>
                 <span class="expense-currency">{{ expense.currency }}</span>
               </div>
               <div class="expense-details">
@@ -108,9 +108,11 @@ import { showSuccessToast, showFailToast } from 'vant'
 import { joinSplitGroup, getSharedExpenses } from '@/api/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { SharedExpense } from '@/types/travel'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const { formatIn } = useCurrency()
 
 const inviteCode = computed(() => route.params.code as string)
 const loading = ref(true)
@@ -135,9 +137,8 @@ function formatDateRange(start: string | null | undefined, end: string | null | 
   return `${formatDate(start)} - ${formatDate(end)}`
 }
 
-function formatAmount(amount: string): string {
-  const num = parseFloat(amount) || 0
-  return `¥${num.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+function formatAmount(amount: string, currency = 'CNY'): string {
+  return formatIn(amount, currency)
 }
 
 async function copyInviteCode() {

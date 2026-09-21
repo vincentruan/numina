@@ -25,7 +25,7 @@
           </div>
 
           <div class="settlement-amount">
-            <span class="amount-value">{{ formatAmount(settlement.amount) }}</span>
+            <span class="amount-value">{{ formatAmount(settlement.amount, settlement.currency) }}</span>
             <span class="amount-currency">{{ settlement.currency }}</span>
           </div>
 
@@ -68,23 +68,24 @@ import { useTravelStore } from '@/stores/travel'
 import { markSettlementComplete, reverseSettlement } from '@/api/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { SplitSettlement } from '@/types/travel'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const store = useTravelStore()
+const { formatIn } = useCurrency()
 
 const loading = ref(true)
 
 const tripId = computed(() => route.params.tripId as string)
 const settlements = computed(() => store.settlements)
 
-function formatAmount(amount: string): string {
-  const num = parseFloat(amount) || 0
-  return `¥${num.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+function formatAmount(amount: string, currency = 'CNY'): string {
+  return formatIn(amount, currency)
 }
 
 async function copyTransferInfo(settlement: SplitSettlement) {
-  const amount = formatAmount(settlement.amount)
+  const amount = formatAmount(settlement.amount, settlement.currency)
   const message = t('travel.settlement.transferTemplate', {
     amount,
     name: settlement.to_participant_name,

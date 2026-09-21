@@ -41,6 +41,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useCurrency } from '@/composables/useCurrency'
 import type { Trip } from '@/types/travel'
 
 const props = defineProps<{
@@ -52,6 +53,12 @@ defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+const { formatIn } = useCurrency()
+
+function formatAmount(amount: string | null): string {
+  if (!amount) return formatIn(0, props.trip.currency)
+  return formatIn(amount, props.trip.currency)
+}
 
 const statusLabel = computed(() => {
   const map: Record<string, string> = {
@@ -78,12 +85,6 @@ const statusTagType = computed((): 'primary' | 'success' | 'warning' | 'default'
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
   return date.toLocaleDateString(locale.value, { month: 'short', day: 'numeric' })
-}
-
-function formatAmount(amount: string | null): string {
-  if (!amount) return '¥0'
-  const num = parseFloat(amount)
-  return `¥${num.toLocaleString(locale.value, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
 const budgetPercentage = computed(() => {

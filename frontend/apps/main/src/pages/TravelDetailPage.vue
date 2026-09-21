@@ -114,6 +114,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import { cancelTrip } from '@/api/travel'
+import { useCurrency } from '@/composables/useCurrency'
 import PageHeader from '@/components/common/PageHeader.vue'
 import SplitGroupManager from '@/components/travel/SplitGroupManager.vue'
 import ExpenseListPanel from '@/components/travel/ExpenseListPanel.vue'
@@ -122,6 +123,13 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useTravelStore()
+const { formatIn } = useCurrency()
+
+function formatAmount(amount: string | null): string {
+  const currency = trip.value?.currency || 'CNY'
+  if (!amount) return formatIn(0, currency)
+  return formatIn(amount, currency)
+}
 
 const loading = ref(true)
 const showActionSheet = ref(false)
@@ -141,12 +149,6 @@ const budgetPercentage = computed(() => {
   if (budget === 0) return 0
   return Math.min(Math.round((spend / budget) * 100), 100)
 })
-
-function formatAmount(amount: string | null): string {
-  if (!amount) return '¥0'
-  const num = parseFloat(amount) || 0
-  return `¥${num.toLocaleString(locale.value, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
