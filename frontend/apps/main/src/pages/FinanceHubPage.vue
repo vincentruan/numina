@@ -79,7 +79,7 @@
           <van-tab name="travel">
             <template #title>
               <div class="tab-title">
-                <van-icon name="compass-o" />
+                <van-icon name="map-marked" />
                 <span>{{ t('travel.tab') }}</span>
               </div>
             </template>
