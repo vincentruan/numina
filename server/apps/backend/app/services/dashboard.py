@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from apps.backend.app.models.activity import Activity
@@ -201,10 +201,10 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
             prepaid = Decimal(str(prepaid_expenses))
 
     unsettled = Decimal("0")
-    active_trip_ids_sub = db.query(Trip.id).filter(
+    active_trip_ids_sub = select(Trip.id).filter(
         Trip.family_id == family_id,
         Trip.is_active == True,  # noqa: E712
-    ).subquery()
+    )
     unsettled_settlements = db.query(func.sum(SplitSettlement.amount)).filter(
         SplitSettlement.trip_id.in_(active_trip_ids_sub),
         SplitSettlement.is_complete == False,  # noqa: E712
