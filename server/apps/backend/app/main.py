@@ -157,6 +157,7 @@ from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import shared as shared_router
 from apps.backend.app.routers import split_groups as split_groups_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
+from apps.backend.app.routers import travel_receipt as travel_receipt_router
 from apps.backend.app.routers import treasures as treasures_router
 from apps.backend.app.routers import trips as trips_router
 from apps.backend.app.routers import uploads as uploads_serve_router
@@ -607,6 +608,7 @@ app.include_router(user_config_router.router, prefix="/api/v1")
 app.include_router(manifesto_router.router, prefix="/api/v1")
 app.include_router(child_manifesto_router.router, prefix="/api/v1")
 app.include_router(trips_router.router, prefix="/api/v1")
+app.include_router(travel_receipt_router.router, prefix="/api/v1")
 app.include_router(expenses_router.router, prefix="/api/v1")
 app.include_router(expense_categories_router.router, prefix="/api/v1")
 app.include_router(split_groups_router.router, prefix="/api/v1")
