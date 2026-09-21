@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
+from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.split_group import (
     SplitGroup,
     SplitParticipant,
@@ -10,6 +11,7 @@ from packages.db.models.split_group import (
     generate_invite_code,
 )
 from packages.db.models.trip import Trip
+from packages.db.models.user import User
 
 _MAX_PARTICIPANTS = 20
 _MAX_CO_ORGANIZERS = 3
@@ -256,3 +258,56 @@ def is_organizer_or_co(db: Session, trip_id: int, user_id: int) -> bool:
         .first()
     )
     return co is not None
+
+
+def get_shared_expense_view(db: Session, invite_code: str) -> dict:
+    """Get sanitized shared expense data for external participants (no auth).
+
+    Returns a dict with trip info, expense items, and participants.
+    Raises AppError if the invite code is invalid or trip not found.
+    """
+    group = (
+        db.query(SplitGroup)
+        .filter(
+            SplitGroup.invite_code == invite_code,
+            SplitGroup.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not group:
+        raise AppError(ErrorCode.SPLIT_GROUP_NOT_FOUND)
+
+    trip = db.query(Trip).filter(Trip.id == group.trip_id).first()
+    if not trip:
+        raise AppError(ErrorCode.TRIP_NOT_FOUND)
+
+    participants = (
+        db.query(SplitParticipant)
+        .filter(SplitParticipant.group_id == group.id)
+        .order_by(SplitParticipant.joined_at)
+        .all()
+    )
+
+    expenses = (
+        db.query(ExpenseEntry)
+        .filter(
+            ExpenseEntry.family_id == trip.family_id,
+            ExpenseEntry.ref_id == trip.id,
+            ExpenseEntry.ref_type == "trip",
+            ExpenseEntry.leg_type == "debit",
+        )
+        .all()
+    )
+
+    user_ids = {e.user_id for e in expenses}
+    user_name_map: dict[int, str] = {}
+    if user_ids:
+        users = db.query(User).filter(User.id.in_(user_ids)).all()
+        user_name_map = {u.id: u.display_name for u in users}
+
+    return {
+        "trip": trip,
+        "expenses": expenses,
+        "participants": participants,
+        "user_name_map": user_name_map,
+    }

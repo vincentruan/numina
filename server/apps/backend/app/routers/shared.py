@@ -13,10 +13,6 @@ from apps.backend.app.schemas.split_group import (
     SplitParticipantResponse,
 )
 from apps.backend.app.services import split_group as split_group_service
-from packages.db.models.expense_entry import ExpenseEntry
-from packages.db.models.split_group import SplitGroup, SplitParticipant
-from packages.db.models.trip import Trip
-from packages.db.models.user import User
 
 router = APIRouter(prefix="/travel/shared", tags=["travel"])
 
@@ -54,49 +50,10 @@ def get_shared_expense_view(
     client_ip = _get_real_client_ip(request)
     _check_rate_limit(client_ip, "shared_view", _VIEW_RATE_LIMIT_PER_MINUTE)
 
-    group = (
-        db.query(SplitGroup)
-        .filter(
-            SplitGroup.invite_code == invite_code,
-            SplitGroup.is_active == True,  # noqa: E712
-        )
-        .first()
-    )
-    if not group:
-        raise AppError(ErrorCode.SPLIT_GROUP_NOT_FOUND)
+    data = split_group_service.get_shared_expense_view(db, invite_code)
+    trip = data["trip"]
+    user_name_map = data["user_name_map"]
 
-    trip = db.query(Trip).filter(Trip.id == group.trip_id).first()
-    if not trip:
-        raise AppError(ErrorCode.TRIP_NOT_FOUND)
-
-    # Get participants
-    participants = (
-        db.query(SplitParticipant)
-        .filter(SplitParticipant.group_id == group.id)
-        .order_by(SplitParticipant.joined_at)
-        .all()
-    )
-
-    # Get debit expenses for this trip
-    expenses = (
-        db.query(ExpenseEntry)
-        .filter(
-            ExpenseEntry.family_id == trip.family_id,
-            ExpenseEntry.ref_id == trip.id,
-            ExpenseEntry.ref_type == "trip",
-            ExpenseEntry.leg_type == "debit",
-        )
-        .all()
-    )
-
-    # Resolve user_id -> display_name
-    user_ids = {e.user_id for e in expenses}
-    user_name_map: dict[int, str] = {}
-    if user_ids:
-        users = db.query(User).filter(User.id.in_(user_ids)).all()
-        user_name_map = {u.id: u.display_name for u in users}
-
-    # Build sanitized expense items (no receipt_image_url, description, transfer_id, etc.)
     expense_items = [
         SharedExpenseItem(
             id=e.id,
@@ -106,7 +63,7 @@ def get_shared_expense_view(
             expense_date=e.expense_date,
             payer_name=user_name_map.get(e.user_id, f"User_{e.user_id}"),
         )
-        for e in expenses
+        for e in data["expenses"]
     ]
 
     return SharedExpenseResponse(
@@ -123,7 +80,7 @@ def get_shared_expense_view(
                 family_id=p.family_id,
                 joined_at=p.joined_at,
             )
-            for p in participants
+            for p in data["participants"]
         ],
     )
 
