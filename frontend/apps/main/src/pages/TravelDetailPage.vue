@@ -65,6 +65,11 @@
       <!-- Trip info card -->
       <van-cell-group inset class="info-card">
         <van-cell :title="t('travel.destination')" :value="trip.destination" />
+        <van-cell v-if="trip.description" :title="t('travel.description')">
+          <template #label>
+            <span>{{ trip.description }}</span>
+          </template>
+        </van-cell>
         <van-cell :title="t('travel.departureDate')" :value="formatDate(trip.departure_date)" />
         <van-cell
           v-if="trip.return_date"

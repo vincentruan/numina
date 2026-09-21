@@ -17,6 +17,14 @@
           :rules="[{ required: true, message: t('travel.tripNameRequired') }]"
         />
         <van-field
+          v-model="formData.description"
+          :label="t('travel.description')"
+          type="textarea"
+          rows="2"
+          autosize
+          :placeholder="t('travel.descriptionPlaceholder')"
+        />
+        <van-field
           v-model="formData.destination"
           :label="t('travel.destination')"
           :placeholder="t('travel.destinationPlaceholder')"
@@ -115,6 +123,7 @@ const submitting = ref(false)
 
 const formData = reactive({
   name: '',
+  description: '',
   destination: '',
   departure_date: '',
   return_date: '',
@@ -164,6 +173,7 @@ async function onSubmit() {
   try {
     const data: TripCreate = {
       name: formData.name,
+      description: formData.description || undefined,
       destination: formData.destination,
       departure_date: formData.departure_date,
       return_date: formData.return_date || undefined,
@@ -175,6 +185,7 @@ async function onSubmit() {
     if (isEdit.value && tripId.value) {
       const updateData: TripUpdate = {
         name: data.name,
+        description: data.description,
         destination: data.destination,
         departure_date: data.departure_date,
         return_date: data.return_date,
@@ -211,6 +222,7 @@ onMounted(async () => {
       const trip = store.currentTrip
       if (trip) {
         formData.name = trip.name
+        formData.description = trip.description ?? ''
         formData.destination = trip.destination
         formData.departure_date = trip.departure_date
         formData.return_date = trip.return_date || ''

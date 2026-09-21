@@ -17,6 +17,9 @@ class WishCreate(BaseModel):
     target_date: date | None = None
     monthly_saving: Decimal | None = None
     ignore_debt_warning: bool | None = None  # W5
+    travel_destination: str | None = None
+    travel_duration_days: int | None = None
+    rental_area: str | None = None
 
 
 class WishUpdate(BaseModel):
@@ -31,6 +34,9 @@ class WishUpdate(BaseModel):
     target_date: date | None = None
     monthly_saving: Decimal | None = None
     ignore_debt_warning: bool | None = None  # W5
+    travel_destination: str | None = None
+    travel_duration_days: int | None = None
+    rental_area: str | None = None
 
 
 class WishRealizeRequest(BaseModel):
@@ -70,6 +76,9 @@ class WishResponse(SnowflakeBase):
     savings_count: int = 0  # computed (count of wish_savings_log rows)
     ignore_debt_warning: bool
     realized_asset_id: int | None
+    travel_destination: str | None = None
+    travel_duration_days: int | None = None
+    rental_area: str | None = None
     fulfilled_at: datetime | None = Field(default=None, description="Timestamp when wish was realized/fulfilled (status became 'realized')")
     created_at: datetime
     updated_at: datetime

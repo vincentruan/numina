@@ -5,6 +5,7 @@ export interface Trip {
   family_id: string
   user_id: string
   name: string
+  description: string | null
   destination: string
   departure_date: string
   return_date: string | null
@@ -29,10 +30,12 @@ export interface TripCreate {
   currency?: string
   timezone?: string | null
   wish_id?: string | null
+  description?: string | null
 }
 
 export interface TripUpdate {
   name?: string
+  description?: string | null
   destination?: string
   departure_date?: string
   return_date?: string | null

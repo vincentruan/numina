@@ -1,5 +1,7 @@
 """Wish-to-Trip graduation pipeline (U5)."""
 
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -38,12 +40,25 @@ def graduate_to_trip(
     if wish.converts_to_asset:
         raise AppError(ErrorCode.VALIDATION_ERROR)
 
+    # Map wish fields to trip fields:
+    # - wish.description → trip.description (旅游描述, NOT destination)
+    # - wish.travel_destination → trip.destination
+    # - wish.target_date → trip.departure_date
+    # - wish.travel_duration_days → trip.return_date (departure + duration)
+    destination = (wish.travel_destination or wish.name)[:200]
+    departure_date = wish.target_date
+    return_date = None
+    if departure_date and wish.travel_duration_days:
+        return_date = departure_date + timedelta(days=wish.travel_duration_days)
+
     trip = Trip(
         family_id=wish.family_id,
         user_id=wish.user_id,
         name=wish.name,
-        destination=(wish.description or wish.name)[:200] if wish.description != wish.name else wish.name,
-        departure_date=wish.target_date,
+        description=wish.description,
+        destination=destination,
+        departure_date=departure_date,
+        return_date=return_date,
         planned_budget=wish.expected_price,
         initial_funding=wish.saved_amount,
         currency=wish.currency,

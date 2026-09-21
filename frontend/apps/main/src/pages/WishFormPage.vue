@@ -80,7 +80,33 @@
             <span v-else class="category-placeholder">{{ t('wish.form.categoryPlaceholder') }}</span>
           </template>
         </van-field>
-        <van-field name="converts_to_asset" class="converts-field">
+        <!-- Travel-specific fields (shown when category is 旅游) -->
+        <van-field
+          v-if="isTravelCategory"
+          v-model="form.travel_destination"
+          name="travel_destination"
+          :label="t('wish.form.travelDestination')"
+          :placeholder="t('wish.form.travelDestinationPlaceholder')"
+        />
+        <van-field
+          v-if="isTravelCategory"
+          v-model="travelDurationStr"
+          name="travel_duration_days"
+          :label="t('wish.form.travelDuration')"
+          type="number"
+          inputmode="numeric"
+          :placeholder="t('wish.form.travelDurationPlaceholder')"
+        />
+        <!-- Rental-specific fields (shown when category is 租房) -->
+        <van-field
+          v-if="isRentalCategory"
+          v-model="form.rental_area"
+          name="rental_area"
+          :label="t('wish.form.rentalArea')"
+          :placeholder="t('wish.form.rentalAreaPlaceholder')"
+        />
+        <!-- converts_to_asset toggle (hidden for "other" categories — auto false) -->
+        <van-field v-if="!isWishTypeCategory(selectedCategory?.name)" name="converts_to_asset" class="converts-field">
           <template #label>
             <span class="converts-label">{{ t('toast.wishConvertsToAsset') }}</span>
           </template>
@@ -103,7 +129,7 @@
     <!-- Category Picker — bottom sheet with physical/financial tabs -->
     <van-popup v-model:show="showCategoryPicker" round position="bottom">
       <div class="category-popup">
-        <!-- Tab switcher: 实物 / 金融资产 -->
+        <!-- Tab switcher: 实物 / 金融资产 / 其他 -->
         <div class="category-tabs">
           <div
             class="category-tab"
@@ -115,6 +141,11 @@
             :class="{ active: categoryTab === 'financial' }"
             @click="categoryTab = 'financial'"
           >{{ t('wish.form.tabFinancial') }}</div>
+          <div
+            class="category-tab"
+            :class="{ active: categoryTab === 'other' }"
+            @click="categoryTab = 'other'"
+          >{{ t('wish.form.tabOther') }}</div>
         </div>
         <!-- Category grid -->
         <div v-if="filteredCategories.length === 0" class="category-empty">{{ t('wish.form.categoryEmpty') }}</div>
@@ -159,6 +190,7 @@ import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getIconId } from '@/utils/icon'
 import { getCategoryName } from '@/utils/categoryName'
+import { TRAVEL_CATEGORY_NAME, RENTAL_CATEGORY_NAME, isWishTypeCategory } from '@/constants/categories'
 
 const { t } = useI18n()
 
@@ -182,15 +214,20 @@ const form = ref({
   // (initial 0, spec §2.3); the backend derives it from savings log.
   monthly_saving: undefined as number | undefined,
   target_date: undefined as string | undefined,
+  // Wish-type-specific fields (旅游/租房)
+  travel_destination: '',
+  travel_duration_days: undefined as number | undefined,
+  rental_area: '',
 })
 const priceStr = ref('')
 const monthlySavingStr = ref('')
+const travelDurationStr = ref('')
 const submitting = ref(false)
 const showCategoryPicker = ref(false)
 const showDatePicker = ref(false)
 const datePickerValue = ref<string[]>([])
 const categories = ref<Category[]>([])
-const categoryTab = ref<'physical' | 'financial'>('physical')
+const categoryTab = ref<'physical' | 'financial' | 'other'>('physical')
 
 const filteredCategories = computed(() =>
   categories.value.filter(c => c.asset_type === categoryTab.value)
@@ -200,8 +237,20 @@ const selectedCategory = computed(() =>
   categories.value.find(c => c.id === form.value.category_id) ?? null
 )
 
+const isTravelCategory = computed(() =>
+  selectedCategory.value?.asset_type === 'other' && selectedCategory.value?.name === TRAVEL_CATEGORY_NAME
+)
+const isRentalCategory = computed(() =>
+  selectedCategory.value?.asset_type === 'other' && selectedCategory.value?.name === RENTAL_CATEGORY_NAME
+)
+
 function selectCategory(id: string) {
   form.value.category_id = id
+  // For "other" categories (旅游/租房), force converts_to_asset to false
+  const cat = categories.value.find(c => c.id === id)
+  if (cat && isWishTypeCategory(cat.name)) {
+    form.value.converts_to_asset = false
+  }
   showCategoryPicker.value = false
 }
 
@@ -212,7 +261,10 @@ async function onSubmit() {
       ...form.value,
       expected_price: priceStr.value ? parseFloat(priceStr.value) : undefined,
       monthly_saving: monthlySavingStr.value ? parseFloat(monthlySavingStr.value) : undefined,
+      travel_duration_days: travelDurationStr.value ? parseInt(travelDurationStr.value, 10) : undefined,
       target_date: form.value.target_date || undefined,
+      travel_destination: form.value.travel_destination || undefined,
+      rental_area: form.value.rental_area || undefined,
     }
     if (isEdit.value) {
       await wishStore.updateWish(wishId.value!, payload)
@@ -257,9 +309,13 @@ onMounted(async () => {
       converts_to_asset: w.converts_to_asset,
       monthly_saving: w.monthly_saving ? Number(w.monthly_saving) : undefined,
       target_date: w.target_date ?? undefined,
+      travel_destination: w.travel_destination ?? '',
+      travel_duration_days: w.travel_duration_days ?? undefined,
+      rental_area: w.rental_area ?? '',
     }
     priceStr.value = w.expected_price != null ? String(w.expected_price) : ''
     monthlySavingStr.value = w.monthly_saving ? String(w.monthly_saving) : ''
+    travelDurationStr.value = w.travel_duration_days ? String(w.travel_duration_days) : ''
     if (w.target_date) {
       form.value.target_date = w.target_date
       datePickerValue.value = w.target_date.split('-')
@@ -267,7 +323,7 @@ onMounted(async () => {
     // Auto-set category tab based on the current category's asset_type
     if (w.category_id) {
       const cat = categories.value.find(c => c.id === w.category_id)
-      if (cat) categoryTab.value = cat.asset_type
+      if (cat) categoryTab.value = cat.asset_type as 'physical' | 'financial' | 'other'
     }
   }
 })

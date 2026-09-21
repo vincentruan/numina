@@ -44,6 +44,10 @@ class Wish(Base):
     converts_to_asset: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
     fulfilled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    # Wish-type-specific fields (populated based on category: 旅游/租房)
+    travel_destination: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    travel_duration_days: Mapped[int | None] = mapped_column(nullable=True)
+    rental_area: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
