@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -6,8 +7,10 @@ from sqlalchemy.orm import Session
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.cached_file import CachedFile
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.travel_receipt import TravelReceiptUploadResponse
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.file_validation import (
     detect_image_format,
     validate_image_magic_bytes,
@@ -17,6 +20,8 @@ from apps.backend.app.services.security_log import (
     _log_security_event,
 )
 from apps.backend.app.services.storage.service import StorageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/import", tags=["travel"])
 
@@ -31,10 +36,12 @@ async def parse_travel_receipt(
     user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    """Upload a travel receipt image for later AI extraction.
+    """Upload a travel receipt image and attempt AI extraction.
 
-    Accepts the image, validates and stores it, then returns the stored URL.
-    The actual AI extraction happens asynchronously through the import-parse chat flow.
+    Accepts the image, validates and stores it, then calls the agent's
+    import-parse endpoint (vision mode) to extract structured receipt data.
+    If extraction fails (agent unavailable, timeout, parse error), returns
+    the image URL with ``extracted_data=None`` and ``confidence="pending"``.
     """
     # Validate file extension
     ext = Path(file.filename).suffix.lower() if file.filename else ""
@@ -66,9 +73,38 @@ async def parse_travel_receipt(
         content, file.filename or "receipt.jpg", ext, user, db
     )
 
+    # Attempt AI extraction via the agent's import-parse endpoint (vision mode).
+    extracted_data = None
+    confidence = "pending"
+    try:
+        cached = db.query(CachedFile).filter_by(id=file_record.file_id).first()
+        if cached and cached.local_path:
+            agent_client = AgentClient(
+                str(user.family_id), user_id=str(user.id), timeout=60.0
+            )
+            resp = await agent_client.post(
+                "/import/parse",
+                json={"text": "", "image_paths": [cached.local_path]},
+            )
+            resp.raise_for_status()
+            agent_data = resp.json()
+            items = agent_data.get("items", [])
+            if items:
+                first = items[0]
+                extracted_data = {
+                    "vendor": first.get("name", ""),
+                    "amount": first.get("purchase_price") or first.get("current_value"),
+                    "currency": first.get("currency", "CNY"),
+                    "date": agent_data.get("report_date"),
+                    "expense_category": "misc",
+                }
+                confidence = "medium"
+    except Exception:
+        logger.debug("Receipt AI extraction failed, returning upload-only", exc_info=True)
+
     return TravelReceiptUploadResponse(
         receipt_image_url=file_record.url,
         trip_id=trip_id,
-        extracted_data=None,
-        confidence="pending",
+        extracted_data=extracted_data,
+        confidence=confidence,
     )

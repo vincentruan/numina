@@ -5,7 +5,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel, field_validator
 
-from apps.backend.app.schemas.base import SnowflakeBase, coerce_money_str, coerce_to_decimal
+from apps.backend.app.schemas.base import (
+    SnowflakeBase,
+    coerce_money_str,
+    coerce_to_decimal,
+)
 
 _coerce_to_decimal = coerce_to_decimal
 _coerce_money_str = coerce_money_str
@@ -20,6 +24,14 @@ class ExpenseEntryCreate(BaseModel):
     ref_id: int | None = None
     ref_type: str | None = None  # 'trip', 'split_settlement'
     receipt_image_url: str | None = None
+    split_type: str | None = None  # 'equal', 'per_person', 'custom'
+
+    @field_validator("split_type")
+    @classmethod
+    def _validate_split_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("equal", "per_person", "custom"):
+            raise ValueError("split_type must be 'equal', 'per_person', or 'custom'")
+        return v
 
     @field_validator("amount", mode="before")
     @classmethod
@@ -49,6 +61,7 @@ class ExpenseEntryResponse(SnowflakeBase):
     expense_date: date
     description: str | None = None
     receipt_image_url: str | None = None
+    split_type: str | None = None
     user_id: int
     created_at: datetime | None = None
     updated_at: datetime | None = None

@@ -96,11 +96,26 @@ export function reverseSettlement(tripId: string, settlementId: string) {
 }
 
 // Receipt API
+export interface ReceiptExtractionResult {
+  vendor: string
+  amount: number | null
+  currency: string
+  date: string | null
+  expense_category: string | null
+}
+
+export interface ReceiptUploadResponse {
+  receipt_image_url: string
+  trip_id: string
+  extracted_data: ReceiptExtractionResult | null
+  confidence: string
+}
+
 export function uploadReceipt(tripId: string, file: File) {
   const formData = new FormData()
   formData.append('trip_id', tripId)
   formData.append('file', file)
-  return http.post<{ receipt_image_url: string }>('/import/parse-travel-receipt', formData, {
+  return http.post<ReceiptUploadResponse>('/import/parse-travel-receipt', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }

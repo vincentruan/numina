@@ -51,6 +51,7 @@ class ExpenseEntry(Base):
     expense_date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     receipt_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    split_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())

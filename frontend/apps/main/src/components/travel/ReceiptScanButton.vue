@@ -52,11 +52,18 @@ async function onFileRead(file: UploaderFileListItem | UploaderFileListItem[]) {
     if (!fileObj) return
     const res = await uploadReceipt(props.tripId, fileObj)
     const imageUrl = res.data.receipt_image_url
+    const extracted = res.data.extracted_data
 
-    // Navigate to expense form with pre-filled receipt URL
+    // Navigate to expense form with pre-filled data from AI extraction
+    const query: Record<string, string> = { receipt_image_url: imageUrl }
+    if (extracted && extracted.amount != null) query.receipt_amount = String(extracted.amount)
+    if (extracted && extracted.currency) query.receipt_currency = extracted.currency
+    if (extracted && extracted.date) query.receipt_date = extracted.date
+    if (extracted && extracted.expense_category) query.receipt_category = extracted.expense_category
+
     router.push({
       path: `/travel/${props.tripId}/expense/new`,
-      query: { receipt_image_url: imageUrl },
+      query,
     })
   } catch {
     showFailToast(t('travel.receiptUploadFailed'))

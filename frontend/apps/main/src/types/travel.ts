@@ -69,6 +69,7 @@ export interface ExpenseEntryCreate {
   category_id?: string | null
   description?: string | null
   receipt_image_url?: string | null
+  split_type?: 'equal' | 'per_person' | 'custom' | null
 }
 
 export interface ExpenseCategory {

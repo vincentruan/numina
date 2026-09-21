@@ -27,6 +27,20 @@
           @click="showCurrencyPicker = true"
         />
 
+        <!-- Split type selector (visible only when trip has active split group) -->
+        <van-field
+          v-if="hasSplitGroup"
+          :label="t('travel.splitType')"
+        >
+          <template #input>
+            <van-radio-group v-model="formData.split_type" direction="horizontal">
+              <van-radio name="equal">{{ t('travel.splitTypeEqual') }}</van-radio>
+              <van-radio name="per_person">{{ t('travel.splitTypePerPerson') }}</van-radio>
+              <van-radio name="custom">{{ t('travel.splitTypeCustom') }}</van-radio>
+            </van-radio-group>
+          </template>
+        </van-field>
+
         <van-field
           v-model="categoryName"
           is-link
@@ -111,14 +125,27 @@ const trip = computed(() => store.currentTrip)
 const formRef = ref()
 const submitting = ref(false)
 
+// Pre-fill from receipt AI extraction query params (U7)
+const q = route.query
 const formData = ref({
-  amount: '',
-  currency: '',
+  amount: (q.receipt_amount as string) || '',
+  currency: (q.receipt_currency as string) || '',
   category_id: null as string | null,
-  expense_date: new Date().toISOString().split('T')[0],
+  expense_date: (q.receipt_date as string) || new Date().toISOString().split('T')[0],
   description: '',
-  receipt_image_url: route.query.receipt_image_url as string | null || null,
+  receipt_image_url: (q.receipt_image_url as string) || null,
+  split_type: 'equal' as 'equal' | 'per_person' | 'custom',
 })
+
+// Map extracted category to expense category_id (best-effort)
+const receiptCategoryMap: Record<string, string> = {
+  dining: '餐饮',
+  transport: '交通',
+  accommodation: '住宿',
+  activities: '娱乐',
+  shopping: '购物',
+  misc: '其他',
+}
 
 const formRules = {
   amount: [{ required: true, message: t('travel.amountRequired') }],
@@ -166,6 +193,9 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   showDatePicker.value = false
 }
 
+// Whether the trip has an active split group (drives split type selector visibility)
+const hasSplitGroup = computed(() => !!store.splitGroup?.is_active)
+
 async function onSubmit() {
   submitting.value = true
   try {
@@ -176,6 +206,7 @@ async function onSubmit() {
       expense_date: formData.value.expense_date,
       description: formData.value.description || null,
       receipt_image_url: formData.value.receipt_image_url,
+      split_type: hasSplitGroup.value ? formData.value.split_type : null,
     })
     showSuccessToast(t('common.success'))
     router.back()
@@ -191,9 +222,22 @@ onMounted(async () => {
     await store.fetchTrip(tripId)
   }
   if (store.categories.length === 0) {
-    await store.fetchCategories()
+    await store.categories.length === 0 && await store.fetchCategories()
   }
-  formData.value.currency = trip.value?.currency || 'CNY'
+  formData.value.currency = formData.value.currency || trip.value?.currency || 'CNY'
+
+  // Map receipt AI-extracted category to local category_id
+  const receiptCat = q.receipt_category as string
+  if (receiptCat && !formData.value.category_id) {
+    const label = receiptCategoryMap[receiptCat] || receiptCat
+    const match = store.categories.find(c => c.name === label)
+    if (match) formData.value.category_id = match.id
+  }
+
+  // Fetch split group to determine if split type selector should show
+  if (!store.splitGroup) {
+    store.fetchSplitGroup(tripId).catch(() => {})
+  }
 })
 </script>
 

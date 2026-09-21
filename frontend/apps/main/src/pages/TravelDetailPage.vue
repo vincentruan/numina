@@ -103,6 +103,13 @@
 
       <!-- Action Sheet -->
       <van-action-sheet v-model:show="showActionSheet" :actions="expenseActions" @select="onActionSelect" />
+
+      <!-- Receipt Scan Popup -->
+      <van-popup v-model:show="showReceiptScan" position="bottom" round destroy-on-close>
+        <div style="padding: 16px;">
+          <ReceiptScanButton :trip-id="trip!.id" />
+        </div>
+      </van-popup>
     </template>
   </div>
 </template>
@@ -118,6 +125,7 @@ import { useCurrency } from '@/composables/useCurrency'
 import PageHeader from '@/components/common/PageHeader.vue'
 import SplitGroupManager from '@/components/travel/SplitGroupManager.vue'
 import ExpenseListPanel from '@/components/travel/ExpenseListPanel.vue'
+import ReceiptScanButton from '@/components/travel/ReceiptScanButton.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -133,6 +141,7 @@ function formatAmount(amount: string | null): string {
 
 const loading = ref(true)
 const showActionSheet = ref(false)
+const showReceiptScan = ref(false)
 
 const trip = computed(() => store.currentTrip)
 const expenses = computed(() => store.expenses)
@@ -166,9 +175,7 @@ function onActionSelect(action: { value: string }) {
   if (action.value === 'manual') {
     router.push(`/travel/${trip.value!.id}/expense/new`)
   } else if (action.value === 'photo') {
-    // Photo receipt is handled by the ReceiptScanButton component
-    // This would need a separate implementation or modal
-    showSuccessToast('拍照记账功能开发中')
+    showReceiptScan.value = true
   }
 }
 

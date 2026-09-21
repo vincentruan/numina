@@ -4108,5 +4108,9 @@ export default {
     receiptUploadFailed: '上传失败',
     receiptScanFailed: '识别失败',
     amountRequired: '请输入金额',
+    splitType: '分摊方式',
+    splitTypeEqual: '均摊',
+    splitTypePerPerson: '按人头',
+    splitTypeCustom: '自定义',
   },
 }
