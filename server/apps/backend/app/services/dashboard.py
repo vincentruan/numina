@@ -205,12 +205,20 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         Trip.family_id == family_id,
         Trip.is_active == True,  # noqa: E712
     )
-    unsettled_settlements = db.query(func.sum(SplitSettlement.amount)).filter(
-        SplitSettlement.trip_id.in_(active_trip_ids_sub),
-        SplitSettlement.is_complete == False,  # noqa: E712
-    ).scalar()
-    if unsettled_settlements:
-        unsettled = Decimal(str(unsettled_settlements))
+    # R15: convert each settlement to CNY before summing
+    unsettled_rows = (
+        db.query(SplitSettlement.amount, SplitSettlement.currency)
+        .filter(
+            SplitSettlement.trip_id.in_(active_trip_ids_sub),
+            SplitSettlement.is_complete == False,  # noqa: E712
+        )
+        .all()
+    )
+    for row in unsettled_rows:
+        converted = ExchangeRateService.convert(
+            float(row.amount), row.currency, "CNY", db
+        )
+        unsettled += Decimal(str(converted))
 
     if prepaid or unsettled:
         travel_float_val = prepaid - unsettled

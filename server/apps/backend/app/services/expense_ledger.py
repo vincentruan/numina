@@ -8,6 +8,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.schemas.expense_entry import ExpenseEntryCreate
 from packages.core.snowflake import next_id
 from packages.db.models.expense_entry import ExpenseEntry
+from packages.db.models.split_group import SplitGroup, SplitParticipant
 from packages.db.models.trip import Trip
 from packages.domain.exchange_rate.service import ExchangeRateService
 
@@ -64,7 +65,8 @@ def create_expense(
             .first()
         )
         if trip:
-            trip.actual_spend = (trip.actual_spend or Decimal("0")) + amount_cny
+            spend_amount = _family_proportional_share(db, trip.id, amount_cny)
+            trip.actual_spend = (trip.actual_spend or Decimal("0")) + spend_amount
 
     db.commit()
     db.refresh(debit)
@@ -146,7 +148,8 @@ def delete_expense(
             .first()
         )
         if trip:
-            trip.actual_spend = (trip.actual_spend or Decimal("0")) - entry.amount_cny
+            spend_amount = _family_proportional_share(db, trip.id, entry.amount_cny)
+            trip.actual_spend = (trip.actual_spend or Decimal("0")) - spend_amount
 
     db.commit()
 
@@ -187,3 +190,32 @@ def get_expense(
     if not entry:
         raise AppError(ErrorCode.EXPENSE_NOT_FOUND)
     return entry
+
+
+def _family_proportional_share(
+    db: Session, trip_id: int, amount_cny: Decimal
+) -> Decimal:
+    """Calculate the family's proportional share of an expense.
+
+    If the trip has an active split group, the family's share is
+    amount_cny / total_participants. Otherwise returns the full amount.
+    Per R7a: trip.actual_spend reflects the family's proportional share
+    of shared expenses plus 100% of non-shared expenses.
+    """
+    group = (
+        db.query(SplitGroup)
+        .filter(SplitGroup.trip_id == trip_id, SplitGroup.is_active == True)  # noqa: E712
+        .first()
+    )
+    if not group:
+        return amount_cny
+
+    num_participants = (
+        db.query(SplitParticipant)
+        .filter(SplitParticipant.group_id == group.id)
+        .count()
+    )
+    if num_participants <= 1:
+        return amount_cny
+
+    return (amount_cny / num_participants).quantize(Decimal("0.01"))
