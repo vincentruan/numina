@@ -100,6 +100,15 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
     )
 
     # ── 租约 ──────────────────────────────────────────────────────────────────
+    # 房东：车位出租（不关联资产）
+    RentalContractFactory.get_or_create(
+        db,
+        user_id=user.id, family_id=fam.id,
+        role="landlord", monthly_rent=800, deposit=1600,
+        start_date=date(2024, 6, 1), end_date=date(2025, 5, 31),
+        counterparty="赵先生", notes="地下车位出租，一年期",
+    )
+    # 租客：公寓承租（不定期）
     RentalContractFactory.get_or_create(
         db,
         user_id=user.id, family_id=fam.id,
