@@ -45,6 +45,20 @@
             <van-icon name="success" color="#07c160" size="24" />
             <span>{{ t('travel.tripSettled') }}</span>
           </div>
+          <!-- R14: Split summary above the fold for settled trips -->
+          <div class="settled-split-summary">
+            <div class="section-title">{{ t('travel.splitSummaryAboveFold') }}</div>
+            <div class="budget-breakdown">
+              <div class="breakdown-item">
+                <span class="label">{{ t('travel.plannedBudget') }}</span>
+                <span class="value">{{ formatAmount(trip.planned_budget) }}</span>
+              </div>
+              <div class="breakdown-item">
+                <span class="label">{{ t('travel.actualSpend') }}</span>
+                <span class="value">{{ formatAmount(trip.actual_spend) }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -11,9 +11,6 @@ from apps.backend.app.schemas.base import (
     coerce_to_decimal,
 )
 
-_coerce_to_decimal = coerce_to_decimal
-_coerce_money_str = coerce_money_str
-
 
 class ExpenseEntryCreate(BaseModel):
     amount: Decimal
@@ -37,7 +34,7 @@ class ExpenseEntryCreate(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def _coerce_amount(cls, v):
-        return _coerce_to_decimal(v)
+        return coerce_to_decimal(v)
 
     @field_validator("amount")
     @classmethod
@@ -70,4 +67,4 @@ class ExpenseEntryResponse(SnowflakeBase):
     @field_validator("amount", "amount_cny", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        return _coerce_money_str(v)
+        return coerce_money_str(v)

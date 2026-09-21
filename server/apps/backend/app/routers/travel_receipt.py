@@ -91,14 +91,15 @@ async def parse_travel_receipt(
             items = agent_data.get("items", [])
             if items:
                 first = items[0]
+                # Travel receipt fields — different from asset-focused parse schema
                 extracted_data = {
-                    "vendor": first.get("name", ""),
-                    "amount": first.get("purchase_price") or first.get("current_value"),
+                    "vendor": first.get("vendor") or first.get("name", ""),
+                    "amount": first.get("amount") or first.get("purchase_price") or first.get("current_value"),
                     "currency": first.get("currency", "CNY"),
-                    "date": agent_data.get("report_date"),
-                    "expense_category": "misc",
+                    "date": first.get("date") or agent_data.get("report_date"),
+                    "expense_category": first.get("expense_category") or first.get("category", "misc"),
                 }
-                confidence = "medium"
+                confidence = "medium" if extracted_data["amount"] else "low"
     except Exception:
         logger.debug("Receipt AI extraction failed, returning upload-only", exc_info=True)
 

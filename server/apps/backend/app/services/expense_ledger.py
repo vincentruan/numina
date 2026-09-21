@@ -27,12 +27,14 @@ def create_expense(
     used_rate: float | None = None
     if req.exchange_rate is not None and req.exchange_rate > 0:
         used_rate = req.exchange_rate
-        converted = float(req.amount) * req.exchange_rate
+        converted = req.amount * Decimal(str(req.exchange_rate))
     else:
+        # Coerce Decimal → float at boundary: ExchangeRateService.convert
+        # expects float. Result immediately wrapped back to Decimal.
         converted = ExchangeRateService.convert(float(req.amount), req.currency, "CNY", db)
         # Derive the effective rate from the conversion result
-        if req.currency != "CNY" and float(req.amount) > 0:
-            used_rate = converted / float(req.amount)
+        if req.currency != "CNY" and req.amount > 0:
+            used_rate = float(Decimal(str(converted)) / req.amount)
     amount_cny = Decimal(str(converted))
 
     transfer_id = next_id()
@@ -75,7 +77,9 @@ def create_expense(
             .first()
         )
         if trip:
-            spend_amount = _family_proportional_share(db, trip.id, amount_cny)
+            spend_amount = _family_proportional_share(
+                db, trip.id, amount_cny, is_shared=bool(req.split_type)
+            )
             trip.actual_spend = (trip.actual_spend or Decimal("0")) + spend_amount
 
     db.commit()
@@ -158,7 +162,9 @@ def delete_expense(
             .first()
         )
         if trip:
-            spend_amount = _family_proportional_share(db, trip.id, entry.amount_cny)
+            spend_amount = _family_proportional_share(
+                db, trip.id, entry.amount_cny, is_shared=bool(entry.split_type)
+            )
             trip.actual_spend = (trip.actual_spend or Decimal("0")) - spend_amount
 
     db.commit()
@@ -203,15 +209,18 @@ def get_expense(
 
 
 def _family_proportional_share(
-    db: Session, trip_id: int, amount_cny: Decimal
+    db: Session, trip_id: int, amount_cny: Decimal, is_shared: bool = False
 ) -> Decimal:
     """Calculate the family's proportional share of an expense.
 
-    If the trip has an active split group, the family's share is
-    amount_cny / total_participants. Otherwise returns the full amount.
     Per R7a: trip.actual_spend reflects the family's proportional share
-    of shared expenses plus 100% of non-shared expenses.
+    of **shared** expenses plus 100% of **non-shared** expenses.
+    Only applies proportional logic when the expense is actually shared
+    (has a split_type set) AND the trip has an active split group.
     """
+    if not is_shared:
+        return amount_cny
+
     group = (
         db.query(SplitGroup)
         .filter(SplitGroup.trip_id == trip_id, SplitGroup.is_active == True)  # noqa: E712

@@ -71,6 +71,7 @@ def get_shared_expense_view(
         destination=trip.destination,
         departure_date=trip.departure_date,
         return_date=trip.return_date,
+        trip_status=trip.status,
         expenses=expense_items,
         participants=[
             SplitParticipantResponse(

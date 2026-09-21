@@ -39,7 +39,7 @@ function beforeRead(file: File | File[]): boolean {
   const files = Array.isArray(file) ? file : [file]
   const isValid = files.every(f => f.type.startsWith('image/'))
   if (!isValid) {
-    showFailToast('请上传图片文件')
+    showFailToast(t('travel.uploadImage'))
     return false
   }
   return true

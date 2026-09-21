@@ -108,28 +108,28 @@ def simplify_debts(db: Session, trip_id: int, family_id: int) -> list[SplitSettl
     ).delete()
 
     settlements: list[SplitSettlement] = []
-    i, j = 0, 0
-    while i < len(debtors) and j < len(creditors):
-        amount = min(debtors[i][1], creditors[j][1])
+    debtor_idx, creditor_idx = 0, 0
+    while debtor_idx < len(debtors) and creditor_idx < len(creditors):
+        amount = min(debtors[debtor_idx][1], creditors[creditor_idx][1])
         if amount <= Decimal("0"):
             break
 
         settlement = SplitSettlement(
             trip_id=trip_id,
-            from_participant_name=debtors[i][0],
-            to_participant_name=creditors[j][0],
+            from_participant_name=debtors[debtor_idx][0],
+            to_participant_name=creditors[creditor_idx][0],
             amount=amount.quantize(Decimal("0.01")),
             currency="CNY",
         )
         db.add(settlement)
         settlements.append(settlement)
 
-        debtors[i] = (debtors[i][0], debtors[i][1] - amount)
-        creditors[j] = (creditors[j][0], creditors[j][1] - amount)
-        if debtors[i][1] <= Decimal("0.005"):
-            i += 1
-        if creditors[j][1] <= Decimal("0.005"):
-            j += 1
+        debtors[debtor_idx] = (debtors[debtor_idx][0], debtors[debtor_idx][1] - amount)
+        creditors[creditor_idx] = (creditors[creditor_idx][0], creditors[creditor_idx][1] - amount)
+        if debtors[debtor_idx][1] <= Decimal("0.005"):
+            debtor_idx += 1
+        if creditors[creditor_idx][1] <= Decimal("0.005"):
+            creditor_idx += 1
 
     db.commit()
     for s in settlements:

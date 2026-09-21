@@ -15,16 +15,19 @@ SYSTEM_EXPENSE_CATEGORIES: list[dict] = [
 
 
 def bootstrap_expense_categories(db: Session) -> None:
-    """Ensure system expense categories exist. Idempotent."""
-    existing = db.query(ExpenseCategory).filter(ExpenseCategory.is_system).first()
-    if existing:
-        return
+    """Ensure system expense categories exist. Idempotent — upserts per name."""
+    existing_names = {
+        name for (name,) in db.query(ExpenseCategory.name).filter(
+            ExpenseCategory.is_system, ExpenseCategory.family_id.is_(None)
+        ).all()
+    }
 
     for cat_data in SYSTEM_EXPENSE_CATEGORIES:
-        cat = ExpenseCategory(
-            family_id=None,
-            is_system=True,
-            **cat_data,
-        )
-        db.add(cat)
+        if cat_data["name"] not in existing_names:
+            cat = ExpenseCategory(
+                family_id=None,
+                is_system=True,
+                **cat_data,
+            )
+            db.add(cat)
     db.commit()

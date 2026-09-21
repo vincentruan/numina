@@ -24,6 +24,15 @@
 
       <!-- Shared expense view (joined) -->
       <template v-else>
+        <!-- R5: Cancellation notice -->
+        <van-notice-bar
+          v-if="sharedData?.trip_status === 'cancelled' || sharedData?.trip_status === 'archived'"
+          left-icon="warning-o"
+          :text="t('travel.cancelledNotice')"
+          color="#ee0a24"
+          background="#fff0f0"
+        />
+
         <!-- Trip info header -->
         <van-cell-group inset class="trip-info">
           <van-cell :title="t('travel.shared.tripName')" :value="sharedData?.trip_name" />

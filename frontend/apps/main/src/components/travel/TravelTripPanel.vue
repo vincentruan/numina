@@ -69,15 +69,17 @@ const refreshing = ref(false)
 const trips = computed(() => store.trips)
 const activeTrips = computed(() => store.upcomingTrips)
 
-// Current month spend calculation
+// Current month spend: sum actual_spend for trips active during the current month
 const currentMonthSpend = computed(() => {
   const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
   let total = 0
   for (const trip of trips.value) {
     const depDate = new Date(trip.departure_date)
-    if (depDate.getFullYear() === year && depDate.getMonth() === month) {
+    const retDate = trip.return_date ? new Date(trip.return_date) : depDate
+    // Include trips that overlap with the current month
+    if (depDate <= monthEnd && retDate >= monthStart) {
       total += parseFloat(trip.actual_spend) || 0
     }
   }

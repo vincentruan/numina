@@ -41,6 +41,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import { deleteExpense } from '@/api/travel'
+import { useCurrency } from '@/composables/useCurrency'
 import type { ExpenseEntry } from '@/types/travel'
 
 const props = defineProps<{
@@ -72,14 +73,14 @@ function formatDate(dateStr: string): string {
 }
 
 function formatAmount(amount: string, currency: string): string {
-  const num = parseFloat(amount) || 0
-  return `${currency} ${num.toLocaleString(locale.value, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  const { formatIn } = useCurrency()
+  return formatIn(amount, currency)
 }
 
 function getCategoryName(categoryId: string | null): string {
-  if (!categoryId) return '其他'
+  if (!categoryId) return t('travel.otherCategory')
   const cat = store.categories.find(c => c.id === categoryId)
-  return cat?.name || '其他'
+  return cat?.name || t('travel.otherCategory')
 }
 
 function getCategoryIcon(categoryId: string | null): string {

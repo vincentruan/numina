@@ -143,6 +143,14 @@
               <van-button
                 v-if="!wish.converts_to_asset"
                 square
+                type="primary"
+                class="swipe-action-btn"
+                :text="t('travel.graduateWish')"
+                @click="onGraduateWish(wish)"
+              />
+              <van-button
+                v-if="!wish.converts_to_asset"
+                square
                 type="success"
                 class="swipe-action-btn"
                 :text="t('wish.markComplete')"
@@ -236,6 +244,7 @@ import { useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
 import type { Wish } from '@/types'
 import { completeWish, copyWish } from '@/api/wishes'
+import { graduateWish } from '@/api/travel'
 import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useWishStore } from '@/stores/wish'
@@ -364,6 +373,26 @@ function swipeRightWidth(wish: Wish): number {
 function swipeCellStyle(wish: Wish): Record<string, string> {
   const w = swipeRightWidth(wish)
   return w > 0 ? { '--swipe-right-width': `${w}px` } : {}
+}
+
+// R19: Graduate a travel wish to a trip
+async function onGraduateWish(wish: Wish) {
+  try {
+    await showConfirmDialog({
+      title: t('travel.graduateWish'),
+      message: t('travel.graduateConfirm'),
+    })
+    const resp = await graduateWish(wish.id)
+    await refreshWishes()
+    closeSwipe(wish.id)
+    showSuccessToast(t('travel.graduateSuccess'))
+    const trip = resp.data
+    if (trip?.id) {
+      router.push(`/travel/${trip.id}`)
+    }
+  } catch {
+    // user cancelled dialog or API error
+  }
 }
 
 async function onSwipeComplete(wish: Wish) {

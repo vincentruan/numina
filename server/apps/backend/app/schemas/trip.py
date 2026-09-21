@@ -5,10 +5,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel, field_validator
 
-from apps.backend.app.schemas.base import SnowflakeBase, coerce_money_str, coerce_to_decimal
-
-_coerce_to_decimal = coerce_to_decimal
-_coerce_money_str = coerce_money_str
+from apps.backend.app.schemas.base import (
+    SnowflakeBase,
+    coerce_money_str,
+    coerce_to_decimal,
+)
 
 # --- valid status transitions ---
 _VALID_STATUSES = {"planning", "active", "settled", "archived"}
@@ -32,7 +33,7 @@ class TripCreate(BaseModel):
     @field_validator("planned_budget", mode="before")
     @classmethod
     def _coerce_budget(cls, v):
-        return _coerce_to_decimal(v)
+        return coerce_to_decimal(v)
 
 
 class TripUpdate(BaseModel):
@@ -57,7 +58,7 @@ class TripUpdate(BaseModel):
     @field_validator("planned_budget", mode="before")
     @classmethod
     def _coerce_budget(cls, v):
-        return _coerce_to_decimal(v)
+        return coerce_to_decimal(v)
 
 
 class TripResponse(SnowflakeBase):
@@ -82,4 +83,4 @@ class TripResponse(SnowflakeBase):
     @field_validator("planned_budget", "initial_funding", "actual_spend", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        return _coerce_money_str(v)
+        return coerce_money_str(v)

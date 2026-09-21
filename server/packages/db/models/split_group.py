@@ -20,10 +20,11 @@ from packages.db.session import Base, UTCDateTime
 
 def generate_invite_code() -> str:
     """Generate a 6-char alphanumeric invite code (uppercase + digits)."""
-    import random
+    import secrets
     import string
 
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(6))
 
 
 class SplitGroup(Base):

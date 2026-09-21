@@ -6,8 +6,6 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase, coerce_money_str
 
-_coerce_money_str = coerce_money_str
-
 
 class SplitParticipantCreate(BaseModel):
     name: str
@@ -57,7 +55,7 @@ class SplitSettlementResponse(SnowflakeBase):
     @field_validator("amount", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        return _coerce_money_str(v)
+        return coerce_money_str(v)
 
 
 class GraduationRequest(BaseModel):
@@ -76,7 +74,7 @@ class SharedExpenseItem(SnowflakeBase):
     @field_validator("amount", "amount_cny", mode="before")
     @classmethod
     def _coerce_money(cls, v):
-        return _coerce_money_str(v)
+        return coerce_money_str(v)
 
 
 class SharedExpenseResponse(SnowflakeBase):
@@ -86,5 +84,6 @@ class SharedExpenseResponse(SnowflakeBase):
     destination: str
     departure_date: date
     return_date: date | None = None
+    trip_status: str = "active"  # R5: frontend uses this to show "行程已取消" notice
     expenses: list[SharedExpenseItem] = []
     participants: list[SplitParticipantResponse] = []

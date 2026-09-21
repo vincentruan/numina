@@ -117,6 +117,7 @@ export interface SharedExpense {
   destination: string
   departure_date: string
   return_date: string | null
+  trip_status: string
   expenses: SharedExpenseItem[]
   participants: SplitParticipant[]
 }

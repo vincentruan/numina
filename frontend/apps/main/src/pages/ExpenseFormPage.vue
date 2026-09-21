@@ -55,7 +55,7 @@
           is-link
           readonly
           :label="t('travel.expenseDate')"
-          placeholder="选择日期"
+          :placeholder="t('travel.selectDate')"
           @click="showDatePicker = true"
         />
 
@@ -115,7 +115,7 @@
     <van-popup v-model:show="showDatePicker" position="bottom" round destroy-on-close>
       <van-date-picker
         v-model="currentDate"
-        title="选择日期"
+        :title="t('travel.selectDate')"
         @confirm="onDateConfirm"
         @cancel="showDatePicker = false"
       />
@@ -214,7 +214,9 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
 // Whether the trip has an active split group (drives split type selector visibility)
 const hasSplitGroup = computed(() => !!store.splitGroup?.is_active)
 
-// Show manual rate input when expense currency differs from CNY (R3)
+// Show manual rate input as optional field when expense currency differs from CNY (R3).
+// The backend uses the user-provided rate only when ExchangeRateService has no auto-rate.
+// The "手动汇率" badge appears when the user has actually entered a value.
 const showManualRate = computed(() => {
   const curr = formData.value.currency || trip.value?.currency || 'CNY'
   return curr !== 'CNY'

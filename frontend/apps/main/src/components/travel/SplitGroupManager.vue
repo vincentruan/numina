@@ -302,22 +302,21 @@ async function fetchCoOrganizers() {
   try {
     const { getSplitGroup: fetchGroup } = await import('@/api/travel')
     const groupRes = await fetchGroup(props.tripId)
-    // Co-organizer data comes from the group participants with family_id
-    // For now, fetch from a dedicated endpoint or derive from participants
-    // The backend stores co-organizers in trip_co_organizers table
-    // We fetch family members and cross-reference
+    // TODO: Replace with dedicated GET /trips/{id}/co-organizers endpoint.
+    // Currently deriving from participants with family_id set — a heuristic,
+    // not the actual trip_co_organizers table data. Works for display but
+    // won't distinguish co-organizers from regular family-member participants.
     const members = familyMembers.value
     const participantFamilyIds = new Set(
       (groupRes.data.participants || [])
         .filter(p => p.family_id)
         .map(p => p.family_id!),
     )
-    // Co-organizers are family members who are participants with family_id set
     coOrganizers.value = members
       .filter(m => participantFamilyIds.has(m.id))
       .map(m => ({ user_id: m.id, display_name: m.display_name }))
   } catch {
-    // ignore
+    // ignore — co-organizer display is non-critical
   }
 }
 

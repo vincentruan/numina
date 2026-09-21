@@ -215,8 +215,11 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         .all()
     )
     for row in unsettled_rows:
+        # Coerce Decimal → float: ExchangeRateService.convert expects float.
+        # Result is immediately wrapped back to Decimal for exact summation.
+        row_amount = float(Decimal(str(row.amount)))
         converted = ExchangeRateService.convert(
-            float(row.amount), row.currency, "CNY", db
+            row_amount, row.currency, "CNY", db
         )
         unsettled += Decimal(str(converted))
 
