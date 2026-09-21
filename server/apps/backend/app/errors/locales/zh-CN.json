@@ -112,5 +112,21 @@
   "MANIFESTO_NOT_FOUND": "家庭约定不存在",
   "MANIFESTO_ALREADY_SIGNED": "已签署过该约定",
   "MANIFESTO_NOT_ACTIVE": "该约定未生效",
-  "MANIFESTO_ALREADY_REJECTED": "已拒绝过该约定"
+  "MANIFESTO_ALREADY_REJECTED": "已拒绝过该约定",
+  "TRIP_NOT_FOUND": "行程不存在",
+  "TRIP_STATUS_CONFLICT": "行程当前状态不允许此操作",
+  "EXPENSE_NOT_FOUND": "费用条目不存在",
+  "EXPENSE_CATEGORY_NOT_FOUND": "支出类别不存在",
+  "WISH_NOT_FOUND": "心愿不存在",
+  "SPLIT_GROUP_NOT_FOUND": "分摊组不存在",
+  "SPLIT_GROUP_ALREADY_EXISTS": "该行程已有分摊组",
+  "SPLIT_GROUP_INACTIVE": "分摊组已失效",
+  "SPLIT_PARTICIPANT_LIMIT": "参与者人数已达上限（最多20人）",
+  "SPLIT_PARTICIPANT_NAME_CONFLICT": "该参与者姓名已存在",
+  "SPLIT_PARTICIPANT_NOT_FOUND": "参与者不存在",
+  "SETTLEMENT_NOT_FOUND": "结算记录不存在",
+  "SETTLEMENT_REVERSE_EXPIRED": "结算撤销已超过24小时时限",
+  "SETTLEMENT_HAS_COMPLETED": "存在已完成的结算记录，无法重新计算",
+  "CO_ORGANIZER_LIMIT": "共同组织者最多3人",
+  "CO_ORGANIZER_NOT_ALLOWED": "仅行程创建者可管理共同组织者"
 }

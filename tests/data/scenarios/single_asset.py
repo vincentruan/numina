@@ -1,10 +1,11 @@
-"""场景: test_asset — 单个实物资产（MacBook Pro）。"""
+"""场景: test_asset — 单个实物资产（房产 + 出租租约）。"""
 
 from datetime import date
 
 from sqlalchemy.orm import Session
 
 from factories.assets import AssetFactory
+from factories.rentals import RentalContractFactory
 from factories.users import FamilyFactory, UserFactory
 
 
@@ -29,7 +30,8 @@ def seed_single_asset_scenario(db: Session, verbose: bool = False) -> None:
     user.family_id = fam.id
     db.flush()
 
-    AssetFactory.get_or_create(
+    # ── 实物资产 ──────────────────────────────────────────────────────────────
+    property_asset, _ = AssetFactory.get_or_create(
         db,
         user_id=user.id,
         family_id=fam.id,
@@ -43,4 +45,14 @@ def seed_single_asset_scenario(db: Session, verbose: bool = False) -> None:
         location="测试地址",
     )
 
-    print("  [ok] test_asset — 单资产账号已创建")
+    # ── 租约（房东，关联上述房产）──────────────────────────────────────────────
+    RentalContractFactory.get_or_create(
+        db,
+        user_id=user.id, family_id=fam.id,
+        role="landlord", monthly_rent=5000, deposit=10000,
+        start_date=date(2024, 1, 1), end_date=date(2026, 12, 31),
+        linked_asset_id=property_asset.id,
+        counterparty="测试租客", notes="测试房产出租，月租5000",
+    )
+
+    print("  [ok] test_asset — 单资产+租约账号已创建")

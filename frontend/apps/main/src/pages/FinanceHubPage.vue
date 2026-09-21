@@ -3,9 +3,9 @@
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <!-- Skeleton: tab-specific layout matching the actual content structure -->
       <div v-if="hubLoading && !overview" class="hub-skeleton-wrapper">
-        <!-- Tab bar skeleton (4 tabs) -->
+        <!-- Tab bar skeleton (5 tabs) -->
         <div class="skeleton-tab-bar">
-          <div v-for="i in 4" :key="i" class="skeleton-tab-item">
+          <div v-for="i in 5" :key="i" class="skeleton-tab-item">
             <van-skeleton-avatar avatar-size="18px" avatar-shape="square" animate />
             <van-skeleton :row="1" row-width="32px" animate />
           </div>
@@ -14,6 +14,7 @@
         <AssetListSkeleton v-if="activeTab === 'assets'" />
         <LiabilityListSkeleton v-else-if="activeTab === 'liabilities'" />
         <RentalListSkeleton v-else-if="activeTab === 'rentals'" />
+        <TravelListSkeleton v-else-if="activeTab === 'travel'" />
         <WishListSkeleton v-else />
       </div>
 
@@ -75,6 +76,16 @@
             <!-- Rental contracts panel (landlord/tenant + active/history tabs + summary) -->
             <RentalListPanel />
           </van-tab>
+          <van-tab name="travel">
+            <template #title>
+              <div class="tab-title">
+                <van-icon name="compass-o" />
+                <span>{{ t('travel.tab') }}</span>
+              </div>
+            </template>
+            <!-- Travel trip panel (trip list + month summary + FAB) -->
+            <TravelTripPanel />
+          </van-tab>
         </van-tabs>
       </template>
     </van-pull-refresh>
@@ -89,10 +100,12 @@ import AssetListSkeleton from '@/components/asset/AssetListSkeleton.vue'
 import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
 import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 import RentalListSkeleton from '@/components/rental/RentalListSkeleton.vue'
+import TravelListSkeleton from '@/components/travel/TravelListSkeleton.vue'
 import AssetListPanel from '@/components/asset/AssetListPanel.vue'
 import LiabilityListPanel from '@/components/liability/LiabilityListPanel.vue'
 import WishListPanel from '@/components/wishes/WishListPanel.vue'
 import RentalListPanel from '@/components/rental/RentalListPanel.vue'
+import TravelTripPanel from '@/components/travel/TravelTripPanel.vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
@@ -126,7 +139,7 @@ const hubLoading = computed(() => dashboardStore.loading && !overview.value)
 const overviewError = ref(false)
 const refreshing = ref(false)
 
-const activeTab = ref<'assets' | 'liabilities' | 'wishes' | 'rentals'>('assets')
+const activeTab = ref<'assets' | 'liabilities' | 'wishes' | 'rentals' | 'travel'>('assets')
 
 // --- W5 cross-module hint (useDebtWarning): high-interest debt delays nearest wish ---
 // ComputedRef<T[]> is assignable to Ref<T[]> — no cast needed.
@@ -169,7 +182,7 @@ watch(activeTab, (tab) => {
 watch(
   () => route.query.tab,
   (q) => {
-    if (q === 'assets' || q === 'liabilities' || q === 'wishes' || q === 'rentals') {
+    if (q === 'assets' || q === 'liabilities' || q === 'wishes' || q === 'rentals' || q === 'travel') {
       activeTab.value = q
     }
   },
@@ -184,7 +197,7 @@ watch(activeTab, (tab) => {
 })
 function applyQueryTab() {
   const q = route.query.tab
-  if (q === 'assets' || q === 'liabilities' || q === 'wishes' || q === 'rentals') {
+  if (q === 'assets' || q === 'liabilities' || q === 'wishes' || q === 'rentals' || q === 'travel') {
     activeTab.value = q
   } else {
     activeTab.value = 'assets'

@@ -38,6 +38,11 @@ class FamilyFactory:
             existing = db.get(Family, family_id)
             if existing:
                 return existing
+        # Dedup by name so re-seed from a new process (different ID counter)
+        # finds the existing family instead of creating a duplicate.
+        existing = db.query(Family).filter(Family.name == name).first()
+        if existing:
+            return existing
         fam = Family(
             id=family_id or next_id(),
             name=name,

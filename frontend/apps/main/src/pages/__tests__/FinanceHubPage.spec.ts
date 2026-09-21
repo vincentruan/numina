@@ -110,6 +110,8 @@ const stubs = [
   'WishListPanel',
   'RentalListPanel',
   'RentalListSkeleton',
+  'TravelTripPanel',
+  'TravelListSkeleton',
   'van-skeleton-avatar',
 ]
 

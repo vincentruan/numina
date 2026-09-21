@@ -373,3 +373,91 @@ async def notification_digest_job() -> None:
         logger.exception(f"Notification digest job failed: {e}")
     finally:
         db.close()
+
+
+# ── Job 11: Travel trip auto-transitions (R5) ────────────────────────────────
+
+def travel_transition_job() -> None:
+    """Auto-transition trip statuses based on dates and send notifications.
+
+    R5: planning → active uses a hybrid model:
+    - On departure_date, suggest activation via notification
+    - If not activated within 24 hours, auto-transition to active
+    - Past return_date with unsettled expenses: show "待结算" notification
+    """
+    from datetime import date, timedelta  # noqa: PLC0415
+
+    from packages.db.models.trip import Trip  # noqa: PLC0415
+
+    db = SessionLocal()
+    try:
+        today = date.today()
+
+        # 1. Auto-activate: departure_date was 24+ hours ago and still planning
+        auto_activate_cutoff = today - timedelta(days=1)
+        stale_planning = (
+            db.query(Trip)
+            .filter(
+                Trip.status == "planning",
+                Trip.is_active == True,  # noqa: E712
+                Trip.departure_date <= auto_activate_cutoff,
+            )
+            .all()
+        )
+        for trip in stale_planning:
+            trip.status = "active"
+            logger.info(
+                "Trip %s (%s) auto-activated (departure_date=%s, >24h overdue)",
+                trip.id,
+                trip.name,
+                trip.departure_date,
+            )
+
+        # 2. Notify about trips departing today (activation suggestion)
+        today_departures = (
+            db.query(Trip)
+            .filter(
+                Trip.status == "planning",
+                Trip.is_active == True,  # noqa: E712
+                Trip.departure_date == today,
+            )
+            .all()
+        )
+        for trip in today_departures:
+            logger.info(
+                "Trip %s (%s) departure today — notification suggested for activation",
+                trip.id,
+                trip.name,
+            )
+            # TODO: integrate with notification service when travel notifications are registered
+
+        # 3. Notify about unsettled trips past return_date
+        unsettled_trips = (
+            db.query(Trip)
+            .filter(
+                Trip.status == "active",
+                Trip.is_active == True,  # noqa: E712
+                Trip.return_date != None,  # noqa: E711
+                Trip.return_date < today,
+            )
+            .all()
+        )
+        for trip in unsettled_trips:
+            logger.info(
+                "Trip %s (%s) past return_date — '待结算' notification suggested",
+                trip.id,
+                trip.name,
+            )
+            # TODO: integrate with notification service when travel notifications are registered
+
+        db.commit()
+        logger.info(
+            "Travel transition job completed: %d auto-activated, %d departing today, %d unsettled",
+            len(stale_planning),
+            len(today_departures),
+            len(unsettled_trips),
+        )
+    except Exception as e:
+        logger.exception(f"Travel transition job failed: {e}")
+    finally:
+        db.close()

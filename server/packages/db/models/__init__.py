@@ -6,6 +6,8 @@ from packages.db.models.device_session import DeviceSession
 from packages.db.models.child_economy.chore import ChoreInstance, ChoreTemplate
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
 from packages.db.models.exchange_rate import ExchangeRate
+from packages.db.models.expense_category import ExpenseCategory
+from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.family import Family
 from packages.db.models.file_remote_location import FileRemoteLocation
 from packages.db.models.liability import Liability
@@ -21,8 +23,15 @@ from packages.db.models.reminder_notification import ReminderNotification
 from packages.db.models.rental_contract import RentalContract
 from packages.db.models.revoked_token import RevokedToken
 from packages.db.models.security_audit_log import SecurityAuditLog
+from packages.db.models.split_group import (
+    SplitGroup,
+    SplitParticipant,
+    SplitSettlement,
+    TripCoOrganizer,
+)
 from packages.db.models.storage_backend import StorageBackend
 from packages.db.models.tag import Tag
+from packages.db.models.trip import Trip
 from packages.db.models.user import User
 from packages.db.models.wish import Wish
 
@@ -36,6 +45,8 @@ __all__ = [
     "CoinTransaction",
     "DeviceSession",
     "ExchangeRate",
+    "ExpenseCategory",
+    "ExpenseEntry",
     "Family",
     "FileRemoteLocation",
     "Liability",
@@ -50,8 +61,13 @@ __all__ = [
     "RentalContract",
     "RevokedToken",
     "SecurityAuditLog",
+    "SplitGroup",
+    "SplitParticipant",
+    "SplitSettlement",
     "StorageBackend",
     "Tag",
+    "Trip",
+    "TripCoOrganizer",
     "User",
     "Wish",
     "asset_tags",

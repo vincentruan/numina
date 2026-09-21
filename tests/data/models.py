@@ -18,6 +18,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Table,
     Text,
@@ -382,3 +383,126 @@ class BlindBoxGift(Base):
     created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+# ── Travel module ─────────────────────────────────────────────────────────────
+
+class Trip(Base):
+    """家庭旅行 — 镜像 backend trips 表。"""
+
+    __tablename__ = "trips"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    destination: Mapped[str] = mapped_column(String(200), nullable=False)
+    departure_date: Mapped[date] = mapped_column(Date, nullable=False)
+    return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="planning")
+    planned_budget: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    initial_funding: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    actual_spend: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(10), default="CNY")
+    wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("wishes.id"), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ExpenseCategory(Base):
+    """支出类别 — 镜像 backend expense_categories 表。"""
+
+    __tablename__ = "expense_categories"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    family_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    icon: Mapped[str] = mapped_column(String(50), nullable=False, default="label")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ExpenseEntry(Base):
+    """费用条目 — 双Entry记账，镜像 backend expense_entries 表。"""
+
+    __tablename__ = "expense_entries"
+
+    __table_args__ = (
+        UniqueConstraint("transfer_id", "leg_type", name="uq_expense_transfer_leg"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    transfer_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    leg_type: Mapped[str] = mapped_column(String(10), nullable=False)  # debit/credit
+    ref_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    ref_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    category_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("expense_categories.id"), nullable=True)
+    amount: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="CNY")
+    amount_cny: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    exchange_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expense_date: Mapped[date] = mapped_column(Date, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    receipt_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    split_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # equal/per_person/custom
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SplitGroup(Base):
+    """分摊组 — 镜像 backend split_groups 表。"""
+
+    __tablename__ = "split_groups"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("trips.id"), nullable=False)
+    invite_code: Mapped[str] = mapped_column(String(6), unique=True, nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class SplitParticipant(Base):
+    """分摊参与者 — 镜像 backend split_participants 表。"""
+
+    __tablename__ = "split_participants"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("split_groups.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    family_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class SplitSettlement(Base):
+    """分摊结算 — 镜像 backend split_settlements 表。"""
+
+    __tablename__ = "split_settlements"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("trips.id"), nullable=False)
+    from_participant_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    to_participant_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="CNY")
+    is_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    settled_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class TripCoOrganizer(Base):
+    """行程共同组织者 — 镜像 backend trip_co_organizers 表。"""
+
+    __tablename__ = "trip_co_organizers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("trips.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)

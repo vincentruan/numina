@@ -1,6 +1,6 @@
-"""场景: demouser — 完整仿真数据（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒）。"""
+"""场景: demouser — 完整仿真数据（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+旅游）。"""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -9,8 +9,18 @@ from factories.blindbox import BlindBoxFactory
 from factories.children import ChoreFactory, CoinFactory
 from factories.liabilities import LiabilityFactory
 from factories.rentals import RentalContractFactory
+from factories.travel import (
+    ExpenseCategoryFactory,
+    ExpenseEntryFactory,
+    SplitGroupFactory,
+    SplitParticipantFactory,
+    SplitSettlementFactory,
+    TripCoOrganizerFactory,
+    TripFactory,
+)
 from factories.users import FamilyFactory, UserFactory
 from factories.wishes import ChildWishFactory, WishFactory
+from models import Wish
 
 
 def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
@@ -246,4 +256,146 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
             name=name, emoji=emoji, value_score=score, description=desc,
         )
 
-    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒）")
+    # ── 旅游 ──────────────────────────────────────────────────────────────────
+    # 支出类别（复用已有的系统预置，或创建）
+    ec_food, _ = ExpenseCategoryFactory.get_or_create(db, name="餐饮", icon="food", is_system=True, sort_order=1)
+    ec_transport, _ = ExpenseCategoryFactory.get_or_create(db, name="交通", icon="transport", is_system=True, sort_order=2)
+    ec_hotel, _ = ExpenseCategoryFactory.get_or_create(db, name="住宿", icon="hotel", is_system=True, sort_order=3)
+    ec_activity, _ = ExpenseCategoryFactory.get_or_create(db, name="活动", icon="activity", is_system=True, sort_order=4)
+    ec_shopping, _ = ExpenseCategoryFactory.get_or_create(db, name="购物", icon="shopping", is_system=True, sort_order=5)
+    ec_misc, _ = ExpenseCategoryFactory.get_or_create(db, name="杂项", icon="label", is_system=True, sort_order=6)
+
+    # 行程1: 日本家庭旅行（planning，从心愿转化）
+    japan_wish_ref = db.query(Wish).filter(Wish.name == "日本家庭旅行", Wish.family_id == fam.id).first()
+    japan_trip, _ = TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="日本家庭旅行", destination="东京 · 京都 · 大阪",
+        departure_date=date(2026, 10, 1), return_date=date(2026, 10, 7),
+        status="planning", planned_budget=50000, initial_funding=8000,
+        currency="CNY",
+        wish_id=japan_wish_ref.id if japan_wish_ref else None,
+        timezone="Asia/Tokyo",
+    )
+    # 日本旅行费用（提前预订）
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=japan_trip.id, user_id=user.id,
+        category_id=ec_transport.id, amount=12800, expense_date=date(2026, 7, 15),
+        description="往返机票（2大2小）",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=japan_trip.id, user_id=user.id,
+        category_id=ec_hotel.id, amount=9600, expense_date=date(2026, 7, 20),
+        description="新宿华盛顿酒店 6晚",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=japan_trip.id, user_id=user.id,
+        category_id=ec_hotel.id, amount=5400, expense_date=date(2026, 7, 22),
+        description="京都町屋民宿 2晚",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=japan_trip.id, user_id=spouse.id,
+        category_id=ec_activity.id, amount=2400, expense_date=date(2026, 8, 1),
+        description="迪士尼海洋门票预订",
+    )
+    # 配偶作为共同组织者
+    TripCoOrganizerFactory.get_or_create(
+        db, trip_id=japan_trip.id, user_id=spouse.id,
+    )
+
+    # 行程2: 三亚年假（active，正在进行）
+    sanya_trip, _ = TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="三亚年假", destination="三亚湾 · 亚龙湾",
+        departure_date=date(2026, 9, 15), return_date=date(2026, 9, 20),
+        status="active", planned_budget=15000, actual_spend=11200,
+        currency="CNY", timezone="Asia/Shanghai",
+    )
+    sanya_expenses = [
+        (ec_transport.id, 3200, date(2026, 9, 1), "往返机票", user.id),
+        (ec_hotel.id, 4800, date(2026, 9, 1), "亚龙湾万豪 5晚", user.id),
+        (ec_food.id, 1200, date(2026, 9, 15), "海鲜第一餐", user.id),
+        (ec_food.id, 680, date(2026, 9, 16), "椰子鸡 + 清补凉", spouse.id),
+        (ec_activity.id, 800, date(2026, 9, 16), "蜈支洲岛一日游", user.id),
+        (ec_activity.id, 520, date(2026, 9, 17), "潜水体验", spouse.id),
+    ]
+    for cat_id, amt, edate, desc, uid in sanya_expenses:
+        ExpenseEntryFactory.create_pair(
+            db, family_id=fam.id, trip_id=sanya_trip.id, user_id=uid,
+            category_id=cat_id, amount=amt, expense_date=edate,
+            description=desc,
+        )
+    # 三亚分摊组（夫妻 AA）
+    sanya_split, _ = SplitGroupFactory.get_or_create(
+        db, trip_id=sanya_trip.id, created_by_user_id=user.id,
+        invite_code="SANYA1",
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=sanya_split.id, name="演示用户", family_id=fam.id,
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=sanya_split.id, name="演示配偶", family_id=fam.id,
+    )
+
+    # 行程3: 成都美食之旅（settled，已结束并结算）
+    chengdu_trip, _ = TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="成都美食之旅", destination="成都 · 都江堰",
+        departure_date=date(2026, 6, 5), return_date=date(2026, 6, 8),
+        status="settled", planned_budget=8000, actual_spend=7350,
+        currency="CNY", timezone="Asia/Shanghai",
+    )
+    chengdu_expenses = [
+        (ec_transport.id, 2100, date(2026, 5, 20), "高铁往返", user.id),
+        (ec_hotel.id, 1800, date(2026, 5, 22), "太古里亚朵 3晚", user.id),
+        (ec_food.id, 680, date(2026, 6, 5), "马路边边火锅", user.id),
+        (ec_food.id, 420, date(2026, 6, 6), "小龙坎火锅", spouse.id),
+        (ec_food.id, 350, date(2026, 6, 6), "宽窄巷子小吃", user.id),
+        (ec_activity.id, 480, date(2026, 6, 7), "都江堰门票", user.id),
+        (ec_shopping.id, 520, date(2026, 6, 7), "伴手礼：火锅底料+兔头", spouse.id),
+        (ec_food.id, 380, date(2026, 6, 8), "返程前最后一顿串串", user.id),
+        (ec_misc.id, 620, date(2026, 6, 8), "打车+行李寄存", user.id),
+    ]
+    for cat_id, amt, edate, desc, uid in chengdu_expenses:
+        ExpenseEntryFactory.create_pair(
+            db, family_id=fam.id, trip_id=chengdu_trip.id, user_id=uid,
+            category_id=cat_id, amount=amt, expense_date=edate,
+            description=desc,
+        )
+    # 成都分摊组 + 结算
+    chengdu_split, _ = SplitGroupFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, created_by_user_id=user.id,
+        invite_code="CD2026", is_active=False,
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=chengdu_split.id, name="演示用户", family_id=fam.id,
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=chengdu_split.id, name="演示配偶", family_id=fam.id,
+    )
+    SplitSettlementFactory.get_or_create(
+        db, trip_id=chengdu_trip.id,
+        from_participant_name="演示配偶", to_participant_name="演示用户",
+        amount=480, is_complete=True,
+        settled_at=datetime(2026, 6, 10, 15, 30),
+        settled_by_user_id=spouse.id,
+    )
+
+    # 行程4: 国庆露营（planning，刚创建）
+    TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="国庆莫干山露营", destination="莫干山",
+        departure_date=date(2026, 10, 3), return_date=date(2026, 10, 5),
+        status="planning", planned_budget=3500,
+        currency="CNY",
+    )
+
+    # 行程5: 已取消的旅行
+    TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="春节东南亚游", destination="曼谷 · 清迈",
+        departure_date=date(2026, 1, 25), return_date=date(2026, 2, 1),
+        status="cancelled", planned_budget=20000, actual_spend=0,
+        currency="CNY", is_active=False,
+    )
+
+    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+21费用+2结算）")

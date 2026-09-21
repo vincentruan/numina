@@ -9,6 +9,15 @@ from .children import ChoreFactory, CoinFactory
 from .liabilities import LiabilityFactory
 from .users import FamilyFactory, UserFactory
 from .rentals import RentalContractFactory
+from .travel import (
+    ExpenseCategoryFactory,
+    ExpenseEntryFactory,
+    SplitGroupFactory,
+    SplitParticipantFactory,
+    SplitSettlementFactory,
+    TripCoOrganizerFactory,
+    TripFactory,
+)
 from .wishes import ChildWishFactory, WishFactory
 
 __all__ = [
@@ -22,4 +31,11 @@ __all__ = [
     "CoinFactory",
     "BlindBoxFactory",
     "RentalContractFactory",
+    "ExpenseCategoryFactory",
+    "ExpenseEntryFactory",
+    "TripFactory",
+    "SplitGroupFactory",
+    "SplitParticipantFactory",
+    "SplitSettlementFactory",
+    "TripCoOrganizerFactory",
 ]

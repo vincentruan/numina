@@ -20,12 +20,15 @@ import re
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.rental_contract import RentalContract
 from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
+from packages.db.models.expense_entry import ExpenseEntry
+from packages.db.models.trip import Trip
 from packages.domain.exchange_rate.service import ExchangeRateService
 
 logger = logging.getLogger(__name__)
@@ -295,5 +298,45 @@ def build_rental_summary(db: Session, user: User) -> str:
         "monthly_expense": round(monthly_expense, 2),
         "net_cash_flow": round(monthly_income - monthly_expense, 2),
         "total_deposit": round(total_deposit, 2),
+    }
+    return _serialize(data)
+
+
+def build_travel_summary(db: Session, user: User) -> str | None:
+    """Active trips summary as structured JSON for AI context."""
+    active_trips = db.query(Trip).filter(
+        Trip.family_id == user.family_id,
+        Trip.is_active == True,  # noqa: E712
+    ).all()
+
+    dc = user.default_currency or "CNY"
+
+    if not active_trips:
+        return None
+
+    trips_data: list[dict[str, Any]] = []
+    for trip in active_trips:
+        spend_raw = db.query(func.sum(ExpenseEntry.amount_cny)).filter(
+            ExpenseEntry.family_id == user.family_id,
+            ExpenseEntry.leg_type == "debit",
+            ExpenseEntry.ref_id == trip.id,
+            ExpenseEntry.ref_type == "trip",
+        ).scalar() or 0
+        spend = Decimal(str(spend_raw)).quantize(Decimal("0.01"))
+
+        trips_data.append({
+            "name": trip.name,
+            "destination": trip.destination,
+            "status": trip.status,
+            "planned_budget": str(Decimal(str(trip.planned_budget)).quantize(Decimal("0.01"))) if trip.planned_budget else None,
+            "actual_spend": str(spend),
+            "currency": trip.currency,
+        })
+
+    data: dict[str, Any] = {
+        "type": "travel_summary",
+        "currency": dc,
+        "active_trips": len(active_trips),
+        "trips": trips_data,
     }
     return _serialize(data)

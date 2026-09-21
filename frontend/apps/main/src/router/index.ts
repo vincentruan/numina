@@ -162,6 +162,40 @@ const router = createRouter({
           component: () => import('@/pages/ImportReportPage.vue'),
         },
         {
+          path: 'travel',
+          redirect: '/finance?tab=travel',
+        },
+        {
+          path: 'travel/new',
+          name: 'TravelCreate',
+          component: () => import('@/pages/TravelFormPage.vue'),
+          meta: { title: '新建旅行' },
+        },
+        {
+          path: 'travel/:id',
+          name: 'TravelDetail',
+          component: () => import('@/pages/TravelDetailPage.vue'),
+          meta: { title: '行程详情' },
+        },
+        {
+          path: 'travel/:tripId/settlement',
+          name: 'SplitSettlement',
+          component: () => import('@/pages/SplitSettlementPage.vue'),
+          meta: { title: '结算' },
+        },
+        {
+          path: 'travel/:id/edit',
+          name: 'TravelEdit',
+          component: () => import('@/pages/TravelFormPage.vue'),
+          meta: { title: '编辑行程' },
+        },
+        {
+          path: 'travel/:tripId/expense/new',
+          name: 'ExpenseCreate',
+          component: () => import('@/pages/ExpenseFormPage.vue'),
+          meta: { title: '记录费用' },
+        },
+        {
           path: 'blind-box/draws',
           name: 'BlindBoxDraws',
           component: () => import('@/pages/BlindBoxDrawsPage.vue')
@@ -444,6 +478,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         }
       ]
+    },
+    {
+      path: '/travel/shared/:code',
+      name: 'SharedExpense',
+      component: () => import('@/pages/SharedExpensePage.vue'),
+      meta: { title: '共享费用', guest: true },
     },
     {
       // Match /child and any sub-path so navigation from inside the adult app

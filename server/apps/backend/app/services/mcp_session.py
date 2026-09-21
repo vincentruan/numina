@@ -440,6 +440,134 @@ class MCPSession:
                                 ],
                             },
                         }
+                elif name == "get_travel_trips":
+                    from apps.backend.app.services import trip as trip_service
+
+                    status_filter = arguments.get("status")
+                    limit = int(arguments.get("limit", 20))
+                    trips = trip_service.list_trips(
+                        db,
+                        family_id=int(self._family_id),
+                        status=status_filter,
+                    )
+                    trips = trips[:limit]
+                    data = {
+                        "trips": [
+                            {
+                                "id": str(t.id),
+                                "name": t.name,
+                                "destination": t.destination,
+                                "status": t.status,
+                                "departure_date": (
+                                    t.departure_date.isoformat()
+                                    if t.departure_date
+                                    else None
+                                ),
+                                "return_date": (
+                                    t.return_date.isoformat()
+                                    if t.return_date
+                                    else None
+                                ),
+                                "planned_budget": (
+                                    str(t.planned_budget)
+                                    if t.planned_budget is not None
+                                    else None
+                                ),
+                                "actual_spend": str(t.actual_spend),
+                                "currency": t.currency,
+                            }
+                            for t in trips
+                        ]
+                    }
+                elif name == "get_travel_expenses":
+                    from apps.backend.app.services import (
+                        expense_ledger as expense_ledger_service,
+                    )
+                    from apps.backend.app.services import trip as trip_service
+
+                    trip_id_str = arguments["trip_id"]
+                    trip_id_int = int(trip_id_str)
+                    limit = int(arguments.get("limit", 50))
+                    # Validate trip belongs to family
+                    trip_service.get_trip(db, trip_id_int, int(self._family_id))
+                    expenses = expense_ledger_service.list_expenses(
+                        db,
+                        family_id=int(self._family_id),
+                        ref_id=trip_id_int,
+                        ref_type="trip",
+                        limit=limit,
+                    )
+                    data = {
+                        "trip_id": trip_id_str,
+                        "expenses": [
+                            {
+                                "id": str(e.id),
+                                "amount": str(e.amount),
+                                "currency": e.currency,
+                                "amount_cny": str(e.amount_cny),
+                                "expense_date": (
+                                    e.expense_date.isoformat()
+                                    if e.expense_date
+                                    else None
+                                ),
+                                "description": e.description,
+                            }
+                            for e in expenses
+                        ],
+                    }
+                elif name == "get_travel_split_balances":
+                    from apps.backend.app.services import (
+                        expense_ledger as expense_ledger_service,
+                    )
+                    from apps.backend.app.services import (
+                        settlement as settlement_service,
+                    )
+                    from apps.backend.app.services import trip as trip_service
+
+                    trip_id_str = arguments["trip_id"]
+                    trip_id_int = int(trip_id_str)
+                    # Validate trip belongs to family
+                    trip_obj = trip_service.get_trip(
+                        db, trip_id_int, int(self._family_id)
+                    )
+
+                    # Get total shared expenses (debit legs only, in CNY)
+                    expenses = expense_ledger_service.list_expenses(
+                        db,
+                        family_id=int(self._family_id),
+                        ref_id=trip_id_int,
+                        ref_type="trip",
+                        limit=1000,
+                    )
+                    total_shared_cny = sum(
+                        (e.amount_cny for e in expenses), Decimal("0")
+                    )
+
+                    # Get settlements (sanitized — no external participant names)
+                    try:
+                        settlements = settlement_service.get_settlements(
+                            db, trip_id_int, int(self._family_id)
+                        )
+                        settlement_data = [
+                            {
+                                "amount": str(s.amount),
+                                "currency": s.currency,
+                                "is_complete": s.is_complete,
+                            }
+                            for s in settlements
+                        ]
+                    except Exception:
+                        # No split group yet — that's fine
+                        settlement_data = []
+
+                    data = {
+                        "trip_id": trip_id_str,
+                        "total_shared_expenses_cny": str(total_shared_cny),
+                        "trip_currency": trip_obj.currency,
+                        "expense_count": len(expenses),
+                        "settlements": settlement_data,
+                        "has_split_group": len(settlement_data) > 0,
+                    }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

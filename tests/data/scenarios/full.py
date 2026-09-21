@@ -1,4 +1,4 @@
-"""场景: test_rich — 完整数据（多资产 + 负债 + 心愿 + 儿童）。"""
+"""场景: test_rich — 完整数据（多资产 + 负债 + 心愿 + 儿童 + 旅游）。"""
 
 from datetime import date, datetime
 
@@ -8,6 +8,13 @@ from factories.assets import AssetFactory
 from factories.children import ChoreFactory, CoinFactory
 from factories.liabilities import LiabilityFactory
 from factories.rentals import RentalContractFactory
+from factories.travel import (
+    ExpenseCategoryFactory,
+    ExpenseEntryFactory,
+    SplitGroupFactory,
+    SplitParticipantFactory,
+    TripFactory,
+)
 from factories.users import FamilyFactory, UserFactory
 from factories.wishes import ChildWishFactory, WishFactory
 
@@ -93,6 +100,15 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
     )
 
     # ── 租约 ──────────────────────────────────────────────────────────────────
+    # 房东：车位出租（不关联资产）
+    RentalContractFactory.get_or_create(
+        db,
+        user_id=user.id, family_id=fam.id,
+        role="landlord", monthly_rent=800, deposit=1600,
+        start_date=date(2024, 6, 1), end_date=date(2025, 5, 31),
+        counterparty="赵先生", notes="地下车位出租，一年期",
+    )
+    # 租客：公寓承租（不定期）
     RentalContractFactory.get_or_create(
         db,
         user_id=user.id, family_id=fam.id,
@@ -106,7 +122,7 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
         db, user_id=user.id, family_id=fam.id,
         name="索尼 A7M4 相机", expected_price=18000, priority="high",
     )
-    WishFactory.get_or_create(
+    japan_wish, _ = WishFactory.get_or_create(
         db, user_id=user.id, family_id=fam.id,
         name="家庭旅行 — 日本", expected_price=30000, priority="medium",
         converts_to_asset=False,
@@ -114,6 +130,79 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
     WishFactory.get_or_create(
         db, user_id=user.id, family_id=fam.id,
         name="钢琴", expected_price=12000, priority="low",
+    )
+
+    # ── 旅游 ──────────────────────────────────────────────────────────────────
+    # 支出类别（系统预置）
+    cat_food, _ = ExpenseCategoryFactory.get_or_create(db, name="餐饮", icon="food", is_system=True, sort_order=1)
+    cat_transport, _ = ExpenseCategoryFactory.get_or_create(db, name="交通", icon="transport", is_system=True, sort_order=2)
+    cat_hotel, _ = ExpenseCategoryFactory.get_or_create(db, name="住宿", icon="hotel", is_system=True, sort_order=3)
+    cat_activity, _ = ExpenseCategoryFactory.get_or_create(db, name="活动", icon="activity", is_system=True, sort_order=4)
+    ExpenseCategoryFactory.get_or_create(db, name="购物", icon="shopping", is_system=True, sort_order=5)
+
+    # 行程1: 日本旅行（planning，从心愿转化）
+    japan_trip, _ = TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="日本家庭旅行", destination="东京 · 大阪",
+        departure_date=date(2026, 10, 1), return_date=date(2026, 10, 7),
+        status="planning", planned_budget=30000, currency="CNY",
+        wish_id=japan_wish.id, timezone="Asia/Tokyo",
+    )
+
+    # 为日本旅行添加几笔费用
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=japan_trip.id, user_id=user.id,
+        category_id=cat_transport.id, amount=5800, expense_date=date(2026, 8, 15),
+        description="往返机票预订（2大1小）",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=japan_trip.id, user_id=user.id,
+        category_id=cat_hotel.id, amount=4200, expense_date=date(2026, 8, 20),
+        description="新宿花园酒店 6晚",
+    )
+
+    # 行程2: 周末露营（active，已有较多费用）
+    camping_trip, _ = TripFactory.get_or_create(
+        db, user_id=user.id, family_id=fam.id,
+        name="周末千岛湖露营", destination="千岛湖",
+        departure_date=date(2026, 9, 12), return_date=date(2026, 9, 14),
+        status="active", planned_budget=3000, actual_spend=2350,
+        currency="CNY",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=camping_trip.id, user_id=user.id,
+        category_id=cat_transport.id, amount=450, expense_date=date(2026, 9, 12),
+        description="油费 + 高速过路费",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=camping_trip.id, user_id=user.id,
+        category_id=cat_hotel.id, amount=800, expense_date=date(2026, 9, 12),
+        description="湖景帐篷营地 2晚",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=camping_trip.id, user_id=user.id,
+        category_id=cat_food.id, amount=600, expense_date=date(2026, 9, 12),
+        description="农家菜 + BBQ食材",
+    )
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=camping_trip.id, user_id=user.id,
+        category_id=cat_activity.id, amount=500, expense_date=date(2026, 9, 13),
+        description="皮划艇租赁",
+    )
+
+    # 分摊组（露营行程，邀请了朋友）
+    split_group, _ = SplitGroupFactory.get_or_create(
+        db, trip_id=camping_trip.id, created_by_user_id=user.id,
+        invite_code="CAMP26",
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=split_group.id, name="完整数据测试", family_id=fam.id,
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=split_group.id, name="老王",
+    )
+    SplitParticipantFactory.get_or_create(
+        db, group_id=split_group.id, name="小李",
     )
 
     # ── 儿童账号 ──────────────────────────────────────────────────────────────
@@ -163,4 +252,4 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
         status="active", priority="high",
     )
 
-    print("  [ok] test_rich — 完整数据账号已创建")
+    print("  [ok] test_rich — 完整数据账号已创建（含旅游 2 行程 + 6 费用 + 1 分摊组）")

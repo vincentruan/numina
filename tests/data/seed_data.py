@@ -355,7 +355,7 @@ def main():
         
         print("\n测试账号:")
         print("  test_empty  / TestEmpty123!  - 空家庭")
-        print("  test_asset  / TestAsset123!  - 单资产")
+        print("  test_asset  / TestAsset123!  - 单资产+租约")
         print("  test_rich   / TestRich123!   - 完整数据")
         if not args.skip_demo:
             print("  demouser    / DemoPass123    - 完整仿真")

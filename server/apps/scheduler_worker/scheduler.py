@@ -27,6 +27,7 @@ def setup_all_jobs() -> None:
         reminder_job,
         revoked_token_cleanup_job,
         snapshot_job,
+        travel_transition_job,
     )
 
     # Job 1: Exchange rate — every 2h from 08:00-22:00, 15-min jitter
@@ -166,3 +167,17 @@ def setup_all_jobs() -> None:
         coalesce=True,
     )
     logger.info("通知摘要定时任务已配置（每日 21:00）")
+
+    # Job 11: Travel trip auto-transitions — daily at 06:00
+    scheduler.add_job(
+        travel_transition_job,
+        trigger="cron",
+        hour=6,
+        minute=0,
+        id="travel_transition",
+        name="travel_transition_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("行程状态自动转换任务已配置（每日 06:00）")

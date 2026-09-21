@@ -256,6 +256,60 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=False,
     ),
+    "get_travel_trips": MCPToolMeta(
+        name="get_travel_trips",
+        description="查询家庭旅行列表。支持按状态过滤、限制条数。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "行程状态过滤 (planning/active/settled/archived)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 20,
+                    "minimum": 1,
+                    "maximum": 100,
+                },
+            },
+            "required": [],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
+    "get_travel_expenses": MCPToolMeta(
+        name="get_travel_expenses",
+        description="查询指定行程的费用明细。支持按类别过滤。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "trip_id": {"type": "string", "description": "行程ID"},
+                "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "minimum": 1,
+                    "maximum": 200,
+                },
+            },
+            "required": ["trip_id"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
+    "get_travel_split_balances": MCPToolMeta(
+        name="get_travel_split_balances",
+        description="查询指定行程的分摊余额和结算状态。仅返回家庭自身数据，不含外部参与者信息。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "trip_id": {"type": "string", "description": "行程ID"},
+            },
+            "required": ["trip_id"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
 }
 
 

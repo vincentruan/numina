@@ -27,7 +27,7 @@ authenticated UI flows, screenshot capture, and test report generation.
 > environment must already contain the test accounts below (see
 > "Prerequisites").
 
-Covers **thirteen** feature areas (detailed cases split by area under
+Covers **fourteen** feature areas (detailed cases split by area under
 [`test-cases/`](./test-cases/), shared conventions in
 [`test-cases/_common.md`](./test-cases/_common.md), role matrix in
 [`test-cases/role-capabilities.md`](./test-cases/role-capabilities.md)):
@@ -44,6 +44,7 @@ Covers **thirteen** feature areas (detailed cases split by area under
 11. **AI/agent adversarial security** — 提示词注入 / 跨租户隔离 / 工具越权 / 自定义智能体隔离 / 输入边界 (C11.1–C11.20) ([`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md))
 12. **AI task resilience** — 前端不稳定处理：离开/刷新恢复、失败/中断重试、用户取消 (C12.1–C12.9) ([`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md))
 13. **AI 资产报告深度验证** — Hub 弹窗内容/z-index、报告重入步骤去重/SSE 重连/取消按钮、narrative 缓存推导 (C13.1–C13.5) ([`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md))
+14. **Travel module (家庭旅行管理)** — 旅行 Tab / 行程 CRUD / 费用记账 / 多币种 / 心愿转化 / 分摊结算 / 魔法链接 / Dashboard travel_float (C14.1–C14.22) ([`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md))
 
 > Areas 4–6 are navigation-coverage + parity suites. Area 4 includes the
 > **currency-switch bug class** (amounts not re-converted by rate after switching
@@ -72,16 +73,17 @@ schedule + verified browser concurrency evidence.
 | Group | Dir | Areas | Session | State domain | Parallel with |
 |-------|-----|-------|---------|--------------|---------------|
 | **G0** preconditions | [`g0-preconditions/`](./test-cases/groups/g0-preconditions/) | Phase 0/1/1.5/2 | serial | establishes login | none — first |
-| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11, 12 | `$SID` (adult) | reads global; per-entity writes | **G3** |
+| **G1** adult-stable | [`g1-adult-stable/`](./test-cases/groups/g1-adult-stable/) | 2, 3, 6, 7, 8, 11, 12, 14 | `$SID` (adult) | reads global; per-entity writes | **G3** |
 | **G2** adult-currency | [`g2-adult-currency/`](./test-cases/groups/g2-adult-currency/) | 4 | adult (own) | **mutates `default_currency`** | **G3** |
 | **G3** child | [`g3-child/`](./test-cases/groups/g3-child/) | 1, 5, 10 | `$SID_CHILD` | child origin (isolated dev) | **G1 or G2** |
 
 **Schedule:** `G0 (serial) → G1 ‖ G3 (parallel) → G2 (after G1)`. Three agents
 cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
-> **G1 internal order:** area2 → area8 → area3 → area6 → area7 → area11. Area 7
+> **G1 internal order:** area2 → area14 → area8 → area3 → area6 → area7 → area11. Area 7
 > (regression) runs just before Area 11, with R6 (auth expiry) destroying the
-> session **last** so earlier areas have a live session. Area 11 uses adult
+> session **last** so earlier areas have a live session. Area 14 (travel) runs
+> after area2 since both create financial entities. Area 11 uses adult
 > session read-only probes and should run before R6 clears the session.
 
 > **Docker mode caveat:** nginx serves adult + child under **one origin** (:80)
@@ -112,20 +114,21 @@ cover all cases; wall-clock ≈ G0 + max(G1, G3) + G2 instead of sequential.
 
 | Mode | 触发词 | 覆盖范围 | 预计耗时 |
 |------|--------|----------|----------|
-| **full** | "run sim test", "全量测试" | Area 1–13 (所有用例) | ~80-110 min |
+| **full** | "run sim test", "全量测试" | Area 1–14 (所有用例) | ~90-120 min |
 | **smoke** | "smoke test", "快速检查" | C2.1, C2.2, C2.5, C2.8, C3.1, C3.2, C4.0, R1, R2, C9.4 | ~18-25 min |
 | **child** | "child test", "儿童测试" | Area 1 + Area 5 (G3 only) | ~20-30 min |
 | **finance** | "finance test", "财务测试" | Area 2 only (G1 subset, C2.1–C2.25) | ~20-25 min |
 | **ai** | "ai test", "AI测试" | Area 3 + Area 6 + Area 12 + Area 13 (G1 subset, AI 必须启用) | ~35-45 min |
 | **regression** | "regression test", "回归测试" | Area 7 only (R1–R9) | ~10-15 min |
 | **security** | "security test", "安全测试" | Area 9 (C9.1–C9.7) + Area 11 (C11.1–C11.20) + R6 | ~25-35 min |
+| **travel** | "travel test", "旅行测试" | Area 14 only (C14.1–C14.22) | ~25-35 min |
 | **area-N** | "test area N", "测试区域N" | 指定 Area N 的用例 | varies |
 
 **选择逻辑:**
 1. 用户未指定模式 → 默认 `full`
 2. 用户说"快速检查" / "smoke" → `smoke` (仅跑关键路径的 10 个用例)
 3. 用户明确指定某个 area 或功能域 → 跑对应的 area
-4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12, 仅验证核心 adult 功能 + 币种回归 + 通知触发
+4. `smoke` 模式跳过 Area 1/5/7/8/9/10/11/12/14, 仅验证核心 adult 功能 + 币种回归 + 通知触发
 
 ---
 
@@ -793,7 +796,7 @@ the skill log.
 - 截图目录: dogfood-output/
 
 ## 成功摘要
-- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5)
+- 测试用例总数: N (Area1: C1.1–C1.17, Area2: C2.1–C2.25, Area3: C3.1–C3.23, Area4: C4.0–C4.16, Area5: C5.1–C5.10, Area6: C6.1–C6.27, Area7: R1–R9, Area8: F.1–F.10, Area9: C9.1–C9.7, Area10: C10.1–C10.4, Area11: C11.1–C11.20, Area12: C12.1–C12.9, Area13: C13.1–C13.5, Area14: C14.1–C14.22)
 - 通过: X
 - 失败: Y
 - 跳过: Z (注明原因, 如 AI 未启用、数据不足)
@@ -1038,6 +1041,7 @@ curl -sf "${API_BASE%/v1}/health" -o /dev/null && echo "api UP"
 | **11 — AI/agent adversarial security (提示词注入/租户隔离/越权)** | **G1** | **C11.1–C11.20** | [`test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md`](./test-cases/groups/g1-adult-stable/area11-ai-security-adversarial.md) |
 | **12 — AI task resilience (前端不稳定处理)** | **G1** | **C12.1–C12.9** | [`test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md`](./test-cases/groups/g1-adult-stable/area12-ai-task-resilience.md) |
 | **13 — AI 资产报告深度验证 (Hub 弹窗/重入去重/SSE 重连)** | **G1** | **C13.1–C13.5** | [`test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md`](./test-cases/groups/g1-adult-stable/area13-ai-asset-report-deep.md) |
+| **14 — Travel module (旅行管理: 行程/费用/分摊/转化)** | **G1** | **C14.1–C14.22** | [`test-cases/groups/g1-adult-stable/area14-travel.md`](./test-cases/groups/g1-adult-stable/area14-travel.md) |
 
 ### Supporting References
 
