@@ -64,7 +64,9 @@ export function createExpenseCategory(data: { name: string; icon?: string }) {
 
 // Split Group API
 export function getSplitGroup(tripId: string) {
-  return http.get<SplitGroup>(`/trips/${tripId}/split`)
+  return http.get<SplitGroup>(`/trips/${tripId}/split`, {
+    _silentErrorCodes: ['SPLIT_GROUP_NOT_FOUND'],
+  })
 }
 
 export function createSplitGroup(tripId: string) {
