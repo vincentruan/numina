@@ -140,8 +140,9 @@ describe('TravelTripCard', () => {
     }))
     const budgetInfo = wrapper.find('.budget-info')
     expect(budgetInfo.exists()).toBe(true)
-    expect(budgetInfo.text()).toContain('5')
-    expect(budgetInfo.text()).toContain('15')
+    // formatCurrency uses 万 for CNY ≥10000: 15000 → ¥1.50万, 5000 → ¥5,000
+    expect(budgetInfo.text()).toContain('5,000')
+    expect(budgetInfo.text()).toContain('1.50')
   })
 
   it('renders cancelled status with danger tag', () => {
