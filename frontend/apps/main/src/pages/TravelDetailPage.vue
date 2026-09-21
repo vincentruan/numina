@@ -74,13 +74,6 @@
         <van-cell :title="t('travel.currency')" :value="trip.currency" />
       </van-cell-group>
 
-      <!-- Budget section -->
-      <van-cell-group inset class="budget-card">
-        <van-cell :title="t('travel.plannedBudget')" :value="formatAmount(trip.planned_budget)" />
-        <van-cell :title="t('travel.initialFunding')" :value="formatAmount(trip.initial_funding)" />
-        <van-cell :title="t('travel.actualSpend')" :value="formatAmount(trip.actual_spend)" />
-      </van-cell-group>
-
       <!-- Expense list section -->
       <van-cell-group inset class="expense-card">
         <van-cell :title="t('travel.expenses')">
