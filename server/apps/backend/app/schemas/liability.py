@@ -1,31 +1,13 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from apps.backend.app.schemas.base import SnowflakeBase
+from apps.backend.app.schemas.base import SnowflakeBase, coerce_money_str, coerce_to_decimal
 
-
-def _coerce_to_decimal(v: Any) -> Decimal | None:
-    """Accept int/float/str/Decimal and return a Decimal (or None).
-
-    Shared input coercion for money fields on Create/Update/PaymentRequest.
-    """
-    if v is None or isinstance(v, Decimal):
-        return v
-    return Decimal(str(v))
-
-
-def _coerce_money_str(v: Any) -> str | None:
-    """Serialize a money value to a 2-decimal str (or None) for the wire.
-
-    Shared output coercion for money fields on LiabilityResponse — the
-    money-as-str convention (Decimal in compute, str on the wire).
-    """
-    if v is None or isinstance(v, str):
-        return v
-    return str(Decimal(v).quantize(Decimal("0.01")))
+# Backward-compatible aliases — existing references use the underscore prefix
+_coerce_to_decimal = coerce_to_decimal
+_coerce_money_str = coerce_money_str
 
 
 def _validate_repayment_method(v: str) -> str:

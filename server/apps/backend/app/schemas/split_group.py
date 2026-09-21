@@ -1,19 +1,12 @@
 """Pydantic schemas for SplitGroup, SplitParticipant, SplitSettlement, and shared-expense magic link."""
 
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Any
 
 from pydantic import BaseModel, field_validator
 
-from apps.backend.app.schemas.base import SnowflakeBase
+from apps.backend.app.schemas.base import SnowflakeBase, coerce_money_str
 
-
-def _coerce_money_str(v: Any) -> str | None:
-    """Serialize a money value to a 2-decimal str (or None) for the wire."""
-    if v is None or isinstance(v, str):
-        return v
-    return str(Decimal(v).quantize(Decimal("0.01")))
+_coerce_money_str = coerce_money_str
 
 
 class SplitParticipantCreate(BaseModel):

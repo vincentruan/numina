@@ -6,9 +6,25 @@ This prevents JavaScript Number precision loss for IDs > 2^53.
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_serializer
+
+
+def coerce_to_decimal(v: Any) -> Decimal | None:
+    """Accept int/float/str/Decimal and return a Decimal (or None)."""
+    if v is None or isinstance(v, Decimal):
+        return v
+    return Decimal(str(v))
+
+
+def coerce_money_str(v: Any) -> str | None:
+    """Serialize a money value to a 2-decimal str (or None) for the wire."""
+    if v is None or isinstance(v, str):
+        return v
+    return str(Decimal(v).quantize(Decimal("0.01")))
+
 
 class SnowflakeBase(BaseModel):
     """Inherit this instead of BaseModel for any schema that contains Snowflake IDs.
