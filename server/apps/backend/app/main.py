@@ -135,6 +135,8 @@ from apps.backend.app.routers import chores as chores_router
 from apps.backend.app.routers import coins as coins_router
 from apps.backend.app.routers import currencies as currencies_router
 from apps.backend.app.routers import device as device_router
+from apps.backend.app.routers import expense_categories as expense_categories_router
+from apps.backend.app.routers import expenses as expenses_router
 from apps.backend.app.routers import export as export_router
 from apps.backend.app.routers import family_config as family_config_router
 from apps.backend.app.routers import files as files_router
@@ -154,14 +156,24 @@ from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import rental_contracts as rental_contracts_router
 from apps.backend.app.routers import storage_backend as storage_backend_router
 from apps.backend.app.routers import treasures as treasures_router
+from apps.backend.app.routers import trips as trips_router
 from apps.backend.app.routers import uploads as uploads_serve_router
 from apps.backend.app.routers import user_config as user_config_router
 from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
-from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
 from apps.backend.app.services.storage.base import StorageError
+from packages.db.exchange_rate_adapter import ExchangeRateAdapter
+from packages.db.models.expense_category import ExpenseCategory
+from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.notification_config import NotificationConfig
+from packages.db.models.split_group import (
+    SplitGroup,
+    SplitParticipant,
+    SplitSettlement,
+    TripCoOrganizer,
+)
+from packages.db.models.trip import Trip
 
 logger = logging.getLogger(__name__)
 
@@ -592,6 +604,9 @@ app.include_router(storage_backend_router.router, prefix="/api/v1")
 app.include_router(user_config_router.router, prefix="/api/v1")
 app.include_router(manifesto_router.router, prefix="/api/v1")
 app.include_router(child_manifesto_router.router, prefix="/api/v1")
+app.include_router(trips_router.router, prefix="/api/v1")
+app.include_router(expenses_router.router, prefix="/api/v1")
+app.include_router(expense_categories_router.router, prefix="/api/v1")
 
 # Serve uploaded files — authenticated endpoint with tenant isolation
 app.include_router(uploads_serve_router.router)

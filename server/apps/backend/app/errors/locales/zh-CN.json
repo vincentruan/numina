@@ -112,5 +112,9 @@
   "MANIFESTO_NOT_FOUND": "家庭约定不存在",
   "MANIFESTO_ALREADY_SIGNED": "已签署过该约定",
   "MANIFESTO_NOT_ACTIVE": "该约定未生效",
-  "MANIFESTO_ALREADY_REJECTED": "已拒绝过该约定"
+  "MANIFESTO_ALREADY_REJECTED": "已拒绝过该约定",
+  "TRIP_NOT_FOUND": "行程不存在",
+  "TRIP_STATUS_CONFLICT": "行程当前状态不允许此操作",
+  "EXPENSE_NOT_FOUND": "费用条目不存在",
+  "EXPENSE_CATEGORY_NOT_FOUND": "支出类别不存在"
 }

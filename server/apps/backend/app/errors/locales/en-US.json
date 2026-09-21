@@ -112,5 +112,9 @@
   "MANIFESTO_NOT_FOUND": "Family manifesto not found",
   "MANIFESTO_ALREADY_SIGNED": "Already signed this manifesto",
   "MANIFESTO_NOT_ACTIVE": "This manifesto is not active",
-  "MANIFESTO_ALREADY_REJECTED": "Already rejected this manifesto"
+  "MANIFESTO_ALREADY_REJECTED": "Already rejected this manifesto",
+  "TRIP_NOT_FOUND": "Trip not found",
+  "TRIP_STATUS_CONFLICT": "Trip status does not allow this operation",
+  "EXPENSE_NOT_FOUND": "Expense entry not found",
+  "EXPENSE_CATEGORY_NOT_FOUND": "Expense category not found"
 }
