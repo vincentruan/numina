@@ -48,10 +48,12 @@
           :placeholder="t('travel.budgetPlaceholder')"
         />
         <van-field
-          v-model="formData.currency"
           :label="t('travel.currency')"
-          :placeholder="t('travel.currencyPlaceholder')"
-        />
+        >
+          <template #input>
+            <CurrencyButton v-model="formData.currency" />
+          </template>
+        </van-field>
         <van-field
           v-model="formData.timezone"
           :label="t('travel.timezone')"
@@ -99,6 +101,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import type { TripCreate, TripUpdate } from '@/types/travel'
 
 const { t } = useI18n()
