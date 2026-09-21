@@ -18,6 +18,8 @@ class OverviewResponse(BaseModel):
     rental_monthly_income: float | None = None
     rental_monthly_expense: float | None = None
     rental_total_deposit: float | None = None
+    # Travel float (U8): positive=prepaid, negative=unsettled debt; None when no travel data.
+    travel_float: str | None = None
 
 
 class AllocationItem(SnowflakeBase):

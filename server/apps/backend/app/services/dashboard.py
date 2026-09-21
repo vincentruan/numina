@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -50,6 +51,9 @@ from apps.backend.app.services.asset import (
     compute_daily_cost,
 )
 from apps.backend.app.services.exchange_rate import ExchangeRateService
+from packages.db.models.expense_entry import ExpenseEntry
+from packages.db.models.split_group import SplitSettlement
+from packages.db.models.trip import Trip
 
 
 def _period_start_date(today: date, period: str) -> date:
@@ -176,6 +180,41 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         rental_net = round(rental_income - rental_expense, 2)
         rental_deposit = round(rental_deposit, 2)
 
+    # Travel float (U8): prepaid on planning trips minus unsettled split settlements
+    travel_float_val: Decimal | None = None
+    planning_trip_ids = [
+        t.id for t in db.query(Trip).filter(
+            Trip.family_id == family_id,
+            Trip.is_active == True,  # noqa: E712
+            Trip.status == "planning",
+        ).all()
+    ]
+    prepaid = Decimal("0")
+    if planning_trip_ids:
+        prepaid_expenses = db.query(func.sum(ExpenseEntry.amount_cny)).filter(
+            ExpenseEntry.family_id == family_id,
+            ExpenseEntry.leg_type == "debit",
+            ExpenseEntry.ref_id.in_(planning_trip_ids),
+            ExpenseEntry.ref_type == "trip",
+        ).scalar()
+        if prepaid_expenses:
+            prepaid = Decimal(str(prepaid_expenses))
+
+    unsettled = Decimal("0")
+    active_trip_ids_sub = db.query(Trip.id).filter(
+        Trip.family_id == family_id,
+        Trip.is_active == True,  # noqa: E712
+    ).subquery()
+    unsettled_settlements = db.query(func.sum(SplitSettlement.amount)).filter(
+        SplitSettlement.trip_id.in_(active_trip_ids_sub),
+        SplitSettlement.is_complete == False,  # noqa: E712
+    ).scalar()
+    if unsettled_settlements:
+        unsettled = Decimal(str(unsettled_settlements))
+
+    if prepaid or unsettled:
+        travel_float_val = prepaid - unsettled
+
     return OverviewResponse(
         currency=default_currency,
         total_assets=round(total_assets_val, 2),
@@ -189,6 +228,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         rental_monthly_income=rental_income,
         rental_monthly_expense=rental_expense,
         rental_total_deposit=rental_deposit,
+        travel_float=str(travel_float_val.quantize(Decimal("0.01"))) if travel_float_val is not None else None,
     )
 
 
