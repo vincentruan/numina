@@ -67,19 +67,18 @@
         <van-cell :title="t('travel.actualSpend')" :value="formatAmount(trip.actual_spend)" />
       </van-cell-group>
 
-      <!-- Expense list section (placeholder for U11) -->
+      <!-- Expense list section -->
       <van-cell-group inset class="expense-card">
-        <van-cell :title="t('travel.expenses')" is-link @click="showExpensePlaceholder">
+        <van-cell :title="t('travel.expenses')">
           <template #label>
             <span class="expense-count">{{ expenses.length }} {{ t('travel.expenseEntries') }}</span>
           </template>
         </van-cell>
       </van-cell-group>
+      <ExpenseListPanel :trip-id="trip.id" />
 
-      <!-- Split summary section (placeholder for U12) -->
-      <van-cell-group inset class="split-card">
-        <van-cell :title="t('travel.splitSummary')" is-link @click="showSplitPlaceholder" />
-      </van-cell-group>
+      <!-- Split group manager -->
+      <SplitGroupManager :trip-id="trip.id" />
 
       <!-- Action buttons -->
       <div class="action-buttons">
@@ -96,6 +95,14 @@
           {{ t('travel.cancelTrip') }}
         </van-button>
       </div>
+
+      <!-- FAB Button -->
+      <div class="fab-button" @click="showActionSheet = true">
+        <van-icon name="plus" size="24" color="#fff" />
+      </div>
+
+      <!-- Action Sheet -->
+      <van-action-sheet v-model:show="showActionSheet" :actions="expenseActions" @select="onActionSelect" />
     </template>
   </div>
 </template>
@@ -108,6 +115,8 @@ import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import { cancelTrip } from '@/api/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
+import SplitGroupManager from '@/components/travel/SplitGroupManager.vue'
+import ExpenseListPanel from '@/components/travel/ExpenseListPanel.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -115,9 +124,15 @@ const router = useRouter()
 const store = useTravelStore()
 
 const loading = ref(true)
+const showActionSheet = ref(false)
 
 const trip = computed(() => store.currentTrip)
 const expenses = computed(() => store.expenses)
+
+const expenseActions = [
+  { name: t('travel.photoReceipt'), value: 'photo' },
+  { name: t('travel.manualEntry'), value: 'manual' },
+]
 
 const budgetPercentage = computed(() => {
   if (!trip.value?.planned_budget) return 0
@@ -144,12 +159,15 @@ function navigateToEdit() {
   }
 }
 
-function showExpensePlaceholder() {
-  showSuccessToast(t('travel.expenseFeatureComingSoon'))
-}
-
-function showSplitPlaceholder() {
-  showSuccessToast(t('travel.splitFeatureComingSoon'))
+function onActionSelect(action: { value: string }) {
+  showActionSheet.value = false
+  if (action.value === 'manual') {
+    router.push(`/travel/${trip.value!.id}/expense/new`)
+  } else if (action.value === 'photo') {
+    // Photo receipt is handled by the ReceiptScanButton component
+    // This would need a separate implementation or modal
+    showSuccessToast('拍照记账功能开发中')
+  }
 }
 
 async function confirmCancel() {
@@ -288,5 +306,23 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.fab-button {
+  position: fixed;
+  right: 20px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--van-primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  z-index: 100;
+}
+.fab-button:active {
+  transform: scale(0.95);
 }
 </style>
