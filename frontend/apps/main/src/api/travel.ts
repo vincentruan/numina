@@ -95,6 +95,24 @@ export function reverseSettlement(tripId: string, settlementId: string) {
   return http.delete(`/trips/${tripId}/split/settlements/${settlementId}/complete`)
 }
 
+// Participant management
+export function removeParticipant(tripId: string, participantId: string) {
+  return http.delete(`/trips/${tripId}/split/participants/${participantId}`)
+}
+
+export function regenerateInviteCode(tripId: string) {
+  return http.post<SplitGroup>(`/trips/${tripId}/split/regenerate-code`)
+}
+
+// Co-organizer management
+export function addCoOrganizer(tripId: string, targetUserId: string) {
+  return http.post(`/trips/${tripId}/split/co-organizers`, { target_user_id: targetUserId })
+}
+
+export function removeCoOrganizer(tripId: string, targetUserId: string) {
+  return http.delete(`/trips/${tripId}/split/co-organizers/${targetUserId}`)
+}
+
 // Receipt API
 export interface ReceiptExtractionResult {
   vendor: string

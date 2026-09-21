@@ -1,5 +1,7 @@
 """Split group service — manage split groups and participants for shared travel expenses."""
 
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -15,6 +17,7 @@ from packages.db.models.user import User
 
 _MAX_PARTICIPANTS = 20
 _MAX_CO_ORGANIZERS = 3
+_INVITE_CODE_EXPIRY_DAYS = 7
 
 
 def _get_trip(db: Session, trip_id: int, family_id: int) -> Trip:
@@ -27,9 +30,21 @@ def _get_trip(db: Session, trip_id: int, family_id: int) -> Trip:
     return trip
 
 
+def _compute_expires_at(trip: Trip) -> datetime | None:
+    """Compute invite code expiry: 7 days after trip's return_date, or 30 days from now if open-ended."""
+    if trip.return_date:
+        return datetime(
+            trip.return_date.year,
+            trip.return_date.month,
+            trip.return_date.day,
+            tzinfo=UTC,
+        ) + timedelta(days=_INVITE_CODE_EXPIRY_DAYS)
+    return datetime.now(UTC) + timedelta(days=30)
+
+
 def create_group(db: Session, trip_id: int, family_id: int, user_id: int) -> SplitGroup:
     """Create a split group for a trip."""
-    _get_trip(db, trip_id, family_id)
+    trip = _get_trip(db, trip_id, family_id)
 
     existing = (
         db.query(SplitGroup)
@@ -43,6 +58,7 @@ def create_group(db: Session, trip_id: int, family_id: int, user_id: int) -> Spl
         trip_id=trip_id,
         invite_code=generate_invite_code(),
         created_by_user_id=user_id,
+        expires_at=_compute_expires_at(trip),
     )
     db.add(group)
     db.commit()
@@ -61,6 +77,10 @@ def join_group(
     )
     if not group:
         raise AppError(ErrorCode.SPLIT_GROUP_NOT_FOUND)
+
+    # Check invite code expiry (R6)
+    if group.expires_at and datetime.now(UTC) > group.expires_at:
+        raise AppError(ErrorCode.SPLIT_GROUP_INACTIVE)
 
     count = (
         db.query(SplitParticipant).filter(SplitParticipant.group_id == group.id).count()
@@ -160,9 +180,10 @@ def regenerate_code(db: Session, group_id: int, family_id: int) -> SplitGroup:
     if not group:
         raise AppError(ErrorCode.SPLIT_GROUP_NOT_FOUND)
 
-    _get_trip(db, group.trip_id, family_id)
+    trip = _get_trip(db, group.trip_id, family_id)
 
     group.invite_code = generate_invite_code()
+    group.expires_at = _compute_expires_at(trip)
     db.commit()
     db.refresh(group)
     return group

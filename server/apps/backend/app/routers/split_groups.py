@@ -44,7 +44,57 @@ def get_group(
         invite_code=group.invite_code,
         created_by_user_id=group.created_by_user_id,
         is_active=group.is_active,
+        expires_at=group.expires_at,
         created_at=group.created_at,
+        participants=[
+            SplitParticipantResponse(
+                id=p.id,
+                group_id=p.group_id,
+                name=p.name,
+                family_id=p.family_id,
+                joined_at=p.joined_at,
+            )
+            for p in participants
+        ],
+    )
+
+
+@router.delete("/participants/{participant_id}", status_code=204)
+def remove_participant(
+    trip_id: int,
+    participant_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Remove a participant from the split group. Organizer or co-organizer only."""
+    if not split_group_service.is_organizer_or_co(db, trip_id, user.id):
+        from apps.backend.app.errors import AppError, ErrorCode
+
+        raise AppError(ErrorCode.CO_ORGANIZER_NOT_ALLOWED)
+    split_group_service.remove_participant(db, participant_id, user.family_id)
+
+
+@router.post("/regenerate-code", response_model=SplitGroupResponse)
+def regenerate_invite_code(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Regenerate the invite code. Organizer only."""
+    result = split_group_service.get_group_with_participants(
+        db, trip_id, user.family_id
+    )
+    group = result["group"]
+    participants = result["participants"]
+    updated = split_group_service.regenerate_code(db, group.id, user.family_id)
+    return SplitGroupResponse(
+        id=updated.id,
+        trip_id=updated.trip_id,
+        invite_code=updated.invite_code,
+        created_by_user_id=updated.created_by_user_id,
+        is_active=updated.is_active,
+        expires_at=updated.expires_at,
+        created_at=updated.created_at,
         participants=[
             SplitParticipantResponse(
                 id=p.id,

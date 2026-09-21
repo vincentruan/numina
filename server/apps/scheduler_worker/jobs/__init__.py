@@ -373,3 +373,64 @@ async def notification_digest_job() -> None:
         logger.exception(f"Notification digest job failed: {e}")
     finally:
         db.close()
+
+
+# ── Job 11: Travel trip auto-transitions (R5) ────────────────────────────────
+
+def travel_transition_job() -> None:
+    """Auto-transition trip statuses based on dates and send notifications."""
+    from datetime import date  # noqa: PLC0415
+
+    from packages.db.models.trip import Trip  # noqa: PLC0415
+
+    db = SessionLocal()
+    try:
+        today = date.today()
+
+        # 1. planning → active: departure_date has arrived
+        planning_trips = (
+            db.query(Trip)
+            .filter(
+                Trip.status == "planning",
+                Trip.is_active == True,  # noqa: E712
+                Trip.departure_date <= today,
+            )
+            .all()
+        )
+        for trip in planning_trips:
+            trip.status = "active"
+            logger.info(
+                "Trip %s (%s) auto-transitioned to active (departure_date=%s)",
+                trip.id,
+                trip.name,
+                trip.departure_date,
+            )
+
+        # 2. Notify about unsettled trips past return_date
+        unsettled_trips = (
+            db.query(Trip)
+            .filter(
+                Trip.status == "active",
+                Trip.is_active == True,  # noqa: E712
+                Trip.return_date != None,  # noqa: E711
+                Trip.return_date < today,
+            )
+            .all()
+        )
+        for trip in unsettled_trips:
+            logger.info(
+                "Trip %s (%s) past return_date with active status — may need settlement",
+                trip.id,
+                trip.name,
+            )
+
+        db.commit()
+        logger.info(
+            "Travel transition job completed: %d activated, %d unsettled",
+            len(planning_trips),
+            len(unsettled_trips),
+        )
+    except Exception as e:
+        logger.exception(f"Travel transition job failed: {e}")
+    finally:
+        db.close()

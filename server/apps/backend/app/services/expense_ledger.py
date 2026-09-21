@@ -23,8 +23,16 @@ def create_expense(
 
     Returns {"debit": entry, "credit": entry}.
     """
-    # Convert to CNY
-    converted = ExchangeRateService.convert(float(req.amount), req.currency, "CNY", db)
+    # Convert to CNY — use user-provided rate if available (R3 manual rate)
+    used_rate: float | None = None
+    if req.exchange_rate is not None and req.exchange_rate > 0:
+        used_rate = req.exchange_rate
+        converted = float(req.amount) * req.exchange_rate
+    else:
+        converted = ExchangeRateService.convert(float(req.amount), req.currency, "CNY", db)
+        # Derive the effective rate from the conversion result
+        if req.currency != "CNY" and float(req.amount) > 0:
+            used_rate = converted / float(req.amount)
     amount_cny = Decimal(str(converted))
 
     transfer_id = next_id()
@@ -37,6 +45,7 @@ def create_expense(
         amount=req.amount,
         currency=req.currency,
         amount_cny=amount_cny,
+        exchange_rate=used_rate,
         expense_date=req.expense_date,
         description=req.description,
         receipt_image_url=req.receipt_image_url,

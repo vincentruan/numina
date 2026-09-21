@@ -37,6 +37,7 @@ class SplitGroupResponse(SnowflakeBase):
     invite_code: str
     created_by_user_id: int
     is_active: bool
+    expires_at: datetime | None = None
     created_at: datetime | None = None
     participants: list[SplitParticipantResponse] = []
 

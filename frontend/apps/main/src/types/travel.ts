@@ -70,6 +70,7 @@ export interface ExpenseEntryCreate {
   description?: string | null
   receipt_image_url?: string | null
   split_type?: 'equal' | 'per_person' | 'custom' | null
+  exchange_rate?: number | null
 }
 
 export interface ExpenseCategory {
@@ -87,6 +88,7 @@ export interface SplitGroup {
   invite_code: string
   created_by_user_id: string
   is_active: boolean
+  expires_at: string | null
   participants: SplitParticipant[]
 }
 

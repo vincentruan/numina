@@ -42,6 +42,7 @@ class SplitGroup(Base):
     )
     created_by_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)  # R6: invite code expiry
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
 

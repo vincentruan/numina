@@ -25,6 +25,7 @@ class ExpenseEntryCreate(BaseModel):
     ref_type: str | None = None  # 'trip', 'split_settlement'
     receipt_image_url: str | None = None
     split_type: str | None = None  # 'equal', 'per_person', 'custom'
+    exchange_rate: float | None = None  # R3: user-provided rate when auto-rate unavailable
 
     @field_validator("split_type")
     @classmethod

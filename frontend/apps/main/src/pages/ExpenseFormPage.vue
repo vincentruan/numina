@@ -59,6 +59,23 @@
           @click="showDatePicker = true"
         />
 
+        <!-- Timezone hint for date (R3) -->
+        <div v-if="trip?.timezone" class="timezone-hint">
+          {{ t('travel.dateHint', { tz: trip.timezone }) }}
+        </div>
+
+        <!-- Manual exchange rate (R3) -->
+        <van-field
+          v-if="showManualRate"
+          v-model="formData.exchange_rate"
+          type="number"
+          :label="t('travel.manualRate')"
+          :placeholder="t('travel.manualRateHint')"
+        />
+        <div v-if="showManualRateBadge" class="manual-rate-badge">
+          <van-tag type="warning" plain>{{ t('travel.manualRateBadge') }}</van-tag>
+        </div>
+
         <van-field
           v-model="formData.description"
           type="textarea"
@@ -135,6 +152,7 @@ const formData = ref({
   description: '',
   receipt_image_url: (q.receipt_image_url as string) || null,
   split_type: 'equal' as 'equal' | 'per_person' | 'custom',
+  exchange_rate: undefined as string | undefined,
 })
 
 // Map extracted category to expense category_id (best-effort)
@@ -196,6 +214,17 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
 // Whether the trip has an active split group (drives split type selector visibility)
 const hasSplitGroup = computed(() => !!store.splitGroup?.is_active)
 
+// Show manual rate input when expense currency differs from CNY (R3)
+const showManualRate = computed(() => {
+  const curr = formData.value.currency || trip.value?.currency || 'CNY'
+  return curr !== 'CNY'
+})
+
+// Show badge when user has entered a manual rate
+const showManualRateBadge = computed(() => {
+  return showManualRate.value && formData.value.exchange_rate && parseFloat(formData.value.exchange_rate) > 0
+})
+
 async function onSubmit() {
   submitting.value = true
   try {
@@ -207,6 +236,7 @@ async function onSubmit() {
       description: formData.value.description || null,
       receipt_image_url: formData.value.receipt_image_url,
       split_type: hasSplitGroup.value ? formData.value.split_type : null,
+      exchange_rate: formData.value.exchange_rate ? parseFloat(formData.value.exchange_rate) || null : null,
     })
     showSuccessToast(t('common.success'))
     router.back()
@@ -249,5 +279,13 @@ onMounted(async () => {
 }
 .submit-button {
   padding: 16px 12px;
+}
+.timezone-hint {
+  padding: 0 16px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.manual-rate-badge {
+  padding: 0 16px 8px;
 }
 </style>
