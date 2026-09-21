@@ -21,17 +21,18 @@ from packages.db.models.user import User
 router = APIRouter(prefix="/travel/shared", tags=["travel"])
 
 _JOIN_RATE_LIMIT_PER_MINUTE = 10
+_VIEW_RATE_LIMIT_PER_MINUTE = 20
 
 
-def _check_join_rate_limit(ip: str) -> None:
-    """Limit join endpoint to 10 requests per minute per IP."""
+def _check_rate_limit(ip: str, key_prefix: str, limit: int) -> None:
+    """Generic per-IP rate limiter using the rate-limit cache backend."""
     try:
         from apps.backend.app.services.cache.factory import get_rate_limit_cache
 
         cache = get_rate_limit_cache()
-        key = f"shared_join:{ip}"
+        key = f"{key_prefix}:{ip}"
         count = cache.get(key)
-        if count is not None and int(count) >= _JOIN_RATE_LIMIT_PER_MINUTE:
+        if count is not None and int(count) >= limit:
             raise AppError(ErrorCode.RATE_LIMITED)
         new_count = cache.increment(key)
         if new_count == 1:
@@ -46,9 +47,13 @@ def _check_join_rate_limit(ip: str) -> None:
 @router.get("/{invite_code}", response_model=SharedExpenseResponse)
 def get_shared_expense_view(
     invite_code: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Get sanitized shared expense view for external participants. No auth required."""
+    client_ip = _get_real_client_ip(request)
+    _check_rate_limit(client_ip, "shared_view", _VIEW_RATE_LIMIT_PER_MINUTE)
+
     group = (
         db.query(SplitGroup)
         .filter(
@@ -132,7 +137,7 @@ def join_group(
 ):
     """Join a split group via invite code. No auth required. Rate-limited by IP."""
     client_ip = _get_real_client_ip(request)
-    _check_join_rate_limit(client_ip)
+    _check_rate_limit(client_ip, "shared_join", _JOIN_RATE_LIMIT_PER_MINUTE)
 
     participant, _group = split_group_service.join_group(db, invite_code, req.name)
     return SplitParticipantResponse(

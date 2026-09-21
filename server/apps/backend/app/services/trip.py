@@ -3,7 +3,7 @@
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.schemas.trip import TripCreate, TripUpdate
+from apps.backend.app.schemas.trip import _VALID_TRANSITIONS, TripCreate, TripUpdate
 from apps.backend.app.services import expense_ledger
 from packages.db.models.split_group import SplitGroup
 from packages.db.models.trip import Trip
@@ -69,6 +69,18 @@ def update_trip(
     """Update trip fields."""
     trip = get_trip(db, trip_id, family_id)
     update_data = req.model_dump(exclude_unset=True)
+
+    # Enforce status transition rules
+    if "status" in update_data:
+        new_status = update_data["status"]
+        current_status = trip.status
+        allowed_next = _VALID_TRANSITIONS.get(current_status)
+        if allowed_next and new_status != allowed_next:
+            raise AppError(
+                ErrorCode.TRIP_STATUS_CONFLICT,
+                details=f"Cannot transition from '{current_status}' to '{new_status}'",
+            )
+
     for key, value in update_data.items():
         setattr(trip, key, value)
     db.commit()

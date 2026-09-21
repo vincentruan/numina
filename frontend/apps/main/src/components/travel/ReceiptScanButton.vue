@@ -30,7 +30,9 @@ const props = defineProps<{
 const { t } = useI18n()
 const router = useRouter()
 
-const fileList = ref<any[]>([])
+import type { UploaderFileListItem } from 'vant'
+
+const fileList = ref<UploaderFileListItem[]>([])
 const uploading = ref(false)
 
 function beforeRead(file: File | File[]): boolean {
@@ -43,10 +45,11 @@ function beforeRead(file: File | File[]): boolean {
   return true
 }
 
-async function onFileRead(file: any) {
+async function onFileRead(file: UploaderFileListItem | UploaderFileListItem[]) {
   uploading.value = true
   try {
-    const fileObj = Array.isArray(file) ? file[0].file : file.file
+    const fileObj = Array.isArray(file) ? file[0]?.file : file.file
+    if (!fileObj) return
     const res = await uploadReceipt(props.tripId, fileObj)
     const imageUrl = res.data.receipt_image_url
 

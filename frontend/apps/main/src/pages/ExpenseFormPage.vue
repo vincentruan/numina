@@ -151,17 +151,17 @@ const categoryColumns = computed(() =>
 
 const currentDate = ref(formData.value.expense_date.split('-'))
 
-function onCurrencyConfirm({ selectedOptions }: any) {
+function onCurrencyConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string }> }) {
   formData.value.currency = selectedOptions[0]?.value || 'CNY'
   showCurrencyPicker.value = false
 }
 
-function onCategoryConfirm({ selectedOptions }: any) {
+function onCategoryConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string }> }) {
   formData.value.category_id = selectedOptions[0]?.value || null
   showCategoryPicker.value = false
 }
 
-function onDateConfirm({ selectedValues }: any) {
+function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   formData.value.expense_date = selectedValues.join('-')
   showDatePicker.value = false
 }

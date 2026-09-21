@@ -1,6 +1,6 @@
 """Split group router — nested under /trips/{trip_id}/split."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
@@ -58,7 +58,7 @@ def get_group(
     )
 
 
-@router.post("/settle", response_model=list[SplitSettlementResponse])
+@router.post("/settle", response_model=list[SplitSettlementResponse], status_code=201)
 def simplify_debts(
     trip_id: int,
     db: Session = Depends(get_db),
@@ -116,7 +116,7 @@ def reverse_settlement(
 @router.post("/co-organizers", status_code=201)
 def add_co_organizer(
     trip_id: int,
-    target_user_id: int,
+    target_user_id: int = Body(..., embed=True),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

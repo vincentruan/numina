@@ -11,6 +11,7 @@ export default {
     loading: 'Loading...',
     noData: 'No Data',
     success: 'Success',
+    comingSoon: 'Coming soon',
     failed: 'Failed',
     back: 'Back',
     next: 'Next',

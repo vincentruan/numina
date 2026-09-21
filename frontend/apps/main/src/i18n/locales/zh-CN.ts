@@ -13,6 +13,7 @@ export default {
     loading: '加载中...',
     noData: '暂无数据',
     success: '操作成功',
+    comingSoon: '该功能即将上线',
     failed: '操作失败',
     back: '返回',
     next: '下一步',

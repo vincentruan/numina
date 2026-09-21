@@ -24,7 +24,7 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
-@router.post("/parse-travel-receipt", response_model=TravelReceiptUploadResponse)
+@router.post("/parse-travel-receipt", response_model=TravelReceiptUploadResponse, status_code=201)
 async def parse_travel_receipt(
     trip_id: str = Form(...),
     file: UploadFile = File(...),

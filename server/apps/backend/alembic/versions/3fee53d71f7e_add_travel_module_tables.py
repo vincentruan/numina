@@ -19,8 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 TRAVEL_TABLES = [
     "trips",
-    "expense_entries",
     "expense_categories",
+    "expense_entries",
     "split_groups",
     "split_participants",
     "split_settlements",
@@ -51,8 +51,8 @@ def upgrade() -> None:
             sa.Column("wish_id", sa.BigInteger(), nullable=True),
             sa.Column("timezone", sa.String(length=50), nullable=True),
             sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
-            sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-            sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["family_id"], ["families.id"]),
             sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
             sa.ForeignKeyConstraint(["wish_id"], ["wishes.id"]),
@@ -62,7 +62,24 @@ def upgrade() -> None:
         op.create_index("ix_trips_user_id", "trips", ["user_id"])
         op.create_index("ix_trips_status", "trips", ["status"])
 
-    # --- expense_entries ---
+    # --- expense_categories (must precede expense_entries — FK target) ---
+    if "expense_categories" not in existing:
+        op.create_table(
+            "expense_categories",
+            sa.Column("id", sa.BigInteger(), nullable=False),
+            sa.Column("family_id", sa.BigInteger(), nullable=True),
+            sa.Column("name", sa.String(length=50), nullable=False),
+            sa.Column("icon", sa.String(length=50), nullable=False, server_default="label"),
+            sa.Column("sort_order", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column("is_system", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.ForeignKeyConstraint(["family_id"], ["families.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index("ix_expense_categories_family_id", "expense_categories", ["family_id"])
+
+    # --- expense_entries (FK to expense_categories) ---
     if "expense_entries" not in existing:
         op.create_table(
             "expense_entries",
@@ -81,8 +98,8 @@ def upgrade() -> None:
             sa.Column("description", sa.Text(), nullable=True),
             sa.Column("receipt_image_url", sa.Text(), nullable=True),
             sa.Column("user_id", sa.BigInteger(), nullable=False),
-            sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-            sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["category_id"], ["expense_categories.id"]),
             sa.ForeignKeyConstraint(["family_id"], ["families.id"]),
             sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
@@ -93,23 +110,6 @@ def upgrade() -> None:
         op.create_index("ix_expense_entries_ref", "expense_entries", ["ref_type", "ref_id"])
         op.create_index("ix_expense_entries_transfer_id", "expense_entries", ["transfer_id"])
 
-    # --- expense_categories ---
-    if "expense_categories" not in existing:
-        op.create_table(
-            "expense_categories",
-            sa.Column("id", sa.BigInteger(), nullable=False),
-            sa.Column("family_id", sa.BigInteger(), nullable=True),
-            sa.Column("name", sa.String(length=50), nullable=False),
-            sa.Column("icon", sa.String(length=50), nullable=False, server_default="label"),
-            sa.Column("sort_order", sa.Integer(), nullable=False, server_default=sa.text("0")),
-            sa.Column("is_system", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-            sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-            sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-            sa.ForeignKeyConstraint(["family_id"], ["families.id"]),
-            sa.PrimaryKeyConstraint("id"),
-        )
-        op.create_index("ix_expense_categories_family_id", "expense_categories", ["family_id"])
-
     # --- split_groups ---
     if "split_groups" not in existing:
         op.create_table(
@@ -119,7 +119,7 @@ def upgrade() -> None:
             sa.Column("invite_code", sa.String(length=6), nullable=False),
             sa.Column("created_by_user_id", sa.BigInteger(), nullable=False),
             sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
-            sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["trip_id"], ["trips.id"]),
             sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"]),
             sa.PrimaryKeyConstraint("id"),
@@ -135,7 +135,7 @@ def upgrade() -> None:
             sa.Column("group_id", sa.BigInteger(), nullable=False),
             sa.Column("name", sa.String(length=200), nullable=False),
             sa.Column("family_id", sa.BigInteger(), nullable=True),
-            sa.Column("joined_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+            sa.Column("joined_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["group_id"], ["split_groups.id"]),
             sa.ForeignKeyConstraint(["family_id"], ["families.id"]),
             sa.PrimaryKeyConstraint("id"),
@@ -153,9 +153,9 @@ def upgrade() -> None:
             sa.Column("amount", sa.Numeric(precision=18, scale=2), nullable=False),
             sa.Column("currency", sa.String(length=10), nullable=False, server_default="CNY"),
             sa.Column("is_complete", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-            sa.Column("settled_at", sa.DateTime(), nullable=True),
+            sa.Column("settled_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("settled_by_user_id", sa.BigInteger(), nullable=True),
-            sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["trip_id"], ["trips.id"]),
             sa.ForeignKeyConstraint(["settled_by_user_id"], ["users.id"]),
             sa.PrimaryKeyConstraint("id"),
@@ -178,4 +178,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for table in reversed(TRAVEL_TABLES):
-        op.drop_table(table)
+        op.drop_table(table, if_exists=True)

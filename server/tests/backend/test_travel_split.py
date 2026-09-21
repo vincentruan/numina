@@ -179,7 +179,7 @@ def test_simplify_debts_basic(client, auth_headers, trip, split_group, db):
         f"/api/v1/trips/{trip_id}/split/settle",
         headers=auth_headers,
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     settlements = response.json()["data"]
 
     # Should produce at least 1 settlement
@@ -217,7 +217,7 @@ def test_add_co_organizer(client, auth_headers, trip):
     response = client.post(
         f"/api/v1/trips/{trip_id}/split/co-organizers",
         headers=auth_headers,
-        params={"target_user_id": 99999},
+        json={"target_user_id": 99999},
     )
     # Either succeeds (creates co-organizer with non-existent user — FK not enforced at app level)
     # or the endpoint just stores the ID — depends on implementation

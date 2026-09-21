@@ -7,21 +7,17 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services import split_group as split_group_service
+from apps.backend.app.services import trip as trip_service
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.split_group import SplitParticipant, SplitSettlement
-from packages.db.models.trip import Trip
 from packages.db.models.user import User
 
 _REVERSE_WINDOW_HOURS = 24
 
 
-def _get_trip(db: Session, trip_id: int, family_id: int) -> Trip:
-    trip = (
-        db.query(Trip).filter(Trip.id == trip_id, Trip.family_id == family_id).first()
-    )
-    if not trip:
-        raise AppError(ErrorCode.TRIP_NOT_FOUND)
-    return trip
+def _get_trip(db: Session, trip_id: int, family_id: int):
+    """Delegate to trip_service.get_trip for consistency."""
+    return trip_service.get_trip(db, trip_id, family_id)
 
 
 def simplify_debts(db: Session, trip_id: int, family_id: int) -> list[SplitSettlement]:
@@ -33,7 +29,8 @@ def simplify_debts(db: Session, trip_id: int, family_id: int) -> list[SplitSettl
     3. Greedy max-creditor / max-debtor matching to minimise transfers.
     4. Delete any previous settlements for this trip and persist new ones.
     """
-    trip = _get_trip(db, trip_id, family_id)
+    # Verify trip exists and belongs to family
+    _get_trip(db, trip_id, family_id)
 
     # Get all debit expenses for this trip
     expenses = (
@@ -75,8 +72,10 @@ def simplify_debts(db: Session, trip_id: int, family_id: int) -> list[SplitSettl
         if payer_name not in net:
             net[payer_name] = Decimal("0")
 
-        share = expense.amount / num_participants
-        net[payer_name] = net[payer_name] + expense.amount
+        # Use amount_cny for arithmetic to avoid cross-currency errors
+        amount_cny = expense.amount_cny
+        share = amount_cny / num_participants
+        net[payer_name] = net[payer_name] + amount_cny
         for p in participant_list:
             net[p.name] = net[p.name] - share
 
@@ -90,8 +89,23 @@ def simplify_debts(db: Session, trip_id: int, family_id: int) -> list[SplitSettl
         key=lambda x: -x[1],
     )
 
-    # Delete previous settlements for this trip
-    db.query(SplitSettlement).filter(SplitSettlement.trip_id == trip_id).delete()
+    # Prevent recalculation when completed settlements exist (audit trail protection)
+    completed_count = (
+        db.query(SplitSettlement)
+        .filter(
+            SplitSettlement.trip_id == trip_id,
+            SplitSettlement.is_complete == True,  # noqa: E712
+        )
+        .count()
+    )
+    if completed_count > 0:
+        raise AppError(ErrorCode.SETTLEMENT_HAS_COMPLETED)
+
+    # Delete previous non-completed settlements for this trip
+    db.query(SplitSettlement).filter(
+        SplitSettlement.trip_id == trip_id,
+        SplitSettlement.is_complete == False,  # noqa: E712
+    ).delete()
 
     settlements: list[SplitSettlement] = []
     i, j = 0, 0
@@ -105,7 +119,7 @@ def simplify_debts(db: Session, trip_id: int, family_id: int) -> list[SplitSettl
             from_participant_name=debtors[i][0],
             to_participant_name=creditors[j][0],
             amount=amount.quantize(Decimal("0.01")),
-            currency=trip.currency,
+            currency="CNY",
         )
         db.add(settlement)
         settlements.append(settlement)

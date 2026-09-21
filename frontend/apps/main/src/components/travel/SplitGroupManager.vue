@@ -83,7 +83,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import {
   createSplitGroup,
@@ -135,15 +135,14 @@ async function copyInviteLink() {
   }
 }
 
-async function handleRemoveParticipant(participantId: string) {
+async function handleRemoveParticipant(_participantId: string) {
   try {
     await showConfirmDialog({
       title: t('travel.splitGroup.removeParticipant'),
       message: t('travel.splitGroup.removeConfirm'),
     })
-    // TODO: Implement remove participant API
-    await store.fetchSplitGroup(props.tripId)
-    showSuccessToast(t('common.success'))
+    // Remove participant API not yet implemented — show placeholder feedback
+    showToast({ message: t('common.comingSoon'), icon: 'info-o' })
   } catch {
     // user cancelled
   }

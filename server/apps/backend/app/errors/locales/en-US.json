@@ -126,6 +126,7 @@
   "SPLIT_PARTICIPANT_NOT_FOUND": "Participant not found",
   "SETTLEMENT_NOT_FOUND": "Settlement record not found",
   "SETTLEMENT_REVERSE_EXPIRED": "Settlement reversal exceeded 24-hour window",
+  "SETTLEMENT_HAS_COMPLETED": "Cannot recalculate while completed settlements exist",
   "CO_ORGANIZER_LIMIT": "Maximum 3 co-organizers allowed",
   "CO_ORGANIZER_NOT_ALLOWED": "Only the trip organizer can manage co-organizers"
 }

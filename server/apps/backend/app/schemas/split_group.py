@@ -70,7 +70,7 @@ class GraduationRequest(BaseModel):
     wish_id: int
 
 
-class SharedExpenseItem(BaseModel):
+class SharedExpenseItem(SnowflakeBase):
     id: int
     amount: str
     currency: str
@@ -85,7 +85,7 @@ class SharedExpenseItem(BaseModel):
         return _coerce_money_str(v)
 
 
-class SharedExpenseResponse(BaseModel):
+class SharedExpenseResponse(SnowflakeBase):
     """Magic-link payload — no family_id, user_id, receipt_image_url, description, transfer_id, leg_type, exchange_rate."""
 
     trip_name: str
