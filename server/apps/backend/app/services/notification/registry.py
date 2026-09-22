@@ -79,6 +79,37 @@ NOTIFICATION_CATEGORIES: dict[str, dict] = {
             },
         },
     },
+    "learning": {
+        "label_key": "reminders.categories.learning",
+        "icon": "education-outline",
+        "events": {
+            "learning_assignment_created": {
+                "label_key": "reminders.types.learning_assignment_created",
+                "default_severity": "info",
+                "trigger": "realtime",
+            },
+            "learning_submitted_for_review": {
+                "label_key": "reminders.types.learning_submitted_for_review",
+                "default_severity": "info",
+                "trigger": "realtime",
+            },
+            "learning_approved": {
+                "label_key": "reminders.types.learning_approved",
+                "default_severity": "info",
+                "trigger": "realtime",
+            },
+            "learning_rejected": {
+                "label_key": "reminders.types.learning_rejected",
+                "default_severity": "warning",
+                "trigger": "realtime",
+            },
+            "learning_streak_3_failures": {
+                "label_key": "reminders.types.learning_streak_3_failures",
+                "default_severity": "warning",
+                "trigger": "realtime",
+            },
+        },
+    },
 }
 
 

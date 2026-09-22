@@ -1,5 +1,7 @@
 """Family (parent) learning endpoints — manage children's learning."""
 
+import contextlib
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
@@ -19,9 +21,15 @@ from apps.backend.app.services.learning import (
     assignment_service,
     progress_service,
 )
+from apps.backend.app.services.notification.dispatcher import (
+    notify_learning_approved,
+    notify_learning_assignment_created,
+    notify_learning_rejected,
+)
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningAssessmentAttempt
+from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/family/learning", tags=["learning-family"])
 
@@ -115,7 +123,16 @@ def create_assignment(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    return assignment_service.create_assignment(db, user, req)
+    assignment = assignment_service.create_assignment(db, user, req)
+    # Fire notification — child name resolved from DB
+    child = db.query(User).filter(User.id == req.child_id).first()
+    topic = db.query(LearningTopic).filter(LearningTopic.id == req.topic_id).first()
+    if child and topic:
+        child_name = child.display_name or child.username or ""
+        topic_name = topic.name_zh or topic.name or ""
+        with contextlib.suppress(Exception):
+            notify_learning_assignment_created(db, user.family_id, child_name, topic_name)
+    return assignment
 
 
 @router.get("/assignments", response_model=list[AssignmentResponse])
@@ -166,8 +183,6 @@ def review_queue(
         # Fetch child name
         child = db.query(User).filter(User.id == p.child_id).first()
         # Fetch topic info
-        from packages.db.models.learning.topic import LearningTopic
-
         topic = db.query(LearningTopic).filter(LearningTopic.id == p.topic_id).first()
         result.append(
             ReviewItemResponse(
@@ -247,6 +262,14 @@ def approve_review(
 
     # Link coin transaction to attempt for idempotency
     txn.ref_id = attempt.id
+
+    # Fire notification — child approved
+    child_name = child.display_name or child.username or ""
+    topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
+    topic_name = topic.name_zh or topic.name or "" if topic else ""
+    with contextlib.suppress(Exception):
+        notify_learning_approved(db, user.family_id, child_name, topic_name)
+
     return progress
 
 
@@ -272,4 +295,12 @@ def reject_review(
     progress_service._validate_transition(progress.mastery_level, "learning")
     progress.mastery_level = "learning"
     db.flush()
+
+    # Fire notification — child rejected, needs more work
+    child_name = child.display_name or child.username or ""
+    topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
+    topic_name = topic.name_zh or topic.name or "" if topic else ""
+    with contextlib.suppress(Exception):
+        notify_learning_rejected(db, user.family_id, child_name, topic_name)
+
     return progress

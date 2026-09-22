@@ -1,5 +1,7 @@
 """Child learning endpoints — learning activities for children."""
 
+import contextlib
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,10 @@ from apps.backend.app.services.learning import (
     assignment_service,
     session_service,
 )
+from apps.backend.app.services.notification.dispatcher import (
+    notify_learning_submitted_for_review,
+)
+from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.progress import LearningProgress
 from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
@@ -105,7 +111,22 @@ def submit_assignment(
     child: User = Depends(get_current_child_user),
 ):
     """Submit an assignment for parent review."""
-    return assignment_service.submit_for_review(db, assignment_id, child.id)
+    progress = assignment_service.submit_for_review(db, assignment_id, child.id)
+    # Fire notification — parent should review
+    assignment = (
+        db.query(LearningAssignment)
+        .filter(LearningAssignment.id == assignment_id)
+        .first()
+    )
+    if assignment:
+        topic = db.query(LearningTopic).filter(LearningTopic.id == assignment.topic_id).first()
+        child_name = child.display_name or child.username or ""
+        topic_name = topic.name_zh or topic.name or "" if topic else ""
+        with contextlib.suppress(Exception):
+            notify_learning_submitted_for_review(
+                db, child.family_id, child_name, topic_name
+            )
+    return progress
 
 
 @router.get("/progress", response_model=ProgressResponse)
