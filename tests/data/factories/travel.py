@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from models import (
     ExpenseCategory,
     ExpenseEntry,
+    ItineraryItem,
+    ItineraryItemType,
     SplitGroup,
     SplitParticipant,
     SplitSettlement,
@@ -126,6 +128,7 @@ class ExpenseEntryFactory:
         expense_date: date,
         description: str | None = None,
         split_type: str | None = None,
+        itinerary_item_id: int | None = None,
     ) -> tuple[ExpenseEntry, ExpenseEntry]:
         """创建 debit+credit 双Entry 对。返回 (debit, credit)。
 
@@ -172,6 +175,7 @@ class ExpenseEntryFactory:
             expense_date=expense_date,
             description=description,
             split_type=split_type,
+            itinerary_item_id=itinerary_item_id,
             user_id=user_id,
         )
         credit = ExpenseEntry(
@@ -189,6 +193,7 @@ class ExpenseEntryFactory:
             expense_date=expense_date,
             description=description,
             split_type=split_type,
+            itinerary_item_id=itinerary_item_id,
             user_id=user_id,
         )
         db.add_all([debit, credit])
@@ -330,3 +335,89 @@ class TripCoOrganizerFactory:
         db.add(co)
         db.flush()
         return co, True
+
+
+class ItineraryItemTypeFactory:
+    @staticmethod
+    def get_or_create(
+        db: Session,
+        *,
+        name: str,
+        icon: str = "star",
+        family_id: int | None = None,
+        sort_order: int = 0,
+    ) -> tuple[ItineraryItemType, bool]:
+        """幂等创建行程项自定义类型。按 (family_id, name) 查重。"""
+        q = db.query(ItineraryItemType).filter(ItineraryItemType.name == name)
+        if family_id is not None:
+            q = q.filter(ItineraryItemType.family_id == family_id)
+        else:
+            q = q.filter(ItineraryItemType.family_id.is_(None))
+        existing = q.first()
+        if existing:
+            return existing, False
+
+        item_type = ItineraryItemType(
+            id=next_id(),
+            family_id=family_id,
+            name=name,
+            icon=icon,
+            sort_order=sort_order,
+        )
+        db.add(item_type)
+        db.flush()
+        return item_type, True
+
+
+class ItineraryItemFactory:
+    @staticmethod
+    def get_or_create(
+        db: Session,
+        *,
+        trip_id: int,
+        family_id: int,
+        date: date,
+        type: str,
+        sort_order: int = 0,
+        start_time: time | None = None,
+        end_time: time | None = None,
+        location: str | None = None,
+        description: str | None = None,
+        cost_amount: float | None = None,
+        cost_currency: str | None = None,
+        custom_type_id: int | None = None,
+        type_metadata: dict | None = None,
+    ) -> tuple[ItineraryItem, bool]:
+        """幂等创建行程项。按 (trip_id, date, type, sort_order) 查重。"""
+        existing = (
+            db.query(ItineraryItem)
+            .filter(
+                ItineraryItem.trip_id == trip_id,
+                ItineraryItem.date == date,
+                ItineraryItem.type == type,
+                ItineraryItem.sort_order == sort_order,
+            )
+            .first()
+        )
+        if existing:
+            return existing, False
+
+        item = ItineraryItem(
+            id=next_id(),
+            trip_id=trip_id,
+            family_id=family_id,
+            date=date,
+            type=type,
+            sort_order=sort_order,
+            start_time=start_time,
+            end_time=end_time,
+            location=location,
+            description=description,
+            cost_amount=Decimal(str(cost_amount)) if cost_amount is not None else None,
+            cost_currency=cost_currency,
+            custom_type_id=custom_type_id,
+            type_metadata=type_metadata,
+        )
+        db.add(item)
+        db.flush()
+        return item, True

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 
 from sqlalchemy import (
@@ -18,10 +18,12 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     String,
     Table,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -450,6 +452,7 @@ class ExpenseEntry(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     receipt_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     split_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # equal/per_person/custom
+    itinerary_item_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("itinerary_items.id"), nullable=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -506,3 +509,49 @@ class TripCoOrganizer(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     trip_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("trips.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+
+
+class ItineraryItemType(Base):
+    """行程项自定义类型 — 家庭范围内可复用。"""
+
+    __tablename__ = "itinerary_item_types"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    family_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    icon: Mapped[str] = mapped_column(String(50), nullable=False, default="star")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ItineraryItem(Base):
+    """行程项 — 按天的旅行计划条目。
+
+    type: accommodation | dining | transport | activity | custom
+    type_metadata: JSON 存放类型特有字段
+      - accommodation: {"check_in_time": "14:00", "check_out_time": "12:00"}
+      - dining: {"diners": 4}
+      - transport: {"origin": "...", "destination": "..."}
+      - activity: {"ticket_price": "100.00"}
+      - custom: 用户自定义
+    """
+
+    __tablename__ = "itinerary_items"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("trips.id"), nullable=False)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    start_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    end_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    location: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cost_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    cost_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    custom_type_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("itinerary_item_types.id"), nullable=True)
+    type_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

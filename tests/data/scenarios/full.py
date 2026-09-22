@@ -1,6 +1,6 @@
 """场景: test_rich — 完整数据（多资产 + 负债 + 心愿 + 儿童 + 旅游）。"""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,8 @@ from factories.rentals import RentalContractFactory
 from factories.travel import (
     ExpenseCategoryFactory,
     ExpenseEntryFactory,
+    ItineraryItemFactory,
+    ItineraryItemTypeFactory,
     SplitGroupFactory,
     SplitParticipantFactory,
     TripFactory,
@@ -203,6 +205,128 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
     )
     SplitParticipantFactory.get_or_create(
         db, group_id=split_group.id, name="小李",
+    )
+
+    # 行程项 — 露营行程（active, 3天完整时间线）
+    # Day 1: 9月12日 — 出发 + 入住 + 晚餐
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=camping_trip.id, family_id=fam.id,
+        date=date(2026, 9, 12), type="transport", sort_order=0,
+        start_time=time(8, 0),
+        location="家 → 千岛湖",
+        description="自驾出发，约3小时车程",
+        type_metadata={"origin": "杭州 home", "destination": "千岛湖"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=camping_trip.id, family_id=fam.id,
+        date=date(2026, 9, 12), type="accommodation", sort_order=1,
+        start_time=time(14, 0),
+        location="千岛湖湖景帐篷营地",
+        description="湖景大帐篷，含早",
+        cost_amount=800, cost_currency="CNY",
+        type_metadata={"check_in_time": "14:00", "check_out_time": "12:00"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=camping_trip.id, family_id=fam.id,
+        date=date(2026, 9, 12), type="dining", sort_order=2,
+        start_time=time(18, 0),
+        location="营地BBQ区",
+        description="湖边自助烧烤",
+        cost_amount=300, cost_currency="CNY",
+        type_metadata={"diners": 4},
+    )
+    # Day 2: 9月13日 — 皮划艇 + 农家菜
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=camping_trip.id, family_id=fam.id,
+        date=date(2026, 9, 13), type="activity", sort_order=0,
+        start_time=time(9, 0), end_time=time(12, 0),
+        location="千岛湖水上运动中心",
+        description="皮划艇半日游",
+        cost_amount=500, cost_currency="CNY",
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=camping_trip.id, family_id=fam.id,
+        date=date(2026, 9, 13), type="dining", sort_order=1,
+        start_time=time(12, 30),
+        location="湖畔农家菜馆",
+        description="千岛湖鱼头汤 + 时蔬",
+        cost_amount=300, cost_currency="CNY",
+        type_metadata={"diners": 4},
+    )
+    # Day 3: 9月14日 — 返程
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=camping_trip.id, family_id=fam.id,
+        date=date(2026, 9, 14), type="transport", sort_order=0,
+        start_time=time(10, 0),
+        location="千岛湖 → 家",
+        description="返程，途中服务区休息",
+        type_metadata={"origin": "千岛湖", "destination": "杭州 home"},
+    )
+    # 独立费用（非行程项关联）— 模拟 AE2：timeline 上混合显示
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=camping_trip.id, user_id=user.id,
+        category_id=cat_activity.id, amount=60, expense_date=date(2026, 9, 13),
+        description="景区停车费",
+    )
+
+    # 行程项 — 日本旅行（planning, 覆盖多种类型 + 自定义类型）
+    custom_type_spa, _ = ItineraryItemTypeFactory.get_or_create(
+        db, name="温泉", icon="spa", family_id=fam.id, sort_order=1,
+    )
+    # Day 1: 10月1日 — 抵达 + 入住
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=japan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 1), type="transport", sort_order=0,
+        start_time=time(10, 0), end_time=time(14, 0),
+        location="浦东机场 → 成田机场",
+        description="航班 MU523",
+        cost_amount=5800, cost_currency="CNY",
+        type_metadata={"origin": "上海浦东", "destination": "东京成田"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=japan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 1), type="accommodation", sort_order=1,
+        start_time=time(15, 0),
+        location="新宿花园酒店",
+        description="豪华双床房 6晚",
+        cost_amount=4200, cost_currency="CNY",
+        type_metadata={"check_in_time": "15:00", "check_out_time": "11:00"},
+    )
+    # Day 3: 10月3日 — 迪士尼
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=japan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 3), type="activity", sort_order=0,
+        start_time=time(8, 0), end_time=time(21, 0),
+        location="东京迪士尼海洋",
+        description="全家一日游",
+        cost_amount=2400, cost_currency="CNY",
+        type_metadata={"ticket_price": "600"},
+    )
+    # Day 5: 10月5日 — 京都 + 温泉（自定义类型）
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=japan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 5), type="activity", sort_order=0,
+        start_time=time(9, 0),
+        location="伏见稻荷大社",
+        description="千本鸟居徒步",
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=japan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 5), type="custom", sort_order=1,
+        start_time=time(16, 0),
+        location="京都岚山温泉",
+        description="露天风吕体验",
+        cost_amount=800, cost_currency="CNY",
+        custom_type_id=custom_type_spa.id,
+    )
+    # Day 7: 10月7日 — 返程
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=japan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 7), type="transport", sort_order=0,
+        start_time=time(14, 0),
+        location="关西机场 → 浦东",
+        description="航班 MU728",
+        type_metadata={"origin": "大阪关西", "destination": "上海浦东"},
     )
 
     # ── 儿童账号 ──────────────────────────────────────────────────────────────

@@ -12,6 +12,8 @@ from .rentals import RentalContractFactory
 from .travel import (
     ExpenseCategoryFactory,
     ExpenseEntryFactory,
+    ItineraryItemFactory,
+    ItineraryItemTypeFactory,
     SplitGroupFactory,
     SplitParticipantFactory,
     SplitSettlementFactory,
@@ -38,4 +40,6 @@ __all__ = [
     "SplitParticipantFactory",
     "SplitSettlementFactory",
     "TripCoOrganizerFactory",
+    "ItineraryItemTypeFactory",
+    "ItineraryItemFactory",
 ]

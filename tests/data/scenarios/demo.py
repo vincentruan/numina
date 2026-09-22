@@ -1,6 +1,6 @@
 """场景: demouser — 完整仿真数据（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+旅游）。"""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,8 @@ from factories.rentals import RentalContractFactory
 from factories.travel import (
     ExpenseCategoryFactory,
     ExpenseEntryFactory,
+    ItineraryItemFactory,
+    ItineraryItemTypeFactory,
     SplitGroupFactory,
     SplitParticipantFactory,
     SplitSettlementFactory,
@@ -381,7 +383,7 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
     )
 
     # 行程4: 国庆露营（planning，刚创建）
-    TripFactory.get_or_create(
+    moganshan_trip, _ = TripFactory.get_or_create(
         db, user_id=user.id, family_id=fam.id,
         name="国庆莫干山露营", destination="莫干山",
         departure_date=date(2026, 10, 3), return_date=date(2026, 10, 5),
@@ -398,4 +400,221 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
         currency="CNY", is_active=False,
     )
 
-    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+21费用+2结算）")
+    # ── 行程项 (Itinerary Items) ─────────────────────────────────────────────
+
+    # 自定义类型
+    custom_type_shopping, _ = ItineraryItemTypeFactory.get_or_create(
+        db, name="购物", icon="shopping-bag", family_id=fam.id, sort_order=1,
+    )
+    custom_type_spa, _ = ItineraryItemTypeFactory.get_or_create(
+        db, name="温泉", icon="spa", family_id=fam.id, sort_order=2,
+    )
+
+    # 三亚年假行程项（active, 6天 — 丰富的时间线数据）
+    # Day 1: 9月15日 — 抵达
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 15), type="transport", sort_order=0,
+        start_time=time(8, 0), end_time=time(11, 30),
+        location="凤凰机场",
+        description="接机 → 酒店",
+        type_metadata={"origin": "上海虹桥", "destination": "三亚凤凰"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 15), type="accommodation", sort_order=1,
+        start_time=time(14, 0),
+        location="亚龙湾万豪度假酒店",
+        description="海景大床房 5晚",
+        cost_amount=4800, cost_currency="CNY",
+        type_metadata={"check_in_time": "14:00", "check_out_time": "12:00"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 15), type="dining", sort_order=2,
+        start_time=time(18, 0),
+        location="酒店海景餐厅",
+        description="海鲜自助晚餐",
+        cost_amount=1200, cost_currency="CNY",
+        type_metadata={"diners": 4},
+    )
+    # Day 2: 9月16日 — 椰子鸡 + 蜈支洲岛
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 16), type="dining", sort_order=0,
+        start_time=time(8, 30),
+        location="椰梦长廊椰子鸡",
+        description="正宗海南椰子鸡早餐",
+        cost_amount=680, cost_currency="CNY",
+        type_metadata={"diners": 4},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 16), type="activity", sort_order=1,
+        start_time=time(10, 0), end_time=time(17, 0),
+        location="蜈支洲岛",
+        description="一日游含浮潜",
+        cost_amount=800, cost_currency="CNY",
+    )
+    # Day 3: 9月17日 — 潜水 + spa
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 17), type="activity", sort_order=0,
+        start_time=time(9, 0), end_time=time(12, 0),
+        location="亚龙湾潜水基地",
+        description="体验潜水（PADI认证）",
+        cost_amount=520, cost_currency="CNY",
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 17), type="custom", sort_order=1,
+        start_time=time(15, 0),
+        location="珠江南田温泉",
+        description="家庭温泉套餐",
+        cost_amount=480, cost_currency="CNY",
+        custom_type_id=custom_type_spa.id,
+    )
+    # Day 5: 9月19日 — 购物
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 19), type="custom", sort_order=0,
+        start_time=time(10, 0), end_time=time(14, 0),
+        location="三亚国际免税城",
+        description="免税购物",
+        cost_amount=3500, cost_currency="CNY",
+        custom_type_id=custom_type_shopping.id,
+    )
+    # Day 6: 9月20日 — 返程
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=sanya_trip.id, family_id=fam.id,
+        date=date(2026, 9, 20), type="transport", sort_order=0,
+        start_time=time(13, 0),
+        location="亚龙湾 → 凤凰机场",
+        description="酒店送机",
+        type_metadata={"origin": "亚龙湾万豪", "destination": "三亚凤凰机场"},
+    )
+    # 独立费用（非行程项关联）— timeline 上混合显示
+    ExpenseEntryFactory.create_pair(
+        db, family_id=fam.id, trip_id=sanya_trip.id, user_id=spouse.id,
+        category_id=ec_shopping.id, amount=150, expense_date=date(2026, 9, 18),
+        description="海边纪念品",
+    )
+
+    # 成都美食之旅行程项（settled, 4天 — 已结束）
+    # Day 1: 6月5日
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 5), type="transport", sort_order=0,
+        start_time=time(7, 30), end_time=time(15, 0),
+        location="成都东站",
+        description="高铁到达",
+        cost_amount=2100, cost_currency="CNY",
+        type_metadata={"origin": "上海虹桥", "destination": "成都东"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 5), type="dining", sort_order=1,
+        start_time=time(18, 0),
+        location="马路边边火锅（春熙路店）",
+        description="正宗成都火锅",
+        cost_amount=680, cost_currency="CNY",
+        type_metadata={"diners": 2},
+    )
+    # Day 2: 6月6日
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 6), type="dining", sort_order=0,
+        start_time=time(12, 0),
+        location="小龙坎火锅（宽窄巷子店）",
+        description="经典牛油火锅",
+        cost_amount=420, cost_currency="CNY",
+        type_metadata={"diners": 2},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 6), type="activity", sort_order=1,
+        start_time=time(14, 0), end_time=time(17, 0),
+        location="宽窄巷子",
+        description="逛吃逛吃",
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 6), type="dining", sort_order=2,
+        start_time=time(17, 30),
+        location="宽窄巷子小吃街",
+        description="三大炮、糖油果子、钵钵鸡",
+        cost_amount=350, cost_currency="CNY",
+        type_metadata={"diners": 2},
+    )
+    # Day 3: 6月7日 — 都江堰
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 7), type="activity", sort_order=0,
+        start_time=time(8, 0), end_time=time(15, 0),
+        location="都江堰景区",
+        description="世界文化遗产一日游",
+        cost_amount=480, cost_currency="CNY",
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 7), type="custom", sort_order=1,
+        start_time=time(16, 0),
+        location="春熙路伴手礼店",
+        description="火锅底料+兔头+张飞牛肉",
+        cost_amount=520, cost_currency="CNY",
+        custom_type_id=custom_type_shopping.id,
+    )
+    # Day 4: 6月8日 — 返程
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 8), type="dining", sort_order=0,
+        start_time=time(9, 0),
+        location="串串香（太古里店）",
+        description="返程前最后一顿",
+        cost_amount=380, cost_currency="CNY",
+        type_metadata={"diners": 2},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=chengdu_trip.id, family_id=fam.id,
+        date=date(2026, 6, 8), type="transport", sort_order=1,
+        start_time=time(14, 0),
+        location="成都东站 → 上海虹桥",
+        description="高铁返程",
+        type_metadata={"origin": "成都东", "destination": "上海虹桥"},
+    )
+
+    # 莫干山露营行程项（planning, 3天）
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=moganshan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 3), type="transport", sort_order=0,
+        start_time=time(9, 0),
+        location="杭州 → 莫干山",
+        description="自驾约1.5小时",
+        type_metadata={"origin": "杭州", "destination": "莫干山"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=moganshan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 3), type="accommodation", sort_order=1,
+        start_time=time(14, 0),
+        location="莫干山裸心谷",
+        description="山景别墅 2晚",
+        cost_amount=2800, cost_currency="CNY",
+        type_metadata={"check_in_time": "14:00", "check_out_time": "11:00"},
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=moganshan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 4), type="activity", sort_order=0,
+        start_time=time(8, 0), end_time=time(12, 0),
+        location="莫干山登山步道",
+        description="竹海徒步",
+    )
+    ItineraryItemFactory.get_or_create(
+        db, trip_id=moganshan_trip.id, family_id=fam.id,
+        date=date(2026, 10, 5), type="transport", sort_order=0,
+        start_time=time(10, 0),
+        location="莫干山 → 杭州",
+        description="返程",
+        type_metadata={"origin": "莫干山", "destination": "杭州"},
+    )
+
+    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+行程项+21费用+2结算）")
