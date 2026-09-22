@@ -258,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
@@ -289,6 +289,31 @@ function postLoginTarget(): string {
   // Block protocol-relative URLs (//evil.com) and backslash variants (/\evil.com)
   if (redirect && redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.startsWith('/\\')) return redirect
   return '/'
+}
+
+/**
+ * Redirect child users to the child app after login.
+ * If the trust-device prompt is showing, waits for the user to
+ * confirm/dismiss before navigating — so the dialog isn't destroyed
+ * by the immediate page-level redirect.
+ */
+function redirectForChild() {
+  const childBaseUrl = getChildBaseUrl()
+  const redirect = route.query.redirect as string
+  const targetUrl = redirect && redirect.startsWith('/child/')
+    ? `${childBaseUrl}${redirect.replace('/child/', '')}`
+    : childBaseUrl
+
+  if (authStore.showTrustPrompt) {
+    const unwatch = watch(() => authStore.showTrustPrompt, (val) => {
+      if (!val) {
+        unwatch()
+        window.location.href = targetUrl
+      }
+    })
+  } else {
+    window.location.href = targetUrl
+  }
 }
 
 // Theme detection — follow data-theme set by App.vue
@@ -435,15 +460,8 @@ async function onStep1Submit() {
       // fetchMe() succeeded — safe to show success and navigate
       showSuccessToast(t('toast.loginSuccess'))
       authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
-      const user = authStore.user
-      if (user?.role === 'child') {
-        const childBaseUrl = getChildBaseUrl()
-      const redirect = route.query.redirect as string
-      if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
-      } else {
-        window.location.href = childBaseUrl
-      }
+      if (authStore.user?.role === 'child') {
+        redirectForChild()
         return
       }
       router.push(postLoginTarget())
@@ -505,10 +523,8 @@ async function onQuickLogin() {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
       authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
-      const authUser = authStore.user
-      if (authUser?.role === 'child') {
-        const childBaseUrl = getChildBaseUrl()
-        window.location.href = childBaseUrl
+      if (authStore.user?.role === 'child') {
+        redirectForChild()
         return
       }
       router.push(postLoginTarget())
@@ -558,10 +574,8 @@ async function authenticateWithWebAuthn(user: BoundUser) {
       await authStore.fetchMe()
       showSuccessToast(t('toast.loginSuccess'))
       authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
-      const authUser = authStore.user
-      if (authUser?.role === 'child') {
-        const childBaseUrl = getChildBaseUrl()
-        window.location.href = childBaseUrl
+      if (authStore.user?.role === 'child') {
+        redirectForChild()
         return
       }
       router.push(postLoginTarget())
@@ -627,16 +641,8 @@ async function submitPin() {
     })
     showSuccessToast(t('toast.loginSuccess'))
     authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
-    // Redirect based on user role
-    const user = authStore.user
-    if (user?.role === 'child') {
-      const childBaseUrl = getChildBaseUrl()
-      const redirect = route.query.redirect as string
-      if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
-      } else {
-        window.location.href = childBaseUrl
-      }
+    if (authStore.user?.role === 'child') {
+      redirectForChild()
       return
     }
     router.push(postLoginTarget())
@@ -710,15 +716,8 @@ async function submitEmojiPin() {
     })
     showSuccessToast(t('toast.loginSuccess'))
     authStore.maybeShowTrustPrompt(deviceAlreadyTrusted.value)
-    const user = authStore.user
-    if (user?.role === 'child') {
-      const childBaseUrl = getChildBaseUrl()
-      const redirect = route.query.redirect as string
-      if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
-      } else {
-        window.location.href = childBaseUrl
-      }
+    if (authStore.user?.role === 'child') {
+      redirectForChild()
       return
     }
     router.push(postLoginTarget())
