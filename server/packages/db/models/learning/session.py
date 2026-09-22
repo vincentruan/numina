@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
@@ -39,6 +39,10 @@ class LearningSession(Base):
 
 class LearningAssessmentAttempt(Base):
     __tablename__ = "learning_assessment_attempts"
+
+    __table_args__ = (
+        Index("ix_assessment_attempt_child_topic_created", "child_id", "topic_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     child_id: Mapped[int] = mapped_column(
