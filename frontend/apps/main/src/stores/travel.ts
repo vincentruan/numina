@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Trip, ExpenseEntry, ExpenseCategory, SplitGroup, SplitSettlement } from '@/types/travel'
+import type { Trip, ExpenseEntry, ExpenseCategory, SplitGroup, SplitSettlement, ItineraryItem, ItineraryItemTypeDef } from '@/types/travel'
 import * as travelApi from '@/api/travel'
 import { enqueue, listPending } from '@/utils/offlineQueue'
 
@@ -12,6 +12,8 @@ export const useTravelStore = defineStore('travel', () => {
   const categories = ref<ExpenseCategory[]>([])
   const splitGroup = ref<SplitGroup | null>(null)
   const settlements = ref<SplitSettlement[]>([])
+  const itineraryItems = ref<ItineraryItem[]>([])
+  const itineraryTypes = ref<ItineraryItemTypeDef[]>([])
   const loading = ref(false)
   const pendingSyncCount = ref(0)
 
@@ -94,6 +96,27 @@ export const useTravelStore = defineStore('travel', () => {
     pendingSyncCount.value = pending.length
   }
 
+  async function fetchItinerary(tripId: string) {
+    const res = await travelApi.getItineraryItems(tripId)
+    itineraryItems.value = res.data
+  }
+
+  async function fetchItineraryTypes() {
+    const res = await travelApi.getItineraryTypes()
+    itineraryTypes.value = res.data
+  }
+
+  async function createItineraryItem(tripId: string, data: Parameters<typeof travelApi.createItineraryItem>[1]) {
+    const res = await travelApi.createItineraryItem(tripId, data)
+    itineraryItems.value.push(res.data)
+    return res.data
+  }
+
+  async function deleteItineraryItem(tripId: string, itemId: string, mode: 'cascade' | 'unlink') {
+    await travelApi.deleteItineraryItem(tripId, itemId, mode)
+    itineraryItems.value = itineraryItems.value.filter(i => i.id !== itemId)
+  }
+
   function $reset() {
     trips.value = []
     currentTrip.value = null
@@ -101,6 +124,8 @@ export const useTravelStore = defineStore('travel', () => {
     categories.value = []
     splitGroup.value = null
     settlements.value = []
+    itineraryItems.value = []
+    itineraryTypes.value = []
     loading.value = false
     pendingSyncCount.value = 0
   }
@@ -112,6 +137,8 @@ export const useTravelStore = defineStore('travel', () => {
     categories,
     splitGroup,
     settlements,
+    itineraryItems,
+    itineraryTypes,
     loading,
     pendingSyncCount,
     upcomingTrips,
@@ -122,6 +149,10 @@ export const useTravelStore = defineStore('travel', () => {
     fetchExpenses,
     createExpense,
     fetchCategories,
+    fetchItinerary,
+    fetchItineraryTypes,
+    createItineraryItem,
+    deleteItineraryItem,
     fetchSplitGroup,
     fetchSettlements,
     refreshPendingCount,
