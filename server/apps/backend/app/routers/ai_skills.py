@@ -63,6 +63,8 @@ RESERVED_NAMES = [
     "finance-digest",
     "financial-deep-analysis",
     "surprise-me",
+    # Learning OS
+    "learning-tutor",
 ]
 
 # Internal-only skills excluded from user-facing catalog and creation.
