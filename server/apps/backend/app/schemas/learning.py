@@ -81,7 +81,7 @@ class AssignmentCreate(BaseModel):
     topic_id: int
     assignment_type: str = "parent_assigned"
     priority: int = 0
-    due_date: date | None
+    due_date: date | None = None
 
     @field_validator("assignment_type")
     @classmethod
