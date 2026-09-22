@@ -87,6 +87,12 @@ const router = createRouter({
           component: () => import('@/pages/ChildBadgesPage.vue'),
         },
         {
+          path: 'learning',
+          name: 'LearningMap',
+          component: () => import('@/pages/learning/LearningMapPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
           path: 'manifesto/sign',
           name: 'ManifestoSigning',
           component: () => import('@/pages/ManifestoSigningPage.vue'),

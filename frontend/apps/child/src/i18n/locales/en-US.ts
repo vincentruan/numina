@@ -442,6 +442,21 @@ export default {
     },
     step2: { title: 'My Rewards', desc: 'Save up rewards to redeem wishes' },
   },
+  learning: {
+    title: 'Knowledge Map',
+    empty: 'No learning content yet — ask your parents to assign some!',
+    todayRecommend: 'Today\'s Pick',
+    startLearning: 'Start Learning',
+    attempts: '{count} attempts',
+    general: 'General',
+    status: {
+      available: 'Available',
+      learning: 'Learning',
+      mastered: 'Mastered',
+      locked: 'Locked',
+      review: 'Review',
+    },
+  },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',
     allDone: 'All done for today! Amazing 🎉',

@@ -443,6 +443,21 @@ export default {
     },
     step2: { title: '我的奖励', desc: '积攒奖励，兑换心愿' },
   },
+  learning: {
+    title: '知识地图',
+    empty: '还没有学习内容，让爸爸妈妈帮你布置吧！',
+    todayRecommend: '今日推荐',
+    startLearning: '开始学习',
+    attempts: '{count} 次尝试',
+    general: '综合',
+    status: {
+      available: '可学习',
+      learning: '学习中',
+      mastered: '已掌握',
+      locked: '未解锁',
+      review: '待复习',
+    },
+  },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',
     allDone: '今天的任务都完成啦！太棒了 🎉',
