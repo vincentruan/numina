@@ -36,6 +36,9 @@ _CATEGORY_IDENTITIES: list[tuple[str, str]] = [
     ("理财产品", "financial"),
     ("数字货币", "financial"),
     ("其他金融", "financial"),
+    # Other (wish-only categories — non-asset wish types)
+    ("租房", "other"),
+    ("旅游", "other"),
 ]
 
 _FALLBACK_PRESENTATION: dict[str, dict] = {
@@ -62,6 +65,8 @@ _FALLBACK_PRESENTATION: dict[str, dict] = {
     "理财产品": {"icon": "icon-wealth",        "color": "#8B5CF6", "sort_order": 21},
     "数字货币": {"icon": "icon-crypto",        "color": "#F97316", "sort_order": 22},
     "其他金融": {"icon": "icon-other-finance", "color": "#64748B", "sort_order": 23},
+    "租房":     {"icon": "icon-rental",        "color": "#0891B2", "sort_order": 24},
+    "旅游":     {"icon": "icon-travel",        "color": "#7C3AED", "sort_order": 25},
 }
 
 
@@ -103,25 +108,28 @@ def bootstrap_categories(db: Session) -> None:
     """Ensure system categories exist. Idempotent."""
     from apps.backend.app.models.category import Category
 
-    existing = db.query(Category).filter(Category.is_system).first()
-    if existing:
-        icon_map = {cat["name"]: cat["icon"] for cat in SYSTEM_CATEGORIES}
-        rows = db.query(Category).filter(
-            Category.is_system,
-            ~Category.icon.like("icon-%"),
-        ).all()
-        for cat in rows:
-            if cat.name in icon_map:
-                cat.icon = icon_map[cat.name]
-        if rows:
-            db.commit()
-        return
+    existing_names = {
+        c.name
+        for c in db.query(Category.name).filter(Category.is_system).all()
+    }
 
+    # Backfill any new system categories that were added to the seed list
+    # after the initial bootstrap.
+    added = False
     for cat_data in SYSTEM_CATEGORIES:
-        cat = Category(
-            family_id=None,
-            is_system=True,
-            **cat_data,
-        )
-        db.add(cat)
-    db.commit()
+        if cat_data["name"] not in existing_names:
+            db.add(Category(family_id=None, is_system=True, **cat_data))
+            added = True
+
+    # Migrate legacy emoji icons to sprite IDs.
+    icon_map = {cat["name"]: cat["icon"] for cat in SYSTEM_CATEGORIES}
+    rows = db.query(Category).filter(
+        Category.is_system,
+        ~Category.icon.like("icon-%"),
+    ).all()
+    for cat in rows:
+        if cat.name in icon_map:
+            cat.icon = icon_map[cat.name]
+
+    if added or rows:
+        db.commit()

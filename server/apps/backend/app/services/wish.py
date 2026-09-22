@@ -74,6 +74,9 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         target_date=req.target_date,
         monthly_saving=req.monthly_saving or Decimal("0"),
         ignore_debt_warning=req.ignore_debt_warning or False,
+        travel_destination=req.travel_destination,
+        travel_duration_days=req.travel_duration_days,
+        rental_area=req.rental_area,
     )
     db.add(wish)
     invalidate_skill(db, user.family_id, "finance-coach")

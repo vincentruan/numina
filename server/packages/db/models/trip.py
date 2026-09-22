@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Numeric,
     String,
+    Text,
     func,
     text,
 )
@@ -33,6 +34,7 @@ class Trip(Base):
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     destination: Mapped[str] = mapped_column(String(200), nullable=False)
     departure_date: Mapped[date] = mapped_column(Date, nullable=False)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # null=不定返程

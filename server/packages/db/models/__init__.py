@@ -10,6 +10,8 @@ from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.family import Family
 from packages.db.models.file_remote_location import FileRemoteLocation
+from packages.db.models.itinerary_item import ItineraryItem
+from packages.db.models.itinerary_item_type import ItineraryItemType
 from packages.db.models.liability import Liability
 from packages.db.models.literacy_badge import LiteracyBadge, LiteracyBadgeDefinition
 from packages.db.models.literacy_report import LiteracyWeeklyReport
@@ -49,6 +51,8 @@ __all__ = [
     "ExpenseEntry",
     "Family",
     "FileRemoteLocation",
+    "ItineraryItem",
+    "ItineraryItemType",
     "Liability",
     "LiteracyBadge",
     "LiteracyBadgeDefinition",

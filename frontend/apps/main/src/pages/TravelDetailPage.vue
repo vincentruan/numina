@@ -65,6 +65,11 @@
       <!-- Trip info card -->
       <van-cell-group inset class="info-card">
         <van-cell :title="t('travel.destination')" :value="trip.destination" />
+        <van-cell v-if="trip.description" :title="t('travel.description')">
+          <template #label>
+            <span>{{ trip.description }}</span>
+          </template>
+        </van-cell>
         <van-cell :title="t('travel.departureDate')" :value="formatDate(trip.departure_date)" />
         <van-cell
           v-if="trip.return_date"
@@ -74,18 +79,29 @@
         <van-cell :title="t('travel.currency')" :value="trip.currency" />
       </van-cell-group>
 
-      <!-- Expense list section -->
+      <!-- Itinerary Timeline (primary view) -->
       <van-cell-group inset class="expense-card">
-        <van-cell :title="t('travel.expenses')">
-          <template #label>
-            <span class="expense-count">{{ expenses.length }} {{ t('travel.expenseEntries') }}</span>
-          </template>
-        </van-cell>
+        <van-cell :title="t('travel.itinerary.title')" />
       </van-cell-group>
-      <ExpenseListPanel :trip-id="trip.id" />
+      <ItineraryTimeline
+        :trip-id="trip.id"
+        :departure-date="trip.departure_date"
+        :return-date="trip.return_date"
+        :expenses="expenses"
+        @add="openAddForm"
+        @edit="openEditForm"
+        @delete="handleDeleteRequest"
+      />
 
-      <!-- Split group manager -->
-      <SplitGroupManager :trip-id="trip.id" />
+      <!-- Collapsible details section (expenses + split) -->
+      <van-collapse v-model="collapseActive">
+        <van-collapse-item :title="t('travel.expenses')" name="expenses">
+          <ExpenseListPanel :trip-id="trip.id" />
+        </van-collapse-item>
+        <van-collapse-item :title="t('travel.splitGroup.title')" name="split">
+          <SplitGroupManager :trip-id="trip.id" />
+        </van-collapse-item>
+      </van-collapse>
 
       <!-- Action buttons -->
       <div class="action-buttons">
@@ -117,22 +133,44 @@
           <ReceiptScanButton :trip-id="trip!.id" />
         </div>
       </van-popup>
+
+      <!-- Itinerary Item Form -->
+      <ItineraryItemForm
+        v-model="showItineraryForm"
+        :trip-id="trip.id"
+        :edit-item="editingItem"
+        :initial-date="addItemDate"
+        @saved="onItinerarySaved"
+      />
+
+      <!-- Delete choice action sheet (R13: cascade or unlink) -->
+      <van-action-sheet
+        v-model:show="showDeleteSheet"
+        :title="t('travel.itinerary.deleteItem')"
+        :description="t('travel.itinerary.delete.confirmMessage')"
+        :actions="deleteActions"
+        @select="onDeleteActionSelect"
+        :cancel-text="t('common.cancel')"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useTravelStore } from '@/stores/travel'
-import { cancelTrip } from '@/api/travel'
+import { cancelTrip, deleteItineraryItem } from '@/api/travel'
 import { useCurrency } from '@/composables/useCurrency'
 import PageHeader from '@/components/common/PageHeader.vue'
 import SplitGroupManager from '@/components/travel/SplitGroupManager.vue'
 import ExpenseListPanel from '@/components/travel/ExpenseListPanel.vue'
 import ReceiptScanButton from '@/components/travel/ReceiptScanButton.vue'
+import ItineraryTimeline from '@/components/travel/ItineraryTimeline.vue'
+import ItineraryItemForm from '@/components/travel/ItineraryItemForm.vue'
+import type { ItineraryItem } from '@/types/travel'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -149,14 +187,26 @@ function formatAmount(amount: string | null): string {
 const loading = ref(true)
 const showActionSheet = ref(false)
 const showReceiptScan = ref(false)
+const collapseActive = ref<string[]>([])
+const showItineraryForm = ref(false)
+const editingItem = ref<ItineraryItem | null>(null)
+const addItemDate = ref<string | undefined>(undefined)
+const showDeleteSheet = ref(false)
+const deleteTargetItem = ref<ItineraryItem | null>(null)
 
 const trip = computed(() => store.currentTrip)
 const expenses = computed(() => store.expenses)
 
 const expenseActions = [
+  { name: t('travel.itinerary.addItem'), value: 'itinerary' },
   { name: t('travel.photoReceipt'), value: 'photo' },
   { name: t('travel.manualEntry'), value: 'manual' },
 ]
+
+const deleteActions = computed(() => [
+  { name: t('travel.itinerary.delete.cascadeTitle'), subname: t('travel.itinerary.delete.cascadeDesc'), value: 'cascade', color: '#ee0a24' },
+  { name: t('travel.itinerary.delete.unlinkTitle'), subname: t('travel.itinerary.delete.unlinkDesc'), value: 'unlink' },
+])
 
 const budgetPercentage = computed(() => {
   if (!trip.value?.planned_budget) return 0
@@ -179,10 +229,74 @@ function navigateToEdit() {
 
 function onActionSelect(action: { value: string }) {
   showActionSheet.value = false
-  if (action.value === 'manual') {
+  if (action.value === 'itinerary') {
+    openAddForm()
+  } else if (action.value === 'manual') {
     router.push(`/travel/${trip.value!.id}/expense/new`)
   } else if (action.value === 'photo') {
     showReceiptScan.value = true
+  }
+}
+
+function openAddForm(dateStr?: string) {
+  editingItem.value = null
+  addItemDate.value = dateStr
+  showItineraryForm.value = true
+}
+
+function openEditForm(item: ItineraryItem) {
+  editingItem.value = item
+  addItemDate.value = undefined
+  showItineraryForm.value = true
+}
+
+async function onItinerarySaved() {
+  if (trip.value) {
+    await Promise.all([
+      store.fetchItinerary(trip.value.id),
+      store.fetchExpenses(trip.value.id),
+    ])
+  }
+}
+
+async function handleDeleteRequest(item: ItineraryItem) {
+  const hasCost = item.cost_amount && parseFloat(item.cost_amount) > 0
+
+  if (hasCost) {
+    // R13: Show explicit two-choice action sheet (cascade or unlink)
+    deleteTargetItem.value = item
+    showDeleteSheet.value = true
+  } else {
+    // No cost — simple confirm + delete
+    try {
+      await showConfirmDialog({
+        title: t('travel.itinerary.deleteItem'),
+        message: t('travel.itinerary.delete.confirmNoMessage'),
+      })
+      await deleteItineraryItem(trip.value!.id, item.id, 'cascade')
+      await store.fetchItinerary(trip.value!.id)
+      showSuccessToast(t('common.success'))
+    } catch {
+      // user cancelled
+    }
+  }
+}
+
+async function onDeleteActionSelect(action: { value: string }) {
+  showDeleteSheet.value = false
+  if (!deleteTargetItem.value) return
+  const mode = action.value as 'cascade' | 'unlink'
+  try {
+    await deleteItineraryItem(trip.value!.id, deleteTargetItem.value.id, mode)
+    await Promise.all([
+      store.fetchItinerary(trip.value!.id),
+      store.fetchExpenses(trip.value!.id),
+    ])
+    showSuccessToast(t('common.success'))
+  } catch {
+    showFailToast(t('common.failed'))
+  } finally {
+    deleteTargetItem.value = null
   }
 }
 
@@ -209,6 +323,8 @@ onMounted(async () => {
       await Promise.all([
         store.fetchTrip(id),
         store.fetchExpenses(id),
+        store.fetchItinerary(id),
+        store.fetchItineraryTypes(),
       ])
     } catch {
       showFailToast(t('common.failed'))
@@ -217,6 +333,16 @@ onMounted(async () => {
     }
   } else {
     loading.value = false
+  }
+})
+
+onActivated(async () => {
+  const id = route.params.id as string
+  if (id && trip.value) {
+    await Promise.all([
+      store.fetchItinerary(id),
+      store.fetchExpenses(id),
+    ])
   }
 })
 </script>

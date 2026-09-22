@@ -33,3 +33,7 @@
 理财产品: { icon: icon-wealth,        color: "#8B5CF6", sort_order: 21 }
 数字货币: { icon: icon-crypto,        color: "#F97316", sort_order: 22 }
 其他金融: { icon: icon-other-finance, color: "#64748B", sort_order: 23 }
+
+# Other (wish-only categories — non-asset wish types)
+租房:     { icon: icon-rental,         color: "#0891B2", sort_order: 24 }
+旅游:     { icon: icon-travel,         color: "#7C3AED", sort_order: 25 }

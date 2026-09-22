@@ -9,6 +9,10 @@ import type {
   SplitGroup,
   SplitSettlement,
   SharedExpense,
+  ItineraryItem,
+  ItineraryItemCreate,
+  ItineraryItemUpdate,
+  ItineraryItemTypeDef,
 } from '@/types/travel'
 
 // Trip API
@@ -64,7 +68,9 @@ export function createExpenseCategory(data: { name: string; icon?: string }) {
 
 // Split Group API
 export function getSplitGroup(tripId: string) {
-  return http.get<SplitGroup>(`/trips/${tripId}/split`)
+  return http.get<SplitGroup>(`/trips/${tripId}/split`, {
+    _silentErrorCodes: ['SPLIT_GROUP_NOT_FOUND'],
+  })
 }
 
 export function createSplitGroup(tripId: string) {
@@ -111,6 +117,36 @@ export function addCoOrganizer(tripId: string, targetUserId: string) {
 
 export function removeCoOrganizer(tripId: string, targetUserId: string) {
   return http.delete(`/trips/${tripId}/split/co-organizers/${targetUserId}`)
+}
+
+// Itinerary API
+export function getItineraryItems(tripId: string) {
+  return http.get<ItineraryItem[]>(`/trips/${tripId}/itinerary`)
+}
+
+export function createItineraryItem(tripId: string, data: ItineraryItemCreate) {
+  return http.post<ItineraryItem>(`/trips/${tripId}/itinerary`, data)
+}
+
+export function updateItineraryItem(tripId: string, itemId: string, data: ItineraryItemUpdate) {
+  return http.patch<ItineraryItem>(`/trips/${tripId}/itinerary/${itemId}`, data)
+}
+
+export function deleteItineraryItem(tripId: string, itemId: string, mode: 'cascade' | 'unlink') {
+  return http.delete(`/trips/${tripId}/itinerary/${itemId}`, { params: { mode } })
+}
+
+// Itinerary Type API
+export function getItineraryTypes() {
+  return http.get<ItineraryItemTypeDef[]>('/itinerary-types')
+}
+
+export function createItineraryType(data: { name: string; icon?: string }) {
+  return http.post<ItineraryItemTypeDef>('/itinerary-types', data)
+}
+
+export function deleteItineraryType(typeId: string) {
+  return http.delete(`/itinerary-types/${typeId}`)
 }
 
 // Receipt API

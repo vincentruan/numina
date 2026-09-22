@@ -19,13 +19,12 @@
         />
 
         <van-field
-          v-model="formData.currency"
-          is-link
-          readonly
           :label="t('travel.currency')"
-          :placeholder="trip?.currency || 'CNY'"
-          @click="showCurrencyPicker = true"
-        />
+        >
+          <template #input>
+            <CurrencyButton v-model="formData.currency" />
+          </template>
+        </van-field>
 
         <!-- Split type selector (visible only when trip has active split group) -->
         <van-field
@@ -93,15 +92,6 @@
       </div>
     </van-form>
 
-    <!-- Currency Picker -->
-    <van-popup v-model:show="showCurrencyPicker" position="bottom" round destroy-on-close>
-      <van-picker
-        :columns="currencyColumns"
-        @confirm="onCurrencyConfirm"
-        @cancel="showCurrencyPicker = false"
-      />
-    </van-popup>
-
     <!-- Category Picker -->
     <van-popup v-model:show="showCategoryPicker" position="bottom" round destroy-on-close>
       <van-picker
@@ -130,6 +120,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -169,17 +160,8 @@ const formRules = {
   amount: [{ required: true, message: t('travel.amountRequired') }],
 }
 
-const showCurrencyPicker = ref(false)
 const showCategoryPicker = ref(false)
 const showDatePicker = ref(false)
-
-const currencyColumns = [
-  { text: '人民币 (CNY)', value: 'CNY' },
-  { text: '美元 (USD)', value: 'USD' },
-  { text: '欧元 (EUR)', value: 'EUR' },
-  { text: '日元 (JPY)', value: 'JPY' },
-  { text: '港币 (HKD)', value: 'HKD' },
-]
 
 const categoryName = computed(() => {
   if (!formData.value.category_id) return ''
@@ -195,11 +177,6 @@ const categoryColumns = computed(() =>
 )
 
 const currentDate = ref(formData.value.expense_date.split('-'))
-
-function onCurrencyConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string }> }) {
-  formData.value.currency = selectedOptions[0]?.value || 'CNY'
-  showCurrencyPicker.value = false
-}
 
 function onCategoryConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string }> }) {
   formData.value.category_id = selectedOptions[0]?.value || null

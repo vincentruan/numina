@@ -46,6 +46,7 @@ def create_trip(
         family_id=family_id,
         user_id=user_id,
         name=req.name,
+        description=req.description,
         destination=req.destination,
         departure_date=req.departure_date,
         return_date=req.return_date,

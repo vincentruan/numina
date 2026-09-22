@@ -17,6 +17,14 @@
           :rules="[{ required: true, message: t('travel.tripNameRequired') }]"
         />
         <van-field
+          v-model="formData.description"
+          :label="t('travel.description')"
+          type="textarea"
+          rows="2"
+          autosize
+          :placeholder="t('travel.descriptionPlaceholder')"
+        />
+        <van-field
           v-model="formData.destination"
           :label="t('travel.destination')"
           :placeholder="t('travel.destinationPlaceholder')"
@@ -48,10 +56,12 @@
           :placeholder="t('travel.budgetPlaceholder')"
         />
         <van-field
-          v-model="formData.currency"
           :label="t('travel.currency')"
-          :placeholder="t('travel.currencyPlaceholder')"
-        />
+        >
+          <template #input>
+            <CurrencyButton v-model="formData.currency" />
+          </template>
+        </van-field>
         <van-field
           v-model="formData.timezone"
           :label="t('travel.timezone')"
@@ -99,6 +109,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useTravelStore } from '@/stores/travel'
 import PageHeader from '@/components/common/PageHeader.vue'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import type { TripCreate, TripUpdate } from '@/types/travel'
 
 const { t } = useI18n()
@@ -112,6 +123,7 @@ const submitting = ref(false)
 
 const formData = reactive({
   name: '',
+  description: '',
   destination: '',
   departure_date: '',
   return_date: '',
@@ -161,6 +173,7 @@ async function onSubmit() {
   try {
     const data: TripCreate = {
       name: formData.name,
+      description: formData.description || undefined,
       destination: formData.destination,
       departure_date: formData.departure_date,
       return_date: formData.return_date || undefined,
@@ -172,6 +185,7 @@ async function onSubmit() {
     if (isEdit.value && tripId.value) {
       const updateData: TripUpdate = {
         name: data.name,
+        description: data.description,
         destination: data.destination,
         departure_date: data.departure_date,
         return_date: data.return_date,
@@ -208,6 +222,7 @@ onMounted(async () => {
       const trip = store.currentTrip
       if (trip) {
         formData.name = trip.name
+        formData.description = trip.description ?? ''
         formData.destination = trip.destination
         formData.departure_date = trip.departure_date
         formData.return_date = trip.return_date || ''

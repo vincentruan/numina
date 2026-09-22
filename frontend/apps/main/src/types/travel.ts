@@ -5,6 +5,7 @@ export interface Trip {
   family_id: string
   user_id: string
   name: string
+  description: string | null
   destination: string
   departure_date: string
   return_date: string | null
@@ -29,10 +30,12 @@ export interface TripCreate {
   currency?: string
   timezone?: string | null
   wish_id?: string | null
+  description?: string | null
 }
 
 export interface TripUpdate {
   name?: string
+  description?: string | null
   destination?: string
   departure_date?: string
   return_date?: string | null
@@ -58,6 +61,7 @@ export interface ExpenseEntry {
   description: string | null
   receipt_image_url: string | null
   user_id: string
+  itinerary_item_id: string | null
   created_at: string
   updated_at: string
 }
@@ -130,4 +134,61 @@ export interface SharedExpenseItem {
   expense_date: string
   category_name: string | null
   payer_name: string
+}
+
+export type ItineraryItemType = 'accommodation' | 'dining' | 'transport' | 'activity' | 'custom'
+
+export interface ItineraryItemTypeDef {
+  id: string
+  family_id: string | null
+  name: string
+  icon: string
+  sort_order: number
+}
+
+export interface ItineraryItem {
+  id: string
+  trip_id: string
+  family_id: string
+  date: string
+  type: ItineraryItemType
+  sort_order: number
+  start_time: string | null
+  end_time: string | null
+  location: string | null
+  description: string | null
+  cost_amount: string | null
+  cost_currency: string | null
+  custom_type_id: string | null
+  type_metadata: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ItineraryItemCreate {
+  date: string
+  type: ItineraryItemType
+  sort_order?: number
+  start_time?: string | null
+  end_time?: string | null
+  location?: string | null
+  description?: string | null
+  cost_amount?: string | null
+  cost_currency?: string | null
+  custom_type_id?: string | null
+  type_metadata?: Record<string, unknown> | null
+}
+
+export interface ItineraryItemUpdate {
+  date?: string
+  type?: ItineraryItemType
+  sort_order?: number
+  start_time?: string | null
+  end_time?: string | null
+  location?: string | null
+  description?: string | null
+  cost_amount?: string | null
+  cost_currency?: string | null
+  custom_type_id?: string | null
+  type_metadata?: Record<string, unknown> | null
 }

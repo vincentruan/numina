@@ -97,6 +97,17 @@
         <van-cell :title="wish.description" />
       </van-cell-group>
 
+      <!-- Travel-specific info -->
+      <van-cell-group v-if="wish.travel_destination || wish.travel_duration_days" inset :title="t('wish.form.tabOther')">
+        <van-cell v-if="wish.travel_destination" :title="t('wish.form.travelDestination')" :value="wish.travel_destination" />
+        <van-cell v-if="wish.travel_duration_days" :title="t('wish.form.travelDuration')" :value="t('wish.travelDurationValue', { days: wish.travel_duration_days })" />
+      </van-cell-group>
+
+      <!-- Rental-specific info -->
+      <van-cell-group v-if="wish.rental_area" inset :title="t('wish.form.tabOther')">
+        <van-cell :title="t('wish.form.rentalArea')" :value="wish.rental_area" />
+      </van-cell-group>
+
       <!-- Actions -->
       <div class="actions">
         <template v-if="wish.status === 'pending'">

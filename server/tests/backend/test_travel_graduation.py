@@ -153,3 +153,72 @@ def test_cross_family_graduate_fails(client, auth_headers, second_user_headers):
     )
     # Should fail — wish not found in second user's family
     assert response2.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Field mapping (travel_destination, travel_duration_days, description)
+# ---------------------------------------------------------------------------
+
+
+def test_graduate_maps_travel_fields_to_trip(client, auth_headers):
+    """Graduation maps wish travel fields to trip correctly."""
+    # Create wish with travel-specific fields
+    response = client.post(
+        "/api/v1/wishes",
+        headers=auth_headers,
+        json={
+            "name": "东京之旅",
+            "description": "家庭度假",
+            "expected_price": 15000,
+            "priority": "high",
+            "currency": "CNY",
+            "converts_to_asset": False,
+            "target_date": "2026-10-01",
+            "travel_destination": "Tokyo",
+            "travel_duration_days": 5,
+        },
+    )
+    assert response.status_code == 201
+    wish_id = response.json()["data"]["id"]
+
+    # Graduate
+    grad_response = client.post(
+        "/api/v1/trips/graduate",
+        headers=auth_headers,
+        json={"wish_id": int(wish_id)},
+    )
+    assert grad_response.status_code == 201
+    trip_data = grad_response.json()["data"]
+
+    # Verify field mapping
+    assert trip_data["destination"] == "Tokyo"
+    assert trip_data["description"] == "家庭度假"
+    assert trip_data["departure_date"] == "2026-10-01"
+    assert trip_data["return_date"] == "2026-10-06"  # departure + 5 days
+
+
+def test_graduate_falls_back_to_name_when_no_destination(client, auth_headers):
+    """When travel_destination is null, destination falls back to wish.name."""
+    response = client.post(
+        "/api/v1/wishes",
+        headers=auth_headers,
+        json={
+            "name": "巴黎度假",
+            "expected_price": 10000,
+            "priority": "medium",
+            "currency": "CNY",
+            "converts_to_asset": False,
+            "target_date": "2026-11-01",
+        },
+    )
+    assert response.status_code == 201
+    wish_id = response.json()["data"]["id"]
+
+    grad_response = client.post(
+        "/api/v1/trips/graduate",
+        headers=auth_headers,
+        json={"wish_id": int(wish_id)},
+    )
+    trip_data = grad_response.json()["data"]
+    assert trip_data["destination"] == "巴黎度假"  # falls back to name
+    assert trip_data["return_date"] is None  # no duration set

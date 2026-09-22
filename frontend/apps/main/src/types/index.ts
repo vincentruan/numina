@@ -18,7 +18,7 @@ export interface Category {
   name: string
   icon: string
   color: string
-  asset_type: 'physical' | 'financial'
+  asset_type: 'physical' | 'financial' | 'other'
   sort_order: number
   is_system: boolean
 }
@@ -406,6 +406,9 @@ export interface Wish {
   target_date?: string
   savings_count?: number
   ignore_debt_warning?: boolean
+  travel_destination?: string
+  travel_duration_days?: number
+  rental_area?: string
   created_at: string
   updated_at: string
 }

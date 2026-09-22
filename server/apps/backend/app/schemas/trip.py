@@ -29,6 +29,7 @@ class TripCreate(BaseModel):
     currency: str = "CNY"
     timezone: str | None = None
     wish_id: int | None = None
+    description: str | None = None
 
     @field_validator("planned_budget", mode="before")
     @classmethod
@@ -38,6 +39,7 @@ class TripCreate(BaseModel):
 
 class TripUpdate(BaseModel):
     name: str | None = None
+    description: str | None = None
     destination: str | None = None
     departure_date: date | None = None
     return_date: date | None = None
@@ -66,6 +68,7 @@ class TripResponse(SnowflakeBase):
     family_id: int
     user_id: int
     name: str
+    description: str | None = None
     destination: str
     departure_date: date
     return_date: date | None = None

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideation: Family Travel Module — Numina</title>
+<style>
+:root {
+  --bg: #fafaf9;
+  --surface: #fff;
+  --text: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #78716c;
+  --border: #e7e5e4;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --accent-text: #1e40af;
+  --success: #16a34a;
+  --success-soft: #f0fdf4;
+  --success-text: #166534;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --warn-text: #92400e;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-text: #991b1b;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 920px;
+  margin-inline: auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* Header */
+.doc-header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.meta-row span { white-space: nowrap; }
+
+/* Stats strip */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Sections */
+section { margin-bottom: 2.5rem; }
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border);
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+/* Prose */
+.prose { max-width: 70ch; }
+.prose p { margin-bottom: 0.75rem; color: var(--text-secondary); }
+.prose ul { margin-left: 1.25rem; margin-bottom: 0.75rem; color: var(--text-secondary); }
+.prose li { margin-bottom: 0.25rem; }
+code { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 0.85em; background: #f5f5f4; padding: 0.1em 0.3em; border-radius: 4px; }
+
+/* Axes */
+.axis-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.5rem;
+}
+
+.axis-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+.axis-name { font-weight: 600; color: var(--text); }
+.axis-desc { color: var(--text-muted); font-size: 0.8rem; }
+
+/* Sub-nav */
+.idea-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.idea-subnav a {
+  font-size: 0.78rem;
+  color: var(--accent-text);
+  text-decoration: none;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  white-space: nowrap;
+}
+
+.idea-subnav a:hover { background: #dbeafe; }
+
+/* Idea cards */
+.idea-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.idea-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.idea-rank {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.idea-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.idea-axis {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: #f5f5f4;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.idea-desc {
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.idea-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+  margin-bottom: 0.75rem;
+}
+
+.idea-meta dt {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.idea-meta dd { color: var(--text-secondary); }
+
+.idea-visual {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #fafaf9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.confidence-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.confidence-fill {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.confidence-track {
+  width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+/* Chips */
+.chip {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.chip-high { background: var(--success-soft); color: var(--success-text); }
+.chip-medium { background: var(--warn-soft); color: var(--warn-text); }
+.chip-low { background: var(--danger-soft); color: var(--danger-text); }
+.chip-std { background: #f5f5f4; color: var(--text-muted); }
+
+/* Rejection table */
+.rejection-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.rejection-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.rejection-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.rejection-table tr:last-child td { border-bottom: none; }
+.rejection-table td:first-child { font-weight: 500; color: var(--text); white-space: nowrap; }
+
+/* Footer */
+.composition-signal {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Diagram */
+.flow-diagram {
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+.flow-diagram svg { display: block; margin: 0 auto; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .container { padding: 1rem; }
+  h1 { font-size: 1.35rem; }
+  .idea-card { padding: 1rem; }
+  .idea-card-header { flex-wrap: wrap; }
+  .stats-strip { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Header -->
+<header class="doc-header">
+  <div class="eyebrow">Ideation Document</div>
+  <h1>家庭出游模块 — Family Travel Module</h1>
+  <div class="meta-row">
+    <span><time datetime="2026-09-20">2026-09-20</time></span>
+    <span>·</span>
+    <span>topic: family-travel-module</span>
+    <span>·</span>
+    <span>mode: repo-grounded</span>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats-strip">
+  <div class="stat-card">
+    <div class="stat-value">39</div>
+    <div class="stat-label">Raw Ideas</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">8</div>
+    <div class="stat-label">Survivors</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">4</div>
+    <div class="stat-label">Axes</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">5</div>
+    <div class="stat-label">Ideation Agents</div>
+  </div>
+</div>
+
+<!-- Grounding Context -->
+<section id="grounding">
+  <h2>Grounding Context</h2>
+  <div class="prose">
+    <p><strong>Numina</strong> is a privacy-first, self-hosted family asset visualization and management system. Backend: Python 3.12+ FastAPI + SQLAlchemy + Alembic. Frontend: Vue 3 + Vant 4 + Pinia. FinanceHubPage uses <code>van-tabs</code> with 4 tabs: assets, liabilities, wishes, rentals.</p>
+    <p><strong>Key architecture:</strong> All financial entities are family-scoped via <code>user_id + family_id</code>. Money fields are <code>Numeric(18,2)</code> in DB, Decimal in Python, str on wire (SnowflakeBase). Strict family isolation — no cross-family access.</p>
+    <p><strong>Existing precedents:</strong> RentalContract (date-range + status lifecycle + soft-delete, free-text counterparty for external parties), CoinTransaction (double-entry ledger for child economy), Wish (status lifecycle: pending/realized/cancelled, savings log with derived cache), PaymentRecord (liability repayment history), AssetSnapshot (daily net-worth with extensible JSON breakdown).</p>
+    <p><strong>Key gaps:</strong> No expense ledger (only coin transactions and rental cash flow). No bill-splitting. No trip/booking management. No annual/periodic reporting (only daily snapshots). Liability categories are hardcoded (mortgage/car_loan/credit_card/personal_loan/other).</p>
+    <p><strong>Leverage points:</strong> Multi-currency (Currency + ExchangeRate models), AI agent system (DeerFlow-based with import-parse skill for receipt vision), scheduler worker, dashboard narrative system.</p>
+  </div>
+</section>
+
+<!-- Topic Axes -->
+<section id="axes">
+  <h2>Topic Axes</h2>
+  <div class="axis-list">
+    <div class="axis-item">
+      <div class="axis-name">trip-planning</div>
+      <div class="axis-desc">Trip creation, itinerary, booking state management</div>
+    </div>
+    <div class="axis-item">
+      <div class="axis-name">expense-tracking</div>
+      <div class="axis-desc">Per-trip expense ledger, categories, multi-currency, budget vs actual</div>
+    </div>
+    <div class="axis-item">
+      <div class="axis-name">bill-splitting</div>
+      <div class="axis-desc">Multi-family/friend groups, split algorithms, debt simplification, settlement</div>
+    </div>
+    <div class="axis-item">
+      <div class="axis-name">liability-and-stats</div>
+      <div class="axis-desc">Travel debt integration, annual spending stats, dashboard aggregation</div>
+    </div>
+  </div>
+</section>
+
+<!-- Ranked Ideas -->
+<section id="ranked-ideas">
+  <h2>Ranked Ideas</h2>
+
+  <!-- Sub-nav -->
+  <nav class="idea-subnav">
+    <a href="#idea-1">1. Wish→Trip</a>
+    <a href="#idea-2">2. SplitGroup</a>
+    <a href="#idea-3">3. Expense Ledger</a>
+    <a href="#idea-4">4. Travel Float</a>
+    <a href="#idea-5">5. CAFR Cycle</a>
+    <a href="#idea-6">6. Debt Simplify</a>
+    <a href="#idea-7">7. Context Overlay</a>
+    <a href="#idea-8">8. Receipt-First</a>
+  </nav>
+
+  <!-- Idea 1 -->
+  <article class="idea-card" id="idea-1">
+    <div class="idea-card-header">
+      <span class="idea-rank">#1</span>
+      <span class="idea-title">Wish→Trip Graduation Pipeline</span>
+      <span class="idea-axis">trip-planning</span>
+    </div>
+    <p class="idea-desc">Extend the existing <code>complete_wish</code> flow so that when a wish with travel category is marked "realized", it offers to create a Trip entity pre-populated with the wish's <code>expected_price</code> as budget and <code>saved_amount</code> as initial funding. The wish's savings ledger (WishSavingsLog) carries over as the trip's funding history, preserving financial context from aspiration to execution.</p>
+
+    <div class="flow-diagram">
+      <svg width="600" height="80" viewBox="0 0 600 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="20" width="120" height="40" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+        <text x="70" y="45" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="500">Wish (saving)</text>
+        <path d="M130 40 L180 40" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="155" y="32" text-anchor="middle" font-size="10" fill="#78716c">graduate</text>
+        <rect x="180" y="20" width="120" height="40" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+        <text x="240" y="45" text-anchor="middle" font-size="13" fill="#166534" font-weight="500">Trip (planning)</text>
+        <path d="M300 40 L350 40" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="325" y="32" text-anchor="middle" font-size="10" fill="#78716c">expenses</text>
+        <rect x="350" y="20" width="120" height="40" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+        <text x="410" y="45" text-anchor="middle" font-size="13" fill="#92400e" font-weight="500">Trip (active)</text>
+        <path d="M470 40 L520 40" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="495" y="32" text-anchor="middle" font-size="10" fill="#78716c">settle</text>
+        <rect x="520" y="20" width="70" height="40" rx="8" fill="#f5f5f4" stroke="#78716c" stroke-width="1.5"/>
+        <text x="555" y="45" text-anchor="middle" font-size="13" fill="#57534e" font-weight="500">Archive</text>
+        <defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0 0 L8 3 L0 6" fill="#78716c"/></marker></defs>
+      </svg>
+    </div>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>complete_wish</code> docstring at <code>wish.py:145</code> explicitly mentions "travel" as canonical use case. <code>Wish.saved_amount</code> is derived cache of <code>WishSavingsLog</code>. Verified: <strong>sound</strong>.</dd>
+      <dt>Rationale</dt>
+      <dd>Families already use wishes to track travel intentions with budgets and savings. When it's time to book, they re-enter everything into a separate system. This eliminates that boundary.</dd>
+      <dt>Downsides</dt>
+      <dd>Tight coupling between Wish and Trip lifecycle. If wish semantics change, trip graduation may break. Requires careful FK design (<code>wish_id</code> on Trip).</dd>
+    </dl>
+    <div>
+      <span class="chip chip-high">Confidence: 90%</span>
+      <span class="chip chip-std">Complexity: Low</span>
+    </div>
+  </article>
+
+  <!-- Idea 2 -->
+  <article class="idea-card" id="idea-2">
+    <div class="idea-card-header">
+      <span class="idea-rank">#2</span>
+      <span class="idea-title">Ephemeral Cross-Family SplitGroup via Invite Token</span>
+      <span class="idea-axis">bill-splitting</span>
+    </div>
+    <p class="idea-desc">Create a <code>SplitGroup</code> entity with a 6-character invite code (mirroring <code>Family.invite_code</code>). External participants (friends, other families) join via the code and receive a scoped view of only the group's expenses — they cannot see the host family's assets, liabilities, or any data outside the group. The group is scoped to a single trip and expires when the trip closes. External participants are stored as free-text names (like <code>RentalContract.counterparty</code>), not full User records, preserving family isolation.</p>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>Family.invite_code</code> at <code>family.py:15</code> is a proven 6-char token pattern. <code>RentalContract.counterparty</code> at <code>rental_contract.py:33</code> handles external parties as free-text. Cross-family isolation is hard-enforced (<code>test_assets.py:189</code>). Verified: <strong>sound</strong>.</dd>
+      <dt>Rationale</dt>
+      <dd>The user explicitly wants bill-splitting with other families/friends, but cross-family access is architecturally rejected. The invite-code pattern is the minimum-viable bridge: proven UX, keeps family isolation intact, avoids building a full multi-tenant identity system.</dd>
+      <dt>Downsides</dt>
+      <dd>Free-text participants mean no authentication for external users — they can't independently verify expenses. Settlement requires trust. May need a "guest account" evolution path later.</dd>
+    </dl>
+    <div>
+      <span class="chip chip-high">Confidence: 88%</span>
+      <span class="chip chip-medium">Complexity: Medium</span>
+    </div>
+  </article>
+
+  <!-- Idea 3 -->
+  <article class="idea-card" id="idea-3">
+    <div class="idea-card-header">
+      <span class="idea-rank">#3</span>
+      <span class="idea-title">Unified Double-Entry Expense Ledger</span>
+      <span class="idea-axis">expense-tracking</span>
+    </div>
+    <p class="idea-desc">Generalize the <code>CoinTransaction</code> double-entry pattern from the child economy into a family-scoped expense ledger. Each travel expense creates two entries: a debit against a funding source (checking account, credit card) and a credit to an expense category. This reuses the existing double-entry infrastructure with <code>SELECT ... FOR UPDATE</code> locking, ensuring every expense has a verifiable source, split amounts balance automatically, and the audit trail exists for free. Trip expenses become one use case of the ledger, not a separate model — the same ledger later serves rental expenses, daily spending, etc.</p>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>coin_transactions.py:51-90</code> has double-entry with concurrent-spend protection via <code>SELECT FOR UPDATE</code>. <code>WishSavingsLog</code> confirms the "source of truth = log, derived cache on parent" pattern. Verified: <strong>sound</strong>.</dd>
+      <dt>Rationale</dt>
+      <dd>A single-entry expense table is trivial to build but creates reconciliation nightmares when bill-splitting enters the picture. Double-entry from day one means the ledger compounds across modules — trip expenses today, rental expenses tomorrow, daily spending later.</dd>
+      <dt>Downsides</dt>
+      <dd>Higher initial complexity than a simple expense table. The debit/credit mental model may confuse non-technical family members. Needs careful UI design to abstract the double-entry from users.</dd>
+    </dl>
+    <div>
+      <span class="chip chip-high">Confidence: 85%</span>
+      <span class="chip chip-medium">Complexity: Medium</span>
+    </div>
+  </article>
+
+  <!-- Idea 4 -->
+  <article class="idea-card" id="idea-4">
+    <div class="idea-card-header">
+      <span class="idea-rank">#4</span>
+      <span class="idea-title">Rental Cash Flow Mirror — Travel Float in Net Worth</span>
+      <span class="idea-axis">liability-and-stats</span>
+    </div>
+    <p class="idea-desc">Mirror the rental cash flow integration pattern: add a <code>travel_float</code> metric to <code>OverviewResponse</code> showing the net unpaid travel expense balance. When a family pays for flights/hotels upfront but hasn't traveled yet, this is a "prepaid travel asset" (positive). When they've traveled but haven't settled group bills, this is "travel debt" (negative). The balance flows into net worth, making travel financially visible in the same way rental cash flow is today. Zero new aggregation infrastructure — add travel to the existing overview computation loop.</p>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>dashboard.py:145-191</code> computes <code>rental_income/expense/net/deposit</code> as OverviewResponse fields. <code>projection.py:6-102</code> combines assets+liabilities into net worth. <code>AssetSnapshot.breakdown</code> is extensible JSON. Verified: <strong>sound</strong>.</dd>
+      <dt>Rationale</dt>
+      <dd>Without net worth integration, travel spending is invisible in the family's financial picture — a family could be steadily eroding net worth through travel without seeing it in their dashboard. The rental mirror pattern means zero new aggregation infrastructure.</dd>
+      <dt>Downsides</dt>
+      <dd>Travel "float" is conceptually different from rental cash flow (rental is recurring income; travel is episodic spending). The metric may confuse users if not well-labeled. Requires the expense ledger (Idea #3) to be built first.</dd>
+    </dl>
+    <div>
+      <span class="chip chip-high">Confidence: 85%</span>
+      <span class="chip chip-low">Complexity: Low</span>
+    </div>
+  </article>
+
+  <!-- Idea 5 -->
+  <article class="idea-card" id="idea-5">
+    <div class="idea-card-header">
+      <span class="idea-rank">#5</span>
+      <span class="idea-title">Municipal CAFR Annual Cycle — Monthly Rollup + AI Narrative</span>
+      <span class="idea-axis">liability-and-stats</span>
+    </div>
+    <p class="idea-desc">Model annual travel statistics on the municipal Comprehensive Annual Financial Report (CAFR) cycle. Extend the daily snapshot generator with a <strong>monthly travel rollup job</strong> in the scheduler worker: aggregate trip expenses by category, destination, and family member into a monthly summary. The annual report then reads 12 monthly rows instead of 365 daily rows. The dashboard narrative system generates AI-powered year-end travel summaries: "Your family spent 23% more on travel this year, primarily driven by the Japan trip."</p>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>auto_generate_daily_snapshots</code> at <code>snapshot.py:56</code> is a daily scheduler job. <code>liability_calculator.py:51-88</code> computes month-by-month amortization schedules. <code>AssetSnapshot.breakdown</code> is extensible JSON Text. Verified: <strong>sound</strong>.</dd>
+      <dt>Rationale</dt>
+      <dd>No periodic reporting exists in the codebase. Monthly rollups create a pre-aggregated time series that makes year-over-year comparison, trend detection, and AI narrative generation fast and natural. The "travel fiscal year" concept aligns with how families actually think about travel spending.</dd>
+      <dt>Downsides</dt>
+      <dd>Introduces a new scheduler job and data model (monthly travel rollup). The rollup job adds complexity to the scheduler worker. AI narrative quality depends on having enough historical data (12+ months).</dd>
+    </dl>
+    <div>
+      <span class="chip chip-high">Confidence: 82%</span>
+      <span class="chip chip-medium">Complexity: Medium</span>
+    </div>
+  </article>
+
+  <!-- Idea 6 -->
+  <article class="idea-card" id="idea-6">
+    <div class="idea-card-header">
+      <span class="idea-rank">#6</span>
+      <span class="idea-title">Greedy Debt Simplification for Group Settlement</span>
+      <span class="idea-axis">bill-splitting</span>
+    </div>
+    <p class="idea-desc">After a trip's split expenses are tallied, each participant has a net balance (owed or owing). Apply the greedy max-creditor/max-debtor algorithm: repeatedly match the largest debtor with the largest creditor, settle <code>min(|debt|, |credit|)</code>, and eliminate one party per iteration. This reduces N participants to at most N-1 transactions. Expose as a one-tap "simplify debts" action. Settlement transactions reuse the <code>CoinTransaction</code> double-entry pattern with a new <code>transaction_type: "split_settle"</code>.</p>
+
+    <div class="flow-diagram">
+      <svg width="500" height="120" viewBox="0 0 500 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <text x="250" y="15" text-anchor="middle" font-size="11" fill="#78716c" font-weight="500">Before Simplification (6 transfers)</text>
+        <rect x="30" y="30" width="50" height="30" rx="4" fill="#fef2f2" stroke="#dc2626" stroke-width="1"/>
+        <text x="55" y="50" text-anchor="middle" font-size="11" fill="#991b1b">A</text>
+        <rect x="220" y="30" width="50" height="30" rx="4" fill="#f0fdf4" stroke="#16a34a" stroke-width="1"/>
+        <text x="245" y="50" text-anchor="middle" font-size="11" fill="#166534">B</text>
+        <rect x="420" y="30" width="50" height="30" rx="4" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+        <text x="445" y="50" text-anchor="middle" font-size="11" fill="#1e40af">C</text>
+        <path d="M80 40 L220 40" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 2"/>
+        <path d="M80 50 L420 50" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 2"/>
+        <path d="M270 45 L420 45" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 2"/>
+        <text x="150" y="35" font-size="9" fill="#78716c">A→B ¥100</text>
+        <text x="250" y="62" font-size="9" fill="#78716c">A→C ¥200</text>
+        <text x="345" y="40" font-size="9" fill="#78716c">B→C ¥80</text>
+
+        <text x="250" y="90" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="600">↓ After Simplification (2 transfers)</text>
+        <rect x="120" y="100" width="50" height="15" rx="4" fill="#f0fdf4" stroke="#16a34a" stroke-width="1"/>
+        <path d="M170 107 L310 107" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arrowG)"/>
+        <text x="240" y="103" text-anchor="middle" font-size="9" fill="#166534">A→B ¥20</text>
+        <rect x="310" y="100" width="50" height="15" rx="4" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+        <path d="M170 112 L310 112" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="0"/>
+        <defs><marker id="arrowG" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0 0 L6 2.5 L0 5" fill="#16a34a"/></marker></defs>
+      </svg>
+    </div>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>external:</code> Splitwise's debt simplification algorithm (greedy max-creditor/max-debtor matching) — proven at scale with 100M+ users. <code>direct:</code> <code>CoinTransaction</code> double-entry at <code>coin_transactions.py:78-79</code> with extensible <code>transaction_type</code> string. Verified: <strong>sound</strong>.</dd>
+      <dt>Rationale</dt>
+      <dd>Without simplification, a 4-family trip generates up to 12 settlement transactions. With simplification, it reduces to 3. This is the key UX differentiator for the split module — without it, settlement is painful; with it, the module delivers real value over manual spreadsheet tracking.</dd>
+      <dt>Downsides</dt>
+      <dd>The greedy algorithm is not globally optimal (the problem is NP-hard). For small groups (4-6 families) this is acceptable. Settlement transactions are internal to Numina — actual money transfer still happens externally.</dd>
+    </dl>
+    <div>
+      <span class="chip chip-high">Confidence: 90%</span>
+      <span class="chip chip-low">Complexity: Low</span>
+    </div>
+  </article>
+
+  <!-- Idea 7 -->
+  <article class="idea-card" id="idea-7">
+    <div class="idea-card-header">
+      <span class="idea-rank">#7</span>
+      <span class="idea-title">Travel as Ephemeral Context Overlay (Not a Tab)</span>
+      <span class="idea-axis">trip-planning</span>
+    </div>
+    <p class="idea-desc"><strong>Challenge the assumption:</strong> instead of adding a 5th van-tab, model a "trip" as a temporary context window that overlays the existing FinanceHubPage. When a trip is active (departure within N days or user-pinned), its expenses, bookings, and budget appear as a floating context layer on top of the existing tabs — expenses show inline in the asset list, liabilities show in the liability tab, bookings appear as date-marked cards. The "旅游" entry point is a trip launcher button, not a tab.</p>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>reasoned:</code> Travel is a <em>project</em> that draws on assets and creates temporary liabilities — not a peer category of assets/liabilities. A tab implies permanence for something used episodically. <code>complete_wish</code> already treats travel as an "experience" not an "asset-type". Verifier noted <strong>weak</strong> (docstring ≠ architectural constraint), but the conceptual reframing remains valid as a design choice.</dd>
+      <dt>Rationale</dt>
+      <dd>Treating travel as context rather than category keeps the mental model clean and avoids fragmenting the dashboard. A family doesn't "have travel" the way they "have assets" — they <em>go on trips</em> that temporarily affect their financial picture.</dd>
+      <dt>Downsides</dt>
+      <dd>Contradicts user's literal request for a "旅游 tab". High implementation complexity (overlay context system doesn't exist). May confuse users who expect a dedicated travel management space. The contextual overlay pattern is untested in the codebase.</dd>
+    </dl>
+    <div>
+      <span class="chip chip-medium">Confidence: 60%</span>
+      <span class="chip chip-high">Complexity: High</span>
+    </div>
+  </article>
+
+  <!-- Idea 8 -->
+  <article class="idea-card" id="idea-8">
+    <div class="idea-card-header">
+      <span class="idea-rank">#8</span>
+      <span class="idea-title">Receipt-First Expense Entry via import-parse</span>
+      <span class="idea-axis">expense-tracking</span>
+    </div>
+    <p class="idea-desc">Invert the expense entry workflow: instead of users manually typing travel expenses, they photograph receipts or forward booking confirmations. The existing <code>import-parse</code> AI skill (which already parses shopping receipts and financial documents via vision) is extended with a <code>travel-receipt</code> document type. The system extracts vendor, amount, currency, date, and category automatically. Users confirm, not create. The expense record is the output of parsing, not the input of a form.</p>
+
+    <dl class="idea-meta">
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>import-parse</code> SKILL.md already handles "Shopping receipts / purchase invoices → extract purchased items" with vision pipeline + batch-write MCP tool. Extending to travel expenses reuses the same <code>read_file → view_image → structured JSON → batch write</code> architecture.</dd>
+      <dt>Rationale</dt>
+      <dd>Travel generates the most receipt clutter of any expense category — hotel folios, restaurant bills, transport tickets — all in mixed currencies. Manual entry is the #1 drop-off point for expense trackers. By inverting the workflow from "user creates record" to "system extracts record, user confirms," friction shifts from data entry to data review.</dd>
+      <dt>Downsides</dt>
+      <dd>Requires the AI agent system to be available (LLM cost per receipt). OCR accuracy varies for handwritten receipts or non-standard formats. Mixed-currency receipt parsing is harder than single-currency. Latency may frustrate users expecting instant capture.</dd>
+    </dl>
+    <div>
+      <span class="chip chip-medium">Confidence: 75%</span>
+      <span class="chip chip-medium">Complexity: Medium</span>
+    </div>
+  </article>
+</section>
+
+<!-- Rejection Summary -->
+<section id="rejections">
+  <h2>Rejection Summary</h2>
+  <table class="rejection-table">
+    <thead>
+      <tr>
+        <th>Idea</th>
+        <th>Axis</th>
+        <th>Reason Rejected</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Snapshot-Derived Passive Expense Detection</td>
+        <td>expense-tracking</td>
+        <td>Verifier weak: projection engine is too simplistic (linear) for daily-delta comparison; architecturally mismatched</td>
+      </tr>
+      <tr>
+        <td>Grant Budget Line-Item Control</td>
+        <td>expense-tracking</td>
+        <td>Verifier weak: existing categories are for assets (asset_type: physical/financial), not expenses; requires fundamentally different taxonomy</td>
+      </tr>
+      <tr>
+        <td>Trip Expense → Credit-Card Liability Auto-Bridge</td>
+        <td>liability-and-stats</td>
+        <td>Verifier weak: PaymentRecord is tied to liability repayments, not expense recording; conflates "spent money" with "paid down debt"</td>
+      </tr>
+      <tr>
+        <td>Production Greenlight Pipeline</td>
+        <td>trip-planning</td>
+        <td>Duplicates stronger Wish→Trip Graduation (#1) lifecycle pattern with added complexity</td>
+      </tr>
+      <tr>
+        <td>Package Tracking Event-Sourcing</td>
+        <td>trip-planning</td>
+        <td>Interesting pattern but dead-ends at trip timeline visualization; WishSavingsLog pattern is absorbed into expense ledger (#3)</td>
+      </tr>
+      <tr>
+        <td>Construction Change Order Protocol</td>
+        <td>expense-tracking</td>
+        <td>Similar to BalanceCorrection pattern for liabilities; premature for travel module's first iteration</td>
+      </tr>
+      <tr>
+        <td>Rate-Lock Multi-Currency Trip Envelope</td>
+        <td>expense-tracking</td>
+        <td>Absorbed into unified expense ledger (#3) — multi-currency handling is part of the ledger's design</td>
+      </tr>
+      <tr>
+        <td>Multi-Currency Dual-View Envelope</td>
+        <td>expense-tracking</td>
+        <td>Duplicates rate-lock idea; absorbed into unified expense ledger (#3)</td>
+      </tr>
+      <tr>
+        <td>Zero-Budget Trip Planning</td>
+        <td>trip-planning</td>
+        <td>Interesting inversion but basis is too thin — no existing pattern supports "accumulate before entity exists"</td>
+      </tr>
+      <tr>
+        <td>Housing Co-op Participation Shares</td>
+        <td>bill-splitting</td>
+        <td>Too niche for first iteration; split algorithm configurability can be added to SplitGroup (#2) later</td>
+      </tr>
+      <tr>
+        <td>Liability as Shared Obligation</td>
+        <td>liability-and-stats</td>
+        <td>Weakens the liability model's single-family invariant; travel float (#4) handles net worth impact without breaking isolation</td>
+      </tr>
+      <tr>
+        <td>Annual Travel Spending Rollup from Ledger</td>
+        <td>liability-and-stats</td>
+        <td>Absorbed into CAFR Annual Cycle (#5) — monthly rollup subsumes annual aggregation</td>
+      </tr>
+      <tr>
+        <td>Annual Cost-of-Experience Report</td>
+        <td>liability-and-stats</td>
+        <td>Speculative; depends on AI narrative quality which needs 12+ months of data before being useful</td>
+      </tr>
+      <tr>
+        <td>Projected Trip Budget Drain on Forecast</td>
+        <td>liability-and-stats</td>
+        <td>Good idea but premature — projection engine needs refactoring first (currently ignores interest compounding)</td>
+      </tr>
+      <tr>
+        <td>Category-less AI-Derived Taxonomy</td>
+        <td>expense-tracking</td>
+        <td>Too speculative for first iteration; import-parse can add auto-classification as enhancement later</td>
+      </tr>
+      <tr>
+        <td>AI Trip Budget Advisor</td>
+        <td>trip-planning</td>
+        <td>Lower priority — finance-coach extension is viable but needs travel expense data first (#3 must land before this)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Footer -->
+<footer class="composition-signal">
+  Composed 2026-09-20 by ce-ideate · Focus: family travel management module · 39 raw → 8 survivors across 4 axes · 5 ideation agents (3 generation-tier, 2 ceiling-tier) + 1 basis verifier
+</footer>
+
+</div>
+</body>
+</html>

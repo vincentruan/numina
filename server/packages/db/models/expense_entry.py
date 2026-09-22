@@ -52,6 +52,10 @@ class ExpenseEntry(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     receipt_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     split_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Optional back-reference to an itinerary item (for cost-linked items)
+    itinerary_item_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("itinerary_items.id"), nullable=True
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())

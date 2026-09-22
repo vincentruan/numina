@@ -34,6 +34,8 @@ const SYSTEM_CATEGORY_KEYS: Record<string, string> = {
   理财产品: 'wealthManagement',
   数字货币: 'digitalCurrency',
   其他金融: 'otherFinancial',
+  租房: 'rental',
+  旅游: 'travel',
 }
 
 type CategoryNameInput = { name: string; is_system?: boolean }
