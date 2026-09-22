@@ -15,8 +15,8 @@ VALID_TRANSITIONS = {
     "learning": {"assessing", "parent_review"},
     "assessing": {"mastered", "review"},
     "parent_review": {"mastered", "learning"},
-    "mastered": {"review", "learning"},
-    "review": {"learning"},
+    "mastered": {"review"},               # only -> review (via next_review_at expiry)
+    "review": {"mastered", "learning"},   # pass -> mastered; fail -> learning
 }
 
 
@@ -80,6 +80,8 @@ def transition_to_mastered(
 ) -> LearningProgress:
     """Transition progress to 'mastered' state and update stability/review schedule."""
     _validate_transition(progress.mastery_level, "mastered")
+    if completed_via not in ("ai_assessment", "parent_approval"):
+        raise ValueError(f"Invalid completed_via: {completed_via}")
     now = datetime.now(UTC)
     progress.mastery_level = "mastered"
     progress.mastery_score = score
@@ -115,6 +117,65 @@ def update_stability(progress: LearningProgress, score: float) -> float:
         return max(current * 0.6, 1.0)
 
 
+def recheck_prerequisites(
+    db: Session, child_id: int, topic_id: int
+) -> LearningProgress:
+    """Re-evaluate hard prerequisites for a locked topic; unlock if all met.
+
+    Returns the updated progress (may still be "locked" if prerequisites unmet).
+    """
+    progress = (
+        db.query(LearningProgress)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .first()
+    )
+    if progress is None or progress.mastery_level != "locked":
+        return progress  # type: ignore[return-value]
+
+    hard_prereqs = (
+        db.query(LearningDependency)
+        .filter_by(topic_id=topic_id, strength="hard")
+        .all()
+    )
+    all_met = all(
+        db.query(LearningProgress)
+        .filter_by(
+            child_id=child_id,
+            topic_id=hp.prerequisite_id,
+            mastery_level="mastered",
+        )
+        .first()
+        is not None
+        for hp in hard_prereqs
+    ) if hard_prereqs else True
+
+    if all_met:
+        progress.mastery_level = "available"
+        db.flush()
+    return progress
+
+
+def unlock_dependent_topics(
+    db: Session, child_id: int, mastered_topic_id: int
+) -> list[LearningProgress]:
+    """Unlock all topics that have `mastered_topic_id` as a hard prerequisite.
+
+    Returns the list of newly-unlocked progress records.
+    """
+    dependent_ids = [
+        row.topic_id
+        for row in db.query(LearningDependency.topic_id)
+        .filter_by(prerequisite_id=mastered_topic_id, strength="hard")
+        .all()
+    ]
+    unlocked: list[LearningProgress] = []
+    for dep_topic_id in dependent_ids:
+        p = recheck_prerequisites(db, child_id, dep_topic_id)
+        if p is not None and p.mastery_level == "available":
+            unlocked.append(p)
+    return unlocked
+
+
 def _validate_transition(from_level: str, to_level: str) -> None:
     """Validate that a state transition is allowed."""
     if to_level not in VALID_TRANSITIONS.get(from_level, set()):
@@ -139,4 +200,6 @@ def get_child_progress_overview(db: Session, child_id: int) -> dict:
         "available": counts.get("available", 0),
         "locked": counts.get("locked", 0),
         "review": counts.get("review", 0),
+        "assessing": counts.get("assessing", 0),
+        "parent_review": counts.get("parent_review", 0),
     }

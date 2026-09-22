@@ -12,8 +12,10 @@ from apps.backend.app.services.learning.progress_service import (
     compute_next_review,
     get_child_progress_overview,
     get_or_create_progress,
+    recheck_prerequisites,
     transition_to_learning,
     transition_to_mastered,
+    unlock_dependent_topics,
     update_stability,
 )
 from packages.db.models.learning.progress import LearningProgress
@@ -140,10 +142,10 @@ def test_transition_to_mastered(db, child_user, topic):
     p = get_or_create_progress(db, child_user["id"], topic.id)
     p.mastery_level = "assessing"
     db.flush()
-    result = transition_to_mastered(db, p, score=0.9, completed_via="assessment")
+    result = transition_to_mastered(db, p, score=0.9, completed_via="ai_assessment")
     assert result.mastery_level == "mastered"
     assert result.mastery_score == 0.9
-    assert result.completed_via == "assessment"
+    assert result.completed_via == "ai_assessment"
     assert result.first_mastered_at is not None
     assert result.stability is not None
     assert result.next_review_at is not None
@@ -215,3 +217,96 @@ def test_valid_transitions_coverage():
     """All expected mastery levels have defined transitions."""
     expected_levels = {"locked", "available", "learning", "assessing", "parent_review", "mastered", "review"}
     assert set(VALID_TRANSITIONS.keys()) == expected_levels
+
+def test_review_to_mastered(db, child_user, topic):
+    """review -> mastered is a valid transition (pass)."""
+    p = get_or_create_progress(db, child_user["id"], topic.id)
+    p.mastery_level = "review"
+    db.flush()
+    result = transition_to_mastered(db, p, score=0.95, completed_via="ai_assessment")
+    assert result.mastery_level == "mastered"
+
+
+def test_review_to_learning(db, child_user, topic):
+    """review -> learning is a valid transition (fail → re-learn)."""
+    p = get_or_create_progress(db, child_user["id"], topic.id)
+    p.mastery_level = "review"
+    db.flush()
+    result = transition_to_learning(db, p)
+    assert result.mastery_level == "learning"
+
+
+def test_mastered_to_learning_is_invalid(db, child_user, topic):
+    """mastered -> learning is NOT valid (must go through review first)."""
+    p = get_or_create_progress(db, child_user["id"], topic.id)
+    p.mastery_level = "mastered"
+    db.flush()
+    with pytest.raises(AppError) as exc_info:
+        transition_to_learning(db, p)
+    assert "invalid_state_transition" in str(exc_info.value)
+
+
+def test_recheck_prerequisites_unlocks_when_prereqs_met(db, child_user, topic_with_prereq):
+    """recheck_prerequisites unlocks a locked topic once prerequisites are mastered."""
+    t1, t2 = topic_with_prereq
+    # Create locked progress for t2
+    p = get_or_create_progress(db, child_user["id"], t2.id)
+    assert p.mastery_level == "locked"
+
+    # Master the prerequisite t1
+    p1 = get_or_create_progress(db, child_user["id"], t1.id)
+    p1.mastery_level = "mastered"
+    db.flush()
+
+    # Recheck should unlock t2
+    result = recheck_prerequisites(db, child_user["id"], t2.id)
+    assert result.mastery_level == "available"
+
+
+def test_recheck_prerequisites_stays_locked_when_prereqs_not_met(db, child_user, topic_with_prereq):
+    """recheck_prerequisites keeps topic locked when prerequisites are not yet mastered."""
+    _, t2 = topic_with_prereq
+    p = get_or_create_progress(db, child_user["id"], t2.id)
+    assert p.mastery_level == "locked"
+
+    # Prereq not mastered → stays locked
+    result = recheck_prerequisites(db, child_user["id"], t2.id)
+    assert result.mastery_level == "locked"
+
+
+def test_unlock_dependent_topics(db, child_user, topic_with_prereq):
+    """unlock_dependent_topics unlocks topics whose hard prereq was just mastered."""
+    t1, t2 = topic_with_prereq
+    # Create locked progress for t2
+    get_or_create_progress(db, child_user["id"], t2.id)
+
+    # Master t1 via transition_to_mastered from "assessing" state
+    p1 = get_or_create_progress(db, child_user["id"], t1.id)
+    p1.mastery_level = "assessing"
+    db.flush()
+    transition_to_mastered(db, p1, score=0.9, completed_via="ai_assessment")
+
+    # Now unlock dependents
+    unlocked = unlock_dependent_topics(db, child_user["id"], t1.id)
+    assert len(unlocked) == 1
+    assert unlocked[0].topic_id == t2.id
+    assert unlocked[0].mastery_level == "available"
+
+
+def test_invalid_completed_via_raises(db, child_user, topic):
+    """transition_to_mastered rejects invalid completed_via values."""
+    p = get_or_create_progress(db, child_user["id"], topic.id)
+    p.mastery_level = "assessing"
+    db.flush()
+    with pytest.raises(ValueError, match="Invalid completed_via"):
+        transition_to_mastered(db, p, score=0.9, completed_via="bogus")
+
+
+def test_get_child_progress_overview_includes_all_states(db, child_user, topic):
+    """Overview includes assessing and parent_review keys (default 0)."""
+    get_or_create_progress(db, child_user["id"], topic.id)
+    overview = get_child_progress_overview(db, child_user["id"])
+    assert "assessing" in overview
+    assert "parent_review" in overview
+    assert overview["assessing"] == 0
+    assert overview["parent_review"] == 0
