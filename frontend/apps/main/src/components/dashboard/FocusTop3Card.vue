@@ -2,7 +2,13 @@
   <div class="focus-top3-card">
     <van-tabs v-model:active="activeTab" shrink class="top3-tabs">
       <!-- 资产 tab: top 3 by current value -->
-      <van-tab :title="t('nav.assets')" name="assets">
+      <van-tab name="assets">
+        <template #title>
+          <div class="tab-title">
+            <van-icon name="gold-coin-o" />
+            <span>{{ t('nav.assets') }}</span>
+          </div>
+        </template>
         <div class="top3-body">
           <van-skeleton v-if="assetLoading" :row="3" animate data-test="assets-skeleton" />
           <van-empty v-else-if="topAssets.length === 0" :description="t('dashboard.emptyState.noAssets')" image-size="60" />
@@ -21,7 +27,13 @@
       </van-tab>
 
       <!-- 负债 tab: top 3 by interest rate -->
-      <van-tab :title="t('nav.liabilities')" name="liabilities">
+      <van-tab name="liabilities">
+        <template #title>
+          <div class="tab-title">
+            <van-icon name="bill-o" />
+            <span>{{ t('nav.liabilities') }}</span>
+          </div>
+        </template>
         <div class="top3-body">
           <van-skeleton v-if="liabilityLoading" :row="3" animate data-test="liabilities-skeleton" />
           <button v-else-if="liabilityError" class="top3-retry" data-test="liabilities-retry" @click="retryLiabilities">
@@ -76,7 +88,13 @@
       </van-tab>
 
       <!-- 心愿 tab: top 3 by nearest target_date (no-target_date excluded) -->
-      <van-tab :title="t('nav.wishes')" name="wishes">
+      <van-tab name="wishes">
+        <template #title>
+          <div class="tab-title">
+            <van-icon name="gift-o" />
+            <span>{{ t('nav.wishes') }}</span>
+          </div>
+        </template>
         <div class="top3-body">
           <van-skeleton v-if="wishLoading" :row="3" animate data-test="wishes-skeleton" />
           <button v-else-if="wishError" class="top3-retry" data-test="wishes-retry" @click="retryWishes">
@@ -148,7 +166,13 @@
       </van-tab>
 
       <!-- 租约 tab: active contracts sorted by upcoming due date -->
-      <van-tab :title="t('nav.rentals')" name="rentals">
+      <van-tab name="rentals">
+        <template #title>
+          <div class="tab-title">
+            <van-icon name="shop-o" />
+            <span>{{ t('nav.rentals') }}</span>
+          </div>
+        </template>
         <div class="top3-body">
           <van-skeleton v-if="rentalLoading" :row="3" animate data-test="rentals-skeleton" />
           <button v-else-if="rentalError" class="top3-retry" data-test="rentals-retry" @click="retryRentals">
@@ -188,6 +212,55 @@
           </router-link>
         </div>
       </van-tab>
+
+      <!-- 旅游 tab: upcoming 3 trips sorted by departure date -->
+      <van-tab name="travel">
+        <template #title>
+          <div class="tab-title">
+            <van-icon name="map-marked" />
+            <span>{{ t('travel.tab') }}</span>
+          </div>
+        </template>
+        <div class="top3-body">
+          <van-skeleton v-if="travelLoading" :row="3" animate data-test="travel-skeleton" />
+          <button v-else-if="travelError" class="top3-retry" data-test="travel-retry" @click="retryTrips">
+            {{ t('financeHub.retry') }}
+          </button>
+          <van-empty v-else-if="topTrips.length === 0" :description="t('focusTop3.noTrips')" image-size="60" />
+          <template v-else>
+            <div
+              v-for="trip in topTrips"
+              :key="trip.id"
+              class="top3-trip"
+              role="button"
+              tabindex="0"
+              :aria-label="tripAria(trip)"
+              @click="$router.push(`/travel/${trip.id}`)"
+              @keydown.enter="$router.push(`/travel/${trip.id}`)"
+            >
+              <div class="top3-trip-head">
+                <van-icon name="location-o" class="top3-trip-icon" />
+                <span class="top3-trip-name">{{ trip.name }}</span>
+                <span class="top3-trip-status" :class="`top3-trip-status--${trip.status}`">
+                  {{ tripStatusLabel(trip) }}
+                </span>
+              </div>
+              <div class="top3-trip-foot">
+                <span class="top3-trip-destination">
+                  <van-icon name="aim" />{{ trip.destination }}
+                </span>
+                <span class="top3-trip-date">
+                  {{ trip.departure_date }}
+                  <template v-if="trip.return_date"> — {{ trip.return_date }}</template>
+                </span>
+              </div>
+            </div>
+          </template>
+          <router-link :to="{ path: '/finance', query: { tab: 'travel' } }" class="top3-view-all" data-test="view-all-trips">
+            {{ t('financeHub.viewAll') }} ›
+          </router-link>
+        </div>
+      </van-tab>
     </van-tabs>
   </div>
 </template>
@@ -202,9 +275,11 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useLiabilityStore } from '@/stores/liability'
 import { useWishStore } from '@/stores/wish'
 import { useRentalContractStore } from '@/stores/rentalContract'
+import { useTravelStore } from '@/stores/travel'
 import { useCurrency } from '@/composables/useCurrency'
 import { parseLocalDate } from '@/utils/format'
 import type { Liability, Wish, RentalContract } from '@/types'
+import type { Trip } from '@/types/travel'
 import { wishProgress } from '@/utils/wishProgress'
 
 defineOptions({ name: 'FocusTop3Card' })
@@ -214,6 +289,7 @@ const dashboardStore = useDashboardStore()
 const liabilityStore = useLiabilityStore()
 const wishStore = useWishStore()
 const rentalStore = useRentalContractStore()
+const travelStore = useTravelStore()
 const currency = useCurrency()
 
 // High-interest thresholds mirror useDebtWarning defaults (W5 spec §5). Kept local
@@ -227,7 +303,7 @@ const HIGH_INTEREST_THRESHOLDS: Record<string, number> = {
   other: 10,
 }
 
-const activeTab = ref<'assets' | 'liabilities' | 'wishes' | 'rentals'>('assets')
+const activeTab = ref<'assets' | 'liabilities' | 'wishes' | 'rentals' | 'travel'>('assets')
 
 // Per-domain loading / error. Liability/wish stores expose only `loading` (fetch
 // throws on failure), so their error is tracked here. Assets read the dashboard
@@ -240,6 +316,8 @@ const liabilityError = ref(false)
 const wishError = ref(false)
 const rentalLoading = ref(false)
 const rentalError = ref(false)
+const travelLoading = ref(false)
+const travelError = ref(false)
 const assetLoading = computed(() => dashboardStore.loading)
 
 // --- Top 3 selections (R13) ---
@@ -296,6 +374,13 @@ const topRentals = computed(() =>
       if (!db) return -1
       return da.getTime() - db.getTime()
     })
+    .slice(0, 3),
+)
+
+// Trips: upcoming (planning + active) sorted by departure_date ascending.
+const topTrips = computed(() =>
+  [...(travelStore.trips || []).filter(trip => trip.status === 'planning' || trip.status === 'active')]
+    .sort((a, b) => (a.departure_date < b.departure_date ? -1 : 1))
     .slice(0, 3),
 )
 
@@ -418,6 +503,37 @@ function rentalAria(c: RentalContract): string {
   return listFormatter.format(parts)
 }
 
+// --- Trip helpers ---
+
+function tripStatusLabel(trip: Trip): string {
+  if (trip.status === 'planning') return t('focusTop3.tripStatusPlanning')
+  if (trip.status === 'active') return t('focusTop3.tripStatusActive')
+  return trip.status ?? ''
+}
+
+function tripAria(trip: Trip): string {
+  const parts = [trip.name, trip.destination]
+  parts.push(`${t('focusTop3.tripDeparture')} ${trip.departure_date}`)
+  if (trip.return_date) parts.push(`${t('focusTop3.tripReturn')} ${trip.return_date}`)
+  return listFormatter.format(parts)
+}
+
+async function loadTrips() {
+  travelLoading.value = true
+  travelError.value = false
+  try {
+    await travelStore.fetchTrips()
+  } catch {
+    travelError.value = true
+  } finally {
+    travelLoading.value = false
+  }
+}
+
+function retryTrips() {
+  loadTrips()
+}
+
 async function loadLiabilities() {
   liabilityLoading.value = true
   liabilityError.value = false
@@ -466,11 +582,12 @@ function retryRentals() {
 }
 
 onMounted(() => {
-  // Liability/wish/rental load independently so a single failure degrades only its own tab.
+  // Liability/wish/rental/travel load independently so a single failure degrades only its own tab.
   // Assets read from the dashboard store's homeAssets (fetched by DashboardPage.fetchAll).
   loadLiabilities()
   loadWishes()
   loadRentals()
+  loadTrips()
 })
 
 // KeepAlive: reload data when re-activated (returning from sub-pages).
@@ -481,6 +598,7 @@ onActivated(() => {
   loadLiabilities()
   loadWishes()
   loadRentals()
+  loadTrips()
 })
 </script>
 
@@ -811,5 +929,90 @@ onActivated(() => {
 [data-theme='dark'] .top3-rental-date.warning {
   background: rgba(251, 191, 36, 0.15);
   color: #fbbf24;
+}
+
+/* Tab title with icons */
+.tab-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.top3-tabs :deep(.van-tab) .tab-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.top3-tabs :deep(.van-tab) .van-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Trip row */
+.top3-trip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px 10px 8px;
+  border-bottom: 1px solid var(--separator);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 150ms ease-out;
+}
+.top3-trip:active { background: var(--bg-secondary); }
+.top3-trip:last-of-type { border-bottom: none; }
+.top3-trip-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.top3-trip-icon {
+  font-size: 16px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.top3-trip-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top3-trip-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.top3-trip-status--planning {
+  background: rgba(25, 137, 250, 0.1);
+  color: var(--color-primary);
+}
+.top3-trip-status--active {
+  background: rgba(7, 193, 96, 0.1);
+  color: var(--color-success, #07c160);
+}
+.top3-trip-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.top3-trip-destination {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.top3-trip-destination .van-icon {
+  font-size: 13px;
+}
+.top3-trip-date {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 </style>

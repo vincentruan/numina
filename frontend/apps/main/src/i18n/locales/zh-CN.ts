@@ -158,6 +158,11 @@ export default {
     rentCollection: '收租',
     rentalIndefinite: '不定期',
     rentalCollectionDay: '每月{day}日',
+    noTrips: '暂无行程',
+    tripDeparture: '出发',
+    tripReturn: '返回',
+    tripStatusPlanning: '计划中',
+    tripStatusActive: '进行中',
   },
   dashboard: {
     title: '总览',

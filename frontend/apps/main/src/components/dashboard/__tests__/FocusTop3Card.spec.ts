@@ -29,12 +29,14 @@ vi.mock('@/composables/useCurrency', () => ({
 const fetchLiabilitiesMock = vi.fn(() => Promise.resolve())
 const fetchWishesMock = vi.fn(() => Promise.resolve())
 const fetchContractsMock = vi.fn(() => Promise.resolve())
+const fetchTripsMock = vi.fn(() => Promise.resolve())
 
 const homeAssetsRef = ref<Record<string, Array<Record<string, unknown>>>>({})
 const loadingRef = ref(false)
 const liabilitiesRef = ref<Array<Record<string, unknown>>>([])
 const wishesRef = ref<Array<Record<string, unknown>>>([])
 const contractsRef = ref<Array<Record<string, unknown>>>([])
+const tripsRef = ref<Array<Record<string, unknown>>>([])
 
 vi.mock('@/stores/dashboard', () => ({
   useDashboardStore: () => ({
@@ -58,6 +60,12 @@ vi.mock('@/stores/rentalContract', () => ({
   useRentalContractStore: () => ({
     get contracts() { return contractsRef.value },
     fetchContracts: fetchContractsMock,
+  }),
+}))
+vi.mock('@/stores/travel', () => ({
+  useTravelStore: () => ({
+    get trips() { return tripsRef.value },
+    fetchTrips: fetchTripsMock,
   }),
 }))
 
@@ -102,12 +110,15 @@ function resetState() {
   liabilitiesRef.value = []
   wishesRef.value = []
   contractsRef.value = []
+  tripsRef.value = []
   fetchLiabilitiesMock.mockReset()
   fetchWishesMock.mockReset()
   fetchContractsMock.mockReset()
+  fetchTripsMock.mockReset()
   fetchLiabilitiesMock.mockResolvedValue(undefined)
   fetchWishesMock.mockResolvedValue(undefined)
   fetchContractsMock.mockResolvedValue(undefined)
+  fetchTripsMock.mockResolvedValue(undefined)
 }
 
 describe('FocusTop3Card', () => {
@@ -163,7 +174,7 @@ describe('FocusTop3Card', () => {
     expect(names).toEqual(['Sooner', 'Middle', 'Later']) // NoDate excluded, sorted asc by date
   })
 
-  it('renders 查看全部 links for all four tabs → /finance?tab=X (R14)', async () => {
+  it('renders 查看全部 links for all five tabs → /finance?tab=X (R14)', async () => {
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()
 
@@ -171,6 +182,7 @@ describe('FocusTop3Card', () => {
     expect(wrapper.find('[data-test="view-all-liabilities"]').attributes('href')).toContain('tab=liabilities')
     expect(wrapper.find('[data-test="view-all-wishes"]').attributes('href')).toContain('tab=wishes')
     expect(wrapper.find('[data-test="view-all-rentals"]').attributes('href')).toContain('tab=rentals')
+    expect(wrapper.find('[data-test="view-all-trips"]').attributes('href')).toContain('tab=travel')
   })
 
   it('shows all items when fewer than 3 (no padding/truncation)', async () => {
@@ -195,8 +207,8 @@ describe('FocusTop3Card', () => {
     const wrapper = mount(FocusTop3Card, { global: { stubs } })
     await flushPromises()
 
-    // van-empty is stubbed; assert four empty placeholders render (one per tab).
-    expect(wrapper.findAll('van-empty-stub').length + wrapper.findAll('.van-empty').length).toBeGreaterThanOrEqual(4)
+    // van-empty is stubbed; assert five empty placeholders render (one per tab).
+    expect(wrapper.findAll('van-empty-stub').length + wrapper.findAll('.van-empty').length).toBeGreaterThanOrEqual(5)
   })
 
   it('shows assets skeleton while dashboard asset list is loading', async () => {
@@ -284,5 +296,49 @@ describe('FocusTop3Card', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="rentals-retry"]').exists()).toBe(false)
     expect(fetchContractsMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('sorts upcoming trips by departure_date ascending and limits to top 3', async () => {
+    tripsRef.value = [
+      { id: 't1', name: 'Late Trip', destination: 'Paris', departure_date: '2027-06-01', return_date: '2027-06-10', status: 'planning' },
+      { id: 't2', name: 'Soon Trip', destination: 'Tokyo', departure_date: '2026-10-01', return_date: '2026-10-07', status: 'planning' },
+      { id: 't3', name: 'Active Trip', destination: 'Beijing', departure_date: '2026-09-20', return_date: null, status: 'active' },
+      { id: 't4', name: 'Settled Trip', destination: 'Shanghai', departure_date: '2026-01-01', return_date: '2026-01-05', status: 'settled' },
+      { id: 't5', name: 'Mid Trip', destination: 'Seoul', departure_date: '2026-12-01', return_date: '2026-12-10', status: 'planning' },
+    ]
+
+    const wrapper = mount(FocusTop3Card, { global: { stubs } })
+    await flushPromises()
+
+    const names = wrapper.findAll('.top3-trip-name').map((n) => n.text())
+    // Only planning + active, sorted by departure_date asc, top 3
+    expect(names).toEqual(['Active Trip', 'Soon Trip', 'Mid Trip'])
+    // Settled trip excluded
+    expect(names).not.toContain('Settled Trip')
+  })
+
+  it('calls fetchTrips on mount', async () => {
+    tripsRef.value = []
+
+    mount(FocusTop3Card, { global: { stubs } })
+    await flushPromises()
+
+    expect(fetchTripsMock).toHaveBeenCalled()
+  })
+
+  it('degrades only the travel tab on fetch reject; inline retry refetches', async () => {
+    fetchTripsMock.mockRejectedValueOnce(new Error('network'))
+
+    const wrapper = mount(FocusTop3Card, { global: { stubs } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="travel-retry"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="liabilities-retry"]').exists()).toBe(false)
+
+    fetchTripsMock.mockResolvedValueOnce(undefined)
+    await wrapper.find('[data-test="travel-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="travel-retry"]').exists()).toBe(false)
+    expect(fetchTripsMock).toHaveBeenCalledTimes(2)
   })
 })
