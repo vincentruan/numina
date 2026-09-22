@@ -2,9 +2,9 @@ from packages.db.models.asset import Asset, asset_tags
 from packages.db.models.asset_snapshot import AssetSnapshot
 from packages.db.models.cached_file import CachedFile
 from packages.db.models.category import Category
-from packages.db.models.device_session import DeviceSession
 from packages.db.models.child_economy.chore import ChoreInstance, ChoreTemplate
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
+from packages.db.models.device_session import DeviceSession
 from packages.db.models.exchange_rate import ExchangeRate
 from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
@@ -12,6 +12,17 @@ from packages.db.models.family import Family
 from packages.db.models.file_remote_location import FileRemoteLocation
 from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.itinerary_item_type import ItineraryItemType
+from packages.db.models.learning.assignment import LearningAssignment
+from packages.db.models.learning.progress import LearningProgress
+from packages.db.models.learning.session import (
+    LearningAssessmentAttempt,
+    LearningSession,
+)
+from packages.db.models.learning.topic import (
+    LearningCluster,
+    LearningDependency,
+    LearningTopic,
+)
 from packages.db.models.liability import Liability
 from packages.db.models.literacy_badge import LiteracyBadge, LiteracyBadgeDefinition
 from packages.db.models.literacy_report import LiteracyWeeklyReport
@@ -53,6 +64,13 @@ __all__ = [
     "FileRemoteLocation",
     "ItineraryItem",
     "ItineraryItemType",
+    "LearningAssignment",
+    "LearningAssessmentAttempt",
+    "LearningCluster",
+    "LearningDependency",
+    "LearningProgress",
+    "LearningSession",
+    "LearningTopic",
     "Liability",
     "LiteracyBadge",
     "LiteracyBadgeDefinition",
