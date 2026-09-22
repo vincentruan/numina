@@ -115,6 +115,8 @@ Supabase standby 通过逻辑复制订阅主库变更。**PostgreSQL 逻辑复�
 
 **当前限制：** Supabase 域名只有 AAAA (IPv6) 记录，无 IPv4。Docker IPv6 已配置（`daemon.json` + compose `networks.default.enable_ipv6`）。如果 subscriptions 连接失败，参见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Enabling Docker IPv6。
 
+**DDL 同步方法：** 容器内无法解析 Supabase IPv6 域名，必须在服务器主机用 Python (`pip3 install psycopg[binary]`) 直连执行 DDL。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md)。
+
 **检查 DDL 一致性：**
 ```bash
 # 查看本地表数量
@@ -783,3 +785,5 @@ make deploy-remote  # uses existing dist/images.tar.gz
 | PG `can no longer get changes from replication slot` | 复制槽损坏（通常因磁盘满 crash）。修复流程见 [references/ipv6-disk-recovery.md](references/ipv6-disk-recovery.md) §Replication Slot Corruption |
 | PG `the database system is not yet accepting connections` | PG 处于 recovery 模式，通常因磁盘满 crash 后重启。先清理磁盘空间，PG 自动恢复。如持续报错，检查 `pg_logical/replorigin_checkpoint.tmp` 写入权限 |
 | `captcha_enabled: false` in health check | 见上方 "Production Config vs Local" §Health Check 验证清单。确认 `.env` 含 `CAPTCHA_ENABLED=true`，然后 `restart backend` |
+| Supabase 备库 `relation "xxx" does not exist` | DDL 未同步到备库。逻辑复制不复制 DDL，需手动执行。完整流程见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) |
+| 容器内 `failed to resolve host ...supabase.co` | Supabase 只有 IPv6 AAAA 记录，Docker 容器无法解析。必须在主机用 Python 直连：`pip3 install psycopg[binary]`，然后 `python3 script.py`。详见 [references/supabase-ddl-sync.md](references/supabase-ddl-sync.md) §Network Constraint |
