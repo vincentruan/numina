@@ -53,6 +53,7 @@ def create_expense(
         receipt_image_url=req.receipt_image_url,
         split_type=req.split_type,
         user_id=user_id,
+        itinerary_item_id=req.itinerary_item_id,
     )
 
     debit = ExpenseEntry(

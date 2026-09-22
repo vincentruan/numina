@@ -23,6 +23,7 @@ class ExpenseEntryCreate(BaseModel):
     receipt_image_url: str | None = None
     split_type: str | None = None  # 'equal', 'per_person', 'custom'
     exchange_rate: float | None = None  # R3: user-provided rate when auto-rate unavailable
+    itinerary_item_id: int | None = None  # back-reference to linked itinerary item
 
     @field_validator("split_type")
     @classmethod
@@ -61,6 +62,7 @@ class ExpenseEntryResponse(SnowflakeBase):
     receipt_image_url: str | None = None
     split_type: str | None = None
     user_id: int
+    itinerary_item_id: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

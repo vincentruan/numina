@@ -140,6 +140,8 @@ from apps.backend.app.routers import expenses as expenses_router
 from apps.backend.app.routers import export as export_router
 from apps.backend.app.routers import family_config as family_config_router
 from apps.backend.app.routers import files as files_router
+from apps.backend.app.routers import itinerary as itinerary_router
+from apps.backend.app.routers import itinerary_types as itinerary_types_router
 from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
 from apps.backend.app.routers import literacy_child as literacy_child_router
@@ -169,6 +171,8 @@ from apps.backend.app.services.storage.base import StorageError
 from packages.db.exchange_rate_adapter import ExchangeRateAdapter
 from packages.db.models.expense_category import ExpenseCategory
 from packages.db.models.expense_entry import ExpenseEntry
+from packages.db.models.itinerary_item import ItineraryItem
+from packages.db.models.itinerary_item_type import ItineraryItemType
 from packages.db.models.notification_config import NotificationConfig
 from packages.db.models.split_group import (
     SplitGroup,
@@ -612,6 +616,8 @@ app.include_router(travel_receipt_router.router, prefix="/api/v1")
 app.include_router(expenses_router.router, prefix="/api/v1")
 app.include_router(expense_categories_router.router, prefix="/api/v1")
 app.include_router(split_groups_router.router, prefix="/api/v1")
+app.include_router(itinerary_router.router, prefix="/api/v1")
+app.include_router(itinerary_types_router.router, prefix="/api/v1")
 app.include_router(shared_router.router, prefix="/api/v1")
 
 # Serve uploaded files — authenticated endpoint with tenant isolation
