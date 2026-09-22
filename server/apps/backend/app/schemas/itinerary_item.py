@@ -54,7 +54,9 @@ class ItineraryItemCreate(BaseModel):
 
     @field_validator("cost_currency")
     @classmethod
-    def _validate_currency_with_amount(cls, v: str | None) -> str | None:
+    def _validate_cost_currency_not_empty(cls, v: str | None) -> str | None:
+        if v is not None and v.strip() == "":
+            return None
         return v
 
 

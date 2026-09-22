@@ -139,7 +139,18 @@
         v-model="showItineraryForm"
         :trip-id="trip.id"
         :edit-item="editingItem"
+        :initial-date="addItemDate"
         @saved="onItinerarySaved"
+      />
+
+      <!-- Delete choice action sheet (R13: cascade or unlink) -->
+      <van-action-sheet
+        v-model:show="showDeleteSheet"
+        :title="t('travel.itinerary.deleteItem')"
+        :description="t('travel.itinerary.delete.confirmMessage')"
+        :actions="deleteActions"
+        @select="onDeleteActionSelect"
+        :cancel-text="t('common.cancel')"
       />
     </template>
   </div>
@@ -180,6 +191,8 @@ const collapseActive = ref<string[]>([])
 const showItineraryForm = ref(false)
 const editingItem = ref<ItineraryItem | null>(null)
 const addItemDate = ref<string | undefined>(undefined)
+const showDeleteSheet = ref(false)
+const deleteTargetItem = ref<ItineraryItem | null>(null)
 
 const trip = computed(() => store.currentTrip)
 const expenses = computed(() => store.expenses)
@@ -189,6 +202,11 @@ const expenseActions = [
   { name: t('travel.photoReceipt'), value: 'photo' },
   { name: t('travel.manualEntry'), value: 'manual' },
 ]
+
+const deleteActions = computed(() => [
+  { name: t('travel.itinerary.delete.cascadeTitle'), subname: t('travel.itinerary.delete.cascadeDesc'), value: 'cascade', color: '#ee0a24' },
+  { name: t('travel.itinerary.delete.unlinkTitle'), subname: t('travel.itinerary.delete.unlinkDesc'), value: 'unlink' },
+])
 
 const budgetPercentage = computed(() => {
   if (!trip.value?.planned_budget) return 0
@@ -245,35 +263,15 @@ async function handleDeleteRequest(item: ItineraryItem) {
   const hasCost = item.cost_amount && parseFloat(item.cost_amount) > 0
 
   if (hasCost) {
-    // Show choice dialog: cascade or unlink
-    try {
-      await showConfirmDialog({
-        title: t('travel.itinerary.deleteItem'),
-        message: t('travel.itinerary.delete.confirmMessage'),
-        confirmButtonText: t('travel.itinerary.delete.cascadeTitle'),
-        cancelButtonText: t('travel.itinerary.delete.unlinkTitle'),
-      })
-      // User confirmed → cascade
-      await deleteItineraryItem(trip.value!.id, item.id, 'cascade')
-      await store.fetchItinerary(trip.value!.id)
-      await store.fetchExpenses(trip.value!.id)
-      showSuccessToast(t('common.success'))
-    } catch (action) {
-      if (action === 'cancel') {
-        // User chose unlink
-        await deleteItineraryItem(trip.value!.id, item.id, 'unlink')
-        await store.fetchItinerary(trip.value!.id)
-        await store.fetchExpenses(trip.value!.id)
-        showSuccessToast(t('common.success'))
-      }
-      // else user dismissed
-    }
+    // R13: Show explicit two-choice action sheet (cascade or unlink)
+    deleteTargetItem.value = item
+    showDeleteSheet.value = true
   } else {
-    // No cost — just delete
+    // No cost — simple confirm + delete
     try {
       await showConfirmDialog({
         title: t('travel.itinerary.deleteItem'),
-        message: t('common.confirmDelete') || '确认删除？',
+        message: t('travel.itinerary.delete.confirmNoMessage'),
       })
       await deleteItineraryItem(trip.value!.id, item.id, 'cascade')
       await store.fetchItinerary(trip.value!.id)
@@ -281,6 +279,24 @@ async function handleDeleteRequest(item: ItineraryItem) {
     } catch {
       // user cancelled
     }
+  }
+}
+
+async function onDeleteActionSelect(action: { value: string }) {
+  showDeleteSheet.value = false
+  if (!deleteTargetItem.value) return
+  const mode = action.value as 'cascade' | 'unlink'
+  try {
+    await deleteItineraryItem(trip.value!.id, deleteTargetItem.value.id, mode)
+    await Promise.all([
+      store.fetchItinerary(trip.value!.id),
+      store.fetchExpenses(trip.value!.id),
+    ])
+    showSuccessToast(t('common.success'))
+  } catch {
+    showFailToast(t('common.failed'))
+  } finally {
+    deleteTargetItem.value = null
   }
 }
 

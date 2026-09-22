@@ -61,6 +61,7 @@ export interface ExpenseEntry {
   description: string | null
   receipt_image_url: string | null
   user_id: string
+  itinerary_item_id: string | null
   created_at: string
   updated_at: string
 }

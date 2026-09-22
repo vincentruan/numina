@@ -18,6 +18,8 @@ def create_expense(
     family_id: int,
     user_id: int,
     req: ExpenseEntryCreate,
+    *,
+    no_commit: bool = False,
 ) -> dict[str, ExpenseEntry]:
     """Create a debit/credit pair for a single expense.
 
@@ -83,9 +85,10 @@ def create_expense(
             )
             trip.actual_spend = (trip.actual_spend or Decimal("0")) + spend_amount
 
-    db.commit()
-    db.refresh(debit)
-    db.refresh(credit)
+    if not no_commit:
+        db.commit()
+        db.refresh(debit)
+        db.refresh(credit)
 
     return {"debit": debit, "credit": credit}
 
@@ -95,6 +98,8 @@ def delete_expense(
     entry_id: int,
     family_id: int,
     user_id: int,
+    *,
+    no_commit: bool = False,
 ) -> None:
     """Reverse an expense by creating offsetting entries."""
     entry = (
@@ -168,7 +173,8 @@ def delete_expense(
             )
             trip.actual_spend = (trip.actual_spend or Decimal("0")) - spend_amount
 
-    db.commit()
+    if not no_commit:
+        db.commit()
 
 
 def list_expenses(

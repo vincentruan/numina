@@ -16,11 +16,12 @@
             <van-icon name="location-o" size="12" />
             {{ item.location }}
           </div>
+          <div v-if="typeMetaSummary" class="card-meta">{{ typeMetaSummary }}</div>
           <div v-if="item.description" class="card-desc">{{ item.description }}</div>
         </div>
         <div class="card-right">
           <div v-if="item.cost_amount" class="card-cost">
-            {{ formatCost(item.cost_amount, item.cost_currency || 'CNY') }}
+            {{ formatIn(item.cost_amount, item.cost_currency || 'CNY') }}
           </div>
           <div v-if="item.cost_amount" class="card-linked" :title="t('travel.itinerary.linkedExpense')">
             <van-icon name="link-o" size="12" />
@@ -101,9 +102,23 @@ const cardAriaLabel = computed(() => {
   return parts.join(', ')
 })
 
-function formatCost(amount: string, currency: string): string {
-  return formatIn(amount, currency)
-}
+const typeMetaSummary = computed(() => {
+  const meta = props.item.type_metadata as Record<string, unknown> | null
+  if (!meta) return ''
+  const parts: string[] = []
+  if (props.item.type === 'accommodation') {
+    if (meta.check_in_time) parts.push(`🕐 ${meta.check_in_time}`)
+    if (meta.check_out_time) parts.push(`🕐 ${meta.check_out_time}`)
+  } else if (props.item.type === 'dining') {
+    if (meta.diners) parts.push(`${meta.diners} ${t('travel.itinerary.form.diners')}`)
+  } else if (props.item.type === 'transport') {
+    if (meta.origin && meta.destination) parts.push(`${meta.origin} → ${meta.destination}`)
+    else if (meta.destination) parts.push(`→ ${meta.destination}`)
+  } else if (props.item.type === 'activity') {
+    if (meta.ticket_price) parts.push(`🎫 ${meta.ticket_price}`)
+  }
+  return parts.join('  ')
+})
 </script>
 
 <style scoped>
@@ -159,6 +174,26 @@ function formatCost(amount: string, currency: string): string {
   color: #9370db;
 }
 
+[data-theme='dark'] .timeline-card--accommodation .card-icon {
+  background: rgba(100, 149, 237, 0.25);
+}
+
+[data-theme='dark'] .timeline-card--dining .card-icon {
+  background: rgba(255, 140, 0, 0.25);
+}
+
+[data-theme='dark'] .timeline-card--transport .card-icon {
+  background: rgba(60, 179, 113, 0.25);
+}
+
+[data-theme='dark'] .timeline-card--activity .card-icon {
+  background: rgba(220, 80, 80, 0.25);
+}
+
+[data-theme='dark'] .timeline-card--custom .card-icon {
+  background: rgba(147, 112, 219, 0.25);
+}
+
 .card-content {
   flex: 1;
   min-width: 0;
@@ -206,6 +241,13 @@ function formatCost(amount: string, currency: string): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.card-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  opacity: 0.8;
 }
 
 .card-right {

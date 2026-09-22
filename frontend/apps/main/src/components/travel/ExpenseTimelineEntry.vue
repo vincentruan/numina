@@ -7,7 +7,7 @@
       <div class="expense-desc">{{ expense.description || t('travel.itinerary.types.activity') }}</div>
     </div>
     <div class="expense-amount">
-      {{ formatCost(expense.amount, expense.currency) }}
+      {{ formatIn(expense.amount, expense.currency) }}
     </div>
   </div>
 </template>
@@ -23,10 +23,6 @@ defineProps<{
 
 const { t } = useI18n()
 const { formatIn } = useCurrency()
-
-function formatCost(amount: string, currency: string): string {
-  return formatIn(amount, currency)
-}
 </script>
 
 <style scoped>

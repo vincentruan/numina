@@ -54,6 +54,59 @@
           />
         </van-cell-group>
 
+        <!-- Type-specific fields -->
+        <van-cell-group v-if="form.type === 'accommodation'" inset>
+          <van-field
+            v-model="typeMeta.check_in_time"
+            :label="t('travel.itinerary.form.checkInTime')"
+            type="time"
+            clearable
+            placeholder="--:--"
+          />
+          <van-field
+            v-model="typeMeta.check_out_time"
+            :label="t('travel.itinerary.form.checkOutTime')"
+            type="time"
+            clearable
+            placeholder="--:--"
+          />
+        </van-cell-group>
+
+        <van-cell-group v-if="form.type === 'dining'" inset>
+          <van-field
+            v-model="typeMeta.diners"
+            :label="t('travel.itinerary.form.diners')"
+            type="digit"
+            clearable
+            :placeholder="t('travel.itinerary.form.diners')"
+          />
+        </van-cell-group>
+
+        <van-cell-group v-if="form.type === 'transport'" inset>
+          <van-field
+            v-model="typeMeta.origin"
+            :label="t('travel.itinerary.form.origin')"
+            clearable
+            :placeholder="t('travel.itinerary.form.origin')"
+          />
+          <van-field
+            v-model="typeMeta.destination"
+            :label="t('travel.itinerary.form.destination')"
+            clearable
+            :placeholder="t('travel.itinerary.form.destination')"
+          />
+        </van-cell-group>
+
+        <van-cell-group v-if="form.type === 'activity'" inset>
+          <van-field
+            v-model="typeMeta.ticket_price"
+            :label="t('travel.itinerary.form.ticketPrice')"
+            type="number"
+            clearable
+            placeholder="0.00"
+          />
+        </van-cell-group>
+
         <!-- Location & Description -->
         <van-cell-group inset>
           <van-field
@@ -150,13 +203,14 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useTravelStore } from '@/stores/travel'
-import { createItineraryType } from '@/api/travel'
+import { createItineraryType, updateItineraryItem } from '@/api/travel'
 import type { ItineraryItem, ItineraryItemCreate, ItineraryItemType } from '@/types/travel'
 
 const props = defineProps<{
   modelValue: boolean
   tripId: string
   editItem?: ItineraryItem | null
+  initialDate?: string
 }>()
 
 const emit = defineEmits<{
@@ -186,6 +240,8 @@ const form = ref({
   custom_type_id: null as string | null,
 })
 
+const typeMeta = ref<Record<string, string>>({})
+
 const showTypePicker = ref(false)
 const showDatePicker = ref(false)
 const showCustomTypeForm = ref(false)
@@ -193,7 +249,12 @@ const newCustomTypeName = ref('')
 const creatingType = ref(false)
 const submitting = ref(false)
 
-const pickerDate = ref(['2026', '10', '01'])
+const today = new Date()
+const pickerDate = ref([
+  String(today.getFullYear()),
+  String(today.getMonth() + 1).padStart(2, '0'),
+  String(today.getDate()).padStart(2, '0'),
+])
 const minDate = new Date(2020, 0, 1)
 const maxDate = new Date(2030, 11, 31)
 
@@ -241,14 +302,26 @@ watch(() => props.editItem, (item) => {
       cost_currency: item.cost_currency || 'CNY',
       custom_type_id: item.custom_type_id,
     }
+    // Restore type_metadata from the item
+    const meta = item.type_metadata as Record<string, unknown> | null
+    typeMeta.value = meta
+      ? Object.fromEntries(Object.entries(meta).map(([k, v]) => [k, String(v ?? '')]))
+      : {}
   } else {
     resetForm()
   }
 }, { immediate: true })
 
+// Watch for initialDate prop (when opening form from timeline "+")
+watch(() => props.initialDate, (d) => {
+  if (d && !props.editItem) {
+    form.value.date = d
+  }
+}, { immediate: true })
+
 function resetForm() {
   form.value = {
-    date: '',
+    date: props.initialDate || '',
     type: 'activity',
     start_time: '',
     end_time: '',
@@ -258,9 +331,10 @@ function resetForm() {
     cost_currency: 'CNY',
     custom_type_id: null,
   }
+  typeMeta.value = {}
 }
 
-function onTypeConfirm({ selectedOptions }: { selectedOptions: any[] }) {
+function onTypeConfirm({ selectedOptions }: { selectedOptions: Array<{ value?: string | number }> }) {
   const value = selectedOptions[0]?.value
   showTypePicker.value = false
 
@@ -278,6 +352,8 @@ function onTypeConfirm({ selectedOptions }: { selectedOptions: any[] }) {
     form.value.type = value as ItineraryItemType
     form.value.custom_type_id = null
   }
+  // Clear type-specific fields when switching type
+  typeMeta.value = {}
 }
 
 function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
@@ -305,6 +381,13 @@ async function createCustomType() {
 async function handleSubmit() {
   submitting.value = true
   try {
+    // Build type_metadata from type-specific fields (only non-empty values)
+    const meta: Record<string, string> = {}
+    for (const [k, v] of Object.entries(typeMeta.value)) {
+      if (v !== '' && v !== null && v !== undefined) meta[k] = v
+    }
+    const hasMeta = Object.keys(meta).length > 0
+
     const data: ItineraryItemCreate = {
       date: form.value.date,
       type: form.value.type,
@@ -315,11 +398,10 @@ async function handleSubmit() {
       cost_amount: form.value.cost_amount || null,
       cost_currency: form.value.cost_amount ? (form.value.cost_currency || 'CNY') : null,
       custom_type_id: form.value.custom_type_id,
+      type_metadata: hasMeta ? meta : null,
     }
 
     if (isEdit.value && props.editItem) {
-      // Update via API directly (store doesn't have update action yet)
-      const { updateItineraryItem } = await import('@/api/travel')
       await updateItineraryItem(props.tripId, props.editItem.id, data)
       await store.fetchItinerary(props.tripId)
     } else {

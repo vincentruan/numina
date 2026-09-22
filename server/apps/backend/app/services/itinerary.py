@@ -1,7 +1,5 @@
 """Itinerary item service — CRUD with expense ledger integration."""
 
-from decimal import Decimal
-
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -86,6 +84,8 @@ def update_item(
     item: ItineraryItem,
     user_id: int,
     data: ItineraryItemUpdate,
+    *,
+    trip: Trip | None = None,
 ) -> ItineraryItem:
     """Update an itinerary item. Sync expense ledger if cost changed."""
     update_fields = data.model_dump(exclude_unset=True)
@@ -106,13 +106,13 @@ def update_item(
     # Handle cost removal (set to None or 0)
     if cost_changed and old_cost and old_cost > 0:
         if not new_cost or new_cost <= 0:
-            # Cost removed — reverse old expense
-            _delete_linked_expense(db, item)
+            # Cost removed — reverse old expense (defer commit to outer scope)
+            _delete_linked_expense(db, item, no_commit=True)
             update_fields["cost_amount"] = None
             update_fields["cost_currency"] = None
         else:
-            # Cost changed — reverse old, create new
-            _delete_linked_expense(db, item)
+            # Cost changed — reverse old (defer commit to outer scope)
+            _delete_linked_expense(db, item, no_commit=True)
 
     # Update item fields
     for field, value in update_fields.items():
@@ -120,11 +120,13 @@ def update_item(
 
     db.flush()
 
-    # Create new expense if cost changed and new cost is positive
+    # Create new expense if cost changed and new cost is positive (defer commit)
     if cost_changed and new_cost and new_cost > 0:
-        trip = db.query(Trip).filter(Trip.id == item.trip_id).first()
-        _create_linked_expense(db, trip, user_id, item)
+        if trip is None:
+            trip = db.query(Trip).filter(Trip.id == item.trip_id).first()
+        _create_linked_expense(db, trip, user_id, item, no_commit=True)
 
+    # Single commit wraps the entire update atomically
     db.commit()
     db.refresh(item)
     return item
@@ -177,6 +179,8 @@ def _create_linked_expense(
     trip: Trip,
     user_id: int,
     item: ItineraryItem,
+    *,
+    no_commit: bool = False,
 ) -> None:
     """Create a debit/credit expense pair linked to an itinerary item."""
     req = ExpenseEntryCreate(
@@ -188,10 +192,15 @@ def _create_linked_expense(
         description=item.description or item.location or f"{item.type} expense",
         itinerary_item_id=item.id,
     )
-    expense_ledger.create_expense(db, trip.family_id, user_id, req)
+    expense_ledger.create_expense(db, trip.family_id, user_id, req, no_commit=no_commit)
 
 
-def _delete_linked_expense(db: Session, item: ItineraryItem) -> None:
+def _delete_linked_expense(
+    db: Session,
+    item: ItineraryItem,
+    *,
+    no_commit: bool = False,
+) -> None:
     """Reverse the expense entries linked to an itinerary item (cascade delete)."""
     debit = (
         db.query(ExpenseEntry)
@@ -202,7 +211,9 @@ def _delete_linked_expense(db: Session, item: ItineraryItem) -> None:
         .first()
     )
     if debit:
-        expense_ledger.delete_expense(db, debit.id, item.family_id, item.family_id)
+        expense_ledger.delete_expense(
+            db, debit.id, item.family_id, item.family_id, no_commit=no_commit,
+        )
 
 
 def _unlink_expense_entries(db: Session, item: ItineraryItem) -> None:

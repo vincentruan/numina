@@ -57,9 +57,9 @@ def update_item(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    trip_service.get_trip(db, trip_id, user.family_id)
+    trip = trip_service.get_trip(db, trip_id, user.family_id)
     item = itinerary_service.get_item(db, item_id, user.family_id)
-    return itinerary_service.update_item(db, item, user.id, req)
+    return itinerary_service.update_item(db, item, user.id, req, trip=trip)
 
 
 @router.delete("/{item_id}")
@@ -72,13 +72,6 @@ def delete_item(
 ):
     trip_service.get_trip(db, trip_id, user.family_id)
     item = itinerary_service.get_item(db, item_id, user.family_id)
-
-    has_cost = item.cost_amount and item.cost_amount > 0
-    if has_cost:
-        # mode is required (validated by Query pattern)
-        itinerary_service.delete_item(db, item, user.id, mode)
-    else:
-        # No cost — just delete, mode doesn't matter
-        itinerary_service.delete_item(db, item, user.id, mode)
+    itinerary_service.delete_item(db, item, user.id, mode)
 
     return {"detail": "已删除"}

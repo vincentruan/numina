@@ -98,10 +98,9 @@ const totalItems = computed(() => store.itineraryItems.length)
 
 const standaloneExpenses = computed(() => {
   // Expenses not linked to any itinerary item
-  const linkedItemIds = new Set(store.itineraryItems.map(i => i.id))
   return (props.expenses || []).filter(e =>
     e.leg_type === 'debit' &&
-    (!e as any).itinerary_item_id
+    !e.itinerary_item_id
   )
 })
 
@@ -118,9 +117,9 @@ const days = computed<DayBucket[]>(() => {
   if (props.returnDate) {
     endDate = new Date(props.returnDate)
   } else {
-    // Default: 7 days from departure (KTD5)
+    // Default: 7 days from departure (KTD5: departure_date through departure_date + 7 days)
     endDate = new Date(depDate)
-    endDate.setDate(endDate.getDate() + 6)
+    endDate.setDate(endDate.getDate() + 7)
   }
 
   const result: DayBucket[] = []
