@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'node:path'
 import Components from 'unplugin-vue-components/vite'
@@ -6,7 +6,9 @@ import { VantResolver } from '@vant/auto-import-resolver'
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons-ng'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  return {
   base: '/',
   plugins: [
     vue(),
@@ -60,7 +62,7 @@ export default defineConfig({
     },
     proxy: {
       '/api/threads': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:80',
+        target: env.VITE_API_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         // SSE streaming needs long timeout — LLM tool-calling / thinking can
         // exceed the default node HTTP agent timeout and silently drop the
@@ -69,7 +71,7 @@ export default defineConfig({
         proxyTimeout: 10 * 60 * 1000,
       },
       '/api': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:80',
+        target: env.VITE_API_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         // Same SSE concern for backend streaming endpoints (/ai/chat/stream,
         // /ai/report/ws, etc.). Non-streaming requests are unaffected.
@@ -77,9 +79,9 @@ export default defineConfig({
         proxyTimeout: 10 * 60 * 1000,
       },
       '/uploads': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:80',
+        target: env.VITE_API_TARGET || 'http://localhost:8000',
         changeOrigin: true,
       },
     },
   },
-})
+}})

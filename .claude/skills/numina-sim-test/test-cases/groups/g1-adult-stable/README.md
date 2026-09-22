@@ -15,7 +15,7 @@ All three files reuse one adult session (`$SID` from G0).
 | [`area7-regression.md`](./area7-regression.md) | 7 — Regression sweep (历史缺陷回归) | R1–R9 |
 | [`area8-expanded-features.md`](./area8-expanded-features.md) | 8 — Expanded coverage (Manifesto/盲盒/Baby/Settings) | F.1–F.12 |
 | [`area12-ai-task-resilience.md`](./area12-ai-task-resilience.md) | 12 — AI task resilience (前端不稳定处理) | C12.1–C12.9 |
-| [`area14-travel.md`](./area14-travel.md) | 14 — Travel module (家庭旅行管理) | C14.1–C14.22 |
+| [`area14-travel.md`](./area14-travel.md) | 14 — Travel module (家庭旅行管理 + 行程规划) | C14.1–C14.33 |
 
 ## State domain
 
@@ -60,7 +60,7 @@ SID="$SID_G0"   # reuse, do NOT session start a new one
 bsk navigate ${BASE} --session "$SID" --wait-until networkidle   # dashboard (C2.1)
 # ... C2.1–C2.25 ...
 # area14 — travel module (trip CRUD, expenses, split, graduation)
-# ... C14.1–C14.22 ...
+# ... C14.1–C14.33 ...
 # area8 — expanded features (Manifesto/Blind Box/Baby/Settings)
 # ... F.1–F.12 ...
 # area3 — AI capabilities (AI must be enabled)
