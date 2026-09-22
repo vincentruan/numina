@@ -52,6 +52,8 @@ from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.file_remote_location import (
     FileRemoteLocation,
 )
+from apps.backend.app.models.itinerary_item import ItineraryItem
+from apps.backend.app.models.itinerary_item_type import ItineraryItemType
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.manifesto import (
     FamilyManifesto,
