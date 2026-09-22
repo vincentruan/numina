@@ -228,7 +228,7 @@ def approve_review(
         family_id=user.family_id,
         child_user_id=progress.child_id,
         amount=REWARD_COINS,
-        transaction_type="parent_grant",
+        transaction_type="learning_earn",
         narrative="掌握知识点奖励",
         narrative_emoji="🌟",
     )
@@ -243,8 +243,10 @@ def approve_review(
         passed=True,
     )
     db.add(attempt)
-
     db.flush()
+
+    # Link coin transaction to attempt for idempotency
+    txn.ref_id = attempt.id
     return progress
 
 
