@@ -30,11 +30,12 @@ http.interceptors.response.use(
     return response
   },
   (error) => {
-    const originalRequest = error.config as { method?: string; url?: string; data?: unknown } | undefined
+    const originalRequest = error.config as { method?: string; url?: string; data?: unknown; _skipAuthRedirect?: boolean } | undefined
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       const url = originalRequest?.url ?? ''
       // Don't redirect for auth endpoints (login should handle its own errors)
-      if (!url.includes('/auth/')) {
+      // or when the caller explicitly opts out (non-critical calls that handle errors locally)
+      if (!url.includes('/auth/') && !originalRequest?._skipAuthRedirect) {
         clearAuth()
         // Redirect to main login (child app has no auth pages).
         // Must use getMainBaseUrl() — VITE_MAIN_APP_URL is unset, so fallback ''

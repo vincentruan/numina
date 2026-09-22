@@ -1,5 +1,12 @@
 import http from '@/api/index'
 
+// Extend AxiosRequestConfig to support our custom skip-auth-redirect flag
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    _skipAuthRedirect?: boolean
+  }
+}
+
 const COMPLETION_RATE_THRESHOLD = 20
 const MIN_ATTEMPTS_FOR_RATE_CHECK = 3
 const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -18,7 +25,7 @@ export async function shouldShowChildGuide(currentVersion: number): Promise<{
 }> {
   let config: OnboardingConfig
   try {
-    const res = await http.get<OnboardingConfig>('/user/config')
+    const res = await http.get<OnboardingConfig>('/user/config', { _skipAuthRedirect: true })
     config = res.data
   } catch {
     return { shouldShow: false, reason: 'api_error', config: { onboarding_guide_version: 0, onboarding_attempts: 0, onboarding_completions: 0 } }
@@ -43,9 +50,9 @@ export function recordChildGuideShown(): void {
 }
 
 export async function recordChildGuideAttempt(config: OnboardingConfig): Promise<void> {
-  await http.patch('/user/config', { settings: { onboarding_attempts: config.onboarding_attempts + 1 } })
+  await http.patch('/user/config', { settings: { onboarding_attempts: config.onboarding_attempts + 1 } }, { _skipAuthRedirect: true })
 }
 
 export async function recordChildGuideCompletion(config: OnboardingConfig, version: number): Promise<void> {
-  await http.patch('/user/config', { settings: { onboarding_guide_version: version, onboarding_completions: config.onboarding_completions + 1 } })
+  await http.patch('/user/config', { settings: { onboarding_guide_version: version, onboarding_completions: config.onboarding_completions + 1 } }, { _skipAuthRedirect: true })
 }
