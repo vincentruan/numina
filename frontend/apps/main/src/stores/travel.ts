@@ -112,6 +112,13 @@ export const useTravelStore = defineStore('travel', () => {
     return res.data
   }
 
+  async function updateItineraryItem(tripId: string, itemId: string, data: Parameters<typeof travelApi.updateItineraryItem>[2]) {
+    const res = await travelApi.updateItineraryItem(tripId, itemId, data)
+    const idx = itineraryItems.value.findIndex(i => i.id === itemId)
+    if (idx !== -1) itineraryItems.value[idx] = res.data
+    return res.data
+  }
+
   async function deleteItineraryItem(tripId: string, itemId: string, mode: 'cascade' | 'unlink') {
     await travelApi.deleteItineraryItem(tripId, itemId, mode)
     itineraryItems.value = itineraryItems.value.filter(i => i.id !== itemId)
@@ -152,6 +159,7 @@ export const useTravelStore = defineStore('travel', () => {
     fetchItinerary,
     fetchItineraryTypes,
     createItineraryItem,
+    updateItineraryItem,
     deleteItineraryItem,
     fetchSplitGroup,
     fetchSettlements,

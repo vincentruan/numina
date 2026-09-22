@@ -121,7 +121,6 @@
   "INVALID_ITEM_TYPE": "无效的行程项类型",
   "ITINERARY_TYPE_NOT_FOUND": "自定义类型不存在",
   "ITINERARY_TYPE_IN_USE": "该类型正在使用中，无法删除",
-  "DELETE_MODE_REQUIRED": "请指定删除模式（cascade 或 unlink）",
   "WISH_NOT_FOUND": "心愿不存在",
   "SPLIT_GROUP_NOT_FOUND": "分摊组不存在",
   "SPLIT_GROUP_ALREADY_EXISTS": "该行程已有分摊组",

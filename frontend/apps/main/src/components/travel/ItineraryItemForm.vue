@@ -203,7 +203,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useTravelStore } from '@/stores/travel'
-import { createItineraryType, updateItineraryItem } from '@/api/travel'
+import { createItineraryType } from '@/api/travel'
 import type { ItineraryItem, ItineraryItemCreate, ItineraryItemType } from '@/types/travel'
 
 const props = defineProps<{
@@ -402,8 +402,7 @@ async function handleSubmit() {
     }
 
     if (isEdit.value && props.editItem) {
-      await updateItineraryItem(props.tripId, props.editItem.id, data)
-      await store.fetchItinerary(props.tripId)
+      await store.updateItineraryItem(props.tripId, props.editItem.id, data)
     } else {
       await store.createItineraryItem(props.tripId, data)
     }

@@ -107,12 +107,12 @@ def update_item(
     if cost_changed and old_cost and old_cost > 0:
         if not new_cost or new_cost <= 0:
             # Cost removed — reverse old expense (defer commit to outer scope)
-            _delete_linked_expense(db, item, no_commit=True)
+            _delete_linked_expense(db, item, user_id, no_commit=True)
             update_fields["cost_amount"] = None
             update_fields["cost_currency"] = None
         else:
             # Cost changed — reverse old (defer commit to outer scope)
-            _delete_linked_expense(db, item, no_commit=True)
+            _delete_linked_expense(db, item, user_id, no_commit=True)
 
     # Update item fields
     for field, value in update_fields.items():
@@ -147,7 +147,7 @@ def delete_item(
 
     if has_cost:
         if mode == "cascade":
-            _delete_linked_expense(db, item)
+            _delete_linked_expense(db, item, user_id)
         elif mode == "unlink":
             _unlink_expense_entries(db, item)
         # mode validation is done at router level
@@ -198,6 +198,7 @@ def _create_linked_expense(
 def _delete_linked_expense(
     db: Session,
     item: ItineraryItem,
+    user_id: int,
     *,
     no_commit: bool = False,
 ) -> None:
@@ -212,7 +213,7 @@ def _delete_linked_expense(
     )
     if debit:
         expense_ledger.delete_expense(
-            db, debit.id, item.family_id, item.family_id, no_commit=no_commit,
+            db, debit.id, item.family_id, user_id, no_commit=no_commit,
         )
 
 

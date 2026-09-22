@@ -121,7 +121,6 @@
   "INVALID_ITEM_TYPE": "Invalid item type",
   "ITINERARY_TYPE_NOT_FOUND": "Custom type not found",
   "ITINERARY_TYPE_IN_USE": "Type is in use and cannot be deleted",
-  "DELETE_MODE_REQUIRED": "Delete mode (cascade or unlink) is required",
   "WISH_NOT_FOUND": "Wish not found",
   "SPLIT_GROUP_NOT_FOUND": "Split group not found",
   "SPLIT_GROUP_ALREADY_EXISTS": "A split group already exists for this trip",
