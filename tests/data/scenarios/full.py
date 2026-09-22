@@ -8,6 +8,7 @@ from factories.assets import AssetFactory
 from factories.children import ChoreFactory, CoinFactory
 from factories.liabilities import LiabilityFactory
 from factories.rentals import RentalContractFactory
+from factories.manifesto import ManifestoFactory
 from factories.travel import (
     ExpenseCategoryFactory,
     ExpenseEntryFactory,
@@ -376,4 +377,13 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
         status="active", priority="high",
     )
 
-    print("  [ok] test_rich — 完整数据账号已创建（含旅游 2 行程 + 6 费用 + 1 分摊组）")
+    # ── 家庭约定 ─────────────────────────────────────────────────────────────
+    ManifestoFactory.get_or_create(
+        db,
+        family_id=fam.id,
+        created_by=user.id,
+        title="测试家庭约定",
+        body="我们约定：\n1. 互相尊重\n2. 共同分担\n3. 理性消费",
+    )
+
+    print("  [ok] test_rich — 完整数据账号已创建（含旅游 2 行程 + 6 费用 + 1 分摊组 + 家庭约定）")

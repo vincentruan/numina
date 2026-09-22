@@ -9,6 +9,7 @@ from factories.blindbox import BlindBoxFactory
 from factories.children import ChoreFactory, CoinFactory
 from factories.liabilities import LiabilityFactory
 from factories.rentals import RentalContractFactory
+from factories.manifesto import ManifestoFactory
 from factories.travel import (
     ExpenseCategoryFactory,
     ExpenseEntryFactory,
@@ -617,4 +618,20 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
         type_metadata={"origin": "莫干山", "destination": "杭州"},
     )
 
-    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+行程项+21费用+2结算）")
+    # ── 家庭约定 ─────────────────────────────────────────────────────────────
+    manifesto, _ = ManifestoFactory.get_or_create(
+        db,
+        family_id=fam.id,
+        created_by=user.id,
+        title="演示家庭约定",
+        body="我们约定：\n1. 互相尊重，彼此倾听\n2. 共同分担家务\n3. 每周一次家庭活动\n4. 理性消费，共同储蓄\n5. 关爱彼此，共同成长",
+    )
+    # 小宝已签署（小宝已完成 3 天任务）
+    if manifesto.current_version_id:
+        ManifestoFactory.sign(
+            db,
+            version_id=manifesto.current_version_id,
+            user_id=child1.id,
+        )
+
+    print("  [ok] demouser — 完整仿真数据已创建（19实物+11金融+7负债+3租约+9心愿+2儿童+盲盒+5行程+行程项+21费用+2结算+家庭约定）")
