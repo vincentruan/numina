@@ -2,8 +2,8 @@
 
 from apps.backend.app.services.notification.registry import (
     NOTIFICATION_CATEGORIES,
-    get_categorized_events,
     VALID_REMINDER_TYPES,
+    get_categorized_events,
 )
 
 
@@ -38,7 +38,7 @@ def test_valid_reminder_types_matches_registry():
     registry_types = set()
     for cat in NOTIFICATION_CATEGORIES.values():
         registry_types.update(cat["events"].keys())
-    assert VALID_REMINDER_TYPES == registry_types
+    assert registry_types == VALID_REMINDER_TYPES
 
 
 def test_each_event_has_required_fields():
