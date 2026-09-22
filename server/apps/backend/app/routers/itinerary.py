@@ -1,5 +1,7 @@
 """Itinerary item router — scoped under a trip."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -66,7 +68,7 @@ def update_item(
 def delete_item(
     trip_id: int,
     item_id: int,
-    mode: str = Query(..., pattern="^(cascade|unlink)$"),
+    mode: Literal["cascade", "unlink"] = Query(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

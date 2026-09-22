@@ -4,15 +4,15 @@ from datetime import date, time
 from decimal import Decimal
 
 import pytest
-from fastapi.testclient import TestClient
 
-from apps.backend.app.schemas.itinerary_item import ItineraryItemCreate, ItineraryItemUpdate
+from apps.backend.app.schemas.itinerary_item import (
+    ItineraryItemCreate,
+    ItineraryItemUpdate,
+)
 from apps.backend.app.services import itinerary as itinerary_service
-from apps.backend.app.services import trip as trip_service
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.itinerary_item import ItineraryItem
 from packages.db.models.trip import Trip
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -193,6 +193,49 @@ class TestExpenseLedgerIntegration:
         amounts = sorted([d.amount for d in linked_debits])
         assert amounts == [Decimal("200.00"), Decimal("300.00")]
 
+    def test_add_cost_to_previously_cost_free_item(self, db, trip, test_user):
+        """Adding cost to an item that had no cost creates a linked expense."""
+        # Create item without cost
+        data = ItineraryItemCreate(
+            date=date(2026, 10, 2),
+            type="activity",
+            description="Visit Senso-ji Temple",
+        )
+        item = itinerary_service.create_item(db, trip, test_user.id, data)
+        assert item.cost_amount is None
+
+        # Verify no expense entries
+        entries_before = (
+            db.query(ExpenseEntry)
+            .filter(ExpenseEntry.itinerary_item_id == item.id)
+            .all()
+        )
+        assert len(entries_before) == 0
+
+        # Update: add cost
+        db.refresh(trip)
+        spend_before = trip.actual_spend
+
+        update = ItineraryItemUpdate(cost_amount=Decimal("150.00"), cost_currency="CNY")
+        updated = itinerary_service.update_item(db, item, test_user.id, update)
+
+        assert updated.cost_amount == Decimal("150.00")
+        assert updated.cost_currency == "CNY"
+
+        # Verify expense entries created
+        entries_after = (
+            db.query(ExpenseEntry)
+            .filter(ExpenseEntry.itinerary_item_id == item.id)
+            .all()
+        )
+        assert len(entries_after) == 2
+        legs = {e.leg_type for e in entries_after}
+        assert legs == {"debit", "credit"}
+
+        # Verify trip.actual_spend increased
+        db.refresh(trip)
+        assert trip.actual_spend == spend_before + Decimal("150.00")
+
     def test_remove_cost_reverses_only(self, db, trip, test_user):
         """Setting cost to None → old expense reversed, cost fields nulled."""
         data = ItineraryItemCreate(
@@ -220,7 +263,7 @@ class TestExpenseLedgerIntegration:
             cost_amount=Decimal("200.00"),
             cost_currency="CNY",
         )
-        item = itinerary_service.create_item(db, trip, test_user.id, data)
+        itinerary_service.create_item(db, trip, test_user.id, data)
 
         db.refresh(trip)
         assert trip.actual_spend == initial_spend + Decimal("200.00")

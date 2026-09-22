@@ -3,7 +3,7 @@
     <!-- Trip-level empty state -->
     <template v-if="totalItems === 0 && standaloneExpenses.length === 0">
       <div class="trip-empty-state">
-        <van-empty
+        <EmptyState
           :description="t('travel.itinerary.emptyState')"
           image="search"
         >
@@ -16,7 +16,7 @@
           >
             {{ t('travel.itinerary.addItem') }}
           </van-button>
-        </van-empty>
+        </EmptyState>
       </div>
     </template>
 
@@ -76,6 +76,7 @@ import { useI18n } from 'vue-i18n'
 import { useTravelStore } from '@/stores/travel'
 import ItineraryItemCard from './ItineraryItemCard.vue'
 import ExpenseTimelineEntry from './ExpenseTimelineEntry.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import type { ItineraryItem, ExpenseEntry } from '@/types/travel'
 
 const props = defineProps<{

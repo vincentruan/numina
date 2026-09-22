@@ -1,14 +1,22 @@
 """Itinerary item service — CRUD with expense ledger integration."""
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.schemas.expense_entry import ExpenseEntryCreate
-from apps.backend.app.schemas.itinerary_item import ItineraryItemCreate, ItineraryItemUpdate
+from apps.backend.app.schemas.itinerary_item import (
+    ItineraryItemCreate,
+    ItineraryItemUpdate,
+)
 from apps.backend.app.services import expense_ledger
 from packages.db.models.expense_entry import ExpenseEntry
 from packages.db.models.itinerary_item import ItineraryItem
+from packages.db.models.itinerary_item_type import ItineraryItemType
 from packages.db.models.trip import Trip
+
+logger = logging.getLogger(__name__)
 
 
 def list_items(db: Session, trip_id: int, family_id: int) -> list[ItineraryItem]:
@@ -46,11 +54,7 @@ def create_item(
     data: ItineraryItemCreate,
 ) -> ItineraryItem:
     """Create an itinerary item. If cost is set, auto-create linked expense."""
-    # Validate custom type reference
-    if data.type == "custom" and data.custom_type_id:
-        _validate_custom_type(db, data.custom_type_id, trip.family_id)
-    elif data.type == "custom" and not data.custom_type_id:
-        raise AppError(ErrorCode.INVALID_ITEM_TYPE)
+    _validate_type_and_custom_type(db, data.type, data.custom_type_id, trip.family_id)
 
     item = ItineraryItem(
         trip_id=trip.id,
@@ -93,15 +97,14 @@ def update_item(
     # Validate custom type reference if type changed
     new_type = update_fields.get("type", item.type)
     new_custom_type_id = update_fields.get("custom_type_id", item.custom_type_id)
-    if new_type == "custom" and new_custom_type_id:
-        _validate_custom_type(db, new_custom_type_id, item.family_id)
-    elif new_type == "custom" and not new_custom_type_id:
-        raise AppError(ErrorCode.INVALID_ITEM_TYPE)
+    _validate_type_and_custom_type(db, new_type, new_custom_type_id, item.family_id)
 
-    # Check if cost changed
+    # Check if cost or currency changed
     old_cost = item.cost_amount
     new_cost = update_fields.get("cost_amount", old_cost)
-    cost_changed = new_cost != old_cost
+    old_currency = item.cost_currency
+    new_currency = update_fields.get("cost_currency", old_currency)
+    cost_changed = new_cost != old_cost or new_currency != old_currency
 
     # Handle cost removal (set to None or 0)
     if cost_changed and old_cost and old_cost > 0:
@@ -123,7 +126,7 @@ def update_item(
     # Create new expense if cost changed and new cost is positive (defer commit)
     if cost_changed and new_cost and new_cost > 0:
         if trip is None:
-            trip = db.query(Trip).filter(Trip.id == item.trip_id).first()
+            trip = db.query(Trip).filter(Trip.id == item.trip_id, Trip.family_id == item.family_id).first()
         _create_linked_expense(db, trip, user_id, item, no_commit=True)
 
     # Single commit wraps the entire update atomically
@@ -148,18 +151,27 @@ def delete_item(
     if has_cost:
         if mode == "cascade":
             _delete_linked_expense(db, item, user_id)
+            # Null itinerary_item_id on original entries so FK allows item deletion
+            _unlink_expense_entries(db, item)
         elif mode == "unlink":
             _unlink_expense_entries(db, item)
-        # mode validation is done at router level
 
     db.delete(item)
     db.commit()
 
 
+def _validate_type_and_custom_type(
+    db: Session, item_type: str, custom_type_id: int | None, family_id: int,
+) -> None:
+    """Validate item type and custom type reference."""
+    if item_type == "custom":
+        if not custom_type_id:
+            raise AppError(ErrorCode.INVALID_ITEM_TYPE)
+        _validate_custom_type(db, custom_type_id, family_id)
+
+
 def _validate_custom_type(db: Session, custom_type_id: int, family_id: int) -> None:
     """Validate that a custom type exists and belongs to this family."""
-    from packages.db.models.itinerary_item_type import ItineraryItemType
-
     iit = (
         db.query(ItineraryItemType)
         .filter(
@@ -214,6 +226,11 @@ def _delete_linked_expense(
     if debit:
         expense_ledger.delete_expense(
             db, debit.id, item.family_id, user_id, no_commit=no_commit,
+        )
+    elif item.cost_amount and item.cost_amount > 0:
+        logger.warning(
+            "Orphaned itinerary item %s: cost_amount=%s but no linked debit expense",
+            item.id, item.cost_amount,
         )
 
 
