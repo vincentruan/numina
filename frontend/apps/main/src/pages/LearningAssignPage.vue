@@ -119,13 +119,16 @@ defineOptions({ name: 'LearningAssign' })
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { useFamilyStore } from '@/stores/family'
-import { createAssignment } from '@/api/learning'
+import { createAssignment, searchTopics } from '@/api/learning'
+import type { TopicResponse } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t, locale } = useI18n()
+const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const route = useRoute()
 const router = useRouter()
 const familyStore = useFamilyStore()
@@ -146,7 +149,8 @@ const formRules = {
 }
 
 const searchQuery = ref('')
-const filteredTopics = ref<Array<{ id: string; name: string | null; name_zh: string | null; description: string; description_zh: string | null; subject: string }>>([])
+const filteredTopics = ref<TopicResponse[]>([])
+const searching = ref(false)
 const submitting = ref(false)
 const showChildPicker = ref(false)
 const showDatePicker = ref(false)
@@ -177,24 +181,24 @@ const dueDateDisplay = computed(() => {
 
 const canSubmit = computed(() => formData.value.child_id && formData.value.topic_id)
 
-function topicDisplayName(topic: { name: string | null; name_zh: string | null }): string {
-  if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
-  return topic.name || ''
-}
-
-function topicDescription(topic: { description: string; description_zh: string | null }): string {
-  if (locale.value.startsWith('zh') && topic.description_zh) return topic.description_zh
-  return topic.description
-}
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 function onSearch(query: string) {
+  if (searchTimer) clearTimeout(searchTimer)
   if (!query.trim()) {
     filteredTopics.value = []
     return
   }
-  // Simple client-side filter against a mock list (in real use, this would be an API call)
-  // For now, show empty — topics would need to be fetched from backend
-  filteredTopics.value = []
+  searchTimer = setTimeout(async () => {
+    searching.value = true
+    try {
+      filteredTopics.value = await searchTopics(query.trim())
+    } catch {
+      filteredTopics.value = []
+    } finally {
+      searching.value = false
+    }
+  }, 300)
 }
 
 function selectTopic(topic: { id: string }) {

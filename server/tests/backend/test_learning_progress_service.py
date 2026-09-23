@@ -218,13 +218,14 @@ def test_valid_transitions_coverage():
     expected_levels = {"locked", "available", "learning", "assessing", "parent_review", "mastered", "review"}
     assert set(VALID_TRANSITIONS.keys()) == expected_levels
 
-def test_review_to_mastered(db, child_user, topic):
-    """review -> mastered is a valid transition (pass)."""
+def test_review_to_mastered_invalid(db, child_user, topic):
+    """review -> mastered is NOT valid (must go review -> learning -> assessing -> mastered)."""
     p = get_or_create_progress(db, child_user["id"], topic.id)
     p.mastery_level = "review"
     db.flush()
-    result = transition_to_mastered(db, p, score=0.95, completed_via="ai_assessment")
-    assert result.mastery_level == "mastered"
+    with pytest.raises(AppError) as exc_info:
+        transition_to_mastered(db, p, score=0.95, completed_via="ai_assessment")
+    assert "invalid_state_transition" in str(exc_info.value)
 
 
 def test_review_to_learning(db, child_user, topic):
@@ -236,14 +237,13 @@ def test_review_to_learning(db, child_user, topic):
     assert result.mastery_level == "learning"
 
 
-def test_mastered_to_learning_is_invalid(db, child_user, topic):
-    """mastered -> learning is NOT valid (must go through review first)."""
+def test_mastered_to_learning_is_valid(db, child_user, topic):
+    """mastered -> learning is valid (re-study after mastery)."""
     p = get_or_create_progress(db, child_user["id"], topic.id)
     p.mastery_level = "mastered"
     db.flush()
-    with pytest.raises(AppError) as exc_info:
-        transition_to_learning(db, p)
-    assert "invalid_state_transition" in str(exc_info.value)
+    result = transition_to_learning(db, p)
+    assert result.mastery_level == "learning"
 
 
 def test_recheck_prerequisites_unlocks_when_prereqs_met(db, child_user, topic_with_prereq):

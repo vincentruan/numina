@@ -1,6 +1,6 @@
 """Global learning knowledge graph endpoints (no auth required)."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from apps.backend.app.database import get_db
@@ -16,15 +16,33 @@ from apps.backend.app.services.learning import topic_service
 router = APIRouter(prefix="/learning", tags=["learning"])
 
 
+@router.get("/topics/batch", response_model=list[TopicResponse])
+def get_topics_batch(
+    ids: str = Query(..., description="Comma-separated topic IDs"),
+    db: Session = Depends(get_db),
+):
+    """Batch-fetch multiple topics by ID."""
+    try:
+        topic_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND) from None
+    if not topic_ids:
+        return []
+    return topic_service.list_topics_by_ids(db, topic_ids)
+
+
 @router.get("/topics", response_model=list[TopicResponse])
 def list_topics(
     subject: str | None = None,
     domain: str | None = None,
     age_group: str | None = None,
+    search: str | None = None,
+    limit: int = 20,
     db: Session = Depends(get_db),
 ):
     return topic_service.list_topics(
-        db, subject=subject, domain=domain, age_group=age_group
+        db, subject=subject, domain=domain, age_group=age_group,
+        search=search, limit=limit,
     )
 
 

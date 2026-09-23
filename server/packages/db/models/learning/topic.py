@@ -2,7 +2,16 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.snowflake import next_id
@@ -46,6 +55,10 @@ class LearningTopic(Base):
 
 class LearningDependency(Base):
     __tablename__ = "learning_dependencies"
+
+    __table_args__ = (
+        UniqueConstraint("topic_id", "prerequisite_id", name="uq_learning_dependency_edge"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     topic_id: Mapped[int] = mapped_column(

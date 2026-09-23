@@ -1,3 +1,6 @@
+// Shared learning API types and functions for the parent (main) app.
+// NOTE: Type definitions (TopicResponse, ProgressResponse, etc.) are duplicated
+// in apps/child/src/api/learning.ts — extract to @numina/types when drift becomes painful.
 import http from './index'
 
 // --- Interfaces (IDs as string — Snowflake serialization) ---
@@ -137,6 +140,16 @@ export async function rejectReview(progressId: string): Promise<ProgressResponse
 }
 
 export async function getTopicDetail(topicId: string): Promise<TopicResponse> {
-  const res = await http.get(`/child/learning/topics/${topicId}`)
+  const res = await http.get(`/family/learning/topics/${topicId}`)
+  return res.data
+}
+
+export async function getTopicsBatch(ids: string[]): Promise<TopicResponse[]> {
+  const res = await http.get(`/learning/topics/batch?ids=${ids.join(',')}`)
+  return res.data
+}
+
+export async function searchTopics(query: string): Promise<TopicResponse[]> {
+  const res = await http.get('/learning/topics', { params: { search: query } })
   return res.data
 }

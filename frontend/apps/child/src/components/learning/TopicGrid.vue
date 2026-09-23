@@ -17,8 +17,8 @@
           <span class="topic-card__status" aria-hidden="true">{{ statusIcon(masteryStatus(item)) }}</span>
           <div class="topic-card__info">
             <p class="topic-card__name">{{ topicDisplayName(item.topic) }}</p>
-            <p v-if="item.progress" class="topic-card__meta">
-              {{ t('learning.attempts', { count: item.progress.attempts }) }}
+            <p v-if="item.attempts" class="topic-card__meta">
+              {{ t('learning.attempts', { count: item.attempts }) }}
             </p>
           </div>
         </button>
@@ -47,11 +47,11 @@ defineEmits<{
 type MasteryStatus = 'mastered' | 'learning' | 'available' | 'locked' | 'review'
 
 function masteryStatus(item: ProgressWithTopic): MasteryStatus {
-  const level = item.progress?.mastery_level
+  const level = item.mastery_level
   if (level === 'mastered') {
     // Check if due for review
-    if (item.progress?.next_review_at) {
-      const reviewDate = new Date(item.progress.next_review_at)
+    if (item.next_review_at) {
+      const reviewDate = new Date(item.next_review_at)
       if (reviewDate <= new Date()) return 'review'
     }
     return 'mastered'

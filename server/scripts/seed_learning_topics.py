@@ -7,11 +7,12 @@ Usage:
 
 import argparse
 import json
+import os
 import subprocess
 from collections import Counter
 from pathlib import Path
 
-DEFAULT_DATA_DIR = Path("/Volumes/LexarSSDNQ790/geek_space/learning/os-taxonomy/data")
+DEFAULT_DATA_DIR = Path(os.environ.get("LEARNING_TAXONOMY_DIR", Path(__file__).parent.parent / "data" / "os-taxonomy"))
 
 # os-taxonomy subject title -> DB subject slug
 SUBJECT_MAP = {

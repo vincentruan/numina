@@ -170,3 +170,14 @@ class ReviewItemResponse(SnowflakeBase):
     attempts: int
     study_duration_seconds: int
     submitted_at: datetime
+
+
+class ChildProgressOverview(BaseModel):
+    """Aggregated progress overview for a child."""
+    mastered_count: int
+    learning_count: int
+    available_count: int
+    locked_count: int
+    review_count: int
+    assessing_count: int
+    parent_review_count: int

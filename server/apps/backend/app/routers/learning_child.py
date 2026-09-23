@@ -11,6 +11,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import (
     AssignmentResponse,
+    ChildProgressOverview,
     ProgressResponse,
     SessionCreate,
     SessionResponse,
@@ -18,6 +19,7 @@ from apps.backend.app.schemas.learning import (
 )
 from apps.backend.app.services.learning import (
     assignment_service,
+    progress_service,
     session_service,
 )
 from apps.backend.app.services.notification.dispatcher import (
@@ -104,6 +106,24 @@ def start_assessment(
     return session_service.start_assessment(db, session_id, child.id)
 
 
+@router.post("/sessions/{session_id}/end", response_model=SessionResponse)
+def end_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """End a learning session."""
+    # Verify the session belongs to this child before ending
+    session = (
+        db.query(LearningSession)
+        .filter(LearningSession.id == session_id, LearningSession.child_id == child.id)
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
+    return session_service.end_session(db, session_id)
+
+
 @router.post("/assignments/{assignment_id}/submit", response_model=ProgressResponse)
 def submit_assignment(
     assignment_id: int,
@@ -121,7 +141,7 @@ def submit_assignment(
     if assignment:
         topic = db.query(LearningTopic).filter(LearningTopic.id == assignment.topic_id).first()
         child_name = child.display_name or child.username or ""
-        topic_name = topic.name_zh or topic.name or "" if topic else ""
+        topic_name = (topic.name_zh or topic.name or "") if topic else ""
         with contextlib.suppress(Exception):
             notify_learning_submitted_for_review(
                 db, child.family_id, child_name, topic_name
@@ -129,23 +149,19 @@ def submit_assignment(
     return progress
 
 
-@router.get("/progress", response_model=ProgressResponse)
+@router.get("/progress", response_model=ChildProgressOverview)
 def my_overall_progress(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    """Get overall progress overview — returns aggregated counts as a pseudo-progress.
-
-    Since there's no single "overall" progress record, return a summary-like response.
-    Frontend can use /map for per-topic breakdown.
-    """
-    # Return the most recently updated progress as a representative record
-    progress = (
-        db.query(LearningProgress)
-        .filter(LearningProgress.child_id == child.id)
-        .order_by(LearningProgress.updated_at.desc())
-        .first()
+    """Get overall progress overview — aggregated mastery counts."""
+    overview = progress_service.get_child_progress_overview(db, child.id)
+    return ChildProgressOverview(
+        mastered_count=overview["mastered"],
+        learning_count=overview["learning"],
+        available_count=overview["available"],
+        locked_count=overview["locked"],
+        review_count=overview["review"],
+        assessing_count=overview["assessing"],
+        parent_review_count=overview["parent_review"],
     )
-    if not progress:
-        raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
-    return progress

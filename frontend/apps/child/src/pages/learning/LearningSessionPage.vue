@@ -14,7 +14,7 @@
       <div class="session-header">
         <div class="session-header__icon">🎓</div>
         <div class="session-header__info">
-          <h2 class="session-header__title">{{ topicDisplayName }}</h2>
+          <h2 class="session-header__title">{{ topicDisplayNameText }}</h2>
           <p class="session-header__type">{{ t(`learning.status.${session.session_type || 'learning'}`) }}</p>
         </div>
       </div>
@@ -63,12 +63,14 @@ defineOptions({ name: 'LearningSession' })
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { getSession, getTopicDetail, type SessionResponse, type TopicResponse } from '@/api/learning'
+import { getSession, getTopicDetail, endSession, type SessionResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { topicDisplayName } = useLocalizedTopic()
 const route = useRoute()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
@@ -81,10 +83,9 @@ const error = ref('')
 const session = ref<SessionResponse | null>(null)
 const topic = ref<TopicResponse | null>(null)
 
-const topicDisplayName = computed(() => {
+const topicDisplayNameText = computed(() => {
   if (!topic.value) return ''
-  if (locale.value.startsWith('zh') && topic.value.name_zh) return topic.value.name_zh
-  return topic.value.name || topic.value.topic_key
+  return topicDisplayName(topic.value)
 })
 
 function goBack() {
@@ -114,7 +115,7 @@ async function onEndSession() {
   if (ending.value) return
   ending.value = true
   try {
-    // TODO: Call end session API when available
+    await endSession(sessionId.value)
     showSuccessToast(t('learning.session.ended'))
     router.push('/learning')
   } catch {

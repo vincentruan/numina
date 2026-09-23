@@ -1,3 +1,6 @@
+// Shared learning API types and functions for the child app.
+// NOTE: Type definitions (TopicResponse, ProgressResponse, etc.) are duplicated
+// in apps/main/src/api/learning.ts — extract to @numina/types when drift becomes painful.
 import http from './index'
 
 // --- Interfaces (IDs as string — Snowflake serialization) ---
@@ -87,6 +90,16 @@ export interface ChildLearningOverview {
   total_study_minutes: number
 }
 
+export interface ChildProgressOverview {
+  mastered_count: number
+  learning_count: number
+  available_count: number
+  locked_count: number
+  review_count: number
+  assessing_count: number
+  parent_review_count: number
+}
+
 // Composite type: progress with topic detail for the map view
 export interface ProgressWithTopic extends ProgressResponse {
   topic: TopicResponse
@@ -131,7 +144,17 @@ export async function submitAssignment(assignmentId: string): Promise<ProgressRe
   return res.data
 }
 
-export async function getMyProgress(): Promise<ProgressResponse> {
+export async function getMyProgress(): Promise<ChildProgressOverview> {
   const res = await http.get('/child/learning/progress')
+  return res.data
+}
+
+export async function getTopicsBatch(ids: string[]): Promise<TopicResponse[]> {
+  const res = await http.get(`/learning/topics/batch?ids=${ids.join(',')}`)
+  return res.data
+}
+
+export async function endSession(sessionId: string): Promise<SessionResponse> {
+  const res = await http.post(`/child/learning/sessions/${sessionId}/end`)
   return res.data
 }

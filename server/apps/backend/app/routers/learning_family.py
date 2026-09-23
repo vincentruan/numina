@@ -16,6 +16,7 @@ from apps.backend.app.schemas.learning import (
     ChildLearningOverview,
     ProgressResponse,
     ReviewItemResponse,
+    TopicResponse,
 )
 from apps.backend.app.services.learning import (
     assignment_service,
@@ -26,9 +27,9 @@ from apps.backend.app.services.notification.dispatcher import (
     notify_learning_assignment_created,
     notify_learning_rejected,
 )
-from packages.db.models.child_economy.coin_transaction import CoinTransaction
+from packages.db.models.learning.assignment import LearningAssignment
 from packages.db.models.learning.progress import LearningProgress
-from packages.db.models.learning.session import LearningAssessmentAttempt
+from packages.db.models.learning.session import LearningSession
 from packages.db.models.learning.topic import LearningTopic
 
 router = APIRouter(prefix="/family/learning", tags=["learning-family"])
@@ -45,27 +46,52 @@ def list_children(
         .filter(User.family_id == user.family_id, User.role == "child")
         .all()
     )
+    if not children:
+        return []
+
+    child_ids = [c.id for c in children]
+
+    # Batch progress overview: single GROUP BY query
+    overview_rows = (
+        db.query(
+            LearningProgress.child_id,
+            LearningProgress.mastery_level,
+            sa_func.count(LearningProgress.id).label("cnt"),
+        )
+        .filter(LearningProgress.child_id.in_(child_ids))
+        .group_by(LearningProgress.child_id, LearningProgress.mastery_level)
+        .all()
+    )
+    # Build per-child overview dicts
+    overviews: dict[int, dict[str, int]] = {cid: {} for cid in child_ids}
+    for row in overview_rows:
+        overviews[row.child_id][row.mastery_level] = row.cnt
+
+    # Batch study time: single GROUP BY query
+    study_rows = (
+        db.query(
+            LearningSession.child_id,
+            sa_func.coalesce(sa_func.sum(LearningSession.duration_seconds), 0),
+        )
+        .filter(LearningSession.child_id.in_(child_ids))
+        .group_by(LearningSession.child_id)
+        .all()
+    )
+    study_seconds = {row.child_id: int(row[1]) for row in study_rows}
+
     result = []
     for child in children:
-        overview = progress_service.get_child_progress_overview(db, child.id)
-        # Calculate total study minutes from sessions
-        from packages.db.models.learning.session import LearningSession
-
-        total_seconds = (
-            db.query(sa_func.coalesce(sa_func.sum(LearningSession.duration_seconds), 0))
-            .filter(LearningSession.child_id == child.id)
-            .scalar()
-        )
+        ov = overviews.get(child.id, {})
         result.append(
             ChildLearningOverview(
                 child_id=child.id,
                 child_name=child.display_name or child.username or "",
-                mastered_count=overview["mastered"],
-                learning_count=overview["learning"],
-                available_count=overview["available"],
-                locked_count=overview["locked"],
-                review_count=overview["review"],
-                total_study_minutes=int(total_seconds) // 60,
+                mastered_count=ov.get("mastered", 0),
+                learning_count=ov.get("learning", 0),
+                available_count=ov.get("available", 0),
+                locked_count=ov.get("locked", 0),
+                review_count=ov.get("review", 0),
+                total_study_minutes=study_seconds.get(child.id, 0) // 60,
             )
         )
     return result
@@ -117,12 +143,34 @@ def get_child_progress(
     )
 
 
+@router.get("/topics/{topic_id}", response_model=TopicResponse)
+def get_topic_detail(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get topic detail (parent view — no per-child progress embedded)."""
+    topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+    if not topic:
+        raise AppError(ErrorCode.LEARNING_TOPIC_NOT_FOUND)
+    return topic
+
+
 @router.post("/assignments", response_model=AssignmentResponse, status_code=201)
 def create_assignment(
     req: AssignmentCreate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
+    # Verify child belongs to this family
+    child = (
+        db.query(User)
+        .filter(User.id == req.child_id, User.family_id == user.family_id, User.role == "child")
+        .first()
+    )
+    if not child:
+        raise AppError(ErrorCode.NOT_FOUND)
+
     assignment = assignment_service.create_assignment(db, user, req)
     # Fire notification — child name resolved from DB
     child = db.query(User).filter(User.id == req.child_id).first()
@@ -163,7 +211,6 @@ def list_assignments(
     ]
     if not child_ids:
         return []
-    from packages.db.models.learning.assignment import LearningAssignment
 
     q = db.query(LearningAssignment).filter(LearningAssignment.child_id.in_(child_ids))
     if status:
@@ -178,24 +225,56 @@ def review_queue(
 ):
     """Get review queue — all progress items awaiting parent review."""
     progress_items = assignment_service.get_review_queue(db, user.family_id)
+    if not progress_items:
+        return []
+
+    # Batch-fetch child names and topic info to avoid N+1 queries
+    child_ids = {p.child_id for p in progress_items}
+    topic_ids = {p.topic_id for p in progress_items}
+
+    children = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(child_ids)).all()
+    }
+    topics = {
+        t.id: t
+        for t in db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+    }
+
+    # Aggregate study duration per (child_id, topic_id) from sessions
+    session_rows = (
+        db.query(
+            LearningSession.child_id,
+            LearningSession.topic_id,
+            sa_func.coalesce(sa_func.sum(LearningSession.duration_seconds), 0),
+        )
+        .filter(
+            LearningSession.child_id.in_(list(child_ids)),
+            LearningSession.topic_id.in_(list(topic_ids)),
+        )
+        .group_by(LearningSession.child_id, LearningSession.topic_id)
+        .all()
+    )
+    duration_map = {
+        (r.child_id, r.topic_id): int(r[2]) for r in session_rows
+    }
+
     result = []
     for p in progress_items:
-        # Fetch child name
-        child = db.query(User).filter(User.id == p.child_id).first()
-        # Fetch topic info
-        topic = db.query(LearningTopic).filter(LearningTopic.id == p.topic_id).first()
+        child = children.get(p.child_id)
+        topic = topics.get(p.topic_id)
         result.append(
             ReviewItemResponse(
                 progress_id=p.id,
                 child_id=p.child_id,
                 child_name=child.display_name if child else "",
                 topic_id=p.topic_id,
-                topic_name=topic.name_zh or topic.name or "" if topic else "",
-                topic_description=topic.description_zh or topic.description or "" if topic else "",
+                topic_name=(topic.name_zh or topic.name or "") if topic else "",
+                topic_description=(topic.description_zh or topic.description or "") if topic else "",
                 evidence=topic.evidence if topic else [],
                 evidence_zh=topic.evidence_zh if topic else None,
                 attempts=p.attempts,
-                study_duration_seconds=0,  # TODO: aggregate from sessions
+                study_duration_seconds=duration_map.get((p.child_id, p.topic_id), 0),
                 submitted_at=p.updated_at,
             )
         )
@@ -209,7 +288,6 @@ def approve_review(
     user: User = Depends(require_adult),
 ):
     """Approve mastery — atomic CAS: parent_review -> mastered."""
-    # Verify child belongs to family
     progress = db.query(LearningProgress).filter(LearningProgress.id == progress_id).first()
     if not progress:
         raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
@@ -222,51 +300,12 @@ def approve_review(
     if not child:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    # Atomic CAS: only transition if currently in parent_review
-    result = db.execute(
-        LearningProgress.__table__.update()
-        .where(
-            LearningProgress.id == progress_id,
-            LearningProgress.mastery_level == "parent_review",
-        )
-        .values(mastery_level="mastered", completed_via="parent_approval")
-    )
-    if result.rowcount == 0:
-        raise AppError(ErrorCode.LEARNING_INVALID_STATE_TRANSITION)
-
-    # Refresh to get updated state
-    db.refresh(progress)
-
-    # Create coin reward transaction
-    REWARD_COINS = 10
-    txn = CoinTransaction(
-        family_id=user.family_id,
-        child_user_id=progress.child_id,
-        amount=REWARD_COINS,
-        transaction_type="learning_earn",
-        narrative="掌握知识点奖励",
-        narrative_emoji="🌟",
-    )
-    db.add(txn)
-
-    # Create assessment attempt record
-    attempt = LearningAssessmentAttempt(
-        child_id=progress.child_id,
-        topic_id=progress.topic_id,
-        assessment_type="parent_approval",
-        score=progress.mastery_score or 1.0,
-        passed=True,
-    )
-    db.add(attempt)
-    db.flush()
-
-    # Link coin transaction to attempt for idempotency
-    txn.ref_id = attempt.id
+    progress = progress_service.approve_parent_review(db, progress, user.family_id)
 
     # Fire notification — child approved
     child_name = child.display_name or child.username or ""
     topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
-    topic_name = topic.name_zh or topic.name or "" if topic else ""
+    topic_name = (topic.name_zh or topic.name or "") if topic else ""
     with contextlib.suppress(Exception):
         notify_learning_approved(db, user.family_id, child_name, topic_name)
 
@@ -292,14 +331,12 @@ def reject_review(
     if not child:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    progress_service._validate_transition(progress.mastery_level, "learning")
-    progress.mastery_level = "learning"
-    db.flush()
+    progress_service.transition_to_learning(db, progress)
 
     # Fire notification — child rejected, needs more work
     child_name = child.display_name or child.username or ""
     topic = db.query(LearningTopic).filter(LearningTopic.id == progress.topic_id).first()
-    topic_name = topic.name_zh or topic.name or "" if topic else ""
+    topic_name = (topic.name_zh or topic.name or "") if topic else ""
     with contextlib.suppress(Exception):
         notify_learning_rejected(db, user.family_id, child_name, topic_name)
 

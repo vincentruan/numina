@@ -89,11 +89,13 @@ defineOptions({ name: 'LearningProgress' })
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { getMyLearningMap, getTopicDetail, type ProgressResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
 const { t, locale } = useI18n()
+const { topicDisplayName } = useLocalizedTopic()
 const { increment, decrement } = usePageLoading()
 
 const loading = ref(true)
@@ -116,7 +118,11 @@ const availableCount = computed(() =>
 )
 
 const reviewCount = computed(() =>
-  progressList.value.filter((p) => p.mastery_level === 'review').length,
+  progressList.value.filter((p) =>
+    p.mastery_level === 'mastered' &&
+    p.next_review_at &&
+    new Date(p.next_review_at) <= new Date()
+  ).length,
 )
 
 const totalStudyMinutes = computed(() => {
@@ -139,8 +145,7 @@ const recentActivity = computed(() => {
 function getTopicName(topicId: string): string {
   const topic = topicMap.value.get(topicId)
   if (!topic) return topicId
-  if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
-  return topic.name || topic.topic_key
+  return topicDisplayName(topic)
 }
 
 function formatDate(dateStr: string): string {

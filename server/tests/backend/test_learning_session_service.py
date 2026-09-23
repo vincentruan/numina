@@ -147,9 +147,18 @@ def test_start_assessment_session_not_found(db, child_user):
 
 
 def test_start_assessment_progress_not_found(db, child_user, topic):
-    """Start assessment with no progress record raises error."""
-    req = SessionCreate(topic_id=topic.id)
-    session = create_session(db, child_user["id"], req)
+    """Start assessment with no progress record raises error.
+
+    Note: create_session now auto-creates progress via get_or_create_progress,
+    so we test start_assessment directly with a manually-created session (no progress).
+    """
+    session = LearningSession(
+        child_id=child_user["id"],
+        topic_id=topic.id,
+        session_type="tutorial",
+    )
+    db.add(session)
+    db.flush()
     # No progress record exists for this child+topic
     with pytest.raises(AppError) as exc_info:
         start_assessment(db, session.id, child_user["id"])
@@ -158,17 +167,21 @@ def test_start_assessment_progress_not_found(db, child_user, topic):
 
 def test_start_assessment_invalid_transition(db, child_user, topic):
     """Start assessment when progress is not 'learning' raises error."""
-    # Create progress in 'available' state (not 'learning')
+    # Create progress in 'locked' state — create_session would reject this,
+    # so we create the session directly to test start_assessment's validation.
     p = LearningProgress(
         child_id=child_user["id"],
         topic_id=topic.id,
-        mastery_level="available",
+        mastery_level="locked",
     )
     db.add(p)
+    session = LearningSession(
+        child_id=child_user["id"],
+        topic_id=topic.id,
+        session_type="tutorial",
+    )
+    db.add(session)
     db.flush()
-
-    req = SessionCreate(topic_id=topic.id)
-    session = create_session(db, child_user["id"], req)
 
     with pytest.raises(AppError) as exc_info:
         start_assessment(db, session.id, child_user["id"])

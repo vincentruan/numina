@@ -61,8 +61,9 @@ defineOptions({ name: 'LearningMap' })
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { getMyLearningMap, getTopicDetail, type ProgressResponse, type TopicResponse } from '@/api/learning'
+import { getMyLearningMap, getTopicsBatch, type ProgressResponse, type TopicResponse } from '@/api/learning'
 import type { ProgressWithTopic } from '@/api/learning'
 import SubjectTabs from '@/components/learning/SubjectTabs.vue'
 import type { SubjectTab } from '@/components/learning/SubjectTabs.vue'
@@ -72,6 +73,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { noRecordsSvg } from '@numina/assets/empty-states'
 
 const { t, locale } = useI18n()
+const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
 
@@ -123,16 +125,6 @@ const recommended = computed(() => {
   return candidates[0] || mapItems.value[0] || null
 })
 
-function topicDisplayName(topic: TopicResponse): string {
-  if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
-  return topic.name || topic.topic_key
-}
-
-function topicDescription(topic: TopicResponse): string {
-  if (locale.value.startsWith('zh') && topic.description_zh) return topic.description_zh
-  return topic.description
-}
-
 function onTopicClick(topicId: string) {
   router.push(`/learning/${topicId}`)
 }
@@ -145,11 +137,11 @@ async function load() {
     const progress = await getMyLearningMap()
     progressList.value = progress
 
-    // Fetch topic details for each unique topic_id
+    // Fetch topic details for each unique topic_id (batch)
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
-    const topicDetails = await Promise.all(
-      uniqueTopicIds.map((id) => getTopicDetail(id)),
-    )
+    const topicDetails = uniqueTopicIds.length > 0
+      ? await getTopicsBatch(uniqueTopicIds)
+      : []
     const newMap = new Map<string, TopicResponse>()
     for (const topic of topicDetails) {
       newMap.set(topic.id, topic)

@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.user import User
 from apps.backend.app.schemas.learning import AssignmentCreate
 from apps.backend.app.services.learning import progress_service
 from packages.db.models.learning.assignment import LearningAssignment
@@ -84,7 +85,7 @@ def submit_for_review(
         raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
 
     # Transition to parent_review
-    progress_service._validate_transition(progress.mastery_level, "parent_review")
+    progress_service.validate_transition(progress.mastery_level, "parent_review")
     progress.mastery_level = "parent_review"
     assignment.status = "submitted"
     db.flush()
@@ -93,12 +94,11 @@ def submit_for_review(
 
 def get_review_queue(db: Session, family_id: int) -> list[LearningProgress]:
     """Get all progress records in parent_review state for a family."""
-    # Get all child IDs in this family
-    from apps.backend.app.models.user import User
-
     child_ids = [
         r.id
-        for r in db.query(User.id).filter(User.family_id == family_id).all()
+        for r in db.query(User.id).filter(
+            User.family_id == family_id, User.role == "child"
+        ).all()
     ]
     if not child_ids:
         return []

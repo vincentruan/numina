@@ -1,5 +1,6 @@
 """Session service — manage learning sessions and assessments."""
 
+import json
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -17,6 +18,15 @@ def create_session(
     req: SessionCreate,
 ) -> LearningSession:
     """Create a new learning session for a child."""
+    # Validate topic exists and child can learn it
+    progress = progress_service.get_or_create_progress(db, child_id, req.topic_id)
+    if not progress_service.can_start_learning(progress):
+        raise AppError(ErrorCode.LEARNING_TOPIC_LOCKED)
+
+    # Auto-transition available -> learning
+    if progress.mastery_level == "available":
+        progress_service.transition_to_learning(db, progress)
+
     session = LearningSession(
         child_id=child_id,
         topic_id=req.topic_id,
@@ -35,8 +45,6 @@ def end_session(
     ai_evaluation: dict | None = None,
 ) -> LearningSession:
     """End a learning session, optionally recording a score and AI evaluation."""
-    import json
-
     session = db.query(LearningSession).filter(LearningSession.id == session_id).first()
     if not session:
         raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
@@ -88,7 +96,7 @@ def start_assessment(
         raise AppError(ErrorCode.LEARNING_PROGRESS_NOT_FOUND)
 
     # Transition learning -> assessing
-    progress_service._validate_transition(progress.mastery_level, "assessing")
+    progress_service.validate_transition(progress.mastery_level, "assessing")
     progress.mastery_level = "assessing"
     db.flush()
     return progress

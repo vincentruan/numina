@@ -9,7 +9,7 @@
         @click="$emit('update:modelValue', tab.subject)"
       >
         <span class="subject-tab__icon">{{ subjectIcon(tab.subject) }}</span>
-        <span class="subject-tab__label">{{ tab.subject }}</span>
+        <span class="subject-tab__label">{{ subjectLabel(tab.subject) }}</span>
         <span v-if="tab.count > 0" class="subject-tab__badge">{{ tab.count }}</span>
       </button>
     </div>
@@ -18,6 +18,8 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'SubjectTabs' })
+
+import { useI18n } from 'vue-i18n'
 
 export interface SubjectTab {
   subject: string
@@ -33,12 +35,27 @@ defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+const { t } = useI18n()
+
+function subjectLabel(subject: string): string {
+  const key = `learning.subject.${subject}`
+  const translated = t(key)
+  // If i18n returns the key itself, fall back to capitalized subject
+  return translated === key ? subject.charAt(0).toUpperCase() + subject.slice(1) : translated
+}
+
 function subjectIcon(subject: string): string {
   const icons: Record<string, string> = {
+    mathematics: '🔢',
     math: '🔢',
     science: '🔬',
+    english: '📖',
     language: '📖',
     history: '🏛️',
+    personal_social: '🤝',
+    life_skills: '🌱',
+    computing: '💻',
+    learning_to_learn: '🧠',
     arts: '🎨',
     music: '🎵',
     coding: '💻',

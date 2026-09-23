@@ -58,11 +58,12 @@ defineOptions({ name: 'ChildLearningMap' })
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getChildMap,
-  getTopicDetail,
+  getTopicsBatch,
   type ProgressResponse,
   type TopicResponse,
   type ProgressWithTopic,
@@ -71,6 +72,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t, locale } = useI18n()
+const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const route = useRoute()
 const { increment, decrement } = usePageLoading()
 
@@ -127,16 +129,6 @@ const domainGroups = computed(() => {
     .sort((a, b) => a.domain.localeCompare(b.domain))
 })
 
-function topicDisplayName(topic: TopicResponse): string {
-  if (locale.value.startsWith('zh') && topic.name_zh) return topic.name_zh
-  return topic.name || topic.topic_key
-}
-
-function topicDescription(topic: TopicResponse): string {
-  if (locale.value.startsWith('zh') && topic.description_zh) return topic.description_zh
-  return topic.description
-}
-
 function masteryTagType(level: string): 'primary' | 'success' | 'warning' | 'danger' | 'default' {
   const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'default'> = {
     mastered: 'success',
@@ -165,11 +157,11 @@ async function load() {
     const progress = await getChildMap(childId)
     progressList.value = progress
 
-    // Fetch topic details for each unique topic_id
+    // Fetch topic details in batch (single request instead of N+1)
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
-    const topicDetails = await Promise.all(
-      uniqueTopicIds.map((id) => getTopicDetail(id)),
-    )
+    const topicDetails = uniqueTopicIds.length > 0
+      ? await getTopicsBatch(uniqueTopicIds)
+      : []
     const newMap = new Map<string, TopicResponse>()
     for (const topic of topicDetails) {
       newMap.set(topic.id, topic)

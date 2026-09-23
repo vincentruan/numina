@@ -21,7 +21,7 @@ class LearningSession(Base):
         BigInteger, ForeignKey("users.id"), nullable=False, index=True
     )
     topic_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("learning_topics.id"), nullable=False
+        BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True
     )
     thread_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     session_type: Mapped[str] = mapped_column(

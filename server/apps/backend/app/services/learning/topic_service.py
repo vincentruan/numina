@@ -16,6 +16,8 @@ def list_topics(
     domain: str | None = None,
     age_group: str | None = None,
     deprecated: bool = False,
+    search: str | None = None,
+    limit: int | None = None,
 ) -> list[LearningTopic]:
     """List topics with optional filters, ordered by subject/domain/centrality."""
     q = db.query(LearningTopic).filter(LearningTopic.deprecated == deprecated)
@@ -25,12 +27,30 @@ def list_topics(
         q = q.filter(LearningTopic.domain == domain)
     if age_group:
         q = q.filter(LearningTopic.age_group == age_group)
-    return q.order_by(LearningTopic.subject, LearningTopic.domain, LearningTopic.centrality.desc().nullslast()).all()
+    if search:
+        pattern = f"%{search}%"
+        q = q.filter(
+            (LearningTopic.name.ilike(pattern))
+            | (LearningTopic.name_zh.ilike(pattern))
+            | (LearningTopic.domain.ilike(pattern))
+        )
+    q = q.order_by(LearningTopic.subject, LearningTopic.domain, LearningTopic.centrality.desc().nullslast())
+    if limit:
+        q = q.limit(limit)
+    return q.all()
 
 
 def get_topic_by_id(db: Session, topic_id: int) -> LearningTopic | None:
     """Get a single topic by ID, or None if not found."""
     return db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+
+
+def list_topics_by_ids(db: Session, topic_ids: list[int]) -> list[LearningTopic]:
+    """Fetch multiple topics by ID list, preserving input order."""
+    topics = db.query(LearningTopic).filter(LearningTopic.id.in_(topic_ids)).all()
+    # Preserve input order
+    by_id = {t.id: t for t in topics}
+    return [by_id[tid] for tid in topic_ids if tid in by_id]
 
 
 def get_topic_graph(db: Session, topic_id: int) -> dict | None:

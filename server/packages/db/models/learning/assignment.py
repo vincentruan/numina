@@ -20,7 +20,7 @@ class LearningAssignment(Base):
         BigInteger, ForeignKey("users.id"), nullable=False, index=True
     )
     topic_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("learning_topics.id"), nullable=False
+        BigInteger, ForeignKey("learning_topics.id"), nullable=False, index=True
     )
     path_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # FK added in Phase 2
     created_by: Mapped[int] = mapped_column(

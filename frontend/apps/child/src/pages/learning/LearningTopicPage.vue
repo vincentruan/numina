@@ -72,19 +72,23 @@ defineOptions({ name: 'LearningTopic' })
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getTopicDetail,
   getMyLearningMap,
+  getMyAssignments,
   createSession,
-
+  submitAssignment,
   type TopicResponse,
   type ProgressResponse,
+  type AssignmentResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
 const { t, locale } = useI18n()
+const { topicDisplayName, topicDescription } = useLocalizedTopic()
 const route = useRoute()
 const router = useRouter()
 const { increment, decrement } = usePageLoading()
@@ -101,19 +105,17 @@ const allProgress = ref<ProgressResponse[]>([])
 
 const displayName = computed(() => {
   if (!topic.value) return ''
-  if (locale.value.startsWith('zh') && topic.value.name_zh) return topic.value.name_zh
-  return topic.value.name || topic.value.topic_key
+  return topicDisplayName(topic.value)
 })
 
 const displayDescription = computed(() => {
   if (!topic.value) return ''
-  if (locale.value.startsWith('zh') && topic.value.description_zh) return topic.value.description_zh
-  return topic.value.description
+  return topicDescription(topic.value)
 })
 
 const displayEvidence = computed(() => {
   if (!topic.value) return []
-  if (locale.value.startsWith('zh') && topic.value.evidence_zh) return topic.value.evidence_zh
+  if (locale.value.startsWith('zh') && topic.value.evidence_zh) return topic.value.evidence_zh as string[]
   return topic.value.evidence
 })
 
@@ -157,14 +159,21 @@ async function onStartLearning() {
 
 async function onSubmitAssignment() {
   if (submitting.value) return
-
-  // Find a pending assignment for this topic from progress list
-  // For now, show a toast since assignment submission requires an assignment_id
-  // which comes from the assignments endpoint
   submitting.value = true
   try {
-    // TODO: Fetch assignments for this topic and submit the relevant one
+    // Find a pending assignment for this topic
+    const assignments = await getMyAssignments()
+    const pending = assignments.find(
+      (a: AssignmentResponse) => a.topic_id === topicId.value && a.status === 'pending',
+    )
+    if (!pending) {
+      showFailToast(t('learning.noPendingAssignment'))
+      return
+    }
+    await submitAssignment(pending.id)
     showSuccessToast(t('learning.submitSuccess'))
+    // Reload progress
+    await load()
   } catch {
     showFailToast(t('toast.submitFailed'))
   } finally {

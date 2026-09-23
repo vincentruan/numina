@@ -133,7 +133,7 @@ def test_full_learning_flow(
     assert len(child_assignments) >= 1
     assert any(int(a["id"]) == assignment_id for a in child_assignments)
 
-    # 3. Child creates session
+    # 3. Child creates session (auto-transitions available -> learning)
     resp = client.post(
         "/api/v1/child/learning/sessions",
         headers=child_token_headers,
@@ -147,20 +147,16 @@ def test_full_learning_flow(
     session_data = resp.json()["data"]
     session_id = int(session_data["id"])
 
-    # 4. Child starts assessment (progress: available -> learning -> assessing)
-    # First transition to 'learning' via progress service (session doesn't do it automatically)
+    # Verify progress auto-transitioned to 'learning'
     progress = (
         db.query(LearningProgress)
         .filter_by(child_id=child_id, topic_id=topic.id)
         .first()
     )
     assert progress is not None
-    # The progress starts as 'available'; we need 'learning' before 'assessing'
-    from apps.backend.app.services.learning.progress_service import (
-        transition_to_learning,
-    )
-    transition_to_learning(db, progress)
+    assert progress.mastery_level == "learning"
 
+    # 4. Child starts assessment (learning -> assessing)
     resp = client.post(
         f"/api/v1/child/learning/sessions/{session_id}/start-assessment",
         headers=child_token_headers,
@@ -169,14 +165,19 @@ def test_full_learning_flow(
     progress_data = resp.json()["data"]
     assert progress_data["mastery_level"] == "assessing"
 
-    # 5. Child submits for review (assessing -> parent_review via assignment submit)
-    # Note: submit_for_review transitions learning -> parent_review, but we're in 'assessing'.
-    # The valid transition from 'assessing' is 'mastered' or 'review'.
-    # Let's transition assessing -> mastered first via the progress, then test submit.
-    # Actually, let's test the realistic flow: child studies (learning) then submits directly.
-    # Reset: let's create a fresh scenario where child goes learning -> parent_review
-
-    # For a cleaner test, let's set progress back to 'learning' for the submit step
+    # 5. Child submits for review — assessing -> review (valid transition),
+    # then from 'review' we need to go back to 'learning' to test submit.
+    # Realistic flow: use a fresh progress where child goes learning -> parent_review.
+    # Reset progress to 'learning' via valid transition: assessing -> review -> learning
+    from apps.backend.app.services.learning.progress_service import (
+        validate_transition,
+    )
+    # assessing -> review is valid
+    validate_transition(progress.mastery_level, "review")
+    progress.mastery_level = "review"
+    db.flush()
+    # review -> learning is valid
+    validate_transition(progress.mastery_level, "learning")
     progress.mastery_level = "learning"
     db.flush()
 
@@ -277,7 +278,7 @@ def test_child_cannot_start_locked_topic(
     assert progress is not None
     assert progress.mastery_level == "locked"
 
-    # Child tries to create a session for the locked topic
+    # Child tries to create a session for the locked topic — should be rejected
     resp = client.post(
         "/api/v1/child/learning/sessions",
         headers=child_headers,
@@ -286,16 +287,9 @@ def test_child_cannot_start_locked_topic(
             "session_type": "study",
         },
     )
-    assert resp.status_code == 201  # session creation succeeds
-    # But start_assessment should fail because progress is 'locked'
-    session_id = int(resp.json()["data"]["id"])
-    resp = client.post(
-        f"/api/v1/child/learning/sessions/{session_id}/start-assessment",
-        headers=child_headers,
-    )
-    assert resp.status_code == 409
+    assert resp.status_code == 409  # LEARNING_TOPIC_LOCKED
     error_data = resp.json()
-    assert "invalid_state_transition" in error_data.get("code", "")
+    assert "learning_topic_locked" in error_data.get("code", "")
 
 
 def test_parent_cannot_approve_non_pending_review(
