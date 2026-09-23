@@ -55,6 +55,7 @@ RESERVED_NAMES = [
     "wish-advice",
     "dashboard-narrative",
     "literacy-weekly-report",
+    "learning-tutor",
     # DeerFlow public skills introduced as builtin
     "deep-research",
     "chart-visualization",
@@ -63,6 +64,8 @@ RESERVED_NAMES = [
     "finance-digest",
     "financial-deep-analysis",
     "surprise-me",
+    # Learning OS
+    "learning-tutor",
 ]
 
 # Internal-only skills excluded from user-facing catalog and creation.

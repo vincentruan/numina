@@ -132,5 +132,14 @@
   "SETTLEMENT_REVERSE_EXPIRED": "Settlement reversal exceeded 24-hour window",
   "SETTLEMENT_HAS_COMPLETED": "Cannot recalculate while completed settlements exist",
   "CO_ORGANIZER_LIMIT": "Maximum 3 co-organizers allowed",
-  "CO_ORGANIZER_NOT_ALLOWED": "Only the trip organizer can manage co-organizers"
+  "CO_ORGANIZER_NOT_ALLOWED": "Only the trip organizer can manage co-organizers",
+  "LEARNING_TOPIC_NOT_FOUND": "Topic not found",
+  "LEARNING_PROGRESS_NOT_FOUND": "Learning progress not found",
+  "LEARNING_ASSIGNMENT_NOT_FOUND": "Assignment not found",
+  "LEARNING_SESSION_NOT_FOUND": "Learning session not found",
+  "LEARNING_TOPIC_LOCKED": "Topic is locked",
+  "LEARNING_PREREQUISITE_NOT_MET": "Prerequisite topic not yet mastered",
+  "LEARNING_ASSESSMENT_NOT_AVAILABLE": "Assessment is not available",
+  "LEARNING_INVALID_STATE_TRANSITION": "Invalid state transition",
+  "LEARNING_SESSION_ALREADY_ENDED": "Learning session has already ended"
 }

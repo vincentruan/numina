@@ -33,4 +33,9 @@ class ReminderSummary(BaseModel):
     chore_completed: int = 0
     treasure_redeemed: int = 0
     wish_redeemed: int = 0
+    learning_assignment_created: int = 0
+    learning_submitted_for_review: int = 0
+    learning_approved: int = 0
+    learning_rejected: int = 0
+    learning_streak_3_failures: int = 0
     total: int = 0

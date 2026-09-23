@@ -87,6 +87,30 @@ const router = createRouter({
           component: () => import('@/pages/ChildBadgesPage.vue'),
         },
         {
+          path: 'learning',
+          name: 'LearningMap',
+          component: () => import('@/pages/learning/LearningMapPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
+          path: 'learning/topic/:id',
+          name: 'LearningTopic',
+          component: () => import('@/pages/learning/LearningTopicPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
+          path: 'learning/session/:id',
+          name: 'LearningSession',
+          component: () => import('@/pages/learning/LearningSessionPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
+          path: 'learning/progress',
+          name: 'LearningProgress',
+          component: () => import('@/pages/learning/LearningProgressPage.vue'),
+          meta: { hasSkeleton: true },
+        },
+        {
           path: 'manifesto/sign',
           name: 'ManifestoSigning',
           component: () => import('@/pages/ManifestoSigningPage.vue'),

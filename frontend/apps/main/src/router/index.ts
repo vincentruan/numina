@@ -454,6 +454,27 @@ const router = createRouter({
           component: () => import('@/pages/LiteracyReportPage.vue')
         },
         {
+          path: 'baby/learning',
+          name: 'BabyLearning',
+          component: () => import('@/pages/BabyLearningPage.vue'),
+          meta: { hasSkeleton: true }
+        },
+        {
+          path: 'baby/learning/assign',
+          name: 'LearningAssign',
+          component: () => import('@/pages/LearningAssignPage.vue')
+        },
+        {
+          path: 'baby/learning/reviews',
+          name: 'LearningReviews',
+          component: () => import('@/pages/LearningReviewsPage.vue')
+        },
+        {
+          path: 'baby/learning/:childId/map',
+          name: 'ChildLearningMap',
+          component: () => import('@/pages/ChildLearningMapPage.vue')
+        },
+        {
           path: 'manifesto/template-select',
           name: 'ManifestoTemplateSelect',
           component: () => import('@/pages/ManifestoTemplateSelectPage.vue'),

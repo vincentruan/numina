@@ -85,6 +85,11 @@ def get_reminder_summary(db: Session, family_id: int) -> ReminderSummary:
         chore_completed=counts.get("chore_completed", 0),
         treasure_redeemed=counts.get("treasure_redeemed", 0),
         wish_redeemed=counts.get("wish_redeemed", 0),
+        learning_assignment_created=counts.get("learning_assignment_created", 0),
+        learning_submitted_for_review=counts.get("learning_submitted_for_review", 0),
+        learning_approved=counts.get("learning_approved", 0),
+        learning_rejected=counts.get("learning_rejected", 0),
+        learning_streak_3_failures=counts.get("learning_streak_3_failures", 0),
         total=sum(counts.values()),
     )
 
@@ -186,6 +191,98 @@ def notify_wish_redeemed(
             "body": f"{child_name} 的心愿「{wish_title}」已兑现！",
             "severity": "info",
             "template_vars": {"child_name": child_name, "wish_title": wish_title},
+        },
+    )
+
+
+def notify_learning_assignment_created(
+    db: Session,
+    family_id: int,
+    child_name: str,
+    topic_name: str,
+) -> None:
+    """Notify that a parent assigned a learning topic to a child."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "learning_assignment_created",
+            "title": f"新学习任务：{topic_name}",
+            "body": f"家长为 {child_name} 布置了学习任务「{topic_name}」",
+            "severity": "info",
+            "template_vars": {
+                "child_name": child_name,
+                "topic_name": topic_name,
+            },
+        },
+    )
+
+
+def notify_learning_submitted_for_review(
+    db: Session,
+    family_id: int,
+    child_name: str,
+    topic_name: str,
+) -> None:
+    """Notify parent that child submitted work for review."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "learning_submitted_for_review",
+            "title": f"待审核：{topic_name}",
+            "body": f"{child_name} 提交了「{topic_name}」的学习成果，请审核。",
+            "severity": "info",
+            "template_vars": {
+                "child_name": child_name,
+                "topic_name": topic_name,
+            },
+        },
+    )
+
+
+def notify_learning_approved(
+    db: Session,
+    family_id: int,
+    child_name: str,
+    topic_name: str,
+) -> None:
+    """Notify child that parent approved their learning."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "learning_approved",
+            "title": f"学习通过：{topic_name}",
+            "body": f"家长已批准 {child_name} 的「{topic_name}」学习！",
+            "severity": "info",
+            "template_vars": {
+                "child_name": child_name,
+                "topic_name": topic_name,
+            },
+        },
+    )
+
+
+def notify_learning_rejected(
+    db: Session,
+    family_id: int,
+    child_name: str,
+    topic_name: str,
+) -> None:
+    """Notify child that parent rejected their learning — needs more work."""
+    ensure_reminder(
+        db,
+        {
+            "family_id": family_id,
+            "reminder_type": "learning_rejected",
+            "title": f"学习需改进：{topic_name}",
+            "body": f"{child_name} 的「{topic_name}」学习需要继续努力，加油！",
+            "severity": "warning",
+            "template_vars": {
+                "child_name": child_name,
+                "topic_name": topic_name,
+            },
         },
     )
 

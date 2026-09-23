@@ -2,22 +2,22 @@
 
 from apps.backend.app.services.notification.registry import (
     NOTIFICATION_CATEGORIES,
-    get_categorized_events,
     VALID_REMINDER_TYPES,
+    get_categorized_events,
 )
 
 
-def test_get_categorized_events_returns_four_categories():
+def test_get_categorized_events_returns_five_categories():
     result = get_categorized_events()
-    assert len(result) == 4
+    assert len(result) == 5
     categories = [c["category"] for c in result]
-    assert categories == ["asset", "ai_task", "children", "wish"]
+    assert categories == ["asset", "ai_task", "children", "wish", "learning"]
 
 
-def test_get_categorized_events_has_ten_total_events():
+def test_get_categorized_events_has_fifteen_total_events():
     result = get_categorized_events()
     total = sum(len(c["events"]) for c in result)
-    assert total == 10
+    assert total == 15
 
 
 def test_get_categorized_events_structure():
@@ -38,7 +38,7 @@ def test_valid_reminder_types_matches_registry():
     registry_types = set()
     for cat in NOTIFICATION_CATEGORIES.values():
         registry_types.update(cat["events"].keys())
-    assert VALID_REMINDER_TYPES == registry_types
+    assert registry_types == VALID_REMINDER_TYPES
 
 
 def test_each_event_has_required_fields():

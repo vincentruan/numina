@@ -7,13 +7,13 @@ and that unauthenticated callers are rejected.
 from fastapi.testclient import TestClient
 
 
-def test_get_events_returns_four_categories(client: TestClient, auth_headers):
+def test_get_events_returns_five_categories(client: TestClient, auth_headers):
     resp = client.get("/api/v1/notification-channels/events", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert len(data) == 4
+    assert len(data) == 5
     categories = [c["category"] for c in data]
-    assert categories == ["asset", "ai_task", "children", "wish"]
+    assert categories == ["asset", "ai_task", "children", "wish", "learning"]
 
 
 def test_get_events_asset_category_has_three_events(client: TestClient, auth_headers):

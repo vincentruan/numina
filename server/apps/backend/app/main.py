@@ -140,10 +140,13 @@ from apps.backend.app.routers import expenses as expenses_router
 from apps.backend.app.routers import export as export_router
 from apps.backend.app.routers import family_config as family_config_router
 from apps.backend.app.routers import files as files_router
-from apps.backend.app.routers import itinerary as itinerary_router
-from apps.backend.app.routers import itinerary_types as itinerary_types_router
 from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
+from apps.backend.app.routers import itinerary as itinerary_router
+from apps.backend.app.routers import itinerary_types as itinerary_types_router
+from apps.backend.app.routers import learning as learning_router
+from apps.backend.app.routers import learning_child as learning_child_router
+from apps.backend.app.routers import learning_family as learning_family_router
 from apps.backend.app.routers import literacy_child as literacy_child_router
 from apps.backend.app.routers import literacy_parent as literacy_parent_router
 from apps.backend.app.routers import manifesto as manifesto_router
@@ -619,6 +622,9 @@ app.include_router(split_groups_router.router, prefix="/api/v1")
 app.include_router(itinerary_router.router, prefix="/api/v1")
 app.include_router(itinerary_types_router.router, prefix="/api/v1")
 app.include_router(shared_router.router, prefix="/api/v1")
+app.include_router(learning_router.router, prefix="/api/v1")
+app.include_router(learning_family_router.router, prefix="/api/v1")
+app.include_router(learning_child_router.router, prefix="/api/v1")
 
 # Serve uploaded files — authenticated endpoint with tenant isolation
 app.include_router(uploads_serve_router.router)

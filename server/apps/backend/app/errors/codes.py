@@ -192,6 +192,17 @@ class ErrorCode(enum.StrEnum):
     CO_ORGANIZER_LIMIT = "CO_ORGANIZER_LIMIT"
     CO_ORGANIZER_NOT_ALLOWED = "CO_ORGANIZER_NOT_ALLOWED"
 
+    # Learning OS errors
+    LEARNING_TOPIC_NOT_FOUND = "learning_topic_not_found"
+    LEARNING_PROGRESS_NOT_FOUND = "learning_progress_not_found"
+    LEARNING_ASSIGNMENT_NOT_FOUND = "learning_assignment_not_found"
+    LEARNING_SESSION_NOT_FOUND = "learning_session_not_found"
+    LEARNING_TOPIC_LOCKED = "learning_topic_locked"
+    LEARNING_PREREQUISITE_NOT_MET = "learning_prerequisite_not_met"
+    LEARNING_ASSESSMENT_NOT_AVAILABLE = "learning_assessment_not_available"
+    LEARNING_INVALID_STATE_TRANSITION = "learning_invalid_state_transition"
+    LEARNING_SESSION_ALREADY_ENDED = "learning_session_already_ended"
+
     # General
     VALIDATION_ERROR = "VALIDATION_ERROR"
     NOT_FOUND = "NOT_FOUND"
@@ -328,4 +339,13 @@ ERROR_META: dict[ErrorCode, int] = {
     ErrorCode.SETTLEMENT_HAS_COMPLETED: 409,
     ErrorCode.CO_ORGANIZER_LIMIT: 400,
     ErrorCode.CO_ORGANIZER_NOT_ALLOWED: 403,
+    ErrorCode.LEARNING_TOPIC_NOT_FOUND: 404,
+    ErrorCode.LEARNING_PROGRESS_NOT_FOUND: 404,
+    ErrorCode.LEARNING_ASSIGNMENT_NOT_FOUND: 404,
+    ErrorCode.LEARNING_SESSION_NOT_FOUND: 404,
+    ErrorCode.LEARNING_TOPIC_LOCKED: 409,
+    ErrorCode.LEARNING_PREREQUISITE_NOT_MET: 409,
+    ErrorCode.LEARNING_ASSESSMENT_NOT_AVAILABLE: 403,
+    ErrorCode.LEARNING_INVALID_STATE_TRANSITION: 409,
+    ErrorCode.LEARNING_SESSION_ALREADY_ENDED: 409,
 }
