@@ -152,6 +152,7 @@ describe('useTaskResume — resume() SSE path', () => {
     expect(mockSubscribeTaskStream).toHaveBeenCalledWith(
       'task-running',
       expect.objectContaining({ onEvent: expect.any(Function) }),
+      undefined,
     )
   })
 

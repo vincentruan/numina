@@ -1270,7 +1270,7 @@ Add `"learning_earn" -> "learning_assessment_attempt"` mapping.
 
 - [ ] **Step 3: Create badge seed script**
 
-Create all 27 badge definitions from spec Section 7.2 (8 subjects × 3 levels + 3 comprehensive).
+Create all 30 badge definitions from spec Section 7.2 (9 subjects × 3 levels + 3 comprehensive). The 9th subject is `learning_to_learn` (学习力), added during implementation as a meaningful pedagogical category.
 
 - [ ] **Step 4: Run seed**
 

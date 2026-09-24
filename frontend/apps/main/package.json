@@ -25,6 +25,7 @@
     "@numina/assets": "workspace:*",
     "@numina/auth": "workspace:*",
     "@numina/math": "workspace:*",
+    "@numina/shared": "workspace:*",
     "@types/nprogress": "^0.2.3",
     "@vant/icons": "^3.0.1",
     "@vant/touch-emulator": "^1.5.0",

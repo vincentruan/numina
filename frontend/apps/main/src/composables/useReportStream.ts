@@ -23,7 +23,7 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
 import { getAITask } from '@/api/ai'
-import { readSSEStream } from '@/utils/sseReader'
+import { readSSEStream } from '@numina/shared'
 
 /**
  * sessionStorage key for persisting step-progress state across page navigation.
@@ -69,7 +69,7 @@ export interface UseReportStreamReturn {
   // U6: SSE reconnection state
   runId: Ref<string | null>
   abort: (keepRunning?: boolean) => void
-  connect: (force?: boolean) => Promise<boolean>
+  connect: (force?: boolean, resume?: boolean) => Promise<boolean>
   reset: () => void
   /** Mark stream as active (reconnect to a running task). Sets status to
    *  'streaming' so the timeline is visible immediately while SSE replays
@@ -80,8 +80,13 @@ export interface UseReportStreamReturn {
   /**
    * P1-5 fix: ingest an external SSE event (from useTaskResume reconnect)
    * and route it through the same internal handlers as connect().
+   * Also captures event metadata (run_id, event_id) for reconnection.
    */
-  ingestEvent: (eventName: string, data: unknown) => void
+  ingestEvent: (eventName: string, data: unknown, eventId?: string) => void
+  /** P0 fix: mark stream as polling fallback (SSE failed, useTaskResume polling). */
+  markPollingFallback: () => void
+  /** P1-4: last received SSE event ID for reconnection. */
+  lastEventId: Ref<string | null>
 }
 
 export function useReportStream(): UseReportStreamReturn {
@@ -104,6 +109,8 @@ export function useReportStream(): UseReportStreamReturn {
 
   // U6: SSE reconnection state
   const runId = ref<string | null>(null)
+  // P1-4: Track last SSE event ID for gap-free reconnection
+  const lastEventId = ref<string | null>(null)
 
   let abortController: AbortController | null = null
   let cookieRefreshTimer: ReturnType<typeof setInterval> | null = null
@@ -222,6 +229,7 @@ export function useReportStream(): UseReportStreamReturn {
     step2Json.value = null
     // U6: Reset reconnection state
     runId.value = null
+    lastEventId.value = null
     // Clear persisted step state — a fresh generation is starting
     clearSavedState()
   }
@@ -243,18 +251,40 @@ export function useReportStream(): UseReportStreamReturn {
    *  Sets status to 'streaming' so the timeline is immediately visible while
    *  SSE replays buffered events from the bridge. Without this, the timeline
    *  stays hidden until the first SSE event arrives — which may be delayed by
-   *  the async fetch or never arrive if SSE falls back to polling. */
+   *  the async fetch or never arrive if SSE falls back to polling.
+   *
+   *  P0 fix: also clears step1Thinking because the SSE replay will rebuild it
+   *  from the beginning. Without clearing, the sessionStorage-restored value
+   *  would be double-counted (restored text + replay text).
+   */
   function markReconnecting(): void {
     if (status.value === 'idle') {
       status.value = 'streaming'
       progressMessage.value = t('aiHub.reportGenerating')
     }
+    // Clear accumulated thinking — SSE replay from Redis Stream will
+    // re-accumulate all AI message content from the start.
+    step1Thinking.value = ''
   }
 
-  async function doFetch(force: boolean, signal: AbortSignal): Promise<Response> {
-    const url = force
-      ? '/api/v1/ai/report/generate/events?force=true'
-      : '/api/v1/ai/report/generate/events'
+  /** P0 fix: called when useTaskResume switches from SSE to polling fallback.
+   *  Without this, useReportStream.status stays 'streaming' (from sessionStorage
+   *  restore) even though SSE is no longer delivering events. The timeline
+   *  appears frozen at the restored step state.
+   */
+  function markPollingFallback(): void {
+    if (status.value === 'streaming' || status.value === 'connecting') {
+      status.value = 'connecting'
+      progressMessage.value = t('aiHub.reportGenerating')
+    }
+  }
+
+  async function doFetch(force: boolean, signal: AbortSignal, resume = false): Promise<Response> {
+    let url = '/api/v1/ai/report/generate/events'
+    const params = new URLSearchParams()
+    if (force) params.set('force', 'true')
+    if (resume) params.set('resume', 'true')
+    if (params.toString()) url += `?${params.toString()}`
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
@@ -450,18 +480,18 @@ export function useReportStream(): UseReportStreamReturn {
     await pollTaskUntilComplete()
   }
 
-  async function connect(force = false): Promise<boolean> {
+  async function connect(force = false, resume = false): Promise<boolean> {
     if (status.value === 'streaming' || status.value === 'connecting') return false
     abortController = new AbortController()
     const signal = abortController.signal
 
     status.value = 'connecting'
-    progressMessage.value = t('wsErrors.connecting')
+    progressMessage.value = resume ? t('aiReport.resumingFromCheckpoint') : t('wsErrors.connecting')
     errorMessage.value = ''
 
     let res: Response
     try {
-      res = await doFetch(force, signal)
+      res = await doFetch(force, signal, resume)
     } catch (err) {
       status.value = 'error'
       errorMessage.value = err instanceof Error && err.message === '401'
@@ -559,9 +589,11 @@ export function useReportStream(): UseReportStreamReturn {
    * reconnect via subscribeTaskStream) and route it through the same
    * internal handlers as connect()'s SSE reader loop.
    */
-  function ingestEvent(eventName: string, data: unknown): void {
+  function ingestEvent(eventName: string, data: unknown, eventId?: string): void {
     if (status.value === 'completed' || status.value === 'error') return
     status.value = 'streaming'
+    // P1-4: track last event ID for reconnection
+    if (eventId) lastEventId.value = eventId
 
     const d = (data ?? {}) as Record<string, unknown>
 
@@ -608,10 +640,13 @@ export function useReportStream(): UseReportStreamReturn {
     step2Json,
     // U6: SSE reconnection state
     runId,
+    // P1-4: last event ID for reconnection
+    lastEventId,
     abort,
     connect,
     reset,
     markReconnecting,
+    markPollingFallback,
     pollTaskUntilComplete,
     startPolling,
     ingestEvent,

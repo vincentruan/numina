@@ -12,7 +12,7 @@
 import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { refreshTokenIfNeeded } from '@/api'
-import { readSSEStream } from '@/utils/sseReader'
+import { readSSEStream } from '@numina/shared'
 
 export type LiteracyStreamStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'error'
 

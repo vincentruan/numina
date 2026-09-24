@@ -1,5 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
-import { readSSEStream } from '@/utils/sseReader'
+import { readSSEStream } from '@numina/shared'
 import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse, EducationRewardSummary, LiabilityAllocationResponse } from '@/types'
 
 export interface ExpiringSoonItem {

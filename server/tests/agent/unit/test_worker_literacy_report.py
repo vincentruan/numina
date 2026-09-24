@@ -1,4 +1,5 @@
 """Test literacy-weekly-report worker dispatch branch."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -6,7 +7,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_worker_dispatches_literacy_weekly_report():
-    """worker.run_agent routes app='literacy-weekly-report' to the correct runner."""
+    """worker.run_agent routes app='literacy-weekly-report' to _run_simple_app."""
     from apps.agent.services.runtime.worker import run_agent
 
     mock_bridge = AsyncMock()
@@ -16,7 +17,7 @@ async def test_worker_dispatches_literacy_weekly_report():
     mock_record.run_id = "test-run-id"
 
     with patch(
-        "apps.agent.services.runtime.worker._run_literacy_weekly_report_agent",
+        "apps.agent.services.runtime.worker._run_simple_app",
         new_callable=AsyncMock,
     ) as mock_runner:
         await run_agent(
@@ -30,6 +31,9 @@ async def test_worker_dispatches_literacy_weekly_report():
             config={},
         )
         mock_runner.assert_called_once()
+        # Verify the config is for literacy-weekly-report
+        cfg_arg = mock_runner.call_args.args[0]
+        assert cfg_arg.app_name == "literacy-weekly-report"
 
 
 @pytest.mark.asyncio

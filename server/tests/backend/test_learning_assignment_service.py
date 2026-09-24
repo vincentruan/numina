@@ -103,7 +103,7 @@ def test_create_assignment_topic_not_found(db, adult_user, child_user):
     )
     with pytest.raises(AppError) as exc_info:
         create_assignment(db, adult_user, req)
-    assert "learning_topic_not_found" in str(exc_info.value)
+    assert "LEARNING_TOPIC_NOT_FOUND" in str(exc_info.value)
 
 
 def test_list_assignments(db, adult_user, child_user, topic):
@@ -147,7 +147,7 @@ def test_submit_for_review_assignment_not_found(db, child_user):
     """Submit for review with nonexistent assignment raises error."""
     with pytest.raises(AppError) as exc_info:
         submit_for_review(db, 99999, child_user["id"])
-    assert "learning_assignment_not_found" in str(exc_info.value)
+    assert "LEARNING_ASSIGNMENT_NOT_FOUND" in str(exc_info.value)
 
 
 def test_submit_for_review_invalid_transition(db, adult_user, child_user, topic):
@@ -157,7 +157,7 @@ def test_submit_for_review_invalid_transition(db, adult_user, child_user, topic)
     # Progress is 'available', not 'learning'
     with pytest.raises(AppError) as exc_info:
         submit_for_review(db, assignment.id, child_user["id"])
-    assert "invalid_state_transition" in str(exc_info.value)
+    assert "LEARNING_INVALID_STATE_TRANSITION" in str(exc_info.value)
 
 
 def test_get_review_queue(db, adult_user, child_user, topic):

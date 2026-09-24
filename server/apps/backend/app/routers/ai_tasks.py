@@ -67,6 +67,7 @@ class AITaskResponse(SnowflakeBase):
     lease_expires_at: datetime | None = None
     queue_position: int | None = None
     session_id: int | None = None
+    last_checkpoint_id: str | None = None
 
     class Config:
         from_attributes = True

@@ -29,6 +29,7 @@ export interface AITask {
   lease_expires_at?: string | null
   queue_position?: number | null
   session_id?: string | null
+  last_checkpoint_id?: string | null
 }
 
 /**
@@ -119,7 +120,7 @@ export async function getChatTaskForSession(
 // ---------------------------------------------------------------------------
 
 export interface TaskStreamCallbacks {
-  onEvent: (event: string, data: unknown) => void
+  onEvent: (event: string, data: unknown, eventId?: string) => void
   onGap: () => void
   onEnd: () => void
   onError: (message: string) => void
@@ -190,6 +191,7 @@ async function runTaskStream(
   const decoder = new TextDecoder()
   let buffer = ''
   let currentEvent = ''
+  let currentEventId: string | undefined
 
   try {
     while (true) {
@@ -203,6 +205,10 @@ async function runTaskStream(
       for (const line of lines) {
         if (line.startsWith('event:')) {
           currentEvent = line.slice(6).trim()
+          continue
+        }
+        if (line.startsWith('id:')) {
+          currentEventId = line.slice(3).trim() || undefined
           continue
         }
         if (!line.startsWith('data:')) continue
@@ -228,7 +234,8 @@ async function runTaskStream(
           // Non-JSON data — pass raw string
         }
 
-        callbacks.onEvent(event, parsed)
+        callbacks.onEvent(event, parsed, currentEventId)
+        currentEventId = undefined
       }
     }
     // Stream ended without explicit end event

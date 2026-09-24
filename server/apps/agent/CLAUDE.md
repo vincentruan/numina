@@ -85,14 +85,15 @@ The dispatch app is carried in `body.metadata["app"]` (defaults to `"numina"`). 
 | `import-parse` | `_run_import_parse_agent` | `import-parse` | PDF/statement parse (single run) |
 | `finance-coach` | `_run_finance_coach_agent` | `finance-coach` | finance advice (single run) |
 | `wish-advice` | `_run_wish_advice_agent` | `wish-advice` | wish savings advice (single run) |
+| `learning-tutor` | `_run_learning_tutor_agent` | `learning-tutor` | AI tutoring session (DeerFlow SSE via Redis bridge) |
 
 Each non-numina runner sets a fixed `skill_name`, injects a synthetic slash-trigger message, runs `adapter.typed_stream_dispatch`, forwards frames, synthesizes `tool_call`/`tool_result` custom events, and emits one result custom event (`report.step2_json` / `import-parse.result` / `finance_coach.result` / `wish_advice.result`) before the `end` frame.
 
 ### R1 allowlist (frontend direct dispatch gate)
 
-`sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice` with **409** ("must be triggered via backend endpoint" — actual message: `"须经由后端触发端点"`). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
+`sse_gateway.start_run` rejects frontend direct dispatch of `asset-report`/`import-parse`/`finance-coach`/`wish-advice`/`learning-tutor` with **409** ("must be triggered via backend endpoint" — actual message: `"须经由后端触发端点"`). Only `numina` is allowed direct from the frontend. The internal run-trigger endpoints in `app/routers/gateway.py` (`/internal/gateway/runs/{app}/{thread_id}`) set `internal=True` to bypass the 409 gate — the backend has already enforced owner / `require_ai_enabled` / concurrency by that point. Unknown app values → 400.
 
-> **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) is `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "dashboard-narrative", "literacy-weekly-report"]` — it protects system skill IDs from custom-skill collision.
+> **Backend `RESERVED_NAMES`** (`apps/backend/app/routers/ai_skills.py`) is `["chat", "asset-report", "import-parse", "finance-coach", "wish-advice", "learning-tutor", "dashboard-narrative", "literacy-weekly-report"]` — it protects system skill IDs from custom-skill collision.
 
 ### Sandbox
 
@@ -321,6 +322,19 @@ update this section and add adversarial test cases to `numina-sim-test` Area 11.
 9. **No new AI path without security review.** When adding a new runner,
    router, skill, or MCP tool, update this section and add adversarial test
    cases to `numina-sim-test` Area 11.
+10. **`learning-tutor` runner security constraints.** The learning-tutor app
+    exposes three MCP tools (`record_learning_result`, `get_learning_topic`,
+    `get_child_learning_profile`). All three require:
+    - **Input validation** — topic_id, child_id, and session_id must be
+      well-formed snowflake IDs; reject non-numeric or negative values before
+      any DB query.
+    - **Tenant isolation** — all queries must filter by the caller's
+      `family_id` (from the MCP session principal). Cross-family topic or
+      progress access must return `permission_denied`, not 404.
+    - **Schema validation for `record_learning_result`** — the tool's
+      `outcome` field is constrained to the learning state machine's valid
+      transitions (see `progress_service.VALID_TRANSITIONS`). Reject invalid
+      transitions with a clear error rather than silently succeeding.
 
 ## Gotchas
 

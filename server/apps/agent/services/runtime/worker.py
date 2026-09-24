@@ -17,6 +17,8 @@ import asyncio
 import logging
 import re
 import shutil
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +59,32 @@ from .run_pipeline import _track_task
 from .sandbox_provider import reset_family_sandbox_context, set_family_sandbox_context
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Config-driven generic runner for simple single-run apps
+# ---------------------------------------------------------------------------
+
+# Result builder signature: (ai_text, thinking_text) → payload dict | None
+_ResultBuilder = Callable[[str, str], dict[str, Any] | None]
+
+
+@dataclass(frozen=True)
+class _SimpleAppConfig:
+    """Per-app config for the generic simple-app runner."""
+
+    app_name: str
+    skill_name: str  # DeerFlow skill (matches SKILL.md name)
+    enable_thinking: bool = False
+    enable_reasoning_delta: bool = False  # forward reasoning_delta to frontend
+    timeout_seconds: int = 120
+    mcp_servers: list | None = None  # None = default resolution; [] = no MCP
+    memory_enabled: bool = True
+    trigger_key: str = ""  # key into _SYNTHETIC_TRIGGERS_BY_LANG
+    result_event_type: str = ""  # "" = no result event (e.g., learning-tutor)
+    result_builder: _ResultBuilder | None = (
+        None  # builds payload from ai_text + thinking_text
+    )
+
 
 # LLM-declared filename in the asset-report AI text (SKILL.md §文件命名规则):
 # ``WRITE_FILE: report_{YYYYMMDD_HHMMSS}.md``. The native write_file tool only
@@ -302,8 +330,9 @@ async def run_agent(
       - ``import-parse``  → ``_run_import_parse_agent`` (U8 single-run parse).
       - ``finance-coach`` → ``_run_finance_coach_agent`` (Plan A single-run advice).
       - ``wish-advice``   → ``_run_wish_advice_agent`` (Plan B T7 single-run advice).
-      - ``dashboard-narrative`` → ``_run_dashboard_narrative_agent`` (仪表盘叙事).
-      - ``literacy-weekly-report`` → ``_run_literacy_weekly_report_agent`` (启蒙周报).
+      - ``dashboard-narrative`` → ``_run_simple_app`` (config-driven, 仪表盘叙事).
+      - ``literacy-weekly-report`` → ``_run_simple_app`` (config-driven, 启蒙周报).
+      - ``learning-tutor`` → ``_run_simple_app`` (config-driven, AI 学习辅导).
 
     The allowlist preventing unknown / asset-report / import-parse / finance-coach
     / wish-advice values from reaching here is enforced upstream in
@@ -330,11 +359,13 @@ async def run_agent(
     # + extensions_config_path ContextVars are coroutine-scoped and would leak
     # into a subsequent run if this coroutine is reused (shared worker task /
     # executor thread). Mirror the active-skill reset pattern: set above, reset
-    # in a finally that wraps all three dispatch branches + any exception path.
+    # in a finally that wraps all dispatch branches + any exception path.
     try:
         app = record.metadata.get("app", "numina") if record.metadata else "numina"
-        if app == "asset-report":
-            await _run_asset_report_agent(
+
+        if app in _SIMPLE_APPS:
+            await _run_simple_app(
+                _SIMPLE_APPS[app],
                 bridge=bridge,
                 run_manager=run_manager,
                 record=record,
@@ -344,9 +375,9 @@ async def run_agent(
                 graph_input=graph_input,
                 config=config,
             )
-            return
-        if app == "import-parse":
-            await _run_import_parse_agent(
+        elif app in _RUNNERS:
+            runner = _RUNNERS[app]
+            kwargs: dict[str, Any] = dict(
                 bridge=bridge,
                 run_manager=run_manager,
                 record=record,
@@ -356,67 +387,11 @@ async def run_agent(
                 graph_input=graph_input,
                 config=config,
             )
-            return
-        if app == "finance-coach":
-            await _run_finance_coach_agent(
-                bridge=bridge,
-                run_manager=run_manager,
-                record=record,
-                family_id=family_id,
-                user_id=user_id,
-                thread_id=thread_id,
-                graph_input=graph_input,
-                config=config,
-            )
-            return
-        if app == "wish-advice":
-            await _run_wish_advice_agent(
-                bridge=bridge,
-                run_manager=run_manager,
-                record=record,
-                family_id=family_id,
-                user_id=user_id,
-                thread_id=thread_id,
-                graph_input=graph_input,
-                config=config,
-            )
-            return
-        if app == "dashboard-narrative":
-            await _run_dashboard_narrative_agent(
-                bridge=bridge,
-                run_manager=run_manager,
-                record=record,
-                family_id=family_id,
-                user_id=user_id,
-                thread_id=thread_id,
-                graph_input=graph_input,
-                config=config,
-            )
-            return
-        if app == "literacy-weekly-report":
-            await _run_literacy_weekly_report_agent(
-                bridge=bridge,
-                run_manager=run_manager,
-                record=record,
-                family_id=family_id,
-                user_id=user_id,
-                thread_id=thread_id,
-                graph_input=graph_input,
-                config=config,
-            )
-            return
-        # Default / "numina"
-        await _run_numina_agent(
-            bridge=bridge,
-            run_manager=run_manager,
-            record=record,
-            family_id=family_id,
-            user_id=user_id,
-            thread_id=thread_id,
-            graph_input=graph_input,
-            config=config,
-            stream_modes=stream_modes,
-        )
+            if app == "numina":
+                kwargs["stream_modes"] = stream_modes
+            await runner(**kwargs)
+        else:
+            raise ValueError(f"Unknown app: {app}")
     except Exception as exc:
         # P0 fix: propagate init/dispatch errors to the SSE consumer instead of
         # silently hanging.  ``run_agent`` is invoked via ``asyncio.create_task``
@@ -561,6 +536,15 @@ async def _run_asset_report_agent(
     """
     from .run_pipeline import RunPipeline
 
+    # Extract checkpoint_id from config.configurable (resume from checkpoint)
+    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+    checkpoint_id = (
+        configurable.get("checkpoint_id")
+        if isinstance(configurable.get("checkpoint_id"), str)
+        else None
+    )
+    auto_resume = bool(configurable.get("auto_resume", False))
+
     async with (
         RunPipeline(
             app_name="asset-report",
@@ -574,6 +558,8 @@ async def _run_asset_report_agent(
             subagent_enabled=False,
             enable_thinking=False,  # Qwen3: avoid empty content (see memory qwen3-enable-thinking-empty-content)
             timeout_seconds=240,
+            checkpoint_id=checkpoint_id,
+            auto_resume=auto_resume,
         ) as p
     ):
         # App-specific delta: trigger construction + result extraction
@@ -753,8 +739,7 @@ async def _run_asset_report_agent(
                         )
                     except Exception:
                         logger.warning(
-                            "[_run_asset_report_agent] fallback persist "
-                            "failed run=%s",
+                            "[_run_asset_report_agent] fallback persist failed run=%s",
                             p.run_id,
                         )
             elif step2_payload is not None:
@@ -918,6 +903,11 @@ _SYNTHETIC_TRIGGERS_BY_LANG = {
         "zh-CN": "/literacy-weekly-report 生成启蒙周报",
         "default": "/literacy-weekly-report 生成启蒙周报",
     },
+    "learning-tutor": {
+        "en-US": "/learning-tutor Provide personalized learning tutoring",
+        "zh-CN": "/learning-tutor 提供个性化学习辅导",
+        "default": "/learning-tutor 提供个性化学习辅导",
+    },
 }
 
 # Localized session titles for skill runs (shown in chat history sidebar).
@@ -952,7 +942,124 @@ _SESSION_TITLES_BY_LANG = {
         "zh-CN": "本月财务洞察",
         "default": "本月财务洞察",
     },
+    "learning-tutor": {
+        "en-US": "Learning Tutor",
+        "zh-CN": "学习辅导",
+        "default": "学习辅导",
+    },
 }
+
+# ---------------------------------------------------------------------------
+# Simple-app config registry — drives _run_simple_app() generic runner
+# ---------------------------------------------------------------------------
+
+_SIMPLE_APPS: dict[str, _SimpleAppConfig] = {
+    "dashboard-narrative": _SimpleAppConfig(
+        app_name="dashboard-narrative",
+        skill_name="dashboard-narrative",
+        mcp_servers=[],
+        timeout_seconds=60,
+        enable_thinking=True,
+        enable_reasoning_delta=True,
+        trigger_key="dashboard-narrative",
+        result_event_type="dashboard_narrative.result",
+        result_builder=lambda ai, th: {"narrative": ai, "thinking": th},
+    ),
+    "literacy-weekly-report": _SimpleAppConfig(
+        app_name="literacy-weekly-report",
+        skill_name="literacy-weekly-report",
+        enable_thinking=True,
+        enable_reasoning_delta=True,
+        trigger_key="literacy-weekly-report",
+        result_event_type="literacy_weekly_report.result",
+        result_builder=lambda ai, th: {"report": ai, "thinking": th},
+    ),
+    "learning-tutor": _SimpleAppConfig(
+        app_name="learning-tutor",
+        skill_name="learning-tutor",
+        enable_thinking=False,
+        memory_enabled=False,
+        trigger_key="learning-tutor",
+        # no result_event_type, no result_builder — frontend consumes streamed frames directly
+    ),
+}
+
+
+async def _run_simple_app(
+    cfg: _SimpleAppConfig,
+    *,
+    bridge: StreamBridge,
+    run_manager: RunManager,
+    record: RunRecord,
+    family_id: str,
+    user_id: str | None,
+    thread_id: str,
+    graph_input: dict | None,
+    config: dict[str, Any],
+) -> None:
+    """Generic runner for simple single-run apps.
+
+    Replaces _run_dashboard_narrative_agent, _run_literacy_weekly_report_agent,
+    _run_learning_tutor_agent.
+
+    Uses the RunPipeline.run_skill() → p.ai_text / p.thinking_text pattern.
+    RunPipeline.__aenter__ handles set_active_skill internally via skill_name param.
+    """
+    from .run_pipeline import RunPipeline
+
+    async with RunPipeline(
+        app_name=cfg.app_name,
+        family_id=family_id,
+        user_id=user_id,
+        thread_id=thread_id,
+        record=record,
+        bridge=bridge,
+        run_manager=run_manager,
+        memory_enabled=cfg.memory_enabled,
+        enable_thinking=cfg.enable_thinking,
+        timeout_seconds=cfg.timeout_seconds,
+        mcp_servers=cfg.mcp_servers,
+        skill_name=cfg.skill_name,
+    ) as p:
+        # Build user message from backend-injected content or synthetic trigger
+        user_language = (record.metadata or {}).get("language") or "zh"
+        user_message = _extract_backend_user_message(
+            graph_input
+        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get(cfg.trigger_key, {}).get(
+            user_language,
+            _SYNTHETIC_TRIGGERS_BY_LANG.get(cfg.trigger_key, {}).get("default", ""),
+        )
+        lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
+            user_language, _LANGUAGE_INSTRUCTIONS["default"]
+        )
+        user_message = f"{lang_instruction}\n\n{user_message}"
+
+        # Set session title (fire-and-forget)
+        title_key = _SESSION_TITLES_BY_LANG.get(cfg.app_name, {})
+        title_prefix = title_key.get(
+            user_language, title_key.get("default", cfg.app_name)
+        )
+        _track_task(
+            asyncio.create_task(_set_session_title(thread_id, family_id, title_prefix))
+        )
+
+        # Execute skill — RunPipeline handles frame streaming, PII redaction, etc.
+        await p.run_skill(
+            user_message, enable_reasoning_delta=cfg.enable_reasoning_delta
+        )
+
+        # Publish result event if configured
+        if cfg.result_event_type and cfg.result_builder:
+            payload = cfg.result_builder(p.ai_text.strip(), p.thinking_text)
+            if payload is not None:
+                await bridge.publish(
+                    p.run_id,
+                    "custom",
+                    {
+                        "type": cfg.result_event_type,
+                        "payload": payload,
+                    },
+                )
 
 
 def _extract_backend_user_message(graph_input: dict | None) -> str | None:
@@ -1080,7 +1187,9 @@ async def _run_import_parse_agent(
             # Final fallback: standalone LLM extraction (only when repair failed)
             if parsed is not None and validate_import_parse_json(parsed):
                 fallback = await extract_json_via_llm(
-                    p.ai_text, _IMPORT_PARSE_REPAIR_PROMPT, p.selected_provider,
+                    p.ai_text,
+                    _IMPORT_PARSE_REPAIR_PROMPT,
+                    p.selected_provider,
                 )
                 if fallback is not None and not validate_import_parse_json(fallback):
                     parsed = fallback
@@ -1259,18 +1368,20 @@ async def _run_finance_coach_agent(
                         p.run_id,
                     )
                     fallback = await extract_json_via_llm(
-                        p.ai_text, _COACH_REPAIR_PROMPT, p.selected_provider,
+                        p.ai_text,
+                        _COACH_REPAIR_PROMPT,
+                        p.selected_provider,
                     )
                     if fallback is not None and not validate_coach_json(fallback):
                         parsed = fallback
                         validation_errors = []
                     else:
                         logger.error(
-                        "[_run_finance_coach_agent] coach JSON validation failed after %d retries run=%s errors=%s",
-                        repair_count,
-                        p.run_id,
-                        validation_errors[:5],
-                    )
+                            "[_run_finance_coach_agent] coach JSON validation failed after %d retries run=%s errors=%s",
+                            repair_count,
+                            p.run_id,
+                            validation_errors[:5],
+                        )
                     await bridge.publish(
                         p.run_id,
                         "error",
@@ -1450,18 +1561,20 @@ async def _run_wish_advice_agent(
                         p.run_id,
                     )
                     fallback = await extract_json_via_llm(
-                        p.ai_text, _WISH_ADVICE_REPAIR_PROMPT, p.selected_provider,
+                        p.ai_text,
+                        _WISH_ADVICE_REPAIR_PROMPT,
+                        p.selected_provider,
                     )
                     if fallback is not None and not validate_wish_advice_json(fallback):
                         parsed = fallback
                         validation_errors = []
                     else:
                         logger.error(
-                        "[_run_wish_advice_agent] wish-advice JSON validation failed after %d retries run=%s errors=%s",
-                        repair_count,
-                        p.run_id,
-                        validation_errors[:5],
-                    )
+                            "[_run_wish_advice_agent] wish-advice JSON validation failed after %d retries run=%s errors=%s",
+                            repair_count,
+                            p.run_id,
+                            validation_errors[:5],
+                        )
                     await bridge.publish(
                         p.run_id,
                         "error",
@@ -1501,110 +1614,6 @@ async def _run_wish_advice_agent(
             user_language,
             _SESSION_TITLES_BY_LANG.get("wish-advice", {}).get(
                 "default", "心愿储蓄建议"
-            ),
-        )
-        _track_task(
-            asyncio.create_task(_set_session_title(thread_id, family_id, _title))
-        )
-
-
-# Synthetic trigger for dashboard-narrative runs (mirrors _SYNTHETIC_FINANCE_COACH_TRIGGER).
-_SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER = "/dashboard-narrative 生成本月财务叙事"
-
-
-async def _run_dashboard_narrative_agent(
-    *,
-    bridge: StreamBridge,
-    run_manager: RunManager,
-    record: RunRecord,
-    family_id: str,
-    user_id: str | None,
-    thread_id: str,
-    graph_input: dict | None,
-    config: dict[str, Any],
-) -> None:
-    """dashboard-narrative dispatch branch via RunPipeline.
-
-    Runs a single ``stream_run`` agent run with ``skill_name="dashboard-narrative"``.
-    The skill prompt drives the LLM to generate 2-3 sentences of financial narrative
-    from the backend-injected context. Emits one ``dashboard_narrative.result`` custom
-    event with the plain-text narrative before the ``end`` frame.
-
-    Simpler than finance-coach: no MCP tools (allowed-tools: []), no JSON parsing —
-    the LLM output IS the narrative text (after stripping code fences if any).
-    """
-    from .run_pipeline import RunPipeline
-
-    async with RunPipeline(
-        app_name="dashboard-narrative",
-        family_id=family_id,
-        user_id=user_id,
-        thread_id=thread_id,
-        record=record,
-        bridge=bridge,
-        run_manager=run_manager,
-        plan_mode=False,
-        subagent_enabled=False,
-        enable_thinking=True,
-        timeout_seconds=60,
-        mcp_servers=[],  # allowed-tools: [] — pure inference
-    ) as p:
-        user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = _extract_backend_user_message(
-            graph_input
-        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("dashboard-narrative", {}).get(
-            user_language, _SYNTHETIC_DASHBOARD_NARRATIVE_TRIGGER
-        )
-        # Prepend language instruction for user-facing output
-        if user_language:
-            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
-                user_language, _LANGUAGE_INSTRUCTIONS["default"]
-            )
-            user_message = f"{lang_instruction}\n\n{user_message}"
-
-        # Set session title immediately so the sidebar shows a proper label
-        # even if the run is interrupted. Idempotent — late call overwrites.
-        _narrative_title = _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
-            user_language,
-            _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
-                "default", "本月财务洞察"
-            ),
-        )
-        _track_task(
-            asyncio.create_task(_set_session_title(thread_id, family_id, _narrative_title))
-        )
-
-        await p.run_skill(user_message, enable_reasoning_delta=True)
-        _narrative_ok = True  # run_skill succeeded
-
-        # Emit BEFORE __aexit__ publishes the "end" frame (run_pipeline.py:474),
-        # so the lifecycle consumer sees result before the end sentinel.
-        if _narrative_ok:
-            narrative_text = p.ai_text.strip()
-            if narrative_text:
-                await bridge.publish(
-                    p.run_id,
-                    "custom",
-                    {
-                        "type": "dashboard_narrative.result",
-                        "payload": {
-                            "narrative": narrative_text,
-                            "thinking": p.thinking_text,
-                        },
-                    },
-                )
-                logger.info(
-                    "[dashboard-narrative] result emitted run=%s narrative_len=%d",
-                    p.run_id,
-                    len(narrative_text),
-                )
-
-    # Set dashboard-narrative session title (localized by user language).
-    if _narrative_ok:
-        _title = _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
-            user_language,
-            _SESSION_TITLES_BY_LANG.get("dashboard-narrative", {}).get(
-                "default", "本月财务洞察"
             ),
         )
         _track_task(
@@ -1900,100 +1909,14 @@ async def _run_numina_agent(
         )
 
 
-# Synthetic trigger for literacy-weekly-report runs.
-_SYNTHETIC_LITERACY_REPORT_TRIGGER = "/literacy-weekly-report"
+# ---------------------------------------------------------------------------
+# Complex-app dispatch dict — populated after all runner definitions
+# ---------------------------------------------------------------------------
 
-
-async def _run_literacy_weekly_report_agent(
-    *,
-    bridge: StreamBridge,
-    run_manager: RunManager,
-    record: RunRecord,
-    family_id: str,
-    user_id: str | None,
-    thread_id: str,
-    graph_input: dict | None,
-    config: dict[str, Any],
-) -> None:
-    """literacy-weekly-report dispatch branch via RunPipeline.
-
-    Runs a single stream_run agent with skill_name='literacy-weekly-report'.
-    The agent calls MCP tools (get_child_literacy_profile, get_literacy_weekly_data)
-    to fetch literacy data and generates a weekly report narrative.
-
-    Design rationale:
-    - ``skill_name="literacy-weekly-report"`` (fixed skill, no chat routing).
-    - ``thinking=True``: SKILL.md declares ``thinking: true`` — the LLM uses
-      deep reasoning for data analysis and personalized suggestions.
-    - ``plan_mode=False``: simple report generation, no multi-step planning
-      or TodoMiddleware needed.
-    - ``subagent_enabled=False``: no delegation to sub-agents.
-    - Synthetic trigger message ``/literacy-weekly-report ...``: follows the
-      DeerFlow canonical skill pattern — agent fetches its own data via MCP
-      tools rather than receiving pre-aggregated context.
-    - No tool_call/tool_result synthesis (MCP tools are not visualised).
-    - Reasoning content extracted from AI messages and forwarded as
-      ``reasoning_delta`` custom events (separate from visible content).
-    - Result custom event: ``literacy_weekly_report.result`` with
-      ``{report, thinking}`` payload for backend persistence.
-    """
-    from .run_pipeline import RunPipeline
-
-    async with RunPipeline(
-        app_name="literacy-weekly-report",
-        family_id=family_id,
-        user_id=user_id,
-        thread_id=thread_id,
-        record=record,
-        bridge=bridge,
-        run_manager=run_manager,
-        plan_mode=False,
-        subagent_enabled=False,
-        enable_thinking=True,
-        timeout_seconds=120,
-    ) as p:
-        user_language = (record.metadata or {}).get("language") or "zh"
-        user_message = _extract_backend_user_message(
-            graph_input
-        ) or _SYNTHETIC_TRIGGERS_BY_LANG.get("literacy-weekly-report", {}).get(
-            user_language, _SYNTHETIC_LITERACY_REPORT_TRIGGER
-        )
-        # Prepend language instruction for user-facing output
-        if user_language:
-            lang_instruction = _LANGUAGE_INSTRUCTIONS.get(
-                user_language, _LANGUAGE_INSTRUCTIONS["default"]
-            )
-            user_message = f"{lang_instruction}\n\n{user_message}"
-        await p.run_skill(user_message, enable_reasoning_delta=True)
-        _lit_ok = True
-
-        # Emit literacy_weekly_report.result custom event (with thinking).
-        # p.completion_status is only set to "complete" in __aexit__ (line 453),
-        # so we use _lit_ok set after run_skill succeeds inside the block.
-        if _lit_ok:
-            report_text = p.ai_text.strip()
-            if report_text:
-                await bridge.publish(
-                    p.run_id,
-                    "custom",
-                    {
-                        "type": "literacy_weekly_report.result",
-                        "payload": {
-                            "report": report_text,
-                            "thinking": p.thinking_text,
-                        },
-                    },
-                )
-
-            # Set literacy weekly report session title (localized by user language).
-            _lit_title = _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get(
-                user_language,
-                _SESSION_TITLES_BY_LANG.get("literacy-weekly-report", {}).get(
-                    "default", "启蒙周报"
-                ),
-            )
-            _track_task(
-                asyncio.create_task(
-                    _set_session_title(thread_id, family_id, _lit_title)
-                )
-            )
+_RUNNERS: dict[str, Callable[..., Any]] = {
+    "asset-report": _run_asset_report_agent,
+    "import-parse": _run_import_parse_agent,
+    "finance-coach": _run_finance_coach_agent,
+    "wish-advice": _run_wish_advice_agent,
+    "numina": _run_numina_agent,
+}

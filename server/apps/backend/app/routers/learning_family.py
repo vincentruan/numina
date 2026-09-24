@@ -67,13 +67,16 @@ def list_children(
     for row in overview_rows:
         overviews[row.child_id][row.mastery_level] = row.cnt
 
-    # Batch study time: single GROUP BY query
+    # Batch study time: single GROUP BY query (exclude in-progress sessions)
     study_rows = (
         db.query(
             LearningSession.child_id,
             sa_func.coalesce(sa_func.sum(LearningSession.duration_seconds), 0),
         )
-        .filter(LearningSession.child_id.in_(child_ids))
+        .filter(
+            LearningSession.child_id.in_(child_ids),
+            LearningSession.ended_at.isnot(None),
+        )
         .group_by(LearningSession.child_id)
         .all()
     )
@@ -111,7 +114,7 @@ def get_child_map(
         .first()
     )
     if not child:
-        raise AppError(ErrorCode.NOT_FOUND)
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     return (
         db.query(LearningProgress)
@@ -133,7 +136,7 @@ def get_child_progress(
         .first()
     )
     if not child:
-        raise AppError(ErrorCode.NOT_FOUND)
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     return (
         db.query(LearningProgress)
@@ -169,7 +172,7 @@ def create_assignment(
         .first()
     )
     if not child:
-        raise AppError(ErrorCode.NOT_FOUND)
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     assignment = assignment_service.create_assignment(db, user, req)
     # Fire notification — child name resolved from DB
@@ -199,7 +202,7 @@ def list_assignments(
             .first()
         )
         if not child:
-            raise AppError(ErrorCode.NOT_FOUND)
+            raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
         return assignment_service.list_assignments(db, child_id, status)
 
     # All children in family
@@ -298,7 +301,7 @@ def approve_review(
         .first()
     )
     if not child:
-        raise AppError(ErrorCode.NOT_FOUND)
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     progress = progress_service.approve_parent_review(db, progress, user.family_id)
 
@@ -329,7 +332,7 @@ def reject_review(
         .first()
     )
     if not child:
-        raise AppError(ErrorCode.NOT_FOUND)
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     progress_service.transition_to_learning(db, progress)
 

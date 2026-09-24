@@ -57,15 +57,23 @@ def client(monkeypatch):
         patch("apps.backend.app.routers.ai_report.AITaskService.get_any_running_task", return_value=None),
         patch("apps.backend.app.routers.ai_report.AITaskService.create_task", return_value=type("T", (), {"id": 1})()),
         patch("apps.backend.app.routers.ai_report.ChatSessionService.create_session", new_callable=AsyncMock, return_value=type("S", (), {"id": "session-1"})()),
-        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", new_callable=AsyncMock) as mock_trigger,
         # Default: no cached report (cache-miss -> stream). Cache-hit tests override
         # _latest_report locally.
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=None),
         # AI-enabled gate is now a manual check (not a dependency) — bypass it.
         patch("apps.backend.app.routers.ai_report._check_ai_enabled"),
     ):
-        mock_agent_cls.return_value.stream = AsyncMock()  # stub; pump is mocked
+        # Make trigger_and_stream return a fake SSE StreamingResponse
+        from fastapi.responses import StreamingResponse
+
+        async def _fake_sse():
+            yield "event: metadata\ndata: {\"task_id\": \"1\"}\n\n"
+
+        mock_trigger.return_value = StreamingResponse(
+            _fake_sse(), media_type="text/event-stream",
+        )
+        mock_agent_cls.return_value.post = AsyncMock()  # stub; trigger is mocked
         from apps.backend.app.auth.deps import require_adult, require_owner
         from apps.backend.app.main import app
 
@@ -81,9 +89,17 @@ def client(monkeypatch):
 
 def test_trigger_streams_agent_sse(client):
     """trigger -> 200 text/event-stream with bridge consumer's report.step2_json forwarded."""
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _sse():
+            yield "event: custom\ndata: {\"type\": \"report.step2_json\", \"payload\": {\"overall_score\": 77}}\n\n"
+            yield "event: end\ndata: null\n\n"
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+
     with patch(
-        "apps.backend.app.routers.ai_report.consume_task_stream",
-        _fake_bridge_stream([("custom", {"type": "report.step2_json", "payload": {"overall_score": 77}})]),
+        "apps.backend.app.routers.ai_report.trigger_and_stream",
+        side_effect=_mock_trigger_and_stream,
     ):
         response = client.post("/api/v1/ai/report/generate/events")
     assert response.status_code == 200
@@ -107,18 +123,22 @@ def test_trigger_passes_family_id_as_string_to_agent(client):
     request body - AssetReportRunRequest.family_id is pydantic ``str``, so an
     int Snowflake value 422s at the agent gateway.
     """
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _sse():
+            yield ""
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+
     with patch(
-        "apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge",
-        new_callable=AsyncMock,
-    ) as mock_pump, patch(
-        "apps.backend.app.routers.ai_report.consume_task_stream",
-        _fake_bridge_stream([("custom", {"type": "report.step2_json", "payload": {"overall_score": 1}})]),
-    ):
+        "apps.backend.app.routers.ai_report.trigger_and_stream",
+        side_effect=_mock_trigger_and_stream,
+    ) as mock_trigger:
         response = client.post("/api/v1/ai/report/generate/events?force=true")
     assert response.status_code == 200
-    # The pump is called with json_body containing the agent request.
-    assert mock_pump.called
-    call_kwargs = mock_pump.call_args.kwargs
+    # trigger_and_stream is called with json_body containing the agent request.
+    assert mock_trigger.called
+    call_kwargs = mock_trigger.call_args.kwargs
     body = call_kwargs["json_body"]
     assert body["family_id"] == "family-1"
     assert body["user_id"] == "1"
@@ -151,7 +171,7 @@ def test_trigger_cache_hit_returns_json_not_stream(client):
     """Cached report (fresh, valid) -> 200 JSON with status=cached, no agent call."""
     with (
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=_fresh_cached_report()),
-        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", new_callable=AsyncMock) as mock_trigger,
     ):
         response = client.post("/api/v1/ai/report/generate/events")
     assert response.status_code == 200
@@ -159,27 +179,36 @@ def test_trigger_cache_hit_returns_json_not_stream(client):
     body = response.json()
     assert body["status"] == "cached"
     assert body["report"]["overall_score"] == 80
-    mock_stream.assert_not_called()
+    mock_trigger.assert_not_called()
 
 
 def test_trigger_force_bypasses_cache(client):
     """force=true -> skips the cache and goes straight to trigger + stream."""
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _sse():
+            yield ""
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=_fresh_cached_report()),
         patch(
-            "apps.backend.app.routers.ai_report.consume_task_stream",
-            side_effect=_fake_bridge_stream([("custom", {"type": "report.step2_json", "payload": {"overall_score": 1}})]),
-        ) as mock_stream,
+            "apps.backend.app.routers.ai_report.trigger_and_stream",
+            side_effect=_mock_trigger_and_stream,
+        ) as mock_trigger,
     ):
         response = client.post("/api/v1/ai/report/generate/events?force=true")
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
-    mock_stream.assert_called_once()
+    mock_trigger.assert_called_once()
 
 
 def test_trigger_stale_cache_misses(client):
     """Cache older than 1h -> regenerated via trigger + stream (not served stale)."""
     from datetime import UTC, datetime, timedelta
+
+    from fastapi.responses import StreamingResponse
 
     stale = type(
         "R",
@@ -189,11 +218,17 @@ def test_trigger_stale_cache_misses(client):
             "generated_at": datetime.now(UTC) - timedelta(hours=2),
         },
     )()
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _sse():
+            yield ""
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=stale),
         patch(
-            "apps.backend.app.routers.ai_report.consume_task_stream",
-            _fake_bridge_stream([("custom", {"type": "report.step2_json", "payload": {"overall_score": 1}})]),
+            "apps.backend.app.routers.ai_report.trigger_and_stream",
+            side_effect=_mock_trigger_and_stream,
         ),
     ):
         response = client.post("/api/v1/ai/report/generate/events")
@@ -203,6 +238,8 @@ def test_trigger_stale_cache_misses(client):
 
 def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
     """Cached report failing schema re-validation falls through to regeneration."""
+    from fastapi.responses import StreamingResponse
+
     corrupted = type(
         "R",
         (),
@@ -211,11 +248,17 @@ def test_trigger_corrupted_cache_revalidates_and_regenerates(client):
             "generated_at": datetime.now(UTC) - timedelta(minutes=5),
         },
     )()
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _sse():
+            yield ""
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report._latest_report", return_value=corrupted),
         patch(
-            "apps.backend.app.routers.ai_report.consume_task_stream",
-            _fake_bridge_stream([("custom", {"type": "report.step2_json", "payload": {"overall_score": 1}})]),
+            "apps.backend.app.routers.ai_report.trigger_and_stream",
+            side_effect=_mock_trigger_and_stream,
         ),
     ):
         response = client.post("/api/v1/ai/report/generate/events")

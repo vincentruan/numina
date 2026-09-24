@@ -383,6 +383,15 @@ async def lifespan(app: FastAPI):
     app.state.orphan_detector_task = orphan_task
     logger.info("Orphan task detector started")
 
+    # Phase 5.2: Initialize event persistence (DeerFlow DbRunEventStore)
+    # Non-fatal: if init fails, event persistence is silently disabled.
+    try:
+        from apps.backend.app.services.event_persistence import init_event_store
+
+        await init_event_store()
+    except Exception:
+        logger.warning("Event persistence init failed (non-fatal)", exc_info=True)
+
     yield
 
     # Cancel orphan detector on shutdown
@@ -632,4 +641,10 @@ app.include_router(uploads_serve_router.router)
 
 @app.get("/api/health")
 def health():
-    return JSONResponse({"status": "ok"})
+    from apps.backend.app.services.event_persistence import health_detail
+
+    payload: dict = {"status": "ok"}
+    ep = health_detail()
+    if ep["status"] != "ok":
+        payload["event_persistence"] = ep
+    return JSONResponse(payload)

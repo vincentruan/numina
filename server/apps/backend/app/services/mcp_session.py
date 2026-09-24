@@ -17,6 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.database import SessionLocal
+from apps.backend.app.errors import AppError
 from apps.backend.app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -169,6 +170,35 @@ def _import_liabilities_batch(
                 }
             )
     return {"created": created, "skipped": skipped, "items": results}
+
+
+def _validate_evaluation_schema(evaluation: Any) -> None:
+    """Validate LLM-produced evaluation structure.
+
+    LLM output is untrusted; this prevents malformed JSON from corrupting
+    the progress state machine or crashing downstream consumers.
+    """
+    if not isinstance(evaluation, dict):
+        raise ValueError("evaluation must be a dict")
+    if "evidence_results" not in evaluation or not isinstance(
+        evaluation["evidence_results"], list
+    ):
+        raise ValueError("evaluation must contain evidence_results array")
+    for i, item in enumerate(evaluation["evidence_results"]):
+        if not isinstance(item, dict):
+            raise ValueError(f"evidence_results[{i}] must be a dict")
+        if "evidence" not in item or not isinstance(item["evidence"], str):
+            raise ValueError(f"evidence_results[{i}] must contain 'evidence' (string)")
+        if "met" not in item or not isinstance(item["met"], bool):
+            raise ValueError(f"evidence_results[{i}] must contain 'met' (boolean)")
+    score = evaluation.get("overall_score")
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not (0.0 <= score <= 1.0):
+        raise ValueError("overall_score must be a number between 0.0 and 1.0")
+    rec = evaluation.get("recommendation")
+    if rec not in ("mastered", "needs_review", "keep_learning"):
+        raise ValueError(
+            f"recommendation must be mastered/needs_review/keep_learning, got {rec!r}"
+        )
 
 
 def _get_caller_user(family_id: str, caller_user_id: str, db: Session) -> User:
@@ -352,7 +382,8 @@ class MCPSession:
                             db.query(LiteracyBadgeDefinition)
                             .join(
                                 LiteracyBadge,
-                                LiteracyBadge.definition_id == LiteracyBadgeDefinition.id,
+                                LiteracyBadge.definition_id
+                                == LiteracyBadgeDefinition.id,
                             )
                             .filter(
                                 LiteracyBadge.child_id == child.id,
@@ -389,7 +420,9 @@ class MCPSession:
                                 ],
                                 "total_scenarios_completed": scenario_count,
                                 "latest_report_week": (
-                                    latest_report[0].isoformat() if latest_report else None
+                                    latest_report[0].isoformat()
+                                    if latest_report
+                                    else None
                                 ),
                             }
                         )
@@ -405,13 +438,20 @@ class MCPSession:
                     child_id_lit = int(arguments["child_id"])
 
                     # Validate child belongs to caller's family
-                    child_in_family = db.query(User.id).filter(
-                        User.id == child_id_lit,
-                        User.family_id == int(self._family_id),
-                        User.role == "child",
-                    ).first()
+                    child_in_family = (
+                        db.query(User.id)
+                        .filter(
+                            User.id == child_id_lit,
+                            User.family_id == int(self._family_id),
+                            User.role == "child",
+                        )
+                        .first()
+                    )
                     if not child_in_family:
-                        data = {"error": "孩子不属于当前家庭", "child_id": str(child_id_lit)}
+                        data = {
+                            "error": "孩子不属于当前家庭",
+                            "child_id": str(child_id_lit),
+                        }
                     else:
                         week_start_arg = arguments.get("week_start")
                         week_start = (
@@ -430,7 +470,8 @@ class MCPSession:
                             **signals,
                             "trend": {
                                 "chores_delta": (
-                                    signals["chores_approved"] - prev_signals["chores_approved"]
+                                    signals["chores_approved"]
+                                    - prev_signals["chores_approved"]
                                 ),
                                 "coins_delta": (
                                     signals["coin_earned"] - prev_signals["coin_earned"]
@@ -464,9 +505,7 @@ class MCPSession:
                                     else None
                                 ),
                                 "return_date": (
-                                    t.return_date.isoformat()
-                                    if t.return_date
-                                    else None
+                                    t.return_date.isoformat() if t.return_date else None
                                 ),
                                 "planned_budget": (
                                     str(t.planned_budget)
@@ -568,6 +607,322 @@ class MCPSession:
                         "settlements": settlement_data,
                         "has_split_group": len(settlement_data) > 0,
                     }
+                elif name == "get_learning_topic":
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.topic import LearningTopic
+
+                    try:
+                        topic_id = int(arguments["topic_id"])
+                        child_id = int(arguments["child_id"])
+                        if topic_id <= 0 or child_id <= 0:
+                            raise ValueError("topic_id and child_id must be positive integers")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        topic = (
+                            db.query(LearningTopic)
+                            .filter(LearningTopic.id == topic_id)
+                            .first()
+                        )
+                        if not topic:
+                            data = {"error": "topic_not_found"}
+                        else:
+                            # Family-scope validation: child must belong to caller's family
+                            child = (
+                                db.query(User)
+                                .filter(
+                                    User.id == child_id,
+                                    User.family_id == int(self._family_id),
+                                )
+                                .first()
+                            )
+                            if not child:
+                                data = {"error": "child_not_in_family"}
+                            else:
+                                progress = (
+                                    db.query(LearningProgress)
+                                    .filter_by(child_id=child_id, topic_id=topic_id)
+                                    .first()
+                                )
+                                data = {
+                                    "topic_id": str(topic.id),
+                                    "name": topic.name,
+                                    "description": topic.description,
+                                    "evidence_criteria": topic.evidence_json,
+                                    "assessment_prompt": topic.assessment_prompt,
+                                    "mastery_level": (
+                                        progress.mastery_level if progress else "locked"
+                                    ),
+                                }
+                elif name == "get_child_learning_profile":
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.topic import LearningTopic
+
+                    try:
+                        child_id = int(arguments["child_id"])
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        subject = arguments.get("subject")
+
+                        # Family-scope validation
+                        child_in_family = (
+                            db.query(User.id)
+                            .filter(
+                                User.id == child_id,
+                                User.family_id == int(self._family_id),
+                                User.role == "child",
+                            )
+                            .first()
+                        )
+                        if not child_in_family:
+                            data = {
+                                "error": "child_not_in_family",
+                                "child_id": str(child_id),
+                            }
+                        else:
+                            query = db.query(LearningProgress).filter(
+                                LearningProgress.child_id == child_id
+                            )
+                            if subject:
+                                # subject lives on LearningTopic; join to filter
+                                query = query.join(
+                                    LearningTopic,
+                                    LearningProgress.topic_id == LearningTopic.id,
+                                ).filter(LearningTopic.subject == subject)
+                            progresses = query.all()
+
+                            data = {
+                                "child_id": str(child_id),
+                                "total_topics": len(progresses),
+                                "mastered": sum(
+                                    1 for p in progresses if p.mastery_level == "mastered"
+                                ),
+                                "learning": sum(
+                                    1 for p in progresses if p.mastery_level == "learning"
+                                ),
+                                "available": sum(
+                                    1 for p in progresses if p.mastery_level == "available"
+                                ),
+                                "review": sum(
+                                    1 for p in progresses if p.mastery_level == "review"
+                                ),
+                                "locked": sum(
+                                    1 for p in progresses if p.mastery_level == "locked"
+                                ),
+                                "assessing": sum(
+                                    1 for p in progresses if p.mastery_level == "assessing"
+                                ),
+                            }
+                elif name == "record_learning_result":
+                    from apps.backend.app.services.learning import session_service
+                    from packages.db.models.learning.progress import LearningProgress
+                    from packages.db.models.learning.session import (
+                        LearningAssessmentAttempt,
+                        LearningSession,
+                    )
+                    from packages.db.models.child_economy.coin_transaction import (
+                        CoinTransaction,
+                    )
+
+                    # Reward tiers by recommendation (encourages mastery)
+                    _REWARD_TIERS = {
+                        "mastered": 15,
+                        "needs_review": 5,
+                        "keep_learning": 2,
+                    }
+
+                    try:
+                        session_id = int(arguments["session_id"])
+                        if session_id <= 0:
+                            raise ValueError("session_id must be a positive integer")
+                    except (ValueError, TypeError, KeyError) as exc:
+                        data = {"error": "invalid_arguments", "detail": str(exc)}
+                    else:
+                        evaluation = arguments["evaluation"]
+
+                        # Schema validation (LLM output is untrusted)
+                        _validate_evaluation_schema(evaluation)
+
+                        # Family-scope validation: session must belong to a child in this family
+                        session = (
+                            db.query(LearningSession)
+                            .join(User, LearningSession.child_id == User.id)
+                            .filter(
+                                LearningSession.id == session_id,
+                                User.family_id == int(self._family_id),
+                            )
+                            .first()
+                        )
+                        if not session:
+                            data = {"error": "session_not_found"}
+                        else:
+                            child = (
+                                db.query(User)
+                                .filter(
+                                    User.id == session.child_id,
+                                    User.family_id == int(self._family_id),
+                                )
+                                .first()
+                            )
+                            if not child:
+                                data = {"error": "session_not_in_family"}
+                            else:
+                                rec = evaluation["recommendation"]
+
+                                # End session with evaluation
+                                ended_session = session_service.end_session(
+                                    db,
+                                    session_id,
+                                    score=evaluation["overall_score"],
+                                    ai_evaluation=evaluation,
+                                )
+
+                                # Create assessment attempt (audit + idempotency key)
+                                attempt = LearningAssessmentAttempt(
+                                    child_id=child.id,
+                                    topic_id=session.topic_id,
+                                    session_id=session.id,
+                                    assessment_type="ai_assessment",
+                                    score=evaluation["overall_score"],
+                                    passed=(rec == "mastered"),
+                                    evidence_results_json=json.dumps(
+                                        evaluation.get("evidence_results", [])
+                                    ),
+                                )
+                                db.add(attempt)
+                                db.flush()
+
+                                # Update progress based on recommendation
+                                progress = (
+                                    db.query(LearningProgress)
+                                    .filter_by(
+                                        child_id=ended_session.child_id,
+                                        topic_id=ended_session.topic_id,
+                                    )
+                                    .first()
+                                )
+                                mastery_changed = False
+                                if progress:
+                                    target_level = (
+                                        "mastered"
+                                        if rec == "mastered"
+                                        else "review"
+                                        if rec == "needs_review"
+                                        else progress.mastery_level
+                                    )
+                                    if target_level != progress.mastery_level:
+                                        from apps.backend.app.services.learning import (
+                                            progress_service,
+                                        )
+
+                                        try:
+                                            progress_service.validate_transition(
+                                                progress.mastery_level, target_level
+                                            )
+                                            progress.mastery_level = target_level
+                                            mastery_changed = True
+
+                                            # Update spaced-repetition bookkeeping on mastery
+                                            if target_level == "mastered":
+                                                from datetime import UTC, datetime
+
+                                                now = datetime.now(UTC)
+                                                if not progress.first_mastered_at:
+                                                    progress.first_mastered_at = now
+                                                progress.mastery_score = (
+                                                    evaluation["overall_score"]
+                                                )
+                                                progress.stability = (
+                                                    progress_service.update_stability(
+                                                        progress,
+                                                        progress.mastery_score,
+                                                    )
+                                                )
+                                                progress.next_review_at = (
+                                                    progress_service.compute_next_review(
+                                                        progress
+                                                    )
+                                                )
+                                                # Unlock dependent topics
+                                                progress_service.unlock_dependent_topics(
+                                                    db, child.id, progress.topic_id
+                                                )
+                                        except AppError:
+                                            data = {
+                                                "error": "invalid_mastery_transition",
+                                                "detail": (
+                                                    f"Cannot transition from "
+                                                    f"'{progress.mastery_level}' to "
+                                                    f"'{target_level}'. "
+                                                    f"Current recommendation: {rec}. "
+                                                    f"The session was still recorded successfully."
+                                                ),
+                                                "session_id": str(session_id),
+                                                "recommendation": rec,
+                                            }
+
+                                # Dispatch coin reward (tiered by recommendation)
+                                coins_earned = 0
+                                if mastery_changed or rec != "mastered":
+                                    coin_amount = _REWARD_TIERS.get(rec, 0)
+                                    if coin_amount > 0:
+                                        # Resolve topic name for narrative
+                                        from packages.db.models.learning.topic import (
+                                            LearningTopic,
+                                        )
+
+                                        topic = (
+                                            db.query(LearningTopic)
+                                            .filter(
+                                                LearningTopic.id == session.topic_id
+                                            )
+                                            .first()
+                                        )
+                                        topic_label = (
+                                            (topic.name_zh or topic.name or "learning")
+                                            if topic
+                                            else "learning"
+                                        )
+                                        txn = CoinTransaction(
+                                            family_id=int(self._family_id),
+                                            child_user_id=child.id,
+                                            amount=coin_amount,
+                                            transaction_type="learning_earn",
+                                            ref_id=attempt.id,
+                                            narrative=f"AI辅导：{topic_label}",
+                                            narrative_emoji="📚",
+                                        )
+                                        db.add(txn)
+                                        coins_earned = coin_amount
+
+                                # Check milestones + challenges (non-blocking)
+                                try:
+                                    from apps.backend.app.services.milestones import (
+                                        check_and_record_milestones,
+                                    )
+
+                                    check_and_record_milestones(
+                                        db,
+                                        child.id,
+                                        int(self._family_id),
+                                        {"instance": None, "wish": None},
+                                    )
+                                except Exception:
+                                    logger.warning(
+                                        "[mcp_session] milestone check failed "
+                                        "for child=%s (non-blocking)",
+                                        child.id,
+                                        exc_info=True,
+                                    )
+
+                                data = {
+                                    "ok": True,
+                                    "session_id": str(session_id),
+                                    "recommendation": rec,
+                                    "coins_earned": coins_earned,
+                                    "assessment_attempt_id": str(attempt.id),
+                                }
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 

@@ -21,6 +21,7 @@ class TestRegistryContents:
         # #11 (U8 follow-up): 3 import_*_batch write tools added.
         # Task 1: literacy weekly report tools added
         # Travel module: 3 travel tools added
+        # Task 4 SDD: 3 learning-tutor tools added
         expected_names = {
             "get_family_overview",
             "get_assets",
@@ -35,6 +36,9 @@ class TestRegistryContents:
             "get_travel_trips",
             "get_travel_expenses",
             "get_travel_split_balances",
+            "get_learning_topic",
+            "get_child_learning_profile",
+            "record_learning_result",
         }
         assert set(_REGISTRY.keys()) == expected_names
 
@@ -64,13 +68,13 @@ class TestGetTool:
 class TestListToolsForRole:
     def test_list_tools_for_role_owner(self):
         tools = list_tools_for_role("owner")
-        # 10 existing + 3 travel tools
-        assert len(tools) == 13
+        # 10 existing + 3 travel + 3 learning tools
+        assert len(tools) == 16
         assert all(isinstance(t, MCPToolMeta) for t in tools)
 
     def test_list_tools_for_role_member(self):
         tools = list_tools_for_role("member")
-        assert len(tools) == 13
+        assert len(tools) == 16
 
     def test_list_tools_for_role_child(self):
         tools = list_tools_for_role("child")
@@ -93,8 +97,10 @@ class TestValidateRegistry:
             allowed_roles=frozenset(),
             requires_write=False,
         )
-        with patch.dict(_REGISTRY, {"broken_tool": broken}), \
-             pytest.raises(RuntimeError, match="empty allowed_roles"):
+        with (
+            patch.dict(_REGISTRY, {"broken_tool": broken}),
+            pytest.raises(RuntimeError, match="empty allowed_roles"),
+        ):
             validate_registry()
 
     def test_validate_registry_raises_on_unknown_role(self):
@@ -105,8 +111,10 @@ class TestValidateRegistry:
             allowed_roles=frozenset({"admin"}),
             requires_write=False,
         )
-        with patch.dict(_REGISTRY, {"broken_tool": broken}), \
-             pytest.raises(RuntimeError, match="unknown roles"):
+        with (
+            patch.dict(_REGISTRY, {"broken_tool": broken}),
+            pytest.raises(RuntimeError, match="unknown roles"),
+        ):
             validate_registry()
 
 

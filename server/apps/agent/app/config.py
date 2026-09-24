@@ -75,6 +75,10 @@ class AgentSettings(BaseSettings):
     # DeerFlow Gateway API 地址（内部代理端点使用）
     DEERFLOW_GATEWAY_URL: str = "http://localhost:8001"
 
+    # StreamBridge Redis URL (cross-process event sharing with backend)
+    # Falls back to REDIS_URL, then redis://redis:6379/0
+    STREAM_BRIDGE_REDIS_URL: str = ""
+
     model_config = {
         "env_file": [".env", str(Path(__file__).resolve().parents[4] / ".env")],
         "extra": "ignore",

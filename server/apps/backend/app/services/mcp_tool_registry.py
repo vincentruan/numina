@@ -165,13 +165,22 @@ _REGISTRY: dict[str, MCPToolMeta] = {
                             "remaining_amount": {"type": "number"},
                             "monthly_payment": {"type": "number"},
                             "interest_rate": {"type": "number"},
-                            "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+                            "start_date": {
+                                "type": "string",
+                                "description": "YYYY-MM-DD",
+                            },
                             "end_date": {"type": "string", "description": "YYYY-MM-DD"},
                             "institution": {"type": "string"},
                             "currency": {"type": "string", "default": "CNY"},
                             "notes": {"type": "string"},
                         },
-                        "required": ["temp_id", "category", "name", "original_amount", "remaining_amount"],
+                        "required": [
+                            "temp_id",
+                            "category",
+                            "name",
+                            "original_amount",
+                            "remaining_amount",
+                        ],
                     },
                 }
             },
@@ -195,17 +204,34 @@ _REGISTRY: dict[str, MCPToolMeta] = {
                         "type": "object",
                         "properties": {
                             "temp_id": {"type": "string"},
-                            "name": {"type": "string", "description": "信用卡名称（如招商银行信用卡）"},
-                            "original_amount": {"type": "number", "description": "额度或账单金额"},
-                            "remaining_amount": {"type": "number", "description": "未还金额"},
+                            "name": {
+                                "type": "string",
+                                "description": "信用卡名称（如招商银行信用卡）",
+                            },
+                            "original_amount": {
+                                "type": "number",
+                                "description": "额度或账单金额",
+                            },
+                            "remaining_amount": {
+                                "type": "number",
+                                "description": "未还金额",
+                            },
                             "monthly_payment": {"type": "number"},
                             "interest_rate": {"type": "number"},
-                            "end_date": {"type": "string", "description": "到期日 YYYY-MM-DD"},
+                            "end_date": {
+                                "type": "string",
+                                "description": "到期日 YYYY-MM-DD",
+                            },
                             "institution": {"type": "string"},
                             "currency": {"type": "string", "default": "CNY"},
                             "notes": {"type": "string"},
                         },
-                        "required": ["temp_id", "name", "original_amount", "remaining_amount"],
+                        "required": [
+                            "temp_id",
+                            "name",
+                            "original_amount",
+                            "remaining_amount",
+                        ],
                     },
                 }
             },
@@ -309,6 +335,82 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         },
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=False,
+    ),
+    # ── Learning-tutor skill (Task 4 SDD) ──────────────────────────────
+    "get_learning_topic": MCPToolMeta(
+        name="get_learning_topic",
+        description=(
+            "获取学习知识点详情及孩子的掌握程度。返回知识点名称、描述、证据标准、"
+            "评估提示，以及孩子当前的掌握级别。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "integer", "description": "知识点 ID"},
+                "child_id": {"type": "integer", "description": "孩子用户 ID"},
+            },
+            "required": ["topic_id", "child_id"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
+    "get_child_learning_profile": MCPToolMeta(
+        name="get_child_learning_profile",
+        description=(
+            "获取孩子的学习档案统计：已掌握、学习中、可用的知识点数量，"
+            "以及最近的学习活动。"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "child_id": {"type": "integer", "description": "孩子用户 ID"},
+                "subject": {"type": "string", "description": "可选：按科目过滤"},
+            },
+            "required": ["child_id"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
+    "record_learning_result": MCPToolMeta(
+        name="record_learning_result",
+        description=("记录 AI 辅导评估结果。更新学习进度、触发金币/徽章奖励。"),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "学习会话 ID"},
+                "evaluation": {
+                    "type": "object",
+                    "description": "评估结果 JSON",
+                    "properties": {
+                        "evidence_results": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "evidence": {"type": "string"},
+                                    "met": {"type": "boolean"},
+                                    "notes": {"type": "string"},
+                                },
+                                "required": ["evidence", "met"],
+                            },
+                        },
+                        "overall_score": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                        },
+                        "recommendation": {
+                            "type": "string",
+                            "enum": ["mastered", "needs_review", "keep_learning"],
+                        },
+                    },
+                    "required": ["evidence_results", "overall_score", "recommendation"],
+                },
+            },
+            "required": ["session_id", "evaluation"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=True,
     ),
 }
 

@@ -195,6 +195,12 @@ def notify_wish_redeemed(
     )
 
 
+# Note: notification titles/bodies use hardcoded Chinese strings — this matches
+# the established convention across all dispatcher functions.  Errors use i18n
+# via AppError; notifications use direct Chinese.  A broader notification i18n
+# effort can be done separately if needed.
+
+
 def notify_learning_assignment_created(
     db: Session,
     family_id: int,

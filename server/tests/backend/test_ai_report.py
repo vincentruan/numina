@@ -155,25 +155,30 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    async def _fake_stream(task_id, family_id, last_event_id=None, run_id=None, **kwargs):
+    async def _fake_sse():
         # Simulate the bridge consumer completing the task on end event
         from apps.backend.app.services.ai_task_service import AITaskService
         from apps.backend.app.database import SessionLocal
 
         yield "event: custom\ndata: {\"type\":\"report.step2_json\"}\n\n"
-        # Mark the task completed (mimics consume_task_stream's end handling)
         _db = SessionLocal()
         try:
-            AITaskService.complete_task(task_id, _db)
+            # Complete the task that was just created
+            task = db.query(AITask).filter_by(family_id=family_id, skill_id="asset-report").first()
+            if task:
+                AITaskService.complete_task(str(task.id), _db)
         finally:
             _db.close()
         yield "event: end\ndata: null\n\n"
 
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        return StreamingResponse(_fake_sse(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
-        patch("apps.backend.app.routers.ai_report.consume_task_stream", _fake_stream),
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
-        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", side_effect=_mock_trigger_and_stream),
     ):
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
@@ -205,13 +210,17 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate/events requires owner role (embedded in JWT)."""
     _enable_ai(db, auth_headers, client)
 
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _empty():
+            yield ""
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
-        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
-        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", side_effect=_mock_trigger_and_stream),
     ):
-        mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -246,13 +255,17 @@ def test_generate_report_resumes_running_task(client, auth_headers, db):
     db.add(task)
     db.commit()
 
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _empty():
+            yield ""
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
-        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
-        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", side_effect=_mock_trigger_and_stream),
     ):
-        mock_stream.return_value = _make_empty_async_gen()
         # No force=true — should resume existing task
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
@@ -286,13 +299,17 @@ def test_generate_report_force_cancels_zombie_task(client, auth_headers, db):
     db.commit()
     zombie_task_id = task.id
 
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _empty():
+            yield ""
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
-        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
-        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", side_effect=_mock_trigger_and_stream),
     ):
-        mock_stream.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -337,13 +354,17 @@ def test_generate_report_timeout_cancels_stale_task(client, auth_headers, db):
     db.add(task)
     db.commit()
 
+    from fastapi.responses import StreamingResponse
+
+    async def _mock_trigger_and_stream(**kwargs):
+        async def _empty():
+            yield ""
+        return StreamingResponse(_empty(), media_type="text/event-stream")
+
     with (
         patch("apps.backend.app.routers.ai_report.AgentClient") as mock_cls,
-        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_stream,
-        patch("apps.backend.app.routers.ai_report._pump_agent_sse_to_bridge", new=AsyncMock()),
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer"),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", side_effect=_mock_trigger_and_stream),
     ):
-        mock_stream.return_value = _make_empty_async_gen()
         # No force=true — the stale task should be auto-timeout'd
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
@@ -362,41 +383,26 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    # Build a mock AgentClient.stream() that returns status 500 (agent failure).
-    mock_resp = MagicMock()
-    mock_resp.status_code = 500
-
-    async def _mock_aread():
-        return b"agent error"
-
-    mock_resp.aread = _mock_aread
-    mock_resp.headers = {}
-
-    mock_cm = MagicMock()
-    mock_cm.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_cm.__aexit__ = AsyncMock(return_value=False)
-
-    mock_client = MagicMock()
-    mock_client.stream = MagicMock(return_value=mock_cm)
+    # Make trigger_and_stream raise to simulate agent trigger failure
+    async def _mock_trigger_fails(**kwargs):
+        raise Exception("agent 500")
 
     with (
-        patch("apps.backend.app.routers.ai_report.AgentClient", return_value=mock_client),
-        patch("apps.backend.app.routers.ai_report.consume_task_stream") as mock_fwd,
-        patch("apps.backend.app.routers.ai_report._spawn_lifecycle_consumer") as mock_lc,
+        patch("apps.backend.app.routers.ai_report.AgentClient"),
+        patch("apps.backend.app.routers.ai_report.trigger_and_stream", side_effect=_mock_trigger_fails),
+        patch("apps.backend.app.routers.ai_report.AITaskService.fail_task"),
     ):
-        mock_fwd.return_value = _make_empty_async_gen()
         resp = client.post("/api/v1/ai/report/generate/events?force=true", headers=auth_headers)
 
-    # Response is still 200 SSE (route returns stream; error delivered via events)
+    # Response is 200 SSE (route returns stream; error delivered via events)
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
 
     # Consume response to let generator complete
     _ = resp.content
 
-    # The lifecycle consumer should have been spawned (fallback with run_id=None
-    # since the agent didn't return Content-Location).
-    assert mock_lc.called, "lifecycle consumer should be spawned"
+    # Error event should be in the response (trigger failed → error stream)
+    assert "error" in resp.text
 
 
 def _make_empty_async_gen():

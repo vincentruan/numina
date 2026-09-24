@@ -24,6 +24,7 @@ from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.schemas.ai_task import (
+    TaskCheckpointRequest,
     TaskCompleteRequest,
     TaskFailRequest,
     TaskHeartbeatRequest,
@@ -1392,3 +1393,50 @@ def internal_task_cancel_confirm(
         db.commit()
 
     return {"ok": True, "task_id": task_id, "status": "cancelled"}
+
+
+@router.post("/tasks/{task_id}/checkpoint")
+def internal_task_checkpoint(
+    task_id: str,
+    body: TaskCheckpointRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Store the last checkpoint ID for checkpoint-based resume.
+
+    Agent calls this after stream completion to persist the latest
+    LangGraph checkpoint ID on the AITask row. Idempotent.
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    ok = AITaskService.update_checkpoint_id(
+        int(task_id), int(family_id), body.checkpoint_id, db
+    )
+    if not ok:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    return {"ok": True, "task_id": task_id}
+
+
+@router.get("/tasks/{task_id}/info")
+def internal_task_info(
+    task_id: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Get task status and checkpoint info for auto-resume detection.
+
+    Returns status and last_checkpoint_id so the agent can decide whether
+    to auto-resume from a previous failure.
+    """
+    from apps.backend.app.services.ai_task_service import AITaskService
+
+    task = AITaskService.get_task_by_id(int(task_id), int(family_id), db)
+    if not task:
+        raise AppError(ErrorCode.NOT_FOUND, "Task not found")
+
+    return {
+        "status": task.status,
+        "last_checkpoint_id": task.last_checkpoint_id,
+        "skill_id": task.skill_id,
+    }

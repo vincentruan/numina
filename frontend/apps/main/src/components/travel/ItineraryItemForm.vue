@@ -288,6 +288,12 @@ const canSubmit = computed(() => {
   return form.value.date && form.value.type
 })
 
+// Helper to parse date string for picker
+function parseDateParts(dateStr: string): string[] {
+  const parts = dateStr.split('-')
+  return parts.length === 3 ? parts : []
+}
+
 // Watch for edit item changes
 watch(() => props.editItem, (item) => {
   if (item) {
@@ -302,6 +308,8 @@ watch(() => props.editItem, (item) => {
       cost_currency: item.cost_currency || 'CNY',
       custom_type_id: item.custom_type_id,
     }
+    // Sync date picker with edit item's date
+    if (item.date) pickerDate.value = parseDateParts(item.date)
     // Restore type_metadata from the item
     const meta = item.type_metadata as Record<string, unknown> | null
     typeMeta.value = meta
@@ -316,8 +324,16 @@ watch(() => props.editItem, (item) => {
 watch(() => props.initialDate, (d) => {
   if (d && !props.editItem) {
     form.value.date = d
+    pickerDate.value = parseDateParts(d)
   }
 }, { immediate: true })
+
+// Sync picker when popup opens
+watch(showDatePicker, (open) => {
+  if (open && form.value.date) {
+    pickerDate.value = parseDateParts(form.value.date)
+  }
+})
 
 function resetForm() {
   form.value = {

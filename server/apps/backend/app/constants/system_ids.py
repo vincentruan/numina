@@ -24,3 +24,8 @@ WISH_ADVICE_AGENT_ID: int = 100000000000009
 # pollute narrative with stale data. soul_md is minimal (the narrative contract
 # lives in skills/builtin/public/dashboard-narrative/SKILL.md).
 DASHBOARD_NARRATIVE_AGENT_ID: int = 100000000000010
+# Learning OS: learning-tutor system agent (AI 学习辅导). Stateless stream_run
+# agent — each run builds fresh learning context; DeerMem would pollute tutoring
+# with stale session data. soul_md is minimal (the tutoring contract lives in
+# skills/builtin/public/learning-tutor/SKILL.md).
+LEARNING_TUTOR_AGENT_ID: int = 100000000000011

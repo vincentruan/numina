@@ -116,7 +116,7 @@ def test_end_session_not_found(db):
     """End a nonexistent session raises error."""
     with pytest.raises(AppError) as exc_info:
         end_session(db, 99999)
-    assert "learning_session_not_found" in str(exc_info.value)
+    assert "LEARNING_SESSION_NOT_FOUND" in str(exc_info.value)
 
 
 def test_end_session_already_ended(db, child_user, topic):
@@ -127,7 +127,7 @@ def test_end_session_already_ended(db, child_user, topic):
 
     with pytest.raises(AppError) as exc_info:
         end_session(db, session.id)
-    assert "learning_session_already_ended" in str(exc_info.value)
+    assert "LEARNING_SESSION_ALREADY_ENDED" in str(exc_info.value)
 
 
 def test_start_assessment(db, child_user, topic, progress):
@@ -143,7 +143,7 @@ def test_start_assessment_session_not_found(db, child_user):
     """Start assessment with nonexistent session raises error."""
     with pytest.raises(AppError) as exc_info:
         start_assessment(db, 99999, child_user["id"])
-    assert "learning_session_not_found" in str(exc_info.value)
+    assert "LEARNING_SESSION_NOT_FOUND" in str(exc_info.value)
 
 
 def test_start_assessment_progress_not_found(db, child_user, topic):
@@ -162,7 +162,7 @@ def test_start_assessment_progress_not_found(db, child_user, topic):
     # No progress record exists for this child+topic
     with pytest.raises(AppError) as exc_info:
         start_assessment(db, session.id, child_user["id"])
-    assert "learning_progress_not_found" in str(exc_info.value)
+    assert "LEARNING_PROGRESS_NOT_FOUND" in str(exc_info.value)
 
 
 def test_start_assessment_invalid_transition(db, child_user, topic):
@@ -185,4 +185,4 @@ def test_start_assessment_invalid_transition(db, child_user, topic):
 
     with pytest.raises(AppError) as exc_info:
         start_assessment(db, session.id, child_user["id"])
-    assert "invalid_state_transition" in str(exc_info.value)
+    assert "LEARNING_INVALID_STATE_TRANSITION" in str(exc_info.value)

@@ -1,5 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
-import { readSSEStream } from '@/utils/sseReader'
+import { readSSEStream } from '@numina/shared'
 import type { AIReport, FinanceCoachResponse, FinanceSuggestion } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────

@@ -51,3 +51,11 @@ class TaskHeartbeatRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     expires_at: datetime | None = None
+
+
+class TaskCheckpointRequest(BaseModel):
+    """Request body for checkpoint ID callback."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    checkpoint_id: str

@@ -244,6 +244,7 @@ class AssetReportRunRequest(BaseModel):
     language: str | None = None
     input: dict[str, Any] | None = None
     on_disconnect: str = "cancel"
+    config: dict[str, Any] | None = None
 
 
 @router.post("/runs/asset-report/{thread_id}")
@@ -268,7 +269,7 @@ async def trigger_asset_report_run(
     run_body = SimpleNamespace(
         assistant_id=None,
         input=body.input,
-        config=None,
+        config=body.config,
         metadata={"app": "asset-report", "language": body.language},
         on_disconnect=body.on_disconnect,
         multitask_strategy="reject",
@@ -621,7 +622,12 @@ async def trigger_literacy_weekly_report_run(
     )
 
     record = await start_run(
-        run_body, thread_id, request, body.family_id, body.user_id, internal=True,
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
     )
     run_mgr = get_run_manager(request)
 
@@ -639,5 +645,67 @@ async def trigger_literacy_weekly_report_run(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Content-Location": f"/internal/gateway/runs/literacy-weekly-report/{thread_id}/{record.run_id}",
+        },
+    )
+
+
+class LearningTutorRunRequest(BaseModel):
+    """Request body for internal learning-tutor run trigger."""
+
+    family_id: str
+    user_id: str | None = None
+    input: dict[str, Any] | None = None
+    on_disconnect: str = "cancel"
+
+
+@router.post("/runs/learning-tutor/{thread_id}")
+async def trigger_learning_tutor_run(
+    thread_id: str,
+    body: LearningTutorRunRequest,
+    request: Request,
+    _family_id: str = Depends(verify_service_token),
+) -> StreamingResponse:
+    """Trigger a learning-tutor stream_run from the backend (service-to-service).
+
+    The backend learning-tutor trigger creates a stream_run with
+    app="learning-tutor" via this X-Agent-Token-authenticated endpoint,
+    bypassing R1's frontend 409 gate (internal=True). The worker's
+    _run_learning_tutor_agent then drives the tutoring agent.
+    """
+    _validate_path_segment(thread_id, "thread_id")
+
+    run_body = SimpleNamespace(
+        assistant_id=None,
+        input=body.input,
+        config=None,
+        metadata={"app": "learning-tutor"},
+        on_disconnect=body.on_disconnect,
+        multitask_strategy="reject",
+    )
+
+    record = await start_run(
+        run_body,
+        thread_id,
+        request,
+        body.family_id,
+        body.user_id,
+        internal=True,
+    )
+    run_mgr = get_run_manager(request)
+
+    async def sse_generator():
+        async for frame in sse_consumer(
+            get_stream_bridge(request), record, request, run_mgr
+        ):
+            yield frame
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/internal/gateway/runs/learning-tutor/{thread_id}/{record.run_id}",
         },
     )

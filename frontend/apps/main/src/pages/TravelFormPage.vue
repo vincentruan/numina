@@ -103,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
@@ -148,6 +148,18 @@ const maxDate = new Date(now.getFullYear() + 5, 11, 31)
 const departureDateValue = ref<string[]>([])
 const returnDateValue = ref<string[]>([])
 
+// Create mode: default departure to today, return follows departure
+if (!isEdit.value) {
+  const today = new Date()
+  const todayStr = [
+    String(today.getFullYear()),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ]
+  departureDateValue.value = todayStr
+  returnDateValue.value = [...todayStr]
+}
+
 function formatDateStr(values: string[]): string {
   return `${values[0]}-${values[1]}-${values[2]}`
 }
@@ -167,6 +179,13 @@ function onReturnConfirm({ selectedValues }: { selectedValues: string[] }) {
   formData.return_date = formatDateStr(selectedValues)
   showReturnPicker.value = false
 }
+
+// Sync return picker to departure date when opening
+watch(showReturnPicker, (open) => {
+  if (open && !formData.return_date && formData.departure_date) {
+    returnDateValue.value = parseDateStr(formData.departure_date)
+  }
+})
 
 async function onSubmit() {
   submitting.value = true

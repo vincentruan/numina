@@ -161,7 +161,7 @@ All routers live in `app/routers/` and are mounted with `prefix="/api/v1"` in `a
 
 ### AI (frontend → backend → agent dispatch)
 
-Backend AI routers are the frontend's entry point. Multi-step capabilities proxy to the agent via `AgentClient.stream` (SSE, `X-Agent-Token`); the agent runs them as `stream_run` apps (`numina`/`asset-report`/`import-parse`/`finance-coach`/`wish-advice`) — see `server/apps/agent/CLAUDE.md` §Runtime & Dispatch. Lightweight single-call capabilities (suggest) call the agent's lightweight LLM endpoint directly.
+Backend AI routers are the frontend's entry point. Multi-step capabilities proxy to the agent via `AgentClient.stream` (SSE, `X-Agent-Token`); the agent runs them as `stream_run` apps (`numina`/`asset-report`/`import-parse`/`finance-coach`/`wish-advice`/`learning-tutor`) — see `server/apps/agent/CLAUDE.md` §Runtime & Dispatch. Lightweight single-call capabilities (suggest) call the agent's lightweight LLM endpoint directly.
 
 | Router | Final prefix | Purpose | Dispatch |
 |--------|--------------|---------|----------|

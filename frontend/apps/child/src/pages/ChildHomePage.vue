@@ -40,6 +40,9 @@
         class="home-progress-ring"
       />
 
+      <!-- Today's learning — drives engagement with learning module -->
+      <TodayLearningCard v-if="todayLearning" :data="todayLearning" />
+
     <!-- Today's chores — read-only preview; tap a card to manage on the Tasks page -->
     <div class="section">
       <div class="section-head">
@@ -217,11 +220,13 @@ defineOptions({ name: 'ChildHome' })
 import { ref, computed, onMounted, watch, onActivated } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ProgressRing from '@/components/ProgressRing.vue'
+import TodayLearningCard from '@/components/TodayLearningCard.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showFailToast } from 'vant'
 import { useRouter } from 'vue-router'
 import { getMyChores, markChoreComplete, claimChore, type ChoreInstance } from '@/api/chores'
+import { getTodayLearning, type TodayLearningResponse } from '@/api/learning'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import { getCoinBalance } from '@/api/coins'
@@ -258,6 +263,7 @@ const reducedMotion = useReducedMotion()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
 const refreshing = ref(false)
+const todayLearning = ref<TodayLearningResponse | null>(null)
 
 // Manifesto state
 const {
@@ -405,6 +411,12 @@ async function load() {
     todayChores.value = chores
     const active = wishData?.active ?? []
     topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
+    // Fetch today learning (non-critical — hide card on failure)
+    try {
+      todayLearning.value = await getTodayLearning()
+    } catch {
+      todayLearning.value = null
+    }
     // Check for pending celebrations after data loads
     checkAndTriggerCelebration(chores)
   } finally {

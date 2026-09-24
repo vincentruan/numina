@@ -240,6 +240,11 @@ class RunPipeline:
         # This skips the failed user message that the head retains after a
         # failed first turn.  Pass None (default) for normal head-based runs.
         checkpoint_id: str | None = None,
+        # Optional: enable auto-resume from the last failed run's checkpoint.
+        # When True and checkpoint_id is None, __aenter__ queries the backend
+        # for the task's last_checkpoint_id and uses it if the previous run
+        # failed/interrupted. Non-fatal: query failure degrades to no-resume.
+        auto_resume: bool = False,
     ) -> None:
         self.app_name = app_name
         self.family_id = family_id
@@ -260,6 +265,7 @@ class RunPipeline:
         self._middlewares = middlewares
         self._preloaded_ai_config = preloaded_ai_config
         self.checkpoint_id = checkpoint_id
+        self.auto_resume = auto_resume
 
         # Populated by __aenter__
         self._providers: list[dict[str, Any]] = []
@@ -294,6 +300,28 @@ class RunPipeline:
             "metadata",
             {"run_id": self.run_id, "thread_id": self.thread_id},
         )
+
+        # 1b. Auto-resume: if no explicit checkpoint_id and auto_resume=True,
+        #     query the backend for the task's last checkpoint from a failed run.
+        if self.checkpoint_id is None and self.auto_resume:
+            task_id = self.record.metadata.get("task_id") if self.record.metadata else None
+            if task_id:
+                try:
+                    task_info = await BackendClient(family_id=self.family_id).get_task_info(int(task_id))
+                    if (
+                        task_info
+                        and task_info.get("status") in ("failed", "interrupted")
+                        and task_info.get("last_checkpoint_id")
+                    ):
+                        self.checkpoint_id = task_info["last_checkpoint_id"]
+                        logger.info(
+                            "[%s] auto-resume from checkpoint=%s task=%s",
+                            self.app_name,
+                            self.checkpoint_id[:16],
+                            task_id,
+                        )
+                except Exception:
+                    logger.debug("auto-resume check failed (non-fatal)", exc_info=True)
 
         # 2. Fetch per-family AI config (tenant-isolated)
         #    Skip the HTTP call when the caller already fetched it.
@@ -468,6 +496,9 @@ class RunPipeline:
             )
         )
 
+        # 4b. Capture checkpoint ID for checkpoint-based resume (non-fatal)
+        await self._capture_checkpoint_id()
+
         # 5. Terminal end frame + sentinel + deferred cleanup (DeerFlow pattern)
         end_payload: dict[str, Any] = {"status": self._completion_status}
         if self.cumulative_usage:
@@ -499,6 +530,33 @@ class RunPipeline:
         )
 
         self._skill_token = set_active_skill(skill_name or self.skill_name)
+
+    async def _capture_checkpoint_id(self) -> None:
+        """Capture the latest checkpoint ID and report to backend (non-fatal).
+
+        Reads the latest checkpoint from the shared checkpointer using the
+        async API and reports it via BackendClient. Failures are logged at
+        debug level and never affect the run outcome.
+        """
+        try:
+            from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+                _get_shared_checkpointer,
+            )
+
+            checkpointer = _get_shared_checkpointer()
+            config = {"configurable": {"thread_id": self.thread_id}}
+            checkpoint_tuple = await checkpointer.aget_tuple(config)
+            if checkpoint_tuple and checkpoint_tuple.checkpoint:
+                checkpoint_id = checkpoint_tuple.checkpoint.get("id")
+                if checkpoint_id:
+                    task_id = self.record.metadata.get("task_id") if self.record.metadata else None
+                    if task_id:
+                        await BackendClient(family_id=self.family_id).report_checkpoint_id(
+                            task_id=int(task_id),
+                            checkpoint_id=str(checkpoint_id),
+                        )
+        except Exception:
+            logger.debug("checkpoint_id capture failed (non-fatal)", exc_info=True)
 
     async def run_skill(
         self,

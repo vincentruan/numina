@@ -156,14 +156,33 @@ const form = ref<FormState>({
   notes: '',
 })
 
+// Date picker values — defined before initialData watch so immediate sync can reference them
+const now = new Date()
+const startPickerValue = ref([
+  String(now.getFullYear()),
+  String(now.getMonth() + 1).padStart(2, '0'),
+  String(now.getDate()).padStart(2, '0'),
+])
+const endPickerValue = ref([
+  String(now.getFullYear()),
+  String(now.getMonth() + 1).padStart(2, '0'),
+  String(now.getDate()).padStart(2, '0'),
+])
+
 watch(() => props.initialData, (data) => {
   if (data) {
     if (data.role !== undefined) form.value.role = data.role
     if (data.monthly_rent !== undefined) form.value.monthly_rent = String(data.monthly_rent ?? '')
     if (data.deposit !== undefined) form.value.deposit = String(data.deposit ?? '')
     if (data.currency !== undefined) form.value.currency = String(data.currency ?? 'CNY')
-    if (data.start_date !== undefined) form.value.start_date = String(data.start_date ?? '')
-    if (data.end_date !== undefined) form.value.end_date = data.end_date ? String(data.end_date) : null
+    if (data.start_date !== undefined) {
+      form.value.start_date = String(data.start_date ?? '')
+      if (data.start_date) startPickerValue.value = data.start_date.split('-')
+    }
+    if (data.end_date !== undefined) {
+      form.value.end_date = data.end_date ? String(data.end_date) : null
+      if (data.end_date) endPickerValue.value = data.end_date.split('-')
+    }
     if (data.linked_asset_id !== undefined) form.value.linked_asset_id = data.linked_asset_id ? String(data.linked_asset_id) : null
     if (data.counterparty !== undefined) form.value.counterparty = String(data.counterparty ?? '')
     if (data.notes !== undefined) form.value.notes = String(data.notes ?? '')
@@ -190,18 +209,31 @@ function onRoleConfirm({ selectedValues }: { selectedValues: string[] }) {
 // --- Date pickers ---
 const showStartPicker = ref(false)
 const showEndPicker = ref(false)
-const now = new Date()
-const startPickerValue = ref([
-  String(now.getFullYear()),
-  String(now.getMonth() + 1).padStart(2, '0'),
-  String(now.getDate()).padStart(2, '0'),
-])
-const endPickerValue = ref([
-  String(now.getFullYear()),
-  String(now.getMonth() + 1).padStart(2, '0'),
-  String(now.getDate()).padStart(2, '0'),
-])
 const endDisplay = computed(() => form.value.end_date ?? '')
+
+// Sync picker when popup opens
+watch(showStartPicker, (open) => {
+  if (open && form.value.start_date) startPickerValue.value = form.value.start_date.split('-')
+})
+watch(showEndPicker, (open) => {
+  if (open) {
+    if (form.value.end_date) {
+      endPickerValue.value = form.value.end_date.split('-')
+    } else if (form.value.start_date) {
+      endPickerValue.value = form.value.start_date.split('-')
+    }
+  }
+})
+
+// Linkage: when start_date changes, sync startPickerValue + endPickerValue
+watch(() => form.value.start_date, (d) => {
+  if (d && d.split('-').length === 3) {
+    startPickerValue.value = d.split('-')
+    if (!form.value.end_date) {
+      endPickerValue.value = d.split('-')
+    }
+  }
+})
 
 function onStartConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.start_date = selectedValues.join('-')

@@ -41,7 +41,16 @@
           <!-- Study time -->
           <div class="study-section">
             <h2 class="section-title">{{ t('learning.progress.studyTime') }}</h2>
-            <p class="study-value">{{ totalStudyMinutes }} {{ t('learning.progress.minutes') }}</p>
+            <div class="study-stats">
+              <div class="study-stat">
+                <span class="study-stat__value">{{ totalStudyMinutes }}</span>
+                <span class="study-stat__label">{{ t('learning.progress.totalMinutes') }}</span>
+              </div>
+              <div class="study-stat">
+                <span class="study-stat__value">{{ todayStudyMinutes }}</span>
+                <span class="study-stat__label">{{ t('learning.progress.todayMinutes') }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- Recent activity -->
@@ -91,7 +100,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { getMyLearningMap, getTopicDetail, type ProgressResponse, type TopicResponse } from '@/api/learning'
+import { getMyLearningMap, getMyProgress, getTopicDetail, type ProgressResponse, type TopicResponse, type ChildProgressOverview } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
 const { t, locale } = useI18n()
@@ -103,6 +112,7 @@ const refreshing = ref(false)
 const error = ref('')
 const progressList = ref<ProgressResponse[]>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
+const progressOverview = ref<ChildProgressOverview | null>(null)
 
 // Computed stats
 const masteredCount = computed(() =>
@@ -126,8 +136,11 @@ const reviewCount = computed(() =>
 )
 
 const totalStudyMinutes = computed(() => {
-  // Sum xp_earned as a proxy for study time (until backend provides study_minutes)
-  return progressList.value.reduce((sum, p) => sum + (p.xp_earned || 0), 0)
+  return progressOverview.value?.total_study_minutes ?? 0
+})
+
+const todayStudyMinutes = computed(() => {
+  return progressOverview.value?.today_study_minutes ?? 0
 })
 
 // Recent activity: sort by last_practice_at descending, take top 10
@@ -160,8 +173,12 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const progress = await getMyLearningMap()
+    const [progress, overview] = await Promise.all([
+      getMyLearningMap(),
+      getMyProgress(),
+    ])
     progressList.value = progress
+    progressOverview.value = overview
 
     // Fetch topic details for display names
     const uniqueTopicIds = [...new Set(progress.map((p) => p.topic_id))]
@@ -289,12 +306,28 @@ onMounted(async () => {
   margin: 0 0 10px;
 }
 
-.study-value {
+.study-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.study-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.study-stat__value {
   font-family: Inter, sans-serif;
   font-size: 20px;
   font-weight: 700;
   color: var(--color-brand-ochre);
-  margin: 0;
+}
+
+.study-stat__label {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-body);
+  margin-top: 2px;
 }
 
 /* Activity section */

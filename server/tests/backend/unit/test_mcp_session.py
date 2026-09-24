@@ -1,4 +1,5 @@
 """Unit tests for MCPSession — verifies family_id-bound tool isolation."""
+
 import json
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +29,7 @@ async def test_list_tools_returns_all_tools():
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
-    # 10 existing + 3 travel tools
+    # 10 existing + 3 travel + 3 learning tools
     assert names == {
         "get_family_overview",
         "get_assets",
@@ -43,6 +44,9 @@ async def test_list_tools_returns_all_tools():
         "get_travel_trips",
         "get_travel_expenses",
         "get_travel_split_balances",
+        "get_learning_topic",
+        "get_child_learning_profile",
+        "record_learning_result",
     }
 
 
@@ -59,12 +63,18 @@ async def test_no_tool_exposes_family_id_parameter():
 @pytest.mark.asyncio
 async def test_get_family_overview_uses_bound_family_id(mock_db):
     session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
-    with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_session_local:
+    with patch(
+        "apps.backend.app.services.mcp_session.SessionLocal"
+    ) as mock_session_local:
         mock_session_local.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_session_local.return_value.__exit__ = MagicMock(return_value=False)
-        with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
+        with patch(
+            "apps.backend.app.services.mcp_session._get_caller_user"
+        ) as mock_user:
             mock_user.return_value = MagicMock(id="u1", family_id="100")
-            with patch("apps.backend.app.services.dashboard.get_overview") as mock_get_overview:
+            with patch(
+                "apps.backend.app.services.dashboard.get_overview"
+            ) as mock_get_overview:
                 mock_get_overview.return_value = {"net_worth": 1000000}
                 result = await session.call_tool("get_family_overview", {})
                 mock_get_overview.assert_called_once()
@@ -98,14 +108,23 @@ async def test_import_assets_batch_skips_unknown_category(mock_db):
     with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
         mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-        with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
+        with patch(
+            "apps.backend.app.services.mcp_session._get_caller_user"
+        ) as mock_user:
             mock_user.return_value = MagicMock(id="u1", family_id="100")
-            result = await session.call_tool("import_assets_batch", {
-                "items": [
-                    {"temp_id": "t1", "name": "茅台", "category_hint": "未知类别",
-                     "current_value": 1000.0},
-                ]
-            })
+            result = await session.call_tool(
+                "import_assets_batch",
+                {
+                    "items": [
+                        {
+                            "temp_id": "t1",
+                            "name": "茅台",
+                            "category_hint": "未知类别",
+                            "current_value": 1000.0,
+                        },
+                    ]
+                },
+            )
     payload = json.loads(result[0].text)
     assert payload["created"] == 0
     assert payload["skipped"] == 1
@@ -129,19 +148,28 @@ async def test_import_credit_cards_batch_applies_category_override(mock_db):
     with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_sl:
         mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_sl.return_value.__exit__ = MagicMock(return_value=False)
-        with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
+        with patch(
+            "apps.backend.app.services.mcp_session._get_caller_user"
+        ) as mock_user:
             mock_user.return_value = MagicMock(id="u1", family_id="100")
             with patch(
                 "apps.backend.app.services.liability.create_liability",
                 side_effect=_fake_create_liability,
             ):
-                result = await session.call_tool("import_credit_cards_batch", {
-                    "items": [
-                        {"temp_id": "c1", "name": "招行信用卡",
-                         "original_amount": 50000.0, "remaining_amount": 3000.0,
-                         "category": "should_be_ignored"},
-                    ]
-                })
+                result = await session.call_tool(
+                    "import_credit_cards_batch",
+                    {
+                        "items": [
+                            {
+                                "temp_id": "c1",
+                                "name": "招行信用卡",
+                                "original_amount": 50000.0,
+                                "remaining_amount": 3000.0,
+                                "category": "should_be_ignored",
+                            },
+                        ]
+                    },
+                )
     payload = json.loads(result[0].text)
     assert payload["created"] == 1
     assert created_reqs[0].category == "credit_card"  # override applied

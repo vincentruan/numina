@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.database import get_db
+from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
@@ -34,10 +34,11 @@ from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.bridge_consumer import (
-    _pump_agent_sse_to_bridge,
+    _lease_heartbeat,
     _spawn_lifecycle_consumer,
     consume_task_stream,
     get_shared_bridge,
+    trigger_agent_run,
 )
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.subscriber_registry import tracked_sse_stream
@@ -239,7 +240,6 @@ async def generate_narrative(
     Cache miss / force → AITask tracking + bridge consumer SSE.
     Threshold gate (asset_count >= 5, history >= 1 month) → empty JSON on miss.
     """
-    from apps.backend.app.database import SessionLocal
     from apps.backend.app.services.dashboard_narrative import (
         SKILL_ID,
         _build_narrative_context,
@@ -383,25 +383,12 @@ async def generate_narrative(
 
     task_id = str(task.id)
 
-    # Trigger agent via single streaming POST (bridge consumer pattern).
-    # NOTE: do NOT add a separate agent_client.post here — it would trigger the
-    # agent TWICE (once here, once in _pump_agent_sse_to_bridge below), creating
-    # two runs with different run_ids.  The interrupt strategy then leaves run 1
-    # without an "end" frame, so the AITask never completes and blocks the queue.
+    # Phase 2: Trigger agent (writes to Redis) and subscribe via bridge.
     agent_client = AgentClient(
         family_id=str(family_id), user_id=str(user.id), timeout=120.0
     )
     agent_url = f"/internal/gateway/runs/dashboard-narrative/{session_id}"
-    run_id: str | None = None
-
-    # Phase 1: Backend-owned buffer.
     shared_bridge = get_shared_bridge()
-
-    if not run_id:
-        logger.info(
-            "[narrative] task=%s run_id not yet resolved — pump will set it",
-            task_id,
-        )
 
     # Lifecycle consumer persistence callback (module-local for closure capture).
     from apps.backend.app.services.finance_coach_cache import upsert_skill_result
@@ -417,70 +404,9 @@ async def generate_narrative(
                 finally:
                     _db.close()
 
-    # Spawn lifecycle consumer inside the pump's on_authoritative_run_id callback
-    # so it subscribes with the correct run_id.  The pump reads the agent's
-    # metadata SSE event (which carries the authoritative run_id) before the
-    # first publish — Content-Location may carry the first POST's run_id, while
-    # the agent's interrupt strategy creates a second run with a different
-    # run_id.  Subscribing with the wrong run_id means the lifecycle consumer
-    # never sees events and the cache is never written.
-    _lc_spawned = False
-    _lc_task: asyncio.Task[None] | None = None
-
-    def _on_lc_run_id(cl_url: str) -> None:
-        """Called when Content-Location header arrives. Persist to AITask so
-        ``consume_task_stream``'s run_id fallback can resolve it."""
-        # Content-Location is a URL path — extract the trailing UUID and persist
-        # to the AITask row. Without this, ``consume_task_stream`` (passing
-        # run_id=None) falls back to AITask.run_id, which stays empty and raises
-        # "Task has no run_id" after 10s of retries — the frontend sees nothing.
-        nonlocal run_id
-        try:
-            run_id = AITaskService.extract_and_attach_run_id(
-                task_id, cl_url, family_id
-            )
-        except Exception:
-            logger.warning(
-                "[narrative] extract_and_attach_run_id failed task=%s",
-                task_id,
-                exc_info=True,
-            )
-
-    def _on_authoritative_run_id(meta_run_id: str) -> None:
-        """Called when metadata event arrives with the authoritative run_id."""
-        nonlocal _lc_spawned, _lc_task
-        if _lc_task is not None and not _lc_task.done():
-            _lc_task.cancel()
-        _lc_task = _spawn_lifecycle_consumer(
-            task_id=task_id,
-            family_id=family_id,
-            run_id=meta_run_id,
-            on_result=_persist_narrative_result,
-            bridge=shared_bridge,
-        )
-        _lc_spawned = True
-
-    # Fallback: if pump never resolves metadata run_id (e.g. stream failure),
-    # spawn with the original run_id after a short delay.
-    async def _lc_fallback() -> None:
-        nonlocal _lc_spawned, _lc_task
-        await asyncio.sleep(3)
-        if not _lc_spawned:
-            _lc_task = _spawn_lifecycle_consumer(
-                task_id=task_id,
-                family_id=family_id,
-                run_id=run_id,
-                on_result=_persist_narrative_result,
-                bridge=shared_bridge,
-            )
-            _lc_spawned = True
-
-    asyncio.create_task(_lc_fallback())
-
-    # Spawn background task: consume agent HTTP SSE → publish to shared bridge.
-    # This is the SINGLE trigger — no separate agent_client.post above.
-    asyncio.create_task(
-        _pump_agent_sse_to_bridge(
+    # Trigger agent and get run_id from Content-Location
+    try:
+        result = await trigger_agent_run(
             agent_client=agent_client,
             agent_url=agent_url,
             json_body={
@@ -498,24 +424,49 @@ async def generate_narrative(
                     ]
                 },
             },
-            bridge=shared_bridge,
-            run_id="",
             task_id=task_id,
             family_id=family_id,
-            on_run_id=_on_lc_run_id,
-            on_authoritative_run_id=_on_authoritative_run_id,
         )
+    except Exception as e:
+        logger.warning("[narrative] trigger failed task=%s err=%s", task_id, e, exc_info=True)
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(task_id, f"agent trigger failed: {type(e).__name__}", _fdb)
+        finally:
+            _fdb.close()
+        async def _error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': '叙事报告服务异常'})}\n\n"
+            yield "event: end\ndata: null\n\n"
+        return StreamingResponse(
+            tracked_sse_stream(task_id, _error_stream()),
+            media_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no"},
+        )
+    run_id = result["run_id"]
+
+    # Persist run_id to AITask row
+    AITaskService.extract_and_attach_run_id(task_id, result["content_location"], family_id)
+
+    # Start lease heartbeat (defence-in-depth for long-running tasks)
+    _hb_stop = asyncio.Event()
+    _hb_task = asyncio.create_task(_lease_heartbeat(task_id, family_id, _hb_stop))
+
+    # Spawn lifecycle consumer (reads from Redis bridge)
+    _spawn_lifecycle_consumer(
+        task_id=task_id,
+        family_id=family_id,
+        run_id=run_id,
+        on_result=_persist_narrative_result,
+        bridge=shared_bridge,
     )
 
     # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
-    # Same run_id alignment issue — consume_task_stream resolves from DB when
-    # run_id is None, so pass None to let the fallback handle it.
     last_event_id = request.headers.get("Last-Event-ID")
     stream_gen = consume_task_stream(
         task_id=task_id,
         family_id=family_id,
         last_event_id=last_event_id,
-        run_id=None,  # resolved from AITask.run_id by bridge_consumer fallback
+        run_id=run_id,
         bridge=shared_bridge,
     )
 
@@ -573,6 +524,8 @@ async def generate_narrative(
                     yield chunk
         finally:
             await _persist_from_stream()
+            _hb_stop.set()
+            _hb_task.cancel()
 
     return StreamingResponse(
         tracked_sse_stream(task_id, _stream_with_persist()),

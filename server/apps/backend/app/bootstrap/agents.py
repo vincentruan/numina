@@ -7,6 +7,7 @@ from apps.backend.app.constants.system_ids import (
     DASHBOARD_NARRATIVE_AGENT_ID,
     FINANCE_COACH_AGENT_ID,
     IMPORT_PARSE_AGENT_ID,
+    LEARNING_TUTOR_AGENT_ID,
     NUMINA_AGENT_ID,
     WISH_ADVICE_AGENT_ID,
 )
@@ -245,6 +246,28 @@ _DASHBOARD_NARRATIVE_AGENT = {
 }
 
 
+# System agent dedicated to learning-tutor (AI 学习辅导, Learning OS).
+# A 7th stream_run agent (app="learning-tutor"). Stateless — each run builds
+# fresh learning context; DeerMem would pollute tutoring with stale session data.
+# soul_md is minimal (the tutoring contract lives in
+# skills/builtin/public/learning-tutor/SKILL.md). The agent calls MCP learning
+# tools to access child learning data and generates personalized tutoring content.
+_LEARNING_TUTOR_AGENT = {
+    "id": LEARNING_TUTOR_AGENT_ID,
+    "family_id": 0,
+    "agent_name": "learning-tutor",
+    "display_name": "学习辅导",
+    "description": "AI 学习辅导智能体。根据儿童学习数据，提供个性化辅导内容和学习建议。",
+    "icon": "📚",
+    "color": "#06b6d4",
+    "soul_md": "你是儿童学习辅导助手，根据提供的学习数据，生成个性化的辅导内容和建议，帮助孩子理解和掌握知识。",
+    "skills": ["learning-tutor"],
+    "agent_type": "system",
+    "memory_enabled": False,
+    "display_order": 70,
+}
+
+
 def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     """Insert or update a builtin system agent from its spec dict."""
     from apps.backend.app.models.ai_agent import AIAgent
@@ -252,21 +275,25 @@ def _upsert_builtin_agent(db: Session, spec: dict) -> None:
     existing = db.query(AIAgent).filter(AIAgent.id == spec["id"]).first()
 
     if not existing:
-        db.add(AIAgent(
-            id=spec["id"],
-            family_id=spec["family_id"],
-            agent_name=spec["agent_name"],
-            display_name=spec["display_name"],
-            description=spec["description"],
-            icon=spec["icon"],
-            color=spec["color"],
-            soul_md=spec["soul_md"],
-            skills=spec["skills"],
-            agent_type=spec["agent_type"],
-            memory_enabled=spec.get("memory_enabled", True),
-            display_order=spec["display_order"],
-        ))
-        logger.info("已初始化系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
+        db.add(
+            AIAgent(
+                id=spec["id"],
+                family_id=spec["family_id"],
+                agent_name=spec["agent_name"],
+                display_name=spec["display_name"],
+                description=spec["description"],
+                icon=spec["icon"],
+                color=spec["color"],
+                soul_md=spec["soul_md"],
+                skills=spec["skills"],
+                agent_type=spec["agent_type"],
+                memory_enabled=spec.get("memory_enabled", True),
+                display_order=spec["display_order"],
+            )
+        )
+        logger.info(
+            "已初始化系统智能体: %s (%s)", spec["display_name"], spec["agent_name"]
+        )
     else:
         # Keep soul_md / description / display_name / memory_enabled in sync with code on updates.
         updated = False
@@ -283,7 +310,9 @@ def _upsert_builtin_agent(db: Session, spec: dict) -> None:
             existing.memory_enabled = spec.get("memory_enabled", True)
             updated = True
         if updated:
-            logger.info("已更新系统智能体: %s (%s)", spec["display_name"], spec["agent_name"])
+            logger.info(
+                "已更新系统智能体: %s (%s)", spec["display_name"], spec["agent_name"]
+            )
 
 
 def bootstrap_agents(db: Session) -> None:
@@ -294,4 +323,5 @@ def bootstrap_agents(db: Session) -> None:
     _upsert_builtin_agent(db, _FINANCE_COACH_AGENT)
     _upsert_builtin_agent(db, _WISH_ADVICE_AGENT)
     _upsert_builtin_agent(db, _DASHBOARD_NARRATIVE_AGENT)
+    _upsert_builtin_agent(db, _LEARNING_TUTOR_AGENT)
     db.commit()

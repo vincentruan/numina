@@ -46,6 +46,9 @@ class AITask(Base):
     progress: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, comment="Optional JSON blob (step, percentage, message)"
     )
+    last_checkpoint_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="Last LangGraph checkpoint ID for resume"
+    )
 
     # Composite index for efficient task queries by family + skill + status
     __table_args__ = (

@@ -15,26 +15,91 @@
         <div class="session-header__icon">🎓</div>
         <div class="session-header__info">
           <h2 class="session-header__title">{{ topicDisplayNameText }}</h2>
-          <p class="session-header__type">{{ t(`learning.status.${session.session_type || 'learning'}`) }}</p>
+          <div class="session-header__meta">
+            <span
+              class="session-badge"
+              :class="session.session_type === 'tutorial' ? 'badge--tutorial' : 'badge--assessment'"
+            >
+              {{ t(`learning.status.${session.session_type || 'learning'}`) }}
+            </span>
+            <span v-if="isStreaming" class="status-indicator status-indicator--active">
+              {{ t('learning.session.streaming') }}
+            </span>
+            <span v-else-if="isCompleted" class="status-indicator status-indicator--done">
+              {{ t('learning.session.completed') }}
+            </span>
+          </div>
         </div>
       </div>
 
-      <!-- Chat area placeholder -->
-      <!-- TODO: Integrate DeerFlow SSE streaming via adapted useThreadChat composable -->
-      <div class="chat-area">
-        <div v-if="session.thread_id" class="chat-placeholder">
-          <div class="chat-placeholder__icon">💬</div>
-          <p class="chat-placeholder__title">{{ t('learning.session.chatTitle') }}</p>
-          <p class="chat-placeholder__desc">{{ t('learning.session.chatDesc') }}</p>
-          <div class="chat-placeholder__thread">
-            <span class="thread-label">Thread:</span>
-            <span class="thread-id">{{ session.thread_id }}</span>
+      <!-- Chat messages -->
+      <div class="chat-area" ref="chatAreaRef">
+        <div v-if="messages.length === 0 && !isStreaming" class="chat-empty">
+          <div class="chat-empty__icon">💬</div>
+          <p class="chat-empty__title">{{ t('learning.session.chatTitle') }}</p>
+          <p class="chat-empty__desc">{{ t('learning.session.chatDesc') }}</p>
+        </div>
+
+        <div
+          v-for="msg in messages"
+          :key="msg.id"
+          class="chat-msg"
+          :class="`chat-msg--${msg.role}`"
+        >
+          <div class="chat-msg__bubble">
+            <!-- Tool call display (collapsible) -->
+            <details v-if="msg.toolCall" class="tool-details">
+              <summary class="tool-details__summary">
+                🔧 {{ msg.toolCall.name }}
+              </summary>
+              <pre class="tool-details__content">{{ JSON.stringify(msg.toolCall.arguments, null, 2) }}</pre>
+            </details>
+
+            <!-- Tool result display (collapsible) -->
+            <details v-if="msg.toolResult" class="tool-details">
+              <summary class="tool-details__summary">
+                📋 {{ msg.toolResult.name }}
+              </summary>
+              <pre class="tool-details__content">{{ typeof msg.toolResult.output === 'string' ? msg.toolResult.output : JSON.stringify(msg.toolResult.output, null, 2) }}</pre>
+            </details>
+
+            <!-- Regular text content -->
+            <div v-if="msg.content" class="chat-msg__text">{{ msg.content }}</div>
           </div>
         </div>
-        <div v-else class="chat-placeholder">
-          <div class="chat-placeholder__icon">📝</div>
-          <p class="chat-placeholder__title">{{ t('learning.session.noThread') }}</p>
+
+        <!-- Streaming text (current response being typed) -->
+        <div v-if="currentStreamText" class="chat-msg chat-msg--assistant">
+          <div class="chat-msg__bubble">
+            <div class="chat-msg__text">{{ currentStreamText }}</div>
+            <span class="typing-cursor">|</span>
+          </div>
         </div>
+
+        <!-- Error display -->
+        <div v-if="chatError" class="chat-error">
+          <p>{{ chatError }}</p>
+          <button class="btn-retry" @click="onRetry">{{ t('common.retry') }}</button>
+        </div>
+      </div>
+
+      <!-- Input area (enabled when streaming or completed — multi-turn tutorial) -->
+      <div v-if="session.thread_id" class="chat-input-area">
+        <input
+          v-model="inputText"
+          class="chat-input"
+          type="text"
+          :placeholder="t('learning.session.inputPlaceholder')"
+          :disabled="isStreaming"
+          @keyup.enter="onSendMessage"
+        />
+        <button
+          class="chat-send-btn"
+          :disabled="isStreaming || !inputText.trim()"
+          @click="onSendMessage"
+        >
+          {{ t('learning.session.send') }}
+        </button>
       </div>
 
       <!-- Session actions -->
@@ -50,8 +115,8 @@
     </template>
 
     <!-- Error state -->
-    <div v-else-if="error" class="error-state">
-      <p>{{ error }}</p>
+    <div v-else-if="loadError" class="error-state">
+      <p>{{ loadError }}</p>
       <button class="btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
   </div>
@@ -60,12 +125,13 @@
 <script setup lang="ts">
 defineOptions({ name: 'LearningSession' })
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
 import { showSuccessToast, showFailToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
+import { useLearningChat } from '@/composables/useLearningChat'
 import { getSession, getTopicDetail, endSession, type SessionResponse, type TopicResponse } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
@@ -79,14 +145,37 @@ const sessionId = computed(() => route.params.id as string)
 
 const loading = ref(true)
 const ending = ref(false)
-const error = ref('')
+const loadError = ref('')
 const session = ref<SessionResponse | null>(null)
 const topic = ref<TopicResponse | null>(null)
+const inputText = ref('')
+const chatAreaRef = ref<HTMLElement | null>(null)
+
+const {
+  messages,
+  status,
+  currentStreamText,
+  error: chatError,
+  isStreaming,
+  isCompleted,
+  startAssessment,
+  sendMessage,
+  disconnect,
+} = useLearningChat()
 
 const topicDisplayNameText = computed(() => {
   if (!topic.value) return ''
   return topicDisplayName(topic.value)
 })
+
+// Auto-scroll to bottom when new messages arrive or streaming text updates
+watch([messages, currentStreamText], () => {
+  nextTick(() => {
+    if (chatAreaRef.value) {
+      chatAreaRef.value.scrollTop = chatAreaRef.value.scrollHeight
+    }
+  })
+}, { deep: true })
 
 function goBack() {
   router.push('/learning')
@@ -94,7 +183,7 @@ function goBack() {
 
 async function load() {
   loading.value = true
-  error.value = ''
+  loadError.value = ''
   try {
     const sessionData = await getSession(sessionId.value)
     session.value = sessionData
@@ -104,16 +193,35 @@ async function load() {
       const topicData = await getTopicDetail(sessionData.topic_id)
       topic.value = topicData
     }
+
+    // Start the assessment stream if session has a thread_id
+    if (sessionData.thread_id) {
+      await startAssessment(sessionId.value)
+    }
   } catch {
-    error.value = t('toast.loadFailed')
+    loadError.value = t('toast.loadFailed')
   } finally {
     loading.value = false
+  }
+}
+
+async function onSendMessage() {
+  if (!inputText.value.trim() || isStreaming.value) return
+  const text = inputText.value
+  inputText.value = ''
+  await sendMessage(sessionId.value, text)
+}
+
+function onRetry() {
+  if (session.value?.thread_id) {
+    startAssessment(sessionId.value)
   }
 }
 
 async function onEndSession() {
   if (ending.value) return
   ending.value = true
+  disconnect()
   try {
     await endSession(sessionId.value)
     showSuccessToast(t('learning.session.ended'))
@@ -132,6 +240,10 @@ onMounted(async () => {
   } finally {
     decrement()
   }
+})
+
+onUnmounted(() => {
+  disconnect()
 })
 </script>
 
@@ -189,11 +301,42 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.session-header__type {
+.session-header__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-badge {
   font-family: Inter, sans-serif;
-  font-size: 13px;
-  color: var(--color-body);
-  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.badge--tutorial {
+  background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.12);
+  color: var(--color-primary, #3b82f6);
+}
+
+.badge--assessment {
+  background: rgba(var(--color-brand-ochre-rgb, 234, 179, 8), 0.15);
+  color: var(--color-brand-ochre, #b45309);
+}
+
+.status-indicator {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-indicator--active {
+  color: var(--color-primary, #3b82f6);
+}
+
+.status-indicator--done {
+  color: var(--color-success, #22c55e);
 }
 
 /* Chat area */
@@ -201,11 +344,15 @@ onMounted(async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 300px;
-  margin-bottom: 20px;
+  gap: 12px;
+  min-height: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding: 4px;
 }
 
-.chat-placeholder {
+.chat-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -218,13 +365,13 @@ onMounted(async () => {
   text-align: center;
 }
 
-.chat-placeholder__icon {
+.chat-empty__icon {
   font-size: 48px;
   line-height: 1;
   margin-bottom: 16px;
 }
 
-.chat-placeholder__title {
+.chat-empty__title {
   font-family: Inter, sans-serif;
   font-size: 16px;
   font-weight: 600;
@@ -232,35 +379,177 @@ onMounted(async () => {
   margin: 0 0 8px;
 }
 
-.chat-placeholder__desc {
+.chat-empty__desc {
   font-family: Inter, sans-serif;
   font-size: 14px;
   color: var(--color-body);
-  margin: 0 0 16px;
+  margin: 0;
   line-height: 1.5;
 }
 
-.chat-placeholder__thread {
+/* Chat messages */
+.chat-msg {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+}
+
+.chat-msg--user {
+  justify-content: flex-end;
+}
+
+.chat-msg--assistant,
+.chat-msg--tool {
+  justify-content: flex-start;
+}
+
+.chat-msg__bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.chat-msg--user .chat-msg__bubble {
+  background: var(--color-primary, #3b82f6);
+  color: var(--color-on-dark, #fff);
+  border-bottom-right-radius: 4px;
+}
+
+.chat-msg--assistant .chat-msg__bubble {
   background: var(--color-surface-card);
-  border-radius: var(--radius-md);
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--color-ink);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-msg--tool .chat-msg__bubble {
+  background: var(--color-surface-soft);
+  color: var(--color-body);
+  max-width: 90%;
+}
+
+.chat-msg__text {
+  white-space: pre-wrap;
+}
+
+.typing-cursor {
+  display: inline-block;
+  animation: blink 1s step-end infinite;
+  color: var(--color-primary, #3b82f6);
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Tool details (collapsible) */
+.tool-details {
+  margin: 4px 0;
   font-size: 12px;
 }
 
-.thread-label {
+.tool-details__summary {
+  cursor: pointer;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  color: var(--color-body);
+  padding: 2px 0;
+}
+
+.tool-details__content {
+  background: var(--color-canvas);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  margin: 4px 0 0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
   color: var(--color-body);
 }
 
-.thread-id {
-  color: var(--color-brand-ochre);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
+/* Chat error */
+.chat-error {
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.chat-error p {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: #ef4444;
+  margin: 0 0 8px;
+}
+
+.btn-retry {
+  background: none;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  border-radius: var(--radius-md);
+  padding: 6px 16px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Input area */
+.chat-input-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+}
+
+.chat-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--color-ink);
+  outline: none;
+  padding: 8px 4px;
+  min-height: 40px;
+}
+
+.chat-input::placeholder {
+  color: var(--color-hairline);
+}
+
+.chat-input:disabled {
+  opacity: 0.5;
+}
+
+.chat-send-btn {
+  background: var(--color-primary, #3b82f6);
+  color: var(--color-on-dark, #fff);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+  transition: transform 0.1s;
+}
+
+.chat-send-btn:active {
+  transform: scale(0.95);
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Session actions */
@@ -270,9 +559,9 @@ onMounted(async () => {
 
 .btn-finish {
   width: 100%;
-  background: var(--color-primary);
-  color: var(--color-on-dark);
-  border: none;
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md);
   padding: 14px;
   font-family: Inter, sans-serif;

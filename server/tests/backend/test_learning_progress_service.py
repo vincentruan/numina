@@ -134,7 +134,7 @@ def test_transition_to_learning_invalid(db, child_user, topic):
     db.flush()
     with pytest.raises(AppError) as exc_info:
         transition_to_learning(db, p)
-    assert "invalid_state_transition" in str(exc_info.value)
+    assert "LEARNING_INVALID_STATE_TRANSITION" in str(exc_info.value)
 
 
 def test_transition_to_mastered(db, child_user, topic):
@@ -225,7 +225,7 @@ def test_review_to_mastered_invalid(db, child_user, topic):
     db.flush()
     with pytest.raises(AppError) as exc_info:
         transition_to_mastered(db, p, score=0.95, completed_via="ai_assessment")
-    assert "invalid_state_transition" in str(exc_info.value)
+    assert "LEARNING_INVALID_STATE_TRANSITION" in str(exc_info.value)
 
 
 def test_review_to_learning(db, child_user, topic):

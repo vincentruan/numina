@@ -58,6 +58,16 @@
       <template v-else>
         <p class="failed-text">{{ stream.errorMessage.value || t('toast.aiGenerateFailed') }}</p>
       </template>
+      <!-- Checkpoint resume button -->
+      <van-button
+        v-if="canResumeFromCheckpoint"
+        type="warning"
+        size="small"
+        style="margin-top: 8px; margin-right: 8px"
+        @click="onResumeFromCheckpoint()"
+      >
+        {{ t('aiTask.resumeFromCheckpoint') }}
+      </van-button>
       <van-button plain size="small" :loading="false" style="margin-top: 8px" @click="onGenerate()">
         {{ t('aiTask.retry') }}
       </van-button>
@@ -340,8 +350,8 @@ const stream = useReportStream()
 
 // v3: useTaskResume for SSE reconnection on page re-entry
 const resumeHandle = useTaskResume('report', {
-  onStreamEvent: (event, data) => {
-    stream.ingestEvent(event, data)
+  onStreamEvent: (event, data, eventId) => {
+    stream.ingestEvent(event, data, eventId)
   },
   onComplete: async () => {
     aiStore.clearBackgroundTask('report')
@@ -363,11 +373,21 @@ const resumeHandle = useTaskResume('report', {
       // report and step state that the template is currently rendering.
       try { sessionStorage.removeItem('numina:report-stream-state') } catch { /* noop */ }
     }
+    // P1 fix: wait for lifecycle consumer to commit the result before
+    // loading the report. Without this, loadExistingReport() may return
+    // the OLD report (race between lifecycle consumer and DB read).
+    await waitForServerTaskComplete()
     await loadExistingReport()
   },
   onError: () => {
     aiStore.clearBackgroundTask('report')
   },
+  // P0 fix: sync useReportStream status when SSE fails and polling activates
+  onPollingFallback: () => {
+    stream.markPollingFallback()
+  },
+  // P1-4: provide last event ID for gap-free reconnection
+  getLastEventId: () => stream.lastEventId.value,
 })
 
 // Whether a generation is in flight (streaming or connecting).
@@ -382,6 +402,30 @@ const hasMarkdownFallback = computed(() =>
   stream.step1Status.value === 'finish' &&
   stream.toolResults.value.some((r) => r.tool_name.includes('write_file')),
 )
+
+// Checkpoint resume: show button when task failed with a saved checkpoint
+const canResumeFromCheckpoint = computed(() => {
+  const task = resumeHandle.task.value
+  return (
+    stream.status.value === 'error' &&
+    !currentReport.value &&
+    task?.last_checkpoint_id != null
+  )
+})
+
+async function onResumeFromCheckpoint() {
+  stream.reset()
+  resumeHandle.taskId.value = null
+  registeredTaskId = null
+  try {
+    const started = await stream.connect(false, true)
+    if (!started) {
+      showToast({ message: t('aiReport.alreadyGenerating'), icon: 'warning-o' })
+    }
+  } catch {
+    showToast({ message: t('aiReport.resumeFailed'), icon: 'warning-o' })
+  }
+}
 
 // Detect which format the report uses
 const hasIndicatorsFormat = computed(() => {

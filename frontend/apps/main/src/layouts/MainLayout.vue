@@ -43,6 +43,7 @@ const cachedTabs = ref<string[]>([
   'FinanceHub',
   'AIHub',
   'Baby',
+  'BabyLearning',
   'Family',
   // 'Settings' removed to force remount on navigation (fixes stale data)
 ])

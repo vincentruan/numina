@@ -289,7 +289,7 @@ def test_child_cannot_start_locked_topic(
     )
     assert resp.status_code == 409  # LEARNING_TOPIC_LOCKED
     error_data = resp.json()
-    assert "learning_topic_locked" in error_data.get("code", "")
+    assert "LEARNING_TOPIC_LOCKED" in error_data.get("code", "")
 
 
 def test_parent_cannot_approve_non_pending_review(
@@ -326,7 +326,7 @@ def test_parent_cannot_approve_non_pending_review(
     )
     assert resp.status_code == 409
     error_data = resp.json()
-    assert "invalid_state_transition" in error_data.get("code", "")
+    assert "LEARNING_INVALID_STATE_TRANSITION" in error_data.get("code", "")
 
 
 def test_state_transition_validation(client, db, parent_headers, topic):
@@ -356,4 +356,4 @@ def test_state_transition_validation(client, db, parent_headers, topic):
     )
     assert resp.status_code == 409
     error_data = resp.json()
-    assert "invalid_state_transition" in error_data.get("code", "")
+    assert "LEARNING_INVALID_STATE_TRANSITION" in error_data.get("code", "")

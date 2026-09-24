@@ -50,9 +50,21 @@ class _FakeStreamResponse:
         return None
 
 
+class _FakePostResponse:
+    """Fake response for httpx.AsyncClient.post()."""
+
+    def __init__(self, url=""):
+        self.status_code = 200
+        self.headers = {"Content-Location": f"{url}/run-test-123"}
+        self.text = '{"status": "started"}'
+
+    def raise_for_status(self):
+        pass
+
+
 class _FakeAsyncClient:
     """Stand-in for httpx.AsyncClient. Captures the (url, body) of the .stream
-    call so tests can assert which path the proxy took."""
+    or .post call so tests can assert which path the proxy took."""
 
     captured: dict = {}
 
@@ -88,6 +100,14 @@ class _FakeAsyncClient:
         else:
             _FakeAsyncClient.captured["json"] = kwargs.get("json")
         return _FakeStreamResponse()
+
+    async def post(self, url, *, json=None, data=None, headers=None, **kwargs):
+        """AgentClient.post() calls this for non-streaming POST requests."""
+        _FakeAsyncClient.captured["method"] = "POST"
+        _FakeAsyncClient.captured["url"] = url
+        _FakeAsyncClient.captured["headers"] = headers or {}
+        _FakeAsyncClient.captured["json"] = json
+        return _FakePostResponse(url)
 
 
 @pytest.fixture

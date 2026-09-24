@@ -635,6 +635,39 @@ class AITaskService:
         return cancelled
 
     @staticmethod
+    def update_checkpoint_id(
+        task_id: int | str,
+        family_id: int | str,
+        checkpoint_id: str,
+        db: Session,
+    ) -> bool:
+        """Store the last checkpoint ID for checkpoint-based resume.
+
+        Args:
+            task_id: AITask primary key.
+            family_id: Family ID for tenant isolation.
+            checkpoint_id: LangGraph checkpoint ID to store.
+            db: SQLAlchemy session.
+
+        Returns:
+            True if updated, False if task not found.
+        """
+        task = (
+            db.query(AITask)
+            .filter(AITask.id == int(task_id), AITask.family_id == int(family_id))
+            .first()
+        )
+        if not task:
+            return False
+        task.last_checkpoint_id = checkpoint_id
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            return False
+        return True
+
+    @staticmethod
     def get_zombie_running_tasks(
         db: Session,
         family_id: int | str | None = None,

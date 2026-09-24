@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -108,6 +108,21 @@ class AssignmentResponse(SnowflakeBase):
     topic: TopicResponse | None = None  # expanded when needed
 
 
+class TodayLearningResponse(SnowflakeBase):
+    """Today's learning overview for a child — drives the TodayLearningCard."""
+
+    current_topic: TopicResponse | None = None
+    pending_assignment: AssignmentResponse | None = None
+    recommended_topic: TopicResponse | None = None
+    study_minutes_today: int = 0
+
+
+class AssessStreamRequest(BaseModel):
+    """Optional body for multi-turn tutorial messages. Omit for initial assessment."""
+
+    user_message: str | None = Field(default=None, max_length=4000)
+
+
 # --- Session ---
 
 class SessionCreate(BaseModel):
@@ -181,3 +196,5 @@ class ChildProgressOverview(BaseModel):
     review_count: int
     assessing_count: int
     parent_review_count: int
+    total_study_minutes: int = 0
+    today_study_minutes: int = 0

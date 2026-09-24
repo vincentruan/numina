@@ -23,12 +23,12 @@ async def test_run_agent_starts_heartbeat_when_task_id_present():
     mock_bridge = AsyncMock()
     mock_run_manager = AsyncMock()
     mock_record = MagicMock()
-    mock_record.metadata = {"app": "finance-coach", "task_id": 777}
+    mock_record.metadata = {"app": "dashboard-narrative", "task_id": 777}
     mock_record.run_id = "run-xyz"
 
     with (
         patch(
-            "apps.agent.services.runtime.worker._run_finance_coach_agent",
+            "apps.agent.services.runtime.worker._run_simple_app",
             new_callable=AsyncMock,
         ) as mock_runner,
         patch(
@@ -65,12 +65,12 @@ async def test_run_agent_skips_heartbeat_without_task_id():
     mock_bridge = AsyncMock()
     mock_run_manager = AsyncMock()
     mock_record = MagicMock()
-    mock_record.metadata = {"app": "finance-coach"}  # no task_id
+    mock_record.metadata = {"app": "dashboard-narrative"}  # no task_id
     mock_record.run_id = "run-xyz"
 
     with (
         patch(
-            "apps.agent.services.runtime.worker._run_finance_coach_agent",
+            "apps.agent.services.runtime.worker._run_simple_app",
             new_callable=AsyncMock,
         ) as mock_runner,
         patch(

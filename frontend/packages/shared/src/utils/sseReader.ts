@@ -43,12 +43,19 @@ export interface SSEStreamHandlers {
  * ``done: true``).  Rejects on network / decode errors — ``AbortError``
  * propagates so callers can distinguish user cancellation from real failures.
  *
+ * Includes a heartbeat timeout: if no data arrives for ``heartbeatTimeoutMs``
+ * (default 120s), the reader aborts with a timeout error.  SSE servers send
+ * heartbeat comments (``: heartbeat\n\n``) to keep connections alive; the
+ * timeout catches half-open TCP connections where the server has died silently.
+ *
  * @param response  A fetch ``Response`` whose body is an SSE byte stream.
  * @param handlers  Typed callbacks for each SSE event category.
+ * @param heartbeatTimeoutMs  Max ms between data chunks before timeout (default 120000).
  */
 export async function readSSEStream(
   response: Response,
   handlers: SSEStreamHandlers,
+  heartbeatTimeoutMs = 120_000,
 ): Promise<void> {
   const body = response.body
   if (!body) return
@@ -57,10 +64,20 @@ export async function readSSEStream(
   const decoder = new TextDecoder()
   let buffer = ''
   let currentEvent = ''
+  let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
+
+  function resetHeartbeat() {
+    if (heartbeatTimer !== null) clearTimeout(heartbeatTimer)
+    heartbeatTimer = setTimeout(() => {
+      reader.cancel().catch(() => {})
+    }, heartbeatTimeoutMs)
+  }
 
   try {
+    resetHeartbeat()
     while (true) {
       const { done, value } = await reader.read()
+      resetHeartbeat()
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
@@ -123,6 +140,7 @@ export async function readSSEStream(
       }
     }
   } finally {
+    if (heartbeatTimer !== null) clearTimeout(heartbeatTimer)
     // Release the reader lock so the response can be garbage-collected.
     try {
       reader.releaseLock()

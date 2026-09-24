@@ -588,6 +588,18 @@ async function onNameBlur() {
   }
 }
 
+// Date picker values — defined before initialData watch so immediate sync can reference them
+const isMaturityInfinite = ref(false)
+const isWarrantyInfinite = ref(false)
+const now = new Date()
+const datePickerValue = ref([
+  String(now.getFullYear()),
+  String(now.getMonth() + 1).padStart(2, '0'),
+  String(now.getDate()).padStart(2, '0')
+])
+const maturityPickerValue = ref([...datePickerValue.value])
+const warrantyPickerValue = ref([...datePickerValue.value])
+
 // Populate form from initialData (edit mode)
 watch(() => props.initialData, (data) => {
   if (data) {
@@ -598,7 +610,10 @@ watch(() => props.initialData, (data) => {
     if (data.purchase_price !== undefined) form.value.purchase_price = String(data.purchase_price ?? '')
     if (data.current_value !== undefined) form.value.current_value = String(data.current_value ?? '')
     if (data.currency !== undefined) form.value.currency = String(data.currency ?? '')
-    if (data.purchase_date !== undefined) form.value.purchase_date = String(data.purchase_date ?? '')
+    if (data.purchase_date !== undefined) {
+      form.value.purchase_date = String(data.purchase_date ?? '')
+      if (data.purchase_date) datePickerValue.value = data.purchase_date.split('-')
+    }
     if (data.status !== undefined) form.value.status = data.status
     if (data.notes !== undefined) form.value.notes = String(data.notes ?? '')
     if (data.image_url !== undefined) form.value.image_url = String(data.image_url ?? '')
@@ -612,6 +627,8 @@ watch(() => props.initialData, (data) => {
       if (data.warranty_expiry_date === INFINITE_DATE_SENTINEL || data.warranty_expiry_date === null) {
         isWarrantyInfinite.value = true
         form.value.warranty_expiry_date = ''
+      } else if (data.warranty_expiry_date) {
+        warrantyPickerValue.value = data.warranty_expiry_date.split('-')
       }
     }
 
@@ -623,6 +640,8 @@ watch(() => props.initialData, (data) => {
       if (data.maturity_date === INFINITE_DATE_SENTINEL || data.maturity_date === null) {
         isMaturityInfinite.value = true
         form.value.maturity_date = ''
+      } else if (data.maturity_date) {
+        maturityPickerValue.value = data.maturity_date.split('-')
       }
     }
 
@@ -672,18 +691,19 @@ const showWarrantyPicker = ref(false)
 // Date picker range: shared constants (1950 to current+50y)
 // DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL imported from constants/dates
 
-// "无限期" toggles for maturity_date and warranty_expiry_date
-const isMaturityInfinite = ref(false)
-const isWarrantyInfinite = ref(false)
-
-const now = new Date()
-const datePickerValue = ref([
-  String(now.getFullYear()),
-  String(now.getMonth() + 1).padStart(2, '0'),
-  String(now.getDate()).padStart(2, '0')
-])
-const maturityPickerValue = ref([...datePickerValue.value])
-const warrantyPickerValue = ref([...datePickerValue.value])
+// Linkage: when purchase_date changes (create mode), sync picker + maturity/warranty
+watch(() => form.value.purchase_date, (d) => {
+  if (d && d.split('-').length === 3) {
+    datePickerValue.value = d.split('-')
+    // Also sync maturity and warranty pickers if they haven't been manually set
+    if (!form.value.maturity_date && !isMaturityInfinite.value) {
+      maturityPickerValue.value = d.split('-')
+    }
+    if (!form.value.warranty_expiry_date && !isWarrantyInfinite.value) {
+      warrantyPickerValue.value = d.split('-')
+    }
+  }
+})
 
 const statusColumns = computed(() => [
   { text: t('asset.inUse'), value: 'in_use' },

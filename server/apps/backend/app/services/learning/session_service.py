@@ -100,3 +100,27 @@ def start_assessment(
     progress.mastery_level = "assessing"
     db.flush()
     return progress
+
+
+def get_session(
+    db: Session,
+    session_id: int,
+    child_id: int,
+) -> LearningSession:
+    """Get a session, validating ownership by child_id."""
+    session = (
+        db.query(LearningSession)
+        .filter(
+            LearningSession.id == session_id,
+            LearningSession.child_id == child_id,
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.LEARNING_SESSION_NOT_FOUND)
+    return session
+
+
+def get_thread_id_for_session(session_id: int) -> str:
+    """Session ID is used as the DeerFlow thread_id (same pattern as AIChatSession)."""
+    return str(session_id)

@@ -4,7 +4,6 @@ POST /api/v1/ai/literacy-report/generate         — synchronous (legacy, schedu
 POST /api/v1/ai/literacy-report/generate/events  — SSE streaming (U14 bridge consumer)
 """
 
-import asyncio
 import json
 import logging
 from datetime import date
@@ -14,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.database import get_db
+from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.family import Family
@@ -23,12 +22,7 @@ from apps.backend.app.responses import SnowflakeResponse
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.bridge_consumer import (
-    _pump_agent_sse_to_bridge,
-    _spawn_lifecycle_consumer,
-    consume_task_stream,
-    get_shared_bridge,
-)
+from apps.backend.app.services.bridge_consumer import trigger_and_stream
 from apps.backend.app.services.chat_session import ChatSessionService
 from apps.backend.app.services.literacy_report import _sunday_of
 from apps.backend.app.services.literacy_report_service import (
@@ -155,7 +149,9 @@ async def trigger_generate_events(
     """
     # Phase 5.2: circuit breaker gate
 
-    blocked_resp = check_circuit_blocked(current_user.family_id, "literacy-weekly-report", db)
+    blocked_resp = check_circuit_blocked(
+        current_user.family_id, "literacy-weekly-report", db
+    )
     if blocked_resp is not None:
         return blocked_resp
 
@@ -228,7 +224,6 @@ async def trigger_generate_events(
     # Phase 1: Backend-owned buffer (single streaming POST — no double trigger).
     agent_client = AgentClient(family_id=family_id, user_id=user_id, timeout=120.0)
     agent_url = f"/internal/gateway/runs/literacy-weekly-report/{session_id}"
-    shared_bridge = get_shared_bridge()
 
     # Lifecycle result callback — persists literacy report output on completion.
     async def _persist_literacy_result(_event_type: str, data: dict) -> None:
@@ -290,77 +285,37 @@ async def trigger_generate_events(
         "input": {"messages": [{"role": "user", "content": trigger}]},
     }
 
-    # Track lifecycle consumer spawn state.
-    lifecycle_spawned = [False]
-    lifecycle_task: asyncio.Task[None] | None = None
-    cl_bare_run_id: str | None = None
-
-    def _on_run_id(cl_url: str) -> None:
-        """Called when Content-Location header arrives. Persist to DB only."""
-        nonlocal cl_bare_run_id
-        cl_bare_run_id = cl_url.rstrip("/").rsplit("/", 1)[-1]
-        AITaskService.extract_and_attach_run_id(
-            task_id, cl_url, family_id
-        )
-
-    def _on_authoritative_run_id(meta_run_id: str) -> None:
-        """Called when metadata event arrives with the authoritative run_id."""
-        nonlocal lifecycle_task
-        AITaskService.extract_and_attach_run_id(
-            task_id, meta_run_id, family_id
-        )
-        if lifecycle_task is not None and not lifecycle_task.done():
-            lifecycle_task.cancel()
-        lifecycle_task = _spawn_lifecycle_consumer(
-            task_id=task_id,
-            family_id=family_id,
-            run_id=meta_run_id,
-            on_result=_persist_literacy_result,
-            bridge=shared_bridge,
-        )
-        lifecycle_spawned[0] = True
-
-    # Spawn background pump: one streaming POST → shared bridge.
-    asyncio.create_task(
-        _pump_agent_sse_to_bridge(
+    # Trigger agent and stream SSE lifecycle
+    try:
+        return await trigger_and_stream(
             agent_client=agent_client,
             agent_url=agent_url,
             json_body=agent_trigger_body,
-            bridge=shared_bridge,
-            run_id="",
-            task_id=task_id,
-            family_id=current_user.family_id,
-            on_run_id=_on_run_id,
-            on_authoritative_run_id=_on_authoritative_run_id,
+            task_id=str(task_id),
+            family_id=family_id,
+            session_id=session_id,
+            last_event_id=request.headers.get("Last-Event-ID"),
+            on_result=_persist_literacy_result,
+            thread_id=_make_thread_id(family_id, cid),
         )
-    )
-
-    # Fallback: lifecycle consumer if metadata never arrives within 3s.
-    async def _lc_fallback() -> None:
-        await asyncio.sleep(3.0)
-        if not lifecycle_spawned[0]:
-            _spawn_lifecycle_consumer(
-                task_id=task_id,
-                family_id=family_id,
-                run_id=cl_bare_run_id,
-                on_result=_persist_literacy_result,
-                bridge=shared_bridge,
+    except Exception as e:
+        logger.warning(
+            "[literacy] trigger failed task=%s err=%s", task_id, e, exc_info=True
+        )
+        _fdb = SessionLocal()
+        try:
+            AITaskService.fail_task(
+                task_id, f"agent trigger failed: {type(e).__name__}", _fdb
             )
+        finally:
+            _fdb.close()
 
-    asyncio.create_task(_lc_fallback())
+        async def _error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': '读写周报服务异常'})}\n\n"
+            yield "event: end\ndata: null\n\n"
 
-    # SSE forwarder: subscribes to shared bridge, yields SSE text to frontend.
-    last_event_id = request.headers.get("Last-Event-ID")
-    stream_gen = consume_task_stream(
-        task_id=task_id,
-        family_id=family_id,
-        last_event_id=last_event_id,
-        run_id=None,
-        bridge=shared_bridge,
-    )
-
-    return StreamingResponse(
-        tracked_sse_stream(task_id, stream_gen),
-        media_type="text/event-stream",
-        headers={"X-Accel-Buffering": "no"},
-    )
+        return StreamingResponse(
+            tracked_sse_stream(task_id, _error_stream()),
+            media_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no"},
+        )

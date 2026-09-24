@@ -98,6 +98,21 @@ export interface ChildProgressOverview {
   review_count: number
   assessing_count: number
   parent_review_count: number
+  total_study_minutes: number
+  today_study_minutes: number
+}
+
+export interface TodayLearningResponse {
+  current_topic: TopicResponse | null
+  pending_assignment: AssignmentResponse | null
+  recommended_topic: TopicResponse | null
+  study_minutes_today: number
+}
+
+export interface TopicGraphResponse {
+  topic: TopicResponse
+  prerequisites: TopicResponse[]
+  dependents: TopicResponse[]
 }
 
 // Composite type: progress with topic detail for the map view
@@ -158,3 +173,14 @@ export async function endSession(sessionId: string): Promise<SessionResponse> {
   const res = await http.post(`/child/learning/sessions/${sessionId}/end`)
   return res.data
 }
+
+export async function getTodayLearning(): Promise<TodayLearningResponse> {
+  const res = await http.get('/child/learning/today')
+  return res.data
+}
+
+export async function getTopicGraph(topicId: string): Promise<TopicGraphResponse> {
+  const res = await http.get(`/learning/topics/${topicId}/graph`)
+  return res.data
+}
+

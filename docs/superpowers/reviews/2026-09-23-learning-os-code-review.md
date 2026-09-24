@@ -47,39 +47,25 @@
 ## Deferred / Open Questions
 
 ### OQ-1: MCP Tools are stubs (Task 11)
-**Status:** All 3 MCP tools in `mcp_tools.py` raise `NotImplementedError`. Not wired into agent tool registry.
-**Decision needed:** Implement now or defer to Phase 2? The AI tutor skill (SKILL.md) is ready, but the tools it needs aren't functional.
-**Recommendation:** Defer to Phase 2 — AI tutor chat works without MCP tools (uses prompt-only approach). MCP tools add structured data access for more advanced scenarios.
+**Status:** ✅ **Resolved** — All 3 MCP tools (`record_learning_result`, `get_learning_progress`, `evaluate_mastery`) are now implemented and wired into the agent tool registry. Security constraints (input validation, tenant isolation, schema validation) documented in `server/apps/agent/CLAUDE.md` §Security Rules #10.
 
 ### OQ-2: Translation service is a placeholder (Task 12)
-**Status:** `translation.py` returns `None` for all fields. No DashScope/OpenAI integration.
-**Decision needed:** When to implement actual LLM-based translation?
-**Recommendation:** Defer — seed script works with English-only data. Translation can be batch-run later.
+**Status:** ✅ **Decision confirmed** — On-demand translation via DeerFlow agent, user-triggered, button visible only on language mismatch. See `docs/superpowers/specs/2026-09-24-learning-os-oq-product-decisions.md` §OQ-2.
 
 ### OQ-3: `learning_streak_3_failures` notification never fires (Task 21)
-**Status:** Event registered in notification registry but no dispatcher function or trigger logic exists.
-**Decision needed:** What constitutes a "streak of 3 failures"? How should it be detected — in progress_service after failed assessment, or via a scheduled job?
-**Recommendation:** Define failure semantics first. Likely needs: (a) assessment failure tracking in session_service, (b) counter in progress_service, (c) dispatcher function. Defer to Phase 2.
+**Status:** ✅ **Decision confirmed** — A1+B1+C1: assessment `passed=False`, same topic, inline detection in `progress_service`. See `docs/superpowers/specs/2026-09-24-learning-os-oq-product-decisions.md` §OQ-3.
 
 ### OQ-4: "Today learning" card on ChildHomePage (Task 16 Step 5)
-**Status:** Not implemented.
-**Decision needed:** Design the card — what data to show, where to place it on ChildHomePage.
-**Recommendation:** Low priority. Can be added as a UX enhancement later.
+**Status:** ✅ **Resolved** — `TodayLearningCard` component integrated at `ChildHomePage.vue:44`, backed by `GET /child/learning/today` endpoint (`learning_child.py:63`). Displays pending assignment > current topic > recommended topic with priority logic. Footer shows today's study minutes. i18n keys at `learning.todayCard.*`.
 
 ### OQ-5: LearningSessionPage AI chat placeholder (Task 17 Step 2)
-**Status:** Chat UI exists but doesn't connect to DeerFlow SSE. TODO comments in place.
-**Decision needed:** Should child app extract `useThreadChat` from main app, or build a simplified version?
-**Recommendation:** Defer — this is the biggest remaining piece. Needs design decision on shared AI chat composable.
+**Status:** ✅ **Resolved** — `LearningSessionPage.vue` is now connected to the DeerFlow SSE stream via the learning-tutor app. Chat UI supports real-time AI tutoring with Redis bridge event delivery. See commits `feat(learning): implement LearningSessionPage chat UI with SSE streaming` and `feat(learning): add assessment stream endpoint with Redis bridge subscribe`.
 
 ### OQ-6: Seed quality validation + version tracking (Task 13)
-**Status:** Seed scripts work but lack orphan edge detection, age range spot checks, and version tracking (`reseed --version <tag>`).
-**Decision needed:** How important is data quality validation for initial seed? Version tracking needed before production?
-**Recommendation:** Add quality validation before first production seed. Version tracking can wait.
+**Status:** ✅ **Decision confirmed** — A1+B1: orphan check + badge-topic cross-validation + age_range constraint, post-seed timing. See `docs/superpowers/specs/2026-09-24-learning-os-oq-product-decisions.md` §OQ-6.
 
 ### OQ-7: Badge count discrepancy (Task 14)
-**Status:** Spec says 27 badges (8 subjects × 3 + 3). Implementation seeds 30 (9 subjects × 3 + 3, with `learning_to_learn` as 9th subject).
-**Decision needed:** Is `learning_to_learn` intentional addition? If so, update spec.
-**Recommendation:** Minor — keep the extra subject if it's meaningful. Update spec to match.
+**Status:** ✅ **Resolved** — Spec updated to reflect 9 subjects (added `learning_to_learn`). 30 badges = 9 × 3 + 3. Implementation is correct; spec was outdated.
 
 ### ~~OQ-8: N+1 query pattern in frontend~~ ✅ Fixed (Session 2, #13)
 Added `GET /learning/topics/batch` endpoint. Both map pages now use `getTopicsBatch()` — single request instead of N+1.
@@ -98,31 +84,22 @@ Added `GET /learning/topics/batch` endpoint. Both map pages now use `getTopicsBa
 **Recommendation:** Same as OQ-10 — keep for now, extract together when types are moved.
 
 ### OQ-12: Hardcoded Chinese in notification dispatcher
-**Status:** All 4 learning notification functions (`notify_learning_*`) use hardcoded Chinese strings for titles/bodies. However, **all existing notification functions** in `dispatcher.py` follow the same pattern — this is the established convention (errors use i18n `AppError`, notifications use direct Chinese).
-**Decision needed:** Migrate all notifications to i18n, or keep current pattern?
-**Recommendation:** Keep consistent with existing pattern. A broader notification i18n effort can be done separately if needed.
+**Status:** ✅ **Resolved (by design)** — All 4 learning notification functions (`notify_learning_*`) use hardcoded Chinese strings. This **matches the established convention** across all dispatcher functions (errors use i18n `AppError`, notifications use direct Chinese). Added comment documenting this is intentional.
 
 ### OQ-13: No auth on global `/learning/*` endpoints
-**Status:** `GET /learning/topics`, `/subjects`, `/clusters` are open (no auth). Intentional — knowledge graph is global/read-only — but undocumented.
-**Decision needed:** Add auth or keep open?
-**Recommendation:** Keep open — the knowledge graph is shared public data, not family-specific. Add a doc comment on the router explaining the auth decision.
+**Status:** ✅ **Resolved** — Added module docstring to `learning.py` explaining the auth decision: knowledge graph is shared/read-only data (same for all families), no family-specific data is served. Write endpoints and family-scoped progress endpoints live behind `require_adult` / `get_current_child_user` in `learning_family.py` and `learning_child.py`.
 
 ### OQ-14: `ErrorCode.NOT_FOUND` vs learning-specific codes
-**Status:** Some endpoints (e.g. `get_child_map`, `create_assignment`) use `ErrorCode.NOT_FOUND` for "child not in family", while others use `LEARNING_TOPIC_NOT_FOUND` etc. Minor inconsistency.
-**Recommendation:** Low priority — functional behavior is correct. Standardize in a future cleanup pass.
+**Status:** ✅ **Resolved** — All `ErrorCode.NOT_FOUND` usages in `learning_family.py` were for "child not found" checks. Standardized to `ErrorCode.AUTH_CHILD_NOT_FOUND` which is the correct semantic error code.
 
 ### OQ-15: No navigation entry to BabyLearningPage
-**Status:** `/baby/learning` route exists but no link/button from `BabyPage.vue` or main navigation reaches it.
-**Decision needed:** Add entry point from BabyPage (e.g. a "学习管理" card alongside chore/literacy cards)?
-**Recommendation:** Add in a follow-up — BabyPage is the parent's main child-management hub and should link to learning.
+**Status:** ✅ **Resolved** — `BabyPage.vue` already contains a `van-cell` entry at line 64-67 with `@click="$router.push('/baby/learning')"` linking to the learning page.
 
 ### OQ-16: BabyLearningPage not in KeepAlive cache
-**Status:** Main app's KeepAlive include list doesn't contain `BabyLearning`. `onActivated` hooks won't fire.
-**Recommendation:** Add to MainLayout's KeepAlive list when navigation entry is added.
+**Status:** ✅ **Resolved** — `MainLayout.vue` already includes `'BabyLearning'` in `cachedTabs` (line 46).
 
 ### OQ-17: Prerequisites/dependents not displayed on LearningTopicPage
-**Status:** Topic detail page shows topic info but doesn't render prerequisite/dependent topic cards with lock status.
-**Recommendation:** Use `GET /learning/topics/{id}/graph` to fetch and display. Defer to UX polish pass.
+**Status:** ✅ **Resolved** — `LearningTopicPage.vue` renders prerequisites (line 51) and dependents/next-steps (line 73) sections using `GET /learning/topics/{id}/graph` endpoint. Uses Vant tags with status icons (success/unlock/lock). i18n keys `learning.prerequisites` and `learning.nextSteps` in both locales.
 
 ---
 

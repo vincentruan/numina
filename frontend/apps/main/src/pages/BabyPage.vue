@@ -59,6 +59,13 @@
           </van-cell>
           <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`" />
           <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`" />
+          <van-cell
+            v-if="selectedChildId"
+            :title="t('baby.learningTab')"
+            :value="t('learning.studyMinutes', { minutes: currentStudyMinutes })"
+            is-link
+            @click="$router.push('/baby/learning')"
+          />
           <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')" />
           <van-cell :title="t('baby.blindBoxDraws')" is-link @click="$router.push('/blind-box/draws')">
             <template v-if="pendingDrawCount > 0" #value>
@@ -584,6 +591,7 @@ import { listParentChildWishes, approveChildWish, rejectChildWish, realizeChildW
 import { getFamilyChildCalendar } from '@/api/calendar'
 import { grantCoins } from '@/api/coins'
 import { getChildrenChores, assignChoreInstance, voidChoreInstance, approveChore, rejectChore, type ChoreInstance } from '@/api/chores'
+import { getLearningChildren, type ChildLearningOverview } from '@/api/learning'
 import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -613,6 +621,7 @@ const refreshing = ref(false)
 const loading = ref(true)
 const activeChildIndex = ref(0)
 const activeContentTab = ref(0)
+const learningOverviews = ref<ChildLearningOverview[]>([])
 
 // Grant stars state
 const showChildPicker = ref(false)
@@ -694,6 +703,12 @@ const currentWishCount = computed(() => {
     ? allWishes.value.filter(w => w.child_user_id === selectedChildId.value)
     : allWishes.value
   return wishes.filter(w => ['pending_review', 'active', 'redemption_requested'].includes(w.status)).length
+})
+
+const currentStudyMinutes = computed(() => {
+  if (!selectedChildId.value) return 0
+  const overview = learningOverviews.value.find(o => o.child_id === selectedChildId.value)
+  return overview?.total_study_minutes ?? 0
 })
 
 const filteredWishes = computed(() => {
@@ -1143,16 +1158,18 @@ async function loadData() {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   try {
-    const [balances, stats, wishes, chores] = await Promise.all([
+    const [balances, stats, wishes, chores, learning] = await Promise.all([
       getAllChildBalances(),
       getChildrenChoreStats(),
       listParentChildWishes(),
       getChildrenChores(today),
+      getLearningChildren().catch(() => [] as ChildLearningOverview[]),
     ])
     childBalances.value = balances.data
     childChoreStats.value = stats.data
     allWishes.value = wishes
     allChores.value = chores
+    learningOverviews.value = learning
     await loadReportStatuses()
   } catch {
     showFailToast(t('toast.operationFailed'))

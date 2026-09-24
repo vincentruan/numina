@@ -380,6 +380,40 @@ class BackendClient:
         )
         resp.raise_for_status()
 
+    async def report_checkpoint_id(
+        self, task_id: int, checkpoint_id: str
+    ) -> None:
+        """Report the last checkpoint ID for checkpoint-based resume.
+
+        Agent calls this after stream completion to persist the latest
+        LangGraph checkpoint ID on the AITask row.
+        Raises on network error — caller should try/except + logger.debug.
+        """
+        client = await get_shared_client()
+        resp = await client.post(
+            f"/api/v1/internal/tasks/{task_id}/checkpoint",
+            json={"checkpoint_id": checkpoint_id},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+
+    async def get_task_info(self, task_id: int) -> dict | None:
+        """Get AITask info (status, last_checkpoint_id) for auto-resume detection.
+
+        Returns None on failure (non-fatal — caller degrades to no-resume).
+        """
+        try:
+            client = await get_shared_client()
+            resp = await client.get(
+                f"/api/v1/internal/tasks/{task_id}/info",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            return cast(dict | None, _unwrap(resp))
+        except Exception:
+            logger.debug("get_task_info failed (non-fatal)", exc_info=True)
+            return None
+
 
 def classify_error_type(error_code: int, error_message: str | None = None) -> str:
     """根据 HTTP 错误码和错误消息分类错误类型。

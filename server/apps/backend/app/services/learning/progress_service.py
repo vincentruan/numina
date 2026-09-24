@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from apps.backend.app.errors import AppError, ErrorCode
 from packages.db.models.child_economy.coin_transaction import CoinTransaction
 from packages.db.models.learning.progress import LearningProgress
-from packages.db.models.learning.session import LearningAssessmentAttempt
+from packages.db.models.learning.session import (
+    LearningAssessmentAttempt,
+    LearningSession,
+)
 from packages.db.models.learning.topic import LearningDependency, LearningTopic
 
 VALID_TRANSITIONS = {
@@ -266,3 +269,65 @@ def approve_parent_review(
     txn.ref_id = attempt.id
 
     return progress
+
+
+def aggregate_study_minutes(db: Session, child_id: int) -> dict[str, int]:
+    """Return total and today study minutes for a child in a single query.
+
+    Excludes sessions with ended_at=None (still in progress).
+    Returns 0 for both fields when no matching sessions exist.
+    """
+    from sqlalchemy import case
+
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    total_seconds, today_seconds = (
+        db.query(
+            sa_func.coalesce(sa_func.sum(LearningSession.duration_seconds), 0),
+            sa_func.coalesce(
+                sa_func.sum(
+                    case(
+                        (LearningSession.ended_at >= today_start, LearningSession.duration_seconds),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+        )
+        .filter(
+            LearningSession.child_id == child_id,
+            LearningSession.ended_at.isnot(None),
+        )
+        .one()
+    )
+
+    return {
+        "total_study_minutes": int(total_seconds) // 60,
+        "today_study_minutes": int(today_seconds) // 60,
+    }
+
+
+def find_recommended_topic(
+    db: Session, child_id: int
+) -> LearningTopic | None:
+    """Find a locked topic whose hard prereqs are all met — recommended next.
+
+    Returns the first such topic sorted by topic_id (stable ordering),
+    or None if no locked topics qualify.
+    """
+    locked_progresses = (
+        db.query(LearningProgress)
+        .filter(
+            LearningProgress.child_id == child_id,
+            LearningProgress.mastery_level == "locked",
+        )
+        .all()
+    )
+    for lp in sorted(locked_progresses, key=lambda p: p.topic_id):
+        if _all_hard_prereqs_met(db, child_id, lp.topic_id):
+            return (
+                db.query(LearningTopic)
+                .filter(LearningTopic.id == lp.topic_id)
+                .first()
+            )
+    return None

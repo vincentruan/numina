@@ -7,12 +7,14 @@ def test_reserved_names_contains_chat_and_time_machine():
     """RESERVED_NAMES protects system fixed-flows from custom skill collisions.
 
     U7 deleted ``time_machine`` (and 4 other trigger skills); U8 added
-    ``import-parse``; Plan A T1 added ``finance-coach``. The current reserved
-    set is the post-U7 + Plan A state — ``time_machine`` is intentionally gone.
+    ``import-parse``; Plan A T1 added ``finance-coach``; Learning OS added
+    ``learning-tutor``. The current reserved set is the post-U7 + Plan A +
+    Learning OS state — ``time_machine`` is intentionally gone.
     """
     assert RESERVED_NAMES == [
         "chat", "asset-report", "import-parse", "finance-coach",
         "wish-advice", "dashboard-narrative", "literacy-weekly-report",
+        "learning-tutor",
         # DeerFlow public skills introduced as builtin
         "deep-research", "chart-visualization", "data-analysis",
         "bootstrap", "finance-digest", "financial-deep-analysis", "surprise-me",
@@ -83,6 +85,28 @@ def test_create_custom_skill_with_chat_id_rejected(client, auth_headers):
             "icon": "💬",
             "color": "#06b6d4",
             "prompt_content": "Custom chat prompt",
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code in (400, 422), resp.text
+    body = resp.text
+    assert "保留命名" in body or "reserved" in body.lower()
+
+
+def test_create_custom_skill_with_learning_tutor_id_rejected(client, auth_headers):
+    """Creating a custom skill with skill_id='learning-tutor' is rejected.
+
+    learning-tutor is a system agent skill (not a user-toggleable skill).
+    Defensive test: ensures RESERVED_NAMES keeps learning-tutor protected.
+    """
+    resp = client.post(
+        "/api/v1/ai/skills/custom",
+        json={
+            "skill_id": "learning-tutor",
+            "name": "My Learning Tutor",
+            "icon": "📚",
+            "color": "#10b981",
+            "prompt_content": "Custom tutor prompt",
         },
         headers=auth_headers,
     )

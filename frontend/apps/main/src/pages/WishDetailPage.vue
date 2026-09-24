@@ -202,7 +202,7 @@
       </van-popup>
 
       <!-- Date Picker -->
-      <van-calendar v-model:show="showDatePicker" @confirm="onDateConfirm" />
+      <van-calendar v-model:show="showDatePicker" :default-date="calendarDefaultDate" @confirm="onDateConfirm" />
 
       <!-- Category Picker -->
       <van-popup v-model:show="showCategoryPicker" round position="bottom">
@@ -357,6 +357,15 @@ function onDateConfirm(date: Date) {
   realizeForm.value.purchase_date = date.toISOString().slice(0, 10)
   showDatePicker.value = false
 }
+
+// Default calendar date: prefer wish target_date, otherwise today
+const calendarDefaultDate = computed(() => {
+  if (wish.value?.target_date) {
+    const d = new Date(wish.value.target_date)
+    if (!isNaN(d.getTime())) return d
+  }
+  return new Date()
+})
 
 function selectCategory(id: string) {
   realizeForm.value.category_id = id

@@ -47,6 +47,51 @@
         </ul>
       </div>
 
+      <!-- Learning path: prerequisites + dependents -->
+      <div v-if="graphData?.prerequisites?.length" class="graph-section">
+        <h3 class="section-title">{{ t('learning.prerequisites') }}</h3>
+        <div class="topic-chips">
+          <van-tag
+            v-for="prereq in graphData.prerequisites"
+            :key="prereq.id"
+            :type="prereqStatusTagType(prereq)"
+            plain
+            size="medium"
+            class="topic-chip"
+            @click="navigateToTopic(prereq.id)"
+          >
+            <van-icon
+              :name="prereqStatusIconName(prereq.id)"
+              size="12"
+              :aria-label="t(`learning.status.${getProgressLevel(prereq.id)}`)"
+            />
+            {{ topicDisplayName(prereq) }}
+          </van-tag>
+        </div>
+      </div>
+
+      <div v-if="graphData?.dependents?.length" class="graph-section">
+        <h3 class="section-title">{{ t('learning.nextSteps') }}</h3>
+        <div class="topic-chips">
+          <van-tag
+            v-for="dep in graphData.dependents"
+            :key="dep.id"
+            :type="prereqStatusTagType(dep)"
+            plain
+            size="medium"
+            class="topic-chip"
+            @click="navigateToTopic(dep.id)"
+          >
+            <van-icon
+              :name="prereqStatusIconName(dep.id)"
+              size="12"
+              :aria-label="t(`learning.status.${getProgressLevel(dep.id)}`)"
+            />
+            {{ topicDisplayName(dep) }}
+          </van-tag>
+        </div>
+      </div>
+
       <!-- Action buttons -->
       <div class="action-buttons">
         <button class="btn-primary" :disabled="starting" @click="onStartLearning">
@@ -73,10 +118,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
-import { showSuccessToast, showFailToast } from 'vant'
+import { showSuccessToast, showFailToast, type TagType } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getTopicDetail,
+  getTopicGraph,
   getMyLearningMap,
   getMyAssignments,
   createSession,
@@ -84,6 +130,7 @@ import {
   type TopicResponse,
   type ProgressResponse,
   type AssignmentResponse,
+  type TopicGraphResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
 
@@ -102,6 +149,7 @@ const error = ref('')
 const topic = ref<TopicResponse | null>(null)
 const progress = ref<ProgressResponse | null>(null)
 const allProgress = ref<ProgressResponse[]>([])
+const graphData = ref<TopicGraphResponse | null>(null)
 
 const displayName = computed(() => {
   if (!topic.value) return ''
@@ -123,16 +171,41 @@ function goBack() {
   router.push('/learning')
 }
 
+function getProgressLevel(topicIdStr: string): string {
+  const prog = allProgress.value.find(p => p.topic_id === topicIdStr)
+  return prog?.mastery_level ?? 'available'
+}
+
+function prereqStatusIconName(topicIdStr: string): string {
+  const level = getProgressLevel(topicIdStr)
+  if (level === 'mastered') return 'success'
+  if (level === 'locked') return 'lock'
+  return 'unlock'
+}
+
+function prereqStatusTagType(topic: TopicResponse): TagType {
+  const level = getProgressLevel(topic.id)
+  if (level === 'mastered') return 'success'
+  if (level === 'locked') return 'default'
+  return 'primary'
+}
+
+function navigateToTopic(tid: string) {
+  router.push(`/learning/topic/${tid}`)
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [topicDetail, progressList] = await Promise.all([
+    const [topicDetail, progressList, graph] = await Promise.all([
       getTopicDetail(topicId.value),
       getMyLearningMap(),
+      getTopicGraph(topicId.value).catch(() => null),
     ])
     topic.value = topicDetail
     allProgress.value = progressList
+    graphData.value = graph
 
     // Find progress for this topic
     const topicProgress = progressList.find((p) => p.topic_id === topicId.value)
@@ -378,5 +451,25 @@ onMounted(async () => {
   font-size: 15px;
   color: var(--color-body);
   margin: 0 0 16px;
+}
+
+/* Graph section */
+.graph-section {
+  margin-bottom: 16px;
+}
+
+.topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.topic-chip {
+  cursor: pointer;
+  padding: 6px 12px;
+}
+
+.topic-chip:active {
+  opacity: 0.7;
 }
 </style>

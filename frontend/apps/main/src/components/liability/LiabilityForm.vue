@@ -269,6 +269,16 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || form.value.currency)
 
+// Date picker values — defined before initialData watch so immediate sync can reference them
+const isEndInfinite = ref(false)
+const now = new Date()
+const startPickerValue = ref([
+  String(now.getFullYear()),
+  String(now.getMonth() + 1).padStart(2, '0'),
+  String(now.getDate()).padStart(2, '0')
+])
+const endPickerValue = ref([...startPickerValue.value])
+
 watch(() => props.initialData, (data) => {
   if (data) {
     if (data.name !== undefined) form.value.name = String(data.name ?? '')
@@ -278,13 +288,18 @@ watch(() => props.initialData, (data) => {
     if (data.currency !== undefined) form.value.currency = String(data.currency ?? '')
     if (data.monthly_payment !== undefined) form.value.monthly_payment = String(data.monthly_payment ?? '')
     if (data.interest_rate !== undefined) form.value.interest_rate = String(data.interest_rate ?? '')
-    if (data.start_date !== undefined) form.value.start_date = String(data.start_date ?? '')
+    if (data.start_date !== undefined) {
+      form.value.start_date = String(data.start_date ?? '')
+      if (data.start_date) startPickerValue.value = data.start_date.split('-')
+    }
     if (data.end_date !== undefined) {
       form.value.end_date = String(data.end_date ?? '')
       // Sentinel 2100-01-01 or empty → treat as infinite
       if (data.end_date === INFINITE_DATE_SENTINEL || data.end_date === null) {
         isEndInfinite.value = true
         form.value.end_date = ''
+      } else if (data.end_date) {
+        endPickerValue.value = data.end_date.split('-')
       }
     }
     if (data.institution !== undefined) form.value.institution = String(data.institution ?? '')
@@ -302,16 +317,29 @@ const showMethodPicker = ref(false)
 // Date picker range: ~126 years (1950 to current+50y)
 import { DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE, INFINITE_DATE_SENTINEL } from '@/constants/dates'
 
-// "无限期" toggle for end_date
-const isEndInfinite = ref(false)
+// Sync picker when popup opens
+watch(showStartPicker, (open) => {
+  if (open && form.value.start_date) startPickerValue.value = form.value.start_date.split('-')
+})
+watch(showEndPicker, (open) => {
+  if (open) {
+    if (form.value.end_date && !isEndInfinite.value) {
+      endPickerValue.value = form.value.end_date.split('-')
+    } else if (form.value.start_date) {
+      endPickerValue.value = form.value.start_date.split('-')
+    }
+  }
+})
 
-const now = new Date()
-const startPickerValue = ref([
-  String(now.getFullYear()),
-  String(now.getMonth() + 1).padStart(2, '0'),
-  String(now.getDate()).padStart(2, '0')
-])
-const endPickerValue = ref([...startPickerValue.value])
+// Linkage: when start_date changes, sync startPickerValue + endPickerValue
+watch(() => form.value.start_date, (d) => {
+  if (d && d.split('-').length === 3) {
+    startPickerValue.value = d.split('-')
+    if (!form.value.end_date && !isEndInfinite.value) {
+      endPickerValue.value = d.split('-')
+    }
+  }
+})
 
 const categoryItems = computed(() => [
   { text: t('liability.mortgage'), value: 'mortgage', icon: 'icon-mortgage' },

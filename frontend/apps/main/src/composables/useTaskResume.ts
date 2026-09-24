@@ -31,12 +31,20 @@ export type TaskResumeStatus =
   | 'failed'
 
 export interface UseTaskResumeOptions {
-  /** Called for each SSE event during streaming. */
-  onStreamEvent?: (event: string, data: unknown) => void
+  /** Called for each SSE event during streaming. P1-4: eventId is the
+   *  SSE id: field for Last-Event-ID tracking (may be undefined). */
+  onStreamEvent?: (event: string, data: unknown, eventId?: string) => void
   /** Called when the task reaches 'completed' status. */
   onComplete?: (task: AITask) => void
   /** Called when the task reaches a terminal error state. */
   onError?: (task: AITask) => void
+  /** P0 fix: called when SSE fails/gaps and polling fallback activates.
+   *  Allows the stream consumer to sync its status (e.g. useReportStream
+   *  needs to know SSE is no longer delivering events). */
+  onPollingFallback?: () => void
+  /** P1-4: provide last event ID for gap-free SSE reconnection.
+   *  Called before starting SSE to get the current cursor position. */
+  getLastEventId?: () => string | null
 }
 
 export interface UseTaskResumeReturn {
@@ -116,6 +124,8 @@ export function useTaskResume(
     if (taskId.value && !pollingTaskId.value) {
       pollingTaskId.value = taskId.value
     }
+    // P0 fix: notify stream consumer that SSE is no longer active
+    options.onPollingFallback?.()
   }
 
   /**
@@ -145,12 +155,14 @@ export function useTaskResume(
     // P1-1 fix: abort previous SSE before starting a new one
     streamHandle?.abort()
     status.value = 'connecting'
+    // P1-4: pass last event ID for gap-free replay from Redis buffer
+    const lastEventId = options.getLastEventId?.() ?? undefined
     streamHandle = subscribeTaskStream(
       tid,
       {
-        onEvent: (event, data) => {
+        onEvent: (event, data, eventId) => {
           status.value = 'streaming'
-          options.onStreamEvent?.(event, data)
+          options.onStreamEvent?.(event, data, eventId)
         },
         onGap: () => {
           // Buffer overflow — SSE can't continue, fall back to polling
@@ -171,6 +183,7 @@ export function useTaskResume(
           activatePollingFallback()
         },
       },
+      lastEventId ? { lastEventId } : undefined,
     )
   }
 
