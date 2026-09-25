@@ -185,7 +185,7 @@ def seed_clusters(session, data_dir: Path) -> int:
 
 
 def validate_quality(session) -> None:
-    """Run post-seed quality checks: orphan edges + per-subject stats."""
+    """Run post-seed quality checks: orphan edges + per-subject stats + new validations."""
     from packages.db.models.learning.topic import (
         LearningCluster,
         LearningDependency,
@@ -216,6 +216,47 @@ def validate_quality(session) -> None:
     print("\n  Topics per subject:")
     for subj, count in subject_counts.most_common():
         print(f"    {subj}: {count}")
+
+    # --- New validations (OQ-6) ---
+    from apps.backend.app.services.learning.validation import (
+        validate_age_ranges,
+        validate_badge_dimensions,
+        validate_no_dependency_cycles,
+    )
+
+    # Badge dimension validity check
+    from packages.db.models.literacy_badge import LiteracyBadgeDefinition
+
+    badge_dims = set(
+        r[0]
+        for r in session.query(LiteracyBadgeDefinition.dimension).distinct().all()
+    )
+    dim_errors = validate_badge_dimensions(badge_dims)
+    if dim_errors:
+        for err in dim_errors:
+            print(f"  BADGE DIMENSION ERROR: {err}")
+        raise ValueError(f"Badge dimension validation failed: {dim_errors}")
+    print("  Badge dimensions: OK")
+
+    # Age range sanity
+    age_errors = validate_age_ranges(session)
+    if age_errors:
+        for err in age_errors:
+            print(f"  AGE RANGE ERROR: {err}")
+        raise ValueError(f"Age range validation failed: {len(age_errors)} topics")
+    print("  Age ranges: OK")
+
+    # Dependency cycle detection
+    cycle_errors = validate_no_dependency_cycles(session)
+    if cycle_errors:
+        for err in cycle_errors:
+            print(f"  CYCLE ERROR: {err}")
+        raise ValueError(
+            f"Dependency cycle detection failed: {len(cycle_errors)} cycles"
+        )
+    print("  Dependency cycles: OK")
+
+    print("\n  All quality validations passed.")
 
 
 def main():
