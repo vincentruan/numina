@@ -803,16 +803,9 @@ class MCPSession:
                                         db, child.id, session.topic_id,
                                     )
                                 else:
-                                    streak = progress_service.check_consecutive_failures(
+                                    progress_service.check_and_notify_streak(
                                         db, child.id, session.topic_id,
                                     )
-                                    if streak == progress_service.STREAK_THRESHOLD:
-                                        from apps.backend.app.services.notification.dispatcher import (
-                                            notify_learning_streak_3_failures,
-                                        )
-                                        notify_learning_streak_3_failures(
-                                            db, child_id=child.id, topic_id=session.topic_id,
-                                        )
 
                                 # Update progress based on recommendation
                                 progress = (

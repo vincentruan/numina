@@ -366,6 +366,21 @@ def resolve_streak_reminder_on_pass(
     return updated
 
 
+def check_and_notify_streak(db: Session, child_id: int, topic_id: int) -> int:
+    """Check consecutive failure streak and dispatch notification at threshold.
+
+    Shared helper used by both ``record_failed_assessment`` and the production
+    path in ``mcp_session.py``. Returns the current streak count.
+    """
+    streak = check_consecutive_failures(db, child_id, topic_id)
+    if streak == STREAK_THRESHOLD:
+        from apps.backend.app.services.notification.dispatcher import (
+            notify_learning_streak_3_failures,
+        )
+        notify_learning_streak_3_failures(db, child_id=child_id, topic_id=topic_id)
+    return streak
+
+
 def record_failed_assessment(
     db: Session,
     child_id: int,
@@ -375,12 +390,11 @@ def record_failed_assessment(
 ) -> int:
     """Record a failed assessment attempt and check for streak notification.
 
-    Creates a LearningAssessmentAttempt with passed=False, then checks
-    if the consecutive failure count has reached the threshold.
+    Creates a LearningAssessmentAttempt with passed=False, then delegates
+    to ``check_and_notify_streak`` for streak detection.
 
     Returns:
-        Current consecutive failure count. Notification is dispatched
-        automatically when count reaches STREAK_THRESHOLD.
+        Current consecutive failure count.
     """
     attempt = LearningAssessmentAttempt(
         child_id=child_id,
@@ -393,17 +407,7 @@ def record_failed_assessment(
     db.add(attempt)
     db.flush()
 
-    streak = check_consecutive_failures(db, child_id, topic_id)
-
-    # Fire notification exactly when threshold is reached (not on 4th, 5th, etc.)
-    if streak == STREAK_THRESHOLD:
-        from apps.backend.app.services.notification.dispatcher import (
-            notify_learning_streak_3_failures,
-        )
-
-        notify_learning_streak_3_failures(db, child_id=child_id, topic_id=topic_id)
-
-    return streak
+    return check_and_notify_streak(db, child_id, topic_id)
 
 
 def find_recommended_topic(
