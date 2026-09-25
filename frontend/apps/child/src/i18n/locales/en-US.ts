@@ -510,6 +510,11 @@ export default {
     },
     prerequisites: 'Prerequisites',
     nextSteps: 'Next Steps',
+    translate: 'Translate to Chinese',
+    retranslate: 'Re-translate',
+    translating: 'Translating...',
+    translationFailed: 'Translation failed, please try again',
+    translationComplete: 'Translation complete',
   },
   empty: {
     noTasks: 'No tasks today, enjoy your rest 🌟',

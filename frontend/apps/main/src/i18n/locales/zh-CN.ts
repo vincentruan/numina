@@ -1814,6 +1814,11 @@ export default {
     empty: '暂无学习记录',
     todayRecommend: '今日推荐',
     startLearning: '开始学习',
+    translate: '翻译为中文',
+    retranslate: '重新翻译',
+    translating: '翻译中...',
+    translationFailed: '翻译失败，请稍后重试',
+    translationComplete: '翻译完成',
   },
   family: {
     title: '家庭',
