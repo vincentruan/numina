@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from apps.backend.app.config import settings
 from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
+from packages.core.cache import get_cache, init_cache, reset_cache
 
 
 def _create_mock_jwt(user_id: str) -> str:
@@ -46,7 +47,12 @@ def reset_rate_limit():
 class TestGlobalRateLimit:
     """Tests for global API rate limiting."""
 
-    def test_health_endpoint_not_rate_limited(self):
+    def setup_method(self):
+        reset_cache()
+        from packages.core.cache import init_cache
+        init_cache(backend='memory')
+
+    async def test_health_endpoint_not_rate_limited(self):
         """Test that health endpoint is not rate limited."""
         from apps.backend.app.main import app
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
@@ -58,7 +64,7 @@ class TestGlobalRateLimit:
             response = client.get("/api/health")
             assert response.status_code == 200
 
-    def test_rate_limit_enforcement(self):
+    async def test_rate_limit_enforcement(self):
         """Test that rate limiting is enforced by the middleware."""
         # Test the middleware logic directly rather than through HTTP
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
@@ -66,43 +72,43 @@ class TestGlobalRateLimit:
 
         # Should allow first 'limit' requests spread across 3 clients
         for i in range(limit):
-            result = middleware._check_rate_limit(f"test_client_{i % 3}")
+            result = await middleware._check_rate_limit(f"test_client_{i % 3}")
             assert result is True, f"Request {i} should have passed"
 
         # Exhaust the limit for one client
         for _ in range(limit):
-            middleware._check_rate_limit("heavy_user")
+            await middleware._check_rate_limit("heavy_user")
 
         # Now should be rate limited
-        result = middleware._check_rate_limit("heavy_user")
+        result = await middleware._check_rate_limit("heavy_user")
         assert result is False, "Should be rate limited after many requests"
 
-    def test_different_clients_have_separate_limits(self):
+    async def test_different_clients_have_separate_limits(self):
         """Test that different clients have separate rate limits."""
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         middleware = RateLimitMiddleware(None)
 
         # Client A exhausts its limit
         for _ in range(limit + 50):
-            middleware._check_rate_limit("client_a")
+            await middleware._check_rate_limit("client_a")
 
         # Client A should be limited
-        assert middleware._check_rate_limit("client_a") is False
+        assert await middleware._check_rate_limit("client_a") is False
 
         # Client B should still be allowed
-        assert middleware._check_rate_limit("client_b") is True
+        assert await middleware._check_rate_limit("client_b") is True
 
-    def test_rate_limit_resets_after_window(self):
+    async def test_rate_limit_resets_after_window(self):
         """Test that rate limit window logic works."""
 
         middleware = RateLimitMiddleware(None)
 
         # Make some requests
         for _ in range(50):
-            middleware._check_rate_limit("test_window_client")
+            await middleware._check_rate_limit("test_window_client")
 
         # Should still be allowed
-        assert middleware._check_rate_limit("test_window_client") is True
+        assert await middleware._check_rate_limit("test_window_client") is True
 
         # Simulate time passing by modifying the timestamp in the store
         # This tests the window expiration logic
@@ -112,13 +118,13 @@ class TestGlobalRateLimit:
             middleware._rate_store['test_window_client'] = (count, time.time() - 61)
 
         # After window expires, should be allowed again
-        assert middleware._check_rate_limit("test_window_client") is True
+        assert await middleware._check_rate_limit("test_window_client") is True
 
 
 class TestClientIdentification:
     """Tests for client identification in rate limiting."""
 
-    def test_authenticated_user_identified_by_user_id(self):
+    async def test_authenticated_user_identified_by_user_id(self):
         """Test that authenticated users are identified by decoded user_id from JWT."""
         # Create a mock JWT token with a user_id
         user_id = str(uuid.uuid4())
@@ -137,7 +143,7 @@ class TestClientIdentification:
 
         assert client_id == f"user:{user_id}"
 
-    def test_authenticated_user_with_invalid_token_falls_back_to_ip(self):
+    async def test_authenticated_user_with_invalid_token_falls_back_to_ip(self):
         """Test that invalid tokens fall back to IP-based identification."""
         # Mock request with invalid token
         class MockRequest:
@@ -153,7 +159,7 @@ class TestClientIdentification:
         # Should fall back to IP
         assert client_id == "ip:192.168.1.1"
 
-    def test_unauthenticated_user_identified_by_ip(self):
+    async def test_unauthenticated_user_identified_by_ip(self):
         """Test that unauthenticated users are identified by IP."""
         # Mock request without Authorization header
         class MockRequest:
@@ -168,7 +174,7 @@ class TestClientIdentification:
 
         assert client_id == "ip:192.168.1.100"
 
-    def test_unknown_ip_handling(self):
+    async def test_unknown_ip_handling(self):
         """Test handling of unknown IP (no client info)."""
         # Mock request with no client info
         class MockRequest:
@@ -185,7 +191,7 @@ class TestClientIdentification:
 class TestRateLimitSkipPaths:
     """Tests for paths that skip rate limiting."""
 
-    def test_skip_paths_defined(self):
+    async def test_skip_paths_defined(self):
         """Test that skip paths are properly defined."""
         skip_paths = RateLimitMiddleware.SKIP_PATHS
 
@@ -193,27 +199,27 @@ class TestRateLimitSkipPaths:
         assert "/api/v1/auth/login" in skip_paths
         assert "/api/v1/auth/register" in skip_paths
 
-    def test_static_prefixes_defined(self):
+    async def test_static_prefixes_defined(self):
         """Test that static prefixes are defined."""
         static_prefixes = RateLimitMiddleware.STATIC_PREFIXES
 
         assert "/uploads/" in static_prefixes
         assert "/static/" in static_prefixes
 
-    def test_rate_limit_check_logic(self):
+    async def test_rate_limit_check_logic(self):
         """Test the rate limit check logic directly."""
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         middleware = RateLimitMiddleware(None)
 
         # First check should pass
-        assert middleware._check_rate_limit("test_client_1") is True
+        assert await middleware._check_rate_limit("test_client_1") is True
 
         # Exhaust the limit
         for _ in range(limit + 50):
-            middleware._check_rate_limit("test_client_2")
+            await middleware._check_rate_limit("test_client_2")
 
         # Should now be rate limited
-        assert middleware._check_rate_limit("test_client_2") is False
+        assert await middleware._check_rate_limit("test_client_2") is False
 
         # Different client should still pass
-        assert middleware._check_rate_limit("test_client_3") is True
+        assert await middleware._check_rate_limit("test_client_3") is True

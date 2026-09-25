@@ -174,8 +174,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     # Paths that don't count towards rate limit
     STATIC_PREFIXES = ("/uploads/", "/static/")
 
-    _rate_store: dict[str, tuple[int, float]] = {}
-
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting entirely in development/CI
         # Production environments still need protection
@@ -193,9 +191,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Get client identifier
         client_id = self._get_client_id(request)
 
-        # Check rate limit using in-memory storage
-        # Note: For distributed deployments, replace with cache layer
-        if not self._check_rate_limit(client_id):
+        # Check rate limit using unified cache layer
+        if not await self._check_rate_limit(client_id):
             _log_security_event(SecurityEventType.GLOBAL_RATE_LIMITED, client_id=client_id, path=request.url.path)
             # BaseHTTPMiddleware exceptions bypass FastAPI's exception handlers,
             # so call app_error_handler directly to return a proper 429 response.
@@ -224,40 +221,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = _get_real_client_ip(request)
         return f"ip:{client_ip}"
 
-    def _check_rate_limit(self, client_id: str) -> bool:
-        """Check if client is within rate limit.
+    async def _check_rate_limit(self, client_id: str) -> bool:
+        """Check if client is within rate limit using unified Cache.
 
-        Uses in-memory dict for rate limiting.
-        For distributed deployments, use cache layer instead.
+        Uses fixed-window algorithm via ``Cache.increment()`` + TTL.
         """
-        import time
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        # Use module-level storage for rate limiting
-        store = RateLimitMiddleware._rate_store
-        current_time = time.time()
-        window_start = current_time - 60  # 1 minute window
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:global:{client_id}"
+        count = await cache.increment(key)
+        if count == 1:
+            # First request in window — set 60s TTL
+            await cache.set(key, count, ttl=60)
 
-        # Clean up expired entries
-        expired_keys = [
-            k for k, (_, timestamp) in store.items()
-            if timestamp < window_start
-        ]
-        for k in expired_keys:
-            del store[k]
-
-        # Get current count
-        count, timestamp = store.get(client_id, (0, current_time))
-
-        # Reset if outside window
-        if timestamp < window_start:
-            count = 0
-            timestamp = current_time
-
-        # Check limit
         limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
-        if count >= limit:
-            return False
-
-        # Increment count
-        store[client_id] = (count + 1, timestamp)
-        return True
+        return count <= limit

@@ -80,7 +80,7 @@ def _decode_webauthn_challenge(challenge: str) -> bytes:
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(
+async def register(
     response: Response,
     req: RegisterRequest,
     request: Request,
@@ -92,7 +92,7 @@ def register(
     Returns tokens in both Cookie (httpOnly) and JSON body (for API clients).
     """
     client_ip = _get_real_client_ip(request)
-    tokens = auth_service.register(db, req, client_ip)
+    tokens = await auth_service.register(db, req, client_ip)
 
     # Set httpOnly cookies (recommended for web)
     set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
@@ -102,7 +102,7 @@ def register(
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(
+async def login(
     response: Response,
     req: LoginRequest,
     db: Session = Depends(get_db),
@@ -112,7 +112,7 @@ def login(
 
     Returns tokens in both Cookie (httpOnly) and JSON body (for API clients).
     """
-    tokens = auth_service.login(db, req)
+    tokens = await auth_service.login(db, req)
 
     # Set httpOnly cookies (recommended for web)
     set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
@@ -122,7 +122,7 @@ def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(
+async def refresh(
     response: Response,
     req: RefreshRequest | None = None,
     refresh_token_cookie: str = Depends(get_refresh_token_from_cookie),
@@ -142,7 +142,7 @@ def refresh(
     if not refresh_token:
         raise ValueError("缺少刷新令牌")
 
-    tokens = auth_service.refresh_token(db, refresh_token)
+    tokens = await auth_service.refresh_token(db, refresh_token)
 
     # Update cookies
     set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
@@ -151,14 +151,14 @@ def refresh(
 
 
 @router.post("/family/join", response_model=TokenResponse)
-def join_family(
+async def join_family(
     response: Response,
     req: JoinFamilyRequest,
     db: Session = Depends(get_db),
     _: None = Depends(verify_captcha),
 ):
     """Join an existing family and set authentication cookies."""
-    tokens = auth_service.join_family(db, req)
+    tokens = await auth_service.join_family(db, req)
 
     # Set httpOnly cookies
     set_auth_cookies(response, tokens.access_token, tokens.refresh_token)
@@ -219,13 +219,13 @@ def update_settings(
 
 
 @router.post("/me/password")
-def change_password(
+async def change_password(
     req: ChangePasswordRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """修改密码，成功后吊销该用户所有现存 token，需重新登录。"""
-    auth_service.change_password(db, user, req.old_password, req.new_password)
+    await auth_service.change_password(db, user, req.old_password, req.new_password)
     return {"message": "密码已修改，请重新登录"}
 
 

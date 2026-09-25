@@ -43,21 +43,21 @@ def failed_task_with_checkpoint(db, family_id):
 class TestGetLastCheckpointForResume:
     """Tests for _get_last_checkpoint_for_resume helper."""
 
-    def test_returns_checkpoint_from_failed_task(
+    async def test_returns_checkpoint_from_failed_task(
         self, db, family_id, failed_task_with_checkpoint  # noqa: ARG002
     ):
         from apps.backend.app.routers.ai_report import _get_last_checkpoint_for_resume
 
-        result = _get_last_checkpoint_for_resume(family_id, "asset-report", db)
+        result = await _get_last_checkpoint_for_resume(family_id, "asset-report", db)
         assert result == "ckpt-resume-test-123"
 
-    def test_returns_none_when_no_failed_task(self, db, family_id):
+    async def test_returns_none_when_no_failed_task(self, db, family_id):
         from apps.backend.app.routers.ai_report import _get_last_checkpoint_for_resume
 
-        result = _get_last_checkpoint_for_resume(family_id, "asset-report", db)
+        result = await _get_last_checkpoint_for_resume(family_id, "asset-report", db)
         assert result is None
 
-    def test_returns_none_when_checkpoint_is_null(self, db, family_id):
+    async def test_returns_none_when_checkpoint_is_null(self, db, family_id):
         """Failed task without checkpoint_id returns None."""
         from apps.backend.app.models.ai_chat_session import AIChatSession
 
@@ -79,10 +79,10 @@ class TestGetLastCheckpointForResume:
 
         from apps.backend.app.routers.ai_report import _get_last_checkpoint_for_resume
 
-        result = _get_last_checkpoint_for_resume(family_id, "asset-report", db)
+        result = await _get_last_checkpoint_for_resume(family_id, "asset-report", db)
         assert result is None
 
-    def test_ignores_completed_tasks(self, db, family_id):
+    async def test_ignores_completed_tasks(self, db, family_id):
         """Completed tasks are not considered for resume."""
         from apps.backend.app.models.ai_chat_session import AIChatSession
 
@@ -104,7 +104,7 @@ class TestGetLastCheckpointForResume:
 
         from apps.backend.app.routers.ai_report import _get_last_checkpoint_for_resume
 
-        result = _get_last_checkpoint_for_resume(family_id, "asset-report", db)
+        result = await _get_last_checkpoint_for_resume(family_id, "asset-report", db)
         assert result is None
 
 

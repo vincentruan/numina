@@ -283,13 +283,13 @@ def update_member_status(
 
 
 @router.post("/invite-code")
-def regenerate_invite_code(
+async def regenerate_invite_code(
     db: Session = Depends(get_db),
     user: User = Depends(require_owner),
 ):
     from apps.backend.app.services.auth import _check_invite_code_rate_limit
 
-    _check_invite_code_rate_limit(str(user.id))
+    await _check_invite_code_rate_limit(str(user.id))
     family = family_service.regenerate_invite_code(db, user)
     return {"invite_code": family.invite_code}
 

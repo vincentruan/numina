@@ -61,13 +61,13 @@ class MarkdownResponse(BaseModel):
         return v.isoformat()
 
 
-def _latest_report(family_id: int, db: Session) -> AIReport | None:
+async def _latest_report(family_id: int, db: Session) -> AIReport | None:
     from apps.backend.app.services.finance_coach_cache import latest_by_skill
 
-    return latest_by_skill(db, family_id, "asset-report")
+    return await latest_by_skill(db, family_id, "asset-report")
 
 
-def _get_last_checkpoint_for_resume(
+async def _get_last_checkpoint_for_resume(
     family_id: int, skill_id: str, db: Session
 ) -> str | None:
     """Find the last_checkpoint_id from the most recent failed/interrupted task.
@@ -103,12 +103,12 @@ REPORT_CACHE_TTL = SKILL_TTL["asset-report"]  # keep existing report behavior
 
 
 @router.get("")
-def get_report(
+async def get_report(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     """获取家庭最新体检报告。"""
-    report = _latest_report(current_user.family_id, db)
+    report = await _latest_report(current_user.family_id, db)
     if not report:
         return {"report": None}
     return {
@@ -140,7 +140,7 @@ async def trigger_generate_events(
     # not create a run, so it must not be blocked by / queue behind a running
     # task). force=true skips the cache and regenerates.
     if not force:
-        cached = _latest_report(current_user.family_id, db)
+        cached = await _latest_report(current_user.family_id, db)
         if cached is not None and cached.generated_at is not None:
             # Dynamic TTL from family settings, fallback to REPORT_CACHE_TTL
             from apps.backend.app.services.config_registry import (
@@ -154,7 +154,7 @@ async def trigger_generate_events(
             if "ai_cache_ttl_report" in FAMILY_SETTING_DEFINITIONS:
                 with contextlib.suppress(Exception):
                     _report_ttl = timedelta(
-                        minutes=get_family_setting_cached(
+                        minutes=await get_family_setting_cached(
                             int(current_user.family_id), "ai_cache_ttl_report"
                         )
                     )
@@ -316,7 +316,7 @@ async def trigger_generate_events(
 
 
 @router.get("/markdown")
-def get_report_markdown(
+async def get_report_markdown(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ) -> MarkdownResponse:
@@ -324,7 +324,7 @@ def get_report_markdown(
 
     返回最新报告的markdown源文件内容，供前端预览使用。
     """
-    report = _latest_report(current_user.family_id, db)
+    report = await _latest_report(current_user.family_id, db)
     if not report:
         raise AppError(ErrorCode.AI_REPORT_NOT_FOUND)
     if not report.markdown_file_path:

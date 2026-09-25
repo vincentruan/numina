@@ -20,19 +20,20 @@ _JOIN_RATE_LIMIT_PER_MINUTE = 10
 _VIEW_RATE_LIMIT_PER_MINUTE = 20
 
 
-def _check_rate_limit(ip: str, key_prefix: str, limit: int) -> None:
+async def _check_rate_limit(ip: str, key_prefix: str, limit: int) -> None:
     """Generic per-IP rate limiter using the rate-limit cache backend."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
+        cache = get_cache()
         key = f"{key_prefix}:{ip}"
-        count = cache.get(key)
+        count = await cache.get(key)
         if count is not None and int(count) >= limit:
             raise AppError(ErrorCode.RATE_LIMITED)
-        new_count = cache.increment(key)
+        new_count = await cache.increment(key)
         if new_count == 1:
-            cache.set(key, 1, ttl_seconds=60)
+            await cache.set(key, 1, ttl=60)
     except AppError:
         raise
     except Exception:
@@ -41,14 +42,14 @@ def _check_rate_limit(ip: str, key_prefix: str, limit: int) -> None:
 
 
 @router.get("/{invite_code}", response_model=SharedExpenseResponse)
-def get_shared_expense_view(
+async def get_shared_expense_view(
     invite_code: str,
     request: Request,
     db: Session = Depends(get_db),
 ):
     """Get sanitized shared expense view for external participants. No auth required."""
     client_ip = _get_real_client_ip(request)
-    _check_rate_limit(client_ip, "shared_view", _VIEW_RATE_LIMIT_PER_MINUTE)
+    await _check_rate_limit(client_ip, "shared_view", _VIEW_RATE_LIMIT_PER_MINUTE)
 
     data = split_group_service.get_shared_expense_view(db, invite_code)
     trip = data["trip"]
@@ -87,7 +88,7 @@ def get_shared_expense_view(
 
 
 @router.post("/{invite_code}/join", response_model=SplitParticipantResponse)
-def join_group(
+async def join_group(
     invite_code: str,
     req: SplitParticipantCreate,
     request: Request,
@@ -95,7 +96,7 @@ def join_group(
 ):
     """Join a split group via invite code. No auth required. Rate-limited by IP."""
     client_ip = _get_real_client_ip(request)
-    _check_rate_limit(client_ip, "shared_join", _JOIN_RATE_LIMIT_PER_MINUTE)
+    await _check_rate_limit(client_ip, "shared_join", _JOIN_RATE_LIMIT_PER_MINUTE)
 
     participant, _group = split_group_service.join_group(db, invite_code, req.name)
     return SplitParticipantResponse(

@@ -17,6 +17,7 @@
 | Backend | `services/cache/` (rate_limit, captcha) | `CacheBackend` 抽象 (memory/redis) | 速率限制计数器、验证码防重放 hash |
 | Backend | `middleware/rate_limit.py:_rate_store` | 内联 dict（绕过 CacheBackend） | 全局 API 速率限制 |
 | Backend | `config_service:_family_setting_cache` | 内联 dict 5min TTL | FamilySetting 热路径读取 |
+| Backend | `security_monitoring.py:InMemorySecurityStore` | 内联 dict/set + 计数器（混合数据结构） | 安全事件日志、IP 计数器、可疑 IP 集合 |
 | Agent | `agent_registry.py` | 内存 dict + 60s TTL | Agent 属性（从 backend HTTP 获取） |
 | Scheduler | `exchange_rate_adapter.py` | 内存 dict 4h TTL | 汇率查询结果 |
 
@@ -34,7 +35,7 @@
 
 ### 1.2 问题
 
-- **缓存层未统一**: Backend 有 `CacheBackend` 抽象但仅服务 rate_limit 和 captcha；`middleware/_rate_store`、`config_service/_family_setting_cache`、`agent_registry`、`exchange_rate_adapter` 全部绕过抽象层直接使用内联 dict
+- **缓存层未统一**: Backend 有 `CacheBackend` 抽象但仅服务 rate_limit 和 captcha；`middleware/_rate_store`、`config_service/_family_setting_cache`、`security_monitoring/InMemorySecurityStore`、`agent_registry`、`exchange_rate_adapter` 全部绕过抽象层直接使用内联 dict/set
 - **数据冗余**: 同样的数据（如汇率、family setting）在多个服务进程中各自缓存一份。当启用 Redis 时，这些数据可以跨进程共享，但当前没有通过统一的 cache 层实现
 - **Redis 实现从未启用**: `RedisCacheBackend` 已存在但 `CACHE_BACKEND` 默认 `memory`，从未有用户切换到 Redis
 - **命名不佳**: `CacheBackend` 名字过于泛化，工厂函数 `get_rate_limit_cache()` / `get_captcha_payload_cache()` 按用途而非实例管理
@@ -115,6 +116,9 @@ CAPTCHA = "captcha"           # 验证码防重放
 FAM_SETTING = "famsetting"    # FamilySetting 热路径
 AGENT_REG = "agentreg"        # Agent 属性注册
 FX_RATE = "fxrate"            # 汇率
+SEC_EVENT = "secevent"        # 安全事件日志 (list)
+SEC_SUSPECT = "secsuspect"    # 可疑 IP 集合 (set)
+SEC_COUNTER = "seccounter"    # 安全计数器 (counter)
 ```
 
 调用方使用 `f"{RATE_LIMIT}:{scope}:{key}"` 构造 key。
@@ -132,13 +136,23 @@ FX_RATE = "fxrate"            # 汇率
 
 ### 4.1 接口
 
+参考 Spring Data Redis 的操作分组模式（`opsForValue` / `opsForSet` / `opsForList`），按数据结构类型分组。Redis 原生支持这些数据结构，`MemoryCache` 用 Python 内置 `set` / `list` 实现等价语义。
+
 ```python
 class Cache(ABC):
     """缓存抽象基类。
 
     提供用户选择灵活性：memory 模式（进程本地）或 redis 模式（跨进程共享）。
-    用于共享状态、配置热路径、数据加速。
+    用于共享状态、配置热路径、数据加速、安全监控等场景。
+
+    操作按数据结构分组（参考 Spring Data Redis）：
+    - Value: KV 读写 + TTL
+    - Counter: 原子计数器
+    - Set: 集合操作（去重、成员检测）
+    - List: 列表操作（事件日志、时间范围查询）
     """
+
+    # --- Value ---
 
     @abstractmethod
     async def get(self, key: str) -> Any | None: ...
@@ -152,25 +166,72 @@ class Cache(ABC):
     @abstractmethod
     async def get_ttl(self, key: str) -> int | None: ...
 
+    # --- Counter ---
+
     @abstractmethod
     async def increment(self, key: str, amount: int = 1) -> int: ...
+
+    # --- Set ---
+
+    @abstractmethod
+    async def sadd(self, key: str, *members: str) -> int:
+        """添加成员到集合。首次调用时可通过 ttl 参数设置过期时间。"""
+        ...
+
+    @abstractmethod
+    async def sismember(self, key: str, member: str) -> bool: ...
+
+    @abstractmethod
+    async def smembers(self, key: str) -> set[str]: ...
+
+    @abstractmethod
+    async def srem(self, key: str, *members: str) -> int: ...
+
+    # --- List ---
+
+    @abstractmethod
+    async def lpush(self, key: str, value: Any) -> int:
+        """从左侧推入列表。返回列表当前长度。"""
+        ...
+
+    @abstractmethod
+    async def lrange(self, key: str, start: int, stop: int) -> list: ...
+
+    @abstractmethod
+    async def ltrim(self, key: str, start: int, stop: int) -> None:
+        """裁剪列表到指定范围。常用于限制列表长度或清理过期条目。"""
+        ...
+
+    # --- Lifecycle ---
 
     @abstractmethod
     async def clear(self) -> None: ...
 ```
 
+**设计说明:**
+
+- **接口边界**: 覆盖 cache 常见操作子集（Value / Counter / Set / List），不暴露 Redis 全部 200+ 命令。Spring Data Redis 验证了这个边界在工程实践中是合理的
+- **Set/List 的 TTL**: Redis 通过 `EXPIRE` 命令对任意 key 设置 TTL（与 Value 一致）。`MemoryCache` 在 `_store` 中统一追踪所有 key 类型的过期时间
+- **序列化**: `sadd` / `smembers` 成员为 `str`（如 IP 地址）。`lpush` / `lrange` 值为 `Any`（JSON 序列化，支持事件 dict 等复杂结构）
+- **不含 Hash / Sorted Set**: 当前无消费方需要，遵循 "no speculative code" 原则，待有实际需求时再扩展
+
 ### 4.2 MemoryCache
 
 - 与当前 `MemoryCacheBackend` 逻辑一致，仅重命名
-- 内部 dict + TTL 时间戳
+- Value / Counter: 内部 dict + TTL 时间戳
+- Set: 内部 `dict[str, set[str]]` + 过期时间
+- List: 内部 `dict[str, list[tuple[float, Any]]]`（条目附带时间戳，支持按时间清理）
 - 需注意：async 接口下 `MemoryCache` 的 async 方法是轻量包装（直接返回结果，无 IO）
+- 所有 key 类型（Value / Set / List）共用统一的过期追踪机制（`_expire_at: dict[str, float]`）
 
 ### 4.3 RedisCache
 
-- 与当前 `RedisCacheBackend` 逻辑一致，仅重命名
-- 使用 `redis.asyncio.Redis`
+- 当前 `RedisCacheBackend` 使用同步 `redis.Redis`，迁移为 `redis.asyncio.Redis`（非仅重命名）
 - JSON 序列化（`json.dumps` / `json.loads`）
-- `SETEX` 实现 TTL
+- Value / Counter: `SETEX` / `INCRBY` 实现 TTL
+- Set: `SADD` / `SISMEMBER` / `SMEMBERS` / `SREM` + `EXPIRE` 设置 TTL
+- List: `LPUSH` / `LRANGE` / `LTRIM` + `EXPIRE` 设置 TTL
+- **注意**: 当前 `RedisCacheBackend.clear()` 调用 `flushdb()`，在多服务共用同一 Redis 实例时不安全。迁移后 `RedisCache.clear()` 改为按 key 前缀批量删除（`SCAN` + `DEL`），避免影响其他服务的数据
 
 ### 4.4 异步接口说明
 
@@ -180,9 +241,18 @@ class Cache(ABC):
 - `MemoryCache` 的 async 方法是零开销包装，不受影响
 
 **需要同步改造的调用方:**
-- `middleware/rate_limit.py` — 改为 async middleware
-- `services/auth.py` — 认证函数改为 async（多数已经是）
+- `middleware/rate_limit.py` — 中间件 `dispatch` 已是 async，但需改为调用 `await cache.increment()` 替代类级 `_rate_store` dict
+- `services/auth.py` — 认证函数改为 async（多数已经是）；级联影响 `register`、`login`、`refresh_token` 等端点，需逐一确认调用链
 - `auth/captcha.py` — 验证码验证改为 async
+- `services/security_monitoring.py` — `InMemorySecurityStore` 当前为同步接口（`threading.Lock` 保护），迁移到 `Cache` 后需改为 async。`SecurityMonitor` 的方法已是 async，改造集中在 `_store` 调用层。集群模式下安全状态（可疑 IP、计数器）跨进程共享是新增收益
+
+**需要同步更新 import 路径的测试文件:**
+- `tests/backend/test_cache.py` — 旧缓存模块路径 import
+- `tests/backend/test_auth_security.py` — 同上
+- `tests/backend/test_device_auth.py` — 同上
+- `tests/backend/test_captcha.py` — 同上
+- `tests/backend/test_family.py` — 同上
+- `tests/backend/conftest.py` — 同上
 
 ### 4.5 连接管理
 
@@ -209,8 +279,11 @@ app.state.cache = cache
 |-------|------|--------|------|
 | `services/cache/` (rate_limit) | 私有 `CacheBackend` memory/redis | `packages/core/cache` 的 `get_cache()` | 移除 Backend 私有缓存模块 |
 | `services/cache/` (captcha) | 同上 | 同上 | 同上 |
-| `middleware/rate_limit.py:_rate_store` | 内联 dict | `get_cache()` | 消除绕过抽象；中间件改 async |
+| `routers/device.py` (captcha 调用方) | 调用 `get_captcha_payload_cache()` | `get_cache()` | 同 captcha |
+| `routers/shared.py` (captcha 调用方) | 调用 `get_captcha_payload_cache()` | `get_cache()` | 同 captcha |
+| `middleware/rate_limit.py:_rate_store` | 内联 dict（滑动窗口） | `get_cache()`（固定窗口） | 消除绕过抽象；中间件改 async；**算法变更**见下方说明 |
 | `config_service:_family_setting_cache` | 内联 dict 5min TTL | `get_cache()` 5min TTL | Redis 模式下 agent 也可直接读取 |
+| `security_monitoring.py:InMemorySecurityStore` | 内联 dict/set + 计数器 | `get_cache()` set/list/counter 操作 | 扩展后的 Cache 接口覆盖；集群模式下可疑 IP、安全计数器跨进程共享 |
 
 **文件变更清单:**
 - 删除 `server/apps/backend/app/services/cache/` 整个目录
@@ -220,7 +293,18 @@ app.state.cache = cache
 - 修改 `server/apps/backend/app/auth/captcha.py` — 使用 `get_cache()` 替代 `get_captcha_payload_cache()`
 - 修改 `server/apps/backend/app/routers/device.py` — 同上
 - 修改 `server/apps/backend/app/routers/shared.py` — 同上
+- 重构 `server/apps/backend/app/services/security_monitoring.py` — 移除 `InMemorySecurityStore`，改用 `get_cache()` 的 set/list/counter 操作；移除 `threading.Lock`（`Cache` 接口已是 async-safe）
 - 修改 backend lifespan — 调用 `init_cache()` 初始化
+- 更新 `server/tests/backend/test_cache.py`、`test_auth_security.py`、`test_device_auth.py`、`test_captcha.py`、`test_family.py`、`conftest.py` — import 路径从旧缓存模块改为 `packages/core/cache`
+
+**速率限制算法变更说明:**
+
+当前 `_rate_store` 使用滑动窗口算法（每个 key 记录多个时间戳，每次检查清理过期条目）。迁移到 `Cache.increment()` + TTL 产生固定窗口算法，在窗口边界处可能允许高达 2 倍配置限额的突发流量。这是一个已知的行为变更：
+
+- **Memory 模式**: 行为从滑动窗口变为固定窗口，与当前略有差异
+- **Redis 模式**: 同上，但多实例间共享计数器是新增收益
+
+当前速率限额较宽松（全局 API 保护），固定窗口的边界突增在实际场景中影响有限。如需保持滑动窗口，可后续扩展 Cache 接口或在 rate limiter 中保留独立实现。
 
 ### 5.2 Agent
 
@@ -256,6 +340,8 @@ app.state.cache = cache
 | FamilySetting | Backend | Backend + Agent | Agent 无需通过 HTTP 获取 |
 | Agent 属性 | Agent | Backend + Agent | 消除 HTTP invalidation 调用 |
 | 汇率 | Scheduler | Backend + Scheduler | 避免重复查询外部 API |
+| 可疑 IP 集合 | Backend | Backend | 多 worker 间共享安全状态，一处标记全局生效 |
+| 安全事件计数器 | Backend | Backend | 多 worker 间共享计数，威胁检测阈值准确 |
 
 Memory 模式下行为与当前一致（各进程独立），不丢失功能。
 
@@ -265,7 +351,7 @@ Memory 模式下行为与当前一致（各进程独立），不丢失功能。
 
 - `CACHE_BACKEND` — 保留，`"memory"` (默认) 或 `"redis"`
 - `REDIS_URL` — 当 `CACHE_BACKEND=redis` 时使用
-- `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`, `REDIS_USE_TLS` — 保留，用于构造 `REDIS_URL`
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`, `REDIS_USE_TLS` — 保留，仅用于在缺省 `REDIS_URL` 时构造默认值；若用户显式设置 `REDIS_URL`，这些变量不生效
 
 ### 6.2 不启用 Redis 时的行为
 
@@ -304,11 +390,16 @@ async def _check_redis_connection(redis_url: str) -> None:
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| 同步改 async 影响面 | auth/middleware/captcha 等需改 async | 逐个迁移，先改接口再改调用方 |
+| 同步改 async 影响面 | auth/middleware/captcha 等需改 async；auth.py 级联影响 register/login/refresh_token 等端点 | 逐个迁移，先改接口再改调用方；planning 阶段估算完整级联范围 |
 | Key 前缀变化（Redis 模式） | 旧 key 不再命中 | 缓存数据可从源头重建，TTL 自然过期 |
 | 连接池耗尽 | 缓存操作阻塞 | `max_connections=10`，可配置调大 |
-| Agent HTTP invalidation 删除 | 仅 Redis 模式下不再需要 | Memory 模式下保留（进程隔离，仍需 HTTP 通知） |
+| 速率限制算法变更 | 从滑动窗口变为固定窗口，窗口边界可能允许 2x 突发流量 | 当前限额宽松，实际影响有限；如需保持滑动窗口可后续扩展接口（见 5.1 说明） |
 | 工厂函数 API 变更 | 消费方 import 路径变化 | 迁移时统一替换，无渐进过渡 |
+| 测试文件 import 路径 | 6 个测试文件 import 旧缓存模块路径 | 随代码迁移同步更新（见 4.4 测试文件清单） |
+
+**未来可考虑的简化（不在本次迁移范围）:**
+
+- 当确认所有生产部署都使用 Redis 模式时，可移除 Agent HTTP invalidation 端点（Redis 模式下 backend/scheduler 可直接读取 agent 属性，无需 HTTP 通知）
 
 ## 9. 明确不迁移的项
 

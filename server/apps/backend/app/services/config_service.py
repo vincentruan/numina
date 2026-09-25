@@ -5,8 +5,6 @@ Hot-path reads use a 5-minute LRU cache to avoid per-request DB hits.
 """
 import json
 import logging
-import threading
-import time
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -72,7 +70,7 @@ def get_all_family_settings(db: Session, family_id: int) -> dict[str, Any]:
     return result
 
 
-def update_family_settings(
+async def update_family_settings(
     db: Session, family_id: int, updates: dict[str, Any]
 ) -> dict[str, Any]:
     """Validate and persist setting updates. Returns merged result.
@@ -105,7 +103,7 @@ def update_family_settings(
             row.value = serialized
 
     db.commit()
-    _invalidate_family_cache(family_id)
+    await _invalidate_family_cache(family_id)
     return get_all_family_settings(db, family_id)
 
 
@@ -173,26 +171,25 @@ def update_user_settings(
 # --- Hot-path cache (5-min TTL, per-family) ---
 
 _CACHE_TTL_SECONDS = 300  # 5 minutes
-_family_setting_cache: dict[tuple[int, str], tuple[float, Any]] = {}
-_cache_lock = threading.Lock()
 
 
-def get_family_setting_cached(family_id: int, key: str) -> Any:
-    """Read a family setting with 5-minute in-memory cache (per-family).
+async def get_family_setting_cached(family_id: int, key: str) -> Any:
+    """Read a family setting with 5-minute cache via unified Cache layer.
 
     For hot-path callers that don't have a DB session (e.g. is_cache_fresh).
     Callers must ensure the key exists in FAMILY_SETTING_DEFINITIONS
     (Task 9 callers guard with ``if config_key in FAMILY_SETTING_DEFINITIONS``).
     """
-    now = time.time()
-    cache_key = (family_id, key)
-    with _cache_lock:
-        entry = _family_setting_cache.get(cache_key)
-        if entry is not None:
-            ts, value = entry
-            if now - ts < _CACHE_TTL_SECONDS:
-                return value
-    # Cache miss or expired — read from DB
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import FAM_SETTING
+
+    cache = get_cache()
+    cache_key = f"{FAM_SETTING}:{family_id}:{key}"
+    value = await cache.get(cache_key)
+    if value is not None:
+        return value
+
+    # Cache miss — read from DB
     from apps.backend.app.database import SessionLocal
 
     db = SessionLocal()
@@ -200,14 +197,37 @@ def get_family_setting_cached(family_id: int, key: str) -> Any:
         value = get_family_setting(db, family_id, key)
     finally:
         db.close()
-    with _cache_lock:
-        _family_setting_cache[cache_key] = (now, value)
+
+    await cache.set(cache_key, value, ttl=_CACHE_TTL_SECONDS)
     return value
 
 
-def _invalidate_family_cache(family_id: int) -> None:
-    """Clear cached entries for a specific family."""
-    with _cache_lock:
-        keys_to_remove = [k for k in _family_setting_cache if k[0] == family_id]
+async def _invalidate_family_cache(family_id: int) -> None:
+    """Clear cached entries for a specific family.
+
+    Uses ``Cache.clear()`` in memory mode (all entries are family-scoped and
+    will be repopulated on next access). In Redis mode, uses SCAN+DEL with
+    the family prefix pattern.
+    """
+    from packages.core.cache import get_cache
+    from packages.core.cache.keys import FAM_SETTING
+
+    cache = get_cache()
+    prefix = f"{FAM_SETTING}:{family_id}:"
+    # Memory mode: iterate internal store for matching keys
+    if hasattr(cache, "_store"):
+        keys_to_remove = [k for k in cache._store if k.startswith(prefix)]
         for k in keys_to_remove:
-            del _family_setting_cache[k]
+            await cache.delete(k)
+    else:
+        # Redis mode: SCAN + DEL
+        client = cache._client  # type: ignore[attr-defined]
+        cache_prefix = getattr(cache, "_prefix", "")
+        pattern = f"{cache_prefix}{prefix}*"
+        cursor = 0
+        while True:
+            cursor, batch = await client.scan(cursor, match=pattern, count=100)
+            if batch:
+                await client.delete(*batch)
+            if cursor == 0:
+                break

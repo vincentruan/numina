@@ -107,7 +107,7 @@ def get_low_usage_assets(
 
 
 @router.get("/investment-returns", response_model=list[InvestmentReturnItem])
-def get_investment_returns(
+async def get_investment_returns(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -115,7 +115,7 @@ def get_investment_returns(
 
 
 @router.get("/education-reward-summary", response_model=EducationRewardSummaryResponse)
-def get_education_reward_summary(
+async def get_education_reward_summary(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -124,7 +124,7 @@ def get_education_reward_summary(
 
 
 @router.get("/states-summary")
-def get_states_summary(
+async def get_states_summary(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -132,7 +132,7 @@ def get_states_summary(
 
 
 @router.get("/home-assets")
-def get_home_assets(
+async def get_home_assets(
     limit: int = Query(5, ge=1, le=20),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -142,7 +142,7 @@ def get_home_assets(
 
 
 @router.get("/home-assets/{status}/categories")
-def get_home_assets_category_counts(
+async def get_home_assets_category_counts(
     status: str,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -158,7 +158,7 @@ def get_home_assets_category_counts(
 
 
 @router.get("/home-assets/{status}")
-def get_home_assets_paginated(
+async def get_home_assets_paginated(
     status: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -192,7 +192,7 @@ def get_home_assets_paginated(
 
 
 @router.get("/new-assets", response_model=NewAssetsResponse)
-def get_new_assets(
+async def get_new_assets(
     period: Literal["month", "quarter", "year"] = Query("month"),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -201,7 +201,7 @@ def get_new_assets(
 
 
 @router.get("/expiring-soon", response_model=list[ExpiringSoonItem])
-def get_expiring_soon(
+async def get_expiring_soon(
     days_threshold: int = Query(90, ge=1, le=365),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -216,7 +216,7 @@ def get_expiring_soon(
 
 
 @router.get("/insights", response_model=InsightsResponse)
-def get_insights(
+async def get_insights(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -270,8 +270,8 @@ async def generate_narrative(
 
     # 1. Cache check (R4) — uses request-scoped db
     if not force:
-        cached = latest_by_skill(db, family_id, SKILL_ID)
-        if is_cache_fresh(cached, SKILL_ID, family_id=family_id, config_key="ai_cache_ttl_dashboard_narrative") and cached is not None:
+        cached = await latest_by_skill(db, family_id, SKILL_ID)
+        if await is_cache_fresh(cached, SKILL_ID, family_id=family_id, config_key="ai_cache_ttl_dashboard_narrative") and cached is not None:
             report = cached.report_json or {}
             narrative = report.get("narrative", "")
             from apps.backend.app.services.dashboard_narrative import (

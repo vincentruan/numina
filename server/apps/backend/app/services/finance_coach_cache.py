@@ -38,7 +38,7 @@ def _family_id_int(family_id: str | int) -> int:
     return int(family_id)
 
 
-def latest_by_skill(
+async def latest_by_skill(
     db: Session, family_id: str | int, skill_id: str
 ) -> AIReport | None:
     """Return the most recent completed AIReport for (family, skill_id), or None."""
@@ -54,7 +54,7 @@ def latest_by_skill(
     )
 
 
-def is_cache_fresh(
+async def is_cache_fresh(
     row: AIReport | None,
     skill_id: str,
     family_id: str | int | None = None,
@@ -78,7 +78,7 @@ def is_cache_fresh(
         lookup_key = config_key or f"ai_cache_ttl_{skill_id.replace('-', '_')}"
         if lookup_key in FAMILY_SETTING_DEFINITIONS:
             try:
-                ttl_minutes = get_family_setting_cached(int(family_id), lookup_key)
+                ttl_minutes = await get_family_setting_cached(int(family_id), lookup_key)
                 ttl = timedelta(minutes=ttl_minutes)
             except Exception:
                 ttl = SKILL_TTL.get(skill_id, timedelta(hours=8))

@@ -26,7 +26,6 @@ from sqlalchemy.pool import StaticPool
 
 from apps.backend.app.database import Base, get_db
 from apps.backend.app.main import app
-from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
 from apps.backend.app.models.ai_agent import AIAgent
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_report import AIReport
@@ -52,10 +51,7 @@ from apps.backend.app.models.revoked_token import RevokedToken
 from apps.backend.app.models.user import User
 from apps.backend.app.models.user_setting import UserSetting
 from apps.backend.app.seed.categories import seed_categories
-from apps.backend.app.services.cache import (
-    reset_captcha_payload_cache,
-    reset_rate_limit_cache,
-)
+from packages.core.cache import init_cache, reset_cache
 from packages.db.models.notification_config import NotificationConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,11 +94,9 @@ def db(_session_engine):
     This is 10-100x faster than create_all/drop_all per test.
     """
     # Reset rate limit store before each test
-    if hasattr(RateLimitMiddleware, "_rate_store"):
-        RateLimitMiddleware._rate_store.clear()
-
-    # Reset cache (including registration rate limits)
-    reset_rate_limit_cache()
+    # Initialize cache for tests (memory mode, fresh instance)
+    reset_cache()
+    init_cache(backend="memory")
 
     # Defensive: clear any leaked dependency overrides from tests that
     # manipulate app.dependency_overrides directly (e.g. internal API tests).
@@ -139,12 +133,8 @@ def db(_session_engine):
     transaction.rollback()
     connection.close()
 
-    # Reset rate limit store after each test
-    if hasattr(RateLimitMiddleware, "_rate_store"):
-        RateLimitMiddleware._rate_store.clear()
-    # Reset captcha payload cache and rate limit cache
-    reset_captcha_payload_cache()
-    reset_rate_limit_cache()
+    # Reset cache after each test
+    reset_cache()
 
 
 def _seed_test_invitation_codes(session):

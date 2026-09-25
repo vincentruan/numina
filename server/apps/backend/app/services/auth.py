@@ -104,14 +104,15 @@ def _create_default_mcp_server(db: Session, family_id: int) -> None:
     logger.info("Created default MCP server for family=%s url=%s", family_id, mcp_url)
 
 
-def _check_refresh_rate_limit(user_id: str) -> None:
+async def _check_refresh_rate_limit(user_id: str) -> None:
     """Limit token refresh to 10 per minute per user."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"refresh_attempts:{user_id}"
-        count = cache.get(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:refresh:{user_id}"
+        count = await cache.get(key)
         if count is not None and int(count) >= _REFRESH_RATE_LIMIT_PER_MINUTE:
             _log_security_event(
                 SecurityEventType.TOKEN_REFRESH_FAILED,
@@ -119,23 +120,24 @@ def _check_refresh_rate_limit(user_id: str) -> None:
                 reason="rate_limited",
             )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=60)
-        new_count = cache.increment(key)
+        new_count = await cache.increment(key)
         if new_count == 1:
-            cache.set(key, 1, ttl_seconds=60)
+            await cache.set(key, 1, ttl=60)
     except AppError:
         raise
     except Exception:
         pass
 
 
-def _check_password_change_rate_limit(user_id: int | str) -> None:
+async def _check_password_change_rate_limit(user_id: int | str) -> None:
     """Limit password changes to 3 per hour per user."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"password_change_attempts:{user_id}"
-        count = cache.get(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:password_change:{user_id}"
+        count = await cache.get(key)
         if count is not None and int(count) >= _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR:
             _log_security_event(
                 SecurityEventType.PASSWORD_CHANGE_FAILED,
@@ -143,28 +145,29 @@ def _check_password_change_rate_limit(user_id: int | str) -> None:
                 reason="rate_limited",
             )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=3600)
-        new_count = cache.increment(key)
+        new_count = await cache.increment(key)
         if new_count == 1:
-            cache.set(key, 1, ttl_seconds=3600)
+            await cache.set(key, 1, ttl=3600)
     except AppError:
         raise
     except Exception:
         pass
 
 
-def _check_invite_code_rate_limit(user_id: str) -> None:
+async def _check_invite_code_rate_limit(user_id: str) -> None:
     """Limit invite code regeneration to 5 per hour per user."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"invite_code_attempts:{user_id}"
-        count = cache.get(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:invite_code:{user_id}"
+        count = await cache.get(key)
         if count is not None and int(count) >= _INVITE_CODE_RATE_LIMIT_PER_HOUR:
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=3600)
-        new_count = cache.increment(key)
+        new_count = await cache.increment(key)
         if new_count == 1:
-            cache.set(key, 1, ttl_seconds=3600)
+            await cache.set(key, 1, ttl=3600)
     except AppError:
         raise
     except Exception:
@@ -218,7 +221,7 @@ def _get_client_ip(request: Request) -> str:
     return _get_real_client_ip(request)
 
 
-def _check_register_rate_limit(client_ip: str) -> None:
+async def _check_register_rate_limit(client_ip: str) -> None:
     """Check if IP is rate limited for registration.
 
     Limits registration to REGISTER_RATE_LIMIT_PER_HOUR per IP per hour.
@@ -226,13 +229,14 @@ def _check_register_rate_limit(client_ip: str) -> None:
     max_per_hour = _get_register_rate_limit_settings()
 
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"register_attempts:{client_ip}"
-        count = cache.get(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:register:{client_ip}"
+        count = await cache.get(key)
         if count is not None and int(count) >= max_per_hour:
-            ttl = cache.get_ttl(key) or 0
+            ttl = await cache.get_ttl(key) or 0
             _log_security_event(
                 SecurityEventType.REGISTER_RATE_LIMITED, client_ip=client_ip
             )
@@ -244,34 +248,36 @@ def _check_register_rate_limit(client_ip: str) -> None:
         pass
 
 
-def _record_register_attempt(client_ip: str) -> None:
+async def _record_register_attempt(client_ip: str) -> None:
     """Record a registration attempt for rate limiting."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"register_attempts:{client_ip}"
-        count = cache.increment(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:register:{client_ip}"
+        count = await cache.increment(key)
         # Set TTL on first attempt (1 hour = 3600 seconds)
         if count == 1:
-            cache.set(key, 1, ttl_seconds=3600)
+            await cache.set(key, 1, ttl=3600)
     except Exception:
         # If cache not available, skip tracking
         pass
 
 
-def _check_rate_limit(username: str) -> None:
+async def _check_rate_limit(username: str) -> None:
     """Check if user is rate limited due to too many failed login attempts."""
     max_attempts, lockout_seconds = _get_rate_limit_settings()
 
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"login_attempts:{username}"
-        count = cache.get(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:login:{username}"
+        count = await cache.get(key)
         if count is not None and int(count) >= max_attempts:
-            ttl = cache.get_ttl(key) or 0
+            ttl = await cache.get_ttl(key) or 0
             _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
             raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, ttl))
     except Exception:
@@ -292,18 +298,19 @@ def _check_rate_limit(username: str) -> None:
             del _login_attempts[username]
 
 
-def _record_failed_login(username: str) -> None:
+async def _record_failed_login(username: str) -> None:
     """Record a failed login attempt."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"login_attempts:{username}"
-        cache.increment(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:login:{username}"
+        await cache.increment(key)
         # Set TTL on first attempt
         _, lockout_seconds = _get_rate_limit_settings()
-        if cache.get(key) == 1:
-            cache.set(key, 1, ttl_seconds=lockout_seconds)
+        if await cache.get(key) == 1:
+            await cache.set(key, 1, ttl=lockout_seconds)
     except Exception:
         # Fallback to in-memory
         if username in _login_attempts:
@@ -313,14 +320,15 @@ def _record_failed_login(username: str) -> None:
             _login_attempts[username] = (1, time.time())
 
 
-def _clear_failed_login(username: str) -> None:
+async def _clear_failed_login(username: str) -> None:
     """Clear failed login attempts for a user."""
     try:
-        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+        from packages.core.cache import get_cache
+        from packages.core.cache.keys import RATE_LIMIT
 
-        cache = get_rate_limit_cache()
-        key = f"login_attempts:{username}"
-        cache.delete(key)
+        cache = get_cache()
+        key = f"{RATE_LIMIT}:login:{username}"
+        await cache.delete(key)
     except Exception:
         _login_attempts.pop(username, None)
 
@@ -342,7 +350,7 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def register(
+async def register(
     db: Session, req: RegisterRequest, client_ip: str = "unknown"
 ) -> TokenResponse:
     """Register a new user with rate limiting.
@@ -356,7 +364,7 @@ def register(
         TokenResponse with access and refresh tokens
     """
     # Check registration rate limit
-    _check_register_rate_limit(client_ip)
+    await _check_register_rate_limit(client_ip)
 
     # Validate family invitation code
     invitation_code = (
@@ -409,7 +417,7 @@ def register(
     db.commit()
 
     # Record successful registration for rate limiting
-    _record_register_attempt(client_ip)
+    await _record_register_attempt(client_ip)
     _log_security_event(
         SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id
     )
@@ -420,8 +428,8 @@ def register(
     )
 
 
-def login(db: Session, req: LoginRequest) -> TokenResponse:
-    _check_rate_limit(req.username)
+async def login(db: Session, req: LoginRequest) -> TokenResponse:
+    await _check_rate_limit(req.username)
 
     user = (
         db.query(User)
@@ -433,7 +441,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         # User not found - verify against dummy hash to consume similar time
         dummy_hash = _get_dummy_hash()
         bcrypt.checkpw(req.password.encode("utf-8"), dummy_hash.encode("utf-8"))
-        _record_failed_login(req.username)
+        await _record_failed_login(req.username)
         _log_security_event(
             SecurityEventType.LOGIN_FAILED_USER_NOT_FOUND, username=req.username
         )
@@ -445,7 +453,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         bcrypt.checkpw(req.password.encode("utf-8"), _get_dummy_hash().encode("utf-8"))
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
     if not verify_password(req.password, user.password_hash):
-        _record_failed_login(req.username)
+        await _record_failed_login(req.username)
         _log_security_event(
             SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD,
             username=req.username,
@@ -461,7 +469,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         )
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    _clear_failed_login(req.username)
+    await _clear_failed_login(req.username)
     _log_security_event(
         SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id
     )
@@ -474,7 +482,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     )
 
 
-def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
+async def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     import jwt
     from jwt.exceptions import PyJWTError
 
@@ -505,7 +513,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     # Rate limit refresh attempts per user
-    _check_refresh_rate_limit(user_id)
+    await _check_refresh_rate_limit(user_id)
 
     # Atomically revoke the old JTI — if another request already revoked it,
     # this is a concurrent replay; reject immediately to prevent token reuse.
@@ -542,7 +550,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     )
 
 
-def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
+async def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     if db.query(User).filter(User.username == req.username).first():
         raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
 
@@ -575,13 +583,13 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     )
 
 
-def change_password(
+async def change_password(
     db: Session, user: User, old_password: str, new_password: str
 ) -> None:
     """Change user password and revoke all existing tokens."""
     from apps.backend.app.auth.revoke_jti import revoke_all_user_tokens
 
-    _check_password_change_rate_limit(user.id)
+    await _check_password_change_rate_limit(user.id)
 
     if not verify_password(old_password, user.password_hash):
         _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user.id)
