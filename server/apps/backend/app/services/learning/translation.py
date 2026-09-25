@@ -67,7 +67,17 @@ def _call_llm(prompt: str) -> dict:
         temperature=0.3,
         response_format={"type": "json_object"},
     )
-    return json.loads(response.choices[0].message.content)
+    content = response.choices[0].message.content
+    if not content:
+        raise ValueError("LLM returned empty response")
+    try:
+        result = json.loads(content)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"LLM returned malformed translation response: {e}") from e
+    for key in ("name_zh", "description_zh", "evidence_zh", "assessment_prompt_zh"):
+        if key not in result:
+            raise ValueError(f"LLM response missing required key: {key}")
+    return result
 
 
 def translate_topic(topic: dict) -> dict:
@@ -109,5 +119,5 @@ def derive_ability_dimensions(topic: dict) -> list[str]:
 
 
 def translate_batch(topics: list[dict], batch_size: int = 50) -> list[dict]:
-    """Translate a batch of topics. Not used for on-demand translation."""
-    return []
+    """Translate a batch of topics. Not supported in on-demand mode."""
+    raise NotImplementedError("Batch translation not supported in on-demand mode")

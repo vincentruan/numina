@@ -1,8 +1,12 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from apps.backend.app.services.learning.translation import translate_topic
+from apps.backend.app.services.learning.translation import (
+    _call_llm,
+    translate_batch,
+    translate_topic,
+)
 
 
 @pytest.fixture
@@ -73,3 +77,54 @@ def test_translate_topic_long_description_truncated():
     # Verify _call_llm received truncated content (under ~4000 chars for description)
     call_args = mock_llm.call_args
     assert len(call_args[0][0]) < 5000  # prompt passed to LLM is bounded
+
+
+def test_call_llm_malformed_json_raises():
+    """LLM returning invalid JSON should raise a descriptive ValueError."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "not valid json {"
+
+    with (
+        patch("apps.backend.app.services.learning.translation._get_api_key", return_value="fake-key"),
+        patch("openai.OpenAI") as mock_openai,
+    ):
+        mock_openai.return_value.chat.completions.create.return_value = mock_response
+        with pytest.raises(ValueError, match="LLM returned malformed translation response"):
+            _call_llm("translate this")
+
+
+def test_call_llm_empty_content_raises():
+    """LLM returning None/empty content should raise a descriptive ValueError."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = None
+
+    with (
+        patch("apps.backend.app.services.learning.translation._get_api_key", return_value="fake-key"),
+        patch("openai.OpenAI") as mock_openai,
+    ):
+        mock_openai.return_value.chat.completions.create.return_value = mock_response
+        with pytest.raises(ValueError, match="LLM returned empty response"):
+            _call_llm("translate this")
+
+
+def test_call_llm_missing_keys_raises():
+    """LLM returning JSON without required keys should raise a descriptive ValueError."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = '{"name_zh": "测试"}'
+
+    with (
+        patch("apps.backend.app.services.learning.translation._get_api_key", return_value="fake-key"),
+        patch("openai.OpenAI") as mock_openai,
+    ):
+        mock_openai.return_value.chat.completions.create.return_value = mock_response
+        with pytest.raises(ValueError, match="LLM response missing required key"):
+            _call_llm("translate this")
+
+
+def test_translate_batch_raises_not_implemented():
+    """translate_batch should fail loudly instead of silently returning empty."""
+    with pytest.raises(NotImplementedError, match="Batch translation not supported"):
+        translate_batch([{"name": "test"}])
