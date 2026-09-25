@@ -334,6 +334,38 @@ def check_consecutive_failures(db: Session, child_id: int, topic_id: int) -> int
     return streak
 
 
+def resolve_streak_reminder_on_pass(
+    db: Session, child_id: int, topic_id: int,
+) -> int:
+    """Resolve active streak reminders when a pass breaks the failure streak.
+
+    This allows future failure streaks to trigger new notifications
+    instead of being suppressed by the old active reminder.
+
+    Returns:
+        Number of reminders resolved.
+    """
+    from packages.db.models.reminder import Reminder
+
+    now = datetime.now(UTC)
+    updated = (
+        db.query(Reminder)
+        .filter_by(
+            reminder_type="learning_streak_3_failures",
+            status="active",
+            child_id=child_id,
+            topic_id=topic_id,
+        )
+        .update({
+            Reminder.status: "resolved",
+            Reminder.resolved_at: now,
+        })
+    )
+    if updated:
+        db.flush()
+    return updated
+
+
 def record_failed_assessment(
     db: Session,
     child_id: int,

@@ -716,13 +716,13 @@ class MCPSession:
                             }
                 elif name == "record_learning_result":
                     from apps.backend.app.services.learning import session_service
+                    from packages.db.models.child_economy.coin_transaction import (
+                        CoinTransaction,
+                    )
                     from packages.db.models.learning.progress import LearningProgress
                     from packages.db.models.learning.session import (
                         LearningAssessmentAttempt,
                         LearningSession,
-                    )
-                    from packages.db.models.child_economy.coin_transaction import (
-                        CoinTransaction,
                     )
 
                     # Reward tiers by recommendation (encourages mastery)
@@ -792,6 +792,27 @@ class MCPSession:
                                 )
                                 db.add(attempt)
                                 db.flush()
+
+                                # Streak detection and notification
+                                from apps.backend.app.services.learning import (
+                                    progress_service,
+                                )
+
+                                if attempt.passed:
+                                    progress_service.resolve_streak_reminder_on_pass(
+                                        db, child.id, session.topic_id,
+                                    )
+                                else:
+                                    streak = progress_service.check_consecutive_failures(
+                                        db, child.id, session.topic_id,
+                                    )
+                                    if streak == progress_service.STREAK_THRESHOLD:
+                                        from apps.backend.app.services.notification.dispatcher import (
+                                            notify_learning_streak_3_failures,
+                                        )
+                                        notify_learning_streak_3_failures(
+                                            db, child_id=child.id, topic_id=session.topic_id,
+                                        )
 
                                 # Update progress based on recommendation
                                 progress = (

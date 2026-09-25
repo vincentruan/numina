@@ -316,19 +316,15 @@ def notify_learning_streak_3_failures(
     topic_name = topic.name_zh or topic.name or topic.topic_key
     subject = topic.subject
 
-    # Dedup: only one active streak notification per child+topic combo.
-    # When the streak is broken (pass) and rebuilds, the old reminder should
-    # have been resolved, allowing a fresh notification.
+    # Structured dedup by child_id + topic_id (replaces fragile string containment)
     existing = (
         db.query(Reminder)
         .filter_by(
             family_id=family_id,
             reminder_type="learning_streak_3_failures",
             status="active",
-        )
-        .filter(
-            Reminder.title.contains(child_name),
-            Reminder.title.contains(topic_name),
+            child_id=child_id,
+            topic_id=topic_id,
         )
         .first()
     )
@@ -346,6 +342,8 @@ def notify_learning_streak_3_failures(
         ),
         severity="warning",
         status="active",
+        child_id=child_id,
+        topic_id=topic_id,
     )
     db.add(reminder)
 
