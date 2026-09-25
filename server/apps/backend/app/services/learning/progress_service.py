@@ -361,7 +361,28 @@ def record_failed_assessment(
     db.add(attempt)
     db.flush()
 
-    return check_consecutive_failures(db, child_id, topic_id)
+    streak = check_consecutive_failures(db, child_id, topic_id)
+
+    # Fire notification exactly when threshold is reached (not on 4th, 5th, etc.)
+    if streak == STREAK_THRESHOLD:
+        from apps.backend.app.services.notification.dispatcher import (
+            notify_learning_streak_3_failures,
+        )
+        from packages.db.models.user import User
+
+        topic = db.query(LearningTopic).filter(LearningTopic.id == topic_id).first()
+        # child_id references users.id directly — children are User rows with role="child"
+        child_user = db.query(User).filter(User.id == child_id).first()
+        if child_user and topic:
+            notify_learning_streak_3_failures(
+                db,
+                family_id=child_user.family_id,
+                child_name=child_user.display_name or child_user.username,
+                topic_name=topic.name_zh or topic.name or topic.topic_key,
+                subject=topic.subject,
+            )
+
+    return streak
 
 
 def find_recommended_topic(

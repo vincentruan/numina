@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy.orm import Session
 
+from apps.backend.app.models.reminder import Reminder
 from apps.backend.app.services.learning.progress_service import (
     check_consecutive_failures,
     get_or_create_progress,
@@ -121,3 +122,52 @@ def test_record_failed_assessment_returns_streak_count(db, child, topic):
 
     count3 = record_failed_assessment(db, int(child["id"]), topic.id, None, 0.2)
     assert count3 == 3  # streak! notification should fire
+
+
+def test_streak_notification_fires_at_threshold(db, child, topic):
+    """Notification fires when streak reaches exactly 3."""
+    get_or_create_progress(db, int(child["id"]), topic.id)
+
+    # First 2 failures — no notification
+    record_failed_assessment(db, int(child["id"]), topic.id, None, 0.4)
+    record_failed_assessment(db, int(child["id"]), topic.id, None, 0.3)
+
+    reminders_before = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures"
+    ).count()
+
+    # 3rd failure — notification should fire
+    record_failed_assessment(db, int(child["id"]), topic.id, None, 0.2)
+
+    reminders_after = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures"
+    ).count()
+
+    assert reminders_after == reminders_before + 1
+
+
+def test_streak_notification_not_duplicated_on_4th_failure(db, child, topic):
+    """4th consecutive failure does NOT fire a duplicate notification."""
+    get_or_create_progress(db, int(child["id"]), topic.id)
+
+    for _ in range(4):
+        record_failed_assessment(db, int(child["id"]), topic.id, None, 0.3)
+
+    count = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures"
+    ).count()
+    assert count == 1  # exactly 1, not 2
+
+
+def test_streak_notification_content_includes_child_and_topic(db, child, topic):
+    """Notification body includes child name, topic name, and subject."""
+    get_or_create_progress(db, int(child["id"]), topic.id)
+
+    for _ in range(3):
+        record_failed_assessment(db, int(child["id"]), topic.id, None, 0.3)
+
+    reminder = db.query(Reminder).filter_by(
+        reminder_type="learning_streak_3_failures"
+    ).first()
+    assert reminder is not None
+    assert "Streak Kid" in reminder.title or "Streak Kid" in reminder.body

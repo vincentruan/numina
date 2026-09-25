@@ -293,6 +293,49 @@ def notify_learning_rejected(
     )
 
 
+def notify_learning_streak_3_failures(
+    db: Session,
+    family_id: int,
+    child_name: str,
+    topic_name: str,
+    subject: str,
+) -> None:
+    """Notify parent that child has 3 consecutive failures on a topic."""
+    # NOTE: Do NOT use ensure_reminder here — its dedup is scoped to
+    # (family_id, reminder_type, asset_id=None), which would suppress
+    # legitimate streak notifications for different children/topics.
+    # Create the Reminder directly with streak-specific dedup.
+    existing = (
+        db.query(Reminder)
+        .filter_by(
+            family_id=family_id,
+            reminder_type="learning_streak_3_failures",
+            status="active",
+        )
+        .filter(
+            Reminder.title.contains(child_name),
+            Reminder.title.contains(topic_name),
+        )
+        .first()
+    )
+    if existing:
+        return  # already notified for this child+topic combo
+
+    reminder = Reminder(
+        id=next_id(),
+        family_id=family_id,
+        reminder_type="learning_streak_3_failures",
+        title=f"{child_name} 在 {topic_name} 上连续遇到困难",
+        body=(
+            f"{child_name} 在「{topic_name}」({subject}) 的评估中连续 3 次未通过。"
+            "建议一起复习这个知识点，或尝试不同的学习方式。"
+        ),
+        severity="warning",
+        status="active",
+    )
+    db.add(reminder)
+
+
 def check_on_asset_write(db: Session, asset: Asset) -> None:
     """资产写入时实时检测大额消费冷静期。"""
     if not asset.purchase_price:
