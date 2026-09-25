@@ -27,7 +27,7 @@
 1. **LLM config unavailable** — translation endpoint returns a clear error (not 500) when `DASHSCOPE_API_KEY` is missing or the LLM is unreachable. Test: set no env var, call endpoint, expect 503 with `TRANSLATION_SERVICE_UNAVAILABLE`.
 2. **Very long topic content exceeds LLM token limit** — `description` can be multi-paragraph text. Truncate or chunk before sending. Test: topic with 3000-word description → translation succeeds without API error.
 3. **Streak notification fires exactly once per 3-failure sequence** — 4th consecutive failure must NOT fire a duplicate notification. Test: 4 consecutive `passed=False` → exactly 1 notification created.
-4. **Badge validation false positive on new subjects** — if seed data adds a subject with no badges, cross-check must not fail (only checks badge subjects exist in topics, not the reverse). Test: add topic with subject `"music"` (no badges) → validation passes.
+4. **Badge dimension validation false positive** — badge model uses `dimension` (ability dimension like `"numerical_reasoning"`), NOT topic subject. A topic with `subject="music"` has no bearing on badge validity. Test: topic with subject `"music"` (no related badges) → validation passes.
 5. **Age range null handling** — `age_range_start` and `age_range_end` are both nullable. Validation must skip when either is null, only check when both are non-null. Test: topic with `age_range_start=8, age_range_end=None` → validation passes.
 
 ---
@@ -388,7 +388,11 @@ from apps.backend.app.services.learning.translation import translate_topic
 
 
 @router.post("/topics/{topic_id}/translate")
-def translate_topic_endpoint(topic_id: int, db: Session = Depends(get_db)):
+def translate_topic_endpoint(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_adult),  # LLM calls cost money — require auth
+):
     """Translate a topic's English content to Chinese on demand."""
     from packages.db.models.learning.topic import LearningTopic
 
@@ -520,6 +524,8 @@ def _topic_to_response(topic: LearningTopic) -> dict:
 
 Update the existing `get_topic` and `list_topics` endpoints to use this helper instead of returning the ORM object directly. The response shape stays compatible — `name` and `description` now contain the best-available language, while `_zh` fields let the frontend detect whether translation exists.
 
+**Integration note:** The existing endpoints use `response_model=TopicResponse`. The `TopicResponse` schema already has `name_zh`, `description_zh`, `evidence_zh`, `assessment_prompt_zh` fields, so the helper's extra keys are compatible. Update `get_topic` to call `_topic_to_response(topic)` and return the dict (FastAPI will validate against `response_model`). For `list_topics`, map each ORM object through the helper: `return [_topic_to_response(t) for t in topics]`.
+
 - [ ] **Step 4: Run tests**
 
 Run: `cd server && uv run pytest tests/backend/test_learning_translation.py -v`
@@ -548,7 +554,7 @@ git commit -m "feat(learning): topic responses prefer translated fields with Eng
 **Interfaces:**
 - Consumes: `LearningAssessmentAttempt`, `LearningProgress`, `LearningTopic` models
 - Produces: `record_failed_assessment(db, child_id, topic_id, session_id, score) -> bool` (returns True if streak notification fired)
-- Consumed by: Task 5 (notification dispatch), and by the MCP tool `record_learning_result` caller
+- Consumed by: Task 5 (notification dispatch). **Note:** the actual caller that invokes `record_failed_assessment` when `passed=False` must be wired separately — identify the assessment recording path (likely `session_service.py` or the MCP tool handler) and add the call there.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -783,7 +789,7 @@ from apps.backend.app.services.notification.dispatcher import (
 from packages.db.models.reminder import Reminder
 
 
-def test_streak_notification_fires_at_threshold(db, child, topic, family):
+def test_streak_notification_fires_at_threshold(db, child, topic):
     """Notification fires when streak reaches exactly 3."""
     get_or_create_progress(db, int(child["id"]), topic.id)
 
@@ -805,7 +811,7 @@ def test_streak_notification_fires_at_threshold(db, child, topic, family):
     assert reminders_after == reminders_before + 1
 
 
-def test_streak_notification_not_duplicated_on_4th_failure(db, child, topic, family):
+def test_streak_notification_not_duplicated_on_4th_failure(db, child, topic):
     """4th consecutive failure does NOT fire a duplicate notification."""
     get_or_create_progress(db, int(child["id"]), topic.id)
 
@@ -818,7 +824,7 @@ def test_streak_notification_not_duplicated_on_4th_failure(db, child, topic, fam
     assert count == 1  # exactly 1, not 2
 
 
-def test_streak_notification_content_includes_child_and_topic(db, child, topic, family):
+def test_streak_notification_content_includes_child_and_topic(db, child, topic):
     """Notification body includes child name, topic name, and subject."""
     get_or_create_progress(db, int(child["id"]), topic.id)
 
@@ -850,18 +856,39 @@ def notify_learning_streak_3_failures(
     subject: str,
 ) -> None:
     """Notify parent that child has 3 consecutive failures on a topic."""
-    ensure_reminder(db, {
-        "family_id": family_id,
-        "reminder_type": "learning_streak_3_failures",
-        "title": f"{child_name} 在 {topic_name} 上连续遇到困难",
-        "body": f"{child_name} 在「{topic_name}」({subject}) 的评估中连续 3 次未通过。建议一起复习这个知识点，或尝试不同的学习方式。",
-        "severity": "warning",
-        "template_vars": {
+    # NOTE: Do NOT use ensure_reminder here — its dedup is scoped to
+    # (family_id, reminder_type, asset_id=None), which would suppress
+    # legitimate streak notifications for different children/topics.
+    # Create the Reminder directly with streak-specific dedup.
+    from packages.db.models.reminder import Reminder
+    from packages.core.snowflake import next_id
+
+    existing = db.query(Reminder).filter_by(
+        family_id=family_id,
+        reminder_type="learning_streak_3_failures",
+        status="active",
+    ).filter(
+        Reminder.title.contains(child_name),
+        Reminder.title.contains(topic_name),
+    ).first()
+    if existing:
+        return  # already notified for this child+topic combo
+
+    reminder = Reminder(
+        id=next_id(),
+        family_id=family_id,
+        reminder_type="learning_streak_3_failures",
+        title=f"{child_name} 在 {topic_name} 上连续遇到困难",
+        body=f"{child_name} 在「{topic_name}」({subject}) 的评估中连续 3 次未通过。建议一起复习这个知识点，或尝试不同的学习方式。",
+        severity="warning",
+        template_vars_json=json.dumps({
             "child_name": child_name,
             "topic_name": topic_name,
             "subject": subject,
-        },
-    })
+        }, ensure_ascii=False),
+        status="active",
+    )
+    db.add(reminder)
 ```
 
 - [ ] **Step 4: Wire notification into `record_failed_assessment`**
@@ -896,17 +923,15 @@ def record_failed_assessment(
             notify_learning_streak_3_failures,
         )
         from packages.db.models.learning.topic import LearningTopic
-        from packages.db.models.children import ChildProfile
+        from packages.db.models.user import User
 
         topic = db.query(LearningTopic).get(topic_id)
-        # Resolve child name and family_id from child_id
-        child_profile = db.query(ChildProfile).filter_by(user_id=child_id).first()
-        if child_profile and topic:
-            child_user = child_profile.user
-            family_id = child_user.family_id
+        # child_id references users.id directly — children are User rows with role="child"
+        child_user = db.query(User).get(child_id)
+        if child_user and topic:
             notify_learning_streak_3_failures(
                 db,
-                family_id=family_id,
+                family_id=child_user.family_id,
                 child_name=child_user.display_name or child_user.username,
                 topic_name=topic.name_zh or topic.name or topic.topic_key,
                 subject=topic.subject,
@@ -914,8 +939,6 @@ def record_failed_assessment(
 
     return streak
 ```
-
-**IMPORTANT:** The child→family resolution depends on the project's user model. Check `ChildProfile` / `User` model relationships to find `family_id`. Adapt the query accordingly. If `child_id` is directly a `User.id`, traverse `user.family_id` or `user.family` relationship.
 
 - [ ] **Step 5: Run tests**
 
@@ -940,7 +963,7 @@ git commit -m "feat(learning): wire failure streak notification dispatch (OQ-3)"
 
 **Files:**
 - Modify: `frontend/apps/main/src/api/learning.ts` — add `translateTopic()` function
-- Modify: `frontend/apps/main/src/pages/ChildLearningMapPage.vue` or topic detail page — add translate button
+- Modify: `frontend/apps/main/src/pages/ChildLearningMapPage.vue` — add inline translate button on each topic item
 - Modify: `frontend/apps/child/src/api/learning.ts` — add `translateTopic()` function
 - Modify: `frontend/apps/child/src/pages/learning/LearningTopicPage.vue` — add translate button
 - Modify: `frontend/apps/main/src/i18n/locales/zh-CN.ts` — add i18n keys
@@ -971,11 +994,14 @@ export async function translateTopic(topicId: string): Promise<{
 
 Add the same function to `frontend/apps/child/src/api/learning.ts`.
 
+**TypeScript interface update:** Ensure the `TopicResponse` interface in both apps includes `name_zh: string | null` — the translate button visibility check (`!topic.value.name_zh`) depends on this field. If the existing interface omits it, add it.
+
 - [ ] **Step 2: Add i18n keys to all 4 locale files**
 
 Main app `zh-CN.ts`:
 ```typescript
 'learning.translate': '翻译为中文',
+'learning.retranslate': '重新翻译',
 'learning.translating': '翻译中...',
 'learning.translationFailed': '翻译失败，请稍后重试',
 'learning.translationComplete': '翻译完成',
@@ -984,6 +1010,7 @@ Main app `zh-CN.ts`:
 Main app `en-US.ts`:
 ```typescript
 'learning.translate': 'Translate to Chinese',
+'learning.retranslate': 'Re-translate',
 'learning.translating': 'Translating...',
 'learning.translationFailed': 'Translation failed, please try again',
 'learning.translationComplete': 'Translation complete',
@@ -998,9 +1025,9 @@ Child app: add the same keys with child-friendly Chinese translations:
 'learning.translationComplete': '翻译好啦',
 ```
 
-- [ ] **Step 3: Add translate button to main app topic page**
+- [ ] **Step 3: Add translate button to main app ChildLearningMapPage**
 
-In the topic detail section of the parent-facing page (wherever `GET /learning/topics/{id}` data is displayed), add a translate button with language detection:
+In `ChildLearningMapPage.vue`, add a small inline translate button inside each `.topic-item` div (next to the topic mastery indicator). Use `size="small"` and `plain` to keep it compact within the list layout:
 
 ```vue
 <template>
@@ -1017,25 +1044,35 @@ In the topic detail section of the parent-facing page (wherever `GET /learning/t
     icon="exchange"
     @click="handleTranslate"
   >
-    {{ t('learning.translate') }}
+    {{ translateButtonLabel }}
   </van-button>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { translateTopic } from '@/api/learning'
 
 const { t, locale } = useI18n()
 const translating = ref(false)
 
 // Show translate button only when user locale is zh-CN and topic lacks translation
+// and the source content is not already Chinese
+// Show translate/re-translate button when locale is zh-CN and content is not originally Chinese
 const showTranslateButton = computed(() => {
   if (locale.value !== 'zh-CN') return false
   if (!topic.value) return false
-  // Hide if already translated
-  return !topic.value.name_zh
+  // Guard: don't offer translation for originally-Chinese content
+  if (topic.value.name && /[一-鿿]/.test(topic.value.name)) return false
+  return true
+})
+
+// Button label changes based on translation status
+const translateButtonLabel = computed(() => {
+  return topic.value?.name_zh
+    ? t('learning.retranslate')
+    : t('learning.translate')
 })
 
 async function handleTranslate() {
@@ -1043,10 +1080,16 @@ async function handleTranslate() {
   translating.value = true
   try {
     await translateTopic(topic.value.id)
-    showToast(t('learning.translationComplete'))
+    showSuccessToast(t('learning.translationComplete'))
     await loadTopic() // refresh topic data from server
-  } catch {
-    showToast(t('learning.translationFailed'))
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      showFailToast(t('learning.topicNotFound'))
+    } else if (err?.response?.status === 503) {
+      showFailToast(t('learning.translationFailed'))
+    } else {
+      showFailToast(t('learning.translationFailed'))
+    }
   } finally {
     translating.value = false
   }
@@ -1056,7 +1099,7 @@ async function handleTranslate() {
 
 - [ ] **Step 4: Add translate button to child app topic page**
 
-Same pattern in `LearningTopicPage.vue`, adjusted for child-app styling (simpler, larger tap targets):
+In `LearningTopicPage.vue`, insert the translate button between the description section and the evidence section — near the content it translates. Adjusted for child-app styling (simpler, larger tap targets):
 
 ```vue
 <van-button
@@ -1089,16 +1132,19 @@ git commit -m "feat(learning): add translate button with language detection (OQ-
 
 ---
 
-### Task 7: Seed Data Validation — Badge Cross-Check + Age Range
+### Task 7: Seed Data Validation — Badge Dimensions + Age Range + Dependency Cycles
 
 **Files:**
+- Create: `server/apps/backend/app/services/learning/validation.py`
 - Modify: `server/scripts/seed_learning_topics.py` — extend `validate_quality()`
 - Test: `server/tests/backend/test_learning_seed_validation.py`
 
 **Interfaces:**
-- Consumes: `LearningTopic`, `LiteracyBadgeDefinition` models
-- Produces: Extended `validate_quality()` with 2 new checks
+- Consumes: `LearningTopic`, `LiteracyBadgeDefinition`, `LearningDependency` models
+- Produces: Extended `validate_quality()` with 3 new checks
 - Called post-seed via `--skip-validate` CLI flag (existing behavior)
+
+> **Spec→Model note:** The spec says "badge-topic subject cross-check" but `LiteracyBadgeDefinition.dimension` stores ability dimensions (e.g., `"numerical_reasoning"`), NOT topic subjects (e.g., `"mathematics"`). The check validates badge dimensions against the known `ABILITY_DIMENSIONS` constant from `translation.py`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -1107,11 +1153,11 @@ git commit -m "feat(learning): add translate button with language detection (OQ-
 import pytest
 from sqlalchemy.orm import Session
 
-from packages.db.models.learning.topic import LearningTopic
+from packages.db.models.learning.topic import LearningTopic, LearningDependency
 from apps.backend.app.services.learning.validation import (
-    validate_badge_subject_coverage,
+    validate_badge_dimensions,
     validate_age_ranges,
-    ValidationWarning,
+    validate_no_dependency_cycles,
 )
 
 
@@ -1131,30 +1177,30 @@ def math_topics(db: Session):
     return topics
 
 
-def test_badge_subject_coverage_passes_when_badge_subject_exists(db, math_topics):
-    """Badge subjects that exist in topics pass validation."""
-    badge_subjects = {"mathematics"}
-    topic_subjects = {"mathematics"}
-    result = validate_badge_subject_coverage(badge_subjects, topic_subjects)
-    assert result == []  # no errors
+# --- Badge dimension validity ---
 
-
-def test_badge_subject_coverage_fails_when_no_topics_for_badge(db, math_topics):
-    """Badge subject with 0 topics fails validation."""
-    badge_subjects = {"mathematics", "music"}
-    topic_subjects = {"mathematics"}
-    result = validate_badge_subject_coverage(badge_subjects, topic_subjects)
-    assert len(result) == 1
-    assert "music" in result[0]
-
-
-def test_badge_subject_coverage_new_topic_subject_without_badges_ok(db, math_topics):
-    """Topic subjects without badges do NOT fail (only badge→topic direction checked)."""
-    badge_subjects = {"mathematics"}
-    topic_subjects = {"mathematics", "art"}  # "art" has no badges — that's fine
-    result = validate_badge_subject_coverage(badge_subjects, topic_subjects)
+def test_badge_dimensions_all_valid():
+    """All recognized ability dimensions pass."""
+    valid_dims = {"numerical_reasoning", "spatial_reasoning", "creative_thinking"}
+    result = validate_badge_dimensions(valid_dims)
     assert result == []
 
+
+def test_badge_dimensions_unknown_dimension():
+    """An unrecognized dimension fails validation."""
+    invalid_dims = {"numerical_reasoning", "astrology"}
+    result = validate_badge_dimensions(invalid_dims)
+    assert len(result) == 1
+    assert "astrology" in result[0]
+
+
+def test_badge_dimensions_empty_set_ok():
+    """No badges defined at all → nothing to validate → passes."""
+    result = validate_badge_dimensions(set())
+    assert result == []
+
+
+# --- Age range sanity ---
 
 def test_age_range_valid_passes(db, math_topics):
     """Topics with start < end pass validation."""
@@ -1191,12 +1237,57 @@ def test_age_range_null_skipped(db):
 
     invalid = validate_age_ranges(db)
     assert invalid == []
+
+
+# --- Dependency cycle detection ---
+
+def test_no_cycles_in_acyclic_graph(db, math_topics):
+    """Linear chain A → B → C has no cycles."""
+    db.add(LearningDependency(
+        topic_id=math_topics[1].id, prerequisite_id=math_topics[0].id,
+    ))
+    db.add(LearningDependency(
+        topic_id=math_topics[2].id, prerequisite_id=math_topics[1].id,
+    ))
+    db.flush()
+
+    assert validate_no_dependency_cycles(db) == []
+
+
+def test_cycle_detected(db, math_topics):
+    """A → B → A is a cycle."""
+    db.add(LearningDependency(
+        topic_id=math_topics[1].id, prerequisite_id=math_topics[0].id,
+    ))
+    db.add(LearningDependency(
+        topic_id=math_topics[0].id, prerequisite_id=math_topics[1].id,
+    ))
+    db.flush()
+
+    cycles = validate_no_dependency_cycles(db)
+    assert len(cycles) > 0
+
+
+def test_self_loop_detected(db, math_topics):
+    """A → A is a cycle (self-loop)."""
+    db.add(LearningDependency(
+        topic_id=math_topics[0].id, prerequisite_id=math_topics[0].id,
+    ))
+    db.flush()
+
+    cycles = validate_no_dependency_cycles(db)
+    assert len(cycles) > 0
+
+
+def test_no_topics_no_cycles(db):
+    """Empty topic table has no cycles."""
+    assert validate_no_dependency_cycles(db) == []
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd server && uv run pytest tests/backend/test_learning_seed_validation.py -v`
-Expected: FAIL — module doesn't exist
+Expected: FAIL — `apps.backend.app.services.learning.validation` module doesn't exist
 
 - [ ] **Step 3: Implement validation functions**
 
@@ -1205,37 +1296,48 @@ Create `server/apps/backend/app/services/learning/validation.py`:
 ```python
 """Seed data quality validation for Learning OS."""
 
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+
 from sqlalchemy.orm import Session
+
 from packages.db.models.learning.topic import LearningTopic
 
+logger = logging.getLogger(__name__)
 
-class ValidationWarning(Exception):
-    """Raised when seed data fails quality validation."""
+# Known ability dimensions — must match translation.py ABILITY_DIMENSIONS
+_KNOWN_ABILITY_DIMENSIONS = {
+    "numerical_reasoning", "spatial_reasoning", "verbal_reasoning",
+    "scientific_inquiry", "computational_thinking", "social_emotional",
+    "creative_thinking", "physical_kinesthetic", "memory_recall", "metacognition",
+}
 
 
-def validate_badge_subject_coverage(
-    badge_subjects: set[str],
-    topic_subjects: set[str],
-) -> list[str]:
-    """Verify every badge subject has at least one topic.
+def validate_badge_dimensions(badge_dimensions: set[str]) -> list[str]:
+    """Verify all badge dimensions are recognized ability dimensions.
 
-    Only checks badge→topic direction: if a badge subject has 0 topics, it's an error.
-    Topic subjects without badges are NOT errors.
+    The badge model (LiteracyBadgeDefinition) uses a `dimension` field
+    storing ability dimension names (e.g., "numerical_reasoning"), NOT
+    topic subjects. This check ensures badge dimensions are valid.
 
     Returns:
         List of error messages (empty = all good).
     """
     errors = []
-    for subject in sorted(badge_subjects):
-        if subject not in topic_subjects:
+    for dim in sorted(badge_dimensions):
+        if dim not in _KNOWN_ABILITY_DIMENSIONS:
             errors.append(
-                f"Badge subject '{subject}' has 0 matching topics in seed data"
+                f"Badge dimension '{dim}' is not a recognized ability dimension"
             )
     return errors
 
 
 def validate_age_ranges(db: Session) -> list[str]:
     """Verify age_range_start < age_range_end for all topics where both are non-null.
+
+    Skips topics where either age_range_start or age_range_end is null.
 
     Returns:
         List of error messages (empty = all good).
@@ -1253,6 +1355,45 @@ def validate_age_ranges(db: Session) -> list[str]:
         f"Topic '{t.topic_key}' has age_range_start={t.age_range_start} >= age_range_end={t.age_range_end}"
         for t in invalid
     ]
+
+
+def validate_no_dependency_cycles(db: Session) -> list[str]:
+    """Detect circular prerequisites in the topic dependency graph (DFS-based, O(V+E)).
+
+    Returns:
+        List of error messages (empty = no cycles found).
+    """
+    from packages.db.models.learning.topic import LearningTopic, LearningDependency
+
+    edges = db.query(
+        LearningDependency.topic_id, LearningDependency.prerequisite_id
+    ).all()
+
+    graph: dict[int, list[int]] = defaultdict(list)
+    all_nodes: set[int] = set()
+    for topic_id, prereq_id in edges:
+        graph[prereq_id].append(topic_id)  # prerequisite → dependent
+        all_nodes.add(topic_id)
+        all_nodes.add(prereq_id)
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: dict[int, int] = {n: WHITE for n in all_nodes}
+    cycles: list[str] = []
+
+    def dfs(node: int) -> None:
+        color[node] = GRAY
+        for neighbor in graph.get(node, []):
+            if color[neighbor] == GRAY:
+                cycles.append(f"Cycle detected: {node} → {neighbor}")
+            elif color[neighbor] == WHITE:
+                dfs(neighbor)
+        color[node] = BLACK
+
+    for node in all_nodes:
+        if color[node] == WHITE:
+            dfs(node)
+
+    return cycles
 ```
 
 - [ ] **Step 4: Wire into `validate_quality()` in seed script**
@@ -1264,23 +1405,22 @@ def validate_quality(session):
     """Run all quality validations after seeding."""
     # ... existing checks (counts, orphan edges, per-subject stats) ...
 
-    # NEW: Badge-topic subject cross-check
+    from apps.backend.app.services.learning.validation import (
+        validate_badge_dimensions,
+        validate_age_ranges,
+        validate_no_dependency_cycles,
+    )
+
+    # NEW: Badge dimension validity check
     from packages.db.models.literacy_badge import LiteracyBadgeDefinition
-    badge_subjects = set(
+    badge_dims = set(
         r[0] for r in session.query(LiteracyBadgeDefinition.dimension).distinct().all()
     )
-    topic_subjects = set(
-        r[0] for r in session.query(LearningTopic.subject).distinct().all()
-    )
-    from apps.backend.app.services.learning.validation import (
-        validate_badge_subject_coverage,
-        validate_age_ranges,
-    )
-    badge_errors = validate_badge_subject_coverage(badge_subjects, topic_subjects)
-    if badge_errors:
-        for err in badge_errors:
-            logger.error("BADGE VALIDATION: %s", err)
-        raise ValueError(f"Badge validation failed: {badge_errors}")
+    dim_errors = validate_badge_dimensions(badge_dims)
+    if dim_errors:
+        for err in dim_errors:
+            logger.error("BADGE DIMENSION: %s", err)
+        raise ValueError(f"Badge dimension validation failed: {dim_errors}")
 
     # NEW: Age range sanity
     age_errors = validate_age_ranges(session)
@@ -1289,13 +1429,20 @@ def validate_quality(session):
             logger.error("AGE RANGE: %s", err)
         raise ValueError(f"Age range validation failed: {len(age_errors)} topics")
 
+    # NEW: Dependency cycle detection
+    cycle_errors = validate_no_dependency_cycles(session)
+    if cycle_errors:
+        for err in cycle_errors:
+            logger.error("DEPENDENCY CYCLE: %s", err)
+        raise ValueError(f"Dependency cycle detection failed: {len(cycle_errors)} cycles")
+
     logger.info("All quality validations passed ✅")
 ```
 
 - [ ] **Step 5: Run tests**
 
 Run: `cd server && uv run pytest tests/backend/test_learning_seed_validation.py -v`
-Expected: All 6 tests PASS
+Expected: All 10 tests PASS
 
 - [ ] **Step 6: Run linter**
 
@@ -1306,7 +1453,7 @@ Expected: No errors
 
 ```bash
 git add server/apps/backend/app/services/learning/validation.py server/scripts/seed_learning_topics.py server/tests/backend/test_learning_seed_validation.py
-git commit -m "feat(learning): add badge cross-check + age range validation to seed (OQ-6)"
+git commit -m "feat(learning): add badge dimension + age range + cycle validation to seed (OQ-6)"
 ```
 
 ---
@@ -1326,3 +1473,13 @@ Task 7 (seed validation) — independent, no dependencies
 2. Tasks 1 → 2 → 3 (translation pipeline) — sequential, each builds on previous
 3. Tasks 4 → 5 (failure streak) — sequential, can run parallel with translation
 4. Task 6 (frontend) — after Task 2 (needs the API endpoint)
+
+---
+
+## Deferred / Open Questions
+
+### From 2026-09-24 doc review
+
+- ~~**Main app translate button placement (P0):**~~ ✅ **Resolved:** Inline on `ChildLearningMapPage.vue` topic items.
+- ~~**Child app translate button position (P1):**~~ ✅ **Resolved:** Between description and evidence sections in `LearningTopicPage.vue`.
+- ~~**Re-translation UX (P2):**~~ ✅ **Resolved:** Keep button visible after translation, change label to "Re-translate" (`learning.retranslate` i18n key added).
