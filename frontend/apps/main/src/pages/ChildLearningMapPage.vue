@@ -37,6 +37,17 @@
                     <span class="topic-name">{{ topicDisplayName(item.topic) }}</span>
                     <span class="topic-desc">{{ topicDescription(item.topic) }}</span>
                   </div>
+                  <van-button
+                    v-if="shouldShowTranslate(item.topic)"
+                    :loading="translatingIds.has(item.topic.id)"
+                    :loading-text="t('learning.translating')"
+                    size="small"
+                    type="primary"
+                    plain
+                    @click="handleTranslate(item.topic.id)"
+                  >
+                    {{ item.topic.name_zh ? t('learning.retranslate') : t('learning.translate') }}
+                  </van-button>
                   <div class="topic-mastery">
                     <van-tag :type="masteryTagType(item.mastery_level)">
                       {{ masteryLabel(item.mastery_level) }}
@@ -59,17 +70,19 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLocalizedTopic } from '@/composables/useLocalizedTopic'
-import { showFailToast } from 'vant'
+import { showFailToast, showSuccessToast } from 'vant'
 import { usePageLoading } from '@/composables/usePageLoading'
 import {
   getChildMap,
   getTopicsBatch,
+  translateTopic,
   type ProgressResponse,
   type TopicResponse,
   type ProgressWithTopic,
 } from '@/api/learning'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
@@ -84,6 +97,7 @@ const refreshing = ref(false)
 const activeSubjectIdx = ref(0)
 const progressList = ref<ProgressResponse[]>([])
 const topicMap = ref<Map<string, TopicResponse>>(new Map())
+const translatingIds = ref<Set<string>>(new Set())
 
 // Composite items: progress + topic
 const mapItems = computed<ProgressWithTopic[]>(() =>
@@ -149,6 +163,31 @@ function masteryLabel(level: string): string {
     locked: t('learning.locked'),
   }
   return map[level] ?? level
+}
+
+function shouldShowTranslate(topic: TopicResponse): boolean {
+  if (locale.value !== 'zh-CN') return false
+  if (hasChineseChars(topic.name)) return false
+  return true
+}
+
+async function handleTranslate(topicId: string) {
+  translatingIds.value.add(topicId)
+  try {
+    await translateTopic(topicId)
+    showSuccessToast(t('learning.translationComplete'))
+    // Re-fetch this topic's details to pick up translated fields
+    const updated = await getTopicsBatch([topicId])
+    if (updated.length > 0) {
+      const newMap = new Map(topicMap.value)
+      newMap.set(topicId, updated[0])
+      topicMap.value = newMap
+    }
+  } catch {
+    showFailToast(t('learning.translationFailed'))
+  } finally {
+    translatingIds.value.delete(topicId)
+  }
 }
 
 async function load() {
@@ -241,6 +280,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px;
+  gap: 8px;
   background: var(--card-bg);
   border-radius: 10px;
   box-shadow: var(--shadow-elevated, 0 2px 8px rgba(1, 1, 32, 0.06));

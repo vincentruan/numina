@@ -153,3 +153,14 @@ export async function searchTopics(query: string): Promise<TopicResponse[]> {
   const res = await http.get('/learning/topics', { params: { search: query } })
   return res.data
 }
+
+/** Translate a topic's content to Chinese. Returns translated fields. */
+export async function translateTopic(topicId: string): Promise<{
+  name_zh: string | null
+  description_zh: string | null
+  evidence_zh: string[] | null
+  assessment_prompt_zh: string | null
+}> {
+  const res = await http.post(`/learning/topics/${topicId}/translate`)
+  return res.data
+}

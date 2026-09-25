@@ -24,6 +24,7 @@ from apps.agent.routers import model_test as model_test_router
 from apps.agent.routers import runs_stream as runs_stream_router
 from apps.agent.routers import suggest as suggest_router
 from apps.agent.routers import threads as threads_router
+from apps.agent.routers import translate as translate_router
 
 _original_create_mcp_http_client = _httpx_utils.create_mcp_http_client
 
@@ -305,6 +306,7 @@ app.include_router(input_polish_router.router)
 app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)
+app.include_router(translate_router.router)
 
 
 @app.get("/health")

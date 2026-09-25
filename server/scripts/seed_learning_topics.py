@@ -185,7 +185,7 @@ def seed_clusters(session, data_dir: Path) -> int:
 
 
 def validate_quality(session) -> None:
-    """Run post-seed quality checks: orphan edges + per-subject stats."""
+    """Run post-seed quality checks: orphan edges + per-subject stats + new validations."""
     from packages.db.models.learning.topic import (
         LearningCluster,
         LearningDependency,
@@ -216,6 +216,36 @@ def validate_quality(session) -> None:
     print("\n  Topics per subject:")
     for subj, count in subject_counts.most_common():
         print(f"    {subj}: {count}")
+
+    # --- New validations (OQ-6) ---
+    from apps.backend.app.services.learning.validation import (
+        validate_age_ranges,
+        validate_badge_subjects,
+    )
+
+    # Badge subject validity check — badge dimensions must match LearningTopic.subject
+    from packages.db.models.literacy_badge import LiteracyBadgeDefinition
+
+    badge_subjects = set(
+        r[0]
+        for r in session.query(LiteracyBadgeDefinition.dimension).distinct().all()
+    )
+    subject_errors = validate_badge_subjects(badge_subjects, session)
+    if subject_errors:
+        for err in subject_errors:
+            print(f"  BADGE SUBJECT ERROR: {err}")
+        raise ValueError(f"Badge subject validation failed: {subject_errors}")
+    print("  Badge subjects: OK")
+
+    # Age range sanity
+    age_errors = validate_age_ranges(session)
+    if age_errors:
+        for err in age_errors:
+            print(f"  AGE RANGE ERROR: {err}")
+        raise ValueError(f"Age range validation failed: {len(age_errors)} topics")
+    print("  Age ranges: OK")
+
+    print("\n  All quality validations passed.")
 
 
 def main():

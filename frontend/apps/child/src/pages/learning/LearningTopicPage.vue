@@ -37,6 +37,20 @@
         <p class="description-text">{{ displayDescription }}</p>
       </div>
 
+      <!-- Translate button -->
+      <van-button
+        v-if="showTranslateButton"
+        :loading="translating"
+        :loading-text="t('learning.translating')"
+        size="normal"
+        type="primary"
+        block
+        class="translate-btn"
+        @click="handleTranslate"
+      >
+        {{ topic?.name_zh ? t('learning.retranslate') : t('learning.translate') }}
+      </van-button>
+
       <!-- Evidence / Standards -->
       <div v-if="topic.evidence && topic.evidence.length > 0" class="evidence-section">
         <h3 class="section-title">{{ t('learning.evidence') }}</h3>
@@ -127,12 +141,14 @@ import {
   getMyAssignments,
   createSession,
   submitAssignment,
+  translateTopic,
   type TopicResponse,
   type ProgressResponse,
   type AssignmentResponse,
   type TopicGraphResponse,
 } from '@/api/learning'
 import RoleShimmer from '@/components/RoleShimmer.vue'
+import { hasChineseChars } from '@numina/shared'
 
 const { t, locale } = useI18n()
 const { topicDisplayName, topicDescription } = useLocalizedTopic()
@@ -145,6 +161,7 @@ const topicId = computed(() => route.params.id as string)
 const loading = ref(true)
 const starting = ref(false)
 const submitting = ref(false)
+const translating = ref(false)
 const error = ref('')
 const topic = ref<TopicResponse | null>(null)
 const progress = ref<ProgressResponse | null>(null)
@@ -166,6 +183,28 @@ const displayEvidence = computed(() => {
   if (locale.value.startsWith('zh') && topic.value.evidence_zh) return topic.value.evidence_zh as string[]
   return topic.value.evidence
 })
+
+const showTranslateButton = computed(() => {
+  if (locale.value !== 'zh-CN') return false
+  if (!topic.value) return false
+  // Don't offer translation for originally-Chinese content
+  if (hasChineseChars(topic.value.name)) return false
+  return true
+})
+
+async function handleTranslate() {
+  if (!topic.value) return
+  translating.value = true
+  try {
+    await translateTopic(topic.value.id)
+    showSuccessToast(t('learning.translationComplete'))
+    await load()
+  } catch {
+    showFailToast(t('learning.translationFailed'))
+  } finally {
+    translating.value = false
+  }
+}
 
 function goBack() {
   router.push('/learning')
@@ -362,6 +401,11 @@ onMounted(async () => {
   color: var(--color-body);
   line-height: 1.6;
   margin: 0;
+}
+
+/* Translate button */
+.translate-btn {
+  margin-bottom: 20px;
 }
 
 /* Evidence */

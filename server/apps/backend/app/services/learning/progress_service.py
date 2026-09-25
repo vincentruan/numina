@@ -307,6 +307,109 @@ def aggregate_study_minutes(db: Session, child_id: int) -> dict[str, int]:
     }
 
 
+STREAK_THRESHOLD = 3
+
+
+def check_consecutive_failures(db: Session, child_id: int, topic_id: int) -> int:
+    """Count consecutive failed assessments for a child on a specific topic.
+
+    Walks backward from the most recent attempt. Stops at the first pass
+    or beginning of attempts.
+
+    Returns:
+        Number of consecutive failures (0 if last attempt passed or no attempts).
+    """
+    attempts = (
+        db.query(LearningAssessmentAttempt)
+        .filter_by(child_id=child_id, topic_id=topic_id)
+        .order_by(LearningAssessmentAttempt.created_at.desc())
+        .all()
+    )
+    streak = 0
+    for attempt in attempts:
+        if not attempt.passed:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def resolve_streak_reminder_on_pass(
+    db: Session, child_id: int, topic_id: int,
+) -> int:
+    """Resolve active streak reminders when a pass breaks the failure streak.
+
+    This allows future failure streaks to trigger new notifications
+    instead of being suppressed by the old active reminder.
+
+    Returns:
+        Number of reminders resolved.
+    """
+    from packages.db.models.reminder import Reminder
+
+    now = datetime.now(UTC)
+    updated = (
+        db.query(Reminder)
+        .filter_by(
+            reminder_type="learning_streak_3_failures",
+            status="active",
+            child_id=child_id,
+            topic_id=topic_id,
+        )
+        .update({
+            Reminder.status: "resolved",
+            Reminder.resolved_at: now,
+        })
+    )
+    if updated:
+        db.flush()
+    return updated
+
+
+def check_and_notify_streak(db: Session, child_id: int, topic_id: int) -> int:
+    """Check consecutive failure streak and dispatch notification at threshold.
+
+    Shared helper used by both ``record_failed_assessment`` and the production
+    path in ``mcp_session.py``. Returns the current streak count.
+    """
+    streak = check_consecutive_failures(db, child_id, topic_id)
+    if streak == STREAK_THRESHOLD:
+        from apps.backend.app.services.notification.dispatcher import (
+            notify_learning_streak_3_failures,
+        )
+        notify_learning_streak_3_failures(db, child_id=child_id, topic_id=topic_id)
+    return streak
+
+
+def record_failed_assessment(
+    db: Session,
+    child_id: int,
+    topic_id: int,
+    session_id: int | None,
+    score: float | None,
+) -> int:
+    """Record a failed assessment attempt and check for streak notification.
+
+    Creates a LearningAssessmentAttempt with passed=False, then delegates
+    to ``check_and_notify_streak`` for streak detection.
+
+    Returns:
+        Current consecutive failure count.
+    """
+    attempt = LearningAssessmentAttempt(
+        child_id=child_id,
+        topic_id=topic_id,
+        session_id=session_id,
+        assessment_type="ai",
+        score=score,
+        passed=False,
+    )
+    db.add(attempt)
+    db.flush()
+
+    return check_and_notify_streak(db, child_id, topic_id)
+
+
 def find_recommended_topic(
     db: Session, child_id: int
 ) -> LearningTopic | None:

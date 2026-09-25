@@ -511,6 +511,11 @@ export default {
     },
     prerequisites: '前置知识',
     nextSteps: '后续学习',
+    translate: '翻译成中文',
+    retranslate: '重新翻译',
+    translating: '正在翻译...',
+    translationFailed: '翻译失败了，再试一次吧',
+    translationComplete: '翻译好啦',
   },
   empty: {
     noTasks: '今天没有任务，好好休息吧 🌟',
